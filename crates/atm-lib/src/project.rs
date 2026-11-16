@@ -118,11 +118,26 @@ impl Project {
     /// # Errors
     /// No task of either; several projects with that key.
     pub fn resolve_dependency(&self, reference: &str) -> Result<String> {
+        let reference = reference.trim();
+        // Already another project's task (`<project id>:<UUID>`): kept when that task can be found (ADR-007 §8, the
+        // way to name one whose key two projects share)
+        if atm_common::rules::is_foreign_reference(reference) {
+            return match crate::foreign::status(reference) {
+                Some(_) => Ok(reference.to_string()),
+                None => Err(atm_common::Error::NotFound(format!(
+                    "no task {reference} among your registered projects"
+                ))),
+            };
+        }
         match self.resolve_task(reference) {
             Ok(id) => Ok(id),
             Err(e) => {
                 if !atm_common::keys::keys_format(self.store.document()?) {
                     return Err(e);
+                }
+                if atm_common::ids::valid_task_uuid(reference) {
+                    // Another registered project's task by its UUID alone
+                    return crate::foreign::find_uuid(reference, self.root()).ok_or(e);
                 }
                 match crate::foreign::resolve_in_other_project(reference, self.root())? {
                     Some(id) => Ok(id),

@@ -258,6 +258,52 @@ test('a dependency on another registered project’s task, by its key: waits unt
   }
 });
 
+test('two projects with one key: refused by key, named by UUID, shown by UUID, warned about (T-545)', () => {
+  const home = tempDir('atm-home-');
+  const env = { ATM_HOME: home };
+  const project = (id, name, key) => {
+    const root = makeProject({
+      files: {
+        [FILE]: {
+          meta: { id, project: name },
+          tasks: [{ id: 'T-1', name: `${name} one`, type: 'feature', status: 'todo' }],
+        },
+      },
+    });
+    assert.equal(runAtm(['db', 'migrate'], root, env).code, 0);
+    assert.equal(runAtm(['project', 'key', 'set', key], root, env).code, 0);
+    return root;
+  };
+  const first = project('aaaa1111', 'First', 'ATM');
+  const second = project('cccc3333', 'Second', 'ATM');
+  const blog = project('bbbb2222', 'Blog', 'LFB');
+  const run = (root, args) => runAtm(args, root, env);
+  try {
+    // By key: refused, saying why
+    const byKey = run(blog, ['task', 'edit', 'LFB-1', '--add-dep', 'ATM-1']);
+    assert.notEqual(byKey.code, 0);
+    assert.match(byKey.stderr, /2 projects use the key ATM: rename one with atm project key set/);
+    // By UUID: found, stored with its project
+    const uuid = read(second, FILE).tasks[0].id;
+    const byUuid = run(blog, ['task', 'edit', 'LFB-1', '--add-dep', uuid]);
+    assert.equal(byUuid.code, 0, byUuid.stderr);
+    assert.deepEqual(read(blog, FILE).tasks[0].dependencies, [`cccc3333:${uuid}`]);
+    // Shown by its UUID's first 8 characters, as ATM-1 would be ambiguous
+    assert.match(
+      run(blog, ['task', 'details', 'LFB-1']).stdout,
+      new RegExp(`depends on: ${uuid.slice(0, 8)} \\(todo\\)`),
+    );
+    // Inside each project its own keys stay, and doctor and status warn
+    assert.match(run(first, ['task', 'list']).stdout, /^ATM-1 /m);
+    assert.match(run(first, ['doctor']).stdout, /Two projects in your workspaces use the key ATM \(Second/);
+    assert.match(run(first, ['project', 'status']).stdout, /warning: Two projects in your workspaces use the key ATM/);
+    assert.doesNotMatch(run(blog, ['project', 'status']).stdout, /use the key/);
+  } finally {
+    for (const root of [first, second, blog]) removeDir(root);
+    removeDir(home);
+  }
+});
+
 test('migrate --keys on a copy of this repository’s own task files loses nothing', () => {
   const own = JSON.parse(fs.readFileSync(path.join(REPO, FILE), 'utf8'));
   const ownArchive = JSON.parse(fs.readFileSync(path.join(REPO, ARCHIVE), 'utf8'));

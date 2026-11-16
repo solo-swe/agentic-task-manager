@@ -273,12 +273,21 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 component,
                 ..Filters::default()
             };
-            let status = status_report(&Project::open(cwd)?, &filters)?;
+            let project = Project::open(cwd)?;
+            let mut status = status_report(&project, &filters)?;
+            // Another registered project with this project's key (ADR-007 §8)
+            let shared = atm_lib::check::shared_key_warning(&project, project.store().document()?);
+            if let (Some(warning), Some(report)) = (&shared, status.report.as_object_mut()) {
+                report.insert("key_warning".into(), serde_json::json!(warning));
+            }
             if ctx.json {
                 print_json(&status.report);
             } else {
                 for line in status_lines(&status) {
-                    println!("{line}");
+                    super::say(cwd, &line);
+                }
+                if let Some(warning) = shared {
+                    println!("warning: {warning}");
                 }
             }
             Ok(())

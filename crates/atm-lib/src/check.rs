@@ -410,6 +410,27 @@ fn check_merged_releases(vocab: &Vocabulary, tasks: &[Value], warnings: &mut Vec
     }
 }
 
+/// Two registered projects with one short name (ADR-007 §8): the warning `atm doctor` and `atm project status` give,
+/// naming the others; none when no other registered project uses this project's key.
+#[must_use]
+pub fn shared_key_warning(project: &Project, document: &Value) -> Option<String> {
+    let key = atm_common::keys::project_key(document)?;
+    let root = project.root()?;
+    let others = crate::workspaces::Workspaces::open().key_users(key, root);
+    if others.is_empty() {
+        return None;
+    }
+    let names: Vec<String> = others
+        .iter()
+        .map(|(w, p)| format!("{p} (workspace {w})"))
+        .collect();
+    Some(format!(
+        "Two projects in your workspaces use the key {key} ({}): their keys read the same across projects, so they \
+         show by UUID there; rename one with `atm project key set`",
+        names.join(", ")
+    ))
+}
+
 /// `atm doctor`: what is wrong with the task data as stored. With `files`, a finished task's files that don't exist
 /// are warned about too (relative to the working copy).
 ///
@@ -426,12 +447,13 @@ pub fn check_project(project: &Project, files: bool) -> Result<Checked> {
             count: None,
         });
     };
-    let (found, warnings) = check_data(
+    let (found, mut warnings) = check_data(
         &document,
         project.store().working_copy(),
         files,
         &raw.archive,
     );
+    warnings.extend(shared_key_warning(project, &document));
     let mut errors: Vec<String> = raw.archive_error.into_iter().collect();
     errors.extend(found);
     Ok(Checked {

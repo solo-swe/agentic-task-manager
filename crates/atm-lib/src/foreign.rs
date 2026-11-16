@@ -128,16 +128,33 @@ pub fn status(reference: &str) -> Option<(bool, Value)> {
     answer
 }
 
-/// How another project's task reads: its key (`~` while provisional), or None when it can't be found.
+/// How another project's task reads: its key (`~` while provisional); its UUID's first 8 characters when another
+/// registered project uses the same key too, as the key would be ambiguous (ADR-007 §8); None when it can't be found.
 #[must_use]
 pub fn label(reference: &str) -> Option<String> {
     let (task, _, project) = find(reference)?;
     let document = project.store().document().ok()?;
     let key = key_of(document, &task)?;
+    let prefix = project_key(document)?;
+    if projects_with_key(prefix, None).len() > 1 {
+        let uuid = task.get("id").and_then(Value::as_str).unwrap_or_default();
+        return Some(uuid.chars().take(8).collect());
+    }
     Some(if key_final(&task) {
         key
     } else {
         format!("~{key}")
+    })
+}
+
+/// Another registered project's task by its UUID alone (not the one at `here`): `<project id>:<UUID>`.
+#[must_use]
+pub fn find_uuid(uuid: &str, here: Option<&Path>) -> Option<String> {
+    registered(here).into_iter().find_map(|project| {
+        let document = project.store().document().ok()?.clone();
+        let archive = archive_of(&project);
+        resolve(&document, &archive, uuid).ok()?;
+        Some(format!("{}:{uuid}", meta_id(&project)?))
     })
 }
 

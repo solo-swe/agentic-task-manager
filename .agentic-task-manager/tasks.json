@@ -20767,7 +20767,7 @@
       "description": "ADR-007 §8. Where a key would be ambiguous across a workspace (the overview, a dependency on another project, search across projects): the task's UUID (first 8 characters) with the warning \"Two projects in this workspace use the key ATM: rename one with `atm project key set`\"; typing such a key is refused with the same advice; inside a project's own views its keys stay. `atm doctor` and `atm project status` warn too.\n\n## Tests\nScenarios: two projects keyed `ATM`, a dependency across them by UUID, the refusal and the warnings.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-544"
       ],
@@ -20777,7 +20777,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:24Z",
+      "updated_at": "2026-11-16T04:25:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20789,7 +20789,9 @@
       "sprint": "Keys and reach",
       "components": [
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-16T04:25:07Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-546",
@@ -20804,7 +20806,7 @@
       "description": "ADR-007 §3, §5, §7, §8, §9.\n\n## Change\n- Cards, rows, details, the graph, related tasks and search show the key; a provisional one lighter with a draft mark and the tooltip \"Provisional until merged into main: the number may change if another branch took it\".\n- `?task=` and `atm://…?task=` take the key; an alias or old prefix resolves to the task (the address then shows its current key).\n- A dependency on another project's task shows its key, status and a link that opens it in its project (a new tab in the app); a missing one says why.\n- The duplicate-short-name warning (§8) where it applies.\n- Filters, sorting and Kanban order by number.\n\n## Tests\nUnit (address parsing, the mark) and e2e (a provisional task, an alias address, a cross-project dependency, the warning); the screenshots in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-543",
         "T-544"
@@ -20819,7 +20821,7 @@
         "dashboard/tests/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:05:40Z",
+      "updated_at": "2026-11-16T04:25:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20833,7 +20835,18 @@
         "dashboard"
       ],
       "started_at": "2026-11-16T04:05:40Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "8a9a30ee22d741c850890a8b9aebcc4a0f726e2f",
+      "completed_at": "2026-11-16T04:25:02Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T04:25:02Z",
+          "kind": "outcome",
+          "text": "Dashboard and app show keys (lib/keys.ts, ui/TaskKey.svelte): cards, rows, details, graph, deps/related, search; provisional ones lighter with a DRAFT tag and the tooltip; ?task= takes key/old prefix/alias/UUID and rewrites to the key; order by number. Unit 1351, e2e 443 (keys.spec.ts, keys fixture). Left: overview cards and All projects board (summary has no keys, Rust), other project’s task shown by key only when loaded, no link.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-547",
