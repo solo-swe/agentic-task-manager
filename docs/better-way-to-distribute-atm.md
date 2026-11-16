@@ -1,7 +1,8 @@
 # Distributing atm as an app that installs its own skills
 
 Status: **agreed** with Hakan on 2026-11-06 (T-426). It replaces the per-harness adapters of
-[multi-harness-support.md](multi-harness-support.md) (T-413 is rewritten to this model, §8). Built on the Rust port
+[multi-harness-support.md](multi-harness-support.md), now a pointer here (T-413 is rewritten to this model, §8; its
+support table is in §5). Built on the Rust port
 (T-415) and the [Tauri](guides/tauri.md), [Rust](guides/rust.md) and [Svelte](guides/svelte.md) guides.
 
 Today atm is a Claude Code plugin: installing it from the marketplace brings the CLI (Python), the dashboard and the
@@ -100,19 +101,48 @@ named `atm-do-task`, `atm-loop-tasks`, `atm-create-tasks`, `atm-plan-sprint`, `a
 The skills live once, in `~/.agentic-task-manager/skills/<skill>/`, written by the installed atm (so an upgrade
 updates them), and are **symlinked** into each harness's folder:
 
-| Harness | Folder atm writes | Notes (checked 2026-11-06) |
-|---|---|---|
-| Claude Code | `~/.claude/skills/` | Doesn't read `~/.agents/skills` (an open request). |
-| Codex CLI, Gemini CLI, Copilot, OpenCode, Windsurf (Devin), Goose | `~/.agents/skills/` | Each also has its own folder; `~/.agents/skills` is the shared one. |
-| Cursor | `~/.agents/skills/` | |
+atm's harnesses are the **folders**, not the tools (T-413): several tools read one folder, so `atm agents install`
+writes each folder once. `--harness` takes a folder's ID or a tool's (`--harness codex` is the `agents` folder), and
+removing a shared folder's skills removes them for every tool that reads it.
 
-- **Both `~/.agents/skills` and `~/.claude/skills` by default**, so Claude Code works without the plugin. Cursor,
-  OpenCode, Goose and VS Code Copilot read both, so they list atm's skills twice: `atm agents status` says where, and
-  `--harness` installs into fewer folders.
-- **Copied where links break:** Cursor (home-folder symlinks) and the Copilot CLI (symlinked skills not listed) have
-  known bugs; atm copies for them, and re-copies on upgrade. `--copy` copies everywhere.
+| Harness (`--harness`) | Folder atm writes | Read by | Installed without `--harness` |
+|---|---|---|---|
+| `claude` | `~/.claude/skills/` (project: `.claude/skills/`) | Claude Code; also Cursor, OpenCode, VS Code Copilot | always |
+| `agents` | `~/.agents/skills/` (project: `.agents/skills/`) | Codex, Copilot CLI, Cursor, OpenCode, Gemini CLI | always |
+| `antigravity` | `~/.gemini/config/skills/` (project: `.agents/skills/`, the `agents` one) | Antigravity CLI | when `~/.gemini/antigravity-cli` exists |
+
+- **Links everywhere.** Every tool tried follows atm's symlinks; the known bugs of 2026-11-06 are fixed in the
+  versions below (Copilot CLI lists symlinked skills; Cursor follows home-folder links since 2.5). `--copy` still
+  copies, and a project always gets copies.
+- **Twice:** Cursor reads both `~/.claude/skills` and `~/.agents/skills` and lists atm's skills from each;
+  `atm agents status` says so ("listed twice in Cursor") and `--harness` installs into fewer folders. OpenCode reads
+  both too but lists a skill once by its name.
 - **User-wide by default**; `--project` writes the project's `.agents/skills` (and `.claude/skills`) instead, for a
   team that commits them.
+
+### Support (tried on 2026-11-17, T-413)
+
+Each tool was installed and signed in on a Mac, atm's skills installed with `atm agents install`. "Listed" is
+checked without a model: the tool's own command for its skills. "A task" is a prompt asking where the sprint stands,
+"using atm's skills", with Homebrew's atm 0.37.0 on PATH and the skills of 0.38.0 (which say to stop below 0.38.0).
+
+| Tool | Version | Listed | Links | Twice | A task | Notes |
+|---|---|---|---|---|---|---|
+| Claude Code | — | yes | yes | no | yes (every task of this repo) | Its copy carries `allowed-tools`. |
+| Codex CLI | 0.169.0 | yes (`codex debug prompt-input`) | yes | no | yes | Free ChatGPT plan. Went on past the version check. |
+| Copilot CLI | 1.0.112 | yes (`copilot skill list`) | yes | no | not tried | Reads `allowed-tools` too (its own command syntax), so atm leaves it out of the portable copy. |
+| VS Code Copilot | — | not tried | — | — | not tried | Its docs: `~/.copilot/skills`, and `~/.claude/skills` in its Claude mode. |
+| Cursor | 3.30.14 | yes (it ran the skill) | yes | expected (its docs: both folders) | stopped at the version check, as the skill says | Free Hobby plan. |
+| OpenCode | 2.2.7 | yes (its `/api/skill` route) | yes | no | yes | Went on past the version check. |
+| Antigravity CLI | 1.5.9 | yes (`agy -p /skills`) | yes | no | yes | Doesn't read `~/.agents/skills`, only its own folder. Went on past the version check. |
+| Gemini CLI | — | not tried | — | — | not tried | Deprecated on Homebrew for Antigravity CLI; its docs say it reads `~/.agents/skills`. |
+| Windsurf, Goose | — | — | — | — | — | Left out (little use, 2026 surveys). |
+
+- **The version check is not always followed:** Codex, OpenCode and Antigravity went on with an atm older than the
+  skill's minimum; only Cursor stopped. The skills can't enforce it: an older atm refuses the commands it doesn't
+  know, but a command whose meaning changed would run as the older atm has it.
+- **Permissions:** each tool asks before running a command (`atm …` included) in its own way; only Claude Code (and
+  Copilot CLI, not used) reads pre-approvals from a skill. Nothing in the skills needs changing for it.
 
 ## 6. Plugins
 
