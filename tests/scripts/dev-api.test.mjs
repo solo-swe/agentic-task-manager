@@ -117,6 +117,31 @@ test(NAME, { skip }, async () => {
       assert.ok(scriptSrc.includes(`'sha256-${createHash('sha256').update(body).digest('base64')}'`), scriptSrc);
     assert.doesNotMatch(scriptSrc, /unsafe-inline/);
 
+    // The modules the page then imports come with their head: Vite's own and SvelteKit's start-up module, the first
+    // the page loads. Node sends a head through `writeHead` from inside `end`, which the page policy's hold on
+    // `writeHead` once swallowed, so every module came without one and the page stayed blank
+    const entry = /import\("([^"]+\/kit\/src\/runtime\/client\/entry\.js)"\)/.exec(html)?.[1];
+    assert.ok(entry, 'SvelteKit’s start-up module, in the page');
+    for (const module of ['/@vite/client', new URL(entry, `${base}/`).pathname]) {
+      const answer = await fetch(`${base}${module}`);
+      assert.equal(answer.status, 200, module);
+      assert.match(answer.headers.get('content-type') ?? '', /javascript/, module);
+      assert.equal(answer.headers.get('x-content-type-options'), 'nosniff', module);
+      // Asked again with its ETag: a 304 with no policy, so the one the browser stored with it stands
+      const again = await fetch(`${base}${module}`, { headers: { 'if-none-match': answer.headers.get('etag') ?? '' } });
+      assert.equal(again.status, 304, module);
+      assert.equal(again.headers.get('content-security-policy'), null, module);
+    }
+
+    // A reload: the browser asks for the page with its ETag. It is rendered again, with its inline scripts' hashes in
+    // its policy, never a 304 whose policy lacks them (which the browser would put on the stored page, blocking its
+    // inline scripts)
+    const reload = await fetch(`${base}/`, {
+      headers: { accept: 'text/html', 'if-none-match': page.headers.get('etag') ?? '' },
+    });
+    assert.equal(reload.status, 200);
+    assert.equal(reload.headers.get('content-security-policy'), csp);
+
     // A rebuild (the binary replaced, as cargo does): the API server restarts on it, and answers again
     const record = path.join(home, 'server.json');
     const first = JSON.parse(fs.readFileSync(record, 'utf8')).pid;

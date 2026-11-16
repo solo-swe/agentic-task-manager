@@ -14661,7 +14661,7 @@
       "description": "T-427 moved the dashboard to pnpm without the `devEngines` pins the [Svelte guide](docs/guides/svelte.md#toolchain) asks for, because of a CompMD bug: with `devEngines`, pnpm 12 writes `pnpm-lock.yaml` as two YAML documents (the pinned pnpm and Node first, then the packages), and `@compmd/vite` 0.5.0 reads only the first document that has `packages` (`dist/packs.js`, `integrities`). The mermaid pack's `integrity` then becomes `null` in `plugin/assets/compmd/<version>/compmd.js`, and its pin is lost.\n\n**Wait for** a `@compmd/vite` release that reads every document of the lockfile. Until then this task stays in the backlog.\n\n## Change\n- Bump `@compmd/vite` (and the other `@compmd/*` packages it goes with) to that release.\n- Add `devEngines` to `dashboard/package.json`: `packageManager` pnpm 12.14.0 (or the version in use then) and `runtime` node 24, both with `\"onFail\": \"download\"`, as in the guide; `pnpm install` records them in the lockfile.\n- Update the guide's example version if it changed, and AGENTS.md if it says the pins are missing.\n\n## Tests\n`pnpm run build`, then `compmd.js` holds the mermaid pack's `integrity` (a `sha512-…`, not `null`); `pnpm run check` passes (it fails on a stale CompMD build); unit and functional e2e tests; CI green.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-427",
         "T-550"
@@ -14673,7 +14673,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T06:52:44Z",
-      "updated_at": "2026-11-16T06:55:22Z",
+      "updated_at": "2026-11-16T06:58:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -14691,6 +14691,12 @@
           "kind": "answer",
           "text": "CompMD 0.6.0 is out (T-503 uses it) and reads every document of pnpm 12’s lockfile (Hakan): go ahead.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-16T06:58:51Z",
+          "kind": "outcome",
+          "text": "`devEngines` pins pnpm 12.14.0 and Node 24 (`onFail: download`), recorded in `pnpm-lock.yaml` (now two documents); CompMD 0.7.1 still pins the packs by hash (no null integrity). AGENTS.md updated. CI green still to see on the next push",
+          "by": "claude:0f56a916"
         }
       ],
       "blocks": [
@@ -14708,7 +14714,10 @@
       ],
       "sprint": "Keys and reach",
       "started_at": "2026-11-16T06:55:22Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "0724f087993ae8631647ffb8fce9b70915bbe382",
+      "completed_at": "2026-11-16T06:58:51Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-437",
@@ -21059,7 +21068,7 @@
       "description": "What T-546 left ([ADR-007](docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md) §3, §7).\n\n## Change\n- **The project summary has keys:** `atm_lib::summary::project_summary` (what `atm project summary` and the overview get) gives each task it lists its key and whether it is final, as the task views do (`with_key`). The overview's project cards and the All projects board show the key (`ui/TaskKey.svelte`, the provisional mark included) where they show an ID today.\n- **Another project's task, even when that project isn't loaded:** a dependency or related task in another registered project (`<project meta.id>:<UUID>`) shows its key, its status and a link that opens it in its project (a new tab in the app), from the server rather than from the page's loaded projects: a read route (or a field in the task's view) that resolves it with `atm_lib::foreign`. A project that isn't registered, or a task it no longer has, says why.\n- `docs/multi-project-api.md` for a new route, and `docs/security-architecture.md` if it is a new entry point.\n\n## Tests\nRust: the summary's keys (atm-lib). Unit and e2e: a card and the board with keys (a provisional one marked), another project's task shown with key, status and link while only this project is open, and the missing cases. The CLI suite if `atm project summary` changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/summary.rs",
@@ -21071,7 +21080,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-16T06:38:45Z",
-      "updated_at": "2026-11-16T06:38:50Z",
+      "updated_at": "2026-11-16T06:59:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -21088,7 +21097,9 @@
         "dashboard",
         "api",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-16T06:59:00Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-550",
