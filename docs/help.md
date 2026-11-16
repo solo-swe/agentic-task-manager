@@ -106,7 +106,7 @@ Click a task for everything about it: its description, what it depends on and wh
   your answers, and failures;
 - **Commit** — the commit that holds the task's work.
 
-Descriptions, notes and questions are written in [CompMD](https://compmd.hakanserce.com/), Markdown with components,
+Descriptions, notes and questions are written in [CompMD](https://compmd.dev/), Markdown with components,
 and render as (this Help and What's new render with CompMD too):
 
 - **Markdown and GFM** — headings, lists (nested too), tables, task lists, code, quotes, alerts, footnotes and links;

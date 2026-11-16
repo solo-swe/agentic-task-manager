@@ -90,7 +90,7 @@ test.describe('Help', () => {
       .locator('#help-panel a[target="_blank"]')
       .evaluateAll((links) => links.map((a) => a.getAttribute('href')));
     expect(hrefs).toEqual([
-      'https://compmd.hakanserce.com/',
+      'https://compmd.dev/',
       'https://mermaid.js.org/',
       expect.stringMatching(/^https:\/\/github\.com\/solo-swe\/agentic-task-manager/),
     ]);

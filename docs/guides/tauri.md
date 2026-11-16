@@ -66,7 +66,7 @@ atm's own rules for the atm app, the desktop distribution proposed in
   - **every debug build** (`cargo run`, `cargo tauri dev`, the tests) uses `devCsp`, not `csp`: the same policy plus only
     the CLI's live-reload socket. A test keeps the two in step.
 - **CompMD from two schemes** ([ADR-006](../adr/ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md), CompMD 0.7.0's
-  [Tauri chapter](https://compmd.hakanserce.com/guides/developers/a-tauri-app/)):
+  [Tauri chapter](https://compmd.dev/guides/developers/a-tauri-app/)):
   - **CompMD's bundle** (the sandbox's frames under their hash, the packs by their place) from CompMD's own plugin
     (crates.io, pinned to the `@compmd/*` version: bump them together), on `compmd://localhost/`
     (`http://compmd.localhost` on Windows and Android). The dashboard's build writes the bundle

@@ -3,7 +3,7 @@
 - **Status:** accepted, 2026-11-13; replaces [ADR-005](ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md)
 - **Decided by:** Hakan Serce ("adopt 0.7.0 properly", T-524)
 - **Context:** T-524, ADR-005 (and ADR-004 before it), CompMD 0.7.0's
-  [developer guide](https://compmd.hakanserce.com/guides/developers/), chapter 19 (a Tauri app), and its designs
+  [developer guide](https://compmd.dev/guides/developers/), chapter 19 (a Tauri app), and its designs
   [hosting](https://github.com/comp-markdown/compmd/blob/main/docs/hosting.md) and
   [the Tauri plugin](https://github.com/comp-markdown/compmd/blob/main/docs/tauri-plugin.md);
   [security-architecture.md](../security-architecture.md) I13 and I26

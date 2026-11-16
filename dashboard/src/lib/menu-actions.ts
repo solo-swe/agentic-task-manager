@@ -9,7 +9,7 @@ import type { DialogId } from './dialogs';
 import type { ViewId } from './tabs';
 
 /** CompMD's site, Help ▸ CompMD */
-export const COMPMD_URL = 'https://compmd.hakanserce.com/';
+export const COMPMD_URL = 'https://compmd.dev/';
 
 /** What the menu's actions act on: the dashboard's state, and the page's own (in tests, stand-ins) */
 export interface MenuTarget {

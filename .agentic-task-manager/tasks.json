@@ -20871,7 +20871,7 @@
       "description": "ADR-007 §9. `docs/agent/` (`atm docs tasks`, `commands`: keys, the `~` mark, aliases, `atm project key set`, references across projects), the skills' examples (`skills/atm-*/SKILL.md`: `T-…` to keys, what a provisional key means for commit messages), `docs/help.md` and README. A skill change: the release's security review gets a written review (`docs/security-architecture.md` §3.3).\n\n## Tests\n`docs.test.mjs` (every command a topic names exists); the skills' tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-543"
       ],
@@ -20883,7 +20883,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:27:50Z",
+      "updated_at": "2026-11-16T04:32:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20908,10 +20908,19 @@
           "kind": "note",
           "text": "From T-543: the migration is `atm project key set <KEY>` (not db migrate --keys): on a T- project it converts with that key; on a keyed one it changes the prefix. Document it in docs/agent and the skills (create-tasks: a new project gets meta.key, ask the user for it).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T04:32:37Z",
+          "kind": "outcome",
+          "text": "Skills require atm 0.38.0 (older ones misread a keyed file); docs/agent commands and tasks: keys, ~ provisional, aliases, atm project key show|set (only with the user’s say), cross-project deps; create-tasks: new project meta key, next key, deps by key; do-task example; help.md and README sections. A skill change: the 0.38.0 release’s security checklist needs its written review (§3.3).",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-16T04:27:50Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f2acd31ed3391f95819d8851389817154cdb9cf5",
+      "completed_at": "2026-11-16T04:32:37Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-548",
@@ -20924,7 +20933,7 @@
       "description": "CompMD's site moved to `https://compmd.dev`. Change every reference to `compmd.hakanserce.com`, keeping the path (`/guides/developers/a-tauri-app/` stays):\n- `dashboard/src/lib/menu-actions.ts` (`COMPMD_URL`, the About dialog's and Help's link)\n- `docs/help.md`, `README.md`\n- `docs/guides/tauri.md`, `docs/adr/ADR-006-…` (a link in an accepted ADR: only the address changes)\n- the tests that check the link: `dashboard/tests/unit/AboutDialog.component.test.ts`, `dashboard/tests/e2e/help.spec.ts`\n\nThen search the repository again (outside `node_modules`, `target`, `dist`, coverage output) to confirm none is left; `CHANGELOG.md`'s past entries stay as written.\n\n## Tests\nThe unit test and the help spec.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/menu-actions.ts",
@@ -20936,7 +20945,7 @@
         "dashboard/tests/e2e/help.spec.ts"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:25Z",
+      "updated_at": "2026-11-16T04:32:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20949,7 +20958,9 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-16T04:32:37Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
