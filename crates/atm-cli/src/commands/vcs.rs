@@ -232,10 +232,19 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             let mut project =
                 Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
-            let result = record_merge(&mut project, pr, at.as_deref())?;
+            let mut result = record_merge(&mut project, pr, at.as_deref())?;
+            // Keys of tasks now on the base branch are final (ADR-007 §3)
+            let vcs = project.vcs();
+            let finalized = atm_lib::code::finalize_keys(&mut project, vcs.as_ref())?;
+            if !finalized.is_empty() {
+                result["keys_final"] = json!(finalized);
+            }
             if ctx.json {
                 print_json(&result);
                 return Ok(());
+            }
+            if !finalized.is_empty() {
+                println!("Final now (on the base branch): {}", finalized.join(", "));
             }
             let ids: Vec<String> = result["tasks"]
                 .as_array()

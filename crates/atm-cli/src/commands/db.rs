@@ -264,7 +264,25 @@ pub fn run(command: DbCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 );
                 return Ok(0);
             }
-            let migration = maintenance(cwd)?.migrate(true)?;
+            let mut migration = maintenance(cwd)?.migrate(true)?;
+            // Keys of tasks now on the base branch are final (ADR-007 §3); nothing without task keys
+            let finalized = match Project::open(cwd) {
+                Ok(mut project) => {
+                    let vcs = project.vcs();
+                    atm_lib::code::finalize_keys(&mut project, vcs.as_ref()).unwrap_or_default()
+                }
+                Err(_) => Vec::new(),
+            };
+            if !finalized.is_empty() {
+                migration
+                    .result
+                    .insert("keys_final".into(), json!(finalized));
+                migration.lines.retain(|l| l != "Nothing to migrate.");
+                migration.lines.push(format!(
+                    "Final now (on the base branch): {}",
+                    finalized.join(", ")
+                ));
+            }
             if ctx.json {
                 print_json(&Value::Object(migration.result));
             } else {

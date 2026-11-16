@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { REPO, makeProject, removeDir, runAtm } from './helpers.mjs';
+import { REPO, git, makeProject, removeDir, runAtm, tempDir } from './helpers.mjs';
 
 const DIR = '.agentic-task-manager';
 const FILE = `${DIR}/tasks.json`;
@@ -167,6 +167,51 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
     assert.match(other.stderr, /LFB isn't this project's key \(ATM\)/);
   } finally {
     removeDir(root);
+  }
+});
+
+test('a key becomes final once its task is on origin’s base branch, read from git (T-542)', () => {
+  const remote = tempDir('atm-remote-');
+  const root = makeProject({
+    files: { [FILE]: { meta: { id: '3f2a9c1e', project: 'Fig' }, tasks: [] } },
+    git: true,
+    commit: true,
+  });
+  const add = (name) => {
+    const dir = tempDir();
+    try {
+      fs.writeFileSync(path.join(dir, 'new.json'), JSON.stringify([{ name, type: 'feature' }]));
+      assert.equal(runAtm(['task', 'add', '--json-file', path.join(dir, 'new.json')], root).code, 0);
+    } finally {
+      removeDir(dir);
+    }
+  };
+  const task = (name) => read(root, FILE).tasks.find((t) => t.name === name);
+  try {
+    git(['init', '-q', '--bare', remote], root);
+    git(['branch', '-M', 'main'], root);
+    git(['remote', 'add', 'origin', remote], root);
+    assert.equal(runAtm(['project', 'key', 'set', 'FIG'], root).code, 0);
+    git(['commit', '-q', '-am', 'keys'], root);
+    git(['push', '-q', '-u', 'origin', 'main'], root);
+    // Added on a branch: provisional, and migrate leaves it so (it isn't on origin/main)
+    git(['switch', '-q', '-c', 'work'], root);
+    add('on a branch');
+    git(['commit', '-q', '-am', 'work'], root);
+    runAtm(['db', 'migrate'], root);
+    assert.equal(task('on a branch').key_final, false);
+    // Merged and pushed: final on the next migrate, never from what anyone says
+    git(['switch', '-q', 'main'], root);
+    git(['merge', '-q', '--no-edit', 'work'], root);
+    git(['push', '-q', 'origin', 'main'], root);
+    const r = runAtm(['db', 'migrate', '--json'], root);
+    assert.equal(r.code, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout).keys_final, ['FIG-1']);
+    assert.equal(task('on a branch').key_final, true);
+    assert.match(runAtm(['task', 'list'], root).stdout, /^FIG-1 /m, 'no ~ any more');
+  } finally {
+    removeDir(root);
+    removeDir(remote);
   }
 });
 
