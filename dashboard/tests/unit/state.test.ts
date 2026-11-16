@@ -359,6 +359,23 @@ describe('DashboardState', () => {
   });
 });
 
+describe('DashboardState auto-refresh preference', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('is on every 5 seconds by default', () => {
+    const s = new DashboardState();
+    expect([s.autoRefresh, s.autoRefreshSeconds]).toEqual([true, 5]);
+  });
+
+  it('remembers the choice and interval for the next session', () => {
+    const first = new DashboardState();
+    first.setAutoRefresh(false);
+    first.setAutoRefreshSeconds(30);
+    const next = new DashboardState();
+    expect([next.autoRefresh, next.autoRefreshSeconds]).toEqual([false, 30]);
+  });
+});
+
 describe('DashboardState update notice', () => {
   let held = 'b2';
   let meta: HTMLMetaElement;

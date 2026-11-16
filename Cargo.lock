@@ -265,7 +265,6 @@ dependencies = [
  "atm-lib",
  "axum",
  "compmd-host",
- "futures-core",
  "serde_json",
  "tokio",
 ]
@@ -278,6 +277,8 @@ dependencies = [
  "atm-common",
  "atm-lib",
  "axum",
+ "notify",
+ "notify-debouncer-full",
  "serde",
  "serde_json",
  "specta",
@@ -337,8 +338,6 @@ dependencies = [
  "atm-common",
  "atm-db",
  "atm-vcs",
- "notify",
- "notify-debouncer-full",
  "serde_json",
  "sysinfo",
 ]

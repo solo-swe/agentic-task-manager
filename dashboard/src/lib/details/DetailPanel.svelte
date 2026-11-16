@@ -163,7 +163,7 @@
     body.scrollTo({ top, behavior: scrollBehavior() });
   }
 
-  // Another task opens at its top; the same task re-rendered (a change, a reload) keeps its scroll position
+  // Another task opens at its top; the same task re-rendered (auto-refresh, a reload) keeps its scroll position
   let shownId: string | undefined;
   $effect(() => {
     const id = task?.id;

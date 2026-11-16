@@ -388,10 +388,16 @@ export class DashboardState {
   systemPrefersLight = $state(prefersLight());
   mode = $derived<Mode>(resolveMode(this.modePref, this.systemPrefersLight));
 
-  // The page reacts to changes, in the app (T-506) and the browser (T-507), instead of polling: the old auto-refresh
-  // settings stored in a browser are ignored, not deleted
+  // On by default (FR-6.1); the user's choice is remembered per browser (FR-6.2)
+  autoRefresh = $state(getPref('autoRefresh', true));
+  autoRefreshSeconds = $state(getPref('autoRefreshSeconds', 5));
+  /** In the atm app the page reacts to the app's changes instead of polling (T-506): no refresh settings there, and
+   * the stored ones are ignored, not deleted */
+  live = $state(inApp);
+  /** Whether the page polls: in the browser, with auto-refresh on */
+  polls = $derived(!this.live && this.autoRefresh);
 
-  // The last tasks.json's ETag / Last-Modified: reloads ask whether it changed, and skip the work when it hasn't
+  // The last tasks.json's ETag / Last-Modified: polls ask whether it changed, and skip the work when it hasn't
   #validators: Validators | undefined;
   #projectsValidators: Validators | undefined;
   #pendingNeedsYou = false;
@@ -416,7 +422,7 @@ export class DashboardState {
   #kept = new Map<string, KeptProject>();
 
   /**
-   * A view needs history (D-5.2): load the archive now, and keep it current with the reloads from then on. Failures
+   * A view needs history (D-5.2): load the archive now, and keep it current with the polls from then on. Failures
    * are logged only; the views then show tasks.json alone.
    */
   wantArchive() {
@@ -463,17 +469,6 @@ export class DashboardState {
       console.error('Reload failed:', e);
     }
     setTimeout(() => (this.reloading = false), RELOAD_SPIN_MS);
-  }
-
-  /** When the page was last told there may be news: a change (T-506, T-507), the app's window regaining focus, the
-   * Reload button. What reads more than the reload does (the document viewer's file) reads it again then; a reload
-   * for a move to another page doesn't need that */
-  refreshedAt = $state(0);
-
-  /** Reload for news (see refreshedAt) */
-  refresh(): Promise<void> {
-    this.refreshedAt = Date.now();
-    return this.reload();
   }
 
   /** Re-fetch the project list and decide the page from the URL; returns the project to load, or null for a page
@@ -681,7 +676,7 @@ export class DashboardState {
   /** In the atm app (T-483): look for a newer version of the app, at most every UPDATE_CHECK_MS (now, `force`d by
    * the menu's Check for Updates, T-512); one put off ("Not now") isn't offered again, a newer one is */
   async checkAppUpdate(now = Date.now(), force = false) {
-    if (!inApp || (!force && now - this.#updateCheckedAt < UPDATE_CHECK_MS)) return;
+    if (!this.live || (!force && now - this.#updateCheckedAt < UPDATE_CHECK_MS)) return;
     this.#updateCheckedAt = now;
     const update = await checkAppUpdate();
     const dismissed = getPref('dismissedAppUpdate', '');
@@ -750,7 +745,7 @@ export class DashboardState {
   }
 
   private async fetchAndApply() {
-    // The first load waits, as `/` may go to another workspace; a reload doesn't
+    // The first load waits, as `/` may go to another workspace; a poll doesn't
     if (this.projectsLoaded) void this.refreshWorkspaces();
     else await this.refreshWorkspaces();
     const project = await this.refreshProjects();
@@ -872,6 +867,11 @@ export class DashboardState {
     setPref('overviewActiveOnly', on);
   }
 
+  setAutoRefresh(on: boolean) {
+    this.autoRefresh = on;
+    setPref('autoRefresh', on);
+  }
+
   setModePref(pref: ModePref) {
     this.modePref = pref;
     setPref('mode', pref);
@@ -885,6 +885,11 @@ export class DashboardState {
   setDocStyle(id: string) {
     this.docStyle = knownDocStyle(id);
     setPref('docStyle', this.docStyle);
+  }
+
+  setAutoRefreshSeconds(seconds: number) {
+    this.autoRefreshSeconds = seconds;
+    setPref('autoRefreshSeconds', seconds);
   }
 
   toggleFilter(group: FilterGroup, value: string) {

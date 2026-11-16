@@ -38,8 +38,6 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /api/v2/workspaces/<w>/projects/<id>/tasks` | as `api/v1/projects/<id>/tasks`, in that workspace | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/documents?path=`, `files?path=` | as the v1 file routes (§2.6) | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/claims`, `worktrees`, `logo` | as `/p/<id>/claims.json`, `worktrees.json`, `logo` | yes |
-| `GET /api/v2/workspaces/<w>/changes` | a stream of events, one each time the workspace's list or one of its projects changes (§2.9) | no |
-| `GET /api/v2/workspaces/<w>/projects/<id>/changes` | a stream of events, one each time that project's data changes (§2.9) | no |
 | anything else | `404` | |
 
 The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/…`) are the `default` workspace's
@@ -223,45 +221,7 @@ old parameters from its hash and moves to the new address.
   a workspace; its logo is at `api/v2/workspaces/<w>/projects/<id>/logo` (in `default`, `p/<id>/logo`).
 - The app's commands answer the same (without `generated_at`): `list_workspaces`, `list_projects`, `search`,
   `project_tasks`, `claims`, `worktrees`, `document`, `file` and `logo`, and `subscribe_workspace`,
-  `subscribe_project` and `unsubscribe` for live changes (docs/guides/tauri.md); atm serve's are its change streams
-  (§2.9).
-
-### 2.9 `changes`: a workspace's or a project's changes, as they happen (T-507)
-
-`GET /api/v2/workspaces/<w>/changes` and `GET /api/v2/workspaces/<w>/projects/<id>/changes` answer `200` with
-`Content-Type: text/event-stream` (server-sent events) and stay open, sending:
-
-```text
-: watching
-
-event: changed
-data: {"workspace":"default","project":"abcd1234"}
-
-:
-```
-
-- **What it watches** is what the app's subscriptions watch (`subscribe_workspace`, `subscribe_project`;
-  `atm_lib::watch`): for a workspace, its list's folder, the state folder and each listed project's task folders; for
-  a project, its task folders (each worktree's) and its claims folder. Not their subfolders, and not the project's
-  other files (a document): the page asks for those again when it reloads.
-- **What it says:** a comment, `: watching`, once the watch is set up; then one `changed` event per burst of changes,
-  once it has settled (300 ms), naming the workspace and the project (`null` on a workspace's stream). Never what
-  changed in it: the page reads that through the routes above, conditionally, so an unchanged answer is a `304`.
-- **Keep-alive:** a comment (`:`) every 15 seconds while nothing changes, so the client sees the connection is alive and
-  the server finds one that is gone.
-- **At most 16 streams** are open at once, all clients together; one more gets `503` with
-  `{"error": "too many change streams"}` and `Retry-After: 30`. A stream ends, its watch stopped and its place given
-  back, when its client goes.
-- An unknown workspace gets `404` with `{"error": "unknown workspace"}`, an unknown or missing project `404` with
-  `{"error": "unknown project"}` or `{"error": "not found"}`, as the other routes answer. The Host check (§1) applies,
-  and the headers every response has: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`,
-  `Cross-Origin-Resource-Policy: same-origin`.
-- **The dashboard** in the browser opens one, the workspace's (`EventSource`): a browser holds only six HTTP/1
-  connections to a server across all its tabs, so each tab holds one, which covers its projects. It reloads on each
-  event. A stream that fails is opened again after a wait that doubles, from 1 s to 30 s, and reloads once it is back;
-  while it can't connect at all (three tries in a row) the page also reloads every 60 s, until it does
-  (`dashboard/src/lib/api/changes.ts`). There is no refresh interval to set (the Refresh menu's went with T-507), only
-  the Reload button.
+  `subscribe_project` and `unsubscribe` for live changes (docs/guides/tauri.md).
 
 ## 3. `GET /api/projects`
 

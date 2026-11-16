@@ -34,72 +34,91 @@ test.describe('reload', () => {
   });
 });
 
-test.describe('changes (T-507)', () => {
+test.describe('auto-refresh', () => {
   const requests = (tasksServer: { requests: number }) => expect.poll(() => tasksServer.requests);
-  /** The change streams the page opened, and whether each is still open */
-  const streams = (page: Page) =>
-    page.evaluate(() =>
-      (window as unknown as { __atmStreams: { path: string; closed: boolean }[] }).__atmStreams.map((s) => [
-        s.path,
-        s.closed,
-      ]),
-    );
+  // The settings are in the ⋯ menu next to the Reload button (T-323)
+  const menu = (page: Page) => openMenu(page, '#settings-btn');
+  const toggle = (page: Page) => page.locator('.auto-refresh-toggle');
+  const check = (page: Page) => page.locator('#auto-refresh-check');
+  const interval = (page: Page) => page.locator('#auto-refresh-interval');
+  const state = (page: Page) => page.locator('#reload-btn .refresh-state');
 
-  test('the page watches its workspace on one stream, and polls on no timer', async ({ page, tasksServer }) => {
+  test.beforeEach(async ({ page, tasksServer }) => {
     await page.clock.install();
-    await openDashboard(page, tasksServer, 'standard');
-    expect(await streams(page)).toEqual([['/api/v2/workspaces/default/changes', false]]);
-    await page.clock.runFor(120_000);
-    await requests(tasksServer).toBe(1);
-    // Nothing to set: no interval on the button, no auto-refresh in the settings
-    await expect(page.locator('#reload-btn .refresh-state')).toHaveCount(0);
-    await openMenu(page, '#settings-btn');
-    await expect(page.locator('#auto-refresh-check')).toHaveCount(0);
-    await expect(page.locator('#last-loaded')).toContainText('Updates as tasks change');
+    // A fresh browser profile: no stored preferences, so the dashboard's defaults apply
+    await openDashboard(page, tasksServer, 'standard', { autoRefresh: true });
+    await menu(page);
   });
 
-  test('a change reloads the page and shows', async ({ page, tasksServer }) => {
-    await openDashboard(page, tasksServer, 'standard');
-    tasksServer.use(standardWithT005Done());
-    await tasksServer.pushChange();
-    await expect(progress(page)).toHaveAccessibleName('Progress 55%, 6 of 11 tasks done');
+  test('is on by default and polls every 5 seconds', async ({ page, tasksServer }) => {
+    await expect(state(page)).toHaveText('5s');
+    await expect(check(page)).toBeChecked();
+    await expect(interval(page)).toHaveValue('5');
+    await page.clock.runFor(5_000);
     await requests(tasksServer).toBe(2);
+    await page.clock.runFor(5_000);
+    await requests(tasksServer).toBe(3);
+  });
+
+  test('stops polling when switched off', async ({ page, tasksServer }) => {
+    await toggle(page).click();
+    await expect(check(page)).not.toBeChecked();
+    await expect(state(page)).toHaveText(''); // a pause icon instead of the interval
+    await page.clock.runFor(30_000);
+    await requests(tasksServer).toBe(1);
+  });
+
+  test('switching it off is remembered across reloads', async ({ page, tasksServer }) => {
+    await toggle(page).click();
+    await page.reload();
+    await menu(page);
+    await expect(check(page)).not.toBeChecked();
+    const afterReload = tasksServer.requests;
+    await page.clock.runFor(30_000);
+    expect(tasksServer.requests).toBe(afterReload);
+  });
+
+  test('picks up changes on the next tick', async ({ page, tasksServer }) => {
+    tasksServer.use(standardWithT005Done());
+    await page.clock.runFor(5_000);
+    await expect(progress(page)).toHaveAccessibleName('Progress 55%, 6 of 11 tasks done');
   });
 
   test('an unchanged file is a 304: nothing is parsed or re-rendered; a change still shows', async ({
     page,
     tasksServer,
   }) => {
-    await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
     // A marker on a rendered card survives only if the card isn't rendered again
+    await page.keyboard.press('Escape'); // the settings menu
+    await page.getByRole('tab', { name: 'Task List' }).click();
     await page.locator('.task-card[data-id="T-005"]').evaluate((el) => el.setAttribute('data-marker', '1'));
-    await tasksServer.pushChange();
-    await requests(tasksServer).toBe(2);
-    expect(tasksServer.notModified).toBe(1);
+    await page.clock.runFor(10_000);
+    await requests(tasksServer).toBe(3);
+    expect(tasksServer.notModified).toBe(2);
     await expect(page.locator('.task-card[data-id="T-005"][data-marker="1"]')).toHaveCount(1);
 
     tasksServer.use(standardWithT005Done());
-    await tasksServer.pushChange();
+    await page.clock.runFor(5_000);
     await expect(progress(page)).toHaveAccessibleName('Progress 55%, 6 of 11 tasks done');
-    expect(tasksServer.notModified).toBe(1);
+    expect(tasksServer.notModified).toBe(2);
   });
 
-  test('another workspace: its own stream, the old one closed', async ({ page, tasksServer }) => {
-    tasksServer.workspaces(['work']);
-    await openDashboard(page, tasksServer, 'standard');
-    await page.locator('#workspace-selector').click();
-    await page.locator('.workspace-option[data-id="work"]').click();
-    await expect(page.locator('#workspace-selector')).toHaveText('work');
-    await expect
-      .poll(() => streams(page))
-      .toEqual([
-        ['/api/v2/workspaces/default/changes', true],
-        ['/api/v2/workspaces/work/changes', false],
-      ]);
+  test('a changed interval applies immediately and is remembered', async ({ page, tasksServer }) => {
+    await interval(page).fill('2');
+    await interval(page).press('Tab');
+    await page.clock.runFor(2_000);
+    await requests(tasksServer).toBe(2);
+    await page.clock.runFor(2_000);
+    await requests(tasksServer).toBe(3);
+    await page.reload();
+    await expect(state(page)).toHaveText('2s');
+    await menu(page);
+    await expect(interval(page)).toHaveValue('2');
+    await expect(check(page)).toBeChecked();
   });
 });
 
-test('the ⋯ settings menu: mode and theme; closes on Escape and on a click outside (T-323)', async ({
+test('the ⋯ settings menu: auto-refresh, mode and theme; closes on Escape and on a click outside (T-323)', async ({
   page,
   tasksServer,
 }) => {
@@ -108,7 +127,13 @@ test('the ⋯ settings menu: mode and theme; closes on Escape and on a click out
   await button.click();
   const settings = page.locator('#settings-menu');
   await expect(settings).toBeVisible();
-  await expect(settings.locator('.menu-label')).toHaveText(['Mode', 'Theme', 'Document style', 'This project']);
+  await expect(settings.locator('.menu-label')).toHaveText([
+    'Auto-refresh',
+    'Mode',
+    'Theme',
+    'Document style',
+    'This project',
+  ]);
   await expect(button).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.press('Escape');
   await expect(settings).toHaveCount(0);

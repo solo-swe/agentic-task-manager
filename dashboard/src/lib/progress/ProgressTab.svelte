@@ -19,7 +19,7 @@
   });
   const tasks = $derived(dashboard.historyFiltered);
 
-  // Recomputed whenever tasks or filters change (the reloads on a change keep it current)
+  // Recomputed whenever tasks or filters change (auto-refresh reloads keep it current)
   const now = $derived.by(() => (dashboard.history, tasks, Date.now()));
   // The search and filters pick a slice of the tasks (the status and stage filters don't apply here: T-239). The slice
   // gets its own counts and lines, but when a sprint finishes is the whole sprint's: the loop works through all of it.

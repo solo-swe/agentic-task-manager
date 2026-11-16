@@ -54,11 +54,7 @@ jiff = "0.2"
 uuid = { version = "1.29", features = ["v7"] }
 # `atm service`'s server (T-449, docs/porting-to-rust.md §3): HTTP/1 on localhost; the rest of atm stays synchronous
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
-# (`sync`, `time`: the change streams' channels and their limits, T-507)
-tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros", "sync", "time"] }
-# The change streams' `Stream` trait (T-507; approved by Hakan): axum's server-sent events take one. Already in the
-# tree through axum
-futures-core = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros"] }
 # Windows only (T-480, approved): atm's own standard handles made non-inheritable before it starts a background
 # process, so the caller's pipes close when atm exits. Already in the tree through tokio and sysinfo
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }
@@ -80,8 +76,7 @@ tauri-plugin-notification = "=2.8.0"
 specta ={ version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
-# Live changes (T-456, approved): a watcher on the folders the store reports, its events debounced; atm-lib's since
-# T-507 (approved by Hakan), for the app and atm serve's change streams
+# The app's live changes (T-456, approved): a watcher on the folders the store reports, its events debounced
 notify = "8.2.1"
 notify-debouncer-full = "0.7.0"
 

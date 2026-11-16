@@ -27,15 +27,13 @@ atm's own rules for the atm app, the desktop distribution proposed in
 
 - **One `tauri::ipc::Channel` per subscription** for live data, delivering messages in order, and an `unsubscribe`
   command to end it. A subscription watches the folders the store reports (`Store::watch_folders`, not their
-  subfolders) with atm-lib's watcher (`atm_lib::watch`: `notify`, debounced; `atm serve`'s change streams use the same
-  one, T-507), and says only what changed (a workspace, a project); the page reads it again.
+  subfolders) with `notify`, debounced, and says only what changed (a workspace, a project); the page reads it again.
 - No global events for data changes.
-- **The page reacts, it doesn't poll** (T-506): in the app the root layout subscribes to the workspace and the open
-  project (`lib/api/changes.ts`'s `watchChanges`), reloads on a message, and ends the subscriptions when it moves to
-  another workspace or project. A change the watcher can't see (a document outside the task folder, a missed event)
-  shows when the window regains focus, and on the Reload button. In the browser the same `watchChanges` follows
-  `atm serve`'s change stream instead (T-507, docs/multi-project-api.md §2.9), with backoff and a slow poll only while
-  it can't connect; there are no refresh settings anywhere.
+- **The page reacts, it doesn't poll** (T-506): in the app (`dashboard.live`) the root layout subscribes to the
+  workspace and the open project (`lib/api/changes.ts`'s `watchChanges`), reloads on a message, and ends the
+  subscriptions when it moves to another workspace or project. A change the watcher can't see (a document outside the
+  task folder, a missed event) shows when the window regains focus, and on the Reload button. The refresh settings are
+  the browser's only (`dashboard.polls`), until `atm serve` pushes changes too (T-507).
 - **A page that goes away doesn't say so:** sending on its channel doesn't fail, the message only finds no callback.
   So the window's page loading again (`on_page_load`, `PageLoadEvent::Started`: a reload, ⌘R) ends every
   subscription (`AppState::unwatch_all`); the new page makes its own.

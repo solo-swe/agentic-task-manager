@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::badge::NeedsYou;
 use crate::links::Links;
@@ -15,19 +16,25 @@ use crate::menu::Menus;
 use crate::session::Session;
 use atm_lib::Workspaces;
 use atm_lib::query::Filters;
-use atm_lib::watch::Watch;
 use atm_lib::workspaces::{Member, Workspace};
+use notify::RecursiveMode;
+use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use specta::Type;
 use tauri::ipc::Channel;
 use tauri::{Runtime, State, WebviewWindow};
 
-/// A live subscription: the window whose page made it, and its watch.
+/// How long the watcher waits for a burst of changes (an atm command writes a file or two, git many) to settle.
+const SETTLE: Duration = Duration::from_millis(300);
+
+type Watcher = Debouncer<notify::RecommendedWatcher, RecommendedCache>;
+
+/// A live subscription: the window whose page made it, and its watcher.
 struct Subscription {
     window: String,
     /// Held only: it watches until it is dropped
-    _watch: Watch,
+    _watcher: Watcher,
 }
 
 /// What every command shares: the user's workspaces, opened when the app starts, the live subscriptions (each its
@@ -149,9 +156,18 @@ impl AppState {
         channel: Channel<Changed>,
         message: Changed,
     ) -> Result<u32, AppError> {
-        let watch = atm_lib::watch::watch(folders, move || {
-            let _ = channel.send(message.clone());
-        })?;
+        let failed = |e: notify::Error| AppError::Failed(e.to_string());
+        let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
+            if result.is_ok_and(|events| !events.is_empty()) {
+                let _ = channel.send(message.clone());
+            }
+        })
+        .map_err(failed)?;
+        for folder in folders.iter().filter(|f| f.is_dir()) {
+            watcher
+                .watch(folder, RecursiveMode::NonRecursive)
+                .map_err(failed)?;
+        }
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         self.subscriptions
             .lock()
@@ -160,7 +176,7 @@ impl AppState {
                 id,
                 Subscription {
                     window: window.to_owned(),
-                    _watch: watch,
+                    _watcher: watcher,
                 },
             );
         Ok(id)
@@ -582,7 +598,8 @@ pub async fn subscribe_workspace<R: Runtime>(
     channel: Channel<Changed>,
 ) -> Result<u32, AppError> {
     let found = self::workspace(&state.workspaces, &workspace)?;
-    let folders = atm_lib::watch::workspace_folders(&state.workspaces, &found);
+    let mut folders = found.watch_folders();
+    folders.push(state.workspaces.folder());
     let message = Changed {
         workspace,
         project: None,
@@ -673,7 +690,6 @@ pub async fn unsubscribe<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     #[test]
     fn a_subscription_says_when_a_watched_folder_changes_and_ends_with_unsubscribe() {

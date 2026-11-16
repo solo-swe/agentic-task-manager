@@ -2,8 +2,7 @@
 //! every registered project, on axum. It holds the dashboard page and its assets in memory (embedded in the binary)
 //! and answers only GET and HEAD, only for the Host `localhost:<port>` or `127.0.0.1:<port>` (DNS rebinding), with
 //! the security headers and the page's Content-Security-Policy of docs/security-architecture.md I12–I13. Its routes
-//! and record are described in docs/multi-project-api.md; besides the reads, a change stream per workspace and
-//! project tells the page when to read again (T-507, `changes`). It never depends on the CLI: `atm service` starts it as a
+//! and record are described in docs/multi-project-api.md. It never depends on the CLI: `atm service` starts it as a
 //! process (`atm _serve <home> <port>`).
 //!
 //! Part of atm's Rust port (T-415): docs/porting-to-rust.md, docs/layered-architecture.md, docs/guides/rust.md.
@@ -12,7 +11,6 @@
 const APP_VERSION: &str = "/_app/version.json";
 
 mod assets;
-mod changes;
 mod pages;
 /// The read API's routes: public so the app's tests can check its commands answer the same (ADR-003 §5).
 pub mod routes;
@@ -48,8 +46,6 @@ struct Served {
     home: String,
     hashes: Vec<String>,
     projects: routes::Projects,
-    /// The change streams open now (T-507)
-    streams: changes::Streams,
 }
 
 /// A response as atm sends them: `Cache-Control: no-store` unless `headers` say otherwise, no content sniffing, and
@@ -182,10 +178,6 @@ async fn handle(State(served): State<Arc<Served>>, request: Request) -> Response
             &[],
         );
     }
-    if let Some(target) = changes::target(path) {
-        // A workspace's or a project's changes, as they happen (T-507): held open, so not one of the blocking reads
-        return changes::open(Arc::clone(&served), target).await;
-    }
     // The read API works on the projects' files: off the async workers
     let (path, query) = (
         path.to_string(),
@@ -269,7 +261,6 @@ pub fn serve(home: &Path, first_port: u16) -> Result<(), String> {
         home: home_id(home),
         hashes: script_hashes(PAGE),
         projects: routes::Projects::new(home),
-        streams: changes::Streams::default(),
     });
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

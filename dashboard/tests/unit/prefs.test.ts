@@ -6,31 +6,31 @@ describe('prefs', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('returns defaults when nothing is stored', () => {
-    expect(getPref('needsYouBadge', true)).toBe(true);
-    expect(getPref('sidebarWidth', 240)).toBe(240);
+    expect(getPref('autoRefresh', true)).toBe(true);
+    expect(getPref('autoRefreshSeconds', 5)).toBe(5);
   });
 
   it('round-trips values and keeps other keys', () => {
-    setPref('needsYouBadge', false);
-    setPref('sidebarWidth', 300);
-    expect(getPref('needsYouBadge', true)).toBe(false);
-    expect(getPref('sidebarWidth', 240)).toBe(300);
-    expect(JSON.parse(localStorage.getItem(PREFS_KEY)!)).toEqual({ needsYouBadge: false, sidebarWidth: 300 });
+    setPref('autoRefresh', false);
+    setPref('autoRefreshSeconds', 30);
+    expect(getPref('autoRefresh', true)).toBe(false);
+    expect(getPref('autoRefreshSeconds', 5)).toBe(30);
+    expect(JSON.parse(localStorage.getItem(PREFS_KEY)!)).toEqual({ autoRefresh: false, autoRefreshSeconds: 30 });
   });
 
   it('ignores values of the wrong type', () => {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ needsYouBadge: 'no', sidebarWidth: '300' }));
-    expect(getPref('needsYouBadge', true)).toBe(true);
-    expect(getPref('sidebarWidth', 240)).toBe(240);
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ autoRefresh: 'no', autoRefreshSeconds: '30' }));
+    expect(getPref('autoRefresh', true)).toBe(true);
+    expect(getPref('autoRefreshSeconds', 5)).toBe(5);
   });
 
   it('survives corrupt or non-object JSON', () => {
     localStorage.setItem(PREFS_KEY, '{ not json');
-    expect(getPref('needsYouBadge', true)).toBe(true);
+    expect(getPref('autoRefresh', true)).toBe(true);
     localStorage.setItem(PREFS_KEY, '[1,2]');
     expect(getPref('lastSeenVersion', '')).toBe('');
-    setPref('needsYouBadge', false);
-    expect(getPref('needsYouBadge', true)).toBe(false);
+    setPref('autoRefresh', false);
+    expect(getPref('autoRefresh', true)).toBe(false);
   });
 
   it('never throws when storage itself throws', () => {
@@ -40,16 +40,16 @@ describe('prefs', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('quota');
     });
-    expect(() => setPref('needsYouBadge', false)).not.toThrow();
-    expect(getPref('needsYouBadge', true)).toBe(true);
+    expect(() => setPref('autoRefresh', false)).not.toThrow();
+    expect(getPref('autoRefresh', true)).toBe(true);
   });
 
   it('never throws when localStorage is inaccessible', () => {
     vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
       throw new DOMException('denied', 'SecurityError');
     });
-    expect(getPref('sidebarWidth', 240)).toBe(240);
-    expect(() => setPref('sidebarWidth', 300)).not.toThrow();
+    expect(getPref('autoRefreshSeconds', 5)).toBe(5);
+    expect(() => setPref('autoRefreshSeconds', 10)).not.toThrow();
   });
 });
 

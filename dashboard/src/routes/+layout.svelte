@@ -105,12 +105,13 @@
     void reportNeedsYou(dashboard.workspace, dashboard.needsYouBadge, dashboard.needsYouNotify);
   });
 
-  // The page reacts to changes: the app (T-506) or atm serve's change stream (T-507) says when the workspace's list or
-  // the open project's data changed, and the page reloads them (a workspace switch or another project ends these
-  // watches and makes new ones). In the app, a change its watcher missed shows when the window regains focus; in the
-  // browser, a stream that comes back reloads once. The browser watches the workspace only, which covers its projects:
-  // one stream per tab (watchChanges)
-  $effect(() => watchChanges(dashboard.workspace, inApp ? dashboard.projectId : null, () => void dashboard.refresh()));
+  // In the atm app the page reacts to changes (T-506): the app says when the workspace's list or the open project's
+  // data changed, and the page reloads them (a workspace switch or another project ends these subscriptions and makes
+  // new ones). A change its watcher missed shows when the window regains focus.
+  $effect(() => {
+    if (!dashboard.live) return;
+    return watchChanges(dashboard.workspace, dashboard.projectId, () => void dashboard.reload());
+  });
 
   afterNavigate(({ type }) => {
     arrived();
@@ -124,7 +125,7 @@
 <!-- An old link typed over the page's address: its page, in place -->
 <svelte:window
   onhashchange={() => legacyParams(location.hash) && settle()}
-  onfocus={() => inApp && void dashboard.refresh()}
+  onfocus={() => dashboard.live && void dashboard.reload()}
   onclickcapture={openInNewTab}
   onauxclickcapture={openInNewTab}
 />

@@ -27,6 +27,8 @@ export function loadIntoDashboard(data: TasksFile, archive?: TasksFile) {
     archive: archive?.tasks ?? [],
     archiveLoaded: !!archive,
     includeArchived: false,
+    // Keep component tests free of background reloads (the real default is on)
+    autoRefresh: false,
   });
 }
 

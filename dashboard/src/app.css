@@ -1443,6 +1443,17 @@ button.menu-trigger:hover,
   width: 10px;
   height: 16px;
 }
+.refresh-state {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.refresh-interval {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+  color: var(--text-muted);
+}
 
 /* Filters (T-323): in the title bar, a compact search and a Filters button; the groups in a popup under it */
 .filters-toggle {
@@ -1787,6 +1798,22 @@ button.menu-trigger:hover,
 .auto-refresh-toggle input:checked + .toggle-track::after {
   transform: translateX(16px);
   background: var(--accent);
+}
+
+.auto-refresh-interval {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  width: 44px;
+  text-align: center;
+}
+
+.auto-refresh-interval:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 @keyframes spin {

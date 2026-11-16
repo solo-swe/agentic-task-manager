@@ -42,7 +42,7 @@ test.describe('light and dark mode', () => {
   test('the stored mode is applied before anything is painted', async ({ page, tasksServer }) => {
     // Record the mode at the moment <body> is created: nothing can be painted before that
     await page.addInitScript(() => {
-      localStorage.setItem('atm-dashboard', JSON.stringify({ mode: 'light' }));
+      localStorage.setItem('atm-dashboard', JSON.stringify({ mode: 'light', autoRefresh: false }));
       new MutationObserver((_, observer) => {
         if (!document.body) return;
         (window as unknown as { modeAtBody: string }).modeAtBody = document.documentElement.dataset.mode ?? 'unset';
