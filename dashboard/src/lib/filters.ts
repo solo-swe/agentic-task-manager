@@ -1,5 +1,6 @@
 import { shortAgent } from './claims';
 import { componentLabel, componentOrder, type Component } from './components';
+import { compareTasks } from './keys';
 import { activeSprint, effectiveRelease, NO_SPRINTS, type SprintModel, type SprintState } from './sprints';
 import { STAGE_LABELS, STAGES, stageOf, type Stage } from './stages';
 import type { Task } from './types';
@@ -296,7 +297,7 @@ export function searchTasks(tasks: Task[], query: string): Task[] {
   if (terms.length === 0) return tasks;
   return tasks.filter((t) => {
     const labels = Array.isArray(t.labels) ? t.labels.join(' ') : '';
-    const text = `${t.id} ${t.name} ${t.description ?? ''} ${t.type} ${labels}`.toLowerCase();
+    const text = `${t.id} ${t.key ?? ''} ${t.name} ${t.description ?? ''} ${t.type} ${labels}`.toLowerCase();
     return terms.every((term) => text.includes(term));
   });
 }
@@ -313,6 +314,6 @@ export function sortTasks(tasks: Task[], sort: ListSort, vocab: Vocabulary = DEF
     (a, b) =>
       priorityRank(vocab, priorityOf(vocab, a)) - priorityRank(vocab, priorityOf(vocab, b)) ||
       a.phase - b.phase ||
-      a.id.localeCompare(b.id, undefined, { numeric: true }),
+      compareTasks(a, b),
   );
 }

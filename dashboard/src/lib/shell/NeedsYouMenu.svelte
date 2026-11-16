@@ -6,6 +6,8 @@
   import { tick } from 'svelte';
   import { DropdownMenu } from 'bits-ui';
   import type { NeedsYouItem } from '../waiting';
+  import { taskLabel } from '../keys';
+  import TaskKey from '../ui/TaskKey.svelte';
 
   let {
     items,
@@ -55,7 +57,7 @@
     <button
       class="attention-chip {chipClass}"
       id={chipId}
-      title="Open {items[0].id} {items[0].name}"
+      title="Open {taskLabel(items[0])} {items[0].name}"
       onclick={() => onopen(items[0].id)}>{label}</button
     >
   </span>
@@ -83,7 +85,7 @@
               <DropdownMenu.Item onSelect={() => onopen(task.id)}>
                 {#snippet child({ props })}
                   <button {...props} class="needs-you-row" data-id={task.id}>
-                    <span class="needs-you-id">{task.id}</span>
+                    <span class="needs-you-id"><TaskKey {task} /></span>
                     <span class="needs-you-name">{task.name}</span>
                     <span class="needs-you-reason">{REASONS[task.reason]}</span>
                   </button>

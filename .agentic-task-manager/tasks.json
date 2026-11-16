@@ -20716,7 +20716,7 @@
       "description": "ADR-007 §7.\n\n## Change\n- Stored as `<project id>:<UUID>`, written by key (`atm task edit LFB-5 --add-dep ATM-978`): the project whose `meta.key` matches among the user's registered projects (`workspaces/<w>.json`), then the task by key or alias.\n- Resolved read only, through the same store and its checks: status, name and key; an unfinished one is an unmet dependency for `atm loop next`; a project not registered, missing, or a task not found is an unmet dependency named by what is known; `atm doctor` reports them.\n- `docs/security-architecture.md`: the new entry point (reading another registered project's task folder), its invariant and check.\n\n## Tests\nScenarios with two projects in a workspace: a dependency across them blocks the loop until done; the other project removed or unregistered; doctor's report.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-543"
       ],
@@ -20728,7 +20728,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:00:22Z",
+      "updated_at": "2026-11-16T04:05:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20743,7 +20743,18 @@
         "docs"
       ],
       "started_at": "2026-11-16T04:00:22Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "b8ccf7c1a53de6709c62dc4d8d9154ccbbd5bb75",
+      "completed_at": "2026-11-16T04:05:40Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T04:05:40Z",
+          "kind": "outcome",
+          "text": "Cross-project deps/related: written by key (resolve_dependency finds the registered project with that meta.key), stored <meta.id>:<UUID>; rules get a foreign-status hook (atm-lib foreign.rs, read only, cached per command): done there releases the task here, unfound counts as not done; details show key and status; doctor warns. Security doc entry added. keys.test.mjs: two registered projects.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-545",
@@ -20793,7 +20804,7 @@
       "description": "ADR-007 §3, §5, §7, §8, §9.\n\n## Change\n- Cards, rows, details, the graph, related tasks and search show the key; a provisional one lighter with a draft mark and the tooltip \"Provisional until merged into main: the number may change if another branch took it\".\n- `?task=` and `atm://…?task=` take the key; an alias or old prefix resolves to the task (the address then shows its current key).\n- A dependency on another project's task shows its key, status and a link that opens it in its project (a new tab in the app); a missing one says why.\n- The duplicate-short-name warning (§8) where it applies.\n- Filters, sorting and Kanban order by number.\n\n## Tests\nUnit (address parsing, the mark) and e2e (a provisional task, an alias address, a cross-project dependency, the warning); the screenshots in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-543",
         "T-544"
@@ -20808,7 +20819,7 @@
         "dashboard/tests/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:24Z",
+      "updated_at": "2026-11-16T04:05:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20820,7 +20831,9 @@
       "sprint": "Keys and reach",
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-16T04:05:40Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-547",

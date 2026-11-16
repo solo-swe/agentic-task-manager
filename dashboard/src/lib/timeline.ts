@@ -1,8 +1,11 @@
+import { keyOf } from './keys';
 import type { Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
 
 export interface Completion {
   id: string;
+  /** Its key, with task keys (lib/keys.ts) */
+  key?: string;
   name: string;
   time: number;
 }
@@ -16,7 +19,7 @@ export function completedAt(task: Task): string | undefined {
 export function completions(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULARY): Completion[] {
   return tasks
     .filter((t) => kindOf(vocab, t.status) === 'done' && completedAt(t))
-    .map((t) => ({ id: t.id, name: t.name, time: new Date(completedAt(t)!).getTime() }))
+    .map((t) => ({ id: t.id, ...keyOf(t), name: t.name, time: new Date(completedAt(t)!).getTime() }))
     .filter((c) => !isNaN(c.time))
     .sort((a, b) => a.time - b.time);
 }

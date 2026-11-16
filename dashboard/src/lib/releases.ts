@@ -2,6 +2,7 @@
 // view shows for each: its sprints, its tasks by stage, and the notes draft `atm releases notes` prints.
 import { effectiveRelease, type SprintModel } from './sprints';
 import { stageOf } from './stages';
+import { taskLabel } from './keys';
 import type { Task, TasksFile } from './types';
 import { kindOf, type Vocabulary } from './vocab';
 
@@ -65,10 +66,11 @@ export function releaseNotes(release: Release, tasks: Task[], vocab: Vocabulary)
     if (seen.has(id) || !own.length) continue;
     seen.add(id);
     lines.push('', `## ${label}`, '');
-    for (const t of own) lines.push(`- **${t.id}** ${t.name}${outcomeOf(t) ? `: ${outcomeOf(t)}` : ''}`);
+    for (const t of own) lines.push(`- **${taskLabel(t)}** ${t.name}${outcomeOf(t) ? `: ${outcomeOf(t)}` : ''}`);
   }
   if (!done.length) lines.push('', 'Nothing done in it yet.');
-  if (open.length) lines.push('', '## Not done yet', '', ...open.map((t) => `- ${t.id} ${t.name} (${t.status})`));
+  if (open.length)
+    lines.push('', '## Not done yet', '', ...open.map((t) => `- ${taskLabel(t)} ${t.name} (${t.status})`));
   return lines.join('\n');
 }
 

@@ -6,6 +6,7 @@
   import { formatMinutes, formatWhen } from '../format';
   import { dashboard } from '../state.svelte';
   import { typeStyle } from '../theme';
+  import { taskLabel } from '../keys';
   import { keepWindow, panWindow, resolveWindow, zoomWindow, type TimeWindow, type ViewWindow } from '../time-window';
 
   // A project's Agents tab by default. The overview's (T-333) gives its own timeline (every project's agents), its own
@@ -314,7 +315,7 @@
             <div class="agent-projects" title={lane.projects.join(', ')}>{lane.projects.join(' · ')}</div>
           {/if}
           {#if lane.current.length}
-            <div class="agent-now">Now: {lane.current.map((t) => t.id).join(', ')}</div>
+            <div class="agent-now">Now: {lane.current.map(taskLabel).join(', ')}</div>
           {/if}
         </div>
         <div class="agent-track">
@@ -333,14 +334,14 @@
                 data-id={bar.task.id}
                 data-project={bar.project?.id}
                 style="left:{seg.left}%;width:max(4px, {seg.width}%);--bar:{typeStyle(bar.task.type).color}"
-                title="{bar.project ? `${bar.project.name}: ` : ''}{bar.task.id} {bar.task.name}&#10;{formatWhen(
-                  bar.start,
-                  now,
-                )} → {bar.live ? 'now' : formatWhen(bar.end, now)} ({formatMinutes(
-                  (bar.end - bar.start) / 60_000,
-                )}){approver ? `\napproved by ${approver}` : ''}"
+                title="{bar.project ? `${bar.project.name}: ` : ''}{taskLabel(bar.task)} {bar.task
+                  .name}&#10;{formatWhen(bar.start, now)} → {bar.live
+                  ? 'now'
+                  : formatWhen(bar.end, now)} ({formatMinutes((bar.end - bar.start) / 60_000)}){approver
+                  ? `\napproved by ${approver}`
+                  : ''}"
                 onclick={() => (onopen ? onopen(bar) : dashboard.showDetail(bar.task.id))}
-                ><span class="agent-bar-label">{bar.task.id}</span>{#if approver}<span
+                ><span class="agent-bar-label">{taskLabel(bar.task)}</span>{#if approver}<span
                     class="agent-bar-approved"
                     data-by={approver}
                   ></span>{/if}</button

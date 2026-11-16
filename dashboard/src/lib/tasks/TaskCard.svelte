@@ -15,6 +15,7 @@
   import PriorityBadge from '../ui/PriorityBadge.svelte';
   import SprintMarker from '../progress/SprintMarker.svelte';
   import StageChip from '../ui/StageChip.svelte';
+  import TaskKey from '../ui/TaskKey.svelte';
 
   // `showSprint`: the list shows tasks of more than one sprint and doesn't group by them, so the card names its own
   let { task, showSprint = false }: { task: Task; showSprint?: boolean } = $props();
@@ -40,7 +41,7 @@
 </script>
 
 <div class="task-card status-{task.status} kind-{kind ?? 'none'}" id="task-{task.id}" data-id={task.id}>
-  <div class="task-id">{task.id}</div>
+  <div class="task-id"><TaskKey {task} /></div>
   <div class="task-body">
     <button type="button" class="task-name" onclick={() => dashboard.showDetail(task.id)}>{task.name}</button>
     {#if excerpt}<div class="task-excerpt">{excerpt}</div>{/if}
@@ -67,11 +68,13 @@
       {#if deps.length}
         <span class="deps-label">needs:</span>
         {#each deps as dep (dep)}
+          {@const ref = dashboard.refOf(dep)}
           <button
             type="button"
             class="dep-link"
-            title={dashboard.taskMap.get(dep)?.name || dep}
-            onclick={() => scrollToTask(dep)}>{dep}</button
+            data-dep={dep}
+            title={ref.tip ?? (ref.task?.name || dep)}
+            onclick={() => scrollToTask(dep)}><TaskKey label={ref.label} provisional={ref.provisional} /></button
           >
         {/each}
       {/if}

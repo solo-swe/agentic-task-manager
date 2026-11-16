@@ -17,6 +17,9 @@ export interface Task extends StoredTask {
   description: string;
   type: TaskType;
   status: Status;
+  /** Its key (`ATM-527`: meta.key and its number), which the API's task views carry beside its UUID in a project with
+   * task keys (ADR-007 §1); absent before task keys, where its `id` is what shows (lib/keys.ts) */
+  key?: string;
   /** What atm derives for the task (its readiness, what it waits for, …), from the API's v1 tasks route
    * (docs/multi-project-api.md §2.5). Absent for tasks that come without it: the archive's, a linked worktree's copy. */
   derived?: TaskDerived;
@@ -26,6 +29,11 @@ export interface TasksFile {
   meta?: {
     project?: string;
     id?: string;
+    /** The file's format: 2 with task keys (ADR-007) */
+    format?: number;
+    /** The project's short name, its tasks' key prefix (ATM), and the ones it had (T), with task keys (ADR-007 §2) */
+    key?: string;
+    key_history?: string[];
     created?: string;
     description?: string;
     /** The repository's web address (atm repository), for commit and PR links (lib/repo.ts) */

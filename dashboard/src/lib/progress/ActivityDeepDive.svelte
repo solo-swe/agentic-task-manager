@@ -1,6 +1,7 @@
 <script lang="ts">
   import { shortAgent } from '../claims';
   import { formatMinutes } from '../format';
+  import { taskLabel } from '../keys';
   import { cycleScaleMax, median, type ActivitySeries } from '../insights';
   import { dashboard } from '../state.svelte';
   import { typeStyle } from '../theme';
@@ -352,11 +353,11 @@
           data-id={c.id}
           role="button"
           tabindex="0"
-          aria-label="{c.id} {c.name}: {formatMinutes(c.minutes)}"
+          aria-label="{taskLabel(c)} {c.name}: {formatMinutes(c.minutes)}"
           onclick={() => openTask(c.id)}
           onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && openTask(c.id)}
         >
-          <title>{c.id} {c.name}: {formatMinutes(c.minutes)}{c.withYou ? ' (with you)' : ''}</title>
+          <title>{taskLabel(c)} {c.name}:{formatMinutes(c.minutes)}{c.withYou ? ' (with you)' : ''}</title>
           {#if over}
             {@const x = xt(c.time)}
             <path
@@ -417,7 +418,10 @@
           </div>
         {/if}
       {/if}
-      {#each hb.completed.slice(0, TOOLTIP_TASKS) as c (c.id)}<div class="tooltip-task">{c.id} {c.name}</div>{/each}
+      {#each hb.completed.slice(0, TOOLTIP_TASKS) as c (c.id)}<div class="tooltip-task">
+          {taskLabel(c)}
+          {c.name}
+        </div>{/each}
       {#if hb.completed.length > TOOLTIP_TASKS}<div class="tooltip-task">
           +{hb.completed.length - TOOLTIP_TASKS} more
         </div>{/if}
