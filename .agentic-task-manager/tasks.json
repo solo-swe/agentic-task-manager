@@ -1266,9 +1266,10 @@
       },
       {
         "id": "Code reviews in the app",
-        "state": "planned",
+        "state": "active",
         "goal": "Reviews reach the sidebar, the tasks and the needs-you counts; live reviews; agents as reviewers designed; tests cover every case",
-        "release": "0.41.0"
+        "release": "0.41.0",
+        "start": "2026-11-17T22:16:26Z"
       }
     ],
     "releases": [
