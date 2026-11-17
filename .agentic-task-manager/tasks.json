@@ -1151,10 +1151,61 @@
       },
       {
         "id": "Keys and reach",
-        "state": "active",
+        "state": "closed",
         "goal": "Design task keys like ATM-123 with dependencies across projects, atm in every agent harness, readable CLI output, and live updates in the browser",
         "release": "0.38.0",
-        "start": "2026-11-14T13:59:30Z"
+        "start": "2026-11-14T13:59:30Z",
+        "end": "2026-11-17T00:45:21Z",
+        "report": {
+          "done": [
+            "T-413",
+            "T-436",
+            "T-488",
+            "T-534",
+            "T-538",
+            "T-539",
+            "T-540",
+            "T-541",
+            "T-542",
+            "T-543",
+            "T-544",
+            "T-545",
+            "T-546",
+            "T-547",
+            "T-548",
+            "T-549",
+            "T-550",
+            "T-551",
+            "T-552",
+            "T-553",
+            "T-554",
+            "T-555",
+            "T-556"
+          ],
+          "carried": [],
+          "added": [
+            "T-436",
+            "T-538",
+            "T-539",
+            "T-540",
+            "T-541",
+            "T-542",
+            "T-543",
+            "T-544",
+            "T-545",
+            "T-546",
+            "T-547",
+            "T-548",
+            "T-549",
+            "T-550",
+            "T-551",
+            "T-552",
+            "T-553",
+            "T-554",
+            "T-555",
+            "T-556"
+          ]
+        }
       }
     ],
     "releases": [
