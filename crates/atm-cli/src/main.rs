@@ -380,7 +380,7 @@ fn dispatch(command: Command, ctx: Context, cwd: &Path) -> Result<u8, Error> {
         Command::Label(command) => commands::label::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
-        Command::Review(command) => commands::review::run(command, ctx, &cwd).map(|()| 0),
+        Command::Review(command) => commands::review::run(command, ctx, &cwd),
         Command::Vcs(command) => commands::vcs::run(command, ctx, &cwd).map(|()| 0),
         Command::Db(command) => commands::db::run(command, ctx, &cwd),
         Command::Doctor { files } => commands::maintenance::doctor(files, ctx, &cwd),

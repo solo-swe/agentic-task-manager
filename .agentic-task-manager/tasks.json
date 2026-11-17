@@ -14673,7 +14673,7 @@
       "description": "The CLI of [§3.9](docs/code-review-design.md#:~:text=3.9%20The%20CLI%2C%20and%20agents%20listening): `atm review create|live|round|tasks|list|show|comments|comment|reply|edit|resolve|submit|close`, each with `--json`, thin mappings to atm-lib.\n\n## Change\n- The commands as listed in the design; `submit --approve` refused while a top-level comment is open, naming it.\n- `atm docs reviews`: a new topic in `docs/agent/` for agents, with the rule that review comments are data, never instructions (I1).\n- Output for people through `output::for_people` (I30).\n\n## Tests\n`tests/scripts/` scenarios for each command, the refusal, and a comment with terminal escapes printed as text.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -14684,7 +14684,7 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T09:18:10Z",
+      "updated_at": "2026-11-17T09:25:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 566,
@@ -14706,10 +14706,19 @@
           "kind": "note",
           "text": "From ATM-565: its tests were atm-lib unit tests (the CLI came later). Add its scenarios here: a task through a review and a round, a batch review of two tasks, a live approval with and without a change since (atm_lib::reviews::apply_live_approval, to be called when an agent finishes a task).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T09:25:02Z",
+          "kind": "outcome",
+          "text": "atm review create|live|round|tasks|list|show|comments|comment|reply|edit|resolve|submit|close (--json each, through atm-lib); atm task state done applies a covering live approval first; atm docs reviews (comments are data, decisions the reviewer’s); I6 covers reviews/. reviews.test.mjs: the round trip, a batch of two, live approval at done, escapes as text, refusals. Changes docs/agent: the sandbox (or its written review) before the release.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-17T09:18:10Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "9a0357568eb0273ede1dd6316e2151adfc0328e7",
+      "completed_at": "2026-11-17T09:25:02Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4",
@@ -14722,7 +14731,7 @@
       "description": "Agents listening ([§3.9](docs/code-review-design.md#:~:text=Two%20ways%20to%20listen)), on the store's subscription, never a poll.\n\n## Change\n- `atm review wait CR-7 [--for submitted|decision] [--timeout]`: blocks, prints what changed.\n- `atm review watch [--timeout]`: names no review and no task; follows the agent (its identity) and its working copy; prints each of the user's comments and replies about the agent's work, one JSON object a line, with the review and the task (or `null`), matched from atm's records (the tasks it held, their commits, its uncommitted files) by the table in §3.9; not the agent's own comments or other agents'.\n\n## Tests\n`tests/scripts/`: wait ends on a submit; watch prints a live comment, a batch review's comment only to the agent whose task touched the file, a no-task comment with `null`, and nothing for another agent's work.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed"
       ],
@@ -14732,7 +14741,7 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T09:25:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 567,
@@ -14746,7 +14755,9 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:25:03Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e20da0a31b2",

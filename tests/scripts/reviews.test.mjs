@@ -1,10 +1,11 @@
 // `atm review` (docs/code-review-design.md §3.9, ATM-566): code reviews recorded in the project, through the CLI as
 // agents and people run it, with the tasks they review kept in step (ATM-565).
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { git, makeProject, removeDir, runAtm } from './helpers.mjs';
+import { ATM, baseEnv, git, makeProject, removeDir, runAtm } from './helpers.mjs';
 
 const AGENT = { ATM_AGENT: 'claude:0f56a916' };
 const HAKAN = { ATM_AGENT: 'Hakan Serce' };
@@ -201,6 +202,127 @@ describe('atm review', () => {
       );
       assert.match(atm(['review', 'list', '--status', 'nope'], root, HAKAN).stderr, /no status nope/);
     } finally {
+      removeDir(root);
+    }
+  });
+});
+
+/** Start atm in the background; its stdout's lines as they come, its end, and a way to stop it. */
+function background(args, root, env) {
+  const child = spawn(ATM, args, { cwd: root, env: { ...baseEnv(), ...env } });
+  const lines = [];
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (d) => {
+    stdout += d;
+    const parts = stdout.split('\n');
+    stdout = parts.pop();
+    lines.push(...parts.filter(Boolean));
+  });
+  child.stderr.on('data', (d) => (stderr += d));
+  const ended = new Promise((resolve) => child.on('close', (code) => resolve(code)));
+  return { lines, ended, stderr: () => stderr, stop: () => child.kill() };
+}
+
+/** Until `check()` holds, or fail after `ms`. */
+async function until(check, what, ms = 20_000) {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+describe('agents listening (ATM-567)', () => {
+  test('wait ends when the reviewer decides, with the comments added meanwhile; at the time up, exit code 3', async () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'Wait for it', '--task', 'T-1', '--uncommitted'], root, AGENT);
+      const timedOut = background(['review', 'wait', 'CR-1', '--timeout', '1s', '--json'], root, AGENT);
+      assert.equal(await timedOut.ended, 3);
+
+      const waiting = background(['review', 'wait', 'CR-1', '--for', 'decision', '--json'], root, AGENT);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why changed?'], root, HAKAN);
+      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
+      assert.equal(await waiting.ended, 0, waiting.stderr());
+      const waited = JSON.parse(waiting.lines.join('\n'));
+      assert.equal(waited.review.status, 'changes_requested');
+      assert.deepEqual(
+        waited.comments.map((c) => [c.comment, c.author, c.body]),
+        [['c1', 'Hakan Serce', 'Why changed?']],
+      );
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('the agent’s one watch hears the comments about its work only, with their task or none', async () => {
+    // T-1 is claude:A's (a.txt), T-2 claude:B's (b.txt); one review of both
+    const root = makeProject({
+      commit: true,
+      files: {
+        '.agentic-task-manager/tasks.json': {
+          meta: { project: 'Watch' },
+          tasks: [
+            {
+              id: 'T-1',
+              name: 'One',
+              type: 'feature',
+              status: 'in_progress',
+              started_by: 'claude:A',
+              files: ['a.txt'],
+            },
+            {
+              id: 'T-2',
+              name: 'Two',
+              type: 'feature',
+              status: 'in_progress',
+              started_by: 'claude:B',
+              files: ['b.txt'],
+            },
+          ],
+        },
+        'a.txt': 'a\n',
+        'b.txt': 'b\n',
+      },
+    });
+    const A = { ATM_AGENT: 'claude:A' };
+    const B = { ATM_AGENT: 'claude:B' };
+    let watching;
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'a, changed\n');
+      fs.writeFileSync(path.join(root, 'b.txt'), 'b, changed\n');
+      ok(['review', 'create', '--title', 'Both', '--task', 'T-1', '--task', 'T-2', '--uncommitted'], root, A);
+
+      watching = background(['review', 'watch', '--json', '--timeout', '60s'], root, A);
+      await until(() => /Watching the reviews for claude:A/.test(watching.stderr()), 'the watch to start');
+
+      // On B's file: not A's; on A's: T-1; naming T-2 at the whole review: not A's; A's own and B's: never
+      ok(['review', 'comment', 'CR-1', '--file', 'b.txt', '--lines', '1', '--body', 'For B.'], root, HAKAN);
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'For A.'], root, HAKAN);
+      ok(['review', 'comment', 'CR-1', '--body', 'T-2: rename the flag.'], root, HAKAN);
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'A notes.'], root, A);
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'B on A.'], root, B);
+      // A live review on the working copy, a file no task of A's touched: no task
+      fs.writeFileSync(path.join(root, 'c.txt'), 'new\n');
+      ok(['review', 'live'], root, B);
+      ok(['review', 'comment', 'CR-2', '--file', 'c.txt', '--lines', '1', '--body', 'Live, no task.'], root, HAKAN);
+
+      await until(() => watching.lines.length >= 2, 'two comments heard');
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // nothing else comes
+      // (in the order written within what is heard at once; a slow machine may hear them in two batches)
+      const heard = watching.lines
+        .map((l) => JSON.parse(l))
+        .map((h) => [h.review, h.task, h.body])
+        .sort();
+      assert.deepEqual(heard, [
+        ['CR-1', 'T-1', 'For A.'],
+        ['CR-2', null, 'Live, no task.'],
+      ]);
+    } finally {
+      watching?.stop();
       removeDir(root);
     }
   });

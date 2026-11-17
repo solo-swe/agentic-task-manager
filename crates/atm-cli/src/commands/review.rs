@@ -230,6 +230,31 @@ pub enum ReviewCommand {
         #[arg(long)]
         agent: Option<String>,
     },
+    /// Wait until a reviewer submits on a review (or decides it): what happened, and the comments added meanwhile.
+    /// Exit code 3 when the time is up first.
+    Wait {
+        /// The review (CR-7)
+        review: String,
+        /// What to wait for: submitted (a decision, or a comment on the whole) or decision
+        #[arg(long = "for", default_value = "submitted", value_parser = ["submitted", "decision"])]
+        until: String,
+        /// How long at most: 90s, 30m, 2h (seconds without a unit)
+        #[arg(long, default_value = "2h")]
+        timeout: String,
+        /// Who waits (their own comments aren't news)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// The agent's one watch for its session: each person's comment about the agent's work, from any review, as it is
+    /// added (a JSON object a line with --json), until the time is up. Names no review and no task.
+    Watch {
+        /// How long at most: 90s, 30m, 8h (seconds without a unit)
+        #[arg(long, default_value = "8h")]
+        timeout: String,
+        /// Who watches
+        #[arg(long)]
+        agent: Option<String>,
+    },
     /// End a review without approval.
     Close {
         /// The review (CR-7)
@@ -341,6 +366,59 @@ fn parse_lines(lines: &str) -> Result<(u32, u32)> {
     Ok((first, last))
 }
 
+/// `90s`, `30m`, `2h`, or seconds without a unit.
+fn duration_of(text: &str) -> Result<std::time::Duration> {
+    let bad = || {
+        Error::Invalid(format!(
+            "--timeout takes 90s, 30m, 2h or seconds, not {text}"
+        ))
+    };
+    let (number, unit) = match text.char_indices().last() {
+        Some((at, 's' | 'm' | 'h')) => (&text[..at], &text[at..]),
+        _ => (text, "s"),
+    };
+    let n: f64 = number.parse().map_err(|_| bad())?;
+    if !n.is_finite() || n <= 0.0 {
+        return Err(bad());
+    }
+    let seconds = n * match unit {
+        "m" => 60.0,
+        "h" => 3600.0,
+        _ => 1.0,
+    };
+    Ok(std::time::Duration::from_secs_f64(seconds))
+}
+
+/// A comment heard, for people: where, who, and its text.
+fn heard_line(heard: &Value) -> String {
+    let text = |key: &str| {
+        heard
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let task = heard
+        .get("task")
+        .and_then(Value::as_str)
+        .map_or_else(String::new, |t| format!(" ({t})"));
+    let place = match (
+        heard.get("path").and_then(Value::as_str),
+        heard.get("lines").and_then(Value::as_array),
+    ) {
+        (Some(path), Some(lines)) => format!(" on {path}:{}-{}", lines[0], lines[1]),
+        (Some(path), None) => format!(" on {path}"),
+        _ => String::new(),
+    };
+    format!(
+        "{} {}{task}{place}, {}: {}",
+        text("review"),
+        text("comment"),
+        text("author"),
+        text("body").replace('\n', " ")
+    )
+}
+
 fn status_of(name: &str) -> Result<Status> {
     serde_json::from_value(json!(name)).map_err(|_| {
         Error::Invalid(format!(
@@ -354,8 +432,70 @@ fn status_of(name: &str) -> Result<Status> {
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
+pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
+        ReviewCommand::Wait {
+            review,
+            until,
+            timeout,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let me = actor(&project);
+            let until = if until == "decision" {
+                atm_lib::review_listen::WaitFor::Decision
+            } else {
+                atm_lib::review_listen::WaitFor::Submitted
+            };
+            let waited = atm_lib::review_listen::wait(
+                &project,
+                &reference(&review),
+                until,
+                duration_of(&timeout)?,
+                &me.0,
+            )?;
+            let Some(waited) = waited else {
+                if ctx.json {
+                    print_json(&json!({ "review": review, "timed_out": true }));
+                } else {
+                    println!("{review}: nothing yet (the time is up)");
+                }
+                return Ok(3);
+            };
+            if ctx.json {
+                print_json(&waited);
+            } else {
+                let header: atm_lib::reviews::ReviewHeader =
+                    serde_json::from_value(waited["review"].clone())
+                        .map_err(|e| Error::failed(e.to_string()))?;
+                println!("{}", summary_line(&header));
+                for heard in waited["comments"].as_array().into_iter().flatten() {
+                    println!("  {}", heard_line(heard));
+                }
+            }
+            return Ok(0);
+        }
+        ReviewCommand::Watch { timeout, agent } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let me = actor(&project);
+            let mut ready = || eprintln!("Watching the reviews for {}'s work.", me.0);
+            let mut emit = |heard: Value| {
+                if ctx.json {
+                    // One object a line, exactly, as print_json prints (I30): a reader takes each as it comes
+                    ::std::println!("{heard}");
+                } else {
+                    println!("{}", heard_line(&heard));
+                }
+            };
+            atm_lib::review_listen::watch(
+                &project,
+                &me.0,
+                duration_of(&timeout)?,
+                &mut ready,
+                &mut emit,
+            )?;
+            return Ok(0);
+        }
         ReviewCommand::Create {
             title,
             tasks,
@@ -377,7 +517,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
                     "[dry-run] would open a review “{title}” of {} file(s)",
                     first.files.len()
                 );
-                return Ok(());
+                return Ok(0);
             }
             let author = actor(&project);
             let header = reviews::create(
@@ -414,7 +554,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             let first = new_round(&project, change, cwd, None, &[])?;
             if ctx.dry_run {
                 println!("[dry-run] would open a live review “{title}”");
-                return Ok(());
+                return Ok(0);
             }
             let author = actor(&project);
             let header = reviews::create(
@@ -450,7 +590,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             let round = new_round(&project, change, cwd, last.map(|r| &r.kind), &files)?;
             if ctx.dry_run {
                 println!("[dry-run] would add a round to {}", found.header.reference);
-                return Ok(());
+                return Ok(0);
             }
             let number = reviews::add_round(&mut project, &found.header.reference, round)?;
             if ctx.json {
@@ -468,7 +608,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             let mut project = opened(cwd, agent.as_deref())?;
             if ctx.dry_run {
                 println!("[dry-run] would change {review}'s tasks");
-                return Ok(());
+                return Ok(0);
             }
             let header = reviews::set_tasks(&mut project, &reference(&review), &add, &remove)?;
             if ctx.json {
@@ -570,11 +710,11 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 } else {
                     print!("{}", patch.0);
                 }
-                return Ok(());
+                return Ok(0);
             }
             if ctx.json {
                 print_json(&as_json!(&found));
-                return Ok(());
+                return Ok(0);
             }
             println!("{}", summary_line(&found.header));
             let reviewers: Vec<&str> = found
@@ -670,7 +810,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             };
             if ctx.dry_run {
                 println!("[dry-run] would comment on {}", found.header.reference);
-                return Ok(());
+                return Ok(0);
             }
             let id = Reviews::new(&mut store).comment(
                 &found.header.reference,
@@ -695,7 +835,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             let mut store = reviews::store(&project)?;
             if ctx.dry_run {
                 println!("[dry-run] would reply to {comment} in {review}");
-                return Ok(());
+                return Ok(0);
             }
             let id = Reviews::new(&mut store).reply(
                 &reference(&review),
@@ -720,7 +860,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             let mut store = reviews::store(&project)?;
             if ctx.dry_run {
                 println!("[dry-run] would edit {comment} in {review}");
-                return Ok(());
+                return Ok(0);
             }
             Reviews::new(&mut store).edit(
                 &reference(&review),
@@ -747,7 +887,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
                     "[dry-run] would {} {comment} in {review}",
                     if reopen { "reopen" } else { "resolve" }
                 );
-                return Ok(());
+                return Ok(0);
             }
             Reviews::new(&mut store).resolve(
                 &reference(&review),
@@ -795,7 +935,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             if ctx.dry_run {
                 println!("[dry-run] would submit on {review}");
-                return Ok(());
+                return Ok(0);
             }
             reviews::submit(&mut project, &reference(&review), verdict, text.as_deref())?;
             let header = reviews::store(&project)?
@@ -816,7 +956,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             let mut project = opened(cwd, agent.as_deref())?;
             if ctx.dry_run {
                 println!("[dry-run] would close {review}");
-                return Ok(());
+                return Ok(0);
             }
             reviews::close(&mut project, &reference(&review), &reason, reject_tasks)?;
             let header = reviews::store(&project)?
@@ -829,5 +969,5 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
         }
     }
-    Ok(())
+    Ok(0)
 }
