@@ -363,8 +363,8 @@ impl GitVcs {
         step(&["log", "-1", "--format=%B", sha], &self.root, false)
     }
 
-    // The working copy's files, for the document viewer (docs/compmd-viewer-design.md §4). atm-lib checks the path
-    // first (`documents.rs`); these read only below the root, through no symbolic link
+    // The working copy's files, for the document viewer (docs/compmd-viewer-design.md §4). atm-docs checks the path
+    // first; these read only below the root, through no symbolic link
 
     /// The file's path, or none when a segment from the root down is a symbolic link or it isn't a regular file.
     fn file(&self, relative: &str) -> Option<PathBuf> {
@@ -399,6 +399,43 @@ impl GitVcs {
         self.file(relative)
             .and_then(|p| std::fs::read(p).ok())
             .ok_or_else(|| Error::NotFound(format!("{relative}: no such file")))
+    }
+
+    /// A regular file as `commit` (a SHA, as [`GitVcs::resolve`] gives it) has it: its size and its blob; none when the
+    /// commit has no regular file there (no entry, a symlink, a submodule, a folder).
+    #[must_use]
+    pub fn blob_in(&self, commit: &str, relative: &str) -> Option<(u64, String)> {
+        let output = run(
+            &["ls-tree", "-z", "--long", commit, "--", relative],
+            &self.root,
+        )?;
+        if !output.status.success() {
+            return None;
+        }
+        let listing = String::from_utf8_lossy(&output.stdout);
+        let (meta, path) = listing.split('\0').next()?.split_once('\t')?;
+        if path != relative {
+            return None;
+        }
+        let parts: Vec<&str> = meta.split_whitespace().collect();
+        let [mode, "blob", blob, size] = parts.as_slice() else {
+            return None;
+        };
+        matches!(*mode, "100644" | "100755").then_some(())?;
+        Some((size.parse().ok()?, (*blob).to_string()))
+    }
+
+    /// A blob's bytes (from [`GitVcs::blob_in`]).
+    ///
+    /// # Errors
+    /// git isn't available, or there is no such blob.
+    pub fn blob_bytes(&self, blob: &str) -> Result<Vec<u8>> {
+        let output = run(&["cat-file", "blob", blob], &self.root)
+            .ok_or_else(|| Error::failed("git isn't available"))?;
+        if !output.status.success() {
+            return Err(Error::NotFound(format!("{blob}: no such blob")));
+        }
+        Ok(output.stdout)
     }
 
     /// The submodule `relative` is in, nearest the root, as (its folder, the path inside it), or none. A submodule is a

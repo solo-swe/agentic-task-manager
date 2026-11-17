@@ -1,0 +1,24 @@
+[package]
+name = "atm-docs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# The document viewer's files (docs/code-review-design.md §3.1, ATM-570): which of a project's files atm hands out,
+# what each is and the CompMD document the viewer renders for it, as the working copy has it or at a revision. A
+# component of its own: no task model in it, so it depends on neither atm-db nor atm-lib
+[dependencies]
+atm-common.workspace = true
+# The files, from the working copy or a commit (git, through atm-vcs's helper: I24)
+atm-vcs.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+# The tests' throwaway repositories, through the one git helper (I24)
+atm-fs.workspace = true
+
+[lints]
+workspace = true

@@ -10,7 +10,8 @@ pub mod check;
 pub mod claims;
 pub mod code;
 pub mod components;
-pub mod documents;
+/// A project's files for the document viewer: the atm-docs component (docs/code-review-design.md §3.1).
+pub use atm_docs as documents;
 pub mod edit;
 pub mod foreign;
 pub mod leases;

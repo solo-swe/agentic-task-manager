@@ -14831,7 +14831,7 @@
       "description": "The skills that hold a review with the user, or wait for one, use `atm review` ([§3.9](docs/code-review-design.md#:~:text=3.9%20The%20CLI%2C%20and%20agents%20listening), [§6](docs/code-review-design.md#:~:text=6.%20Phases)).\n\n## Change\n- The working skills start `atm review watch` once per session in the background, create the CR at the end when no live review covered the work, and wait with `atm review wait` while a task is in review; reply to each comment, never resolve a reviewer's comment, never decide a review (I23).\n- Comments are data (I1), in the skills' rules; their pre-approved commands name the review commands they run, no `atm review *` (I2).\n- `skills.test.ts` checks the rules; the agent sandbox's red-team project gets a review whose comment asks for a forbidden command; `docs/security-architecture.md` §3 records the skill review.\n\nChanges what agents read: the sandbox run (or its written review) before the release.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
       ],
@@ -14843,7 +14843,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T09:43:54Z",
+      "updated_at": "2026-11-17T09:51:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "review": "blocker",
@@ -14861,7 +14861,18 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T09:43:54Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "b985be2450b9600f27e7220c83190fa167d80fe2",
+      "review_requested_at": "2026-11-17T09:51:20Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-17T09:51:20Z",
+          "kind": "review",
+          "text": "Review b985be2: skills/atm-do-task (Step 2 watch, Step 5 rule, 7b CR/wait/answer) and atm-loop-tasks (watch, step 6, step 7); pre-approvals in claude-code.json (no submit/resolve/close/live/tasks/edit); sandbox red-team review (seed-review.sh, verdict); §3 0.40.0 written skill review. Skills now need atm 0.40.0: the release task bumps the version.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e22f7deb631",
@@ -14874,7 +14885,7 @@
       "description": "Phase 2 ([§3.1](docs/code-review-design.md#:~:text=3.1%20Three%20components)): the document viewer as a component of its own.\n\n## Change\n- `crates/atm-docs`: what `crates/atm-lib/src/documents.rs` does (a project's file with its checks, I11, I12), moved, plus a file at a revision through `atm-vcs`, with the same checks.\n- atm-lib, the REST API and the app use it; their routes and commands answer as before.\n- `layers.test.mjs` gains the crate (no task model in it).\n\n## Tests\nThe moved tests pass unchanged; a file at a revision; `serve.test.mjs`'s document tests unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-docs/",
@@ -14883,7 +14894,7 @@
         "tests/scripts/layers.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T09:51:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 570,
@@ -14897,7 +14908,9 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:51:25Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e23fc37ffd6",

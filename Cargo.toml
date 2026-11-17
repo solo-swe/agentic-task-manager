@@ -24,6 +24,7 @@ atm-fs = { path = "crates/atm-fs" }
 atm-db = { path = "crates/atm-db" }
 atm-vcs = { path = "crates/atm-vcs" }
 atm-review = { path = "crates/atm-review" }
+atm-docs = { path = "crates/atm-docs" }
 atm-lib = { path = "crates/atm-lib" }
 atm-api = { path = "crates/atm-api" }
 # CompMD in a Tauri app (ADR-006, T-524): CompMD's own plugin serves the bundle the page's build wrote (the frames and
