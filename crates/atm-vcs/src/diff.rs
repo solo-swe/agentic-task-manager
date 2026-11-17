@@ -12,6 +12,19 @@ use atm_common::{Error, Result};
 
 use crate::GitVcs;
 
+/// `path` without Windows' extended prefix (`\\?\C:\…` is `C:\…`, `\\?\UNC\host\…` is `\\host\…`): git can't make a
+/// file under a path in that form ("Invalid argument"), which canonicalize gives. Any other path as it is.
+fn plain(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{share}"))
+    } else if let Some(local) = text.strip_prefix(r"\\?\") {
+        PathBuf::from(local)
+    } else {
+        path.to_path_buf()
+    }
+}
+
 /// A file a diff changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangedFile {
@@ -98,6 +111,19 @@ impl GitVcs {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
+    /// A revision as the commit's SHA: what reaches git as a diff's end, never a name it could read as an option
+    /// (`--output=…`), whoever wrote it (the browser's write routes, ATM-572).
+    ///
+    /// # Errors
+    /// `Invalid` for a revision that starts with `-` or holds a NUL; `NotFound` for one that names no commit.
+    fn commit_sha(&self, revision: &str) -> Result<String> {
+        if revision.is_empty() || revision.starts_with('-') || revision.contains('\0') {
+            return Err(Error::Invalid(format!("{revision}: not a revision")));
+        }
+        self.resolve(revision)
+            .ok_or_else(|| Error::NotFound(format!("{revision}: no such commit")))
+    }
+
     /// A temporary index in the git folder, removed when `work` is done; `work` gets the environment that uses it.
     fn with_temporary_index<T>(
         &self,
@@ -120,7 +146,7 @@ impl GitVcs {
         let path = if Path::new(answer).is_absolute() {
             PathBuf::from(answer)
         } else {
-            let mut path = self.root.clone();
+            let mut path = plain(&self.root);
             path.extend(answer.split('/').filter(|part| !part.is_empty()));
             path
         };
@@ -172,7 +198,8 @@ impl GitVcs {
     /// Either isn't a commit, or git fails.
     pub fn diff_range(&self, base: &str, head: &str, leave_out: &[&str]) -> Result<Diff> {
         let spec = pathspec(leave_out);
-        let mut args = vec![base, head];
+        let (base, head) = (self.commit_sha(base)?, self.commit_sha(head)?);
+        let mut args = vec![base.as_str(), head.as_str()];
         args.extend(spec.iter().map(String::as_str));
         Ok(Diff {
             patch: self.patch(&args, &[])?,
@@ -187,6 +214,8 @@ impl GitVcs {
     /// `base` isn't a commit, or git fails.
     pub fn diff_working(&self, base: &str, leave_out: &[&str]) -> Result<Diff> {
         let spec = pathspec(leave_out);
+        let base = self.commit_sha(base)?;
+        let base = base.as_str();
         self.with_temporary_index(|env| {
             self.git_with(&["read-tree", base], env, None)?;
             self.git_with(&["add", "-A"], env, None)?;
@@ -417,6 +446,40 @@ mod tests {
             .unwrap();
         assert_eq!(range.files.len(), 1);
         assert!(!range.patch.contains("tasks.json"));
+    }
+
+    #[test]
+    fn git_gets_paths_without_the_extended_prefix_and_revisions_never_as_options() {
+        use atm_common::Error;
+        use std::path::Path;
+        assert_eq!(
+            super::plain(Path::new(r"\\?\C:\Temp\repo")),
+            Path::new(r"C:\Temp\repo")
+        );
+        assert_eq!(
+            super::plain(Path::new(r"\\?\UNC\host\share\repo")),
+            Path::new(r"\\host\share\repo")
+        );
+        assert_eq!(super::plain(Path::new("/tmp/repo")), Path::new("/tmp/repo"));
+        let (_repo, vcs) = repo();
+        write(&vcs, "a.txt", "a\n");
+        git(&vcs, &["add", "-A"]);
+        git(&vcs, &["commit", "-q", "-m", "a"]);
+        for bad in ["--output=x", "-p", ""] {
+            assert!(
+                matches!(vcs.diff_range(bad, "HEAD", &[]), Err(Error::Invalid(_))),
+                "{bad}"
+            );
+            assert!(
+                matches!(vcs.diff_working(bad, &[]), Err(Error::Invalid(_))),
+                "{bad}"
+            );
+        }
+        assert!(!vcs.root.join("x").exists());
+        assert!(matches!(
+            vcs.diff_range("no-such", "HEAD", &[]),
+            Err(Error::NotFound(_))
+        ));
     }
 
     #[test]
