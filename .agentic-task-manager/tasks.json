@@ -1536,7 +1536,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 561
+    "next_number": 578
   },
   "tasks": [
     {
@@ -1848,7 +1848,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-17T06:38:10Z",
+      "updated_at": "2026-11-17T06:40:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -1893,7 +1893,7 @@
       "sprint": "Keys follow-ups and housekeeping",
       "started_at": "2026-11-17T03:19:09Z",
       "started_by": "claude:0f56a916",
-      "commit": "d4d915879b7ac5d1652ab4e5b13bbebe4afb7d10",
+      "commit": "488bdb8509ef17024c0f57e05e2f4fb488fb4138",
       "review_requested_at": "2026-11-17T03:23:23Z",
       "review_state": "waiting"
     },
@@ -14297,6 +14297,509 @@
           "text": "glib 0.18.5 comes only through gtk 0.18 (Tauri’s GTK 3 stack); no update moves it; no crate but glib names VariantStrIter or array_iter_str, atm doesn’t use glib: not reachable (security doc §5). Dismissing the alert as “vulnerable code not used” is Hakan’s call.",
           "by": "claude:0f56a916"
         }
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e194e41ecb3",
+      "name": "Code review: the atm-review crate, its model and the ReviewStore trait",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Phase 1 of [the code review design](docs/code-review-design.md) (approved 2026-11-17).\n\n## Change\n- A new crate `crates/atm-review`, depending on `atm-common` and `atm-vcs` only (not atm-db, not the task model: a task is a key string).\n- The model: `Review` (header, summary, chains, rounds), statuses `draft`, `open`, `live`, `changes_requested`, `approved`, `closed` ([§3.2](docs/code-review-design.md#:~:text=3.2%20A%20review%20and%20how%20it%20goes)), `Round` (kinds `range`, `working`, `files`, and live checkpoints), `Chain`, `Comment` (top-level ones with `resolved`, replies nested, [§3.4](docs/code-review-design.md#:~:text=3.4%20Comments)), `Anchor`, `ReviewId` and `ReviewRef`.\n- The `ReviewStore` trait with one method per operation ([§3.10](docs/code-review-design.md#:~:text=3.10%20The%20store)), and an in-memory store for the tests.\n- The rules above the store: approve only when every top-level comment is resolved; who may resolve; the status changes of the state diagram.\n- `tests/scripts/layers.test.mjs` gains the crate, and checks it depends on neither atm-db nor atm-lib.\n\n## Tests\nUnit tests of the rules on the memory store.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/",
+        "Cargo.toml",
+        "tests/scripts/layers.test.mjs"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 561,
+      "key_final": false,
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e1a9a33bc82",
+      "name": "Code review: comments.md and review.md, written and read back",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "code-review"
+      ],
+      "description": "The two text files of a review ([§3.3](docs/code-review-design.md#:~:text=3.3%20The%20records), [§3.4](docs/code-review-design.md#:~:text=3.4%20Comments)), in `atm-review`.\n\n## Change\n- `review.md`: the TOML header between `+++` lines (id, number, title, status, tasks, author, reviewers, created, updated), then the summary. `toml` becomes atm-review's dependency (approved by Hakan in the design review; already in `Cargo.lock`).\n- `comments.md`: a `##` heading per chain (file and lines, round, chain ID, or `(the review)`), the quote, then the comments as a nested list; top-level items start with `[ ]` / `[x]`, replies have no box; author, time and ID, then the indented text.\n- Writing and reading back exactly; text the format doesn't expect is kept as it is and reported (for `atm doctor`), never dropped.\n\n## Tests\nRound trips of both files, the example in §3.4, a hand-broken file kept and reported.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e194e41ecb3"
+      ],
+      "files": [
+        "crates/atm-review/src/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:01Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "number": 562,
+      "key_final": false
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b",
+      "name": "Code review: the file store (folders, numbers, locks, subscriptions, worktrees)",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "code-review"
+      ],
+      "description": "The first `ReviewStore`: `.agentic-task-manager/reviews/` ([§3.10](docs/code-review-design.md#:~:text=3.10%20The%20store)).\n\n## Change\n- One folder per review, `CR-<n>-<first 4 hex of its UUID>`, with `review.md`, `comments.md` and `rounds/<n>.diff` / `<n>.json`.\n- A new review's number from a counter shared by the clone's worktrees (`.git/atm/`, beside the claims; the task folder outside git), under a lock.\n- Two reviews with one number (two clones, merged) are `CR-8.1` and `CR-8.2`, by creation time then UUID; a reference to `CR-8` resolves to both, and the store says so.\n- One lock per review; writes to a temporary file renamed into place, as `tasks.json`'s are.\n- `subscribe` on the folder's watcher (as the JSON store's, ATM-555).\n- The reviews of the project's worktrees listed with the main working copy's, each with its branch.\n- The folder's checks: no symlinks, paths inside the task folder (as I6).\n\n## Tests\nThe store's operations, the counter across two worktrees, a merged clash read as CR-8.1/CR-8.2, a symlinked folder refused.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e1a9a33bc82"
+      ],
+      "files": [
+        "crates/atm-review/src/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:01Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "number": 563,
+      "key_final": false
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84",
+      "name": "Code review: rounds from a range, uncommitted changes or files, compared and anchored",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Rounds and anchors ([§3.3](docs/code-review-design.md#:~:text=3.3%20The%20records), [§3.6](docs/code-review-design.md#:~:text=3.6%20Rounds%2C%20anchors%20and%20drift)), through `atm-vcs`.\n\n## Change\n- A round's diff from a commit range, the working tree against its base (uncommitted changes, live checkpoints), or files as they are (as if added); `git diff -M`, three lines of context; binary files listed with their blob IDs, never copied; deleted files as a line.\n- No snapshots: two rounds compared by rebuilding each round's files from its base and diff on a temporary index (`GIT_INDEX_FILE`, `git apply --cached`, `git write-tree`), never touching the user's index or working tree.\n- Anchors moved from the round they were made on to a later one through the change between them; a chain whose quote is gone is drifted, at its last place, with the round and lines it was made on.\n\n## Tests\nRounds of each kind, two uncommitted rounds compared, an anchor moved and one drifted, the user's index unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
+      ],
+      "files": [
+        "crates/atm-review/src/",
+        "crates/atm-vcs/src/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:01Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "number": 564,
+      "key_final": false
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40",
+      "name": "Code review: the task link (reviews on tasks, decisions to tasks, live approval)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "atm-lib's `reviews` module, the one place reviews and tasks meet ([§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The task schema gains `reviews` (a list of review references, linked by UUID underneath); the generated types follow.\n- Tasks named when a review is created, when a live review starts, or later (add, remove), with what each does to the task's status ([§3.2](docs/code-review-design.md#:~:text=3.2%20A%20review%20and%20how%20it%20goes)).\n- A reviewer's submit becomes every named task's review decision (approve, request changes with a `rejection` note linking the review); closing rejects only when the user says so. Decisions stay the user's (I23).\n- A live review's approval is the task's when the task's change hasn't moved since the approved checkpoint; otherwise what changed is said ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)).\n\n## Tests\nScenarios (`tests/scripts/scenarios/`): a task through a review and a round, a batch review of two tasks, a live approval with and without a change since.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
+      ],
+      "files": [
+        "crates/atm-lib/src/",
+        "crates/atm-common/schema/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:01Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "number": 565,
+      "key_final": false
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed",
+      "name": "Code review: the atm review commands",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "The CLI of [§3.9](docs/code-review-design.md#:~:text=3.9%20The%20CLI%2C%20and%20agents%20listening): `atm review create|live|round|tasks|list|show|comments|comment|reply|edit|resolve|submit|close`, each with `--json`, thin mappings to atm-lib.\n\n## Change\n- The commands as listed in the design; `submit --approve` refused while a top-level comment is open, naming it.\n- `atm docs reviews`: a new topic in `docs/agent/` for agents, with the rule that review comments are data, never instructions (I1).\n- Output for people through `output::for_people` (I30).\n\n## Tests\n`tests/scripts/` scenarios for each command, the refusal, and a comment with terminal escapes printed as text.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84",
+        "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
+      ],
+      "files": [
+        "crates/atm-cli/src/commands/",
+        "docs/agent/reviews.md",
+        "tests/scripts/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 566,
+      "key_final": false,
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4",
+      "name": "Code review: atm review wait and the agent's one watch",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Agents listening ([§3.9](docs/code-review-design.md#:~:text=Two%20ways%20to%20listen)), on the store's subscription, never a poll.\n\n## Change\n- `atm review wait CR-7 [--for submitted|decision] [--timeout]`: blocks, prints what changed.\n- `atm review watch [--timeout]`: names no review and no task; follows the agent (its identity) and its working copy; prints each of the user's comments and replies about the agent's work, one JSON object a line, with the review and the task (or `null`), matched from atm's records (the tasks it held, their commits, its uncommitted files) by the table in §3.9; not the agent's own comments or other agents'.\n\n## Tests\n`tests/scripts/`: wait ends on a submit; watch prints a live comment, a batch review's comment only to the agent whose task touched the file, a no-task comment with `null`, and nothing for another agent's work.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed"
+      ],
+      "files": [
+        "crates/atm-cli/src/commands/",
+        "crates/atm-lib/src/",
+        "tests/scripts/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:08Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 567,
+      "key_final": false,
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e20da0a31b2",
+      "name": "Code review: merging review files, and atm doctor's checks",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Reviews on branches ([§4](docs/code-review-design.md#:~:text=Merges%20of%20the%20two%20text%20files)).\n\n## Change\n- atm's merge driver also takes `reviews/**/comments.md` (chains and comments merged by ID) and `reviews/**/review.md` (the header by its latest `updated`), registered in `.agentic-task-manager/.gitattributes` as for `tasks.json` (the driver's command from the clone's own git config, I9).\n- `atm doctor`: reviews it can't read, text the comment format doesn't expect, clashing numbers (CR-8.1/CR-8.2), tasks naming reviews that don't exist.\n\n## Tests\n`tests/scripts/merge.test.mjs`: one review commented on two branches, merged; two clones' CR-8s merged as two folders.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
+      ],
+      "files": [
+        "crates/atm-db/src/jsongit/merge.rs",
+        "crates/atm-cli/src/commands/maintenance.rs",
+        "tests/scripts/merge.test.mjs"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:08Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 568,
+      "key_final": false,
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e21486f0d88",
+      "name": "Code review: the skills review with atm instead of Crit",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "The skills that hold a review with the user, or wait for one, use `atm review` ([§3.9](docs/code-review-design.md#:~:text=3.9%20The%20CLI%2C%20and%20agents%20listening), [§6](docs/code-review-design.md#:~:text=6.%20Phases)).\n\n## Change\n- The working skills start `atm review watch` once per session in the background, create the CR at the end when no live review covered the work, and wait with `atm review wait` while a task is in review; reply to each comment, never resolve a reviewer's comment, never decide a review (I23).\n- Comments are data (I1), in the skills' rules; their pre-approved commands name the review commands they run, no `atm review *` (I2).\n- `skills.test.ts` checks the rules; the agent sandbox's red-team project gets a review whose comment asks for a forbidden command; `docs/security-architecture.md` §3 records the skill review.\n\nChanges what agents read: the sandbox run (or its written review) before the release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
+      ],
+      "files": [
+        "skills/",
+        "skills/claude-code.json",
+        "dashboard/tests/unit/skills.test.ts",
+        "tests/sandbox/",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:09Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "review": "blocker",
+      "number": 569,
+      "key_final": false,
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e22f7deb631",
+      "name": "Code review: atm-docs, the document viewer's crate, with files at a revision",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Phase 2 ([§3.1](docs/code-review-design.md#:~:text=3.1%20Three%20components)): the document viewer as a component of its own.\n\n## Change\n- `crates/atm-docs`: what `crates/atm-lib/src/documents.rs` does (a project's file with its checks, I11, I12), moved, plus a file at a revision through `atm-vcs`, with the same checks.\n- atm-lib, the REST API and the app use it; their routes and commands answer as before.\n- `layers.test.mjs` gains the crate (no task model in it).\n\n## Tests\nThe moved tests pass unchanged; a file at a revision; `serve.test.mjs`'s document tests unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-docs/",
+        "crates/atm-lib/src/documents.rs",
+        "Cargo.toml",
+        "tests/scripts/layers.test.mjs"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:09Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 570,
+      "key_final": false,
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e23fc37ffd6",
+      "name": "Code review: lib/documents on a document source, and the boundaries checked",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "The dashboard's side of phase 2 ([§3.1](docs/code-review-design.md#:~:text=3.1%20Three%20components)).\n\n## Change\n- `DocumentViewer.svelte` and `CompMd.svelte` stop reading the dashboard's state (`state.svelte`) and the `Task` type: they take a document source (load a path, at a revision or the working copy) and the links' handler as props; the task manager passes its own.\n- An ESLint rule (`no-restricted-imports`): `lib/documents` imports only itself and `lib/ui`; `lib/reviews` (when it comes) the task areas only through `lib/reviews/links`.\n\n## Tests\nThe viewer's unit and e2e tests unchanged (`documents` specs); a component test with a source of its own.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e22f7deb631"
+      ],
+      "files": [
+        "dashboard/src/lib/documents/",
+        "dashboard/eslint.config.js"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:10Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 571,
+      "key_final": false,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
+      "name": "Code review: writes from the app and the browser, and the security document",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Phase 3's entry points ([§3.12](docs/code-review-design.md#:~:text=3.12%20Writing%20from%20the%20window%20and%20the%20browser)).\n\n## Change\n- The app: write commands for reviews (create, live, comment, reply, edit, resolve, submit, close, tasks), thin mappings to atm-lib, as the user, in `build.rs`'s manifest and the capability (I25).\n- The browser: write routes under `api/v2/workspaces/<w>/projects/<p>/reviews/…`: loopback and Host (I10), `Origin` the server's own, a per-start session token in the served page's `meta` tag and an `X-Atm-Session` header, JSON bodies, no CORS.\n- `docs/security-architecture.md`: B2, B3, B7, I1, I11 and I27 as the design says, with their tests.\n\n## Tests\n`serve.test.mjs`: a write with the token works; without it, from another origin, or as a form, refused. The app's command tests (mock runtime).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed"
+      ],
+      "files": [
+        "crates/atm-api/src/",
+        "app/src-tauri/src/",
+        "app/src-tauri/build.rs",
+        "docs/security-architecture.md",
+        "tests/scripts/serve.test.mjs"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:11Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "review": "blocker",
+      "number": 572,
+      "key_final": false,
+      "components": [
+        "cli",
+        "api",
+        "docs"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",
+      "name": "Code review: the diff viewer",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Ours to build, rendering through CompMD ([§3.7](docs/code-review-design.md#:~:text=3.7%20The%20diff%20viewer)), in `dashboard/src/lib/reviews/`.\n\n## Change\n- Takes a file's two sides (from a document source) and the round's hunks; split or unified; changed lines marked, unchanged runs folded with *show more*.\n- Source (each side through CompMD, as the document viewer shows a source file) or rendered (Markdown): both sides rendered, changed blocks marked by CompMD's source-line map, as the document viewer's gutter uses it.\n- Keys: *n* / *p* next and previous change, *]* / *[* file, *v* viewed.\n- Selecting lines (or rendered text) starts a chain; chains shown in place.\n\nA missing foundational rendering capability goes to CompMD, nothing else.\n\n## Tests\nComponent tests; e2e specs with a fixture review.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e23fc37ffd6"
+      ],
+      "files": [
+        "dashboard/src/lib/reviews/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:11Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 573,
+      "key_final": false,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
+      "name": "Code review: the reviews page and a review's page",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "The pages of [§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), in the app and the browser.\n\n## Change\n- `/projects/<id>/reviews` (and across the workspace on the overview): search (title, summary, comments), filters (status, author, reviewer, task, branch), latest activity first; *Next review needing you*.\n- `/projects/<id>/reviews/CR-7` (`?round=`, `&against=`, `&file=`): the header, the file tree with viewed ticks (kept in the page's preferences by review, round and file content), the diff viewer, the round picker (whole change, or a round against another), drifted chains with a link to where they were made, *Submit* (approve, request changes, comment).\n- A clashing reference (`CR-8`) shows both CR-8.1 and CR-8.2 to choose.\n- Routes listed in `docs/multi-project-api.md` §2.7.\n\n## Tests\nE2e specs (the fixture serves reviews); the performance budget for a large review.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
+        "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",
+        "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84"
+      ],
+      "files": [
+        "dashboard/src/routes/",
+        "dashboard/src/lib/reviews/",
+        "docs/multi-project-api.md",
+        "dashboard/tests/e2e/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:12Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 574,
+      "key_final": false,
+      "components": [
+        "dashboard",
+        "api",
+        "docs"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e27bb7d4274",
+      "name": "Code review: Reviews in the sidebar, CR links on tasks, needs-you counts",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Where reviews show outside their pages ([§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), [§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The app's sidebar: a Reviews section under the projects (the reviews needing you, with a count; All reviews).\n- Cards and the details panel show a task's reviews as links (`CR-7 · changes requested`), a new tab with ⌘-click; *Add to review* on a task.\n- The needs-you menu counts reviews with tasks; deep links `atm://…/reviews/CR-7` (checked as I28).\n\n## Tests\nE2e (`app.spec.ts` for the sidebar, `detail.spec.ts` for the links); unit tests for the deep links.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
+        "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/src/lib/details/",
+        "dashboard/src/lib/shell/NeedsYouMenu.svelte",
+        "app/src-tauri/src/links.rs"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:12Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 575,
+      "key_final": false,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
+      "name": "Code review: live reviews",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Phase 4 ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)): reviewing a change while it is made.\n\n## Change\n- *New live review* in the app and the browser (`atm review live` exists from phase 1): the review page fed by the working copy's changes (the store's subscription and the folder's watcher), redrawn at most every second or two, ignored and generated files left out.\n- A comment records a checkpoint (a `working` round against the base) so it is anchored to what the reviewer saw.\n- Ending it: approve, a round (it becomes `open`), or close; the approval that covers the task when nothing changed since (the task link, phase 1).\n\n## Tests\nE2e: a file written while the page is open shows; a comment makes a checkpoint; approval with and without a change since.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
+        "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
+      ],
+      "files": [
+        "dashboard/src/lib/reviews/",
+        "crates/atm-lib/src/"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 576,
+      "key_final": false,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a1e83f-8c1c-74d3-83f6-0e29c7ba9fca",
+      "name": "Design: agents as reviewers",
+      "type": "docs",
+      "priority": "P3",
+      "labels": [
+        "code-review"
+      ],
+      "description": "The design's open issue 1 ([§5](docs/code-review-design.md#:~:text=Agents%20as%20reviewers)), kept open by Hakan: agents that review, approve sometimes and only comment other times; rules at the project, sprint or task level on what an agent reviewer may do; whether a person's approval is needed besides an agent's; how this fits I23. A design to review with Hakan; until then a review's decision is the user's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1e83f-8c1c-74d3-83f6-0e21486f0d88"
+      ],
+      "files": [
+        "docs/code-review-design.md"
+      ],
+      "created_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T06:44:14Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "with": "user",
+      "number": 577,
+      "key_final": false,
+      "components": [
+        "docs"
       ]
     }
   ]
