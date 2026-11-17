@@ -1263,6 +1263,12 @@
             "01a1eb3e-a0c9-724d-a9e9-0fa4e8823e4f"
           ]
         }
+      },
+      {
+        "id": "Code reviews in the app",
+        "state": "planned",
+        "goal": "Reviews reach the sidebar, the tasks and the needs-you counts; live reviews; agents as reviewers designed; tests cover every case",
+        "release": "0.41.0"
       }
     ],
     "releases": [
@@ -1523,6 +1529,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
         },
         "released_at": "2026-11-17T21:42:22Z"
+      },
+      {
+        "id": "0.41.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -15354,14 +15364,21 @@
         "app/src-tauri/src/links.rs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:12Z",
+      "updated_at": "2026-11-17T22:15:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
       "key_final": true,
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T22:15:54Z"
+        }
+      ],
+      "sprint": "Code reviews in the app"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
@@ -15384,14 +15401,21 @@
         "crates/atm-lib/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:13Z",
+      "updated_at": "2026-11-17T22:15:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
       "key_final": true,
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T22:15:54Z"
+        }
+      ],
+      "sprint": "Code reviews in the app"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e29c7ba9fca",
@@ -15412,7 +15436,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:14Z",
+      "updated_at": "2026-11-17T22:15:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "with": "user",
@@ -15420,7 +15444,14 @@
       "key_final": true,
       "components": [
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T22:15:54Z"
+        }
+      ],
+      "sprint": "Code reviews in the app"
     },
     {
       "id": "01a1e849-7d18-70e6-a36e-15e5d46649df",
@@ -15527,11 +15558,18 @@
         "crates/atm-db/src/jsongit/claims.rs"
       ],
       "created_at": "2026-11-17T16:33:34Z",
-      "updated_at": "2026-11-17T16:49:00Z",
+      "updated_at": "2026-11-17T22:15:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 580,
-      "key_final": true
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T22:15:54Z"
+        }
+      ],
+      "sprint": "Code reviews in the app"
     },
     {
       "id": "01a1eb3d-88aa-723f-8bab-74e5496e739b",
@@ -15554,11 +15592,18 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-17T20:40:40Z",
-      "updated_at": "2026-11-17T20:40:40Z",
+      "updated_at": "2026-11-17T22:15:54Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 581,
-      "key_final": true
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T22:15:54Z"
+        }
+      ],
+      "sprint": "Code reviews in the app"
     },
     {
       "id": "01a1eb3e-a0c9-724d-a9e9-0fa4e8823e4f",
