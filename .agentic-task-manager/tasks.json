@@ -1570,7 +1570,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 582
+    "next_number": 583
   },
   "tasks": [
     {
@@ -15458,6 +15458,43 @@
       "updated_by": "Hakan Serce",
       "number": 581,
       "key_final": false
+    },
+    {
+      "id": "01a1eb3e-a0c9-724d-a9e9-0fa4e8823e4f",
+      "name": "Release 0.40.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "release"
+      ],
+      "description": "Ship the sprint *Code reviews: records and CLI* as 0.40.0, as AGENTS.md's *Versions* and *CI* sections describe. Work is on `dev/0.40.0`.\n\n## Change\n- **The version:** `Cargo.toml`'s `[workspace.package]` to `0.40.0` (the dashboard's meta tag and the app follow it); `Cargo.lock` updated by the build.\n- **`CHANGELOG.md`:** the `[0.40.0]` entry, dated the release day, every change with its commands and flags: the `atm-review` crate and its model (ATM-561), `comments.md` and `review.md` (ATM-562), the file store (ATM-563), rounds (ATM-564), the task link (ATM-565), the `atm review` commands (ATM-566), `atm review wait` and the watch (ATM-567), merging review files and `atm doctor` (ATM-568), the skills reviewing with atm instead of Crit (ATM-569), `atm-docs` and files at a revision (ATM-570), the document sources (ATM-571), writes from the app and the browser (ATM-572), the diff viewer (ATM-573), the reviews page and a review's page (ATM-574), the page budget raised to 1 MiB.\n- **`WHATS-NEW.md`:** 3–6 short plain-language bullets about what a user notices, from the changelog; no flags or file names.\n- **Screenshots:** regenerate the Linux baselines this sprint changed (`pnpm run test:e2e:visual:update`, Docker), delete any whose test is gone, look at one, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): a §3.x entry for 0.40.0. The skills changed (ATM-569) and new entry points came (the review routes and app commands, ATM-572, ATM-574): a written review of the skills' changes replaces the live sandbox run (no API key); check the new routes are in the threat model.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPush with `/atm-push`: it opens the release PR from `dev/0.40.0` to `main` and watches CI. Merging, tagging and publishing are Hakan's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-17T20:41:52Z",
+      "updated_at": "2026-11-17T20:41:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T20:41:52Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "number": 582,
+      "key_final": false,
+      "started_at": "2026-11-17T20:41:52Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

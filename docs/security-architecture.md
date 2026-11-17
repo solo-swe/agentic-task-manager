@@ -1078,8 +1078,8 @@ ATM-560; ATM-519 back to the backlog).** The checklist:
   regenerated for ATM-558: the Help, a blocked task's panel, the projects overview); CI's suite on Linux, macOS and
   Windows.
 
-**Release 0.40.0 (the sprint Code reviews: records and CLI, ATM-561 to ATM-574; in progress, the release task
-completes it).** So far:
+**Release 0.40.0 (the sprint Code reviews: records and CLI, ATM-561 to ATM-574, released by ATM-582).** The
+checklist:
 - **The first routes that change something** (ATM-572): the review routes, POST, PATCH and PUT under
   `…/projects/<p>/reviews` (I11 has their checks: Host, the server's own Origin, this start's session token in the
   served page and a header, a JSON body, no CORS), and the app's seven review commands (I27, B7). Both act as the user,
@@ -1125,6 +1125,17 @@ completes it).** So far:
   - **What the commands run:** `wait` and `watch` run no command and fetch nothing; they print comments, with their
     review, task and place. `create` and `round` read git (I24: `git` only, through atm-vcs's helper) and the files
     named. The skills' minimum atm is 0.40.0, which has the review commands.
+- **Dependencies and CI:** no new outside dependency: `toml` (atm-review's, ATM-562) was already in the tree, and the
+  new crates are atm's own (`atm-review`, `atm-docs`, `atm-fs`); the dashboard's packages are unchanged. No CI
+  permission or workflow changes. The page budget is 1 MiB (decided with Hakan, ATM-574).
+- **What ships is what is described:** the review pages read and write only through the routes and commands above;
+  a review opens in place in the browser (a new browser tab only on ⌘ or Ctrl), in a tab of its own in the app.
+  Comments render through CompMD as task text (I1). A provisional key shows in italics with an ⓘ, its tooltip as
+  before.
+- **Checks run:** `cargo test` (432), clippy, fmt and deny; the unit tests with coverage (1567, 95.6% of lines);
+  `pnpm run check`; the CLI suite (663); the functional e2e suite (480); the Linux screenshots in
+  Docker (84; four regenerated: the standard page in both modes, which shows the Reviews tab, and the update notice in
+  both modes, which shows the version).
 
 ## 4. Keeping it current
 
