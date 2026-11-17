@@ -46,3 +46,67 @@ fn watch_with(
     }
     Ok(Subscription::new(watcher))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, mpsc};
+
+    fn told() -> (OnChange, mpsc::Receiver<()>) {
+        let (send, receive) = mpsc::channel();
+        let send = std::sync::Mutex::new(send);
+        let on_change: OnChange = Arc::new(move || {
+            if let Ok(send) = send.lock() {
+                let _ = send.send(());
+            }
+        });
+        (on_change, receive)
+    }
+
+    #[test]
+    fn a_folder_that_isnt_there_is_skipped_and_nothing_is_told() {
+        let dir = crate::test_dir::TestDir::new();
+        let (on_change, received) = told();
+        let subscription = watch(&[dir.path().join("missing")], on_change).unwrap();
+        std::fs::write(dir.path().join("a.txt"), "a").unwrap();
+        assert!(
+            received.recv_timeout(SETTLE * 3).is_err(),
+            "no folder watched"
+        );
+        drop(subscription);
+    }
+
+    #[test]
+    fn a_change_in_a_watched_folder_is_told_once_it_settles_until_dropped() {
+        let dir = crate::test_dir::TestDir::new();
+        let (on_change, received) = told();
+        let subscription = watch(&[dir.path().to_path_buf()], on_change).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(dir.path().join("a.txt"), "a").unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the change");
+        drop(subscription);
+        while received.recv_timeout(SETTLE * 2).is_ok() {}
+        std::fs::write(dir.path().join("b.txt"), "b").unwrap();
+        assert!(
+            received.recv_timeout(SETTLE * 3).is_err(),
+            "nothing once dropped"
+        );
+    }
+
+    #[test]
+    fn a_tree_watch_tells_a_change_deep_in_a_subfolder() {
+        let dir = crate::test_dir::TestDir::new();
+        let deep = dir.path().join("a/b");
+        std::fs::create_dir_all(&deep).unwrap();
+        let (on_change, received) = told();
+        let subscription = watch_tree(&[dir.path().to_path_buf()], on_change).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(deep.join("c.txt"), "c").unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the change below");
+        drop(subscription);
+    }
+}

@@ -134,3 +134,167 @@ pub fn find_logo(root: &Path, meta: &Map<String, Value>) -> Option<Logo> {
             })
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_dir::TestDir;
+    use serde_json::json;
+
+    fn put(root: &Path, relative: &str, bytes: usize) {
+        let file = root.join(relative);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, vec![b'x'; bytes]).unwrap();
+    }
+
+    fn meta(value: Value) -> Map<String, Value> {
+        match value {
+            Value::Object(map) => map,
+            other => panic!("not an object: {other}"),
+        }
+    }
+
+    #[test]
+    fn a_logo_is_one_of_four_image_types_by_extension_whatever_its_case() {
+        let project = TestDir::new();
+        for (name, content_type) in [
+            ("a.svg", "image/svg+xml"),
+            ("b.PNG", "image/png"),
+            ("c.webp", "image/webp"),
+            ("d.ico", "image/x-icon"),
+        ] {
+            put(project.path(), name, 1);
+            let (file, found) = logo_file(project.path(), name).unwrap();
+            assert_eq!(found, content_type, "{name}");
+            assert_eq!(file, project.path().join(name));
+        }
+    }
+
+    #[test]
+    fn a_logo_path_that_is_empty_not_an_image_outside_missing_or_too_large_is_refused_with_code_2()
+    {
+        let project = TestDir::new();
+        put(project.path(), "logo.jpg", 1);
+        put(project.path(), "logo", 1);
+        put(project.path(), "big.png", 512 * 1024 + 1);
+        put(project.path(), "limit.png", 512 * 1024);
+        assert!(
+            logo_file(project.path(), "limit.png").is_ok(),
+            "at the limit"
+        );
+        let outside = TestDir::new();
+        put(outside.path(), "logo.svg", 1);
+        let escape = format!(
+            "../{}/logo.svg",
+            outside.path().file_name().unwrap().to_string_lossy()
+        );
+        // (the path, the message)
+        for (path, message) in [
+            ("", "no logo path given".to_string()),
+            ("  ", "no logo path given".to_string()),
+            (
+                "logo.jpg",
+                "logo.jpg: a logo is an SVG, PNG, WebP or ICO image".to_string(),
+            ),
+            (
+                "logo",
+                "logo: a logo is an SVG, PNG, WebP or ICO image".to_string(),
+            ),
+            (
+                "a.png/logo",
+                "a.png/logo: a logo is an SVG, PNG, WebP or ICO image".to_string(),
+            ),
+            ("missing.svg", "missing.svg: no such file".to_string()),
+            (
+                "no/folder/missing.svg",
+                "no/folder/missing.svg: no such file".to_string(),
+            ),
+            (
+                "big.png",
+                "big.png: the logo is larger than 512 KB".to_string(),
+            ),
+            (
+                escape.as_str(),
+                format!("{escape}: the logo must be inside the project folder"),
+            ),
+            (
+                "../missing.svg",
+                "../missing.svg: the logo must be inside the project folder".to_string(),
+            ),
+        ] {
+            let error = logo_file(project.path(), path).unwrap_err();
+            assert_eq!(error.to_string(), message, "{path:?}");
+            assert_eq!(error.code(), 2, "{path:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_logo_linked_from_outside_the_project_is_refused() {
+        let (project, outside) = (TestDir::new(), TestDir::new());
+        put(outside.path(), "logo.svg", 1);
+        std::os::unix::fs::symlink(
+            outside.path().join("logo.svg"),
+            project.path().join("logo.svg"),
+        )
+        .unwrap();
+        let error = logo_file(project.path(), "logo.svg").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "logo.svg: the logo must be inside the project folder"
+        );
+    }
+
+    #[test]
+    fn normalize_works_out_dots_without_reading_the_disk() {
+        for (path, normal) in [
+            ("/a/./b/../c", "/a/c"),
+            ("/a/b/..", "/a"),
+            ("a/../../b", "b"),
+            ("/a/b", "/a/b"),
+        ] {
+            assert_eq!(normalize(Path::new(path)), PathBuf::from(normal), "{path}");
+        }
+    }
+
+    #[test]
+    fn the_logo_meta_logo_names_wins_and_an_unusable_one_means_no_logo() {
+        let project = TestDir::new();
+        put(project.path(), "logo.svg", 1);
+        put(project.path(), "brand/mark.png", 1);
+        let set = find_logo(project.path(), &meta(json!({"logo": "brand/mark.png"}))).unwrap();
+        assert_eq!(
+            set,
+            Logo {
+                path: "brand/mark.png".into(),
+                file: project.path().join("brand/mark.png"),
+                content_type: "image/png",
+                source: "set",
+            }
+        );
+        assert_eq!(
+            find_logo(project.path(), &meta(json!({"logo": "missing.png"}))),
+            None
+        );
+        // An empty `meta.logo` counts as not set
+        let found = find_logo(project.path(), &meta(json!({"logo": ""}))).unwrap();
+        assert_eq!((found.path.as_str(), found.source), ("logo.svg", "found"));
+    }
+
+    #[test]
+    fn without_meta_logo_the_first_usable_file_of_the_usual_places_is_the_logo() {
+        let project = TestDir::new();
+        assert_eq!(find_logo(project.path(), &Map::new()), None);
+        // Each one found while it is the first there; a too-large one is passed over
+        put(project.path(), "assets/logo.ico", 1);
+        put(project.path(), "public/favicon.png", 1);
+        put(project.path(), ".github/logo.webp", 1);
+        put(project.path(), ".github/logo.svg", 512 * 1024 + 1);
+        let first = |root: &Path| find_logo(root, &Map::new()).map(|l| l.path);
+        assert_eq!(first(project.path()).as_deref(), Some(".github/logo.webp"));
+        put(project.path(), "logo.png", 1);
+        assert_eq!(first(project.path()).as_deref(), Some("logo.png"));
+        put(project.path(), "logo.svg", 1);
+        assert_eq!(first(project.path()).as_deref(), Some("logo.svg"));
+    }
+}

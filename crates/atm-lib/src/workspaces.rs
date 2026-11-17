@@ -822,6 +822,88 @@ mod tests {
         std::fs::remove_dir_all(&home).unwrap();
     }
 
+    #[test]
+    fn task_data_is_too_large_to_show_only_past_the_limit() {
+        for (stamp, expected) in [
+            (json!({"tasks": [MAX_SERVED_BYTES, "1"]}), false),
+            (json!({"tasks": [MAX_SERVED_BYTES + 1, "1"]}), true),
+            (json!({"tasks": null}), false),
+            (json!({}), false),
+            (json!({"tasks": ["big", "1"]}), false),
+        ] {
+            assert_eq!(too_large(&stamp), expected, "{stamp}");
+        }
+    }
+
+    #[test]
+    fn a_files_stamp_is_its_size_and_time_or_null_when_it_isnt_there() {
+        let home = state("stamp");
+        let file = home.join("f.txt");
+        assert_eq!(file_stamp(&file), Value::Null);
+        std::fs::write(&file, "abc").unwrap();
+        let stamp = file_stamp(&file);
+        assert_eq!(stamp[0], json!(3));
+        assert!(stamp[1].as_str().is_some_and(|t| t.parse::<u128>().is_ok()));
+        assert_eq!(
+            folder(&json!({})),
+            PathBuf::new(),
+            "an entry without a path"
+        );
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn a_logo_is_served_at_the_v1_address_in_default_and_the_v2_one_elsewhere() {
+        let home = state("logo");
+        let workspaces = Workspaces::at(&home);
+        workspaces.create("work").unwrap();
+        assert_eq!(workspaces.default_workspace().logo_route("p1"), "p/p1/logo");
+        assert_eq!(
+            workspaces.get("work").unwrap().logo_route("p1"),
+            "api/v2/workspaces/work/projects/p1/logo"
+        );
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn a_workspace_search_finds_each_projects_tasks_and_ignores_a_blank_query() {
+        let home = state("search");
+        let project = home.join("project");
+        let tasks = project.join(atm_common::TASK_DIR).join("tasks.json");
+        std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
+        std::fs::write(
+            &tasks,
+            r#"{"meta": {"id": "one"}, "tasks": [{"id": "T-1", "name": "Parse config"}, {"id": "T-2", "name": "Other"}]}"#,
+        )
+        .unwrap();
+        let workspaces = Workspaces::at(&home);
+        let workspace = workspaces.default_workspace();
+        workspace
+            .add_project(Some(&project.to_string_lossy()), &home)
+            .unwrap();
+        assert_eq!(
+            Value::Object(workspace.search("CONFIG")),
+            json!({"one": ["T-1"]})
+        );
+        assert!(workspace.search("   ").is_empty());
+        assert!(workspace.search("nothing-matches").is_empty());
+        // past the query's cap, the rest doesn't count
+        let long = format!("config{}", " ".repeat(SEARCH_QUERY_CAP)) + "nothing-matches";
+        assert_eq!(
+            Value::Object(workspace.search(&long)),
+            json!({"one": ["T-1"]})
+        );
+        assert_eq!(
+            workspaces.summary()["workspaces"],
+            json!([{"id": "default", "projects": 1}])
+        );
+        assert!(
+            matches!(workspace.member("nope"), Err(Error::NotFound(m)) if m == "unknown project")
+        );
+        assert!(workspace.member("one").is_ok());
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
     /// T-555: a workspace's subscription is its members' stores' and its list's, merged: a change in a member's task
     /// file and in the workspace's file are both told, and nothing once it is dropped
     #[test]

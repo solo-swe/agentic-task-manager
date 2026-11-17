@@ -121,6 +121,16 @@ describe('in the browser', () => {
     expect(await replyTo('p1', 'CR-7', 'c1', 'x')).toEqual({ ok: false, message: 'network down' });
   });
 
+  it('a refusal whose JSON names no error is its status; a success that isn’t JSON, an empty body', async () => {
+    answering(409, { review: 'CR-7' });
+    expect(await resolveComment('p1', 'CR-7', 'c1', true)).toEqual({ ok: false, message: 'HTTP 409' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+    expect(await resolveComment('p1', 'CR-7', 'c1', true)).toEqual({ ok: true, body: {} });
+  });
+
   it('the token is the page’s meta tag; none, none', () => {
     expect(sessionToken()).toBe(TOKEN);
     withToken('');
@@ -140,7 +150,14 @@ describe('in the browser', () => {
     expect((await replyTo('p1', 'CR-7', 'c1', 'x')).ok).toBe(true);
     expect(fetch.mock.calls[1][1]?.headers).toMatchObject({ 'X-Atm-Session': 'd'.repeat(64) });
 
-    for (const devAnswer of [() => new Response(JSON.stringify({ token: null })), () => new Response('not json')]) {
+    for (const devAnswer of [
+      () => new Response(JSON.stringify({ token: null })),
+      () => new Response(JSON.stringify({})),
+      () => new Response('not json'),
+      () => {
+        throw new Error('no dev server');
+      },
+    ]) {
       const none = vi.fn(async () => devAnswer());
       vi.stubGlobal('fetch', none);
       expect(await replyTo('p1', 'CR-7', 'c1', 'x')).toEqual({

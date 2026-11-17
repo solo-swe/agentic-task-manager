@@ -111,7 +111,18 @@ mod tests {
         for ok in ["T-001", "a", "T.1_x", &"a".repeat(64)] {
             assert!(valid_task_id(ok), "{ok}");
         }
-        for bad in ["", "-T", "T 1", "T;1", "é", &"a".repeat(65), "$(x)"] {
+        for bad in [
+            "",
+            "-T",
+            ".T",
+            "_T",
+            "T/1",
+            "T 1",
+            "T;1",
+            "é",
+            &"a".repeat(65),
+            "$(x)",
+        ] {
             assert!(!valid_task_id(bad), "{bad}");
         }
     }
@@ -119,6 +130,10 @@ mod tests {
     #[test]
     fn branches_may_have_slashes_but_no_double_dot() {
         assert!(valid_branch("dev/0.32.0"));
+        assert!(valid_branch(&"a".repeat(200)), "at the limit");
+        assert!(!valid_branch(""));
+        assert!(!valid_branch("/x"));
+        assert!(!valid_branch("a;b"));
         assert!(!valid_branch("a..b"));
         assert!(!valid_branch("-x"));
         assert!(!valid_branch("a b"));

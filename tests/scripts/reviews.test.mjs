@@ -247,6 +247,244 @@ describe('atm review', () => {
       removeDir(root);
     }
   });
+
+  test('each wrong use has its exit code: 2 for a usage error, 1 for what the review or the files refuse', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
+      // [args, exit code, what stderr says]
+      const cases = [
+        [['review', 'create', '--title', 'x'], 2, /say what to review/],
+        [['review', 'create', '--title', 'x', '--range', 'HEAD'], 2, /--range takes BASE\.\.HEAD, not HEAD/],
+        [['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'], 1, /can't read gone\.md/],
+        [['review', 'create', '--title', 'x', '--range', 'HEAD~1..HEAD', '--uncommitted'], 2, /cannot be used with/],
+        [['review', 'show', 'CR-9'], 1, /no review CR-9/],
+        [['review', 'show', 'CR-1', '--against', '1'], 2, /--round/],
+        [['review', 'comment', 'CR-1'], 2, /--body or --body-file/],
+        [['review', 'comment', 'CR-1', '--body', '   '], 2, /the text is empty/],
+        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 1, /can't read gone\.md/],
+        [['review', 'comment', 'CR-1', '--body', 'x', '--body-file', 'a.txt'], 2, /cannot be used with/],
+        [['review', 'comment', 'CR-1', '--lines', '2', '--body', 'x'], 2, /--file/],
+        [
+          ['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '0', '--body', 'x'],
+          2,
+          /--lines takes A-B or A, not 0/,
+        ],
+        [['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', 'two', '--body', 'x'], 2, /--lines takes/],
+        [['review', 'comment', 'CR-9', '--body', 'x'], 1, /no review CR-9/],
+        [['review', 'reply', 'CR-1', 'c9', '--body', 'x'], 1, /c9/],
+        [['review', 'submit', 'CR-1'], 2, /submit with --approve, --request-changes or --comment/],
+        [['review', 'submit', 'CR-1', '--comment'], 2, /--comment needs its text/],
+        [['review', 'submit', 'CR-1', '--approve', '--request-changes'], 2, /cannot be used with/],
+        [['review', 'wait', 'CR-1', '--timeout', '0'], 2, /--timeout takes 90s, 30m, 2h or seconds, not 0/],
+        [['review', 'wait', 'CR-1', '--timeout', 'soon'], 2, /--timeout takes/],
+        [['review', 'wait', 'CR-1', '--for', 'ever'], 2, /invalid value 'ever'/],
+        [['review', 'watch', '--timeout=-5m'], 2, /--timeout takes/],
+        [['review', 'close', 'CR-1'], 2, /--reason/],
+        [['review', 'list', '--status', 'nope'], 2, /no status nope/],
+      ];
+      for (const [args, code, stderr] of cases) {
+        const r = atm(args, root, HAKAN);
+        assert.equal(r.code, code, `atm ${args.join(' ')}: ${r.stderr}`);
+        assert.match(r.stderr, stderr, `atm ${args.join(' ')}`);
+      }
+      // None of them changed the review
+      const review = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
+      assert.deepEqual([review.header.status, review.chains.length], ['open', 0]);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('--dry-run says what each command would do and writes nothing', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      const reviews = path.join(root, '.agentic-task-manager/reviews');
+      const create = ok(['review', 'create', '--title', 'Try', '--task', 'T-1', '--uncommitted', '-n'], root, AGENT);
+      assert.equal(create.stdout, '[dry-run] would open a review “Try” of 1 file(s)\n');
+      assert.equal(
+        ok(['review', 'live', '-n'], root, AGENT).stdout,
+        '[dry-run] would open a live review “Live review”\n',
+      );
+      assert.ok(!fs.existsSync(reviews), 'no review written');
+      assert.equal(task(root, 'T-1').status, 'in_progress');
+
+      ok(['review', 'create', '--title', 'Real', '--task', 'T-1', '--uncommitted'], root, AGENT);
+      ok(['review', 'comment', 'CR-1', '--body', 'Why?'], root, HAKAN);
+      const before = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).stdout;
+      const dry = [
+        [['review', 'round', 'CR-1', '-n'], AGENT, '[dry-run] would add a round to CR-1\n'],
+        [['review', 'tasks', 'CR-1', '--add', 'T-2', '-n'], AGENT, "[dry-run] would change CR-1's tasks\n"],
+        [['review', 'comment', 'CR-1', '--body', 'More', '-n'], HAKAN, '[dry-run] would comment on CR-1\n'],
+        [['review', 'reply', 'CR-1', 'c1', '--body', 'Because', '-n'], AGENT, '[dry-run] would reply to c1 in CR-1\n'],
+        [['review', 'edit', 'CR-1', 'c1', '--body', 'Why not?', '-n'], HAKAN, '[dry-run] would edit c1 in CR-1\n'],
+        [['review', 'resolve', 'CR-1', 'c1', '-n'], HAKAN, '[dry-run] would resolve c1 in CR-1\n'],
+        [['review', 'resolve', 'CR-1', 'c1', '--reopen', '-n'], HAKAN, '[dry-run] would reopen c1 in CR-1\n'],
+        [['review', 'submit', 'CR-1', '--request-changes', '-n'], HAKAN, '[dry-run] would submit on CR-1\n'],
+        [['review', 'close', 'CR-1', '--reason', 'No', '-n'], AGENT, '[dry-run] would close CR-1\n'],
+      ];
+      for (const [args, env, stdout] of dry) assert.equal(ok(args, root, env).stdout, stdout, args.join(' '));
+      assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).stdout, before);
+      assert.equal(task(root, 'T-2').status, 'in_progress');
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('a draft of files as they are, with a summary: nothing in review yet; show prints its header and rounds', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'summary.md'), 'What it does.\nAnd why.\n');
+      const draft = ok(
+        [
+          'review',
+          'create',
+          '--title',
+          'Early look',
+          '--task',
+          'T-1',
+          '--file',
+          'a.txt',
+          '--summary-file',
+          'summary.md',
+          '--reviewer',
+          'Ana',
+          '--draft',
+          '--json',
+        ],
+        root,
+        AGENT,
+      ).json();
+      assert.deepEqual([draft.status, draft.tasks, draft.reviewers], ['draft', ['T-1'], ['Ana']]);
+      assert.equal(task(root, 'T-1').status, 'in_progress');
+      const shown = ok(['review', 'show', 'CR-1'], root, HAKAN).stdout;
+      assert.match(
+        shown,
+        /^CR-1 · draft · Early look · T-1\n {2}by claude:0f56a916 · decided by Ana · opened .+\n\n {2}What it does\.\n {2}And why\.\n\n {2}round 1 · files as they are · 1 file\(s\) · claude:0f56a916 · .+\n {2}0 chain\(s\), 0 open\n$/,
+      );
+      // The next round is files again, unless named
+      fs.writeFileSync(path.join(root, 'a.txt'), 'one\ntwo\nthree\nfour\n');
+      assert.equal(ok(['review', 'round', 'CR-1'], root, AGENT).stdout, 'CR-1: round 2\n');
+      assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 2 · files as they are · 1 file\(s\)/);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('edit is the comment author’s own; a reply is resolved through its chain; resolve --reopen opens it again', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
+      assert.equal(ok(['review', 'comments', 'CR-1'], root, HAKAN).stdout, 'CR-1: no comments\n');
+      ok(['review', 'comment', 'CR-1', '--body', 'Tpyo.'], root, HAKAN);
+      fs.writeFileSync(path.join(root, 'better.md'), 'Typo, line 1.\n');
+      assert.equal(
+        ok(['review', 'edit', 'CR-1', 'c1', '--body-file', 'better.md'], root, HAKAN).stdout,
+        'CR-1: c1 changed\n',
+      );
+      const edited = atm(['review', 'edit', 'CR-1', 'c1', '--body', 'Mine now'], root, AGENT);
+      assert.equal(edited.code, 1);
+      assert.match(edited.stderr, /c1 is Hakan Serce's to edit/);
+      assert.equal(
+        ok(['review', 'comments', 'CR-1', '--json'], root, HAKAN).json()[0].comments[0].body,
+        'Typo, line 1.',
+      );
+
+      assert.equal(
+        ok(['review', 'reply', 'CR-1', 'c1', '--body', 'Fixed.'], root, AGENT).stdout,
+        'CR-1: c2, in reply to c1\n',
+      );
+      const reply = atm(['review', 'resolve', 'CR-1', 'c2'], root, HAKAN);
+      assert.equal(reply.code, 2);
+      assert.match(reply.stderr, /c2 is a reply: resolve the comment it belongs to \(c1\)/);
+      assert.deepEqual(ok(['review', 'resolve', 'CR-1', 'c1', '--json'], root, HAKAN).json(), {
+        review: 'CR-1',
+        comment: 'c1',
+        resolved: true,
+      });
+      assert.equal(ok(['review', 'comments', 'CR-1', '--open'], root, HAKAN).stdout, 'CR-1: no comments open\n');
+      assert.equal(ok(['review', 'resolve', 'CR-1', 'c1', '--reopen'], root, HAKAN).stdout, 'CR-1: c1 open again\n');
+      assert.equal(ok(['review', 'comments', 'CR-1', '--open', '--json'], root, HAKAN).json().length, 1);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('close ends a review, its author’s or a reviewer’s to do; --reject-tasks rejects its tasks in review; ended, it takes nothing more', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'Kept', '--task', 'T-1', '--uncommitted', '--reviewer', 'Ana'], root, AGENT);
+      ok(
+        ['review', 'create', '--title', 'Dropped', '--task', 'T-2', '--uncommitted', '--reviewer', 'Ana'],
+        root,
+        AGENT,
+      );
+      const stranger = atm(['review', 'close', 'CR-1', '--reason', 'No'], root, HAKAN);
+      assert.equal(stranger.code, 1);
+      assert.match(stranger.stderr, /CR-1 is closed by its author or a reviewer/);
+
+      assert.equal(
+        ok(['review', 'close', 'CR-1', '--reason', 'Split in two'], root, AGENT).stdout,
+        'CR-1 · closed · Kept · T-1\n',
+      );
+      assert.equal(task(root, 'T-1').status, 'in_review');
+      const closed = ok(['review', 'close', 'CR-2', '--reason', 'Not needed', '--reject-tasks', '--json'], root, {
+        ATM_AGENT: 'Ana',
+      }).json();
+      assert.equal(closed.status, 'closed');
+      const t2 = task(root, 'T-2');
+      assert.deepEqual([t2.status, t2.review_state], ['in_review', 'rejected']);
+      assert.match(JSON.stringify(t2.notes), /CR-2 closed: Not needed/);
+      // The reason is on the record, resolved
+      const record = ok(['review', 'comments', 'CR-2', '--json'], root, HAKAN).json()[0].comments[0];
+      assert.deepEqual([record.body, record.resolved], ['Not needed', true]);
+
+      // Ended: no comment, reply, round, submit or second close
+      for (const args of [
+        ['review', 'comment', 'CR-1', '--body', 'Late'],
+        ['review', 'reply', 'CR-1', 'c1', '--body', 'Late'],
+        ['review', 'submit', 'CR-1', '--approve'],
+        ['review', 'close', 'CR-1', '--reason', 'Again'],
+        ['review', 'tasks', 'CR-1', '--add', 'T-2'],
+      ]) {
+        const r = atm(args, root, { ATM_AGENT: 'Ana' });
+        assert.equal(r.code, 1, args.join(' '));
+        assert.match(r.stderr, /CR-1 is closed: it can't/, args.join(' '));
+      }
+      assert.equal(ok(['review', 'list', '--status', 'closed'], root, HAKAN).stdout.trim().split('\n').length, 2);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('tasks --remove takes a task out; list by --task and --mine', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'Both', '--task', 'T-1', '--task', 'T-2', '--uncommitted'], root, AGENT);
+      ok(['review', 'create', '--title', 'Other', '--file', 'a.txt', '--reviewer', 'Ana'], root, HAKAN);
+      assert.equal(ok(['review', 'tasks', 'CR-1', '--remove', 'T-2'], root, AGENT).stdout, 'CR-1: T-1\n');
+      assert.equal(ok(['review', 'tasks', 'CR-1', '--remove', 'T-1'], root, AGENT).stdout, 'CR-1: no tasks\n');
+      ok(['review', 'tasks', 'CR-1', '--add', 'T-2'], root, AGENT);
+
+      const refs = (args, env) =>
+        ok(['review', 'list', ...args, '--json'], root, env)
+          .json()
+          .map((f) => f.review.reference);
+      assert.deepEqual(refs(['--task', 'T-2'], HAKAN), ['CR-1']);
+      assert.deepEqual(refs(['--task', 'T-1'], HAKAN), []);
+      // Mine: the ones I opened or am named to decide (CR-1 names no reviewer)
+      assert.deepEqual(refs(['--mine'], AGENT), ['CR-1']);
+      assert.deepEqual(refs(['--mine'], { ATM_AGENT: 'Ana' }), ['CR-2']);
+      assert.deepEqual(refs(['--mine'], HAKAN), ['CR-2']);
+    } finally {
+      removeDir(root);
+    }
+  });
 });
 
 /** Start atm in the background; its stdout's lines as they come, its end, and a way to stop it. */

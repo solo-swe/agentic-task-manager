@@ -352,3 +352,240 @@ pub fn watch(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reviews::{Actor, Anchor, CommentId, ReviewId};
+    use atm_review::model::ChainId;
+
+    fn comment(id: &str, author: &str, body: &str, replies: Vec<Comment>) -> Comment {
+        Comment {
+            id: CommentId(id.into()),
+            author: Actor::from(author),
+            at: "2026-11-17T10:00:00Z".into(),
+            body: body.into(),
+            resolved: None,
+            replies,
+        }
+    }
+
+    fn chain(path: Option<&str>, comments: Vec<Comment>) -> Chain {
+        Chain {
+            id: ChainId("t1".into()),
+            anchor: Anchor {
+                round: 1,
+                path: path.map(String::from),
+                lines: path.map(|_| (3, 4)),
+                ..Anchor::default()
+            },
+            comments,
+        }
+    }
+
+    fn review(status: Status, tasks: &[&str]) -> Review {
+        Review {
+            header: ReviewHeader {
+                id: ReviewId("r".into()),
+                reference: ReviewRef("CR-1".into()),
+                number: 1,
+                title: "T".into(),
+                status,
+                tasks: tasks.iter().map(|t| (*t).to_string()).collect(),
+                author: Some(Actor::from("claude:me")),
+                reviewers: Vec::new(),
+                created: String::new(),
+                updated: String::new(),
+            },
+            summary: String::new(),
+            chains: Vec::new(),
+            rounds: Vec::new(),
+        }
+    }
+
+    fn files(list: &[&str]) -> Vec<String> {
+        list.iter().map(|f| (*f).to_string()).collect()
+    }
+
+    /// The agent held ATM-1 (src/a.rs, now) and finished ATM-2 (docs/); ATM-3, another's, names src/b.rs; src/c.rs
+    /// and src/b.rs are changed in its working copy.
+    fn work() -> Work {
+        Work {
+            held: Some("ATM-1".into()),
+            tasks: vec![
+                ("ATM-1".into(), files(&["src/a.rs"])),
+                ("ATM-2".into(), files(&["docs/"])),
+            ],
+            others: vec![("ATM-3".into(), files(&["src/b.rs"]))],
+            uncommitted: files(&["src/c.rs", "src/b.rs"]),
+        }
+    }
+
+    /// Whether the chain's first comment is the agent's, in words: `not mine`, `no task` (the agent's, about none of
+    /// its tasks), or the task's key.
+    fn about(review: &Review, chain: &Chain) -> String {
+        let c = &chain.comments[0];
+        match about_my_work(&work(), "claude:me", review, chain, c) {
+            Mine::No => NOT_MINE.into(),
+            Mine::About(task) => task.unwrap_or_else(|| NO_TASK.into()),
+        }
+    }
+
+    const NOT_MINE: &str = "not mine";
+    const NO_TASK: &str = "no task";
+
+    fn by_hakan(path: Option<&str>, body: &str) -> Chain {
+        chain(path, vec![comment("c1", "Hakan", body, Vec::new())])
+    }
+
+    #[test]
+    fn a_file_is_touched_when_named_or_under_a_folder_named() {
+        let list = files(&["src/a.rs", "docs/"]);
+        for (path, expected) in [
+            ("src/a.rs", true),
+            ("docs/x.md", true),
+            ("docs/deep/y.md", true),
+            ("src/a.rs.bak", false),
+            ("src/", false),
+            ("docs", false),
+            ("other.rs", false),
+        ] {
+            assert_eq!(touches(&list, path), expected, "{path}");
+        }
+        assert!(!touches(&[], "a"));
+    }
+
+    #[test]
+    fn a_decision_is_approved_changes_requested_or_closed() {
+        for (status, expected) in [
+            (Status::Draft, false),
+            (Status::Open, false),
+            (Status::Live, false),
+            (Status::ChangesRequested, true),
+            (Status::Approved, true),
+            (Status::Closed, true),
+        ] {
+            assert_eq!(decided(status), expected, "{status:?}");
+        }
+    }
+
+    #[test]
+    fn every_comment_comes_with_the_one_it_answers_depth_first() {
+        let deep = comment("c3", "a", "", Vec::new());
+        let c = chain(
+            None,
+            vec![
+                comment("c1", "a", "", vec![comment("c2", "b", "", vec![deep])]),
+                comment("c4", "a", "", Vec::new()),
+            ],
+        );
+        let pairs: Vec<(&str, Option<&str>)> = with_parents(&c)
+            .into_iter()
+            .map(|(c, p)| (c.id.0.as_str(), p.map(|p| p.id.0.as_str())))
+            .collect();
+        assert_eq!(
+            pairs,
+            [
+                ("c1", None),
+                ("c2", Some("c1")),
+                ("c3", Some("c2")),
+                ("c4", None)
+            ]
+        );
+        assert_eq!(with_parents(&chain(None, Vec::new())).len(), 0);
+    }
+
+    #[test]
+    fn a_comment_heard_names_its_review_chain_place_and_text() {
+        let r = review(Status::Open, &["ATM-1"]);
+        let parent = comment("c1", "claude:me", "Done", Vec::new());
+        let reply = comment("c2", "Hakan", "Why?", Vec::new());
+        let c = chain(Some("src/a.rs"), Vec::new());
+        assert_eq!(
+            heard(&r.header, &c, &reply, Some(&parent), Some("ATM-1")),
+            json!({
+                "review": "CR-1", "task": "ATM-1", "chain": "t1", "comment": "c2", "reply_to": "c1",
+                "author": "Hakan", "at": "2026-11-17T10:00:00Z", "path": "src/a.rs", "lines": [3, 4],
+                "body": "Why?"
+            })
+        );
+        let whole = chain(None, Vec::new());
+        let v = heard(&r.header, &whole, &reply, None, None);
+        assert_eq!(
+            (
+                v["path"].clone(),
+                v["lines"].clone(),
+                v["reply_to"].clone(),
+                v["task"].clone()
+            ),
+            (Value::Null, Value::Null, Value::Null, Value::Null)
+        );
+    }
+
+    #[test]
+    fn a_live_review_is_the_agents_about_the_task_that_touched_the_file_else_the_one_held() {
+        let live = review(Status::Live, &[]);
+        for (path, task) in [
+            (Some("src/a.rs"), "ATM-1"),
+            (Some("docs/guide.md"), "ATM-2"),
+            // a file changed in its copy: the task it holds now
+            (Some("src/c.rs"), "ATM-1"),
+            // the review as a whole: the task held
+            (None, "ATM-1"),
+            // a file neither touched nor changed: about no task, still the agent's
+            (Some("README.md"), NO_TASK),
+        ] {
+            assert_eq!(about(&live, &by_hakan(path, "x")), task, "{path:?}");
+        }
+    }
+
+    #[test]
+    fn a_review_of_none_of_the_agents_tasks_isnt_its() {
+        let theirs = review(Status::Open, &["ATM-3"]);
+        assert_eq!(
+            about(&theirs, &by_hakan(Some("src/a.rs"), "ATM-1")),
+            NOT_MINE
+        );
+    }
+
+    #[test]
+    fn a_review_of_one_of_its_tasks_alone_is_all_about_that_task() {
+        let one = review(Status::ChangesRequested, &["ATM-2"]);
+        for path in [Some("anything.rs"), None] {
+            assert_eq!(about(&one, &by_hakan(path, "x")), "ATM-2", "{path:?}");
+        }
+    }
+
+    #[test]
+    fn in_a_batch_review_a_comment_is_the_agents_by_file_by_task_named_or_by_its_own_chain() {
+        let batch = review(Status::Open, &["ATM-1", "ATM-2", "ATM-3"]);
+        for (path, body, expected) in [
+            // a file its task touched
+            (Some("docs/a.md"), "x", "ATM-2"),
+            // a file changed in its copy, which no other named task claims: the task held
+            (Some("src/c.rs"), "x", "ATM-1"),
+            // a file another named task declares is that task's, even changed here
+            (Some("src/b.rs"), "x", NOT_MINE),
+            // its task named in the comment
+            (None, "see ATM-2 again", "ATM-2"),
+            (Some("other.rs"), "nothing of its", NOT_MINE),
+        ] {
+            assert_eq!(
+                about(&batch, &by_hakan(path, body)),
+                expected,
+                "{path:?} {body}"
+            );
+        }
+        // a chain it wrote in is its, about no task
+        let own = chain(
+            Some("other.rs"),
+            vec![comment(
+                "c1",
+                "Hakan",
+                "x",
+                vec![comment("c2", "claude:me", "y", Vec::new())],
+            )],
+        );
+        assert_eq!(about(&batch, &own), NO_TASK);
+    }
+}

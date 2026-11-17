@@ -614,6 +614,96 @@ mod tests {
         assert_eq!(task(&project, "T-2")["review_state"], "approved");
     }
 
+    fn open_review(project: &mut Project, tasks: &[&str]) -> super::ReviewHeader {
+        super::create(
+            project,
+            NewReview {
+                title: "Both".into(),
+                summary: String::new(),
+                tasks: tasks.iter().map(|t| (*t).to_string()).collect(),
+                author: Some("claude:1".into()),
+                reviewers: vec!["Hakan".into()],
+                status: Status::Open,
+                first: round(),
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_project_without_a_folder_or_git_has_no_reviews() {
+        let memory = Project::new(Box::new(
+            atm_db::MemoryStore::new(Vec::new(), Vec::new(), &serde_json::Map::new()).unwrap(),
+        ));
+        assert_eq!(
+            super::store(&memory).unwrap_err().to_string(),
+            "this project has no folder to keep reviews in"
+        );
+        assert_eq!(
+            super::vcs(&memory).unwrap_err().to_string(),
+            "reviews are of changes in git: this project isn't in a git repository"
+        );
+        // nothing to check either
+        assert_eq!(
+            super::check(&memory, &json!({"tasks": []})),
+            (Vec::new(), Vec::new())
+        );
+    }
+
+    #[test]
+    fn a_comment_only_submission_leaves_the_tasks_waiting() {
+        let dir = dir();
+        let mut project = project(&dir.0, "claude:1");
+        let header = open_review(&mut project, &["T-1"]);
+        let mut hakan = reopen(&dir.0, "Hakan");
+        super::submit(
+            &mut hakan,
+            &header.reference,
+            Verdict::Comment,
+            Some("hm"),
+            None,
+        )
+        .unwrap();
+        assert_eq!(task(&hakan, "T-1")["review_state"], "waiting");
+    }
+
+    #[test]
+    fn closing_a_review_rejects_its_tasks_only_when_asked() {
+        for (reject, state) in [(false, "waiting"), (true, "rejected")] {
+            let dir = dir();
+            let mut project = project(&dir.0, "claude:1");
+            let header = open_review(&mut project, &["T-1"]);
+            let mut hakan = reopen(&dir.0, "Hakan");
+            super::close(&mut hakan, &header.reference, "not needed", reject).unwrap();
+            let t1 = task(&hakan, "T-1");
+            assert_eq!(t1["review_state"], state, "reject {reject}");
+            if reject {
+                assert!(t1["notes"].to_string().contains("CR-1 closed: not needed"));
+            }
+        }
+    }
+
+    #[test]
+    fn doctor_warns_of_a_task_linked_to_a_review_the_project_doesnt_have() {
+        let dir = dir();
+        let mut project = project(&dir.0, "claude:1");
+        let header = open_review(&mut project, &["T-1"]);
+        let document = json!({"tasks": [
+            {"id": "T-1", "code_reviews": [{"id": header.id.0, "ref": "CR-1"}]},
+            {"id": "T-2", "code_reviews": [{"id": "gone", "ref": "CR-7"}]},
+            {"id": "T-3", "code_reviews": [{"id": "gone-too"}]}
+        ]});
+        let (errors, warnings) = super::check(&project, &document);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            warnings,
+            [
+                "T-2: its code review CR-7 isn't in the project (not merged here yet, or deleted)",
+                "T-3: its code review gone-too isn't in the project (not merged here yet, or deleted)"
+            ]
+        );
+    }
+
     #[test]
     fn tasks_named_later_are_linked_and_removed_ones_unlinked_with_a_note() {
         let dir = dir();

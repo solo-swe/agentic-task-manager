@@ -32,6 +32,203 @@ fn ids(p: &Project, filters: &Filters) -> Vec<String> {
         .collect()
 }
 
+fn filters(f: impl FnOnce(&mut Filters)) -> Filters {
+    let mut out = Filters::default();
+    f(&mut out);
+    out
+}
+
+#[test]
+fn a_search_finds_the_tasks_with_every_word_in_any_case() {
+    let p = project_with(
+        json!({}),
+        json!([
+            {"id": "T-1", "name": "Parse the config", "type": "feature", "labels": ["cli"]},
+            {"id": "T-2", "name": "Docs", "description": "Explain the CONFIG file", "type": "docs"},
+            {"id": "T-3", "name": "Other", "notes": [{"text": "config seen in review"}]},
+            {"id": "T-4", "name": "Nothing here"},
+            {"name": "no id, never found: config"}
+        ]),
+        json!([{"id": "T-0", "name": "archived config"}]),
+    );
+    let search = |q: &str, also: &str| search_tasks(&p, q, also).unwrap();
+    assert_eq!(search("config", ""), ["T-1", "T-2", "T-3"]);
+    assert_eq!(search("CONFIG cli", ""), ["T-1"]);
+    assert_eq!(search("t-4", ""), ["T-4"], "by its ID");
+    assert_eq!(search("docs", ""), ["T-2"], "by its type");
+    assert_eq!(search("config missing", "").len(), 0);
+    assert_eq!(search("   ", "").len(), 0, "no words, no tasks");
+    // the project's name finds all of its tasks
+    assert_eq!(search("Atm", "atm"), ["T-1", "T-2", "T-3", "T-4"]);
+}
+
+#[test]
+fn claims_are_listed_by_task_and_entries_without_a_task_are_left_out() {
+    let store = json!({"claims": {
+        "b": {"task": "T-2", "agent": "a"},
+        "a": {"task": "T-1", "agent": "b"},
+        "c": {"agent": "no task"},
+        "d": {"task": 7}
+    }});
+    let p = Project::new(Box::new(
+        MemoryStore::new(Vec::new(), Vec::new(), &Map::new())
+            .unwrap()
+            .with_claims(store.as_object().unwrap().clone()),
+    ));
+    let tasks: Vec<Value> = list_claims(&p).iter().map(|c| c["task"].clone()).collect();
+    assert_eq!(tasks, [json!("T-1"), json!("T-2")]);
+    let empty = project(json!([]));
+    assert_eq!(list_claims(&empty).len(), 0);
+}
+
+#[test]
+fn a_done_tasks_stage_is_merged_in_pr_or_done() {
+    let vocab = Vocabulary::of_meta(&Map::new()).unwrap();
+    for (t, stage) in [
+        (json!({"status": "done"}), Some("done")),
+        (
+            json!({"status": "done", "pr": {"number": 1}}),
+            Some("in_pr"),
+        ),
+        (
+            json!({"status": "done", "pr": {"number": 1}, "merged_at": "M"}),
+            Some("merged"),
+        ),
+        (json!({"status": "done", "merged_at": "M"}), Some("merged")),
+        (json!({"status": "done", "pr": "not a PR"}), Some("done")),
+        (json!({"status": "todo", "pr": {"number": 1}}), None),
+        (json!({"status": "skipped"}), None),
+    ] {
+        assert_eq!(task_stage(&vocab, &task(t.clone())), stage, "{t}");
+    }
+    assert!(in_open_pr(&task(json!({"pr": {}}))));
+    assert!(!in_open_pr(&task(json!({"pr": {}, "merged_at": "M"}))));
+    assert!(
+        in_open_pr(&task(json!({"pr": {}, "merged_at": ""}))),
+        "an empty time isn't a merge"
+    );
+    assert!(!in_open_pr(&task(json!({}))));
+}
+
+#[test]
+fn several_statuses_or_sprints_keep_each_one_named() {
+    let p = project_with(
+        json!({"sprints": [{"id": "A"}, {"id": "B"}, {"id": "C"}]}),
+        json!([
+            {"id": "T-1", "status": "todo", "sprint": "A"},
+            {"id": "T-2", "status": "blocked", "sprint": "B"},
+            {"id": "T-3", "status": "done", "sprint": "C"}
+        ]),
+        json!([]),
+    );
+    assert_eq!(
+        ids(
+            &p,
+            &filters(|f| f.status = vec!["todo".into(), "done".into()])
+        ),
+        ["T-1", "T-3"]
+    );
+    assert_eq!(
+        ids(&p, &filters(|f| f.sprint = vec!["a".into(), "B".into()])),
+        ["T-1", "T-2"]
+    );
+    // the sprint and the status together
+    assert_eq!(
+        ids(
+            &p,
+            &filters(|f| {
+                f.sprint = vec!["a".into(), "B".into()];
+                f.status = vec!["blocked".into()];
+            })
+        ),
+        ["T-2"]
+    );
+}
+
+#[test]
+fn an_unknown_sprint_in_a_project_without_sprints_says_there_are_none() {
+    let p = project(json!([]));
+    assert_eq!(
+        list_matching(&p, &filters(|f| f.sprint = vec!["X".into()]))
+            .unwrap_err()
+            .to_string(),
+        "no sprint 'X'; the sprints: none"
+    );
+    // an empty release or component keeps everything, unchecked
+    let p = project(json!([{"id": "T-1"}]));
+    assert_eq!(
+        ids(
+            &p,
+            &filters(|f| {
+                f.release = Some(String::new());
+                f.component = Some(String::new());
+                f.priority = Some(String::new());
+                f.agent = Some(String::new());
+            })
+        ),
+        ["T-1"]
+    );
+}
+
+#[test]
+fn labels_given_as_a_text_are_its_characters() {
+    let p = project(json!([
+        {"id": "T-1", "labels": "ab"},
+        {"id": "T-2", "labels": null},
+        {"id": "T-3", "labels": ["a"]}
+    ]));
+    assert_eq!(
+        ids(&p, &filters(|f| f.label = vec!["a".into()])),
+        ["T-1", "T-3"]
+    );
+    assert_eq!(ids(&p, &filters(|f| f.label = vec!["b".into()])), ["T-1"]);
+}
+
+#[test]
+fn the_effective_priority_is_filtered_on() {
+    let p = project(json!([{"id": "T-1"}, {"id": "T-2", "priority": "P0"}]));
+    // the default priority is P2: a task without one has it
+    assert_eq!(
+        ids(&p, &filters(|f| f.priority = Some("P2".into()))),
+        ["T-1"]
+    );
+}
+
+#[test]
+fn views_carry_the_effective_release_and_say_when_they_are_the_archives() {
+    let p = project_with(
+        json!({"sprints": [{"id": "S", "release": "1.0"}], "releases": [{"id": "1.0"}]}),
+        json!([{"id": "T-1", "status": "todo", "sprint": "S"}]),
+        json!([{"id": "T-0", "status": "done", "pr": {"number": 1}, "merged_at": "M"}]),
+    );
+    let views = task_views(&p, &Filters::default()).unwrap();
+    assert_eq!(views[0]["derived"]["effective_release"], json!("1.0"));
+    let archived = task_views(&p, &filters(|f| f.archived = true)).unwrap();
+    assert_eq!(archived.len(), 1);
+    assert_eq!(archived[0]["derived"]["archived"], json!(true));
+    assert_eq!(archived[0]["derived"]["stage"], json!("merged"));
+    // an archived task is never ready: it isn't a working one
+    assert_eq!(archived[0]["derived"]["ready"], json!(false));
+}
+
+#[test]
+fn deps_of_a_task_in_both_files_are_its_working_copys() {
+    let p = project_with(
+        json!({}),
+        json!([{"id": "T-1", "status": "todo", "dependencies": []}]),
+        json!([
+            {"id": "T-1", "status": "done", "dependencies": ["T-9"]},
+            {"id": "T-8", "status": "done", "dependencies": ["T-1"]}
+        ]),
+    );
+    let deps = task_dependencies(&p, "T-1").unwrap();
+    assert_eq!(deps["waits_for"], json!([]));
+    assert_eq!(
+        deps["waited_on_by"],
+        json!([{"id": "T-8", "status": "done, archived", "name": ""}])
+    );
+}
+
 #[test]
 fn ready_and_blocked_follow_the_dependencies() {
     let p = project(json!([

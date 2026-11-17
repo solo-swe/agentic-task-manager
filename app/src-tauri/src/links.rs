@@ -167,6 +167,62 @@ mod tests {
         );
     }
 
+    /// Every one of the dashboard's pages opens, with or without a query; an empty query is none
+    #[test]
+    fn each_of_the_dashboards_pages_opens() {
+        for page in PAGES {
+            assert_eq!(
+                link_address(&format!("atm://{page}")),
+                Some(format!("/{page}")),
+                "{page}"
+            );
+        }
+        assert_eq!(link_address("atm://board?").as_deref(), Some("/board"));
+        assert_eq!(
+            link_address("atm://?task=T-1").as_deref(),
+            Some("/?task=T-1")
+        );
+        assert_eq!(
+            link_address("atm://progress?sprint=S+1&release=0.41.0").as_deref(),
+            Some("/progress?sprint=S+1&release=0.41.0")
+        );
+    }
+
+    /// A query holds only what an address does: no quotes, spaces, angle brackets or another `?`
+    #[test]
+    fn a_query_with_other_characters_is_refused() {
+        for link in [
+            "atm://board?q=\"x\"",
+            "atm://board?q=a b",
+            "atm://board?q=<",
+            "atm://board?a=1?b=2",
+            "atm://board?q='x'",
+            "atm://board?q=;",
+        ] {
+            assert_eq!(link_address(link), None, "{link}");
+        }
+        // A path doesn't take the query's punctuation
+        for link in [
+            "atm://projects/a=b",
+            "atm://projects/a&b",
+            "atm://projects/a:b",
+        ] {
+            assert_eq!(link_address(link), None, "{link}");
+        }
+    }
+
+    /// The longest link the app opens is `MAX_LINK` long; one character more is refused
+    #[test]
+    fn a_link_at_the_limit_opens_and_one_past_it_does_not() {
+        let at = format!(
+            "atm://board?q={}",
+            "a".repeat(MAX_LINK - "atm://board?q=".len())
+        );
+        assert_eq!(at.len(), MAX_LINK);
+        assert!(link_address(&at).is_some());
+        assert_eq!(link_address(&format!("{at}a")), None);
+    }
+
     /// A channel that hands what it is sent to the returned receiver.
     fn recorded() -> (
         Channel<String>,
@@ -225,5 +281,48 @@ mod tests {
         links.forget("window-1");
         links.send("window-1", "/projects/def".into());
         assert!(to_other.try_recv().is_err(), "a closed window got a link");
+    }
+
+    /// A page whose channel fails (it went away) doesn't lose the address: it waits for the page's next subscription
+    #[test]
+    fn an_address_its_channel_refuses_waits_for_the_next_subscription() {
+        let links = Links::default();
+        let broken = Channel::new(|_| Err(tauri::Error::WindowNotFound));
+        assert_eq!(links.subscribe("main", broken), None);
+        assert!(links.open("main", "atm://board"));
+        let (channel, received) = recorded();
+        assert_eq!(links.subscribe("main", channel).as_deref(), Some("/board"));
+        assert!(received.try_recv().is_err(), "sent once, as the answer");
+        // Answered once: the next subscription has nothing waiting
+        assert_eq!(links.subscribe("main", recorded().0), None);
+    }
+
+    /// A page that subscribes again (a reload) gets the later addresses on its new channel, not the old one
+    #[test]
+    fn a_new_subscription_replaces_the_windows_channel() {
+        let links = Links::default();
+        let (old, to_old) = recorded();
+        let (new, to_new) = recorded();
+        links.subscribe("main", old);
+        links.subscribe("main", new);
+        assert!(links.open("main", "atm://board"));
+        assert_eq!(text(to_new.recv().expect("a link")), "\"/board\"");
+        assert!(to_old.try_recv().is_err());
+    }
+
+    /// A link the app doesn't open changes nothing: the address waiting stays
+    #[test]
+    fn a_refused_link_leaves_the_waiting_address() {
+        let links = Links::default();
+        assert!(links.open("main", "atm://projects/abc"));
+        assert!(!links.open("main", "atm://api/v2/workspaces"));
+        assert_eq!(
+            links.subscribe("main", recorded().0).as_deref(),
+            Some("/projects/abc")
+        );
+        // Forgetting a window drops what waits for it too
+        links.send("window-1", "/board".into());
+        links.forget("window-1");
+        assert_eq!(links.subscribe("window-1", recorded().0), None);
     }
 }

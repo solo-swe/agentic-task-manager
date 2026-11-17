@@ -5,7 +5,12 @@
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
-            { "id": "T-1", "status": "in_progress", "started_at": "2026-05-01T09:00:00Z", "started_by": "alice" }
+            {
+              "id": "T-1",
+              "status": "in_progress",
+              "started_at": "2026-05-01T09:00:00Z",
+              "started_by": "alice"
+            }
           ]
         }
       }
@@ -42,7 +47,12 @@
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
-            { "id": "T-1", "status": "in_progress", "started_at": "2026-05-01T09:00:00Z", "started_by": "alice" }
+            {
+              "id": "T-1",
+              "status": "in_progress",
+              "started_at": "2026-05-01T09:00:00Z",
+              "started_by": "alice"
+            }
           ]
         }
       }
@@ -86,7 +96,13 @@
             {
               "id": "T-1",
               "status": "done",
-              "notes": [{ "at": "2026-04-01T00:00:00Z", "kind": "outcome", "text": "first" }]
+              "notes": [
+                {
+                  "at": "2026-04-01T00:00:00Z",
+                  "kind": "outcome",
+                  "text": "first"
+                }
+              ]
             }
           ]
         }
@@ -95,7 +111,12 @@
     "args": ["task", "note", "T-1", "Follow-up in T-9", "--json"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "carol" },
     "expect": {
-      "json": { "at": "2026-05-01T10:00:00Z", "kind": "note", "text": "Follow-up in T-9", "by": "carol" },
+      "json": {
+        "at": "2026-05-01T10:00:00Z",
+        "kind": "note",
+        "text": "Follow-up in T-9",
+        "by": "carol"
+      },
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
@@ -103,8 +124,17 @@
               "id": "T-1",
               "status": "done",
               "notes": [
-                { "at": "2026-04-01T00:00:00Z", "kind": "outcome", "text": "first" },
-                { "at": "2026-05-01T10:00:00Z", "kind": "note", "text": "Follow-up in T-9", "by": "carol" }
+                {
+                  "at": "2026-04-01T00:00:00Z",
+                  "kind": "outcome",
+                  "text": "first"
+                },
+                {
+                  "at": "2026-05-01T10:00:00Z",
+                  "kind": "note",
+                  "text": "Follow-up in T-9",
+                  "by": "carol"
+                }
               ],
               "updated_at": "2026-05-01T10:00:00Z",
               "updated_by": "carol"
@@ -118,7 +148,9 @@
     "name": "start replaces an older file's agent by started_by",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "agent": "someone-before" }] }
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo", "agent": "someone-before" }]
+        }
       }
     },
     "args": ["task", "state", "T-1", "in_progress"],
@@ -145,7 +177,13 @@
     "setup": {
       "files": {
         "base.json": {
-          "tasks": [{ "id": "T-1", "status": "todo", "notes": [{ "at": "1", "kind": "note", "text": "a" }] }]
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "todo",
+              "notes": [{ "at": "1", "kind": "note", "text": "a" }]
+            }
+          ]
         },
         "ours.json": {
           "tasks": [
@@ -192,5 +230,97 @@
         }
       }
     }
+  },
+  {
+    "name": "atm task note says it added the note and how many there are",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "todo",
+              "notes": [{ "at": "1", "kind": "note", "text": "first" }]
+            }
+          ]
+        }
+      }
+    },
+    "args": ["task", "note", "T-1", "second"],
+    "env": { "ATM_AGENT": "carol" },
+    "expect": { "stdout": "T-1: note added (2 in all)\n" }
+  },
+  {
+    "name": "atm task note on an unknown task names it, and nothing changes",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo" }]
+        }
+      }
+    },
+    "args": ["task", "note", "T-9", "hello"],
+    "env": { "ATM_AGENT": "carol" },
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["atm: no task T-9"],
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm task note on an archived task says how to bring it back",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "archived": 1 },
+          "tasks": []
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "status": "done" }]
+        }
+      }
+    },
+    "args": ["task", "note", "T-1", "hello"],
+    "env": { "ATM_AGENT": "carol" },
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["no task T-1 (it is archived: atm db unarchive brings it back)"]
+    }
+  },
+  {
+    "name": "atm task note --dry-run says what it would do and writes nothing",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo" }]
+        }
+      }
+    },
+    "args": ["task", "note", "T-1", "hello", "-n"],
+    "env": { "ATM_AGENT": "carol" },
+    "expect": {
+      "stdout": "[dry-run] would add a note to T-1\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm task note needs its text",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo" }]
+        }
+      }
+    },
+    "args": ["task", "note", "T-1"],
+    "expect": { "exit": 2, "stderrIncludes": ["<TEXT>"] }
   }
 ]

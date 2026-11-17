@@ -556,8 +556,485 @@ mod tests {
     #[test]
     fn whole_tree_pathspecs_are_refused() {
         let vcs = GitVcs::new(&std::env::temp_dir());
-        for name in [".", "-A", ":/x"] {
-            assert!(vcs.paths(&[name.to_string()], None).is_err(), "{name}");
+        for name in WHOLE_TREE.iter().copied().chain([":/x", ":(glob)*.rs"]) {
+            let error = vcs.paths(&[name.to_string()], None).unwrap_err();
+            assert!(
+                matches!(&error, Error::Invalid(m) if m.ends_with("would stage the whole tree")),
+                "{name}: {error:?}"
+            );
         }
+    }
+
+    /// A folder of its own, removed when the test ends.
+    struct Scratch(PathBuf);
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn scratch() -> Scratch {
+        // A count too: tests run at once, and two can start in the same nanosecond
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let count = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "atm-vcs-git-{}-{count}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        Scratch(std::fs::canonicalize(&dir).unwrap())
+    }
+
+    /// Run git in `cwd`, which must work: its output.
+    fn git(cwd: &Path, args: &[&str]) -> String {
+        step(args, cwd, false).unwrap()
+    }
+
+    /// A repository at `dir`, with a committer of its own (commit runs git as users do, without `-c`).
+    fn init(dir: &Path) -> GitVcs {
+        std::fs::create_dir_all(dir).unwrap();
+        git(dir, &["init", "-q", "-b", "main"]);
+        for (key, value) in [
+            ("user.name", "t"),
+            ("user.email", "t@example.com"),
+            ("commit.gpgsign", "false"),
+            ("protocol.file.allow", "always"),
+        ] {
+            git(dir, &["config", key, value]);
+        }
+        GitVcs::new(dir)
+    }
+
+    fn write(vcs: &GitVcs, relative: &str, text: &str) {
+        let path = vcs.root.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+
+    fn commit_all(vcs: &GitVcs, message: &str) -> String {
+        git(&vcs.root, &["add", "-A"]);
+        git(&vcs.root, &["commit", "-q", "-m", message]);
+        git(&vcs.root, &["rev-parse", "HEAD"])
+    }
+
+    fn names(names: &[&str]) -> Vec<String> {
+        names.iter().map(ToString::to_string).collect()
+    }
+
+    #[test]
+    fn only_git_is_a_version_control_atm_knows() {
+        assert!(open(Path::new("."), "git").is_ok());
+        let error = open(Path::new("."), "hg").unwrap_err();
+        assert_eq!(
+            error,
+            Error::Invalid("the version control \"hg\" isn't one atm knows (git)".into())
+        );
+    }
+
+    #[test]
+    fn outside_a_repository_git_answers_nothing() {
+        let dir = scratch();
+        std::fs::write(dir.0.join("a.txt"), "a").unwrap();
+        let vcs = GitVcs::new(&dir.0);
+        assert!(!vcs.in_repository());
+        assert_eq!(vcs.head(), None);
+        assert_eq!(vcs.tracked("a.txt"), None);
+        assert!(!vcs.ignored("a.txt"));
+        assert_eq!(vcs.submodule_of("a.txt"), None);
+        assert_eq!(vcs.remote_url(), None);
+        assert_eq!(vcs.default_base(), "main");
+        assert_eq!(vcs.resolve("HEAD"), None);
+    }
+
+    #[test]
+    fn the_files_to_commit_are_named_relative_to_here_once_each() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "src/a.rs", "a");
+        write(&vcs, "b.txt", "b");
+        let picked = vcs
+            .paths(
+                &names(&["a.rs", "../b.txt", "./a.rs", "../src/a.rs"]),
+                Some(&dir.0.join("src")),
+            )
+            .unwrap();
+        assert_eq!(picked, ["src/a.rs", "b.txt"]);
+        assert_eq!(vcs.paths(&[], None).unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_name_outside_the_repository_a_folder_or_a_file_git_doesnt_know_is_refused() {
+        let dir = scratch();
+        let vcs = init(&dir.0.join("repo"));
+        write(&vcs, "src/a.rs", "a");
+        std::fs::write(dir.0.join("outside.txt"), "x").unwrap();
+        // (the name, the message)
+        for (name, message) in [
+            ("../outside.txt", "../outside.txt is outside the repository"),
+            ("..", ".. is outside the repository"),
+            ("src/..", "src/.. is outside the repository"),
+            ("src", "src is a directory: name the files in it"),
+            (
+                "missing.txt",
+                "missing.txt: no such file, and git doesn't track it",
+            ),
+        ] {
+            let error = vcs.paths(&names(&[name]), None).unwrap_err();
+            assert_eq!(error.to_string(), message, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_deleted_file_git_knows_can_be_named() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "by-hand.txt", "a");
+        write(&vcs, "git-rm.txt", "b");
+        commit_all(&vcs, "first");
+        std::fs::remove_file(dir.0.join("by-hand.txt")).unwrap();
+        git(&dir.0, &["rm", "-q", "git-rm.txt"]);
+        assert_eq!(
+            vcs.paths(&names(&["by-hand.txt", "git-rm.txt"]), None)
+                .unwrap(),
+            ["by-hand.txt", "git-rm.txt"]
+        );
+    }
+
+    #[test]
+    fn a_name_is_a_literal_path_never_a_pattern() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "a.env", "secret");
+        write(&vcs, "b.env", "secret");
+        commit_all(&vcs, "first");
+        write(&vcs, "a.env", "changed");
+        write(&vcs, "b.env", "changed");
+        // `*.env` names no file: refused, not every .env file
+        let error = vcs.paths(&names(&["*.env"]), None).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "*.env: no such file, and git doesn't track it"
+        );
+        vcs.commit(&names(&["a.env"]), "only a").unwrap();
+        let status = git(&dir.0, &["status", "--porcelain"]);
+        assert_eq!(status, "M b.env");
+    }
+
+    #[test]
+    fn a_commit_holds_exactly_the_files_named_and_what_else_is_staged_stays_staged() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "a.txt", "a");
+        write(&vcs, "gone.txt", "g");
+        let first = commit_all(&vcs, "first");
+        write(&vcs, "a.txt", "a2");
+        write(&vcs, "new.txt", "n");
+        write(&vcs, "staged.txt", "s");
+        git(&dir.0, &["add", "staged.txt"]);
+        git(&dir.0, &["rm", "-q", "gone.txt"]);
+        let sha = vcs
+            .commit(&names(&["a.txt", "new.txt", "gone.txt"]), "the change")
+            .unwrap();
+        assert_eq!(vcs.head().as_deref(), Some(sha.as_str()));
+        assert_eq!(vcs.resolve("HEAD"), Some(sha.clone()));
+        assert_eq!(vcs.message(&sha).unwrap(), "the change");
+        let changed = git(&dir.0, &["show", "--name-status", "--format=", &sha]);
+        assert_eq!(changed, "M\ta.txt\nD\tgone.txt\nA\tnew.txt");
+        assert_eq!(git(&dir.0, &["status", "--porcelain"]), "A  staged.txt");
+        assert!(vcs.in_history(&first) && vcs.in_history(&sha));
+    }
+
+    #[test]
+    fn a_commit_git_refuses_says_what_git_said() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "a.txt", "a");
+        commit_all(&vcs, "first");
+        let error = vcs.commit(&names(&["a.txt"]), "nothing").unwrap_err();
+        assert!(
+            error.to_string().starts_with("git commit failed: "),
+            "{error}"
+        );
+        assert!(
+            vcs.message("no-such-commit")
+                .unwrap_err()
+                .to_string()
+                .starts_with("git log failed: ")
+        );
+    }
+
+    #[test]
+    fn revisions_resolve_to_their_commit_or_tree_and_only_ancestors_are_in_history() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "a.txt", "a");
+        let first = commit_all(&vcs, "first");
+        let tree = git(&dir.0, &["rev-parse", "HEAD^{tree}"]);
+        assert_eq!(vcs.resolve("main"), Some(first.clone()));
+        assert_eq!(vcs.resolve_tree(&first), Some(tree.clone()));
+        assert_eq!(
+            vcs.resolve_tree(&tree),
+            Some(tree.clone()),
+            "a tree is its own"
+        );
+        assert_eq!(vcs.resolve(&tree), None, "a tree is no commit");
+        assert_eq!(vcs.resolve("no-such-branch"), None);
+        git(&dir.0, &["checkout", "-q", "-b", "side"]);
+        write(&vcs, "b.txt", "b");
+        let side = commit_all(&vcs, "side");
+        git(&dir.0, &["checkout", "-q", "main"]);
+        assert!(vcs.in_history(&first));
+        assert!(!vcs.in_history(&side), "on another branch");
+        assert!(!vcs.in_history("no-such-commit"));
+    }
+
+    #[test]
+    fn changes_under_a_folder_are_what_git_status_lists_there_renames_with_both_names() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(
+            &vcs,
+            "docs/old.md",
+            "same text, long enough to be seen as a rename\n",
+        );
+        write(&vcs, "docs/kept.md", "k");
+        write(&vcs, "docs-other/x.md", "x");
+        write(&vcs, ".gitignore", "*.log\n");
+        commit_all(&vcs, "first");
+        git(&dir.0, &["mv", "docs/old.md", "docs/new.md"]);
+        write(&vcs, "docs/kept.md", "k2");
+        write(&vcs, "docs/deep/added.md", "a");
+        write(&vcs, "docs/build.log", "ignored");
+        write(&vcs, "docs-other/x.md", "x2");
+        let mut found = vcs.changes_under(&names(&["docs"]), None).unwrap();
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                "docs/deep/added.md",
+                "docs/kept.md",
+                "docs/new.md",
+                "docs/old.md"
+            ]
+        );
+        // From a folder inside, and two folders, each change once
+        let from_inside = vcs
+            .changes_under(
+                &names(&["deep", "../docs-other", "deep"]),
+                Some(&dir.0.join("docs")),
+            )
+            .unwrap();
+        assert_eq!(from_inside, ["docs/deep/added.md", "docs-other/x.md"]);
+    }
+
+    #[test]
+    fn changes_under_refuse_the_root_above_it_the_task_folder_a_file_and_a_clean_folder() {
+        let dir = scratch();
+        let vcs = init(&dir.0.join("repo"));
+        write(&vcs, "clean/a.txt", "a");
+        write(&vcs, &format!("{}/tasks.json", atm_common::TASK_DIR), "{}");
+        commit_all(&vcs, "first");
+        write(
+            &vcs,
+            &format!("{}/tasks.json", atm_common::TASK_DIR),
+            "{\"tasks\": []}",
+        );
+        // (the folder, the message's start)
+        for (name, message) in [
+            (".", "--dir .: name a folder inside the repository"),
+            ("..", "--dir ..: name a folder inside the repository"),
+            (
+                atm_common::TASK_DIR,
+                "--dir .agentic-task-manager: the task folder isn't committed this way",
+            ),
+            (
+                "clean/a.txt",
+                "--dir clean/a.txt is a file: name it with --file",
+            ),
+            ("clean", "--dir clean: nothing changed under it"),
+            ("missing", "--dir missing: nothing changed under it"),
+        ] {
+            let error = vcs.changes_under(&names(&[name]), None).unwrap_err();
+            assert!(error.to_string().starts_with(message), "{name}: {error}");
+        }
+    }
+
+    #[test]
+    fn a_working_copy_file_is_read_only_below_the_root_through_no_link() {
+        let dir = scratch();
+        let vcs = init(&dir.0.join("repo"));
+        write(&vcs, "docs/a.md", "hello");
+        assert_eq!(vcs.read_file("docs/a.md").unwrap(), b"hello");
+        let (size, mtime) = vcs.file_stamp("docs/a.md").unwrap();
+        assert_eq!(size, 5);
+        assert!(mtime > 0);
+        for missing in ["docs/none.md", "docs", ""] {
+            assert_eq!(vcs.file_stamp(missing), None, "{missing:?}");
+            assert_eq!(
+                vcs.read_file(missing).unwrap_err(),
+                Error::NotFound(format!("{missing}: no such file"))
+            );
+        }
+        #[cfg(unix)]
+        {
+            std::fs::write(dir.0.join("outside.md"), "secret").unwrap();
+            std::os::unix::fs::symlink(dir.0.join("outside.md"), vcs.root.join("link.md")).unwrap();
+            std::os::unix::fs::symlink(vcs.root.join("docs"), vcs.root.join("linked")).unwrap();
+            for linked in ["link.md", "linked/a.md"] {
+                assert_eq!(vcs.file_stamp(linked), None, "{linked}");
+                assert!(
+                    matches!(vcs.read_file(linked), Err(Error::NotFound(_))),
+                    "{linked}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_commits_regular_file_has_its_size_and_blob_and_anything_else_none() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "docs/a.md", "hello");
+        write(&vcs, "run.sh", "#!/bin/sh\n");
+        git(&dir.0, &["add", "-A"]);
+        git(&dir.0, &["update-index", "--chmod=+x", "run.sh"]);
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("docs/a.md", vcs.root.join("link.md")).unwrap();
+        let head = commit_all(&vcs, "first");
+        let (size, blob) = vcs.blob_in(&head, "docs/a.md").unwrap();
+        assert_eq!(size, 5);
+        assert_eq!(vcs.blob_bytes(&blob).unwrap(), b"hello");
+        assert_eq!(
+            vcs.blob_in(&head, "run.sh").map(|(s, _)| s),
+            Some(10),
+            "executable"
+        );
+        for other in ["docs", "missing.md", "docs/a", "link.md"] {
+            assert_eq!(vcs.blob_in(&head, other), None, "{other}");
+        }
+        assert_eq!(vcs.blob_in("no-such-commit", "docs/a.md"), None);
+        let unknown = "0".repeat(40);
+        assert_eq!(
+            vcs.blob_bytes(&unknown).unwrap_err(),
+            Error::NotFound(format!("{unknown}: no such blob"))
+        );
+    }
+
+    #[test]
+    fn a_tracked_file_is_never_ignored_and_ignore_rules_decide_the_rest() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, ".gitignore", "*.log\n");
+        write(&vcs, "kept.log", "tracked before the rule mattered");
+        git(&dir.0, &["add", "-f", "kept.log", ".gitignore"]);
+        git(&dir.0, &["commit", "-q", "-m", "first"]);
+        write(&vcs, "new.log", "n");
+        write(&vcs, "new.txt", "n");
+        // (the file, ignored, tracked)
+        for (file, ignored, tracked) in [
+            ("kept.log", false, true),
+            ("new.log", true, false),
+            ("new.txt", false, false),
+            ("missing.txt", false, false),
+        ] {
+            assert_eq!(vcs.ignored(file), ignored, "{file}");
+            assert_eq!(vcs.tracked(file), Some(tracked), "{file}");
+        }
+    }
+
+    #[test]
+    fn the_remote_gives_the_default_base_its_address_and_files_as_last_fetched() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "a.txt", "on the remote\n");
+        commit_all(&vcs, "first");
+        assert_eq!(
+            vcs.file_on_remote_branch("main", "a.txt"),
+            None,
+            "no remote yet"
+        );
+        git(
+            &dir.0,
+            &["remote", "add", "origin", "https://github.com/o/r.git"],
+        );
+        git(&dir.0, &["update-ref", "refs/remotes/origin/trunk", "HEAD"]);
+        git(
+            &dir.0,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/trunk",
+            ],
+        );
+        assert_eq!(
+            vcs.remote_url().as_deref(),
+            Some("https://github.com/o/r.git")
+        );
+        assert_eq!(vcs.default_base(), "trunk");
+        assert_eq!(
+            vcs.file_on_remote_branch("trunk", "a.txt").as_deref(),
+            Some("on the remote\n")
+        );
+        // A branch atm doesn't accept, a path read as an option, a file or a branch the remote hasn't: none
+        for (branch, path) in [
+            ("trunk", "missing.txt"),
+            ("other", "a.txt"),
+            ("a..b", "a.txt"),
+            ("-x", "a.txt"),
+            ("trunk", "-p"),
+        ] {
+            assert_eq!(
+                vcs.file_on_remote_branch(branch, path),
+                None,
+                "{branch} {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_in_a_submodule_is_answered_by_the_submodules_own_repository() {
+        let dir = scratch();
+        let sub = init(&dir.0.join("sub-origin"));
+        write(&sub, "a.txt", "a");
+        write(&sub, ".gitignore", "*.tmp\n");
+        let sub_head = commit_all(&sub, "sub");
+        let vcs = init(&dir.0.join("repo"));
+        write(&vcs, "top.txt", "t");
+        commit_all(&vcs, "first");
+        git(
+            &vcs.root,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "--quiet",
+                "add",
+                "../sub-origin",
+                "lib/sub",
+            ],
+        );
+        commit_all(&vcs, "the submodule");
+        write(&vcs, "lib/sub/new.tmp", "n");
+        assert_eq!(
+            vcs.tracked("lib/sub/a.txt"),
+            Some(true),
+            "tracked by the submodule"
+        );
+        assert_eq!(vcs.tracked("lib/sub/new.tmp"), Some(false));
+        assert!(vcs.ignored("lib/sub/new.tmp"), "the submodule's rules");
+        assert!(!vcs.ignored("lib/sub/a.txt"));
+        let of = vcs.submodule_of("lib/sub/a.txt").unwrap();
+        assert_eq!(of["path"], serde_json::json!("lib/sub"));
+        assert_eq!(of["commit"], serde_json::json!(sub_head));
+        assert_eq!(vcs.submodule_of("top.txt"), None);
+        // A folder with a `.git` that this repository doesn't record as a submodule is no submodule
+        let nested = init(&dir.0.join("repo/nested"));
+        write(&nested, "b.txt", "b");
+        assert_eq!(vcs.submodule_of("nested/b.txt"), None);
     }
 }

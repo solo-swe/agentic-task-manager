@@ -30,6 +30,7 @@ const FILE_LIMIT_MS = (limitArg ? Number(limitArg.slice('--file-limit='.length))
 const TEST_LIMIT_MS = 60000;
 const results = new Map();
 const timings = [];
+const todos = [];
 // `--quiet`: only each file's time and the summary, not the TAP
 const quiet = process.argv.includes('--quiet');
 
@@ -51,7 +52,11 @@ const runFile = (file) =>
     const child = spawn(
       process.execPath,
       ['--test', '--test-reporter=tap', `--test-timeout=${TEST_LIMIT_MS}`, path.join(dir, file)],
-      { env: process.env, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' },
+      {
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
+      },
     );
     let timedOut = false;
     const watchdog = setTimeout(() => {
@@ -68,8 +73,12 @@ const runFile = (file) =>
         stack[depth] = subtest[1];
         return;
       }
-      const result = /^\s*(not ok|ok) \d+ - (.*?)(?: # (?:SKIP|TODO).*)?$/.exec(line);
-      if (result) results.set([file, ...stack.slice(0, depth), result[2]].join(' > '), result[1] === 'ok');
+      const result = /^\s*(not ok|ok) \d+ - (.*?)(?: # (SKIP|TODO).*)?$/.exec(line);
+      if (!result) return;
+      const key = [file, ...stack.slice(0, depth), result[2]].join(' > ');
+      // A todo is a known gap: as for node, its failing doesn't fail the run, but it is listed
+      if (result[3] === 'TODO' && result[1] === 'not ok') todos.push(key);
+      results.set(key, result[1] === 'ok' || result[3] === 'TODO');
     });
     child.on('close', () => {
       clearTimeout(watchdog);
@@ -78,7 +87,7 @@ const runFile = (file) =>
       if (timedOut) results.set(`${file} > (did not finish)`, false);
       const seconds = Math.round((Date.now() - started) / 1000);
       // A failing file's TAP is printed even with --quiet: it says why
-      const failed = timedOut || out.some((line) => /^\s*not ok /.test(line));
+      const failed = timedOut || out.some((line) => /^\s*not ok (?!.* # TODO)/.test(line));
       if (!quiet || failed) process.stdout.write(out.join(''));
       const timing = `${file}: ${seconds}s${timedOut ? `, killed after ${FILE_LIMIT_MS / 1000}s` : ''}`;
       timings.push(timing);
@@ -98,5 +107,6 @@ const keys = [...results.keys()];
 const leaves = keys.filter((k) => !keys.some((other) => other.startsWith(`${k} > `)));
 const failed = leaves.filter((k) => !results.get(k)).sort();
 console.log(`\natm: ${leaves.length - failed.length} pass, ${failed.length} fail`);
+if (todos.length) console.log(`\nTodo, still failing:\n  ${todos.sort().join('\n  ')}`);
 if (failed.length) console.log(`\nFailing:\n  ${failed.join('\n  ')}`);
 process.exitCode = failed.length ? 1 : 0;

@@ -154,3 +154,212 @@ impl Review {
         self.comment(id).cloned().ok_or_else(|| no_comment(id))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ordinal;
+    use crate::model::{
+        Actor, Anchor, ChainId, Comment, CommentId, Patch, Review, ReviewHeader, ReviewId,
+        ReviewRef, RoundKind, Status,
+    };
+    use crate::store::{CommentFilter, NewRound};
+    use atm_common::Error;
+
+    const AT: &str = "2026-11-17T03:31:00Z";
+
+    fn hakan() -> Actor {
+        Actor::from("Hakan Serce")
+    }
+
+    fn empty() -> Review {
+        Review {
+            header: ReviewHeader {
+                id: ReviewId("u".into()),
+                reference: ReviewRef::numbered(1),
+                number: 1,
+                title: "T".into(),
+                status: Status::Open,
+                tasks: Vec::new(),
+                author: None,
+                reviewers: Vec::new(),
+                created: AT.into(),
+                updated: AT.into(),
+            },
+            summary: String::new(),
+            chains: Vec::new(),
+            rounds: Vec::new(),
+        }
+    }
+
+    fn id(text: &str) -> CommentId {
+        CommentId(text.into())
+    }
+
+    #[test]
+    fn an_ids_number_is_after_its_letter_and_none_reads_as_0() {
+        for (text, number) in [
+            ("c9", 9),
+            ("t12", 12),
+            ("c", 0),
+            ("", 0),
+            ("cx", 0),
+            ("c-1", 0),
+        ] {
+            assert_eq!(ordinal(text), number, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn the_first_comment_and_chain_are_c1_and_t1_then_one_past_the_highest() {
+        let mut review = empty();
+        assert_eq!(review.next_comment_id(), id("c1"));
+        assert_eq!(review.next_chain_id(), ChainId("t1".into()));
+        let first = review.push_chain(Anchor::default(), "One.", &hakan(), AT);
+        assert_eq!(first, id("c1"));
+        assert_eq!(review.chains[0].id, ChainId("t1".into()));
+        // A reply's ID counts too, at any depth
+        let reply = review.push_reply(&first, "Two.", &hakan(), AT).unwrap();
+        let deeper = review.push_reply(&reply, "Three.", &hakan(), AT).unwrap();
+        assert_eq!((reply, deeper), (id("c2"), id("c3")));
+        // IDs edited by hand: the next is past the highest, not past the count
+        review.chains[0].id = ChainId("t9".into());
+        review.chains[0].comments[0].replies[0].replies[0].id = id("c41");
+        assert_eq!(review.next_comment_id(), id("c42"));
+        assert_eq!(review.next_chain_id(), ChainId("t10".into()));
+    }
+
+    #[test]
+    fn a_new_chain_is_one_open_top_level_comment_its_text_trimmed_at_the_end() {
+        let mut review = empty();
+        let anchor = Anchor {
+            round: 2,
+            path: Some("a.rs".into()),
+            lines: Some((3, 4)),
+            ..Anchor::default()
+        };
+        review.push_chain(anchor.clone(), "  Why?\n\n", &hakan(), AT);
+        let chain = &review.chains[0];
+        assert_eq!(chain.anchor, anchor);
+        let comment = &chain.comments[0];
+        assert_eq!(
+            (comment.body.as_str(), comment.resolved, comment.at.as_str()),
+            ("  Why?", Some(false), AT)
+        );
+        assert_eq!(comment.author, hakan());
+        assert_eq!(comment.replies, Vec::<Comment>::new());
+    }
+
+    #[test]
+    fn a_reply_goes_under_the_comment_it_answers_without_a_box() {
+        let mut review = empty();
+        review.push_chain(Anchor::default(), "One.", &hakan(), AT);
+        let second = review.push_chain(Anchor::default(), "Two.", &hakan(), AT);
+        let reply = review
+            .push_reply(&second, "Answer.\n", &Actor::from("claude:A"), AT)
+            .unwrap();
+        assert_eq!(review.chains[0].comments[0].replies, Vec::<Comment>::new());
+        let under = &review.chains[1].comments[0].replies[0];
+        assert_eq!(
+            (&under.id, under.body.as_str(), under.resolved),
+            (&reply, "Answer.", None)
+        );
+        assert!(matches!(
+            review.push_reply(&id("c9"), "Lost.", &hakan(), AT),
+            Err(Error::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn a_comments_text_is_changed_at_any_depth_and_a_missing_one_is_not_found() {
+        let mut review = empty();
+        let first = review.push_chain(Anchor::default(), "One.", &hakan(), AT);
+        let reply = review.push_reply(&first, "Two.", &hakan(), AT).unwrap();
+        review.set_body(&reply, "Two, edited.\n").unwrap();
+        review.set_body(&first, "One, edited.").unwrap();
+        assert_eq!(review.comment(&reply).unwrap().body, "Two, edited.");
+        assert_eq!(review.comment(&first).unwrap().body, "One, edited.");
+        assert!(matches!(
+            review.set_body(&id("c9"), "x"),
+            Err(Error::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn only_a_top_level_comment_is_resolved_or_reopened() {
+        let mut review = empty();
+        let first = review.push_chain(Anchor::default(), "One.", &hakan(), AT);
+        let reply = review.push_reply(&first, "Two.", &hakan(), AT).unwrap();
+        review.set_resolved(&first, true).unwrap();
+        assert_eq!(review.comment(&first).unwrap().resolved, Some(true));
+        review.set_resolved(&first, false).unwrap();
+        assert_eq!(review.comment(&first).unwrap().resolved, Some(false));
+        for not_top in [reply, id("c9")] {
+            assert!(
+                matches!(review.set_resolved(&not_top, true), Err(Error::NotFound(_))),
+                "{not_top}"
+            );
+        }
+        assert_eq!(review.comment(&id("c2")).unwrap().resolved, None);
+    }
+
+    #[test]
+    fn chains_are_listed_all_or_only_those_with_an_open_top_level_comment() {
+        let mut review = empty();
+        review.push_chain(Anchor::default(), "Open.", &hakan(), AT);
+        let done = review.push_chain(Anchor::default(), "Done.", &hakan(), AT);
+        review.set_resolved(&done, true).unwrap();
+        // A chain with a resolved and an open top-level comment is open
+        let still_open = Comment {
+            id: id("c3"),
+            ..review.chains[0].comments[0].clone()
+        };
+        review.chains[1].comments.push(still_open);
+        let third = review.push_chain(Anchor::default(), "Done too.", &hakan(), AT);
+        review.set_resolved(&third, true).unwrap();
+        let chains = |open_only| -> Vec<String> {
+            review
+                .chains_by(&CommentFilter { open_only })
+                .iter()
+                .map(|c| c.id.0.clone())
+                .collect()
+        };
+        assert_eq!(chains(false), ["t1", "t2", "t3"]);
+        assert_eq!(chains(true), ["t1", "t2"]);
+        assert_eq!(
+            empty().chains_by(&CommentFilter { open_only: true }).len(),
+            0
+        );
+    }
+
+    #[test]
+    fn a_comment_is_handed_out_as_a_copy_or_not_found() {
+        let mut review = empty();
+        let first = review.push_chain(Anchor::default(), "One.", &hakan(), AT);
+        assert_eq!(review.comment_owned(&first).unwrap().body, "One.");
+        assert!(matches!(
+            review.comment_owned(&id("c2")),
+            Err(Error::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn rounds_are_numbered_after_the_last_from_1() {
+        let mut review = empty();
+        let round = NewRound {
+            kind: RoundKind::Files,
+            files: Vec::new(),
+            patch: Patch::default(),
+            by: hakan(),
+        };
+        assert_eq!(review.push_round(&round, AT), 1);
+        assert_eq!(review.push_round(&round, AT), 2);
+        // After a round numbered by hand, the next is one past it
+        review.rounds[1].number = 5;
+        assert_eq!(review.push_round(&round, AT), 6);
+        let last = review.rounds.last().unwrap();
+        assert_eq!(
+            (&last.kind, &last.by, last.at.as_str()),
+            (&RoundKind::Files, &hakan(), AT)
+        );
+    }
+}

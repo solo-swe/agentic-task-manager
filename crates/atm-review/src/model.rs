@@ -308,3 +308,197 @@ impl Review {
             .find(|top| top.all().any(|c| &c.id == id))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ALL: [Status; 6] = [
+        Status::Draft,
+        Status::Open,
+        Status::Live,
+        Status::ChangesRequested,
+        Status::Approved,
+        Status::Closed,
+    ];
+
+    #[test]
+    fn a_status_is_named_as_it_is_written_and_only_approved_and_closed_have_ended() {
+        let names: Vec<(&str, bool)> = ALL.iter().map(|s| (s.name(), s.ended())).collect();
+        assert_eq!(
+            names,
+            [
+                ("draft", false),
+                ("open", false),
+                ("live", false),
+                ("changes_requested", false),
+                ("approved", true),
+                ("closed", true),
+            ]
+        );
+        // The name is the one serde writes and reads
+        for status in ALL {
+            let written = serde_json::to_value(status).unwrap();
+            assert_eq!(written, status.name());
+            assert_eq!(serde_json::from_value::<Status>(written).unwrap(), status);
+        }
+    }
+
+    #[test]
+    fn a_reference_is_cr_and_its_number_and_shows_as_it_is() {
+        assert_eq!(ReviewRef::numbered(7), ReviewRef("CR-7".into()));
+        assert_eq!(ReviewRef("CR-8.1".into()).to_string(), "CR-8.1");
+        assert_eq!(CommentId("c9".into()).to_string(), "c9");
+    }
+
+    #[test]
+    fn a_new_review_id_is_a_fresh_uuid_v7_sorting_after_the_one_before() {
+        let (first, second) = (ReviewId::new(), ReviewId::default());
+        assert_ne!(first, second);
+        for id in [&first, &second] {
+            let parsed = uuid::Uuid::parse_str(&id.0).unwrap();
+            assert_eq!(parsed.get_version_num(), 7, "{}", id.0);
+        }
+        assert!(first < second, "{} then {}", first.0, second.0);
+    }
+
+    #[test]
+    fn ids_and_actors_are_written_as_plain_strings() {
+        assert_eq!(
+            serde_json::to_value(ReviewId("u".into())).unwrap(),
+            serde_json::json!("u")
+        );
+        assert_eq!(
+            serde_json::to_value(Actor::from("Hakan Serce")).unwrap(),
+            serde_json::json!("Hakan Serce")
+        );
+        assert_eq!(
+            serde_json::to_value(Patch("diff".into())).unwrap(),
+            serde_json::json!("diff")
+        );
+    }
+
+    #[test]
+    fn a_rounds_kind_and_a_files_status_are_written_tagged() {
+        for (kind, written) in [
+            (
+                RoundKind::Range {
+                    base: "a".into(),
+                    head: "b".into(),
+                },
+                serde_json::json!({"kind": "range", "base": "a", "head": "b"}),
+            ),
+            (
+                RoundKind::Working { base: "a".into() },
+                serde_json::json!({"kind": "working", "base": "a"}),
+            ),
+            (RoundKind::Files, serde_json::json!({"kind": "files"})),
+        ] {
+            assert_eq!(serde_json::to_value(&kind).unwrap(), written);
+            assert_eq!(serde_json::from_value::<RoundKind>(written).unwrap(), kind);
+        }
+        assert_eq!(
+            serde_json::to_value(FileStatus::Renamed { from: "a".into() }).unwrap(),
+            serde_json::json!({"renamed": {"from": "a"}})
+        );
+        assert_eq!(
+            serde_json::to_value(FileStatus::Added).unwrap(),
+            serde_json::json!("added")
+        );
+        assert_eq!(Side::default(), Side::New);
+    }
+
+    fn comment(id: &str, resolved: Option<bool>, replies: Vec<Comment>) -> Comment {
+        Comment {
+            id: CommentId(id.into()),
+            author: Actor::from("Hakan Serce"),
+            at: "2026-11-17T03:31:00Z".into(),
+            body: format!("Comment {id}."),
+            resolved,
+            replies,
+        }
+    }
+
+    /// Two chains: c1 (open) with c2, and under c2 c3; c4 (resolved); then c5 (open) in the second.
+    fn review() -> Review {
+        let chain = |id: &str, comments| Chain {
+            id: ChainId(id.into()),
+            anchor: Anchor::default(),
+            comments,
+        };
+        Review {
+            header: ReviewHeader {
+                id: ReviewId("u".into()),
+                reference: ReviewRef::numbered(1),
+                number: 1,
+                title: "T".into(),
+                status: Status::Open,
+                tasks: Vec::new(),
+                author: None,
+                reviewers: Vec::new(),
+                created: "2026-11-17T03:00:00Z".into(),
+                updated: "2026-11-17T03:00:00Z".into(),
+            },
+            summary: String::new(),
+            chains: vec![
+                chain(
+                    "t1",
+                    vec![
+                        comment(
+                            "c1",
+                            Some(false),
+                            vec![comment("c2", None, vec![comment("c3", None, vec![])])],
+                        ),
+                        comment("c4", Some(true), vec![]),
+                    ],
+                ),
+                chain("t2", vec![comment("c5", Some(false), vec![])]),
+            ],
+            rounds: Vec::new(),
+        }
+    }
+
+    fn ids<'a>(comments: impl Iterator<Item = &'a Comment>) -> Vec<&'a str> {
+        comments.map(|c| c.id.0.as_str()).collect()
+    }
+
+    #[test]
+    fn a_comment_and_its_replies_are_walked_depth_first() {
+        let review = review();
+        assert_eq!(ids(review.chains[0].comments[0].all()), ["c1", "c2", "c3"]);
+        assert_eq!(ids(review.comments()), ["c1", "c2", "c3", "c4", "c5"]);
+        assert_eq!(
+            ids(Review {
+                chains: Vec::new(),
+                ..review
+            }
+            .comments()),
+            Vec::<&str>::new()
+        );
+    }
+
+    #[test]
+    fn a_comment_is_found_at_any_depth_and_its_top_level_comment_with_it() {
+        let review = review();
+        for (id, top) in [
+            ("c1", Some("c1")),
+            ("c3", Some("c1")),
+            ("c4", Some("c4")),
+            ("c5", Some("c5")),
+            ("c9", None),
+        ] {
+            let id = CommentId(id.into());
+            assert_eq!(review.comment(&id).is_some(), top.is_some(), "{id}");
+            assert_eq!(
+                review.top_level_of(&id).map(|c| c.id.0.as_str()),
+                top,
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_open_comments_are_the_top_level_ones_not_resolved_in_every_chain() {
+        assert_eq!(ids(review().open_comments()), ["c1", "c5"]);
+    }
+}

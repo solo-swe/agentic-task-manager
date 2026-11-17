@@ -591,6 +591,253 @@ written at the margin by hand
     }
 
     #[test]
+    fn review_md_reads_windows_line_ends_a_header_closing_the_file_and_missing_lists() {
+        let text = review_md::write(&header(), "Line one.\n\nLine two.  \n\n").unwrap();
+        assert!(text.ends_with("+++\n\nLine one.\n\nLine two.\n"), "{text}");
+        let (read, summary) = review_md::read(&text.replace('\n', "\r\n")).unwrap();
+        assert_eq!(
+            (read, summary.as_str()),
+            (header(), "Line one.\n\nLine two.")
+        );
+        // The closing +++ as the file's last line, without its line end
+        let bare = review_md::write(&header(), "").unwrap();
+        let (read, summary) = review_md::read(bare.trim_end()).unwrap();
+        assert_eq!((read, summary.as_str()), (header(), ""));
+        // Written by hand: no tasks, reviewers or author lines are none
+        let by_hand = "+++\nid = \"u\"\nnumber = 3\ntitle = \"T\"\nstatus = \"draft\"\n\
+                       created = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T03:20:00Z\n+++\n";
+        let (read, _) = review_md::read(by_hand).unwrap();
+        assert_eq!(
+            (
+                read.reference,
+                read.tasks.len(),
+                read.reviewers.len(),
+                read.author
+            ),
+            (ReviewRef::numbered(3), 0, 0, None)
+        );
+        // A summary that starts without the blank line still reads
+        let tight = format!("{bare}Summary.\n");
+        assert_eq!(review_md::read(&tight).unwrap().1, "Summary.");
+    }
+
+    #[test]
+    fn a_review_md_with_a_status_or_date_atm_doesnt_know_cant_be_read() {
+        for header in [
+            "id = \"u\"\nnumber = 1\ntitle = \"T\"\nstatus = \"merged\"\ncreated = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T03:20:00Z\n",
+            "id = \"u\"\nnumber = 1\ntitle = \"T\"\nstatus = \"open\"\ncreated = \"yesterday\"\nupdated = 2026-11-17T03:20:00Z\n",
+            "id = \"u\"\nnumber = -1\ntitle = \"T\"\nstatus = \"open\"\ncreated = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T03:20:00Z\n",
+            "id = \"u\"\ntitle = \"T\"\nstatus = \"open\"\ncreated = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T03:20:00Z\n",
+        ] {
+            let read = review_md::read(&format!("+++\n{header}+++\n"));
+            assert!(
+                read.as_ref()
+                    .is_err_and(|e| e.to_string().contains("can't be read")),
+                "{header}: {read:?}"
+            );
+        }
+        let mut bad = header();
+        bad.updated = "later".into();
+        assert!(
+            review_md::write(&bad, "")
+                .unwrap_err()
+                .to_string()
+                .contains("update time")
+        );
+    }
+
+    #[test]
+    fn a_heading_names_a_line_a_range_a_whole_file_or_the_review_on_either_side() {
+        use crate::model::{Anchor, Chain};
+        for (path, lines, side, heading) in [
+            (
+                Some("a.rs"),
+                Some((3, 3)),
+                Side::New,
+                "## a.rs:3 · round 2 · t1",
+            ),
+            (
+                Some("a.rs"),
+                Some((3, 5)),
+                Side::Old,
+                "## a.rs:3-5 · round 2 · old side · t1",
+            ),
+            (
+                Some("docs/plan.md"),
+                None,
+                Side::New,
+                "## docs/plan.md · round 2 · t1",
+            ),
+            (None, None, Side::New, "## (the review) · round 2 · t1"),
+            // A path with a colon of its own, and with the separator in it, reads back the same
+            (
+                Some("a:b.rs"),
+                Some((1, 2)),
+                Side::New,
+                "## a:b.rs:1-2 · round 2 · t1",
+            ),
+            (
+                Some("odd · name.md"),
+                None,
+                Side::New,
+                "## odd · name.md · round 2 · t1",
+            ),
+        ] {
+            let chain = Chain {
+                id: ChainId("t1".into()),
+                anchor: Anchor {
+                    round: 2,
+                    path: path.map(String::from),
+                    side,
+                    lines,
+                    quote: None,
+                },
+                comments: Vec::new(),
+            };
+            let file = CommentsFile {
+                chains: vec![chain.clone()],
+                unread: Vec::new(),
+            };
+            let text = comments_md::write(&file);
+            assert_eq!(text, format!("{heading}\n"));
+            assert_eq!(comments_md::read(&text).chains, [chain], "{heading}");
+        }
+    }
+
+    #[test]
+    fn a_heading_atm_didnt_write_is_kept_unread_with_what_follows_it() {
+        for heading in [
+            "## a.rs · round x · t1",
+            "## a.rs · t1",
+            "## a.rs · round 1 · tx",
+            "## a.rs · round 1 · c1",
+            "## :3 · round 1 · t1",
+            "## t1",
+            "## ",
+        ] {
+            let text =
+                format!("{heading}\n- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1\n  Why?\n");
+            let file = comments_md::read(&text);
+            assert!(file.chains.is_empty(), "{heading}: {:?}", file.chains);
+            assert_eq!(file.unread.len(), 3, "{heading}");
+            assert_eq!(comments_md::write(&file), text, "{heading}");
+        }
+    }
+
+    #[test]
+    fn a_quote_keeps_its_blank_lines_and_ends_at_the_first_comment() {
+        let text = "\
+## a.rs:1-3 · round 1 · t1
+> one
+>
+> three
+
+- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1
+  Why?
+> not a quote: the comment's
+";
+        let file = comments_md::read(text);
+        let chain = &file.chains[0];
+        assert_eq!(chain.anchor.quote.as_deref(), Some("one\n\nthree"));
+        // A line like a quote after a comment is no quote, and not the comment's text (not indented): kept unread
+        assert_eq!(chain.comments[0].body, "Why?");
+        assert_eq!(file.unread.len(), 1);
+        assert_eq!(file.unread[0].line, 8);
+        assert_eq!(comments_md::write(&file), text);
+    }
+
+    #[test]
+    fn a_comment_line_atm_didnt_write_is_text_or_kept_unread_never_a_comment() {
+        let item = |line: &str| {
+            format!(
+                "## a.rs · round 1 · t1\n- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1\n  Why?\n{line}\n"
+            )
+        };
+        // Not a comment of its own: under the comment before, indented, it is that comment's text
+        for (line, body) in [
+            // A reply two levels down at once
+            (
+                "    - **Ana** · 2026-11-17T03:32:00Z · c2",
+                "Why?\n  - **Ana** · 2026-11-17T03:32:00Z · c2",
+            ),
+            // A reply with a box
+            (
+                "  - [ ] **Ana** · 2026-11-17T03:32:00Z · c2",
+                "Why?\n- [ ] **Ana** · 2026-11-17T03:32:00Z · c2",
+            ),
+            // No ID, a bad ID, no author, no time
+            (
+                "  - **Ana** · 2026-11-17T03:32:00Z",
+                "Why?\n- **Ana** · 2026-11-17T03:32:00Z",
+            ),
+            (
+                "  - **Ana** · 2026-11-17T03:32:00Z · cx",
+                "Why?\n- **Ana** · 2026-11-17T03:32:00Z · cx",
+            ),
+            (
+                "  - **** · 2026-11-17T03:32:00Z · c2",
+                "Why?\n- **** · 2026-11-17T03:32:00Z · c2",
+            ),
+            ("  - **Ana** ·  · c2", "Why?\n- **Ana** ·  · c2"),
+        ] {
+            let file = comments_md::read(&item(line));
+            assert!(file.unread.is_empty(), "{line}: {:?}", file.unread);
+            let comments = &file.chains[0].comments;
+            assert_eq!(comments.len(), 1, "{line}");
+            assert!(comments[0].replies.is_empty(), "{line}");
+            assert_eq!(comments[0].body, body, "{line}");
+        }
+        // Not indented under it, and not a comment atm writes: kept unread
+        for line in [
+            " - **Ana** · 2026-11-17T03:32:00Z · c2",
+            "- **Ana** · 2026-11-17T03:32:00Z · c2",
+            "- [x] **Ana** · 2026-11-17T03:32:00Z",
+            "text at the margin",
+        ] {
+            let text = item(line);
+            let file = comments_md::read(&text);
+            assert_eq!(file.unread.len(), 1, "{line}");
+            assert_eq!(file.unread[0].text, line);
+            assert_eq!(file.chains[0].comments.len(), 1, "{line}");
+            assert_eq!(comments_md::write(&file), text, "{line}");
+        }
+    }
+
+    #[test]
+    fn lines_before_the_first_comment_of_a_chain_are_kept_unread_and_blank_ones_dropped() {
+        let text = "\n\n## a.rs · round 1 · t1\n\nA note before the comments.\n- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1\n  Why?\n";
+        let file = comments_md::read(text);
+        assert_eq!(file.chains[0].comments.len(), 1);
+        assert_eq!(
+            file.unread
+                .iter()
+                .map(|u| (u.line, u.after.clone()))
+                .collect::<Vec<_>>(),
+            [(5, Some(ChainId("t1".into())))]
+        );
+        assert_eq!(
+            file.problems(),
+            ["comments.md line 5: not a comment atm can read: A note before the comments."]
+        );
+    }
+
+    #[test]
+    fn a_comment_without_text_and_a_chain_without_comments_read_back() {
+        let text = "\
+## a.rs · round 1 · t1
+- [x] **Hakan Serce** · 2026-11-17T03:31:00Z · c1
+
+## b.rs · round 1 · t2
+";
+        let file = comments_md::read(text);
+        assert!(file.unread.is_empty(), "{:?}", file.unread);
+        assert_eq!(file.chains[0].comments[0].body, "");
+        assert_eq!(file.chains[0].comments[0].resolved, Some(true));
+        assert_eq!(file.chains[1].comments.len(), 0);
+        assert_eq!(comments_md::write(&file), text);
+    }
+
+    #[test]
     fn a_review_md_without_a_readable_header_is_refused_naming_why() {
         assert!(
             review_md::read("no header")

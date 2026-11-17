@@ -225,6 +225,78 @@ mod tests {
         assert_eq!(count, 4);
     }
 
+    fn downloaded(message: Option<UpdateProgress>) -> Option<(u32, Option<u32>)> {
+        match message? {
+            UpdateProgress::Downloading { downloaded, total } => Some((downloaded, total)),
+            UpdateProgress::Installing => None,
+        }
+    }
+
+    /// A step is due at exactly `STEP` bytes since the last message, not a byte before
+    #[test]
+    fn progress_is_due_at_exactly_one_step() {
+        let step = usize::try_from(Progress::STEP).expect("a step");
+        let mut progress = Progress::new();
+        assert_eq!(downloaded(progress.chunk(1, None)), Some((1, None)));
+        assert_eq!(downloaded(progress.chunk(step - 1, None)), None);
+        assert_eq!(
+            downloaded(progress.chunk(1, None)),
+            Some((u32::try_from(step).expect("fits") + 1, None))
+        );
+    }
+
+    /// The end is sent once the size is reached, however little came since the last message; a single chunk that is
+    /// the whole archive is one message
+    #[test]
+    fn the_end_is_sent_even_within_a_step() {
+        let mut progress = Progress::new();
+        assert_eq!(
+            downloaded(progress.chunk(10, Some(30))),
+            Some((10, Some(30)))
+        );
+        assert_eq!(downloaded(progress.chunk(10, Some(30))), None);
+        assert_eq!(
+            downloaded(progress.chunk(10, Some(30))),
+            Some((30, Some(30)))
+        );
+        let mut whole = Progress::new();
+        assert_eq!(
+            downloaded(whole.chunk(500, Some(500))),
+            Some((500, Some(500)))
+        );
+        // A server that said too small a size: every chunk past it is the end
+        let mut short = Progress::new();
+        short.chunk(10, Some(5));
+        assert_eq!(downloaded(short.chunk(1, Some(5))), Some((11, Some(5))));
+    }
+
+    /// Sizes past what a `u32` holds are sent as its largest, never wrapped
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn sizes_past_u32_are_capped() {
+        let mut progress = Progress::new();
+        let huge = 5 * 1024 * 1024 * 1024_u64;
+        let chunk = usize::try_from(huge).expect("a 64-bit usize");
+        assert_eq!(
+            downloaded(progress.chunk(chunk, Some(2 * huge))),
+            Some((u32::MAX, Some(u32::MAX)))
+        );
+    }
+
+    /// What the check answers the page: the versions and the notes, by these names
+    #[test]
+    fn an_update_is_its_version_the_running_one_and_its_notes() {
+        let update = UpdateInfo {
+            version: "0.42.0".into(),
+            current_version: "0.41.0".into(),
+            notes: None,
+        };
+        assert_eq!(
+            serde_json::to_value(update).unwrap(),
+            serde_json::json!({"version": "0.42.0", "current_version": "0.41.0", "notes": null})
+        );
+    }
+
     /// What the page reads: `step`, and the bytes while downloading
     #[test]
     fn progress_is_tagged_by_its_step() {

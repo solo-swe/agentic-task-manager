@@ -155,6 +155,30 @@ describe('the workspace in the address (ADR-003 §5)', () => {
     expect(withWorkspace('/w/work/projects/abc', 'work')).toBe('/w/work/projects/abc');
   });
 
+  it('moving to another workspace keeps an overview tab and the dialogs, and drops the document and Sprint filter', () => {
+    expect(withWorkspace('/board?sprint=a&doc=x.md&help', 'work')).toBe('/w/work/board?help');
+    expect(withWorkspace('/w/a/agents', 'b')).toBe('/w/b/agents');
+    expect(withWorkspace('/?view=list&about', 'work')).toBe('/w/work?about');
+    expect(withWorkspace('/', 'default')).toBe('/');
+  });
+
+  it('a /w/ without a name is no workspace, and names no page', () => {
+    expect(params('/w/')).toEqual([]);
+    expect(params('/w')).toEqual([]);
+    expect(workspaceOf('/w/')).toBe('default');
+  });
+
+  it('an overview tab it doesn’t know is the project cards', () => {
+    const write = (entries: [string, string][]) => formatAddress(new URLSearchParams(entries));
+    expect(
+      write([
+        ['overview', ''],
+        ['view', 'list'],
+      ]),
+    ).toBe('/projects');
+    expect(params('/kanban')).toEqual([]);
+  });
+
   it("has a page under /w/<w> for each of the dashboard's pages", () => {
     for (const path of ['/w/work', '/w/work/', '/w/work/projects', '/w/work/projects/abc/list', '/w/work/agents'])
       expect(isPagePath(path), path).toBe(true);

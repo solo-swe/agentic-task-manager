@@ -89,7 +89,8 @@ describe('TaskCard', () => {
     const badge = container.querySelector('.priority-badge')!;
     expect(badge).toHaveTextContent('P0');
     expect(badge).toHaveAttribute('title', 'P0 Critical priority');
-    expect(badge).toHaveStyle({ color: 'var(--red)' });
+    // The badge's own style: jsdom 31 resolves var() in the computed style, and the test page defines no --red
+    expect((badge as HTMLElement).style.color).toBe('var(--red)');
     const plain = render(TaskCard, { task: task('T-002') }).container.querySelector('.priority-badge')!;
     expect(plain).toHaveAttribute('title', 'P2 Medium priority (the default)');
   });

@@ -417,5 +417,111 @@ mod tests {
             Err(Error::TooLarge(_))
         ));
         assert_eq!(text("the reply", "ok").unwrap(), "ok");
+        let at_limit = "x".repeat(MAX_TEXT);
+        assert_eq!(text("the reply", &at_limit).unwrap(), at_limit);
+        // characters, not bytes
+        let wide = "é".repeat(MAX_TEXT);
+        assert!(text("the reply", &wide).is_ok());
+        assert_eq!(
+            text("the title", "\n\t").unwrap_err().to_string(),
+            "the title is empty"
+        );
+    }
+
+    /// A project in memory: the request's own checks come before any review is read.
+    fn memory() -> Project {
+        Project::new(Box::new(
+            atm_db::MemoryStore::new(Vec::new(), Vec::new(), &serde_json::Map::new()).unwrap(),
+        ))
+        .with_actor(Some("Hakan".into()))
+    }
+
+    #[test]
+    fn a_page_closes_a_review_and_changes_nothing_else_of_it() {
+        for status in [Status::Open, Status::Approved, Status::Draft] {
+            let closing = ReviewClosing {
+                status,
+                reason: "why".into(),
+                reject_tasks: false,
+            };
+            let error = close_review(&mut memory(), &ReviewRef("CR-1".into()), &closing);
+            assert_eq!(
+                error.unwrap_err().to_string(),
+                "a review is changed here only to closed",
+                "{status:?}"
+            );
+        }
+        let closing = ReviewClosing {
+            status: Status::Closed,
+            reason: " ".into(),
+            reject_tasks: true,
+        };
+        // the reason is checked once the review is: a project without reviews says so first
+        assert!(close_review(&mut memory(), &ReviewRef("CR-1".into()), &closing).is_err());
+    }
+
+    #[test]
+    fn a_decision_checks_its_texts_before_it_is_made() {
+        let decide = |decision: DecisionKind, body: Option<&str>, reason: Option<&str>| {
+            submit_decision(
+                &mut memory(),
+                &ReviewRef("CR-1".into()),
+                &Decision {
+                    decision,
+                    body: body.map(String::from),
+                    override_rules: reason.map(|r| RulesOverride { reason: r.into() }),
+                },
+            )
+            .unwrap_err()
+            .to_string()
+        };
+        assert_eq!(
+            decide(DecisionKind::Comment, None, None),
+            "a comment on the review needs its text"
+        );
+        assert_eq!(
+            decide(DecisionKind::Approve, Some(" "), None),
+            "the comment is empty"
+        );
+        assert_eq!(
+            decide(DecisionKind::Approve, None, Some("")),
+            "the reason for the override is empty"
+        );
+        let long = "x".repeat(MAX_TEXT + 1);
+        assert_eq!(
+            decide(DecisionKind::RequestChanges, Some(&long), None),
+            "the comment is longer than 100000 characters"
+        );
+    }
+
+    #[test]
+    fn the_page_bodies_take_their_defaults() {
+        let opening: ReviewOpening = request_from(json!({"title": "T"})).unwrap();
+        assert_eq!(
+            (opening.summary.as_str(), opening.start, opening.change),
+            ("", ReviewStart::Open, ChangeToReview::default())
+        );
+        let live: ReviewOpening =
+            request_from(json!({"title": "T", "start": "live", "change": {"base": "main"}}))
+                .unwrap();
+        assert_eq!(live.start, ReviewStart::Live);
+        let update: CommentUpdate = request_from(json!({})).unwrap();
+        assert_eq!(update, CommentUpdate::default());
+        let closing: ReviewClosing =
+            request_from(json!({"status": "closed", "reason": "r"})).unwrap();
+        assert!(!closing.reject_tasks);
+        for bad in [
+            json!({"title": "T", "start": "closed"}),
+            json!({"title": "T", "change": {"range": "a..b", "extra": 1}}),
+        ] {
+            assert!(matches!(
+                request_from::<ReviewOpening>(bad),
+                Err(Error::Invalid(_))
+            ));
+        }
+        assert!(matches!(
+            request_from::<ReviewTasks>(json!({"tasks": "T-1"})),
+            Err(Error::Invalid(_))
+        ));
     }
 }

@@ -221,3 +221,107 @@ impl ReviewStore for MemoryStore {
         Ok(Subscription::new(Unlisten(self.listeners.clone(), id)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::MemoryStore;
+    use crate::model::{Actor, Anchor, CommentId, Patch, ReviewId, RoundKind, Status};
+    use crate::store::{NewReview, NewRound, ReviewStore};
+    use crate::store_contract as contract;
+
+    #[test]
+    fn an_empty_store_lists_and_finds_nothing() {
+        contract::an_empty_store_lists_and_finds_nothing(&mut MemoryStore::new());
+    }
+
+    #[test]
+    fn a_new_review_is_kept_numbered_with_its_first_round() {
+        contract::a_new_review_is_kept_numbered_with_its_first_round(&mut MemoryStore::new());
+    }
+
+    #[test]
+    fn reviews_are_listed_newest_first_and_filtered() {
+        contract::reviews_are_listed_newest_first_and_filtered(&mut MemoryStore::new());
+    }
+
+    #[test]
+    fn a_reviews_header_and_rounds_are_changed_as_asked() {
+        contract::a_reviews_header_and_rounds_are_changed_as_asked(&mut MemoryStore::new());
+    }
+
+    #[test]
+    fn comments_are_kept_replied_to_edited_and_resolved() {
+        contract::comments_are_kept_replied_to_edited_and_resolved(&mut MemoryStore::new());
+    }
+
+    #[test]
+    fn every_method_on_a_review_it_hasnt_is_not_found() {
+        contract::every_method_on_a_review_it_hasnt_is_not_found(&mut MemoryStore::new());
+    }
+
+    /// A write that fails tells no one; every subscription is told of one that succeeds, each until it is dropped.
+    #[test]
+    fn only_a_write_that_succeeds_tells_and_each_subscription_until_it_is_dropped() {
+        let mut store = MemoryStore::new();
+        let counter = || {
+            let told = Arc::new(AtomicUsize::new(0));
+            let count = told.clone();
+            let on_change: atm_common::subscription::OnChange = Arc::new(move || {
+                count.fetch_add(1, Ordering::Relaxed);
+            });
+            (told, on_change)
+        };
+        let (first, on_first) = counter();
+        let (second, on_second) = counter();
+        let keep = store.subscribe(on_first).unwrap();
+        let dropped = store.subscribe(on_second).unwrap();
+        let by = Actor::from("claude:A");
+        let header = store
+            .create_review(NewReview {
+                title: "One".into(),
+                summary: String::new(),
+                tasks: Vec::new(),
+                author: Some(by.clone()),
+                reviewers: Vec::new(),
+                status: Status::Open,
+                first: NewRound {
+                    kind: RoundKind::Files,
+                    files: Vec::new(),
+                    patch: Patch::default(),
+                    by: by.clone(),
+                },
+            })
+            .unwrap();
+        assert_eq!(
+            (
+                first.load(Ordering::Relaxed),
+                second.load(Ordering::Relaxed)
+            ),
+            (1, 1)
+        );
+        drop(dropped);
+        // Refused: no such review, no such comment
+        let gone = ReviewId("gone".into());
+        assert!(store.set_status(&gone, Status::Closed, &by).is_err());
+        assert!(
+            store
+                .reply(&header.id, &CommentId("c9".into()), "x", &by)
+                .is_err()
+        );
+        assert_eq!(first.load(Ordering::Relaxed), 1);
+        store
+            .add_comment(&header.id, Anchor::default(), "Fine.", &by)
+            .unwrap();
+        assert_eq!(
+            (
+                first.load(Ordering::Relaxed),
+                second.load(Ordering::Relaxed)
+            ),
+            (2, 1)
+        );
+        drop(keep);
+    }
+}

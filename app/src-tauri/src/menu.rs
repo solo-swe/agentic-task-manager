@@ -942,6 +942,139 @@ mod tests {
         assert_eq!(MenuAction::from_id("project"), None);
     }
 
+    fn labels_of(platform: Platform, places: &Places) -> Vec<String> {
+        definition(platform, &MenuState::default(), places)
+            .iter()
+            .map(|d| d.label.clone())
+            .collect()
+    }
+
+    /// macOS has the app's own menu first and its Window menu lists the windows; elsewhere the app's items are in File
+    /// and Help, and Zoom and Full Screen are macOS's alone
+    #[test]
+    fn each_platform_has_its_own_menus() {
+        let none = Places::default();
+        assert_eq!(
+            labels_of(Platform::Mac, &none),
+            [APP_NAME, "File", "Edit", "View", "Go", "Window", "Help"]
+        );
+        for platform in [Platform::Windows, Platform::Linux] {
+            assert_eq!(
+                labels_of(platform, &none),
+                ["File", "Edit", "View", "Go", "Window", "Help"],
+                "{platform:?}"
+            );
+        }
+        for platform in [Platform::Mac, Platform::Windows, Platform::Linux] {
+            let menus = definition(platform, &MenuState::default(), &none);
+            let window = menus.iter().find(|d| d.label == "Window").expect("Window");
+            let mac = platform == Platform::Mac;
+            assert_eq!(window.windows, mac, "{platform:?}");
+            assert!(
+                menus
+                    .iter()
+                    .filter(|d| d.label != "Window")
+                    .all(|d| !d.windows)
+            );
+            let has = |item: SystemItem| {
+                menus
+                    .iter()
+                    .flat_map(|d| &d.entries)
+                    .any(|e| *e == MenuEntry::System { item })
+            };
+            assert_eq!(has(SystemItem::Zoom), mac, "{platform:?}");
+            assert_eq!(has(SystemItem::Fullscreen), mac, "{platform:?}");
+            assert_eq!(has(SystemItem::Services), mac, "{platform:?}");
+        }
+    }
+
+    /// With no project and no workspace, the Go menu has neither list, and ends with its own items
+    #[test]
+    fn the_go_menu_without_places_has_only_its_own_items() {
+        let menus = definition(Platform::Mac, &MenuState::default(), &Places::default());
+        let go = menus.iter().find(|d| d.label == "Go").expect("Go");
+        assert_eq!(go.entries.len(), 4, "{:?}", go.entries);
+        assert!(
+            !go.entries
+                .iter()
+                .any(|e| matches!(e, MenuEntry::Submenu { .. }))
+        );
+        // Projects without workspaces: the projects, no Workspace menu
+        let places = Places {
+            workspaces: vec![],
+            projects: vec![("a".into(), "Alpha".into()), ("b".into(), "Beta".into())],
+        };
+        let menus = definition(Platform::Mac, &MenuState::default(), &places);
+        let go = menus.iter().find(|d| d.label == "Go").expect("Go");
+        let mut items = Vec::new();
+        every_item(&go.entries, &mut items);
+        assert_eq!(
+            items.iter().map(|(a, _)| a.clone()).collect::<Vec<_>>(),
+            [
+                MenuAction::Back,
+                MenuAction::Forward,
+                MenuAction::Overview,
+                MenuAction::Project("a".into()),
+                MenuAction::Project("b".into()),
+            ]
+        );
+    }
+
+    /// The page reads each entry by its `type`, an action by its `kind` (and `id`)
+    #[test]
+    fn the_menus_reach_the_page_tagged() {
+        let entry = MenuEntry::Item {
+            action: MenuAction::Project("abcd1234".into()),
+            label: "App".into(),
+            accelerator: None,
+            checked: Some(true),
+        };
+        assert_eq!(
+            serde_json::to_value(entry).expect("json"),
+            serde_json::json!({"type": "item", "action": {"kind": "project", "id": "abcd1234"},
+                               "label": "App", "accelerator": null, "checked": true})
+        );
+        assert_eq!(
+            serde_json::to_value(MenuEntry::System {
+                item: SystemItem::SelectAll
+            })
+            .expect("json"),
+            serde_json::json!({"type": "system", "item": "select_all"})
+        );
+        assert_eq!(
+            serde_json::to_value(MenuEntry::Separator).expect("json"),
+            serde_json::json!({"type": "separator"})
+        );
+    }
+
+    /// The page's report: what it leaves out is off
+    #[test]
+    fn a_menu_state_the_page_leaves_out_is_nothing_checked() {
+        assert_eq!(
+            serde_json::from_value::<MenuState>(serde_json::json!({})).expect("{}"),
+            MenuState::default()
+        );
+        assert_eq!(
+            serde_json::from_value::<MenuState>(
+                serde_json::json!({"view": "graph", "sidebar": true})
+            )
+            .expect("a state"),
+            MenuState {
+                view: Some("graph".into()),
+                sidebar: true,
+                ..MenuState::default()
+            }
+        );
+    }
+
+    /// A page whose channel fails (it went away) isn't listening
+    #[test]
+    fn a_channel_that_fails_is_not_listening() {
+        let menus = Menus::default();
+        menus.subscribe("main", Channel::new(|_| Err(tauri::Error::WindowNotFound)));
+        assert!(!menus.send("main", MenuAction::Reload));
+    }
+
     #[test]
     fn the_windows_menu_states_are_their_own() {
         let menus = Menus::default();

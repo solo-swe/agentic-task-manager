@@ -255,6 +255,35 @@ mod tests {
         );
     }
 
+    /// A listing as atm may hand it: no projects; an entry without an ID or with one that isn't text (skipped); a
+    /// count missing or not a number (none); no name (an empty one); more than a `u32` holds (its largest)
+    #[test]
+    fn a_listing_of_any_shape_counts_what_it_can() {
+        assert_eq!(waiting_of(&[]), Vec::new());
+        let projects = [
+            serde_json::json!({"name": "No ID", "summary": {"needs_you": {"review": 1}}}),
+            serde_json::json!({"id": 7, "summary": {"needs_you": {"review": 1}}}),
+            serde_json::json!({"id": "a", "summary": {"needs_you": {"review": "2", "together": 3}}}),
+            serde_json::json!({"id": "b", "summary": {"needs_you": {"blocked_on_user": u64::MAX}}}),
+            serde_json::json!({"id": "c", "summary": {}}),
+        ];
+        assert_eq!(
+            waiting_of(&projects),
+            vec![
+                Waiting {
+                    id: "a".into(),
+                    name: String::new(),
+                    count: 3
+                },
+                Waiting {
+                    id: "b".into(),
+                    name: String::new(),
+                    count: u32::MAX
+                },
+            ]
+        );
+    }
+
     fn waiting(id: &str, count: u32) -> Waiting {
         Waiting {
             id: id.into(),
@@ -290,8 +319,31 @@ mod tests {
         );
     }
 
+    /// A project gone from the listing and back counts from nothing, as a new one does; a new one with nothing
+    /// waiting says nothing
+    #[test]
+    fn a_project_new_to_the_listing_counts_from_nothing() {
+        let seen = NeedsYou::default();
+        seen.update("default", &[waiting("a", 2)]);
+        assert_eq!(
+            seen.update("default", &[waiting("b", 0)]),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            seen.update("default", &[waiting("a", 2), waiting("b", 0)]),
+            ["A: 2 tasks need you"]
+        );
+    }
+
     #[test]
     fn a_notice_shows_a_projects_name_without_control_characters_and_cut_short() {
+        // At the limit it is whole; its characters, not its bytes, are counted
+        let at_limit = "é".repeat(MAX_NAME);
+        assert_eq!(
+            notice(&at_limit, 1),
+            format!("{at_limit}: 1 task needs you")
+        );
+        assert_eq!(notice("", 3), ": 3 tasks need you");
         assert_eq!(notice("App\n\u{7}", 2), "App: 2 tasks need you");
         assert_eq!(
             notice(&"x".repeat(200), 1).chars().count(),
@@ -328,5 +380,17 @@ mod tests {
         // Past nine, every count looks the same ("9+")
         assert_eq!(overlay_icon(12), overlay_icon(400));
         assert_ne!(overlay_icon(1), overlay_icon(7));
+    }
+
+    /// Each count from one to nine draws its own digit, and ten is the first "9+"
+    #[test]
+    fn each_count_to_nine_looks_its_own() {
+        let icons: Vec<Vec<u8>> = (1..=10).map(overlay_icon).collect();
+        for (a, first) in icons.iter().enumerate() {
+            for (b, second) in icons.iter().enumerate().skip(a + 1) {
+                assert_ne!(first, second, "{} and {} look the same", a + 1, b + 1);
+            }
+        }
+        assert_eq!(overlay_icon(10), overlay_icon(u32::MAX));
     }
 }

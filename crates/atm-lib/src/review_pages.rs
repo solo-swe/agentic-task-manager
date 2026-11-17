@@ -496,6 +496,64 @@ mod tests {
         }
     }
 
+    fn review(title: &str, summary: &str, rounds: Vec<Round>) -> Review {
+        let mut h = header(Status::Open, None, &[]);
+        h.title = title.into();
+        Review {
+            header: h,
+            summary: summary.into(),
+            chains: Vec::new(),
+            rounds,
+        }
+    }
+
+    #[test]
+    fn a_review_mentions_the_query_when_every_word_is_in_its_title_or_summary() {
+        let r = review("Fix the Parser", "Handles *empty* input", Vec::new());
+        for (q, expected) in [
+            ("", true),
+            ("parser", true),
+            ("PARSER empty", true),
+            ("pars inp", true),
+            ("parser lexer", false),
+            ("missing", false),
+        ] {
+            assert_eq!(mentions(&r, &words(q)), expected, "{q:?}");
+        }
+    }
+
+    #[test]
+    fn a_round_the_review_doesnt_have_is_not_found() {
+        let r = review("T", "", Vec::new());
+        let error = round_of(&r, 2).unwrap_err();
+        assert!(matches!(error, Error::NotFound(_)), "{error:?}");
+        assert_eq!(error.to_string(), "CR-1 has no round 2");
+    }
+
+    #[test]
+    fn a_status_list_with_one_unknown_status_is_refused_before_anything_is_read() {
+        let memory = Project::new(Box::new(
+            atm_db::MemoryStore::new(Vec::new(), Vec::new(), &serde_json::Map::new()).unwrap(),
+        ));
+        let query = ReviewQuery {
+            status: vec!["open".into(), "merged".into()],
+            ..ReviewQuery::default()
+        };
+        assert!(matches!(
+            list_reviews(&memory, &query),
+            Err(Error::Invalid(_))
+        ));
+        // valid statuses, no folder: not found
+        let query = ReviewQuery {
+            status: vec!["open".into()],
+            ..ReviewQuery::default()
+        };
+        assert!(matches!(
+            list_reviews(&memory, &query),
+            Err(Error::NotFound(_))
+        ));
+    }
+
     #[test]
     fn the_querys_words_are_every_word_in_any_case() {
         assert_eq!(words("  Two  words "), ["two", "words"]);

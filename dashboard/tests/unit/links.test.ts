@@ -39,4 +39,50 @@ describe('the app’s deep links (T-459)', () => {
     await listenForLinks((address) => none.push(address));
     expect(none).toEqual([]);
   });
+
+  it('started without a link, goes nowhere', async () => {
+    mockIPC(() => null);
+    const went: string[] = [];
+    await listenForLinks((address) => went.push(address));
+    expect(went).toEqual([]);
+  });
+
+  /** The channel the page handed `subscribe_links`, and a way to send it a link as Tauri delivers one */
+  function app(first: string | null) {
+    let channel = -1;
+    mockIPC((command, args) => {
+      if (command === 'subscribe_links') channel = (args as { channel: { id: number } }).channel.id;
+      return first;
+    });
+    let index = 0;
+    const send = (address: unknown) =>
+      (
+        window as unknown as { __TAURI_INTERNALS__: { runCallback: (id: number, m: unknown) => void } }
+      ).__TAURI_INTERNALS__.runCallback(channel, { index: index++, message: address });
+    return { send };
+  }
+
+  it('a link that comes while it runs goes to `later`, the first one to `go`; one that isn’t a page nowhere', async () => {
+    const { send } = app('/board');
+    const went: string[] = [];
+    const later: string[] = [];
+    await listenForLinks(
+      (address) => went.push(address),
+      (address) => later.push(address),
+    );
+    send('/projects/abc');
+    send('https://example.com');
+    send(null);
+    send('/w/work/agents?about');
+    expect(went).toEqual(['/board']);
+    expect(later).toEqual(['/projects/abc', '/w/work/agents?about']);
+  });
+
+  it('without `later`, a link that comes while it runs goes to `go` too', async () => {
+    const { send } = app(null);
+    const went: string[] = [];
+    await listenForLinks((address) => went.push(address));
+    send('/projects/abc');
+    expect(went).toEqual(['/projects/abc']);
+  });
 });

@@ -992,3 +992,96 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     }
     Ok(0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lines_are_a_range_or_one_line_counted_from_one() {
+        for (given, expected) in [("2", (2, 2)), ("3-7", (3, 7)), ("5-5", (5, 5))] {
+            assert_eq!(parse_lines(given).unwrap(), expected, "{given}");
+        }
+        for bad in ["", "0", "0-3", "7-3", "a", "1-b", "-3", "3-", "1-2-3", " 2"] {
+            let e = parse_lines(bad).unwrap_err();
+            assert_eq!(e.code(), 2, "{bad}");
+            assert_eq!(e.to_string(), format!("--lines takes A-B or A, not {bad}"));
+        }
+    }
+
+    #[test]
+    fn a_timeout_is_seconds_minutes_or_hours() {
+        for (given, seconds) in [
+            ("90s", 90.0),
+            ("90", 90.0),
+            ("30m", 1800.0),
+            ("2h", 7200.0),
+            ("1.5m", 90.0),
+            ("0.5", 0.5),
+        ] {
+            assert_eq!(
+                duration_of(given).unwrap(),
+                std::time::Duration::from_secs_f64(seconds),
+                "{given}"
+            );
+        }
+        for bad in [
+            "", "0", "0s", "-5m", "soon", "5d", "m", "NaN", "inf", "1e400",
+        ] {
+            let e = duration_of(bad).unwrap_err();
+            assert_eq!(e.code(), 2, "{bad}");
+            assert!(e.to_string().starts_with("--timeout takes"), "{bad}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_status_is_one_of_the_reviews() {
+        for name in [
+            "draft",
+            "open",
+            "live",
+            "changes_requested",
+            "approved",
+            "closed",
+        ] {
+            assert_eq!(status_of(name).unwrap().name(), name);
+        }
+        for bad in ["", "Open", "changes-requested", "merged"] {
+            assert_eq!(status_of(bad).unwrap_err().code(), 2, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_text_is_given_or_read_and_never_empty() {
+        let dir = std::env::temp_dir().join(format!("atm-cli-text-of-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("body.md"), "From the file.\n").unwrap();
+        std::fs::write(dir.join("blank.md"), " \n\t\n").unwrap();
+        let body = |text: Option<&str>, file: Option<&str>| Body {
+            body: text.map(String::from),
+            body_file: file.map(String::from),
+        };
+        assert_eq!(text_of(body(Some("Given"), None), &dir).unwrap(), "Given");
+        assert_eq!(
+            text_of(body(None, Some("body.md")), &dir).unwrap(),
+            "From the file.\n"
+        );
+        // [body, expected code, the message's start]
+        for (given, code, says) in [
+            (
+                body(None, None),
+                2,
+                "give the text with --body or --body-file",
+            ),
+            (body(Some(""), None), 2, "the text is empty"),
+            (body(Some("  \n"), None), 2, "the text is empty"),
+            (body(None, Some("blank.md")), 2, "the text is empty"),
+            (body(None, Some("gone.md")), 1, "can't read gone.md"),
+        ] {
+            let e = text_of(given, &dir).unwrap_err();
+            assert_eq!(e.code(), code, "{says}");
+            assert!(e.to_string().starts_with(says), "{e}");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

@@ -72,7 +72,7 @@ fn another_agents_claim_and_an_unknown_task_are_refused() {
 // The claim rules (ATM-580): who may take a task, from which working copy, and when a claim ends
 
 /// A project in the worktree `/wt/<branch>` on `branch`, sharing `claims` (the clone's claims store) with the others.
-fn project_in(tasks: Value, actor: &str, branch: &str, claims: Value) -> Project {
+fn project_in(tasks: Value, actor: &str, branch: &str, claims: &Value) -> Project {
     let list: Vec<Task> = match tasks {
         Value::Array(items) => items.into_iter().map(task).collect(),
         other => panic!("not a list: {other}"),
@@ -108,7 +108,7 @@ fn a_free_task_is_claimed_with_this_working_copys_branch_and_worktree_and_a_leas
         json!([{"id": "T-1", "status": "todo"}]),
         "alice",
         "main",
-        json!({}),
+        &json!({}),
     );
     let started = change_task_status(&mut p, Command::Start, "T-1", &Options::default()).unwrap();
     let claim = &claims_of(&p)["T-1"];
@@ -147,7 +147,7 @@ fn a_task_another_agent_holds_is_refused_to_every_command_that_changes_it() {
         ),
         (Command::Block, block),
     ] {
-        let mut bob = project_in(tasks.clone(), "bob", "main", claims.clone());
+        let mut bob = project_in(tasks.clone(), "bob", "main", &claims);
         let error = change_task_status(&mut bob, command, "T-1", &options).unwrap_err();
         assert_eq!(error.code(), 4, "{command:?}");
         assert!(
@@ -168,7 +168,7 @@ fn a_task_claimed_in_another_worktree_is_refused_there_though_it_is_to_do_here()
     // alice claimed T-1 in the main worktree; this worktree's copy still has it to do
     let tasks = json!([{"id": "T-1", "status": "todo"}, {"id": "T-2", "status": "todo"}]);
     let claims = json!({"T-1": held("T-1", "alice", "main", 600)});
-    let mut bob = project_in(tasks.clone(), "bob", "agent-2", claims.clone());
+    let mut bob = project_in(tasks.clone(), "bob", "agent-2", &claims);
     let error =
         change_task_status(&mut bob, Command::Start, "T-1", &Options::default()).unwrap_err();
     assert_eq!(error.code(), 4);
@@ -212,7 +212,7 @@ fn the_holder_starting_its_own_task_again_is_refused_and_keeps_its_claim() {
         json!([{"id": "T-1", "status": "todo"}]),
         "alice",
         "main",
-        json!({}),
+        &json!({}),
     );
     change_task_status(&mut p, Command::Start, "T-1", &Options::default()).unwrap();
     let before = claims_of(&p)["T-1"].clone();
@@ -235,7 +235,7 @@ fn a_released_task_is_free_again_and_another_agent_may_claim_it() {
         tasks,
         "alice",
         "main",
-        json!({"T-1": held("T-1", "alice", "main", 600)}),
+        &json!({"T-1": held("T-1", "alice", "main", 600)}),
     );
     let note = Options {
         note: Some("half done".into()),
@@ -255,16 +255,16 @@ fn an_expired_lease_is_taken_over_by_the_next_agent_and_its_holder_is_told() {
     let tasks = json!([{"id": "T-1", "status": "in_progress"}]);
     let claims = json!({"T-1": held("T-1", "alice", "main", -10)});
     // bob takes it over, by name or from the loop
-    let mut bob = project_in(tasks.clone(), "bob", "main", claims.clone());
+    let mut bob = project_in(tasks.clone(), "bob", "main", &claims);
     let started = change_task_status(&mut bob, Command::Start, "T-1", &Options::default()).unwrap();
     assert_eq!(started.expired.len(), 1);
     assert_eq!(started.claim["agent"], json!("bob"));
-    let mut carol = project_in(tasks.clone(), "carol", "main", claims.clone());
+    let mut carol = project_in(tasks.clone(), "carol", "main", &claims);
     let next = next_task_for(&mut carol, &Selection::default(), false, true, None).unwrap();
     assert_eq!(next.task.unwrap()["id"], json!("T-1"));
     assert_eq!(next.claim.unwrap()["agent"], json!("carol"));
     // alice, coming back to finish it, is told her lease ran out and how to go on (exit code 4)
-    let mut alice = project_in(tasks, "alice", "main", claims);
+    let mut alice = project_in(tasks, "alice", "main", &claims);
     let error =
         change_task_status(&mut alice, Command::Done, "T-1", &Options::default()).unwrap_err();
     assert_eq!(error.code(), 4);

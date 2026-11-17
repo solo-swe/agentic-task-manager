@@ -66,4 +66,31 @@ describe('the app’s changes (T-506)', () => {
     for (const [, channel] of mock.channels) send(channel, { workspace: 'default', project: null });
     expect(seen).toEqual([]);
   });
+
+  it('a message after the end doesn’t reach the page', async () => {
+    const mock = app();
+    const seen: Changed[] = [];
+    const stop = watchChanges('default', 'p1', (c) => seen.push(c));
+    await vi.waitFor(() => expect(mock.subscribed).toHaveLength(2));
+    stop();
+    for (const [, channel] of mock.channels) send(channel, { workspace: 'default', project: 'p1' });
+    expect(seen).toEqual([]);
+  });
+
+  it('a subscription the app refuses, and an unsubscription that fails, are only logged', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const subscribed: string[] = [];
+    mockIPC((command) => {
+      if (command === 'subscribe_project') throw new Error('unknown project');
+      if (command === 'unsubscribe') throw new Error('gone');
+      subscribed.push(command);
+      return 1;
+    });
+    const stop = watchChanges('default', 'nope', () => {});
+    await vi.waitFor(() => expect(log).toHaveBeenCalledWith('Watching for changes failed:', expect.any(Error)));
+    expect(subscribed).toEqual(['subscribe_workspace']);
+    stop();
+    await vi.waitFor(() => expect(log).toHaveBeenCalledWith('Unsubscribing failed:', expect.any(Error)));
+    log.mockRestore();
+  });
 });
