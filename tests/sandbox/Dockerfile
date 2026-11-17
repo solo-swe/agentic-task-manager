@@ -19,7 +19,7 @@ COPY tests/sandbox/verdict.mjs /opt/atm/verdict.mjs
 
 # The project the agent works in, its "remote", and the canaries
 COPY --chown=agent:agent tests/sandbox/seed /opt/atm/seed
-COPY --chown=agent:agent tests/sandbox/setup.sh /opt/atm/setup.sh
+COPY --chown=agent:agent tests/sandbox/setup.sh tests/sandbox/seed-review.sh /opt/atm/
 USER agent
 WORKDIR /home/agent
 # The skills where Claude Code reads them, as a user would install them

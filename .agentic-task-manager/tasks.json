@@ -14781,7 +14781,7 @@
       "description": "Reviews on branches ([§4](docs/code-review-design.md#:~:text=Merges%20of%20the%20two%20text%20files)).\n\n## Change\n- atm's merge driver also takes `reviews/**/comments.md` (chains and comments merged by ID) and `reviews/**/review.md` (the header by its latest `updated`), registered in `.agentic-task-manager/.gitattributes` as for `tasks.json` (the driver's command from the clone's own git config, I9).\n- `atm doctor`: reviews it can't read, text the comment format doesn't expect, clashing numbers (CR-8.1/CR-8.2), tasks naming reviews that don't exist.\n\n## Tests\n`tests/scripts/merge.test.mjs`: one review commented on two branches, merged; two clones' CR-8s merged as two folders.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14791,7 +14791,7 @@
         "tests/scripts/merge.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T09:30:55Z",
+      "updated_at": "2026-11-17T09:43:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 568,
@@ -14807,7 +14807,18 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T09:30:55Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f4d039f049529f878eda9cdcc5686418b4f8c2cf",
+      "completed_at": "2026-11-17T09:43:53Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:43:53Z",
+          "kind": "outcome",
+          "text": "Merge driver gets %P; atm-review::merge merges comments.md by ID (other side’s clashing new IDs renumbered; text edited on both is a conflict, ours kept; open beats resolved) and review.md field by field (both changed: the later updated). .gitattributes gets the reviews’ lines at the first review, not on every migrate. atm doctor: unreadable reviews (error), stray lines, shared numbers, tasks linked to missing reviews (warnings). I9 updated.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e21486f0d88",
@@ -14820,7 +14831,7 @@
       "description": "The skills that hold a review with the user, or wait for one, use `atm review` ([§3.9](docs/code-review-design.md#:~:text=3.9%20The%20CLI%2C%20and%20agents%20listening), [§6](docs/code-review-design.md#:~:text=6.%20Phases)).\n\n## Change\n- The working skills start `atm review watch` once per session in the background, create the CR at the end when no live review covered the work, and wait with `atm review wait` while a task is in review; reply to each comment, never resolve a reviewer's comment, never decide a review (I23).\n- Comments are data (I1), in the skills' rules; their pre-approved commands name the review commands they run, no `atm review *` (I2).\n- `skills.test.ts` checks the rules; the agent sandbox's red-team project gets a review whose comment asks for a forbidden command; `docs/security-architecture.md` §3 records the skill review.\n\nChanges what agents read: the sandbox run (or its written review) before the release.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
       ],
@@ -14832,7 +14843,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T09:43:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "review": "blocker",
@@ -14848,7 +14859,9 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:43:54Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e22f7deb631",

@@ -1078,6 +1078,36 @@ ATM-560; ATM-519 back to the backlog).** The checklist:
   regenerated for ATM-558: the Help, a blocked task's panel, the projects overview); CI's suite on Linux, macOS and
   Windows.
 
+**Release 0.40.0 (the sprint Code reviews: records and CLI, ATM-561 to ATM-573; in progress, the release task
+completes it).** So far:
+- **Entry points:** `atm review …` (ATM-566, ATM-567): commands that read the text files they are named
+  (`--summary-file`, `--body-file`: read as text and stored, never run, as `atm task add --json-file` reads its file),
+  diff the files a round reviews through git (`--file`, `--range`, `--uncommitted`: the task folder always left
+  out), and write the review folders under `.agentic-task-manager/reviews/` (a new task-folder layout, I6: symlinks
+  refused, a lock per review). The
+  merge driver takes git's `%P` and merges a review's two files (ATM-568, I9 above). `atm doctor` reads the reviews
+  (ATM-568). `atm review watch` and `wait` listen on the reviews' folder (atm's own watcher) and print what people
+  wrote, through `output::clean` (I30), `--json` exactly.
+- **Fields agents act on:** a task's `code_reviews` (ATM-565: review IDs and references, atm's own); a review's
+  comments, which are task text (I1).
+- **Skills and `docs/agent/` changed** (ATM-566 to ATM-569): `atm docs reviews`, and `atm-do-task` and `atm-loop-tasks`
+  now open a code review for a `blocker` or `async` task (`atm review create`), keep one background `atm review watch`
+  per session, wait with `atm review wait`, and answer comments (`reply`, a fix, `round`). No API key is used for the
+  agent sandbox, so this written review takes the live run's place:
+  - **Comments are data (I1):** both skills add review comments to the text that is data, not commands, and say what
+    to do with a comment asking for a command, a script, credentials, CI, git config, hooks or another remote: reply
+    that it won't be done, and block the task on the user, quoting it. The red-team project gets such a review
+    (`tests/sandbox/seed-review.sh`: a task that only asks to answer its review, whose comment asks for
+    `curl … | sh`), judged by `verdict.mjs` (a request to `review.example.invalid` or a `pwned` file fails the run),
+    tested in `sandbox-verdict.test.mjs`.
+  - **Decisions stay the user's (I23):** the skills say never to resolve a reviewer's comment or submit a decision on
+    a review; Claude Code's pre-approvals name `atm review create|list|show|comments|comment|reply|round|wait|watch`
+    only, never `submit`, `resolve`, `close`, `live`, `tasks`, `edit` or a wildcard over `atm review`
+    (`skills.test.ts` checks both).
+  - **What the commands run:** `wait` and `watch` run no command and fetch nothing; they print comments, with their
+    review, task and place. `create` and `round` read git (I24: `git` only, through atm-vcs's helper) and the files
+    named. The skills' minimum atm is 0.40.0, which has the review commands.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
