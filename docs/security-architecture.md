@@ -1086,3 +1086,9 @@ Such a PR adds the threat (with its boundary) and, if it needs one, the invarian
   - **Windows and Linux** (T-482 and later): deep links need the deep-link plugin there; I28's checks are the same.
   - **Accepted**: in the app a document's relative images show their alt text (T-457), and a reload on a deep page
     has no fallback page yet; neither reaches anything outside the window.
+- **Dependabot alert #5, `glib` < 0.20 (ATM-560, 2026-11-17):** unsound `Iterator` impls of `glib::VariantStrIter`.
+  `glib` 0.18.5 is in the build only through Tauri's Linux stack (`gtk` 0.18, the GTK 3 bindings tao, wry, webkit2gtk
+  and muda are built on); the gtk-rs releases with `glib` 0.20 dropped GTK 3, so no Tauri release moves it. Nothing
+  in the build calls the unsound code: no crate in the dependency tree but `glib` itself names `VariantStrIter` or
+  `Variant::array_iter_str` (searched in every crate's source), and atm's own code doesn't use `glib`. Not reachable,
+  so the alert can be dismissed as "vulnerable code not used" (Hakan's call); it goes when Tauri moves to GTK 4.
