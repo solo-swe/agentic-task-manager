@@ -79,7 +79,11 @@ test(NAME, { skip }, async () => {
   vite.stderr.on('data', (chunk) => (output += chunk));
   const exited = new Promise((resolve) => vite.once('exit', resolve));
   try {
-    const home = await until(() => /on ATM_STATE_DIR (\S+)/.exec(output)?.[1], 'the dev API to start');
+    // Vite's first start on a fresh checkout builds its dependency cache (node_modules/.vite): 5 s, or past 20 s on a
+    // slow Windows runner (CI run 44016638568). A wait for a cold tool to come up, not a budget: 60 s there (Hakan,
+    // 2026-11-17), every wait after it as before
+    const startWait = process.platform === 'win32' ? 60_000 : 20_000;
+    const home = await until(() => /on ATM_STATE_DIR (\S+)/.exec(output)?.[1], 'the dev API to start', startWait);
     const base = `http://localhost:${port}`;
     const projects = async () => {
       const answer = await fetch(`${base}/api/projects`).catch(() => null);
