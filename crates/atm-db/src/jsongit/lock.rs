@@ -323,10 +323,22 @@ mod tests {
         .unwrap();
     }
 
-    /// Hand the lock from holder to holder every `every`, `times` times, then free it.
-    fn churn(lock: PathBuf, every: Duration, times: u32) -> std::thread::JoinHandle<()> {
+    /// Hand the lock from holder to holder every `every`, `times` times or until `stop`, then free it.
+    ///
+    /// The waits in these tests are a dozen holders long: a busy CI runner can starve this thread for a while (macOS,
+    /// CI runs 44013270217 and 44014913433, the crate's tests three times slower than here), and a holder kept for a
+    /// whole wait is one the waiter rightly gives up on.
+    fn churn(
+        lock: PathBuf,
+        every: Duration,
+        times: u32,
+        stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             for i in 0..times {
+                if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    break;
+                }
                 plant(&lock, &format!("holder-{i}"));
                 std::thread::sleep(every);
             }
@@ -339,14 +351,19 @@ mod tests {
         let dir = TestDir::new();
         let path = dir.path().join(LOCK_DIR);
         plant(&path, "holder-first");
-        // Holders for about 0.9 s, each for a fifth of the waiter's 0.3 s wait (a margin for a busy runner): the queue
-        // moves, so it waits on
-        let busy = churn(path, Duration::from_millis(60), 15);
+        // Holders for about 1.6 s, a new one every 40 ms, more than three of the waiter's 0.5 s waits: the queue moves,
+        // so it waits on
+        let busy = churn(
+            path,
+            Duration::from_millis(40),
+            40,
+            std::sync::Arc::default(),
+        );
         let started = Instant::now();
-        let held = lock(dir.path(), Some(0.3));
+        let held = lock(dir.path(), Some(0.5));
         busy.join().unwrap();
         assert!(held.is_ok(), "{held:?}");
-        assert!(started.elapsed() > Duration::from_millis(600));
+        assert!(started.elapsed() > Duration::from_millis(1000));
         let owner = owner_of(&dir.path().join(LOCK_DIR)).unwrap();
         assert!(
             owner["token"]
@@ -360,21 +377,22 @@ mod tests {
         let dir = TestDir::new();
         let path = dir.path().join(LOCK_DIR);
         plant(&path, "holder-first");
-        // Holders for 6 s, a new one every 40 ms, the wait 0.2 s: given up at about 1.2 s (six waits), not held for the
-        // 6 s. The wait is five holders long, so a holder this busy runner keeps a little longer than 40 ms isn't
-        // taken for one that kept the lock a whole wait (which gives up then, as it should: CI run 44013270217)
-        let busy = churn(path, Duration::from_millis(40), 150);
+        // Holders for up to 12 s, a new one every 40 ms, the wait 0.5 s: given up at about 3 s (six waits), not held for
+        // the 12 s; the churn is stopped then
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let busy = churn(path, Duration::from_millis(40), 300, stop.clone());
         let started = Instant::now();
-        let error = lock(dir.path(), Some(0.2)).unwrap_err().to_string();
+        let error = lock(dir.path(), Some(0.5)).unwrap_err().to_string();
         let waited = started.elapsed();
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
         busy.join().unwrap();
         assert!(
             error.starts_with("timed out waiting for the lock "),
             "{error}"
         );
         // More than one wait: the wait started again as the lock changed hands; far less than the churn: it gave up
-        assert!(waited >= Duration::from_millis(400), "{waited:?}");
-        assert!(waited < Duration::from_millis(3000), "{waited:?}");
+        assert!(waited >= Duration::from_millis(1000), "{waited:?}");
+        assert!(waited < Duration::from_millis(8000), "{waited:?}");
     }
 
     #[test]
