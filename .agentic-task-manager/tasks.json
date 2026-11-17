@@ -1842,13 +1842,13 @@
       "description": "Write a detailed design, reviewed with Hakan (in Crit), for a **full-fledged code review tool built into atm**, recorded in the project, to replace Crit. Hakan's requirements (2026-11-17) are below; the design works them out and checks them against the use cases.\n\n## Sections the design has\nProblem, context, proposal, risks, open issues, alternatives considered; and an **appendix of customer use cases / scenarios**, walked through to show the proposal covers each.\n\n## Hakan's requirements (2026-11-17)\n\n### Storage\n- Review records are **stored locally, in the project**. The storage is abstracted like the tasks' store (the JsonGit store of atm-db), but the first implementation is files:\n  - a **`reviews/` folder under `.agentic-task-manager/`**;\n  - **one folder per review, named `CR-1`, `CR-2`, …**: the numbering is **local to the project**;\n  - each review's folder holds the **diffs of each round** and the **comments**;\n  - the **comments file** (per round? to decide) is a **concise, human-readable representation of each comment chain**, each starting with the **file and range** it is about;\n  - each review has a **header section**: a **summary of the changes**, and the review's **status** (approved, sent back for fixes, …).\n\n### Tasks and reviews\n- A task **in review** shows **clickable CR links**.\n- When a review is **approved** or **sent back**, that is reflected in the **task's review status**.\n\n### The code reviews section\n- atm has a **code reviews section, separate from tasks**, with a **search view** and **process capability** (working through reviews).\n- A **diff to review** can be a **commit range**, or **unstaged / uncommitted changes**.\n- While reviewing, options to render code and documents as **Crit** does: **source, rendered, split, unified**, **jump to the next / previous change**, **mark files viewed**, and so on.\n- A review **opens in its own tab**.\n- The **Tauri app's sidebar** has a **tab for CRs**.\n- **Several rounds** of one CR: see the **whole diff**, or the **diff between selected rounds**.\n- When comments are **submitted, agents can listen and respond**.\n- **Markdown renders with CompMD**, as the document viewer does.\n\n### Architecture\nThree components in atm, **separable when needed into separate apps** (separate crates and Svelte components) **without too much effort**:\n1. **Task manager**: what atm is today.\n2. **Document viewer**: what task-referenced documents use today.\n3. **Code review tool**: uses (2), and relates to (1).\n\n## Questions the earlier draft of this task raised (still to settle in the design)\n- **Writing from the browser:** the dashboard only reads today ([I11](docs/security-architecture.md#:~:text=Nothing%20changes%20state%20over%20HTTP)); comments need writes. In the app, Tauri commands (IPC); in the browser, a write route (loopback, the Host check, a per-session token against CSRF), or read-only there. The threat model and invariants in [`docs/security-architecture.md`](docs/security-architecture.md) change with it.\n- **Agents:** atm commands to list, add, reply to and resolve comments, and to **wait for a state change** (a round finished, approved) without polling by hand, keeping the claim alive; how the skills use them. Review comments are task text ([I1](docs/security-architecture.md#:~:text=Task%20text%20is%20data%2C%20not%20commands)): data, never instructions to run.\n- **Merging:** review records on branches, merged by atm's merge driver or kept per branch.\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md`, reviewed with Hakan in Crit; once approved, the follow-up tasks through `/atm-create-tasks`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-17T02:51:57Z",
+      "updated_at": "2026-11-17T03:19:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -1884,7 +1884,9 @@
           "from": "2026-11-17T01:47:59Z"
         }
       ],
-      "sprint": "Keys follow-ups and housekeeping"
+      "sprint": "Keys follow-ups and housekeeping",
+      "started_at": "2026-11-17T03:19:09Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "e4835eb2-79bb-8121-8028-35dcfe3aab39",
@@ -9807,7 +9809,7 @@
       "description": "Go through `.github/workflows/` with the user and propose changes, based on what CI did during *The Rust port* and the first releases. Each change is agreed first: editing CI is the user's call.\n\n## What to look at\n- **What runs when:** pushes to a release branch run nothing unless dispatched (`gh workflow run CI --ref <branch>`); a PR runs again after every push. Is that still the right trade?\n- **Time and caching:** a run takes about 4–5 minutes. Look at the cargo and pnpm caches, the jobs that build the dashboard and atm more than once (Rust ×3, `atm for the e2e suite`, Playwright), and whether artifacts could be shared instead.\n- **The app (T-455 onwards)** is part of `cargo build`/`test`, so the Linux job needs the webview's system packages and Windows builds against WebView2. See what that adds to each job, and whether the e2e binary and the release should build only `-p atm-cli`.\n- **Windows:** the suite runs only partly there (T-480, T-482), and the stress test fails (T-481). Decide what the Windows job checks until those are done.\n- **macOS:** the stress test hit lock timeouts twice (T-481). Is that a slow runner or a real bug?\n- **Screenshots:** CI makes missing Linux baselines, and the local scripts get a Linux atm (T-485). Check that the two use the same binary and the same steps.\n- **Runner images:** `ubuntu-latest` moves to Ubuntu 26 (CI's annotation); the e2e binary is built on 22.04 for an older glibc. Pin the images we depend on.\n- **Required checks:** the ruleset names jobs by their display names (`Rust (ubuntu-latest)`, …), so renaming a job breaks merges. Keep the names in one place, or test that `.github/rulesets/main.json` matches `ci.yml` (`ci-workflow.test.ts`).\n- **Release workflows:** `release.yml`, `homebrew.yml` and `skills.yml` worked first time for 0.32.0 and 0.33.0. Note anything worth keeping in `packaging/README.md`.\n\n## Outcome\nThe agreed changes in the workflows, `ci-workflow.test.ts` and `AGENTS.md`'s CI section, with `docs/security-architecture.md` updated if a permission or secret changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         ".github/workflows/ci.yml",
@@ -9816,7 +9818,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T08:09:05Z",
-      "updated_at": "2026-11-17T03:15:12Z",
+      "updated_at": "2026-11-17T03:19:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "with": "user",
@@ -9836,7 +9838,18 @@
         }
       ],
       "started_at": "2026-11-17T03:15:12Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "087b5a5dc95532437a1eb0c381965733bb9ddf0a",
+      "waiting_on": "user",
+      "questions": [
+        "Rust build cache (docs/ci-review.md §2.1): Swatinem/rust-cache (third-party, pinned by SHA), actions/cache (GitHub’s own), or none? Saved from main only, never in release.yml.",
+        "cargo-deny in its own job, in parallel, and added to the required checks (§2.2)?",
+        "Pin the runner images (ubuntu-24.04, macos-15, windows-2025) and rename the jobs Rust (Linux) / Rust (macOS) / Rust (Windows), you updating the live ruleset when it merges (§2.3)?",
+        "CI on pushes to dev/** with cancel-in-progress, or keep dispatching by hand (§2.5)?",
+        "Screenshots: their own step, regenerated in the release task as now, or regenerated in the task that changes the UI (§2.7)?",
+        "A backlog task for the Linux build’s image (ubuntu-22.04 is retired around April 2027) (§2.6)?"
+      ],
+      "blocked_at": "2026-11-17T03:19:02Z"
     },
     {
       "id": "2238c9b2-a361-848f-ac56-42807145ee8b",
