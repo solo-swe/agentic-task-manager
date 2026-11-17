@@ -1230,6 +1230,12 @@
             "01a1e853-4d39-7220-b293-f23710b6d068"
           ]
         }
+      },
+      {
+        "id": "Code reviews: records and CLI",
+        "state": "planned",
+        "goal": "Reviews recorded in the project through the CLI: agents open, wait for and watch reviews with atm review, and the skills use it instead of Crit; the document viewer becomes its own component, and the diff viewer is built on it",
+        "release": "0.40.0"
       }
     ],
     "releases": [
@@ -1481,6 +1487,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
         },
         "released_at": "2026-11-17T08:26:00Z"
+      },
+      {
+        "id": "0.40.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -14440,14 +14450,21 @@
         "tests/scripts/layers.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:07Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 561,
       "key_final": true,
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1a9a33bc82",
@@ -14468,11 +14485,18 @@
         "crates/atm-review/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 562,
-      "key_final": true
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b",
@@ -14493,11 +14517,18 @@
         "crates/atm-review/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 563,
-      "key_final": true
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84",
@@ -14519,11 +14550,18 @@
         "crates/atm-vcs/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 564,
-      "key_final": true
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40",
@@ -14545,11 +14583,18 @@
         "crates/atm-common/schema/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 565,
-      "key_final": true
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed",
@@ -14573,7 +14618,7 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:07Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 566,
@@ -14581,7 +14626,14 @@
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4",
@@ -14604,14 +14656,21 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:08Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 567,
       "key_final": true,
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e20da0a31b2",
@@ -14634,14 +14693,21 @@
         "tests/scripts/merge.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:08Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 568,
       "key_final": true,
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e21486f0d88",
@@ -14666,7 +14732,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:09Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "review": "blocker",
@@ -14675,7 +14741,14 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e22f7deb631",
@@ -14697,14 +14770,21 @@
         "tests/scripts/layers.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:09Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 570,
       "key_final": true,
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e23fc37ffd6",
@@ -14726,14 +14806,21 @@
         "dashboard/eslint.config.js"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:10Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 571,
       "key_final": true,
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
@@ -14789,14 +14876,21 @@
         "dashboard/src/lib/reviews/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:11Z",
+      "updated_at": "2026-11-17T08:50:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 573,
       "key_final": true,
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
