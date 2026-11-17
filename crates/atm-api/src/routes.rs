@@ -17,6 +17,7 @@ mod documents;
 mod logo;
 mod query;
 mod reviews;
+mod source;
 mod tasks;
 #[cfg(test)]
 mod test_support;
@@ -27,7 +28,6 @@ use std::path::Path;
 use atm_common::py::to_json;
 use atm_common::sha1::sha1_hex;
 use atm_common::time::now_iso;
-use atm_lib::workspaces::{Workspace, Workspaces};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use serde_json::{Value, json};
@@ -35,6 +35,7 @@ use serde_json::{Value, json};
 use super::{send, send_error};
 
 pub use reviews::{is_reviews_path, serve_review_change};
+use source::{AtmLib, Source, WorkspaceSource};
 
 /// A project's own image (a logo, an image the document viewer shows), which could be an SVG with a script: shown as
 /// an image, never run.
@@ -49,7 +50,7 @@ const IMAGE_HEADERS: [(&str, &str); 3] = [
 
 /// What the server shows: the state folder's workspaces, through atm-lib (their summaries cached there).
 pub struct Projects {
-    workspaces: Workspaces,
+    source: Box<dyn Source>,
 }
 
 impl Projects {
@@ -57,7 +58,15 @@ impl Projects {
     #[must_use]
     pub fn new(home: &Path) -> Self {
         Self {
-            workspaces: Workspaces::at(home),
+            source: Box::new(AtmLib::at(home)),
+        }
+    }
+
+    /// A unit test's: the routes ask `source` instead of atm-lib.
+    #[cfg(test)]
+    fn of(source: impl Source + 'static) -> Self {
+        Self {
+            source: Box::new(source),
         }
     }
 }
@@ -117,23 +126,24 @@ fn error_response(error: &atm_common::Error) -> Response {
 
 /// A read about one project of `workspace`: `tasks`, `documents`, `files`, `claims`, `worktrees` or `logo`.
 fn serve_project_read(
-    workspace: &Workspace,
+    workspace: &dyn WorkspaceSource,
     id: &str,
     route: &str,
     query: &str,
     request: &HeaderMap,
 ) -> Response {
-    let member = match workspace.member(id) {
-        Ok(member) => member,
+    let project = match workspace.project(id) {
+        Ok(project) => project,
         Err(e) => return error_response(&e),
     };
+    let project = project.as_ref();
     match route {
-        "tasks" => tasks::get_tasks(&member, query, request),
-        "documents" => documents::get_document(&member, query, request),
-        "files" => documents::get_file(&member, query, request),
-        "logo" => logo::get_logo(&member, request),
-        "worktrees" => claims::get_worktrees(&member, request),
-        _ => claims::get_claims(&member, request),
+        "tasks" => tasks::get_tasks(project, query, request),
+        "documents" => documents::get_document(project, query, request),
+        "files" => documents::get_file(project, query, request),
+        "logo" => logo::get_logo(project, request),
+        "worktrees" => claims::get_worktrees(project, request),
+        _ => claims::get_claims(project, request),
     }
 }
 
@@ -148,18 +158,19 @@ fn serve_workspace_read(
     let Some(workspace) = parts
         .first()
         .filter(|w| !w.is_empty())
-        .and_then(|w| projects.workspaces.get(w))
+        .and_then(|w| projects.source.workspace(w))
     else {
         return send_error(StatusCode::NOT_FOUND, "unknown workspace");
     };
+    let workspace = workspace.as_ref();
     match parts[1..] {
         ["projects"] => {
             // Opening a workspace's list is opening the workspace: the last opened is the one `/` goes to. A choice
             // of view, the one thing a read records (ADR-003 §5); written only when it changes
-            let _ = projects.workspaces.opened(workspace.id());
-            workspaces::get_projects(&workspace, request)
+            projects.source.opened(&workspace.id());
+            workspaces::get_projects(workspace, request)
         }
-        ["search"] => workspaces::get_search(&workspace, query),
+        ["search"] => workspaces::get_search(workspace, query),
         ["projects", id, route]
             if !id.is_empty()
                 && matches!(
@@ -167,13 +178,14 @@ fn serve_workspace_read(
                     "tasks" | "documents" | "files" | "claims" | "worktrees" | "logo"
                 ) =>
         {
-            serve_project_read(&workspace, id, route, query, request)
+            serve_project_read(workspace, id, route, query, request)
         }
         _ => send_error(StatusCode::NOT_FOUND, "not found"),
     }
 }
 
 /// The reads past the page, its assets and whoami; everything else is 404.
+#[must_use]
 pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) -> Response {
     if path == "/api/v2/workspaces" {
         return workspaces::get_workspaces(projects);
@@ -182,170 +194,332 @@ pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) 
         return serve_workspace_read(projects, rest, query, request);
     }
     // The v1 routes: the default workspace's
-    let default = projects.workspaces.default_workspace();
+    let default = projects.source.default_workspace();
+    let default = default.as_ref();
     if path == "/api/projects" {
         // The dashboard reads `default`'s list here: opening it, as `…/default/projects` would
-        let _ = projects.workspaces.opened(default.id());
-        return workspaces::get_projects(&default, request);
+        projects.source.opened(&default.id());
+        return workspaces::get_projects(default, request);
     }
     if path == "/api/search" {
-        return workspaces::get_search(&default, query);
+        return workspaces::get_search(default, query);
     }
     if let Some(rest) = path.strip_prefix("/api/v1/projects/")
         && let Some((id, route @ ("documents" | "files" | "tasks"))) = rest.split_once('/')
         && !id.is_empty()
     {
-        return serve_project_read(&default, id, route, query, request);
+        return serve_project_read(default, id, route, query, request);
     }
     if let Some(rest) = path.strip_prefix("/p/")
         && let Some((id, name)) = rest.split_once('/')
         && !id.is_empty()
         && matches!(name, "claims.json" | "worktrees.json" | "logo")
     {
-        return serve_project_read(&default, id, name.trim_end_matches(".json"), query, request);
+        return serve_project_read(default, id, name.trim_end_matches(".json"), query, request);
     }
     send_error(StatusCode::NOT_FOUND, "not found")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{PROJECT, a_state_with_a_project, answer, having};
+    use atm_lib::query::Filters;
+
+    use super::test_support::{Call, Fake, FakeProject, answer, having, plain, refusals};
     use super::*;
 
     #[test]
-    fn an_etag_is_quoted_and_changes_with_what_it_depends_on() {
+    fn an_etag_is_a_quoted_hash_that_changes_with_what_it_depends_on() {
         let tag = etag(&json!(["claims", 1]));
         assert_eq!(tag.len(), 18);
         assert!(tag.starts_with('"') && tag.ends_with('"'));
-        assert_eq!(tag, etag(&json!(["claims", 1])));
-        assert_ne!(tag, etag(&json!(["claims", 2])));
+        assert!(tag[1..17].bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_eq!(tag, etag(&json!(["claims", 1])), "the same for the same");
+        for other in [
+            json!(["claims", 2]),
+            json!(["claims"]),
+            json!(["tasks", 1]),
+            Value::Null,
+        ] {
+            assert_ne!(tag, etag(&other), "{other}");
+        }
     }
 
     #[test]
-    fn a_json_answer_starts_with_when_it_was_made() {
-        let body = stamped(json!({"tasks": [], "meta": {}}));
+    fn a_json_answer_starts_with_when_it_was_made_then_the_body_in_its_order() {
+        let body = stamped(json!({"tasks": [], "meta": {}, "a": 1}));
         let keys: Vec<&str> = body
             .as_object()
             .expect("an object")
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys, ["generated_at", "tasks", "meta"]);
-    }
-
-    #[test]
-    fn a_request_is_unchanged_only_with_the_same_tag() {
-        assert!(unchanged(&having("\"a\""), "\"a\""));
-        assert!(!unchanged(&having("\"b\""), "\"a\""));
-        assert!(!unchanged(&HeaderMap::new(), "\"a\""));
-        let answer = answer(not_modified("\"a\"", &IMAGE_HEADERS));
-        assert_eq!(answer.status, StatusCode::NOT_MODIFIED);
-        assert_eq!(answer.header("etag"), "\"a\"");
-        assert_eq!(answer.body, b"");
-        assert_eq!(answer.header("cache-control"), "no-cache");
-    }
-
-    #[test]
-    fn atm_libs_refusals_are_http_statuses() {
-        use atm_common::Error;
-        for (error, status) in [
-            (Error::Invalid("x".into()), StatusCode::BAD_REQUEST),
-            (Error::NotFound("x".into()), StatusCode::NOT_FOUND),
-            (Error::TooLarge("x".into()), StatusCode::PAYLOAD_TOO_LARGE),
-            (Error::Refused("x".into()), StatusCode::FORBIDDEN),
-            (Error::failed("x"), StatusCode::INTERNAL_SERVER_ERROR),
-        ] {
-            let answer = answer(error_response(&error));
-            assert_eq!(answer.status, status, "{error}");
-            assert_eq!(answer.json()["error"], json!(error.to_string()));
-        }
-    }
-
-    /// Every read reaches its route, in v2 and in v1 (the `default` workspace's); anything else is 404
-    #[test]
-    fn each_path_reaches_its_read() {
-        let home = a_state_with_a_project("dispatch");
-        let projects = Projects::new(&home);
-        let read =
-            |path: &str, query: &str| answer(serve(&projects, path, query, &HeaderMap::new()));
-        let v2 = format!("/api/v2/workspaces/work/projects/{PROJECT}");
-        let v1 = format!("/api/v1/projects/{PROJECT}");
-        let p = format!("/p/{PROJECT}");
-        for (path, query, key) in [
-            ("/api/v2/workspaces".to_string(), "", "workspaces"),
-            ("/api/v2/workspaces/work/projects".into(), "", "projects"),
-            ("/api/projects".into(), "", "projects"),
-            ("/api/v2/workspaces/work/search".into(), "q=needle", PROJECT),
-            ("/api/search".into(), "q=needle", PROJECT),
-            (format!("{v2}/tasks"), "", "tasks"),
-            (format!("{v1}/tasks"), "", "tasks"),
-            (format!("{v2}/documents"), "path=README.md", "path"),
-            (format!("{v1}/documents"), "path=README.md", "path"),
-            (format!("{v2}/claims"), "", "claims"),
-            (format!("{p}/claims.json"), "", "claims"),
-            (format!("{v2}/worktrees"), "", "worktrees"),
-            (format!("{p}/worktrees.json"), "", "worktrees"),
-        ] {
-            let answer = read(&path, query);
-            assert_eq!(answer.status, StatusCode::OK, "{path}");
-            assert!(
-                answer.json().get(key).is_some(),
-                "{path}: {}",
-                answer.json()
+        assert_eq!(keys, ["generated_at", "tasks", "meta", "a"]);
+        assert!(
+            body["generated_at"]
+                .as_str()
+                .is_some_and(|t| t.ends_with('Z'))
+        );
+        // A body that isn't an object has nothing to add
+        for other in [json!([1]), json!("x"), Value::Null] {
+            let only = stamped(other.clone());
+            assert_eq!(
+                only.as_object().map(serde_json::Map::len),
+                Some(1),
+                "{other}"
             );
         }
-        for path in [
-            format!("{v2}/files"),
-            format!("{v1}/files"),
-            format!("{v2}/logo"),
-            format!("{p}/logo"),
-        ] {
-            let answer = read(&path, "path=pixel.png");
-            assert_eq!(answer.status, StatusCode::OK, "{path}");
-            assert_eq!(answer.header("content-type"), "image/png", "{path}");
-        }
-        for (path, error) in [
-            (
-                "/api/v2/workspaces/nope/projects".to_string(),
-                "unknown workspace",
-            ),
-            ("/api/v2/workspaces//projects".into(), "unknown workspace"),
-            ("/api/v2/workspaces/work/other".into(), "not found"),
-            (format!("{v2}/reviews"), "not found"),
-            (
-                "/api/v2/workspaces/work/projects//tasks".into(),
-                "not found",
-            ),
-            (format!("{v1}/claims"), "not found"),
-            (format!("{p}/tasks.json"), "not found"),
-            ("/api/v1/projects//tasks".into(), "not found"),
-            ("/elsewhere".into(), "not found"),
-        ] {
-            let answer = read(&path, "");
-            assert_eq!(answer.status, StatusCode::NOT_FOUND, "{path}");
-            assert_eq!(answer.json()["error"], json!(error), "{path}");
-        }
-        assert_eq!(
-            read("/api/v2/workspaces/work/projects/nope/tasks", "").status,
-            StatusCode::NOT_FOUND
-        );
-        std::fs::remove_dir_all(&home).expect("cleaned up");
     }
 
-    /// Opening a workspace's list is what a read records: the workspace `/` goes to
     #[test]
-    fn reading_a_workspaces_projects_opens_it() {
-        let home = a_state_with_a_project("opened");
-        let projects = Projects::new(&home);
-        assert_eq!(projects.workspaces.recent(), "default");
-        let list = "/api/v2/workspaces/work/projects";
+    fn a_request_is_unchanged_only_with_the_same_strong_tag() {
+        assert!(unchanged(&having("\"a\""), "\"a\""));
+        for (has, why) in [
+            (having("\"b\""), "another version"),
+            (having("W/\"a\""), "a weak tag"),
+            (having("\"a\", \"b\""), "a list of tags"),
+            (having("a"), "unquoted"),
+            (plain(), "none"),
+        ] {
+            assert!(!unchanged(&has, "\"a\""), "{why}");
+        }
+    }
+
+    #[test]
+    fn a_304_has_its_tag_and_the_headers_asked_for_and_no_body() {
+        for headers in [&[][..], &IMAGE_HEADERS[..]] {
+            let answer = answer(not_modified("\"a\"", headers));
+            assert_eq!(answer.status, StatusCode::NOT_MODIFIED);
+            assert_eq!(answer.tag(), "\"a\"");
+            assert_eq!(answer.body, b"");
+            assert_eq!(answer.header("content-type"), "");
+            let cache = if headers.is_empty() {
+                "no-store"
+            } else {
+                "no-cache"
+            };
+            assert_eq!(answer.header("cache-control"), cache);
+        }
+    }
+
+    #[test]
+    fn a_json_answer_is_200_json_with_its_tag_if_any() {
+        let tagged = answer(ok_json(&json!({"a": 1}), Some("\"t\"")));
+        assert_eq!(tagged.status, StatusCode::OK);
+        assert_eq!(tagged.header("content-type"), "application/json");
+        assert_eq!(tagged.tag(), "\"t\"");
+        assert_eq!(tagged.json(), json!({"a": 1}));
+        let untagged = answer(ok_json(&json!({"a": 1}), None));
+        assert_eq!(untagged.tag(), "");
+        assert_eq!(untagged.header("cache-control"), "no-store");
+    }
+
+    #[test]
+    fn each_refusal_of_atm_lib_is_its_http_status_with_its_message() {
+        for (error, status) in refusals() {
+            let answer = answer(error_response(&error));
+            assert_eq!(answer.status, status, "{error}");
+            assert_eq!(answer.json(), json!({"error": error.to_string()}));
+        }
+    }
+
+    /// A fake whose project `p1` has a logo, so every read gets as far as its own call
+    fn fake() -> Fake {
+        Fake::with(FakeProject {
+            logo: Some((json!([1, "1"]), "image/png", b"png".to_vec())),
+            ..FakeProject::default()
+        })
+    }
+
+    fn served(fake: Fake, path: &str, query: &str) -> (StatusCode, Value, Vec<Call>) {
+        let (projects, calls) = fake.projects();
+        let answer = answer(serve(&projects, path, query, &plain()));
+        (answer.status, answer.json(), calls.taken())
+    }
+
+    /// Every read reaches its route, the same in v2 (any workspace) and v1 (`default`'s), with the query
+    #[test]
+    fn each_path_reaches_its_read_in_its_workspace() {
+        let project = |w: &str| Call::Project(w.into(), "p1".into());
+        let tasks = |w: &str| {
+            vec![
+                project(w),
+                Call::OthersVersion,
+                Call::Tasks(Filters {
+                    status: vec!["todo".into()],
+                    ..Filters::default()
+                }),
+            ]
+        };
+        let cases: Vec<(&str, &str, Vec<Call>)> = vec![
+            ("/api/v2/workspaces", "", vec![]),
+            (
+                "/api/v2/workspaces/work/projects",
+                "",
+                vec![
+                    Call::Opened("work".into()),
+                    Call::ListedProjects("work".into()),
+                ],
+            ),
+            (
+                "/api/projects",
+                "",
+                vec![
+                    Call::Opened("default".into()),
+                    Call::ListedProjects("default".into()),
+                ],
+            ),
+            (
+                "/api/v2/workspaces/work/search",
+                "q=x",
+                vec![Call::Searched("work".into(), "x".into())],
+            ),
+            (
+                "/api/search",
+                "q=x",
+                vec![Call::Searched("default".into(), "x".into())],
+            ),
+            (
+                "/api/v2/workspaces/work/projects/p1/tasks",
+                "status=todo",
+                tasks("work"),
+            ),
+            ("/api/v1/projects/p1/tasks", "status=todo", tasks("default")),
+            (
+                "/api/v2/workspaces/work/projects/p1/documents",
+                "path=a.md",
+                vec![project("work"), Call::FileVersion("a.md".into())],
+            ),
+            (
+                "/api/v1/projects/p1/documents",
+                "path=a.md",
+                vec![project("default"), Call::FileVersion("a.md".into())],
+            ),
+            (
+                "/api/v2/workspaces/work/projects/p1/files",
+                "path=a.png",
+                vec![project("work"), Call::FileVersion("a.png".into())],
+            ),
+            (
+                "/api/v1/projects/p1/files",
+                "path=a.png",
+                vec![project("default"), Call::FileVersion("a.png".into())],
+            ),
+            (
+                "/api/v2/workspaces/work/projects/p1/claims",
+                "",
+                vec![project("work"), Call::Claims],
+            ),
+            (
+                "/p/p1/claims.json",
+                "",
+                vec![project("default"), Call::Claims],
+            ),
+            (
+                "/api/v2/workspaces/work/projects/p1/worktrees",
+                "",
+                vec![project("work"), Call::Worktrees],
+            ),
+            (
+                "/p/p1/worktrees.json",
+                "",
+                vec![project("default"), Call::Worktrees],
+            ),
+            (
+                "/api/v2/workspaces/work/projects/p1/logo",
+                "",
+                vec![project("work"), Call::ReadLogo],
+            ),
+            ("/p/p1/logo", "", vec![project("default"), Call::ReadLogo]),
+        ];
+        for (path, query, expected) in cases {
+            let (_, _, calls) = served(fake(), path, query);
+            assert_eq!(calls, expected, "{path}?{query}");
+        }
+    }
+
+    /// Anything that isn't a read is 404, before any project is looked at
+    #[test]
+    fn a_path_no_read_has_is_not_found_and_asks_nothing() {
+        for (path, error) in [
+            ("/api/v2/workspaces/", "unknown workspace"),
+            ("/api/v2/workspaces/nope/projects", "unknown workspace"),
+            ("/api/v2/workspaces//projects", "unknown workspace"),
+            ("/api/v2/workspaces/work", "not found"),
+            ("/api/v2/workspaces/work/", "not found"),
+            ("/api/v2/workspaces/work/other", "not found"),
+            ("/api/v2/workspaces/work/projects/", "not found"),
+            ("/api/v2/workspaces/work/projects/p1", "not found"),
+            ("/api/v2/workspaces/work/projects/p1/reviews", "not found"),
+            ("/api/v2/workspaces/work/projects/p1/tasks/T-1", "not found"),
+            ("/api/v2/workspaces/work/projects//tasks", "not found"),
+            ("/api/v1/projects/p1/claims", "not found"),
+            ("/api/v1/projects/p1/logo", "not found"),
+            ("/api/v1/projects//tasks", "not found"),
+            ("/api/v1/projects/p1", "not found"),
+            ("/p/p1/tasks.json", "not found"),
+            ("/p/p1/claims", "not found"),
+            ("/p//claims.json", "not found"),
+            ("/api/v3/workspaces", "not found"),
+            ("/elsewhere", "not found"),
+            ("", "not found"),
+        ] {
+            let (status, body, calls) = served(fake(), path, "");
+            assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
+            assert_eq!(body, json!({"error": error}), "{path}");
+            assert_eq!(calls, [], "{path}");
+        }
+    }
+
+    /// A project the workspace doesn't list, or whose data atm-lib won't open: its refusal, nothing read
+    #[test]
+    fn an_unknown_or_unreadable_project_is_atm_libs_refusal() {
+        let (status, body, calls) =
+            served(fake(), "/api/v2/workspaces/work/projects/nope/tasks", "");
         assert_eq!(
-            answer(serve(&projects, list, "", &HeaderMap::new())).status,
-            StatusCode::OK
+            (status, body),
+            (StatusCode::NOT_FOUND, json!({"error": "unknown project"}))
         );
-        assert_eq!(projects.workspaces.recent(), "work");
-        let _ = serve(&projects, "/api/projects", "", &HeaderMap::new());
-        assert_eq!(projects.workspaces.recent(), "default");
-        std::fs::remove_dir_all(&home).expect("cleaned up");
+        assert_eq!(calls, [Call::Project("work".into(), "nope".into())]);
+        for (error, status) in refusals() {
+            let mut broken = fake();
+            broken.workspaces[1].1.members = vec![("p1".into(), Err(error.clone()))];
+            let (got, body, calls) =
+                served(broken, "/api/v2/workspaces/work/projects/p1/claims", "");
+            assert_eq!(got, status, "{error}");
+            assert_eq!(body, json!({"error": error.to_string()}));
+            assert_eq!(
+                calls,
+                [Call::Project("work".into(), "p1".into())],
+                "{error}"
+            );
+        }
+    }
+
+    /// A project in one workspace isn't found through another
+    #[test]
+    fn a_read_looks_in_its_own_workspace_only() {
+        let mut only_work = fake();
+        only_work.workspaces[0].1.members.clear();
+        let (status, _, _) = served(only_work.clone(), "/api/v1/projects/p1/tasks", "");
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (status, _, _) = served(only_work, "/api/v2/workspaces/work/projects/p1/tasks", "");
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    /// Search and the workspaces' summary are reads that open nothing
+    #[test]
+    fn only_listing_a_workspaces_projects_opens_it() {
+        for (path, query) in [
+            ("/api/v2/workspaces", ""),
+            ("/api/v2/workspaces/work/search", "q=x"),
+            ("/api/search", "q=x"),
+            ("/api/v2/workspaces/work/projects/p1/claims", ""),
+        ] {
+            let (_, _, calls) = served(fake(), path, query);
+            assert!(
+                !calls.iter().any(|c| matches!(c, Call::Opened(_))),
+                "{path}: {calls:?}"
+            );
+        }
     }
 }

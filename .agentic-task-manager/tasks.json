@@ -15015,7 +15015,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T16:26:57Z",
+      "updated_at": "2026-11-17T16:33:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "review": "blocker",
@@ -15035,7 +15035,7 @@
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T11:02:22Z",
       "started_by": "claude:0f56a916",
-      "commit": "29c5806cab39e366017fd194b4a4c52bb52f5a3b",
+      "commit": "764be32774ee9eb575f05bc1091b09f7b7b31020",
       "review_requested_at": "2026-11-17T11:22:51Z",
       "review_state": "waiting",
       "notes": [

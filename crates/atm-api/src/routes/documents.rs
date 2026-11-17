@@ -1,56 +1,36 @@
 //! A project's files for the document viewer (docs/multi-project-api.md §2.6): through atm-lib (atm-docs), which
 //! checks the path and reads the file from the working copy.
 
-use atm_lib::workspaces::Member;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use serde_json::json;
 
 use super::query::parameter;
+use super::source::ProjectSource;
 use super::{IMAGE_HEADERS, error_response, etag, not_modified, ok_json, unchanged};
-use crate::{send, send_error};
-
-/// The file the query's `path` names, after atm-docs' checks.
-struct Checked {
-    path: String,
-    /// Its `(size, mtime)`
-    stamp: (u64, u128),
-    /// The working copy's current commit
-    head: Option<String>,
-}
-
-/// The file the query names, checked; or the refusal to answer.
-fn checked(member: &Member, query: &str) -> Result<Checked, Box<Response>> {
-    let Some(vcs) = member.project().ok().and_then(|p| p.vcs()) else {
-        return Err(Box::new(send_error(StatusCode::NOT_FOUND, "not found")));
-    };
-    let path = parameter(query, "path");
-    match atm_lib::documents::document_stamp(Some(&vcs), &path) {
-        Ok(stamp) => Ok(Checked {
-            path,
-            stamp,
-            head: vcs.head(),
-        }),
-        Err(e) => Err(Box::new(error_response(&e))),
-    }
-}
+use crate::send;
 
 /// `GET …/projects/<p>/documents?path=`: a file as the viewer shows it (its JSON). The `ETag` is the file's size and
 /// mtime and the current commit (which it names), so the viewer's poll gets a 304 without the file being read again.
-pub(super) fn get_document(member: &Member, query: &str, request: &HeaderMap) -> Response {
-    let found = match checked(member, query) {
-        Ok(found) => found,
-        Err(refused) => return *refused,
+pub(super) fn get_document(
+    project: &dyn ProjectSource,
+    query: &str,
+    request: &HeaderMap,
+) -> Response {
+    let path = parameter(query, "path");
+    let (size, modified) = match project.file_version(&path) {
+        Ok(version) => version,
+        Err(e) => return error_response(&e),
     };
     let tag = etag(&json!([
         "document",
-        [found.stamp.0, found.stamp.1.to_string()],
-        found.head
+        [size, modified.to_string()],
+        project.head()
     ]));
     if unchanged(request, &tag) {
         return not_modified(&tag, &[]);
     }
-    match member.document(&found.path) {
+    match project.document(&path) {
         Ok(document) => ok_json(&document, Some(&tag)),
         Err(e) => error_response(&e),
     }
@@ -58,16 +38,17 @@ pub(super) fn get_document(member: &Member, query: &str, request: &HeaderMap) ->
 
 /// `GET …/projects/<p>/files?path=`: an image's bytes (whose bytes match its type), sandboxed. The `ETag` is the
 /// file's size and mtime.
-pub(super) fn get_file(member: &Member, query: &str, request: &HeaderMap) -> Response {
-    let found = match checked(member, query) {
-        Ok(found) => found,
-        Err(refused) => return *refused,
+pub(super) fn get_file(project: &dyn ProjectSource, query: &str, request: &HeaderMap) -> Response {
+    let path = parameter(query, "path");
+    let (size, modified) = match project.file_version(&path) {
+        Ok(version) => version,
+        Err(e) => return error_response(&e),
     };
-    let tag = format!("\"{:x}-{:x}\"", found.stamp.0, found.stamp.1);
+    let tag = format!("\"{size:x}-{modified:x}\"");
     if unchanged(request, &tag) {
         return not_modified(&tag, &IMAGE_HEADERS);
     }
-    match member.image(&found.path) {
+    match project.image(&path) {
         Ok((data, content_type)) => send(
             StatusCode::OK,
             data,
@@ -79,74 +60,170 @@ pub(super) fn get_file(member: &Member, query: &str, request: &HeaderMap) -> Res
     }
 }
 
+/// Which paths atm-docs refuses (outside the project, hidden, too large, …) is atm-docs' and its tests': here, that
+/// the routes ask it first, answer each refusal with its status, and tag and cache what it gives them.
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{PIXEL, a_state_with_a_project, answer, having, member};
+    use atm_common::Error;
+
+    use super::super::test_support::{
+        Answer, Call, FakeFile, FakeProject, answer, bound, having, plain, refusals,
+    };
     use super::*;
 
+    fn file(version: (u64, u128)) -> FakeFile {
+        FakeFile {
+            version,
+            document: Ok(json!({"path": "docs/a b.md", "kind": "markdown"})),
+            image: Ok((b"\x89PNG".to_vec(), "image/png")),
+        }
+    }
+
+    fn fake(path: &str, found: atm_common::Result<FakeFile>, head: Option<&str>) -> FakeProject {
+        FakeProject {
+            files: vec![(path.into(), found)],
+            head: head.map(String::from),
+            ..FakeProject::default()
+        }
+    }
+
+    const QUERY: &str = "path=docs%2Fa+b.md";
+    const PATH: &str = "docs/a b.md";
+
     #[test]
-    fn a_document_is_its_json_and_a_304_while_unchanged() {
-        let home = a_state_with_a_project("document");
-        let member = member(&home);
-        let first = answer(get_document(&member, "path=README.md", &HeaderMap::new()));
-        assert_eq!(first.status, StatusCode::OK, "{}", first.json());
-        assert_eq!(first.json()["path"], "README.md");
-        let tag = first.header("etag").to_string();
+    fn a_document_is_atm_libs_json_tagged_with_its_version_and_the_commit() {
+        let (project, calls) = bound(fake(PATH, Ok(file((10, 20))), Some("aaaa")));
+        let answer = answer(get_document(project.as_ref(), QUERY, &plain()));
+        assert_eq!(answer.status, StatusCode::OK);
         assert_eq!(
-            answer(get_document(&member, "path=README.md", &having(&tag))).status,
-            StatusCode::NOT_MODIFIED
+            answer.json(),
+            json!({"path": "docs/a b.md", "kind": "markdown"})
         );
-        // A change to the file is a new version
-        std::fs::write(home.join("project/README.md"), "# Routes\n\nTwo needles.\n")
-            .expect("README.md changed");
+        assert_eq!(answer.header("content-type"), "application/json");
+        assert_ne!(answer.tag(), "");
+        // The path as the query has it, decoded; checked before it is read
         assert_eq!(
-            answer(get_document(&member, "path=README.md", &having(&tag))).status,
-            StatusCode::OK
+            calls.taken(),
+            [
+                Call::FileVersion(PATH.into()),
+                Call::Head,
+                Call::Document(PATH.into())
+            ]
         );
-        std::fs::remove_dir_all(&home).expect("cleaned up");
     }
 
     #[test]
-    fn an_image_is_its_bytes_sandboxed() {
-        let home = a_state_with_a_project("image");
-        let member = member(&home);
-        let first = answer(get_file(&member, "path=pixel.png", &HeaderMap::new()));
-        assert_eq!(first.status, StatusCode::OK);
-        assert_eq!(first.body, PIXEL);
-        assert_eq!(first.header("content-type"), "image/png");
-        assert!(first.header("content-security-policy").ends_with("sandbox"));
-        let tag = first.header("etag").to_string();
-        let again = answer(get_file(&member, "path=pixel.png", &having(&tag)));
+    fn a_document_is_a_304_without_being_read_until_the_file_or_the_commit_changes() {
+        let (project, calls) = bound(fake(PATH, Ok(file((10, 20))), Some("aaaa")));
+        let tag = answer(get_document(project.as_ref(), QUERY, &plain())).tag();
+        calls.taken();
+        let again = answer(get_document(project.as_ref(), QUERY, &having(&tag)));
+        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+        assert_eq!(again.body, b"");
+        assert_eq!(calls.taken(), [Call::FileVersion(PATH.into()), Call::Head]);
+        for (version, head) in [
+            ((11, 20), Some("aaaa")),
+            ((10, 21), Some("aaaa")),
+            ((10, 20), Some("bbbb")),
+            ((10, 20), None),
+        ] {
+            let (other, _) = bound(fake(PATH, Ok(file(version)), head));
+            assert_eq!(
+                answer(get_document(other.as_ref(), QUERY, &having(&tag))).status,
+                StatusCode::OK,
+                "{version:?} {head:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_image_is_its_bytes_sandboxed_tagged_with_its_version_alone() {
+        let (project, calls) = bound(fake("pixel.png", Ok(file((10, 255))), Some("aaaa")));
+        let answer = answer(get_file(project.as_ref(), "path=pixel.png", &plain()));
+        assert_eq!(answer.status, StatusCode::OK);
+        assert_eq!(answer.body, b"\x89PNG");
+        assert_eq!(answer.header("content-type"), "image/png");
+        assert!(
+            answer
+                .header("content-security-policy")
+                .ends_with("sandbox")
+        );
+        assert_eq!(answer.header("cache-control"), "no-cache");
+        assert_eq!(answer.tag(), "\"a-ff\"");
+        // An image doesn't depend on the commit
+        assert_eq!(
+            calls.taken(),
+            [
+                Call::FileVersion("pixel.png".into()),
+                Call::Image("pixel.png".into())
+            ]
+        );
+        let again = answer_of(project.as_ref(), "\"a-ff\"");
         assert_eq!(again.status, StatusCode::NOT_MODIFIED);
         assert!(again.header("content-security-policy").ends_with("sandbox"));
-        std::fs::remove_dir_all(&home).expect("cleaned up");
+        assert_eq!(calls.taken(), [Call::FileVersion("pixel.png".into())]);
+        assert_eq!(
+            answer_of(project.as_ref(), "\"a-fe\"").status,
+            StatusCode::OK
+        );
     }
 
-    /// atm-docs' checks come first: nothing outside the project, nothing missing, nothing atm doesn't show
+    fn answer_of(project: &dyn ProjectSource, tag: &str) -> Answer {
+        answer(get_file(project, "path=pixel.png", &having(tag)))
+    }
+
+    /// What atm-docs refuses, for either route: its status, no tag, nothing read
     #[test]
-    fn a_path_atm_docs_refuses_is_never_read() {
-        let home = a_state_with_a_project("refused");
-        std::fs::write(home.join("secret.md"), "# Not the project's\n").expect("a file outside");
-        let member = member(&home);
-        for query in [
-            "path=../secret.md",
-            "path=%2E%2E%2Fsecret.md",
-            "path=",
-            "path=missing.md",
-        ] {
-            for route in [get_document, get_file] {
-                let answer = answer(route(&member, query, &HeaderMap::new()));
-                assert!(
-                    answer.status.is_client_error(),
-                    "{query}: {}",
-                    answer.status
-                );
-                assert!(answer.header("etag").is_empty(), "{query}");
+    fn a_path_atm_docs_refuses_is_its_status_and_never_read() {
+        for (error, status) in refusals() {
+            let (project, calls) = bound(fake(PATH, Err(error.clone()), Some("aaaa")));
+            let document = answer(get_document(project.as_ref(), QUERY, &plain()));
+            let image = answer(get_file(project.as_ref(), QUERY, &plain()));
+            for answer in [&document, &image] {
+                assert_eq!(answer.status, status, "{error}");
+                assert_eq!(answer.json(), json!({"error": error.to_string()}));
+                assert_eq!(answer.tag(), "");
             }
+            assert_eq!(
+                calls.taken(),
+                [
+                    Call::FileVersion(PATH.into()),
+                    Call::FileVersion(PATH.into())
+                ]
+            );
         }
-        // A document isn't an image, whatever it is asked for as
-        let answer = answer(get_file(&member, "path=README.md", &HeaderMap::new()));
-        assert!(answer.status.is_client_error(), "{}", answer.status);
-        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+
+    /// No path, or one the project doesn't have: atm-docs is asked, and says no
+    #[test]
+    fn no_path_or_an_unknown_one_is_atm_docs_to_refuse() {
+        for (query, path) in [
+            ("", ""),
+            ("path=", ""),
+            ("other=x", ""),
+            ("path=gone.md", "gone.md"),
+        ] {
+            let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
+            let answer = answer(get_document(project.as_ref(), query, &plain()));
+            assert_eq!(answer.status, StatusCode::NOT_FOUND, "{query}");
+            assert_eq!(calls.taken(), [Call::FileVersion(path.into())], "{query}");
+        }
+    }
+
+    /// The file checked, then refused when it is read (it isn't an image, it went in between): its status
+    #[test]
+    fn a_file_refused_when_read_is_its_status() {
+        let refused = FakeFile {
+            document: Err(Error::TooLarge("too large".into())),
+            image: Err(Error::Invalid("not an image".into())),
+            ..file((1, 1))
+        };
+        let (project, _) = bound(fake(PATH, Ok(refused), None));
+        let document = answer(get_document(project.as_ref(), QUERY, &plain()));
+        assert_eq!(document.status, StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(document.tag(), "");
+        let image = answer(get_file(project.as_ref(), QUERY, &plain()));
+        assert_eq!(image.status, StatusCode::BAD_REQUEST);
+        assert_eq!(image.json(), json!({"error": "not an image"}));
     }
 }

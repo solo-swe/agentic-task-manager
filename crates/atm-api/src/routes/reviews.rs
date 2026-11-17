@@ -13,13 +13,13 @@
 //! | POST | `reviews/<CR>/comments/<c>/replies` | a reply |
 
 use atm_common::py::to_json;
-use atm_lib::Project;
-use atm_lib::review_requests::{self, request_from};
+use atm_lib::review_requests::request_from;
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewRef};
 use axum::http::{Method, StatusCode};
 use axum::response::Response;
 use serde_json::{Value, json};
 
+use super::source::ReviewChanges;
 use super::{Projects, error_response, stamped};
 use crate::{send, send_error};
 
@@ -46,58 +46,58 @@ fn as_json(header: &ReviewHeader) -> atm_common::Result<Value> {
 }
 
 /// `POST …/reviews`: a review opened (or a draft, or a live review).
-fn post_review(project: &mut Project, body: Value) -> Response {
+fn post_review(reviews: &mut dyn ReviewChanges, body: Value) -> Response {
     review_answer(
         true,
         request_from(body)
-            .and_then(|opening| review_requests::open_review(project, opening))
+            .and_then(|opening| reviews.open_review(opening))
             .and_then(|h| as_json(&h)),
     )
 }
 
 /// `PATCH …/reviews/<CR>`: the review closed.
-fn patch_review(project: &mut Project, review: &ReviewRef, body: Value) -> Response {
+fn patch_review(reviews: &mut dyn ReviewChanges, review: &ReviewRef, body: Value) -> Response {
     review_answer(
         false,
         request_from(body)
-            .and_then(|closing| review_requests::close_review(project, review, &closing))
+            .and_then(|closing| reviews.close_review(review, &closing))
             .and_then(|h| as_json(&h)),
     )
 }
 
 /// `PUT …/reviews/<CR>/tasks`: the tasks it reviews, as a whole.
-fn put_review_tasks(project: &mut Project, review: &ReviewRef, body: Value) -> Response {
+fn put_review_tasks(reviews: &mut dyn ReviewChanges, review: &ReviewRef, body: Value) -> Response {
     review_answer(
         false,
         request_from(body)
-            .and_then(|tasks| review_requests::set_review_tasks(project, review, &tasks))
+            .and_then(|tasks| reviews.set_review_tasks(review, &tasks))
             .and_then(|h| as_json(&h)),
     )
 }
 
 /// `POST …/reviews/<CR>/decisions`: a reviewer's decision (or the user's, overriding who decides).
-fn post_decision(project: &mut Project, review: &ReviewRef, body: Value) -> Response {
+fn post_decision(reviews: &mut dyn ReviewChanges, review: &ReviewRef, body: Value) -> Response {
     review_answer(
         true,
         request_from(body)
-            .and_then(|decision| review_requests::submit_decision(project, review, &decision))
+            .and_then(|decision| reviews.submit_decision(review, &decision))
             .and_then(|h| as_json(&h)),
     )
 }
 
 /// `POST …/reviews/<CR>/comments`: a new chain.
-fn post_comment(project: &Project, review: &ReviewRef, body: Value) -> Response {
+fn post_comment(reviews: &mut dyn ReviewChanges, review: &ReviewRef, body: Value) -> Response {
     review_answer(
         true,
         request_from(body)
-            .and_then(|comment| review_requests::add_comment(project, review, comment))
+            .and_then(|comment| reviews.add_comment(review, comment))
             .map(|id| json!({ "review": review.0, "comment": id })),
     )
 }
 
 /// `PATCH …/reviews/<CR>/comments/<c>`: a comment's text, or its resolved box.
 fn patch_comment(
-    project: &Project,
+    reviews: &mut dyn ReviewChanges,
     review: &ReviewRef,
     comment: &CommentId,
     body: Value,
@@ -105,17 +105,22 @@ fn patch_comment(
     review_answer(
         false,
         request_from(body)
-            .and_then(|update| review_requests::update_comment(project, review, comment, update))
+            .and_then(|update| reviews.update_comment(review, comment, update))
             .map(|()| json!({ "review": review.0, "comment": comment })),
     )
 }
 
 /// `POST …/reviews/<CR>/comments/<c>/replies`: a reply.
-fn post_reply(project: &Project, review: &ReviewRef, comment: &CommentId, body: Value) -> Response {
+fn post_reply(
+    reviews: &mut dyn ReviewChanges,
+    review: &ReviewRef,
+    comment: &CommentId,
+    body: Value,
+) -> Response {
     review_answer(
         true,
         request_from(body)
-            .and_then(|reply| review_requests::reply_to_comment(project, review, comment, &reply))
+            .and_then(|reply| reviews.reply_to_comment(review, comment, &reply))
             .map(|id| json!({ "review": review.0, "comment": id, "reply_to": comment })),
     )
 }
@@ -131,7 +136,44 @@ pub fn is_reviews_path(path: &str) -> bool {
     )
 }
 
-/// A review change, to its route by method and resource (the table above).
+/// One of the routes of the table above.
+enum Route {
+    OpenReview,
+    CloseReview(ReviewRef),
+    SetTasks(ReviewRef),
+    Decide(ReviewRef),
+    Comment(ReviewRef),
+    UpdateComment(ReviewRef, CommentId),
+    Reply(ReviewRef, CommentId),
+}
+
+/// The route for `method` on `resource` (past `reviews`): a resource no route has is 404, one the method isn't for
+/// 405.
+fn route(method: &Method, resource: &[&str]) -> Result<Route, (StatusCode, &'static str)> {
+    let review = |cr: &str| ReviewRef(cr.to_string());
+    let comment = |c: &str| CommentId(c.to_string());
+    Ok(match (method.as_str(), resource) {
+        ("POST", []) => Route::OpenReview,
+        ("PATCH", [cr]) => Route::CloseReview(review(cr)),
+        ("PUT", [cr, "tasks"]) => Route::SetTasks(review(cr)),
+        ("POST", [cr, "decisions"]) => Route::Decide(review(cr)),
+        ("POST", [cr, "comments"]) => Route::Comment(review(cr)),
+        ("PATCH", [cr, "comments", c]) => Route::UpdateComment(review(cr), comment(c)),
+        ("POST", [cr, "comments", c, "replies"]) => Route::Reply(review(cr), comment(c)),
+        (
+            _,
+            []
+            | [_]
+            | [_, "tasks" | "decisions" | "comments"]
+            | [_, "comments", _]
+            | [_, "comments", _, "replies"],
+        ) => return Err((StatusCode::METHOD_NOT_ALLOWED, "not with this method")),
+        _ => return Err((StatusCode::NOT_FOUND, "not found")),
+    })
+}
+
+/// A review change, to its route by method and resource (the table above); the project is opened only for a route
+/// there is.
 #[must_use]
 pub fn serve_review_change(
     projects: &Projects,
@@ -149,226 +191,493 @@ pub fn serve_review_change(
     if resource.iter().any(|part| part.is_empty()) {
         return send_error(StatusCode::NOT_FOUND, "not found");
     }
-    let Some(workspace) = projects.workspaces.get(w) else {
+    let route = match route(method, resource) {
+        Ok(route) => route,
+        Err((status, why)) => return send_error(status, why),
+    };
+    let Some(workspace) = projects.source.workspace(w) else {
         return send_error(StatusCode::NOT_FOUND, "unknown workspace");
     };
-    let mut project = match workspace.member(p).and_then(|m| m.project_as_user()) {
-        Ok(project) => project,
+    let mut reviews = match workspace.project(p).and_then(|m| m.reviews_as_user()) {
+        Ok(reviews) => reviews,
         Err(e) => return error_response(&e),
     };
-    let review = |cr: &str| ReviewRef((*cr).to_string());
-    let comment = |c: &str| CommentId((*c).to_string());
-    match (method.as_str(), resource) {
-        ("POST", []) => post_review(&mut project, body),
-        ("PATCH", [cr]) => patch_review(&mut project, &review(cr), body),
-        ("PUT", [cr, "tasks"]) => put_review_tasks(&mut project, &review(cr), body),
-        ("POST", [cr, "decisions"]) => post_decision(&mut project, &review(cr), body),
-        ("POST", [cr, "comments"]) => post_comment(&project, &review(cr), body),
-        ("PATCH", [cr, "comments", c]) => patch_comment(&project, &review(cr), &comment(c), body),
-        ("POST", [cr, "comments", c, "replies"]) => {
-            post_reply(&project, &review(cr), &comment(c), body)
-        }
-        (
-            _,
-            []
-            | [_]
-            | [_, "tasks" | "decisions" | "comments"]
-            | [_, "comments", _]
-            | [_, "comments", _, "replies"],
-        ) => send_error(StatusCode::METHOD_NOT_ALLOWED, "not with this method"),
-        _ => send_error(StatusCode::NOT_FOUND, "not found"),
+    let reviews = reviews.as_mut();
+    match route {
+        Route::OpenReview => post_review(reviews, body),
+        Route::CloseReview(review) => patch_review(reviews, &review, body),
+        Route::SetTasks(review) => put_review_tasks(reviews, &review, body),
+        Route::Decide(review) => post_decision(reviews, &review, body),
+        Route::Comment(review) => post_comment(reviews, &review, body),
+        Route::UpdateComment(review, comment) => patch_comment(reviews, &review, &comment, body),
+        Route::Reply(review, comment) => post_reply(reviews, &review, &comment, body),
     }
 }
 
+/// The review rules (who may decide, what a comment may say) are atm-lib's and its tests'; the checks before a change
+/// reaches a route (Host, Origin, session token, JSON) are `serve_request`'s. Here: which route each method and
+/// resource reach, the request each body becomes, and the status each answer becomes.
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{PROJECT, a_state_with_a_project, answer};
+    use atm_common::Error;
+    use atm_lib::review_requests::{
+        ChangeToReview, CommentUpdate, Decision, DecisionKind, NewComment, NewReply, ReviewClosing,
+        ReviewOpening, ReviewStart, ReviewTasks, RulesOverride,
+    };
+    use atm_lib::reviews::{Side, Status};
+
+    use super::super::test_support::{
+        Answer, Call, Fake, FakeProject, FakeReviews, answer, header, refusals,
+    };
     use super::*;
+
+    const REVIEWS: &str = "/api/v2/workspaces/work/projects/p1/reviews";
+
+    fn send(fake: Fake, method: &Method, resource: &str, body: Value) -> (Answer, Vec<Call>) {
+        let (projects, calls) = fake.projects();
+        let answer = answer(serve_review_change(
+            &projects,
+            method,
+            &format!("{REVIEWS}{resource}"),
+            body,
+        ));
+        (answer, calls.taken())
+    }
+
+    fn ok() -> Fake {
+        Fake::with(FakeProject::default())
+    }
+
+    fn r(cr: &str) -> ReviewRef {
+        ReviewRef(cr.into())
+    }
+
+    fn c(id: &str) -> CommentId {
+        CommentId(id.into())
+    }
 
     #[test]
     fn only_a_projects_reviews_take_changes() {
         for path in [
             "/api/v2/workspaces/w/projects/p/reviews",
-            "/api/v2/workspaces/w/projects/p/reviews/CR-1/comments",
+            "/api/v2/workspaces/w/projects/p/reviews/",
+            "/api/v2/workspaces/w/projects/p/reviews/CR-1/comments/c1/replies",
         ] {
             assert!(is_reviews_path(path), "{path}");
         }
         for path in [
             "/api/v2/workspaces/w/projects/p/tasks",
+            "/api/v2/workspaces/w/projects/p/reviewsx",
             "/api/v2/workspaces//projects/p/reviews",
             "/api/v2/workspaces/w/projects//reviews",
+            "/api/v2/workspaces/w/project/p/reviews",
             "/api/v1/projects/p/reviews",
             "/api/v2/workspaces/w/projects/p",
             "api/v2/workspaces/w/projects/p/reviews",
+            "/x/api/v2/workspaces/w/projects/p/reviews",
+            "",
         ] {
             assert!(!is_reviews_path(path), "{path}");
         }
     }
 
-    /// A resource no route has is 404; one the method isn't for, 405; neither reaches the project
+    /// Each route: the body as its request, the one atm-lib call, as the user, and what it answers
     #[test]
-    fn each_method_reaches_only_its_resource() {
-        let home = a_state_with_a_project("review-routes");
-        let projects = Projects::new(&home);
-        let reviews = format!("/api/v2/workspaces/default/projects/{PROJECT}/reviews");
-        let status = |method: Method, path: &str| {
-            answer(serve_review_change(&projects, &method, path, json!({}))).status
-        };
-        for (method, resource) in [
-            (Method::GET, ""),
-            (Method::PUT, ""),
-            (Method::DELETE, "/CR-1"),
-            (Method::POST, "/CR-1"),
-            (Method::POST, "/CR-1/tasks"),
-            (Method::PATCH, "/CR-1/decisions"),
-            (Method::PUT, "/CR-1/comments"),
-            (Method::POST, "/CR-1/comments/c1"),
-            (Method::PATCH, "/CR-1/comments/c1/replies"),
-        ] {
+    #[allow(clippy::too_many_lines)] // reason: one table, a row per route
+    fn each_route_makes_its_call_as_the_user_and_answers_what_it_made_or_changed() {
+        let made = json!(serde_json::to_value(header()).expect("a header"));
+        let cases: Vec<(Method, &str, Value, Call, StatusCode, Value)> = vec![
+            (
+                Method::POST,
+                "",
+                json!({"title": "Look", "change": {"files": ["a.txt"]}}),
+                Call::OpenReview(ReviewOpening {
+                    title: "Look".into(),
+                    summary: String::new(),
+                    tasks: Vec::new(),
+                    reviewers: Vec::new(),
+                    start: ReviewStart::Open,
+                    change: ChangeToReview {
+                        files: vec!["a.txt".into()],
+                        ..ChangeToReview::default()
+                    },
+                }),
+                StatusCode::CREATED,
+                made.clone(),
+            ),
+            (
+                Method::PATCH,
+                "/CR-1",
+                json!({"status": "closed", "reason": "Not needed."}),
+                Call::CloseReview(
+                    r("CR-1"),
+                    ReviewClosing {
+                        status: Status::Closed,
+                        reason: "Not needed.".into(),
+                        reject_tasks: false,
+                    },
+                ),
+                StatusCode::OK,
+                made.clone(),
+            ),
+            (
+                Method::PUT,
+                "/CR-1/tasks",
+                json!({"tasks": ["T-1", "T-2"]}),
+                Call::SetTasks(
+                    r("CR-1"),
+                    ReviewTasks {
+                        tasks: vec!["T-1".into(), "T-2".into()],
+                    },
+                ),
+                StatusCode::OK,
+                made.clone(),
+            ),
+            (
+                Method::POST,
+                "/CR-1/decisions",
+                json!({"decision": "approve", "override_rules": {"reason": "On a call."}}),
+                Call::Decide(
+                    r("CR-1"),
+                    Decision {
+                        decision: DecisionKind::Approve,
+                        body: None,
+                        override_rules: Some(RulesOverride {
+                            reason: "On a call.".into(),
+                        }),
+                    },
+                ),
+                StatusCode::CREATED,
+                made,
+            ),
+            (
+                Method::POST,
+                "/CR-1/comments",
+                json!({"path": "a.txt", "lines": [1, 2], "body": "Why?"}),
+                Call::Comment(
+                    r("CR-1"),
+                    NewComment {
+                        path: Some("a.txt".into()),
+                        lines: Some((1, 2)),
+                        side: Side::default(),
+                        quote: None,
+                        round: None,
+                        body: "Why?".into(),
+                    },
+                ),
+                StatusCode::CREATED,
+                json!({"review": "CR-1", "comment": "c1"}),
+            ),
+            (
+                Method::PATCH,
+                "/CR-1/comments/c4",
+                json!({"resolved": true}),
+                Call::UpdateComment(
+                    r("CR-1"),
+                    c("c4"),
+                    CommentUpdate {
+                        body: None,
+                        resolved: Some(true),
+                    },
+                ),
+                StatusCode::OK,
+                json!({"review": "CR-1", "comment": "c4"}),
+            ),
+            (
+                Method::POST,
+                "/CR-1/comments/c4/replies",
+                json!({"body": "Because."}),
+                Call::Reply(
+                    r("CR-1"),
+                    c("c4"),
+                    NewReply {
+                        body: "Because.".into(),
+                    },
+                ),
+                StatusCode::CREATED,
+                json!({"review": "CR-1", "comment": "c1", "reply_to": "c4"}),
+            ),
+        ];
+        for (method, resource, body, call, status, answered) in cases {
+            let (answer, calls) = send(ok(), &method, resource, body);
             assert_eq!(
-                status(method.clone(), &format!("{reviews}{resource}")),
-                StatusCode::METHOD_NOT_ALLOWED,
+                answer.status,
+                status,
+                "{method} {resource}: {}",
+                answer.json()
+            );
+            assert_eq!(answer.unstamped(), answered, "{method} {resource}");
+            assert!(answer.json()["generated_at"].is_string());
+            assert_eq!(answer.header("cache-control"), "no-store");
+            assert_eq!(
+                calls,
+                [
+                    Call::Project("work".into(), "p1".into()),
+                    Call::AsUser,
+                    call
+                ],
                 "{method} {resource}"
             );
         }
-        for (method, path) in [
-            (Method::POST, format!("{reviews}/CR-1/votes")),
-            (
-                Method::POST,
-                format!("{reviews}/CR-1/comments/c1/replies/r1"),
-            ),
-            (Method::POST, format!("{reviews}//comments")),
-            (Method::POST, format!("{reviews}/")),
-            (
-                Method::POST,
-                "/api/v2/workspaces/nope/projects/x/reviews".into(),
-            ),
-            (
-                Method::POST,
-                format!("/api/v2/workspaces/default/projects/{PROJECT}/tasks"),
-            ),
-            (Method::POST, "/elsewhere".into()),
-        ] {
-            assert_eq!(
-                status(method.clone(), &path),
-                StatusCode::NOT_FOUND,
-                "{method} {path}"
-            );
-        }
-        assert_eq!(
-            status(
-                Method::POST,
-                "/api/v2/workspaces/default/projects/nope/reviews"
-            ),
-            StatusCode::NOT_FOUND
-        );
-        assert!(
-            !home.join("project/.agentic-task-manager/reviews").exists(),
-            "nothing written"
-        );
-        std::fs::remove_dir_all(&home).expect("cleaned up");
     }
 
-    /// Each route is its atm-lib call, as the user: 201 with what it made, 200 with what it changed, atm-lib's
-    /// refusals as their statuses
+    /// A resource no route has is 404, one the method isn't for 405: before the project is opened
     #[test]
-    fn each_route_makes_or_changes_its_resource() {
-        let home = a_state_with_a_project("review-changes");
-        let projects = Projects::new(&home);
-        let reviews = format!("/api/v2/workspaces/default/projects/{PROJECT}/reviews");
-        let send = |method: Method, resource: &str, body: Value| {
+    fn a_method_or_resource_no_route_has_never_opens_the_project() {
+        for (method, resource) in [
+            (Method::GET, ""),
+            (Method::PUT, ""),
+            (Method::PATCH, ""),
+            (Method::DELETE, "/CR-1"),
+            (Method::POST, "/CR-1"),
+            (Method::PUT, "/CR-1"),
+            (Method::POST, "/CR-1/tasks"),
+            (Method::PATCH, "/CR-1/tasks"),
+            (Method::PUT, "/CR-1/decisions"),
+            (Method::PATCH, "/CR-1/decisions"),
+            (Method::PUT, "/CR-1/comments"),
+            (Method::PATCH, "/CR-1/comments"),
+            (Method::POST, "/CR-1/comments/c1"),
+            (Method::PUT, "/CR-1/comments/c1"),
+            (Method::PATCH, "/CR-1/comments/c1/replies"),
+        ] {
+            let (answer, calls) = send(ok(), &method, resource, json!({}));
+            assert_eq!(
+                answer.status,
+                StatusCode::METHOD_NOT_ALLOWED,
+                "{method} {resource}"
+            );
+            assert_eq!(answer.json(), json!({"error": "not with this method"}));
+            assert_eq!(calls, [], "{method} {resource}");
+        }
+        for (method, resource) in [
+            (Method::POST, "/CR-1/votes"),
+            (Method::POST, "/CR-1/comments/c1/replies/r1"),
+            (Method::POST, "/CR-1/tasks/T-1"),
+            (Method::POST, "//comments"),
+            (Method::POST, "/"),
+            (Method::POST, "/CR-1/"),
+        ] {
+            let (answer, calls) = send(ok(), &method, resource, json!({}));
+            assert_eq!(answer.status, StatusCode::NOT_FOUND, "{method} {resource}");
+            assert_eq!(answer.json(), json!({"error": "not found"}));
+            assert_eq!(calls, [], "{method} {resource}");
+        }
+    }
+
+    #[test]
+    fn a_path_outside_a_projects_reviews_is_not_found() {
+        let (projects, calls) = ok().projects();
+        for path in [
+            "/elsewhere",
+            "/api/v2/workspaces",
+            "/api/v2/workspaces/work/projects/p1",
+            "/api/v2/workspaces/work/projects/p1/tasks",
+            "/api/v2/workspaces/work/p1/reviews",
+        ] {
             let answer = answer(serve_review_change(
                 &projects,
-                &method,
-                &format!("{reviews}{resource}"),
-                body,
+                &Method::POST,
+                path,
+                json!({}),
             ));
-            (answer.status, answer.json())
+            assert_eq!(answer.status, StatusCode::NOT_FOUND, "{path}");
+        }
+        assert_eq!(calls.taken(), []);
+    }
+
+    #[test]
+    fn an_unknown_workspace_or_project_or_one_that_cant_be_opened_is_refused_before_any_change() {
+        let (projects, calls) = ok().projects();
+        let at = |path: &str| {
+            answer(serve_review_change(
+                &projects,
+                &Method::POST,
+                path,
+                json!({"title": "x", "change": {"files": ["a"]}}),
+            ))
         };
+        let unknown = at("/api/v2/workspaces/nope/projects/p1/reviews");
+        assert_eq!(unknown.status, StatusCode::NOT_FOUND);
+        assert_eq!(unknown.json(), json!({"error": "unknown workspace"}));
+        assert_eq!(calls.taken(), []);
+        let unknown = at("/api/v2/workspaces/work/projects/nope/reviews");
+        assert_eq!(unknown.status, StatusCode::NOT_FOUND);
+        assert_eq!(unknown.json(), json!({"error": "unknown project"}));
+        assert_eq!(calls.taken(), [Call::Project("work".into(), "nope".into())]);
 
-        let (status, review) = send(
-            Method::POST,
-            "",
-            json!({"title": "Look at the README", "change": {"files": ["README.md"]}}),
-        );
-        assert_eq!(status, StatusCode::CREATED, "{review}");
-        assert_eq!(review["reference"], "CR-1");
-        let (status, made) = send(
-            Method::POST,
-            "/CR-1/comments",
-            json!({"path": "README.md", "lines": [1, 1], "body": "Why a title?"}),
-        );
-        assert_eq!(
-            (status, &made["comment"]),
-            (StatusCode::CREATED, &json!("c1"))
-        );
-        let (status, made) = send(
-            Method::POST,
-            "/CR-1/comments/c1/replies",
-            json!({"body": "Every page has one."}),
-        );
-        assert_eq!(status, StatusCode::CREATED, "{made}");
-        assert_eq!(
-            (&made["comment"], &made["reply_to"]),
-            (&json!("c2"), &json!("c1"))
-        );
-        let (status, _) = send(
-            Method::PATCH,
-            "/CR-1/comments/c1",
-            json!({"resolved": true}),
-        );
-        assert_eq!(status, StatusCode::OK);
-        let (status, _) = send(Method::PUT, "/CR-1/tasks", json!({"tasks": ["T-1"]}));
-        assert_eq!(status, StatusCode::OK);
+        for (error, status) in refusals() {
+            let fake = Fake::with(FakeProject {
+                reviews: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            let (answer, calls) = send(fake, &Method::POST, "/CR-1/comments", json!({"body": "x"}));
+            assert_eq!(answer.status, status, "{error}");
+            assert_eq!(
+                calls,
+                [Call::Project("work".into(), "p1".into()), Call::AsUser],
+                "{error}"
+            );
+        }
+    }
 
-        // A field no request takes, a malformed request, no such comment
-        let (status, _) = send(
-            Method::POST,
-            "/CR-1/comments/c1/replies",
-            json!({"body": "x", "author": "claude:x"}),
-        );
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        let (status, _) = send(
-            Method::PATCH,
-            "/CR-1",
-            json!({"status": "approved", "reason": "x"}),
-        );
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        let (status, _) = send(
-            Method::PATCH,
-            "/CR-1/comments/c9",
-            json!({"resolved": true}),
-        );
-        assert_eq!(status, StatusCode::NOT_FOUND);
+    /// A body that isn't its route's request (a field it doesn't take, one missing, a wrong type, not an object) is
+    /// 400, and reaches no atm-lib call
+    #[test]
+    fn a_body_that_isnt_the_routes_request_is_400_and_changes_nothing() {
+        for (method, resource, body) in [
+            (Method::POST, "", json!({"change": {"files": ["a"]}})),
+            (
+                Method::POST,
+                "",
+                json!({"title": "x", "author": "claude:x"}),
+            ),
+            (Method::POST, "", json!({"title": "x", "start": "later"})),
+            (Method::POST, "", json!("a text")),
+            (Method::POST, "", Value::Null),
+            // (A status other than closed is atm-lib's to refuse: `approved` is a status)
+            (
+                Method::PATCH,
+                "/CR-1",
+                json!({"status": "shut", "reason": "x"}),
+            ),
+            (Method::PATCH, "/CR-1", json!({"status": "closed"})),
+            (Method::PUT, "/CR-1/tasks", json!({"tasks": "T-1"})),
+            (Method::PUT, "/CR-1/tasks", json!([])),
+            (
+                Method::POST,
+                "/CR-1/decisions",
+                json!({"decision": "merge"}),
+            ),
+            (
+                Method::POST,
+                "/CR-1/decisions",
+                json!({"decision": "approve", "override_rules": {}}),
+            ),
+            (
+                Method::POST,
+                "/CR-1/comments",
+                json!({"path": "a", "lines": [1]}),
+            ),
+            (
+                Method::POST,
+                "/CR-1/comments",
+                json!({"body": "x", "lines": "1-2"}),
+            ),
+            (
+                Method::PATCH,
+                "/CR-1/comments/c1",
+                json!({"resolved": "yes"}),
+            ),
+            (
+                Method::PATCH,
+                "/CR-1/comments/c1",
+                json!({"body": "x", "author": "y"}),
+            ),
+            (Method::POST, "/CR-1/comments/c1/replies", json!({})),
+            (
+                Method::POST,
+                "/CR-1/comments/c1/replies",
+                json!({"body": "x", "author": "claude:x"}),
+            ),
+        ] {
+            let (answer, calls) = send(ok(), &method, resource, body.clone());
+            assert_eq!(
+                answer.status,
+                StatusCode::BAD_REQUEST,
+                "{method} {resource} {body}"
+            );
+            assert!(
+                answer.json()["error"]
+                    .as_str()
+                    .is_some_and(|e| e.starts_with("not this request")),
+                "{}",
+                answer.json()
+            );
+            assert_eq!(
+                calls,
+                [Call::Project("work".into(), "p1".into()), Call::AsUser],
+                "{method} {resource} {body}"
+            );
+        }
+    }
 
-        // The user opened it, so is its author: deciding it takes the rules overridden, saying why
-        let (status, _) = send(
-            Method::POST,
+    /// Every refusal atm-lib can give (the rules', a malformed text, no such review), on every route: its status
+    #[test]
+    fn each_refusal_of_atm_lib_on_each_route_is_its_status() {
+        let routes: [(Method, &str, Value); 7] = [
+            (
+                Method::POST,
+                "",
+                json!({"title": "x", "change": {"files": ["a"]}}),
+            ),
+            (
+                Method::PATCH,
+                "/CR-1",
+                json!({"status": "closed", "reason": "x"}),
+            ),
+            (Method::PUT, "/CR-1/tasks", json!({"tasks": []})),
+            (
+                Method::POST,
+                "/CR-1/decisions",
+                json!({"decision": "approve"}),
+            ),
+            (Method::POST, "/CR-1/comments", json!({"body": "x"})),
+            (Method::PATCH, "/CR-1/comments/c1", json!({"body": "y"})),
+            (
+                Method::POST,
+                "/CR-1/comments/c1/replies",
+                json!({"body": "z"}),
+            ),
+        ];
+        for (error, status) in refusals() {
+            for (method, resource, body) in &routes {
+                let fake = Fake::with(FakeProject {
+                    reviews: Ok(FakeReviews {
+                        header: Err(error.clone()),
+                        comment: Err(error.clone()),
+                        updated: Err(error.clone()),
+                    }),
+                    ..FakeProject::default()
+                });
+                let (answer, calls) = send(fake, method, resource, body.clone());
+                assert_eq!(answer.status, status, "{error}: {method} {resource}");
+                assert_eq!(answer.json(), json!({"error": error.to_string()}));
+                assert_eq!(calls.len(), 3, "the call was made: {method} {resource}");
+            }
+        }
+        // The review rules' refusal in particular (the author deciding their own review): 403
+        let rules = Error::Refused("the review's author can't decide it".into());
+        let fake = Fake::with(FakeProject {
+            reviews: Ok(FakeReviews {
+                header: Err(rules),
+                ..FakeReviews::default()
+            }),
+            ..FakeProject::default()
+        });
+        let (answer, _) = send(
+            fake,
+            &Method::POST,
             "/CR-1/decisions",
             json!({"decision": "approve"}),
         );
-        assert_eq!(status, StatusCode::FORBIDDEN);
-        let (status, decided) = send(
-            Method::POST,
-            "/CR-1/decisions",
-            json!({"decision": "approve", "override_rules": {"reason": "Reviewed on a call."}}),
-        );
-        assert_eq!(status, StatusCode::CREATED, "{decided}");
-        assert_eq!(decided["status"], "approved");
+        assert_eq!(answer.status, StatusCode::FORBIDDEN);
+    }
 
-        let (status, _) = send(
-            Method::POST,
-            "",
-            json!({"title": "Again", "change": {"files": ["README.md"]}}),
-        );
-        assert_eq!(status, StatusCode::CREATED);
-        let (status, closed) = send(
-            Method::PATCH,
-            "/CR-2",
-            json!({"status": "closed", "reason": "Not needed."}),
-        );
-        assert_eq!(status, StatusCode::OK, "{closed}");
-        assert_eq!(closed["status"], "closed");
-        std::fs::remove_dir_all(&home).expect("cleaned up");
+    /// A review's reference and a comment's ID are passed as the path has them: atm-lib resolves them
+    #[test]
+    fn the_review_and_comment_are_the_paths_own() {
+        for cr in ["CR-1", "CR-42", "0193c0de"] {
+            let (_, calls) = send(
+                ok(),
+                &Method::POST,
+                &format!("/{cr}/comments/c9/replies"),
+                json!({"body": "x"}),
+            );
+            assert_eq!(
+                calls.last(),
+                Some(&Call::Reply(r(cr), c("c9"), NewReply { body: "x".into() }))
+            );
+        }
     }
 }
