@@ -19,6 +19,7 @@ pub mod sha1;
 pub mod sha256;
 pub mod skills;
 pub mod sprint_names;
+pub mod subscription;
 pub mod time;
 pub mod vocabulary;
 

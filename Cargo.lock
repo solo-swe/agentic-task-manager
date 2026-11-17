@@ -345,6 +345,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-review"
+version = "0.39.0"
+dependencies = [
+ "atm-common",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "atm-vcs"
 version = "0.39.0"
 dependencies = [

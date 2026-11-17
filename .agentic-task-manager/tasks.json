@@ -14443,7 +14443,7 @@
       "description": "Phase 1 of [the code review design](docs/code-review-design.md) (approved 2026-11-17).\n\n## Change\n- A new crate `crates/atm-review`, depending on `atm-common` and `atm-vcs` only (not atm-db, not the task model: a task is a key string).\n- The model: `Review` (header, summary, chains, rounds), statuses `draft`, `open`, `live`, `changes_requested`, `approved`, `closed` ([§3.2](docs/code-review-design.md#:~:text=3.2%20A%20review%20and%20how%20it%20goes)), `Round` (kinds `range`, `working`, `files`, and live checkpoints), `Chain`, `Comment` (top-level ones with `resolved`, replies nested, [§3.4](docs/code-review-design.md#:~:text=3.4%20Comments)), `Anchor`, `ReviewId` and `ReviewRef`.\n- The `ReviewStore` trait with one method per operation ([§3.10](docs/code-review-design.md#:~:text=3.10%20The%20store)), and an in-memory store for the tests.\n- The rules above the store: approve only when every top-level comment is resolved; who may resolve; the status changes of the state diagram.\n- `tests/scripts/layers.test.mjs` gains the crate, and checks it depends on neither atm-db nor atm-lib.\n\n## Tests\nUnit tests of the rules on the memory store.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/",
@@ -14451,7 +14451,7 @@
         "tests/scripts/layers.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T08:54:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 561,
@@ -14465,7 +14465,9 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T08:54:07Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1a9a33bc82",

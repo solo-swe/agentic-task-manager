@@ -4,6 +4,7 @@
 //! poll its stamp ([`poll_stamp`]). What subscribes can't tell which.
 
 use std::path::PathBuf;
+#[cfg(test)]
 use std::sync::Arc;
 use std::sync::mpsc::{RecvTimeoutError, channel};
 use std::time::Duration;
@@ -13,41 +14,8 @@ use notify::RecursiveMode;
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
 use serde_json::Value;
 
-/// What a subscription calls when the data changed: only that it did, never what changed (the caller reads it again).
-/// It runs on the store's own thread (a watcher's, a poller's, or the writer's), so it must not wait on a lock its
-/// caller may hold while subscribing or reading; shared, so one callback can serve several subscriptions merged.
-pub type OnChange = Arc<dyn Fn() + Send + Sync>;
-
-/// A live subscription: it tells its [`OnChange`] until it is dropped.
-#[must_use = "dropping a subscription ends it"]
-pub struct Subscription {
-    /// What keeps it going (a watcher, a poller's stop signal, a listener's registration): held only, dropped to end it
-    held: Vec<Box<dyn Send>>,
-}
-
-impl std::fmt::Debug for Subscription {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Subscription")
-            .field("parts", &self.held.len())
-            .finish()
-    }
-}
-
-impl Subscription {
-    /// A subscription kept going by `held`, which ends it when dropped.
-    pub fn new(held: impl Send + 'static) -> Self {
-        Self {
-            held: vec![Box::new(held)],
-        }
-    }
-
-    /// Several subscriptions as one: dropping it ends them all.
-    pub fn merged(parts: impl IntoIterator<Item = Subscription>) -> Self {
-        Self {
-            held: parts.into_iter().flat_map(|p| p.held).collect(),
-        }
-    }
-}
+// atm-common's, shared with the review store (atm-review, ATM-561), so atm-lib can merge the two
+pub use atm_common::subscription::{OnChange, Subscription};
 
 /// How long a file watcher waits for a burst of changes (an atm command writes a file or two, git many) to settle.
 pub const SETTLE: Duration = Duration::from_millis(300);

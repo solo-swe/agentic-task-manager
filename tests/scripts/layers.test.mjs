@@ -11,6 +11,9 @@ const ALLOWED = {
   'crates/atm-common': [],
   'crates/atm-db': ['atm-common'],
   'crates/atm-vcs': ['atm-common', 'atm-db'],
+  // The code review tool (docs/code-review-design.md §3.1, ATM-561): a component of its own, which knows a task only
+  // as a key; never atm-db or atm-lib
+  'crates/atm-review': ['atm-common', 'atm-vcs'],
   'crates/atm-lib': ['atm-common', 'atm-db', 'atm-vcs'],
   'crates/atm-api': ['atm-common', 'atm-lib'],
   // The CLI enters the server (`atm _serve`), never calls it otherwise

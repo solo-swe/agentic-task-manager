@@ -1,0 +1,20 @@
+[package]
+name = "atm-review"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# The code review tool (docs/code-review-design.md, ATM-561): reviews, their rounds and comments, and the store they
+# are kept in. A component of its own (§3.1): it knows a task only as a key, so it depends on neither atm-db nor
+# atm-lib; atm-vcs comes with the rounds (ATM-564)
+[dependencies]
+atm-common.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
