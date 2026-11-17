@@ -6,10 +6,10 @@
    A style sets the page's variables (--doc-*, app.css), the colours the rendered text uses (--text, --border,
    --surface2, --accent, as Sticky Notes' sheet does) and, for a Markdown document, its type. A code or text file keeps
    its gutter and padding (app.css); only its paper and colours change. Fonts are the system's: the page's CSP loads
-   none from elsewhere. */
+   none from elsewhere. The same page, as `.doc-sheet`, is the diff viewer's rendered side (ATM-574). */
 
 /* ---- GitHub: the README look ---- */
-.doc-viewer[data-doc-style='github'] {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='github'] {
   --doc-desk: #010409;
   --doc-page: #0d1117;
   --doc-page-border: 1px solid #30363d;
@@ -18,13 +18,13 @@
   --doc-page-padding: 32px 40px 40px;
   --doc-page-ink: #e6edf3;
 }
-:root[data-mode='light'] .doc-viewer[data-doc-style='github'] {
+:root[data-mode='light'] :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] {
   --doc-desk: #f6f8fa;
   --doc-page: #ffffff;
   --doc-page-border: 1px solid #d1d9e0;
   --doc-page-ink: #1f2328;
 }
-.doc-viewer[data-doc-style='github'] .doc-page {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page {
   max-width: 980px;
   --text: #e6edf3;
   --text-muted: #9198a1;
@@ -32,19 +32,19 @@
   --surface2: #151b23;
   --accent: #4493f8;
 }
-:root[data-mode='light'] .doc-viewer[data-doc-style='github'] .doc-page {
+:root[data-mode='light'] :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page {
   --text: #1f2328;
   --text-muted: #59636e;
   --border: #d1d9e0;
   --surface2: #f6f8fa;
   --accent: #0969da;
 }
-.doc-viewer[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
 }
-.doc-viewer[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd-page {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd-page {
   :is(h1, h2, h3, h4, h5, h6) {
     margin: 24px 0 16px;
     font-weight: 600;
@@ -122,7 +122,7 @@
 }
 
 /* ---- Docs: a narrow column of serif text, for reading ---- */
-.doc-viewer[data-doc-style='docs'] {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] {
   --doc-desk: #16181c;
   --doc-page: #1d2026;
   --doc-page-border: none;
@@ -131,20 +131,20 @@
   --doc-page-padding: 48px 56px 56px;
   --doc-page-ink: #dcdfe4;
 }
-:root[data-mode='light'] .doc-viewer[data-doc-style='docs'] {
+:root[data-mode='light'] :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] {
   --doc-desk: #eef0f3;
   --doc-page: #fdfdfc;
   --doc-page-shadow: 0 1px 3px rgba(20, 30, 50, 0.12);
   --doc-page-ink: #22262e;
 }
-.doc-viewer[data-doc-style='docs'] .doc-page {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page {
   --text: #dcdfe4;
   --text-muted: #9aa1ad;
   --border: #383d47;
   --surface2: #262a32;
   --accent: #7fb0ff;
 }
-:root[data-mode='light'] .doc-viewer[data-doc-style='docs'] .doc-page {
+:root[data-mode='light'] :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page {
   --text: #22262e;
   --text-muted: #5d6573;
   --border: #d9dde3;
@@ -152,15 +152,15 @@
   --accent: #2357c5;
 }
 /* The column is the measure (44rem of text), the page around it */
-.doc-viewer[data-doc-style='docs'] .doc-page[data-kind='markdown'] {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] {
   max-width: calc(44rem + 112px);
 }
-.doc-viewer[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd {
   font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
   font-size: 18px;
   line-height: 1.7;
 }
-.doc-viewer[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd-page {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd-page {
   :is(h1, h2, h3, h4, h5, h6) {
     margin: 1.6em 0 0.4em;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -217,7 +217,7 @@
 }
 
 /* ---- Magazine: display headings, a drop cap, one red accent ---- */
-.doc-viewer[data-doc-style='magazine'] {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] {
   --doc-desk: #0e0d0c;
   --doc-page: #171514;
   --doc-page-border: none;
@@ -226,35 +226,35 @@
   --doc-page-padding: 56px 64px 64px;
   --doc-page-ink: #ece6dc;
 }
-:root[data-mode='light'] .doc-viewer[data-doc-style='magazine'] {
+:root[data-mode='light'] :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] {
   --doc-desk: #e7e2d9;
   --doc-page: #fffdf8;
   --doc-page-shadow: 0 1px 4px rgba(40, 30, 20, 0.18);
   --doc-page-ink: #1c1a17;
 }
-.doc-viewer[data-doc-style='magazine'] .doc-page {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page {
   --text: #ece6dc;
   --text-muted: #a69e92;
   --border: #3b3631;
   --surface2: #221f1c;
   --accent: #ff5a4f;
 }
-:root[data-mode='light'] .doc-viewer[data-doc-style='magazine'] .doc-page {
+:root[data-mode='light'] :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page {
   --text: #1c1a17;
   --text-muted: #6b645a;
   --border: #ddd5c8;
   --surface2: #f4efe6;
   --accent: #c8102e;
 }
-.doc-viewer[data-doc-style='magazine'] .doc-page[data-kind='markdown'] {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] {
   max-width: 760px;
 }
-.doc-viewer[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd {
   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
   font-size: 17px;
   line-height: 1.65;
 }
-.doc-viewer[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd-page {
+:is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd-page {
   :is(h1, h2, h3, h4, h5, h6) {
     font-family: Didot, 'Bodoni 72', 'Bodoni MT', 'Playfair Display', Georgia, serif;
     font-weight: 700;

@@ -121,17 +121,18 @@
     else window.open(address, '_blank', 'noopener');
   }
 
-  /** A change made: the page as it is now, or why it was refused */
-  async function change(made: Promise<ChangeResult>) {
+  /** A change made: the page as it is now; or why it was refused, shown and given back (a comment's box keeps it) */
+  async function change(made: Promise<ChangeResult>): Promise<string | null> {
     busy = true;
     const result = await made;
     busy = false;
     if (!result.ok) {
       problem = result.message;
-      return;
+      return result.message;
     }
     problem = null;
     await load();
+    return null;
   }
 
   const review = $derived(shown?.review.reference ?? at.review ?? '');
@@ -155,6 +156,7 @@
         onback={() => go(listAddress)}
         {busy}
         {problem}
+        docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
         onfile={(path) => go(withReview(currentAddress(), { ...at, file: path }), true)}
         onround={(round, against) => go(withReview(currentAddress(), { ...at, round, against }))}
         onviewed={(file) => (viewed = toggleViewed(page.review.id, page.view.round, page.view.against, file))}

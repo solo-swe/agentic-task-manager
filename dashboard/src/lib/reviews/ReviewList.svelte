@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '../ui/Icon.svelte';
   import { NO_QUERY, STATUS_LABELS, type ListQuery as Query, type ReviewEntry, type ReviewStatus } from './types';
 
   // The reviews page (docs/code-review-design.md §3.11, ATM-574): a project's reviews, the latest activity first,
@@ -75,14 +76,17 @@
 
 <div class="review-list" id="review-list">
   <div class="review-list-bar">
-    <input
-      class="review-search"
-      type="search"
-      placeholder="Search reviews"
-      aria-label="Search reviews"
-      value={search}
-      oninput={(e) => typed(e.currentTarget.value)}
-    />
+    <label class="review-search-box">
+      <Icon name="search" size={15} />
+      <input
+        class="review-search"
+        type="search"
+        placeholder="Search titles, summaries and comments"
+        aria-label="Search reviews"
+        value={search}
+        oninput={(e) => typed(e.currentTarget.value)}
+      />
+    </label>
     {#if waiting.length}
       <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false)}>
         Next review needing you <span class="review-count">{waiting.length}</span>
@@ -137,11 +141,14 @@
           <span class="review-status status-{r.status}">{STATUS_LABELS[r.status]}</span>
           {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>{/if}
           <span class="review-meta">
-            {#if r.tasks.length}<span class="review-tasks">{r.tasks.join(', ')}</span>{/if}
-            {#if entry.branch}<span class="review-branch">{entry.branch}</span>{/if}
-            <span>{r.author ?? 'no author yet'}</span>
-            <span title="Open chains of comments">{entry.open} open of {entry.chains}</span>
-            <span title={r.updated}>{ago(r.updated)}</span>
+            {#if r.tasks.length}<span class="review-tasks"><Icon name="list-todo" size={12} />{r.tasks.join(', ')}</span
+              >{/if}
+            {#if entry.branch}<span class="review-branch"><Icon name="git-branch" size={12} />{entry.branch}</span>{/if}
+            <span><Icon name="user" size={12} />{r.author ?? 'no author yet'}</span>
+            <span title="Open chains of comments"
+              ><Icon name="message-square" size={12} />{entry.open} open of {entry.chains}</span
+            >
+            <span title={r.updated}><Icon name="history" size={12} />{ago(r.updated)}</span>
           </span>
         </li>
       {/each}
@@ -153,23 +160,39 @@
   .review-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-5);
-    padding: var(--space-6);
+    gap: var(--space-6);
+    padding: var(--space-7) var(--space-6);
   }
   .review-list-bar,
   .review-filters {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-4);
   }
-  .review-search {
+  .review-search-box {
     flex: 1;
     min-width: 12rem;
-    padding: var(--space-3) var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    height: 34px;
+    padding: 0 var(--space-6);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--bg);
+    color: var(--text-muted);
+  }
+  .review-search-box:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  .review-search {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: none;
     color: var(--text);
     font: inherit;
   }
@@ -177,49 +200,72 @@
   .review-clear,
   .review-chip,
   .review-select {
-    padding: var(--space-2) var(--space-4);
+    height: 28px;
+    padding: 0 var(--space-5);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-pill);
     background: var(--surface);
     color: var(--text);
     font: inherit;
     font-size: var(--text-sm);
     cursor: pointer;
   }
+  .review-select {
+    border-radius: var(--radius-md);
+  }
+  .review-chip:hover,
+  .review-clear:hover {
+    background: var(--surface2);
+  }
   .review-next {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 var(--space-6);
+    border-radius: var(--radius-md);
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
+    font-weight: 500;
   }
   .review-count {
-    margin-left: var(--space-2);
+    margin-left: var(--space-3);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--on-accent) 20%, transparent);
     font-weight: 600;
   }
   .review-chip[aria-pressed='true'] {
-    background: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
     border-color: var(--accent);
-    color: var(--on-accent);
+    color: var(--accent);
+    font-weight: 600;
   }
   .review-rows {
     list-style: none;
     margin: 0;
     padding: 0;
     border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    overflow: hidden;
   }
   .review-row {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--space-4);
-    padding: var(--space-4) var(--space-6);
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-6) var(--space-7);
     border-top: 1px solid var(--border);
+  }
+  .review-row:hover {
+    background: var(--surface2);
   }
   .review-row:first-child {
     border-top: none;
   }
   .review-row.needs-you {
-    box-shadow: inset 3px 0 0 var(--accent);
+    box-shadow: inset 3px 0 0 var(--purple);
   }
   .review-link {
     display: flex;
@@ -237,33 +283,51 @@
     color: var(--text-muted);
   }
   .review-title {
+    font-size: var(--text-lg);
     font-weight: 600;
   }
   .review-status,
   .review-needs {
-    padding: 0 var(--space-3);
-    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-5);
+    border-radius: var(--radius-pill);
     font-size: var(--text-xs);
-    background: var(--surface);
+    font-weight: 600;
+    color: var(--text-muted);
     border: 1px solid var(--border);
   }
   .review-status.status-approved {
     color: var(--green);
+    border-color: color-mix(in srgb, var(--green) 50%, transparent);
+    background: color-mix(in srgb, var(--green) 10%, transparent);
   }
   .review-status.status-changes_requested {
     color: var(--red);
+    border-color: color-mix(in srgb, var(--red) 50%, transparent);
+    background: color-mix(in srgb, var(--red) 10%, transparent);
+  }
+  .review-status.status-open,
+  .review-status.status-live {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
   }
   .review-needs {
-    color: var(--accent);
-    border-color: var(--accent);
+    color: var(--purple);
+    border-color: color-mix(in srgb, var(--purple) 50%, transparent);
+    background: color-mix(in srgb, var(--purple) 10%, transparent);
   }
   .review-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-4);
+    gap: var(--space-7);
     width: 100%;
     color: var(--text-muted);
     font-size: var(--text-xs);
+  }
+  .review-meta > span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
   }
   .review-branch {
     font-family: 'SF Mono', Menlo, Consolas, monospace;

@@ -42,6 +42,7 @@
     header = true,
     keyboard = true,
     busy = false,
+    docStyle = null,
     oncomment,
     onreply,
     onresolve,
@@ -63,7 +64,10 @@
     /** Its keys on the window: off where the page has several viewers and the keys itself */
     keyboard?: boolean;
     busy?: boolean;
-    oncomment?: (picked: Picked, body: string) => void;
+    /** The document style the reader picked in Settings, for the rendered view's page (none: the theme's) */
+    docStyle?: string | null;
+    /** A comment on the lines picked; why it wasn't saved, if it wasn't (the box keeps it) */
+    oncomment?: (picked: Picked, body: string) => Promise<string | null> | void;
     onreply?: (to: string, body: string) => void;
     onresolve?: (comment: string, resolved: boolean) => void;
     onviewed?: () => void;
@@ -146,13 +150,16 @@
   );
   const elsewhere = $derived(shownView === 'source' ? chains.filter((c) => !placed.has(c.id)) : chains);
 
-  /** A block's rows cut after each row a chain ends at, so the chain shows right under its lines */
-  function segments<R extends SplitRow | UnifiedRow>(rows: R[]) {
+  /** A block's rows cut after each row a chain ends at, so the chain shows right under its lines, and after the last
+   * line picked, so the comment being written shows right under them (inside another chain's lines too); the chains
+   * ending at one row, the one starting latest (the narrowest) first */
+  function segments<R extends SplitRow | UnifiedRow>(rows: R[], block: number) {
     const out: { rows: R[]; first: number; chains: Chain[] }[] = [];
+    const cut = picked && picked.block === block && !dragging ? picked.to : -1;
     let first = 0;
     rows.forEach((row, i) => {
-      const here = chainsAfter(row);
-      if (here.length || i === rows.length - 1) {
+      const here = chainsAfter(row).sort((x, y) => (y.anchor.lines?.[0] ?? 0) - (x.anchor.lines?.[0] ?? 0));
+      if (here.length || i === cut || i === rows.length - 1) {
         out.push({ rows: rows.slice(first, i + 1), first, chains: here });
         first = i + 1;
       }
@@ -238,13 +245,48 @@
     picked = null;
     renderedPick = null;
     draft = '';
+    refused = null;
+    saving = false;
   }
 
-  function save() {
+  // Sent: the box stays, with what was written, until the page says it is saved; a refusal shows in it
+  let saving = $state(false);
+  let refused = $state<string | null>(null);
+  async function save() {
     const body = draft.trim();
-    if (!body || !composing) return;
-    oncomment?.(composing, body);
-    cancel();
+    if (!body || !composing || saving) return;
+    saving = true;
+    refused = null;
+    const problem = await oncomment?.(composing, body);
+    saving = false;
+    if (typeof problem === 'string') refused = problem;
+    else cancel();
+  }
+
+  // The chain selected (hovered, focused, or clicked to keep it): its lines are marked
+  let hovered = $state<string | null>(null);
+  let kept = $state<string | null>(null);
+  const selectedId = $derived(hovered ?? kept);
+  const selectedChain = $derived(chains.find((c) => c.id === selectedId) ?? null);
+  function select(id: string, on: boolean, keep: boolean) {
+    if (keep) kept = kept === id ? null : id;
+    else hovered = on ? id : hovered === id ? null : hovered;
+  }
+  /** The rows of a segment the selected chain is on, on side `s`, as the segment's own indices */
+  function markedIn(rows: (SplitRow | UnifiedRow)[], s: Side | 'both'): [number, number] | null {
+    const c = selectedChain;
+    if (!c?.anchor.lines) return null;
+    const [from, to] = c.anchor.lines;
+    const on = (r: SplitRow | UnifiedRow) => {
+      if (s !== 'both' && s !== c.anchor.side) return false;
+      const n = c.anchor.side === 'old' ? r.old : r.new;
+      return n !== null && n >= from && n <= to;
+    };
+    const first = rows.findIndex(on);
+    if (first < 0) return null;
+    let last = first;
+    while (last + 1 < rows.length && on(rows[last + 1])) last++;
+    return [first, last];
   }
 
   const whereLabel = (p: Picked) =>
@@ -288,12 +330,22 @@
 
 <svelte:window {onkeydown} onmouseup={() => (dragging = false)} />
 
+{#snippet chainBox(chain: Chain)}
+  <ChainBox
+    {chain}
+    {onreply}
+    {onresolve}
+    selected={selectedId === chain.id}
+    onselect={(on, keep) => select(chain.id, on, keep)}
+  />
+{/snippet}
+
 {#snippet composer(p: Picked)}
   <form
     class="diff-composer"
     onsubmit={(e) => {
       e.preventDefault();
-      save();
+      void save();
     }}
   >
     <div class="diff-composer-where">
@@ -304,15 +356,18 @@
       class="diff-composer-body"
       aria-label="Comment on {whereLabel(p).toLowerCase()}"
       rows="3"
+      placeholder="Leave a comment…"
       bind:value={draft}
       {@attach focusOnShow}
       onkeydown={(e) => {
         if (e.key === 'Escape') cancel();
-        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save();
       }}></textarea>
+    {#if refused}<p class="diff-composer-problem" role="alert">Not saved: {refused}</p>{/if}
     <div class="diff-composer-actions">
+      <span class="diff-composer-hint">⌘ Enter to comment</span>
       <button type="button" onclick={cancel}>Cancel</button>
-      <button type="submit" class="primary" disabled={!draft.trim() || busy}>Comment</button>
+      <button type="submit" class="primary" disabled={!draft.trim() || busy || saving}>Comment</button>
     </div>
   </form>
 {/snippet}
@@ -352,7 +407,7 @@
           Show {block.fold.count} unchanged {block.fold.count === 1 ? 'line' : 'lines'}
         </button>
       {:else}
-        {#each segments(block.rows as (SplitRow | UnifiedRow)[]) as segment (segment.first)}
+        {#each segments(block.rows as (SplitRow | UnifiedRow)[], b) as segment (segment.first)}
           {@const keys = segment.rows.map((_, i) => `${b}-${segment.first + i}`)}
           {@const isPicked = (s: Side) => pickedIn(b, segment.first, segment.rows.length, s)}
           {@const changes = changesIn(b, segment.first, segment.rows.length)}
@@ -367,6 +422,7 @@
                     {keys}
                     changes={s === 'new' ? changes : []}
                     picked={isPicked(s)}
+                    marked={markedIn(segment.rows, s)}
                     onpick={oncomment ? (i, extend) => pick(b, s, segment.first + i, extend) : undefined}
                     onover={(i) => over(b, s, segment.first + i)}
                   />
@@ -381,6 +437,7 @@
                   {keys}
                   {changes}
                   picked={isPicked('new')}
+                  marked={markedIn(segment.rows, 'both')}
                   onpick={oncomment ? (i, extend) => pick(b, 'new', segment.first + i, extend) : undefined}
                   onover={(i) => over(b, 'new', segment.first + i)}
                 />
@@ -390,7 +447,7 @@
           {#if composing && picked && picked.block === b && picked.to >= segment.first && picked.to < segment.first + segment.rows.length && oncomment}
             {@render composer(composing)}
           {/if}
-          {#each segment.chains as chain (chain.id)}<ChainBox {chain} {onreply} {onresolve} />{/each}
+          {#each segment.chains as chain (chain.id)}{@render chainBox(chain)}{/each}
         {/each}
       {/if}
     {/each}
@@ -403,6 +460,8 @@
             {doc}
             side={s}
             changed={s === 'old' ? changed.old : changed.new}
+            selected={selectedChain?.anchor.side === s ? selectedChain.anchor.lines : null}
+            {docStyle}
             label={sides.length < 2
               ? s === 'old'
                 ? 'Before (deleted)'
@@ -425,7 +484,7 @@
 
   {#if loaded && !problem && elsewhere.length}
     <div class="diff-elsewhere">
-      {#each elsewhere as chain (chain.id)}<ChainBox {chain} {onreply} {onresolve} />{/each}
+      {#each elsewhere as chain (chain.id)}{@render chainBox(chain)}{/each}
     </div>
   {/if}
 </div>
@@ -512,15 +571,26 @@
   .diff-composer {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    margin: var(--space-3) var(--space-4) var(--space-4) var(--space-10);
-    padding: var(--space-4) var(--space-6);
+    gap: var(--space-4);
+    margin: var(--space-4) var(--space-6) var(--space-4) var(--space-10);
+    padding: var(--space-5) var(--space-7);
     border: 1px solid var(--accent);
     border-left-width: 3px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     background: var(--surface);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--overlay) 18%, transparent);
     font-family: var(--font-sans);
     font-size: var(--text-md);
+  }
+  .diff-composer-problem {
+    margin: 0;
+    color: var(--red);
+    font-size: var(--text-sm);
+  }
+  .diff-composer-hint {
+    margin-right: auto;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
   }
   .diff-composer-where {
     display: flex;
@@ -543,22 +613,30 @@
   .diff-composer-body {
     width: 100%;
     box-sizing: border-box;
-    padding: var(--space-3);
+    padding: var(--space-4) var(--space-5);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: var(--bg);
     color: var(--text);
     font: inherit;
+    resize: vertical;
+  }
+  .diff-composer-body:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
   }
   .diff-composer-actions {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: var(--space-3);
   }
   .diff-composer-actions button {
-    padding: var(--space-2) var(--space-5);
+    padding: var(--space-2) var(--space-6);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
+    font-weight: 500;
     background: var(--bg);
     color: var(--text);
     font: inherit;

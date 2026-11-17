@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ChainBox from '../../src/lib/reviews/ChainBox.svelte';
 import type { Chain, ReviewComment } from '../../src/lib/reviews/types';
 
-// A chain of comments (lib/reviews/ChainBox.svelte, ATM-573, ATM-574): where it is, where it stands (Resolve while
-// open, a resolved check above the comment once resolved, folded until shown), replies. CompMD doesn't load here.
+// A chain of comments (lib/reviews/ChainBox.svelte, ATM-573, ATM-574): where it is (its lines; `detailed`, its file
+// too, and the text it was made on), where it stands (Resolve while open, a resolved check above the comment once
+// resolved, folded until shown, Reopen at hand either way), replies, and selecting it. CompMD doesn't load here.
 const loadCompmd = vi.hoisted(() => vi.fn());
 vi.mock('../../src/lib/compmd', async (actual) => ({ ...(await actual()), loadCompmd }));
 
@@ -25,10 +26,11 @@ const chain = (comments: ReviewComment[], anchor: Partial<Chain['anchor']> = {})
 });
 
 function show(c: Chain, more: Record<string, unknown> = {}) {
-  const handlers = { onreply: vi.fn(), onresolve: vi.fn() };
+  const handlers = { onreply: vi.fn(), onresolve: vi.fn(), onselect: vi.fn() };
   const result = render(ChainBox, { chain: c, ...handlers, ...more });
   return { ...result, ...handlers };
 }
+const whereOf = (container: HTMLElement) => container.querySelector('.chain-where > :first-child')?.textContent?.trim();
 
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -38,22 +40,41 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('ChainBox: where it is', () => {
   it.each([
-    [{}, 'src/a.rs:3–5'],
-    [{ lines: [4, 4] as [number, number] }, 'src/a.rs:4'],
-    [{ lines: null }, 'src/a.rs'],
-    [{ side: 'old' as const }, 'src/a.rs:3–5 (before)'],
+    [{}, 'Lines 3–5'],
+    [{ lines: [4, 4] as [number, number] }, 'Line 4'],
+    [{ lines: null }, 'The file'],
+    [{ side: 'old' as const }, 'Lines 3–5 · before'],
     [{ path: null, lines: null }, 'The review'],
-  ])('%o: %s', (anchor, where) => {
-    const { container } = show(chain([comment('c1')], anchor));
-    expect(container.querySelector('.chain-where')?.textContent?.trim()).toBe(where);
+  ])('in the diff, its lines alone (the diff shows the file and the text): %o is %s', (anchor, where) => {
+    const { container } = show(chain([comment('c1')], { ...anchor, quote: 'the text' }));
+    expect(whereOf(container)).toBe(where);
+    expect(screen.queryByText('the text')).toBeNull();
   });
 
-  it('with onwhere, its place is a link; the quote shows under it', async () => {
+  it.each([
+    [{}, 'src/a.rs · Lines 3–5'],
+    [{ lines: null }, 'src/a.rs'],
+    [{ side: 'old' as const, lines: [2, 2] as [number, number] }, 'src/a.rs · Line 2 · before'],
+    [{ path: null, lines: null }, 'The review'],
+  ])('with context (the Comments tab), its file too: %o is %s', (anchor, where) => {
+    const { container } = show(chain([comment('c1')], anchor), { detailed: true });
+    expect(whereOf(container)).toBe(where);
+  });
+
+  it('with context and onwhere, its place is a link and the text it was made on shows', async () => {
     const onwhere = vi.fn();
-    show(chain([comment('c1')], { quote: 'let x = 1;' }), { onwhere });
-    await fireEvent.click(screen.getByRole('button', { name: 'src/a.rs:3–5' }));
+    show(chain([comment('c1')], { quote: 'let x = 1;' }), { detailed: true, onwhere });
+    await fireEvent.click(screen.getByRole('button', { name: 'src/a.rs · Lines 3–5' }));
     expect(onwhere).toHaveBeenCalledOnce();
     expect(screen.getByText('let x = 1;')).toBeTruthy();
+  });
+
+  it('each comment with its author’s initials, name and time', () => {
+    const { container } = show(chain([comment('c1', { author: 'Hakan Serce' })]));
+    expect(container.querySelector('.chain-avatar')?.textContent).toBe('HS');
+    expect(container.querySelector('.chain-author')?.textContent).toBe('Hakan Serce');
+    expect(container.querySelector('time')).toHaveAttribute('datetime', '2026-11-17T10:00:00Z');
+    expect(container.querySelector('time')?.textContent).not.toBe('');
   });
 });
 
@@ -67,19 +88,21 @@ describe('ChainBox: where it stands', () => {
     expect(container.querySelector('.chain')).not.toHaveAttribute('data-resolved');
   });
 
-  it('resolved: folded to its place and a check, until shown; then the check above the comment, and Reopen', async () => {
-    const { container, onresolve } = show(chain([comment('c1', { resolved: true })], { quote: 'q' }));
+  it('resolved: folded to its place and a check, Reopen at hand; shown, the check above the comment, and Reopen', async () => {
+    const { container, onresolve } = show(chain([comment('c1', { resolved: true })]));
     expect(container.querySelector('.chain')).toHaveAttribute('data-resolved');
     expect(container.querySelector('.chain-folded-note')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      '✓ Resolved · Ana',
+      'Resolved · Ana',
     );
     expect(container.querySelector('[data-comment]')).toBeNull();
-    expect(screen.queryByText('q')).toBeNull();
+    // Reopened from the fold
+    await fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    expect(onresolve).toHaveBeenLastCalledWith('c1', false);
     await fireEvent.click(screen.getByRole('button', { name: 'Show' }));
     const state = container.querySelector('[data-comment="c1"] > .chain-state.resolved') as HTMLElement;
     expect(state.textContent).toContain('Resolved');
     await fireEvent.click(within(state).getByRole('button', { name: 'Reopen' }));
-    expect(onresolve).toHaveBeenCalledWith('c1', false);
+    expect(onresolve).toHaveBeenCalledTimes(2);
     await fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
     expect(container.querySelector('[data-comment]')).toBeNull();
   });
@@ -104,12 +127,37 @@ describe('ChainBox: where it stands', () => {
   });
 });
 
+describe('ChainBox: selecting it', () => {
+  it('hovered or focused, it is selected while so; clicked, kept; a click on its buttons isn’t a select', async () => {
+    const { container, onselect } = show(chain([comment('c1')]));
+    const box = container.querySelector('.chain') as HTMLElement;
+    await fireEvent.mouseEnter(box);
+    await fireEvent.mouseLeave(box);
+    await fireEvent.focusIn(box);
+    await fireEvent.click(container.querySelector('.chain-body') as HTMLElement);
+    expect(onselect.mock.calls).toEqual([
+      [true, false],
+      [false, false],
+      [true, false],
+      [true, true],
+    ]);
+    await fireEvent.click(screen.getByRole('button', { name: /Resolve/ }));
+    expect(onselect).toHaveBeenCalledTimes(4);
+  });
+
+  it('selected, it says so', () => {
+    const { container } = show(chain([comment('c1')]), { selected: true });
+    expect(container.querySelector('.chain')).toHaveClass('selected');
+  });
+});
+
 describe('ChainBox: replies', () => {
-  it('Reply opens a box under that comment; an empty reply isn’t sent; Cancel closes it', async () => {
+  it('Reply opens a box under that comment; an empty reply isn’t sent; Cancel and Escape close it', async () => {
     const { container, onreply } = show(chain([comment('c1', { replies: [comment('r1', { resolved: null })] })]));
     const reply = within(container.querySelector('[data-comment="r1"]') as HTMLElement);
-    await fireEvent.click(reply.getAllByRole('button', { name: 'Reply' })[0]);
+    await fireEvent.click(reply.getByRole('button', { name: 'Reply' }));
     const box = screen.getByRole('textbox', { name: 'Reply to Ana' });
+    expect(box).toHaveFocus();
     expect(container.querySelector('[data-comment="r1"] form')).not.toBeNull();
     const send = within(container.querySelector('form') as HTMLElement).getByRole('button', { name: 'Reply' });
     expect(send).toBeDisabled();
@@ -117,19 +165,22 @@ describe('ChainBox: replies', () => {
     expect(send).toBeDisabled();
     await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(container.querySelector('form')).toBeNull();
+    await fireEvent.click(reply.getByRole('button', { name: 'Reply' }));
+    await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    expect(container.querySelector('form')).toBeNull();
     expect(onreply).not.toHaveBeenCalled();
   });
 
-  it('a reply sent goes to the page, trimmed, and the box closes; Reply again toggles it shut', async () => {
+  it('a reply sent goes to the page, trimmed, and the box closes; ⌘ Enter sends too', async () => {
     const { container, onreply } = show(chain([comment('c1')]));
-    const toggle = screen.getByRole('button', { name: 'Reply' });
-    await fireEvent.click(toggle);
-    await fireEvent.click(toggle);
-    expect(container.querySelector('form')).toBeNull();
-    await fireEvent.click(toggle);
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
     await fireEvent.input(screen.getByRole('textbox'), { target: { value: ' Fixed in round 2. ' } });
     await fireEvent.submit(container.querySelector('form') as HTMLElement);
     expect(onreply).toHaveBeenCalledWith('c1', 'Fixed in round 2.');
     expect(container.querySelector('form')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'Again.' } });
+    await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', metaKey: true });
+    expect(onreply).toHaveBeenLastCalledWith('c1', 'Again.');
   });
 });

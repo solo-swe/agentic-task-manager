@@ -334,7 +334,7 @@ describe('DiffView: chains and keys', () => {
     const t1 = container.querySelector('[data-chain="t1"]') as HTMLElement;
     // Right after the run that ends with line 3: the first hunk is cut there
     expect(t1.previousElementSibling).toHaveClass('diff-run');
-    expect(t1.textContent).toContain('f.txt:3');
+    expect(t1.querySelector('.chain-where')?.textContent).toContain('Line 3');
     // A chain on a line folded away shows below the file
     expect(container.querySelector('.diff-elsewhere [data-chain="t2"]')).not.toBeNull();
     await fireEvent.click(within(t1).getByRole('button', { name: /Resolve/ }));
@@ -343,6 +343,54 @@ describe('DiffView: chains and keys', () => {
     await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'To match the heading.' } });
     await fireEvent.click(within(t1.querySelector('form')!).getByRole('button', { name: 'Reply' }));
     expect(onreply).toHaveBeenCalledWith('c-t1', 'To match the heading.');
+  });
+
+  it('a chain hovered marks its lines on its side; clicked, they stay marked until clicked again', async () => {
+    const { container } = show({ chains: [chain('t1', 'new', [7, 9], 'Three lines.')] });
+    await numbers();
+    const marked = () =>
+      [...container.querySelectorAll('.diff-line.commented')].map(
+        (l) => `${l.closest('.diff-old') ? 'old' : 'new'}:${l.querySelector('.diff-number')?.textContent}`,
+      );
+    expect(marked()).toEqual([]);
+    const box = container.querySelector('[data-chain="t1"]') as HTMLElement;
+    await fireEvent.mouseEnter(box);
+    expect(marked()).toEqual(['new:7', 'new:8', 'new:9']);
+    await fireEvent.mouseLeave(box);
+    expect(marked()).toEqual([]);
+    await fireEvent.click(box.querySelector('.chain-body') as HTMLElement);
+    await fireEvent.mouseLeave(box);
+    expect(marked()).toEqual(['new:7', 'new:8', 'new:9']);
+    await fireEvent.click(box.querySelector('.chain-body') as HTMLElement);
+    expect(marked()).toEqual([]);
+  });
+
+  it('a comment on a line inside another chain’s lines opens right under that line; both chains show, each on its own', async () => {
+    const wide = chain('tw', 'new', [7, 9], 'Three lines.');
+    const { container, rerender } = show({ chains: [wide] });
+    await numbers();
+    await press(lineOn(container, 'new', 8));
+    const form = container.querySelector('.diff-composer') as HTMLElement;
+    // Right after line 8, before the wide chain's box (after line 9)
+    expect(form.previousElementSibling?.querySelector('[aria-label="Line 8"]')).not.toBeNull();
+    expect(form.nextElementSibling).toHaveClass('diff-run');
+    await rerender({ chains: [wide, chain('tn', 'new', [8, 8], 'Just this one.')] });
+    expect(container.querySelector('[data-chain="tn"]')).not.toBeNull();
+    expect(container.querySelector('[data-chain="tw"]')).not.toBeNull();
+  });
+
+  it('a comment the page couldn’t save stays in its box, with why; saved, the box closes', async () => {
+    const oncomment = vi.fn().mockResolvedValueOnce('the review is closed').mockResolvedValueOnce(null);
+    const { container } = show({ oncomment });
+    await numbers();
+    await press(lineOn(container, 'new', 3));
+    await fireEvent.input(composer()!, { target: { value: 'Keep me.' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not saved: the review is closed');
+    expect(composer()).toHaveValue('Keep me.');
+    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+    await vi.waitFor(() => expect(composer()).toBeNull());
+    expect(oncomment).toHaveBeenCalledTimes(2);
   });
 
   it('keys: n and p go from change to change, ] and [ change file, v marks it viewed; not while typing', async () => {

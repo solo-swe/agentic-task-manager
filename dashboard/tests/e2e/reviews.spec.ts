@@ -259,7 +259,7 @@ test.describe('a review’s page', () => {
     await expect(page.locator('#tab-reviews')).toHaveCount(0);
     await expect(page.locator('.review-project')).not.toBeEmpty();
     // Back to the list, in the dashboard again
-    await page.getByRole('link', { name: '← Reviews' }).click();
+    await page.getByRole('link', { name: 'Reviews', exact: true }).click();
     await expect(page.locator('#review-list')).toBeVisible();
     await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
   });
@@ -285,9 +285,9 @@ test.describe('a review’s page', () => {
   }) => {
     await openDiffs(page, tasksServer);
     await expect(page.locator('.review-files li')).toHaveText([
-      'docs/',
+      'docs',
       /A\s*b\.md/,
-      'src/',
+      'src',
       /M\s*a\.rs/,
       /M\s*README\.md/,
     ]);
@@ -356,7 +356,7 @@ test.describe('a review’s page', () => {
     await expect(listed).toHaveCount(1);
     await expect(listed.first()).toHaveAttribute('data-chain', 't3');
     await page.getByRole('button', { name: /^All/ }).click();
-    await page.getByRole('button', { name: 'src/a.rs:3', exact: true }).click();
+    await page.getByRole('button', { name: 'src/a.rs · Line 3', exact: true }).click();
     await expect(page.getByRole('tab', { name: /^Diffs/ })).toHaveAttribute('aria-selected', 'true');
     await expect(card(page, 'src/a.rs')).toBeInViewport();
   });
@@ -404,6 +404,14 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(newSide.locator('.doc-gutter-lines [data-line="5"]')).toHaveClass(/marked/);
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
     await expect(newSide.locator('.diff-block-mark.diff-added')).not.toHaveCount(0);
+    // A page on a desk, as the document viewer's: at least a letter page's height for its width; the numbers in its
+    // margin, clear of the text
+    await expect(newSide).toHaveClass(/doc-sheet/);
+    const sheet = (await newSide.locator('.doc-page').boundingBox())!;
+    expect(sheet.height).toBeGreaterThanOrEqual(Math.floor((sheet.width * 11) / 8.5) - 1);
+    const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
+    const heading = (await newSide.locator('.compmd-page h1').boundingBox())!;
+    expect(number.x + number.width).toBeLessThanOrEqual(heading.x);
     await page.getByRole('button', { name: 'Unified' }).click();
     await expect(view.locator('.diff-pane')).toHaveCount(1);
     await expect(view.locator('.diff-pane')).toHaveClass(/diff-new/);
@@ -454,6 +462,39 @@ test.describe('the diff viewer on a review’s page', () => {
     });
     // And the page asks for the review again, to show it
     await expect.poll(() => tasksServer.reviewRequests.filter((r) => r === 'CR-2').length).toBeGreaterThan(1);
+  });
+
+  test('a comment on a line inside another comment’s lines is sent, and both show, each on its own', async ({
+    page,
+    tasksServer,
+  }) => {
+    const wide = {
+      id: 'tw',
+      anchor: { round: 3, path: 'src/a.rs', side: 'new', lines: [2, 4], quote: null },
+      comments: [comment('cw', 'Three lines here.')],
+      placed: [2, 4],
+      drifted: null,
+    };
+    await openReviews(page, tasksServer);
+    tasksServer.setReview('CR-2', reviewPage({ chains: [wide] }));
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=src/a.rs'));
+    const view = diffOf(page, 'src/a.rs');
+    await expect(view.locator('[data-chain="tw"]')).toBeVisible();
+    await view.locator('.diff-new').getByRole('button', { name: 'Line 3', exact: true }).first().click();
+    await page.locator('.diff-composer textarea').fill('Just this one.');
+    await page.locator('.diff-composer').getByRole('button', { name: 'Comment' }).click();
+    await expect.poll(() => tasksServer.reviewChanges.at(-1)).toMatchObject({ body: { lines: [3, 3], side: 'new' } });
+    const narrow = {
+      id: 'tn',
+      anchor: { round: 3, path: 'src/a.rs', side: 'new', lines: [3, 3], quote: null },
+      comments: [comment('cn', 'Just this one.')],
+      placed: [3, 3],
+      drifted: null,
+    };
+    tasksServer.setReview('CR-2', reviewPage({ chains: [wide, narrow] }));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(view.locator('[data-chain="tn"]')).toBeVisible();
+    await expect(view.locator('[data-chain="tw"]')).toBeVisible();
   });
 
   test('a press on a line number picks it, Shift-press extends the pick; Escape drops it', async ({
@@ -563,6 +604,82 @@ test.describe('the diff viewer on a review’s page', () => {
     await page.locator('#review-round').focus();
     await page.keyboard.press(']');
     await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'src/a.rs');
+  });
+
+  test('Prev and Next comment go from chain to chain across the files; c and Shift C too', async ({
+    page,
+    tasksServer,
+  }) => {
+    await page.setViewportSize({ width: 1200, height: 420 });
+    const elsewhere = {
+      id: 't4',
+      anchor: { round: 3, path: 'README.md', side: 'new', lines: [1, 1], quote: null },
+      comments: [comment('c4', 'And here.')],
+      placed: [1, 1],
+      drifted: null,
+    };
+    await openReviews(page, tasksServer);
+    const base = reviewPage();
+    tasksServer.setReview('CR-2', reviewPage({ chains: [...(base.chains as object[]), elsewhere] }));
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=src/a.rs'));
+    await expect(diffOf(page, 'src/a.rs').locator('[data-chain="t1"]')).toBeVisible();
+    const current = page.locator('.chain.review-current-change');
+    // src/a.rs's two (t1 in place, t2 on lines folded away, below the file), then README.md's
+    await page.locator('#review-next-comment').click();
+    await expect(current).toHaveAttribute('data-chain', 't1');
+    await page.locator('#review-next-comment').click();
+    await expect(current).toHaveAttribute('data-chain', 't2');
+    await page.locator('#review-next-comment').click();
+    await expect(current).toHaveAttribute('data-chain', 't4');
+    await expect(current).toBeInViewport();
+    await page.locator('#review-prev-comment').click();
+    await expect(current).toHaveAttribute('data-chain', 't2');
+    await page.keyboard.press('c');
+    await expect(current).toHaveAttribute('data-chain', 't4');
+    await page.keyboard.press('Shift+C');
+    await expect(current).toHaveAttribute('data-chain', 't2');
+  });
+
+  test('a chain hovered or clicked marks its lines; it shows its lines only, not its file or text', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDiffs(page, tasksServer);
+    const chain = diffOf(page, 'src/a.rs').locator('[data-chain="t1"]');
+    await expect(chain.locator('.chain-where')).toHaveText('Line 3');
+    await expect(chain).not.toContainText('src/a.rs');
+    await expect(chain.locator('.chain-quote')).toHaveCount(0);
+    await chain.hover();
+    await expect(diffOf(page, 'src/a.rs').locator('.diff-new .diff-line.commented')).toHaveCount(1);
+    await page.mouse.move(0, 0);
+    await expect(page.locator('.diff-line.commented')).toHaveCount(0);
+    await chain.locator('.chain-body').click();
+    await page.mouse.move(0, 0);
+    await expect(diffOf(page, 'src/a.rs').locator('.diff-new .diff-line.commented')).toHaveCount(1);
+  });
+
+  test('every comment resolved: Submit review is Approve, and one click approves', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    const resolved = reviewPage().chains.map((c) => ({
+      ...c,
+      comments: c.comments.map((x) => ({ ...x, resolved: true })),
+    }));
+    tasksServer.setReview('CR-2', reviewPage({ chains: resolved }));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await expect(page.getByRole('button', { name: 'Submit review' })).toHaveCount(0);
+    await page.locator('#review-approve').click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'POST', path: '/CR-2/decisions', body: { decision: 'approve' } });
+  });
+
+  test('a resolved comment is reopened from its fold', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer, 'CR-2');
+    const own = page.locator('.review-conversation [data-chain="t3"]');
+    await own.getByRole('button', { name: 'Reopen' }).click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'PATCH', path: '/CR-2/comments/c3', body: { resolved: false } });
   });
 
   test('the splitter between the files and the diffs is dragged, and its width kept', async ({ page, tasksServer }) => {

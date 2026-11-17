@@ -134,7 +134,8 @@ describe('ReviewPage: the top bar', () => {
     expect(top.getByRole('heading').textContent?.replace(/\s+/g, ' ').trim()).toBe('ATM CR-7 Trim the names');
     expect(top.getByText('Open')).toBeTruthy();
     expect(top.getByText('Needs you')).toBeTruthy();
-    const back = top.getByRole('link', { name: '← Reviews' });
+    const back = top.getByRole('link', { name: 'Reviews' });
+    expect(back.querySelector('.icon-arrow-left')).not.toBeNull();
     expect(back.getAttribute('href')).toBe('/projects/p1/reviews');
     await fireEvent.click(back);
     expect(onback).toHaveBeenCalledOnce();
@@ -146,7 +147,7 @@ describe('ReviewPage: the top bar', () => {
       'CR-7 Trim the names',
     );
     expect(screen.queryByText('Needs you')).toBeNull();
-    expect(screen.queryByRole('link', { name: '← Reviews' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Reviews' })).toBeNull();
   });
 
   it('shows a problem as an alert', () => {
@@ -157,7 +158,9 @@ describe('ReviewPage: the top bar', () => {
   it('three tabs, with the files and the comments counted; Overview first, Diffs when the address names a file', async () => {
     const { container, unmount } = show(data({ chains: [chain('t1', 'src/a.rs'), chain('t2', null)] }));
     expect(
-      screen.getAllByRole('tab').map((t) => [t.firstChild?.textContent, t.querySelector('.review-count')?.textContent]),
+      screen
+        .getAllByRole('tab')
+        .map((t) => [t.querySelector('.review-tab-label')?.textContent, t.querySelector('.review-count')?.textContent]),
     ).toEqual([
       ['Overview', undefined],
       ['Diffs', '3'],
@@ -174,22 +177,36 @@ describe('ReviewPage: the top bar', () => {
 });
 
 describe('ReviewPage: Overview', () => {
-  it('the summary, who wrote it and who decides, the branch, the tasks as links, the rounds', async () => {
-    const { container, onround } = show();
+  it('the facts across the top, the description and the rounds, the conversation beside them', async () => {
+    const { container, onround } = show(data({ chains: [chain('t1', 'src/a.rs'), chain('t2', null, {}, true)] }));
     // CompMD's to draw; without it, the text as written
     await vi.waitFor(() => expect(container.querySelector('.review-summary')?.textContent).toContain('What changed'));
     const facts = [...container.querySelectorAll('.review-facts dt')].map((dt) => [
       dt.textContent?.trim(),
       dt.nextElementSibling?.textContent?.replace(/\s+/g, ' ').trim(),
     ]);
-    expect(facts.slice(0, 4)).toEqual([
+    expect(facts).toEqual([
       ['Author', 'claude:a'],
       ['Decided by', 'Ana'],
       ['Branch', 'dev/1'],
       ['Tasks', 'ATM-1'],
+      ['Changes', '3 files +3 −3'],
+      ['Comments', '1 open · 1 resolved'],
     ]);
     expect(screen.getByRole('link', { name: 'ATM-1' }).getAttribute('href')).toBe('/projects/p1/list?task=ATM-1');
-    expect(facts[4][1]).toContain('Round 2 · 1 file · claude:a · 2026-11-12');
+    // The facts first, then the description beside the conversation
+    const overview = container.querySelector('.review-overview') as HTMLElement;
+    expect(overview.firstElementChild).toHaveClass('review-facts');
+    expect(overview.querySelector('.review-overview-body > .review-main .review-summary')).not.toBeNull();
+    expect(overview.querySelector('.review-overview-body > .review-conversation [data-chain="t2"]')).not.toBeNull();
+    // The rounds, the latest first
+    expect(
+      [...container.querySelectorAll('.review-round-list li')].map((li) => li.textContent?.replace(/\s+/g, ' ').trim()),
+    ).toEqual([
+      expect.stringMatching(/^Round 3 1 file · claude:a · .+ shown$/),
+      expect.stringMatching(/^Round 2 1 file · claude:a · /),
+      expect.stringMatching(/^Round 1 1 file · claude:a · /),
+    ]);
     // A round opens its whole change on the Diffs tab
     await fireEvent.click(screen.getByRole('button', { name: 'Round 2' }));
     expect(onround).toHaveBeenCalledWith(2, null);
@@ -265,7 +282,8 @@ describe('ReviewPage: Diffs', () => {
     const rows = [...container.querySelectorAll('.review-files li')].map((li) =>
       li.textContent?.replace(/\s+/g, ' ').trim(),
     );
-    expect(rows).toEqual(['src/', 'M b.rs +1 −1', 'A new.rs +1 −1', 'M README.md +1 −1']);
+    expect(rows).toEqual(['src', 'M b.rs +1 −1', 'A new.rs +1 −1', 'M README.md +1 −1']);
+    expect(container.querySelector('.review-folder .icon-folder')).not.toBeNull();
     expect((screen.getAllByLabelText('Viewed README.md')[0] as HTMLInputElement).checked).toBe(true);
     expect((screen.getAllByLabelText('Viewed src/b.rs')[0] as HTMLInputElement).checked).toBe(false);
     expect(screen.getByText('1 of 3 viewed')).toBeTruthy();
@@ -342,7 +360,7 @@ describe('ReviewPage: Diffs', () => {
       scroll.mockClear();
       grow();
       expect(scroll.mock.contexts).toContain(card(container, 'README.md'));
-      await fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+      await fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
       scroll.mockClear();
       grow();
       expect(scroll.mock.contexts).not.toContain(card(container, 'README.md'));
@@ -479,7 +497,7 @@ describe('ReviewPage: Comments', () => {
     expect(listed()).toEqual(['t2']);
     // A drifted chain shows where it was made
     await fireEvent.click(screen.getByRole('button', { name: /^All/ }));
-    expect(container.querySelector('[data-chain="t3"] .chain-where')?.textContent).toContain('src/b.rs:4–5');
+    expect(container.querySelector('[data-chain="t3"] .chain-where')?.textContent).toContain('src/b.rs · Lines 4–5');
   });
 
   it('nothing yet, nothing open, nothing resolved', async () => {
@@ -495,7 +513,7 @@ describe('ReviewPage: Comments', () => {
   it('a chain’s place goes to it: its file on the Diffs tab, the review’s to the Overview', async () => {
     const { onfile } = show(data({ chains }));
     await fireEvent.click(tab(/^Comments/));
-    await fireEvent.click(screen.getByRole('button', { name: 'src/a.rs:2' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'src/a.rs · Line 2' }));
     expect(tab(/^Diffs/)).toHaveAttribute('aria-selected', 'true');
     await vi.waitFor(() => expect(onfile).toHaveBeenCalledWith('src/a.rs'));
     await fireEvent.click(tab(/^Comments/));
@@ -521,8 +539,11 @@ describe('ReviewPage: Comments', () => {
 });
 
 describe('ReviewPage: submit', () => {
+  /** A review with a comment still open: the decision is Submit review's */
+  const open = (more: Partial<ReviewPageData> = {}) => data({ chains: [chain('t1', 'src/a.rs')], ...more });
+
   it('Submit review opens the decision: approve or request changes, with or without a summary; comment only with one', async () => {
-    const { onsubmit } = show();
+    const { onsubmit } = show(open());
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     const toggle = screen.getByRole('button', { name: 'Submit review' });
     await fireEvent.click(toggle);
@@ -545,29 +566,62 @@ describe('ReviewPage: submit', () => {
   });
 
   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {
-    const { rerender } = show();
+    const { rerender } = show(open());
     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
     await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Half written' } });
     // The same review, asked for again: a new object, nothing changed
-    await rerender({ page: data({ chains: [chain('t9', null)] }) });
+    await rerender({ page: open() });
     expect(screen.getByLabelText('Summary')).toHaveValue('Half written');
-    const decided = data();
+    const decided = open();
     decided.review = { ...decided.review, updated: '2026-11-17T11:00:00Z' };
     await rerender({ page: decided });
     expect(screen.getByLabelText('Summary')).toHaveValue('');
   });
 
   it('an ended review takes no decision; a busy page none until it is done', async () => {
-    for (const status of ['approved', 'closed'] as const) {
-      const page = data();
-      page.review = { ...page.review, status };
-      const { unmount } = show(page);
-      expect(screen.queryByRole('button', { name: 'Submit review' })).toBeNull();
-      unmount();
+    for (const page of [open(), data()]) {
+      for (const status of ['approved', 'closed'] as const) {
+        page.review = { ...page.review, status };
+        const { unmount } = show(page);
+        expect(screen.queryByRole('button', { name: /Submit review|Approve/ })).toBeNull();
+        unmount();
+      }
     }
-    show(data(), { busy: true });
+    show(open(), { busy: true });
     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
     expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Request changes' })).toBeDisabled();
+  });
+
+  it('every comment resolved (or none made): Submit review is Approve, one click; the other decisions beside it', async () => {
+    const { onsubmit, unmount } = show(data({ chains: [chain('t1', 'src/a.rs', {}, true)] }));
+    expect(screen.queryByRole('button', { name: 'Submit review' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(onsubmit).toHaveBeenCalledWith('approve', '');
+    const more = screen.getByRole('button', { name: 'Other decisions' });
+    await fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'One more thing.' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
+    expect(onsubmit).toHaveBeenLastCalledWith('request_changes', 'One more thing.');
+    unmount();
+    // No comments at all: nothing left open either
+    show(data({ chains: [] }), { busy: true });
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+  });
+
+  it('a comment on the review the page couldn’t save stays, with why', async () => {
+    const oncomment = vi.fn().mockResolvedValueOnce('the review is closed').mockResolvedValueOnce(null);
+    show(data(), { oncomment });
+    await fireEvent.click(screen.getByRole('button', { name: 'Comment on the review' }));
+    await fireEvent.input(screen.getByLabelText('Comment'), { target: { value: 'Keep me.' } });
+    const save = within(document.querySelector('.review-composer') as HTMLElement).getByRole('button', {
+      name: 'Comment',
+    });
+    await fireEvent.click(save);
+    expect(await screen.findByText('Not saved: the review is closed')).toBeTruthy();
+    expect(screen.getByLabelText('Comment')).toHaveValue('Keep me.');
+    await fireEvent.click(save);
+    await vi.waitFor(() => expect(screen.queryByLabelText('Comment')).toBeNull());
   });
 });

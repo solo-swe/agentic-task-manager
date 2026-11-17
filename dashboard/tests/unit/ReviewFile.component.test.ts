@@ -156,7 +156,9 @@ describe('ReviewFile: the header', () => {
       ({ id, anchor: { path: 'src/a.rs', side: 'new', lines: null }, comments: [] }) as unknown as PlacedChain;
     const { container, onviewed } = show({ chains: [chain('t1'), chain('t2')] });
     const head = container.querySelector('.review-file-head') as HTMLElement;
-    expect(head.textContent?.replace(/\s+/g, ' ').trim()).toBe('▾ M src/a.rs +2 −1 2 comments Viewed');
+    expect(head.textContent?.replace(/\s+/g, ' ').trim()).toBe('M src/a.rs +2 −1 2 comments Viewed');
+    expect(head.querySelector('.review-fold .icon-chevron-down')).not.toBeNull();
+    expect(container.querySelector('.review-file-card')).toHaveAttribute('data-comments');
     await fireEvent.click(screen.getByLabelText('Viewed src/a.rs'));
     expect(onviewed).toHaveBeenCalledOnce();
   });
@@ -185,6 +187,9 @@ describe('ReviewFile: folding', () => {
   it('folded: the header alone, the fold says Show; open: the diff, the fold says Hide', async () => {
     const { container, onfold, rerender } = show({ folded: true, viewed: true });
     expect(container.querySelector('.review-file-body')).toBeNull();
+    expect(container.querySelector('.review-fold .icon-chevron-right')).not.toBeNull();
+    expect(container.querySelector('.review-file-card')).not.toHaveAttribute('data-comments');
+    expect(container.querySelector('.review-file-viewed .icon-check')).not.toBeNull();
     const fold = screen.getByRole('button', { name: 'Show src/a.rs' });
     expect(fold).toHaveAttribute('aria-expanded', 'false');
     await fireEvent.click(fold);

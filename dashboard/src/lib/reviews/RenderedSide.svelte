@@ -6,21 +6,28 @@
   import type { Picked, Side } from './types';
 
   // One side of a Markdown file in the diff viewer's rendered view (docs/code-review-design.md §3.7, ATM-574): the
-  // document viewer's page, with its gutter (each source line numbered beside the text CompMD drew from it, T-406:
-  // `gutterRows`, the viewer's `.doc-gutter-lines`), and the lines this side changed marked on their text. Selecting
-  // text offers a comment on the lines under it (`onpick`).
+  // document viewer's page on its desk (`.doc-sheet`: the viewer's page variables and the document style picked in
+  // Settings, a page of a letter's proportions at the least), with its gutter in the page's margin (each source line
+  // numbered beside the text CompMD drew from it, T-406: `gutterRows`, the viewer's `.doc-gutter-lines`), the lines
+  // this side changed marked on their text, and the selected chain's lines too. Selecting text offers a comment on the
+  // lines under it (`onpick`).
   let {
     doc,
     side,
     changed,
+    selected = null,
     label,
+    docStyle = null,
     onpick,
   }: {
     doc: ProjectDocument;
     side: Side;
     /** The lines of this side the patch changed */
     changed: ReadonlySet<number>;
+    /** The selected chain's lines on this side */
+    selected?: [number, number] | null;
     label: string;
+    docStyle?: string | null;
     onpick?: (picked: Picked) => void;
   } = $props();
 
@@ -52,14 +59,21 @@
     if (JSON.stringify(next) !== JSON.stringify(rows)) rows = next;
   }
 
-  /** The changed lines' boxes; the first of each run of changed lines starts a change (n / p go to it) */
+  const inSelected = (n: number) => !!selected && n >= selected[0] && n <= selected[1];
+  /** The boxes to mark: changed lines (the first of each run starts a change: n / p go to it), and the chain's */
   const marks = $derived(
     drawn
-      .filter((l) => changed.has(l.line))
-      .flatMap((l) => l.rects.map((rect, i) => ({ rect, start: i === 0 && !changed.has(l.line - 1) }))),
+      .filter((l) => changed.has(l.line) || inSelected(l.line))
+      .flatMap((l) =>
+        l.rects.map((rect, i) => ({
+          rect,
+          kind: inSelected(l.line) ? 'commented' : side === 'old' ? 'removed' : 'added',
+          start: changed.has(l.line) && i === 0 && !changed.has(l.line - 1),
+        })),
+      ),
   );
-  const isChanged = (row: GutterRow) => {
-    for (let n = row.from; n <= row.to; n++) if (changed.has(n)) return true;
+  const rowHas = (row: GutterRow, test: (n: number) => boolean) => {
+    for (let n = row.from; n <= row.to; n++) if (test(n)) return true;
     return false;
   };
 
@@ -78,15 +92,15 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions (a selection, made with the mouse, offers a comment) -->
-<div class="diff-pane diff-{side}" onmouseup={select}>
+<div class="diff-pane diff-{side} doc-sheet" data-doc-style={docStyle} onmouseup={select}>
   <div class="diff-pane-label">{label}</div>
-  <article class="doc-page diff-doc-page" data-kind="markdown" bind:this={pageEl}>
+  <article class="doc-page" data-kind="markdown" bind:this={pageEl}>
     {#if rows.length}
       <div class="doc-gutter doc-gutter-lines" aria-hidden="true">
         {#each rows as row (row.from)}
           <div
             class:blank={!row.drawn}
-            class:marked={isChanged(row)}
+            class:marked={rowHas(row, (n) => changed.has(n) || inSelected(n))}
             data-line={row.from}
             style:top="{row.top}px"
             style:height="{row.height}px"
@@ -98,11 +112,11 @@
     {/if}
     {#each marks as mark, i (i)}
       <div
-        class="diff-block-mark diff-{side === 'old' ? 'removed' : 'added'}"
+        class="diff-block-mark diff-{mark.kind}"
         data-change={mark.start ? '' : undefined}
-        style:left="{mark.rect.x}px"
+        style:left="{mark.rect.x - 4}px"
         style:top="{mark.rect.y}px"
-        style:width="{mark.rect.width}px"
+        style:width="{mark.rect.width + 8}px"
         style:height="{mark.rect.height}px"
       ></div>
     {/each}
@@ -111,18 +125,35 @@
 </div>
 
 <style>
+  /* Without a document style: a white page (the theme's background) on a grey desk */
+  .doc-sheet:not([data-doc-style]) {
+    --doc-desk: var(--surface2);
+    --doc-page: var(--bg);
+  }
+  /* The desk the page lies on */
   .diff-pane {
     min-width: 0;
-    padding: var(--space-6) var(--space-7) var(--space-6) 0;
+    padding: var(--space-6) var(--space-8) var(--space-9);
+    background: var(--doc-desk);
   }
   .diff-pane-label {
+    max-width: 820px;
+    margin: 0 auto var(--space-4);
     color: var(--text-muted);
     font-size: var(--text-xs);
-    margin: 0 0 var(--space-3) var(--space-10);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
-  /* The viewer's page, its left margin the gutter's */
-  .diff-doc-page {
-    padding-left: var(--space-10);
+  /* A page: at the least as tall as a letter page is for its width; its gutter in its left margin */
+  .diff-pane .doc-page {
+    aspect-ratio: 8.5 / 11;
+    min-height: 0;
+    padding-left: max(52px, var(--space-10));
+  }
+  .diff-pane :global(.doc-gutter-lines) {
+    left: var(--space-3);
+    width: 34px;
   }
   .diff-block-mark {
     position: absolute;
@@ -134,5 +165,9 @@
   }
   .diff-added {
     background: color-mix(in srgb, var(--green) 16%, transparent);
+  }
+  .diff-commented {
+    background: color-mix(in srgb, var(--yellow) 24%, transparent);
+    box-shadow: inset 3px 0 0 var(--yellow);
   }
 </style>

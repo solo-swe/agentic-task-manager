@@ -26,9 +26,12 @@
     keys = [],
     changes = [],
     picked = null,
+    marked = null,
     onpick,
     onover,
   }: {
+    /** The lines of the chain selected, by their index in `lines`: marked */
+    marked?: [number, number] | null;
     lines: CodeLine[];
     language: string | null;
     /** Each line's key in the viewer (its block and row), so the viewer's n / p can find it */
@@ -125,6 +128,7 @@
       <div
         class="diff-line diff-{line.kind}"
         class:picked={isPicked(i)}
+        class:commented={!!marked && i >= marked[0] && i <= marked[1]}
         data-row={keys[i]}
         data-change={starts.has(i) ? '' : undefined}
         style:top="{layout.top + i * layout.lineHeight}px"
@@ -193,6 +197,14 @@
       135deg,
       transparent 0 4px,
       color-mix(in srgb, var(--border) 40%, transparent) 4px 5px
+    );
+  }
+  /* The lines of the chain selected */
+  .diff-line.commented {
+    box-shadow: inset 3px 0 0 var(--yellow);
+    background-image: linear-gradient(
+      color-mix(in srgb, var(--yellow) 22%, transparent),
+      color-mix(in srgb, var(--yellow) 22%, transparent)
     );
   }
   .diff-line.picked {

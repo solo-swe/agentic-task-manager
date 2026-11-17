@@ -45,6 +45,7 @@
 
 <script lang="ts">
   import type { DocumentSource } from '../documents/source';
+  import Icon from '../ui/Icon.svelte';
   import DiffView from './DiffView.svelte';
   import { lineCounts } from './page';
   import type { Chain, PlacedChain, Picked, ViewFile } from './types';
@@ -63,6 +64,7 @@
     mode,
     view,
     busy = false,
+    docStyle = null,
     root = null,
     wanted = false,
     onfold,
@@ -82,13 +84,15 @@
     mode: 'split' | 'unified';
     view: 'source' | 'rendered';
     busy?: boolean;
+    /** The document style picked in Settings, for a Markdown file's rendered view */
+    docStyle?: string | null;
     /** The list that scrolls, which the card is made in view of */
     root?: HTMLElement | null;
     /** The file just gone to: made at once */
     wanted?: boolean;
     onfold: () => void;
     onviewed: () => void;
-    oncomment: (picked: Picked, body: string) => void;
+    oncomment: (picked: Picked, body: string) => Promise<string | null> | void;
     onreply: (to: string, body: string) => void;
     onresolve: (comment: string, resolved: boolean) => void;
     onround: (round: number) => void;
@@ -135,6 +139,7 @@
   bind:this={el}
   data-file={file.path}
   data-pending={!folded && !near && !file.binary ? '' : undefined}
+  data-comments={chains.length ? '' : undefined}
   aria-label={file.path}
 >
   <header class="review-file-head">
@@ -142,7 +147,7 @@
       class="review-fold"
       aria-expanded={!folded}
       aria-label="{folded ? 'Show' : 'Hide'} {file.path}"
-      onclick={onfold}>{folded ? '▸' : '▾'}</button
+      onclick={onfold}><Icon name={folded ? 'chevron-right' : 'chevron-down'} size={16} /></button
     >
     <span class="review-file-status status-{file.status}" title={file.status}>{statusLetter[file.status]}</span>
     <span class="review-file-path">{file.old_path !== file.path ? `${file.old_path} → ${file.path}` : file.path}</span>
@@ -154,7 +159,8 @@
         >{chains.length} {chains.length === 1 ? 'comment' : 'comments'}</span
       >{/if}
     <label class="review-file-viewed" class:on={viewed}>
-      <input type="checkbox" aria-label="Viewed {file.path}" checked={viewed} onchange={onviewed} /> Viewed
+      <input type="checkbox" aria-label="Viewed {file.path}" checked={viewed} onchange={onviewed} />
+      {#if viewed}<Icon name="check" size={13} />{/if} Viewed
     </label>
   </header>
   {#if !folded}
@@ -184,6 +190,7 @@
           {viewed}
           {busy}
           header={false}
+          {docStyle}
           keyboard={false}
           {oncomment}
           {onreply}
