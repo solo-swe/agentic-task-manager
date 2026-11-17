@@ -7,6 +7,7 @@ import { initSync, OpenDocument, process } from '@compmd/processor';
 import { request as base } from 'virtual:compmd';
 import { compmdRequest, documentRequest, FRONTMATTER_LINES, packComponents, safeTree } from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
+import compmdConfig from '../../compmd.config.json';
 
 const WASM = new URL('../../node_modules/@compmd/processor/pkg/compmd_wasm_bg.wasm', import.meta.url);
 
@@ -115,7 +116,12 @@ describe('task text through the real processor', () => {
         {
           name: 'mermaid',
           trust: { level: 'strict' },
-          module: { pack: '@comp-markdown/mermaid', version: '0.1.1', path: 'dist/mermaid.js' },
+          module: {
+            pack: '@comp-markdown/mermaid',
+            // As the build configuration pins it
+            version: compmdConfig.packs['@comp-markdown/mermaid'].version,
+            path: 'dist/mermaid.js',
+          },
         },
       ]);
     } finally {

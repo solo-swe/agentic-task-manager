@@ -39,7 +39,7 @@
       "stdoutIncludes": ["\"status\": \"in_progress\""],
       "files": {
         "next.txt": "No task available: only work done together with the user is left in the tasks: T-1 (--with-user takes it).\n",
-        "list.txt": "T-1  todo  P2  Together\n"
+        "list.txt": "T-1  todo  P2  Together\n1 task: 1 todo\n"
       }
     }
   },

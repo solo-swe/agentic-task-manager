@@ -397,7 +397,7 @@ describe('claims', () => {
       // atm status there lists it as blocked, in the other worktree
       assert.match(
         runAtm(['project', 'status'], wt, as('bob', 3)).stdout,
-        /blocked: T-001 T-001 \(on user\) \[in another worktree, main\]/,
+        /Blocked \(1\)\n {2}T-001 {2}T-001 {2}on user \[in another worktree, main\]/,
       );
 
       // The user answers in the other worktree: the answer counts there at once ...

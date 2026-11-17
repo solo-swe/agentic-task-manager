@@ -9,8 +9,11 @@ publish.workspace = true
 
 [dependencies]
 atm-common.workspace = true
+notify.workspace = true
+notify-debouncer-full.workspace = true
 serde_json.workspace = true
 sysinfo.workspace = true
+uuid.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 signal-hook.workspace = true

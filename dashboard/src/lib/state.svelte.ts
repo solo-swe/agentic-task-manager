@@ -75,6 +75,8 @@ import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
+import type { ForeignTask } from '$generated/types';
+import { findTask, refView, taskLabel, type OtherProject, type RefView } from './keys';
 import type { ListGroupBy } from './list-groups';
 import { loadProjectSources, type ProjectSource } from './overview-data';
 import { leftovers as leftoversOf, scopeOf } from './scope';
@@ -252,6 +254,39 @@ export class DashboardState {
   archivedCount = $derived(
     typeof this.meta?.archived === 'number' ? this.meta.archived : this.archiveLoaded ? this.archive.length : 0,
   );
+
+  /** The other listed projects, for a reference to another project's task (ADR-007 §7): their tasks when the overview
+   * has loaded them, by the id a reference names them by (their meta.id) */
+  otherProjects = $derived<OtherProject[]>(
+    this.projects.map((p) => {
+      const source = this.projectSources.find((s) => s.project.id === p.id);
+      return { id: source?.meta?.id || p.id, name: p.name, tasks: source?.tasks };
+    }),
+  );
+
+  /** The task a reference people type or link names (a key, an earlier prefix's key, an alias, the UUID; an ID before
+   * task keys), among the loaded tasks and the archive */
+  findTask(ref: string): Task | undefined {
+    return findTask(ref, [this.taskMap, this.archiveMap], this.meta);
+  }
+
+  /** The other projects' tasks this project's tasks name, as the server found them there (ADR-007 §7, T-549): each
+   * task view's `derived.foreign`, by reference */
+  foreignTasks = $derived<ReadonlyMap<string, ForeignTask>>(
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- made anew from the tasks, never changed
+    new Map(this.tasks.flatMap((t) => Object.entries(t.derived?.foreign ?? {}))),
+  );
+
+  /** How a dependency or related task shows: by its key, another project's as far as it is known (lib/keys.ts) */
+  refOf(ref: string): RefView {
+    return refView(
+      ref,
+      (id) => this.taskMap.get(id) ?? this.archiveMap.get(id),
+      this.otherProjects,
+      (r) => this.foreignTasks.get(r),
+      this.workspace,
+    );
+  }
 
   filters = $state.raw<Filters>(emptyFilters());
   /** Keyword search over ID, name, description and type; part of the saved view */
@@ -492,7 +527,7 @@ export class DashboardState {
     if (namesView(currentAddress())) this.tab = viewOf(currentAddress());
     this.loaded = true;
     const task = taskOf(currentAddress());
-    if (task) this.openDetail(task);
+    if (task) this.openAddressed(task);
     return true;
   }
 
@@ -621,7 +656,7 @@ export class DashboardState {
     if (!this.peeking) {
       const task = taskOf(address);
       if (task === null) this.detailOpen = false;
-      else if (!this.detailOpen || this.detailId !== task) this.openDetail(task);
+      else if (!this.detailOpen || this.detailId !== this.findTask(task)?.id) this.openAddressed(task);
     }
     // Back, or a link to another sprint of the project shown (T-323)
     const linked = this.#sprintParam === 'pending' ? null : sprintParamOf(address, this.sprints);
@@ -737,7 +772,7 @@ export class DashboardState {
     this.loaded = true;
     // A task's address (?task=, a link, or an overview card's "needs you" list): its details
     const task = first ? taskOf(currentAddress()) : null;
-    if (task) this.openDetail(task);
+    if (task) this.openAddressed(task);
   }
 
   /** A task of the Omniboard's (T-411): its details open over the board, which stays (the page and the URL don't
@@ -748,7 +783,7 @@ export class DashboardState {
     this.peeking = true;
     await this.loadProjectData(projectId);
     if (this.projectId !== projectId || !this.peeking) return; // another card was opened meanwhile, or another page
-    if (this.taskMap.has(taskId) || this.archiveMap.has(taskId)) {
+    if (this.findTask(taskId)) {
       this.showDetail(taskId);
       return;
     }
@@ -886,17 +921,30 @@ export class DashboardState {
    * closes them; another task's replace them in place. A task opened on the Omniboard isn't in the address (T-411). */
   showDetail(id: string) {
     const wasOpen = this.detailOpen;
-    if (!this.openDetail(id) || this.peeking || this.route.page !== 'project') return;
-    const address = withTask(currentAddress(), id);
+    const task = this.openDetail(id);
+    if (!task || this.peeking || this.route.page !== 'project') return;
+    // The address names it by its key (ADR-007 §5), or its ID before task keys
+    const address = withTask(currentAddress(), taskLabel(task));
     if (address !== currentAddress()) navigate(address, { replace: wasOpen });
   }
 
-  /** Shows a task's details without changing the address (it names them already) */
-  private openDetail(id: string): boolean {
-    if (!this.taskMap.has(id) && !this.archiveMap.has(id)) return false;
-    this.detailId = id;
+  /** Shows the details of the task `id` names (its key, an earlier prefix's key, an alias, its UUID), without changing
+   * the address; the task, if one is found */
+  private openDetail(id: string): Task | undefined {
+    const task = this.findTask(id);
+    if (!task) return undefined;
+    this.detailId = task.id;
     this.detailOpen = true;
-    return true;
+    return task;
+  }
+
+  /** The address names task `ref` (?task=): its details, and the address then names it by its current key (an
+   * earlier prefix, an alias or the UUID becomes the key, in place) */
+  private openAddressed(ref: string) {
+    const task = this.openDetail(ref);
+    if (!task || this.peeking || this.route.page !== 'project') return;
+    const address = withTask(currentAddress(), taskLabel(task));
+    if (address !== currentAddress()) navigate(address, { replace: true });
   }
 
   closeDetail() {

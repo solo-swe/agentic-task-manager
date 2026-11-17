@@ -28,8 +28,9 @@
   import { inApp } from '../lib/api/http';
   import { listenForLinks } from '../lib/api/links';
   import { listenForMenu, reportMenuState } from '../lib/api/menu';
-  import { reportNeedsYou, restoredTabs, saveTabs } from '../lib/api/shell';
+  import { openUrl, reportNeedsYou, restoredTabs, saveTabs } from '../lib/api/shell';
   import { appTabs } from '../lib/app-tabs.svelte';
+  import { sendExternalLink } from '../lib/external-links';
   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
   import { arrived, currentAddress, navigate, useRouter, type EntryState } from '../lib/navigation';
   import { newTabAddress } from '../lib/new-tab-clicks';
@@ -37,10 +38,11 @@
 
   const tabs = tabActions();
 
-  /** In the app: ⌘-click, Ctrl-click or a middle click on a task or a document opens it in a new tab (T-515), before
-   * the click reaches what would open it here */
+  /** In the app, before the click reaches what would open it here: an external link opens in the user's browser
+   * (T-551: the window opens none itself), any click on it; ⌘-click, Ctrl-click or a middle click on a task or a
+   * document opens it in a new tab (T-515) */
   function openInNewTab(e: MouseEvent) {
-    if (!inApp || !wantsNewTab(e)) return;
+    if (!inApp || sendExternalLink(e, openUrl) || !wantsNewTab(e)) return;
     const address = newTabAddress(e.target as Element | null, currentAddress());
     if (!address) return;
     e.preventDefault();

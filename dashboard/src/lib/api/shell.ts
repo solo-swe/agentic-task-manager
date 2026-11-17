@@ -105,6 +105,16 @@ export async function reportNeedsYou(workspace: string, badge: boolean, notify: 
   }
 }
 
+/** Open `url`, an external link (`https:`, `http:`, `mailto:`), in the user's browser or mail app (T-551): the window
+ * opens none itself. The app checks it again (`open_url`); a refusal is only logged */
+export async function openUrl(url: string): Promise<void> {
+  try {
+    await invoke('open_url', { url });
+  } catch (e) {
+    console.error('Opening the link failed:', e);
+  }
+}
+
 /** Open a new window at `address`, one of the dashboard's pages (the app checks it again); whether it opened */
 export async function openWindow(address: string): Promise<boolean> {
   const target = linkTarget(address);

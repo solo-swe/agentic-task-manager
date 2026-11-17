@@ -42,7 +42,7 @@ describe('AboutDialog', () => {
       new RegExp(`^CompMD ${compmdVersion} \\(MIT\\)$`),
     );
     const link = screen.getByRole('link', { name: 'CompMD' });
-    expect(link).toHaveAttribute('href', 'https://compmd.hakanserce.com/');
+    expect(link).toHaveAttribute('href', 'https://compmd.dev/');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(dialog).not.toHaveTextContent('Mermaid');

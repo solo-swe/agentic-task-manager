@@ -21,8 +21,24 @@
   import PriorityBadge from '../ui/PriorityBadge.svelte';
   import StageChip from '../ui/StageChip.svelte';
   import Icon from '../ui/Icon.svelte';
+  import TaskKey from '../ui/TaskKey.svelte';
+  import { parseRef, taskLabel, type RefView } from '../keys';
+  import { inApp } from '../api/http';
+  import { navigate } from '../navigation';
+  import { tabActions, wantsNewTab } from '../tab-actions';
   import type { IconName } from '../ui/Icon.svelte';
   import type { Task } from '../types';
+
+  // Another project's task opens in its project (T-549): in the app in a new tab, as the details stay here; in the
+  // browser in this tab, or another for ⌘-click, Ctrl-click or a middle click, as any link
+  const tabs = tabActions();
+  function openForeign(e: MouseEvent, address: string) {
+    if (!inApp && wantsNewTab(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (inApp) tabs.open(address);
+    else navigate(address);
+  }
 
   // An archived task opens too (listed with "Include archived")
   const task = $derived(
@@ -33,7 +49,11 @@
   const archived = $derived(!!task && !dashboard.taskMap.has(task.id));
   // A dependency missing from tasks.json may be archived: load the archive to show it as a stub (D-5.3)
   $effect(() => {
-    if (task && dashboard.archivedCount > 0 && (task.dependencies ?? []).some((d) => !dashboard.taskMap.has(d)))
+    if (
+      task &&
+      dashboard.archivedCount > 0 &&
+      (task.dependencies ?? []).some((d) => parseRef(d).project === null && !dashboard.taskMap.has(d))
+    )
       dashboard.wantArchive();
   });
   const claim = $derived(
@@ -176,7 +196,7 @@
       {@const pc = sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex)}
       <div class="detail-head">
         <h3>
-          <span style="color:var(--text-muted)">{task.id}</span>
+          <span style="color:var(--text-muted)" id="detail-key"><TaskKey {task} /></span>
           {task.name}{#if archived}<span class="archived-tag" id="detail-archived"> · archived</span>{/if}
         </h3>
         <button class="detail-close" aria-label="Close" onclick={() => dashboard.closeDetail()}>&times;</button>
@@ -311,12 +331,15 @@
           <div class="label">Depends On</div>
           <div class="detail-deps">
             {#each task.dependencies ?? [] as depId (depId)}
+              {@const ref = dashboard.refOf(depId)}
               {@const dep = dashboard.taskMap.get(depId)}
               {@const old = dep ? undefined : dashboard.archiveMap.get(depId)}
-              {#if old}
+              {#if ref.project}
+                {@render foreignItem('←', depId)}
+              {:else if old}
                 <div class="detail-dep-item archived" data-archived={depId} title={old.name}>
                   <span class="detail-dep-arrow">←</span>
-                  <strong>{depId}</strong>
+                  <strong><TaskKey task={old} /></strong>
                   <span style="color:var(--text-muted)"
                     >· archived, {statusLabel(dashboard.vocab, old.status).toLowerCase()}</span
                   >
@@ -477,7 +500,7 @@
             {#each block.questions as question, i (i)}<li><CompMd text={question} {task} inline /></li>{/each}
           </ol>
           <div style="color:var(--text-muted)">
-            Answer with <code>atm unblock {task.id} --answer "…"</code>, one per question.
+            Answer with <code>atm unblock {taskLabel(task)} --answer "…"</code>, one per question.
           </div>
         {/if}
       </div>
@@ -503,21 +526,70 @@
 {#snippet linkItem(arrow: string, id: string)}
   {@const other = dashboard.taskMap.get(id)}
   {@const old = other ? undefined : dashboard.archiveMap.get(id)}
-  {#if other}
+  {#if parseRef(id).project}
+    {@render foreignItem(arrow, id)}
+  {:else if other}
     {@render depItem(arrow, id, other.name, other.status)}
   {:else}
+    {@const ref = dashboard.refOf(id)}
     <div class="detail-dep-item archived" data-archived={id} title={old?.name ?? ''}>
       <span class="detail-dep-arrow">{arrow}</span>
-      <strong>{id}</strong>
+      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
       <span style="color:var(--text-muted)">· {old ? 'archived' : 'not found'}</span>
     </div>
   {/if}
 {/snippet}
 
+<!-- Another project's task (ADR-007 §7): as the server found it there (T-549), by its key, with its status and a link
+     that opens it in its own project (in the app, in a new tab); one it can't find says why, without a link. From a
+     server without that, by its key when its project's tasks are loaded (the overview's), else in short, saying so -->
+{#snippet foreignItem(arrow: string, id: string)}
+  {@const ref = dashboard.refOf(id)}
+  {#if ref.found && ref.address}
+    <a
+      class="detail-dep-item foreign"
+      data-foreign={id}
+      href={ref.address}
+      title="{ref.tip} — opens in its project"
+      onclick={(e) => openForeign(e, ref.address!)}
+    >
+      <span class="detail-dep-arrow">{arrow}</span>
+      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      <span class="detail-dep-name">{ref.found.name}</span>
+      {@render foreignStatus(ref.found)}
+    </a>
+  {:else}
+    <div class="detail-dep-item foreign" data-foreign={id} title={ref.tip}>
+      <span class="detail-dep-arrow">{arrow}</span>
+      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      {#if ref.found}
+        <span class="detail-dep-name">{ref.found.name}</span>
+        {@render foreignStatus(ref.found)}
+      {:else if ref.missing}
+        <span class="detail-foreign-missing" style="color:var(--text-muted)">· {ref.missing}</span>
+      {:else if ref.task}
+        <span class="detail-dep-name">{ref.task.name}</span>
+      {:else}
+        <span style="color:var(--text-muted)">· another project's, not loaded here</span>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet foreignStatus(found: NonNullable<RefView['found']>)}
+  {#if found.status}
+    {@const ds = kindStyle(found.kind)}
+    <span class="badge" style="background:{ds.bg};color:{ds.color};margin-left:auto"
+      >{found.status.replace(/_/g, ' ')}</span
+    >
+  {/if}
+{/snippet}
+
 {#snippet depItem(arrow: string, id: string, name: string, status: string | undefined)}
+  {@const ref = dashboard.refOf(id)}
   <button type="button" class="detail-dep-item" onclick={() => dashboard.showDetail(id)} title={name}>
     <span class="detail-dep-arrow">{arrow}</span>
-    <strong>{id}</strong>
+    <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
     <span class="detail-dep-name">{name}</span>
     {#if status !== undefined}
       {@const ds = statusStyle(status)}

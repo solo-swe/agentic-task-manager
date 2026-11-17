@@ -82,6 +82,57 @@ fn placeholders_become_the_new_ids_in_dependencies() {
 }
 
 #[test]
+fn in_a_keys_file_new_tasks_get_a_uuid_the_next_number_and_references_by_key() {
+    let existing = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8091";
+    let meta = json!({"format": 2, "key": "ATM", "key_history": ["T"], "next_number": 5});
+    let mut p = project(
+        json!([{"id": existing, "number": 4, "key_final": true, "status": "done"}]),
+        meta.clone(),
+    );
+    let entries = [
+        task(json!({"id": "new-1", "name": "a", "type": "feature", "dependencies": ["ATM-4"]})),
+        task(
+            json!({"id": "new-2", "name": "b", "type": "test", "dependencies": ["new-1", "T-4"], "related": ["atm-4"]}),
+        ),
+    ];
+    let added = add_new_tasks(&mut p, &entries).unwrap();
+    let uuids = ids(&added);
+    assert!(uuids.iter().all(|u| atm_common::ids::valid_task_uuid(u)));
+    assert_eq!(added.tasks[0]["number"], json!(5));
+    assert_eq!(added.tasks[1]["number"], json!(6));
+    assert_eq!(added.tasks[0]["key_final"], json!(false), "provisional");
+    assert_eq!(added.tasks[0]["dependencies"], json!([existing]));
+    assert_eq!(added.tasks[1]["dependencies"], json!([uuids[0], existing]));
+    assert_eq!(added.tasks[1]["related"], json!([existing]));
+    assert_eq!(
+        p.store().document().unwrap()["meta"]["next_number"],
+        json!(7)
+    );
+
+    let mut p = project(json!([]), meta.clone());
+    let unknown = add_new_tasks(
+        &mut p,
+        &[task(
+            json!({"name": "a", "type": "feature", "dependencies": ["ATM-99"]}),
+        )],
+    )
+    .unwrap_err();
+    assert_eq!(
+        unknown.to_string(),
+        "ATM-5 (a) depends on ATM-99, which doesn't exist"
+    );
+    let mut p = project(json!([]), meta);
+    let itself = add_new_tasks(
+        &mut p,
+        &[task(
+            json!({"id": "new-1", "name": "a", "type": "feature", "related": ["new-1"]}),
+        )],
+    )
+    .unwrap_err();
+    assert_eq!(itself.to_string(), "ATM-5 can't be related to itself");
+}
+
+#[test]
 fn a_bad_entry_refuses_the_whole_file() {
     let cases = [
         (json!({"name": "a"}), "a new task needs a type"),

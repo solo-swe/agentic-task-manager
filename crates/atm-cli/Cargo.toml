@@ -18,6 +18,10 @@ atm-lib.workspace = true
 atm-api.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
+# Styled output on a terminal, and its width (T-488)
+anstyle.workspace = true
+anstream.workspace = true
+terminal_size.workspace = true
 serde_json.workspace = true
 # Other processes: the server's, a claim watcher's shell
 sysinfo.workspace = true

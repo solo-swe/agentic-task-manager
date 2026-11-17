@@ -93,48 +93,84 @@ fn titled(r: &Value) -> String {
     title
 }
 
-fn describe_release(r: &Value) -> String {
-    let mut details = vec![py_str(&r["state"])];
-    if let Some(target) = text(r, "target") {
-        details.push(format!("target {target}"));
-    }
-    if let Some(at) = text(r, "released_at") {
-        details.push(format!(
-            "released {}",
-            at.chars().take(10).collect::<String>()
-        ));
-    }
-    if let Some(number) = r
-        .get("pr")
-        .filter(|p| p.is_object())
-        .and_then(|p| text(p, "number"))
-    {
-        details.push(format!("PR #{number}"));
-    }
-    let counts = |key: &str, words: fn(&str) -> String| -> Vec<String> {
-        r[key]
+/// The releases as a table (docs/cli-output-design.md §4), by version, the planned ones last: ID, name, its state
+/// (with the day it was released, or its target), its PR, its tasks, the counts by kind (done first) and what of
+/// the done ones isn't merged yet.
+fn release_lines(releases: &[Value]) -> Vec<String> {
+    use crate::output::{Cell, DIM, Table, kind_style};
+    let mut sorted: Vec<&Value> = releases.iter().collect();
+    sorted.sort_by(|a, b| {
+        let planned = |r: &Value| r["state"].as_str() != Some("released");
+        planned(a)
+            .cmp(&planned(b))
+            .then_with(|| version_key(&py_str(&a["id"])).cmp(&version_key(&py_str(&b["id"]))))
+    });
+    let mut table = Table::new().right(4);
+    for r in sorted {
+        let shipped = r["state"].as_str() == Some("released");
+        let mut state = py_str(&r["state"]);
+        if let Some(at) = text(r, "released_at") {
+            state = format!("released {}", at.chars().take(10).collect::<String>());
+        } else if let Some(target) = text(r, "target") {
+            let _ = write!(state, " (target {target})");
+        }
+        let pr = r
+            .get("pr")
+            .filter(|p| p.is_object())
+            .and_then(|p| text(p, "number"))
+            .map_or_else(String::new, |n| format!("PR #{n}"));
+        let mut kinds: Vec<(String, String)> = r["by_kind"]
             .as_object()
             .into_iter()
             .flatten()
-            .map(|(k, n)| format!("{} {}", words(k), py_str(n)))
-            .collect()
-    };
-    let kinds = counts("by_kind", str::to_string);
-    let stages = counts("by_stage", |s| s.replace('_', " "));
-    let tasks = r["tasks"].as_u64().unwrap_or(0);
-    let mut line = format!(
-        "{} · {}: {tasks} task{}",
-        titled(r),
-        details.join(" · "),
-        if tasks == 1 { "" } else { "s" }
-    );
-    if !kinds.is_empty() {
-        let _ = write!(line, " ({})", kinds.join(", "));
+            .map(|(k, n)| (k.clone(), py_str(n)))
+            .collect();
+        kinds.sort_by_key(|(kind, _)| kind != "done");
+        let mut each: Vec<String> = kinds.iter().map(|(k, n)| format!("{k} {n}")).collect();
+        for (stage, n) in r["by_stage"].as_object().into_iter().flatten() {
+            match stage.as_str() {
+                "done" => each.push(format!("{} not merged", py_str(n))),
+                "in_pr" => each.push(format!("{} in a PR", py_str(n))),
+                _ => {}
+            }
+        }
+        let tasks = r["tasks"].as_u64().unwrap_or(0);
+        table.row(vec![
+            Cell::styled(
+                py_str(&r["id"]),
+                if shipped {
+                    anstyle::Style::new()
+                } else {
+                    crate::output::HEADING
+                },
+            ),
+            Cell::new(text(r, "name").map_or_else(String::new, |n| format!("“{n}”"))),
+            Cell::styled(
+                state,
+                if shipped {
+                    kind_style(Some(atm_common::Kind::Done))
+                } else {
+                    anstyle::Style::new()
+                },
+            ),
+            Cell::styled(pr, DIM),
+            Cell::new(format!("{tasks} task{}", if tasks == 1 { "" } else { "s" })),
+            Cell::new(each.join(" · ")),
+        ]);
     }
-    if !stages.is_empty() {
-        let _ = write!(line, "; {}", stages.join(", "));
-    }
-    line
+    table.lines()
+}
+
+/// A release ID's order: its numbers (`0.5.0` before `0.24.0`), then the ID itself; an ID that isn't a version after
+/// the versions.
+fn version_key(id: &str) -> (Vec<u64>, String) {
+    let numbers: Option<Vec<u64>> = id
+        .trim_start_matches('v')
+        .split(['.', '-'])
+        .take(3)
+        .map(|part| part.parse().ok())
+        .collect();
+    (numbers.unwrap_or_else(|| vec![u64::MAX]), id.to_string())
 }
 
 /// The draft as Markdown: a heading per type, a line per task; what's not done yet at the end.
@@ -194,8 +230,8 @@ pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
                     }
                 );
             } else {
-                for r in &releases {
-                    println!("{}", describe_release(r));
+                for line in release_lines(&releases) {
+                    crate::output::emit(&line);
                 }
             }
         }

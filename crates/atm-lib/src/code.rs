@@ -194,10 +194,16 @@ pub fn commit_task(
         .and_then(|w| w.get("commit_template"))
         .map_or_else(|| "feat({id}): {name}".to_string(), py_str);
     let mut text = message.map_or(template, String::from);
-    for key in ["id", "name", "phase", "type"] {
-        let value = task.get(key).map(py_str).unwrap_or_default();
-        text = text.replace(&format!("{{{key}}}"), &value);
+    // `{id}` is how people know the task: its key with task keys (ADR-007 §9), `{uuid}` its stored ID
+    let key = atm_common::keys::key_of(store.document()?, &task);
+    for key_name in ["id", "name", "phase", "type"] {
+        let value = match (key_name, &key) {
+            ("id", Some(k)) => k.clone(),
+            _ => task.get(key_name).map(py_str).unwrap_or_default(),
+        };
+        text = text.replace(&format!("{{{key_name}}}"), &value);
     }
+    text = text.replace("{uuid}", &task.get("id").map(py_str).unwrap_or_default());
     let text = commit_message(&text, workflow.as_ref().and_then(|w| w.get("trailers")));
     if strip(&text).is_empty() {
         return Err(Error::Invalid("the commit message is empty".into()));
@@ -252,8 +258,35 @@ pub fn record_commit(
     let text = vcs.message(&sha)?;
     let task = record_on_task(project, task_id, &sha)?;
     let id = task.get("id").map(py_str).unwrap_or_default();
-    let hint = (!mentions(&text, &id))
-        .then(|| format!("its message doesn't mention {id}: is it the task's commit?"));
+    // With task keys (ADR-007 §9) the message names its key, an alias or a key with an earlier prefix
+    let document = project.store().document()?;
+    let mut names: Vec<String> = vec![id.clone()];
+    if let (Some(key), Some(n)) = (
+        atm_common::keys::key_of(document, &task),
+        atm_common::keys::number_of(&task),
+    ) {
+        names.push(key);
+        names.extend(
+            document["meta"]
+                .get("key_history")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(|p| atm_common::ids::task_key(p, n)),
+        );
+        names.extend(
+            task.get("aliases")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(String::from),
+        );
+    }
+    let shown = names.get(1).unwrap_or(&id).clone();
+    let hint = (!names.iter().any(|n| mentions(&text, n)))
+        .then(|| format!("its message doesn't mention {shown}: is it the task's commit?"));
     let summary = text.lines().next().unwrap_or_default();
     Ok(json!({"task": id, "commit": sha, "recorded": true, "summary": summary, "hint": hint}))
 }
@@ -453,6 +486,76 @@ pub fn record_merge(project: &mut Project, pr: i64, at: Option<&str>) -> Result<
         Ok(())
     })?;
     Ok(outcome)
+}
+
+/// Task keys become final (ADR-007 §3): each provisional task whose UUID, with the same number, is in the task file
+/// (or its archive) on `origin/<base>` (`meta.workflow.base`, else the remote's default branch) gets `key_final: true`,
+/// read from git, never from what an agent says. Nothing sets it back. The keys made final; none without git, a remote
+/// branch to read, or task keys.
+///
+/// # Errors
+/// The task file can't be read or written.
+pub fn finalize_keys(project: &mut Project, vcs: Option<&GitVcs>) -> Result<Vec<String>> {
+    let Some(vcs) = vcs else {
+        return Ok(Vec::new());
+    };
+    let document = project.store().document()?;
+    if !atm_common::keys::keys_format(document) {
+        return Ok(Vec::new());
+    }
+    let base = document
+        .get("meta")
+        .and_then(Value::as_object)
+        .and_then(|m| workflow_of(m).ok().flatten())
+        .and_then(|w| w.get("base").and_then(Value::as_str).map(String::from))
+        .unwrap_or_else(|| vcs.default_base());
+    let mut on_base: Vec<(String, u64)> = Vec::new();
+    for file in [TASKS_FILE, "tasks-archive.json"] {
+        let Some(text) = vcs.file_on_remote_branch(&base, &format!("{TASK_DIR}/{file}")) else {
+            continue;
+        };
+        let Ok(doc) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        on_base.extend(
+            doc["tasks"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|t| {
+                    Some((
+                        t.get("id")?.as_str()?.to_string(),
+                        t.get("number")?.as_u64()?,
+                    ))
+                }),
+        );
+    }
+    if on_base.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut finalized = Vec::new();
+    project.store_mut().change(&mut |work: &mut Working| {
+        let key = atm_common::keys::project_key(&work.document)
+            .unwrap_or_default()
+            .to_string();
+        for task in work.tasks().iter_mut().filter_map(Value::as_object_mut) {
+            if atm_common::keys::key_final(task) {
+                continue;
+            }
+            let (Some(id), Some(n)) = (
+                task.get("id").and_then(Value::as_str),
+                atm_common::keys::number_of(task),
+            ) else {
+                continue;
+            };
+            if on_base.iter().any(|(i, m)| i == id && *m == n) {
+                task.insert("key_final".into(), json!(true));
+                finalized.push(atm_common::ids::task_key(&key, n));
+            }
+        }
+        Ok(())
+    })?;
+    Ok(finalized)
 }
 
 /// `atm vcs repository`: `meta.repository`, if set.

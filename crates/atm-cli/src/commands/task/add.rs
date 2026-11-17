@@ -202,9 +202,12 @@ pub fn add(args: AddArgs, ctx: Context, cwd: &Path) -> Result<()> {
         return Ok(());
     }
     for task in &added.tasks {
-        println!("Added {} {}", py_str(&task["id"]), py_str(&task["name"]));
+        crate::commands::say(
+            cwd,
+            &format!("Added {} {}", py_str(&task["id"]), py_str(&task["name"])),
+        );
         if let Some(line) = suggestion_line(&added.vocab, task) {
-            println!("{line}");
+            crate::commands::say(cwd, &line);
         }
     }
     Ok(())
@@ -233,7 +236,8 @@ pub fn note(args: &NoteArgs, ctx: Context, cwd: &Path) -> Result<()> {
     }
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    let task = add_task_note(&mut project, &args.task_id, &args.text)?;
+    let stored = project.resolve_task(&args.task_id)?;
+    let task = add_task_note(&mut project, &stored, &args.text)?;
     let notes = task
         .get("notes")
         .and_then(Value::as_array)
@@ -242,10 +246,13 @@ pub fn note(args: &NoteArgs, ctx: Context, cwd: &Path) -> Result<()> {
     if ctx.json {
         print_json(notes.last().unwrap_or(&Value::Null));
     } else {
-        println!(
-            "{}: note added ({} in all)",
-            py_str(&task["id"]),
-            notes.len()
+        crate::commands::say(
+            cwd,
+            &format!(
+                "{}: note added ({} in all)",
+                py_str(&task["id"]),
+                notes.len()
+            ),
         );
     }
     Ok(())

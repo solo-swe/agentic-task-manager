@@ -2,6 +2,15 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.38.0] - 2026-11-17
+
+- Tasks can have short keys like ATM-123, and old task IDs still find their task. Update atm on every computer that
+  works on a project before you give it a key.
+- A task can depend on a task in another of your projects, and shows that task's status and a link to it.
+- Codex, Copilot, Cursor, OpenCode and Antigravity can use atm's skills too, not just Claude Code.
+- atm's output in the terminal is easier to read: lined-up columns, sections and colours.
+- Links in the app (About, Help, pull requests) open in your browser.
+
 ## [0.37.0] - 2026-11-13
 
 - The app is called Agentic Task Manager now, in its menus, the Dock and the app switcher; the command is still atm.

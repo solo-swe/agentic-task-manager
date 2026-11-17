@@ -6,6 +6,7 @@ import {
   minimizeWindow,
   NO_SHELL,
   onBarMouseDown,
+  openUrl,
   openWindow,
   resetAppShell,
   reportNeedsYou,
@@ -116,6 +117,21 @@ describe('the app’s window (T-511)', () => {
       throw new Error('no window');
     });
     await minimizeWindow();
+    expect(logged).toHaveBeenCalled();
+  });
+
+  it('hands an external link to the app, and only logs a refusal (T-551)', async () => {
+    const calls: [string, unknown][] = [];
+    mockIPC((command, args) => void calls.push([command, args]));
+    await openUrl('https://compmd.dev/');
+    expect(calls).toEqual([['open_url', { url: 'https://compmd.dev/' }]]);
+
+    clearMocks();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockIPC(() => {
+      throw { kind: 'refused', message: 'not file:' };
+    });
+    await openUrl('file:///etc/passwd');
     expect(logged).toHaveBeenCalled();
   });
 

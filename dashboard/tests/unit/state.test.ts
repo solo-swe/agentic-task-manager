@@ -13,17 +13,34 @@ let projectFailures: number[] = [];
 const failProjects = (status: number) => projectFailures.push(status);
 /** Plays atm serve: the workspaces (`default` alone), the project list, and the standard fixture as each project's
  * tasks and files */
-const server = (projects: unknown = PROJECTS) =>
+const server = (projects: unknown = PROJECTS, data: { meta?: unknown; tasks?: unknown[] } = standard) =>
   vi.fn((url: string) => {
     const path = String(url);
     if (path.startsWith('/api/v2/workspaces'))
       return ok({ workspaces: [{ id: 'default', projects: 1 }], recent: 'default' });
     const failure = path.startsWith('/api/projects') ? projectFailures.shift() : undefined;
     if (failure) return Promise.resolve(new Response('nope', { status: failure }));
-    return ok(
-      path.startsWith('/api/projects') ? projects : path.startsWith('/api/v1/') ? asTaskViews(standard) : standard,
-    );
+    return ok(path.startsWith('/api/projects') ? projects : path.startsWith('/api/v1/') ? asTaskViews(data) : data);
   });
+/** A project with task keys (ADR-007): UUIDs stored, keys shown, ATM now and T before */
+const U1 = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a51';
+const U2 = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a52';
+const KEYED = {
+  meta: { project: 'Keyed', id: 'p3', format: 2, key: 'ATM', key_history: ['T'] },
+  tasks: [
+    { id: U1, key: 'ATM-1', number: 1, key_final: true, name: 'One', type: 'feature', status: 'todo' },
+    {
+      id: U2,
+      key: 'ATM-2',
+      number: 2,
+      key_final: false,
+      aliases: ['ATM-9'],
+      name: 'Two',
+      type: 'feature',
+      status: 'todo',
+    },
+  ],
+};
 
 describe('DashboardState', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -226,6 +243,33 @@ describe('DashboardState', () => {
       history.replaceState(null, '', '/projects/p3/list?task=T-999');
       s.onNavigate();
       expect(s.detailId).toBe('T-005');
+    });
+
+    it("a task's address takes its key in any case, an earlier prefix's, an alias or its UUID, and then shows its key (ADR-007 §5)", async () => {
+      fetchMock = server({ projects: [project('p3')] }, KEYED);
+      vi.stubGlobal('fetch', fetchMock);
+      history.replaceState(null, '', '/projects/p3/list?task=t-2');
+      const s = new DashboardState();
+      await s.load();
+      expect([s.detailOpen, s.detailId]).toEqual([true, U2]);
+      expect(location.search).toBe('?task=ATM-2');
+      for (const [ref, id, key] of [
+        ['T-1', U1, 'ATM-1'],
+        ['ATM-9', U2, 'ATM-2'],
+        [U1, U1, 'ATM-1'],
+        ['atm-2', U2, 'ATM-2'],
+      ]) {
+        history.replaceState(null, '', `/projects/p3/list?task=${ref}`);
+        s.onNavigate();
+        expect([s.detailId, location.search]).toEqual([id, `?task=${key}`]);
+      }
+      // Opening one from the page names it by its key too
+      s.showDetail(U1);
+      expect(location.search).toBe('?task=ATM-1');
+      // Another prefix, or a number no task has, opens nothing
+      history.replaceState(null, '', '/projects/p3/list?task=LFB-2');
+      s.onNavigate();
+      expect([s.detailId, location.search]).toEqual([U1, '?task=LFB-2']);
     });
 
     it('an address that only switches the tab reloads nothing', async () => {

@@ -6,6 +6,8 @@ use std::collections::{HashMap, HashSet};
 
 use atm_common::components::{component_ids, suggest_components};
 use atm_common::edits::{set_sprint, status_for};
+use atm_common::ids::{new_task_uuid, task_key};
+use atm_common::keys::{key_of, keys_format, next_task_number, project_key, resolve};
 use atm_common::py::{py_repr, py_str, repr_str, truthy};
 use atm_common::time::now_iso;
 use atm_common::vocabulary::REVIEW_MODES;
@@ -362,6 +364,9 @@ fn add_tasks(work: &mut Working, entries: &[Task], actor: Option<&str>) -> Resul
             )));
         }
     }
+    if keys_format(&work.document) {
+        return add_keyed_tasks(work, tasks, &placeholders);
+    }
     let ids = allocate_ids(&mut work.document, tasks.len());
     let rename = |value: &Value| -> Value {
         placeholders
@@ -429,6 +434,112 @@ fn add_tasks(work: &mut Working, entries: &[Task], actor: Option<&str>) -> Resul
             cycle.join(" -> ")
         )));
     }
+    work.tasks()
+        .extend(tasks.iter().cloned().map(Value::Object));
+    Ok(tasks)
+}
+
+/// [`add_tasks`] in a keys-format file (ADR-007 §1): each new task gets a UUID and the next number, provisional
+/// (`key_final: false`), and `meta.next_number` moves on. A dependency or related task is a placeholder of this batch,
+/// or a reference [`resolve`] finds (a key, an earlier prefix, an alias, a UUID; archived ones too), stored as its UUID.
+fn add_keyed_tasks(
+    work: &mut Working,
+    mut tasks: Vec<Task>,
+    placeholders: &[&Value],
+) -> Result<Vec<Task>> {
+    let archive: Vec<Task> = work.archive()?["tasks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .cloned()
+        .collect();
+    let first = next_task_number(&work.document, &archive);
+    let uuids: Vec<String> = tasks.iter().map(|_| new_task_uuid()).collect();
+    let prefix = project_key(&work.document).unwrap_or_default().to_string();
+    let label = |n: usize| task_key(&prefix, first + n as u64);
+    // A placeholder's UUID, or the UUID of the task a reference names; None when it names none
+    let target = |value: &Value| -> Option<String> {
+        if let Some(i) = placeholders
+            .iter()
+            .position(|p| !p.is_null() && *p == value)
+        {
+            return Some(uuids[i].clone());
+        }
+        let found = resolve(&work.document, &archive, value.as_str()?).ok()?;
+        found
+            .task
+            .get("id")
+            .and_then(Value::as_str)
+            .map(String::from)
+    };
+    for (n, task) in tasks.iter_mut().enumerate() {
+        task.insert("id".into(), json!(uuids[n]));
+        task.insert("number".into(), json!(first + n as u64));
+        task.insert("key_final".into(), json!(false));
+        let mut deps = Vec::new();
+        let mut missing = Vec::new();
+        for d in task["dependencies"].as_array().into_iter().flatten() {
+            match target(d) {
+                Some(uuid) => deps.push(json!(uuid)),
+                None => missing.push(d.clone()),
+            }
+        }
+        if !missing.is_empty() {
+            return Err(Error::Invalid(format!(
+                "{} ({}) depends on {}, which doesn't exist",
+                label(n),
+                py_str(&task["name"]),
+                join(&missing)
+            )));
+        }
+        task.insert("dependencies".into(), Value::Array(deps));
+        if let Some(Value::Array(related)) = task.get("related").cloned() {
+            let mut kept = Vec::new();
+            for other in &related {
+                let Some(uuid) = target(other) else {
+                    return Err(Error::Invalid(format!(
+                        "{} can't be related to {}, which doesn't exist",
+                        label(n),
+                        py_str(other)
+                    )));
+                };
+                if uuid == uuids[n] {
+                    return Err(Error::Invalid(format!(
+                        "{} can't be related to itself",
+                        label(n)
+                    )));
+                }
+                kept.push(json!(uuid));
+            }
+            task.insert("related".into(), Value::Array(kept));
+        }
+    }
+    let current: Vec<Task> = work.document["tasks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .cloned()
+        .collect();
+    let all: Vec<&Task> = current.iter().chain(tasks.iter()).collect();
+    if let Some(cycle) = find_cycle(&all) {
+        let shown = |id: &str| {
+            all.iter()
+                .find(|t| t.get("id").and_then(Value::as_str) == Some(id))
+                .and_then(|t| key_of(&work.document, t))
+                .unwrap_or_else(|| id.to_string())
+        };
+        return Err(Error::Invalid(format!(
+            "these dependencies would make a cycle: {}",
+            cycle
+                .iter()
+                .map(|id| shown(id))
+                .collect::<Vec<_>>()
+                .join(" -> ")
+        )));
+    }
+    work.document["meta"]["next_number"] = json!(first + tasks.len() as u64);
     work.tasks()
         .extend(tasks.iter().cloned().map(Value::Object));
     Ok(tasks)
@@ -684,7 +795,11 @@ fn edit_task(
                 "{task_id} can't be related to itself"
             )));
         }
-        if !known.contains(other) && !archived.has(work, &json!(other))? {
+        // Another project's task was found there when it was named by its key (ADR-007 §7)
+        if !known.contains(other)
+            && !atm_common::rules::is_foreign_reference(other)
+            && !archived.has(work, &json!(other))?
+        {
             return Err(Error::Invalid(format!(
                 "{task_id} can't be related to {other}, which doesn't exist"
             )));
@@ -704,7 +819,10 @@ fn edit_task(
     }
     let mut missing = Vec::new();
     for dep in &edit.add_dependencies {
-        if !known.contains(dep) && !archived.has(work, &json!(dep))? {
+        if !known.contains(dep)
+            && !atm_common::rules::is_foreign_reference(dep)
+            && !archived.has(work, &json!(dep))?
+        {
             missing.push(dep.clone());
         }
     }

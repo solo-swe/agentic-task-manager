@@ -90,7 +90,7 @@ fn next(args: NextArgs, ctx: Context, cwd: &Path) -> Result<u8> {
         );
         return Ok(0);
     }
-    let sel = Selection {
+    let mut sel = Selection {
         sprints: args.sprint,
         tasks: args
             .tasks
@@ -107,6 +107,8 @@ fn next(args: NextArgs, ctx: Context, cwd: &Path) -> Result<u8> {
     };
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
+    // Keys, earlier prefixes, aliases or UUIDs (ADR-007 §5)
+    sel.tasks = project.resolve_tasks(&sel.tasks)?;
     let result = next_task_for(
         &mut project,
         &sel,
@@ -133,11 +135,14 @@ fn next(args: NextArgs, ctx: Context, cwd: &Path) -> Result<u8> {
             .get("sprint")
             .filter(|s| truthy(s))
             .map_or_else(|| "backlog".to_string(), py_str);
-        println!(
-            "{verb}: {} {} ({where_}, {})",
-            py_str_opt(task.get("id")),
-            task.get("name").map_or_else(String::new, py_str),
-            py_str_opt(task.get("type"))
+        super::say(
+            cwd,
+            &format!(
+                "{verb}: {} {} ({where_}, {})",
+                py_str_opt(task.get("id")),
+                task.get("name").map_or_else(String::new, py_str),
+                py_str_opt(task.get("type"))
+            ),
         );
     } else {
         println!(

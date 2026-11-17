@@ -118,6 +118,19 @@ mod tests {
                 "atm://projects/abc/list?task=T-1",
                 "/projects/abc/list?task=T-1",
             ),
+            // A task by its key, an earlier prefix's key or its UUID (ADR-007 §5, T-546)
+            (
+                "atm://projects/3f2a9c1e/kanban?task=ATM-527",
+                "/projects/3f2a9c1e/kanban?task=ATM-527",
+            ),
+            (
+                "atm://projects/abc?task=TskMan-12",
+                "/projects/abc?task=TskMan-12",
+            ),
+            (
+                "atm://projects/abc?task=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+                "/projects/abc?task=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+            ),
             ("atm://projects/abc/", "/projects/abc"),
             (
                 "atm://w/work/projects/abc?doc=docs/x.md:L3",

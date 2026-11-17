@@ -2,14 +2,21 @@
 
 Every command takes `--json` and `--dry-run` (`-n`), anywhere on the line; `atm help` lists them all and
 `atm <command> --help` describes one. Exit codes: 0 ok, 1 an error (the message says what), 2 a usage error, 3 nothing
-to do (`loop next`), 4 the task is claimed by another agent.
+to do (`loop next`), 4 the task is claimed by another agent. Output to a pipe (as agents get it) is plain text, never
+cut; `--color auto|always|never` only styles it for a terminal.
+
+`<id>` is a task's key (`ATM-527`, any case) in a project with task keys, or its old ID (`T-527`), an alias or its UUID;
+in a project without keys, its ID (`atm docs tasks`). A key shown with a `~` (`~ATM-538`) is provisional: use it freely
+(in commit messages too), it may move to another number before it is merged, and its old key keeps finding it.
 
 ## Reading
-- `atm project status`: the overview (the active sprint, what is in progress, in review or blocked, what's next)
+- `atm project status`: the overview (the active sprint, what is in progress, in review or blocked, what's next);
+  `--all` adds the counts by sprint, type and label
 - `atm task details <id>…`: tasks in full, with their notes
 - `atm task deps <id>`: what a task waits for, and what waits for it
 - `atm task list [--status S] [--sprint NAME | --backlog] [--type T] [--priority P] [--label L] [--ready]
-  [--blocked] [--in-pr] [--archived]`: one line per task
+  [--blocked] [--in-pr] [--archived]`: one line per task (key, status, priority, name, labels), then a line counting
+  them
 - `atm claim list`: who works on what; `atm project workflow`: how the project pushes
 - `atm docs <topic>`: this reference (`atm docs` lists the topics)
 
@@ -37,7 +44,13 @@ to do (`loop next`), 4 the task is claimed by another agent.
 - `atm release edit <id> --released [YYYY-MM-DD]`: a published release marked released by hand, when a task with no
   commit (a check done with the user) keeps `atm vcs pushed` from doing it; refused while a task of it is open, unless
   `--force`; `--planned` takes it back. Only when the user says the release is out
-- `atm db init --meta-file F`: the project and its vocabularies; `atm project workflow set`: how it pushes
+- `atm db init --meta-file F`: the project and its vocabularies (a new project gets task keys: give `key`, 3 to 6
+  letters and digits, in the file); `atm project workflow set`: how it pushes
+- `atm project key show|set <KEY>`: the project's key, its tasks' prefix. `set` on a project of IDs (`T-527`) gives
+  every task a key, keeping its number (`ATM-527`; `T-527` still finds it); on one with keys it changes the prefix.
+  Only with the user's say: it rewrites every task's ID
+- A dependency on another project's task (`--add-dep LFB-5`): found by its key among the user's registered projects,
+  and waited for until it is done there
 
 ## Maintenance
 - `atm db migrate`: move an old task file into `.agentic-task-manager/` and set the folder up

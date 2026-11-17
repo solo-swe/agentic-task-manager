@@ -115,7 +115,8 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
         status: decider.status,
         ..options
     };
-    let result = change_task_status(&mut project, command, &task_id, &options)?;
-    report(command, &result, ctx);
+    let stored = project.resolve_task(&task_id)?;
+    let result = change_task_status(&mut project, command, &stored, &options)?;
+    report(command, &result, ctx, cwd);
     Ok(())
 }

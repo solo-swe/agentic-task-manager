@@ -92,8 +92,18 @@ pub fn run(command: ClaimCommand, ctx: Context, cwd: &Path) -> Result<()> {
             task_id,
             auto,
             agent,
-        } => heartbeat(task_id.as_deref(), auto, agent.as_deref(), ctx, cwd),
-        ClaimCommand::Hold(args) => hold(&args, ctx, cwd),
+        } => {
+            // A key, an earlier prefix, an alias or a UUID (ADR-007 §5)
+            let task_id = match task_id.filter(|t| !t.is_empty()) {
+                Some(t) => Some(super::resolved_one(cwd, &t)?),
+                None => None,
+            };
+            heartbeat(task_id.as_deref(), auto, agent.as_deref(), ctx, cwd)
+        }
+        ClaimCommand::Hold(mut args) => {
+            args.task_id = super::resolved_one(cwd, &args.task_id)?;
+            hold(&args, ctx, cwd)
+        }
     }
 }
 
@@ -219,9 +229,12 @@ fn heartbeat(
     if ctx.json {
         print_json(&claim);
     } else {
-        println!(
-            "{task_id}: lease extended to {}",
-            py_str_opt(claim.get("lease_expires_at"))
+        super::say(
+            cwd,
+            &format!(
+                "{task_id}: lease extended to {}",
+                py_str_opt(claim.get("lease_expires_at"))
+            ),
         );
     }
     Ok(())
@@ -304,10 +317,13 @@ fn hold(args: &HoldArgs, ctx: Context, cwd: &Path) -> Result<()> {
     if ctx.json {
         print_json(&held);
     } else {
-        println!(
-            "{}: holding the claim while this shell runs (pid {shell}), until {until} at most; lease now to {}",
-            args.task_id,
-            py_str_opt(renewed.claim.get("lease_expires_at"))
+        super::say(
+            cwd,
+            &format!(
+                "{}: holding the claim while this shell runs (pid {shell}), until {until} at most; lease now to {}",
+                args.task_id,
+                py_str_opt(renewed.claim.get("lease_expires_at"))
+            ),
         );
     }
     Ok(())

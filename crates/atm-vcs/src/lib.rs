@@ -163,6 +163,23 @@ impl GitVcs {
         .unwrap_or_else(|| "main".into())
     }
 
+    /// A file as it is on `origin/<branch>` (the remote-tracking branch, as last fetched), if git has it there: for
+    /// task keys becoming final (ADR-007 §3), read from git, never from what an agent says.
+    #[must_use]
+    pub fn file_on_remote_branch(&self, branch: &str, relative: &str) -> Option<String> {
+        if !atm_common::ids::valid_branch(branch) || relative.starts_with('-') {
+            return None;
+        }
+        let output = run(
+            &["show", &format!("origin/{branch}:{relative}")],
+            &self.root,
+        )?;
+        output
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
     /// The origin remote's address, as git has it.
     #[must_use]
     pub fn remote_url(&self) -> Option<String> {

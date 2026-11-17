@@ -1,6 +1,6 @@
 // Tasks waiting on someone rather than on agent work (docs/v4/dashboard.md section 3): how long, and what was said.
 import { formatMinutes } from './format';
-import type { NeedsYouItem } from '$generated/types';
+import type { NeedsYouItem as NeedsYouEntry } from '$generated/types';
 import { activeSprint, type SprintModel } from './sprints';
 import type { Note, Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
@@ -94,7 +94,7 @@ export function needsYouReason(
   task: Task,
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   scope?: NeedsYouScope,
-): NeedsYouItem['reason'] | undefined {
+): NeedsYouEntry['reason'] | undefined {
   const kind = kindOf(vocab, task.status);
   if (kind === 'review') return REWORK_STATES.includes(task.review_state ?? '') ? undefined : 'review';
   if (kind === 'blocked' && task.waiting_on === 'user') return 'blocked';
@@ -108,7 +108,9 @@ export function needingUser(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULAR
 }
 
 /** A task that needs the user, and why: what the "need you" chips list (also atm serve's `needs_you_tasks`) */
-export type { NeedsYouItem };
+/** A task that needs the user, as the chips list it: with its key when it has one (ADR-007), as a project's own tasks
+ * and a summary's (the overview's cards, T-549) do */
+export type NeedsYouItem = NeedsYouEntry & Partial<Pick<Task, 'key' | 'key_final'>>;
 
 /** needingUser as the chips list it */
 export function needsYouItems(
@@ -118,6 +120,11 @@ export function needsYouItems(
 ): NeedsYouItem[] {
   return tasks.flatMap((t) => {
     const reason = needsYouReason(t, vocab, scope);
-    return reason ? [{ id: t.id, name: t.name, reason }] : [];
+    if (!reason) return [];
+    return [
+      t.key
+        ? { id: t.id, key: t.key, key_final: t.key_final, name: t.name, reason }
+        : { id: t.id, name: t.name, reason },
+    ];
   });
 }

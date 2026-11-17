@@ -89,6 +89,14 @@ Agents take tasks phase by phase and, within a phase, the most urgent first:
 **Labels** are tags that group tasks across phases and types, such as `spike-2` or `ux`. They show as small chips on
 the cards, and the filter and the search find them.
 
+## Task keys
+
+A task is known by its project's key and a number, such as `ATM-527`, so a task can wait for one in another project
+(`LFB-5` blocked by `ATM-978`). A key marked **draft** is provisional: the task was added on a branch, and its number
+may still move if another branch took it; it is final once merged into the main branch, and never changes after. An
+older ID (`T-527`) or a key a task had before keeps finding it. A project still on IDs gets keys with
+`atm project key set ATM`, which can also change the key later.
+
 ## The task details
 
 Click a task for everything about it: its description, what it depends on and what depends on it, and
@@ -98,7 +106,7 @@ Click a task for everything about it: its description, what it depends on and wh
   your answers, and failures;
 - **Commit** — the commit that holds the task's work.
 
-Descriptions, notes and questions are written in [CompMD](https://compmd.hakanserce.com/), Markdown with components,
+Descriptions, notes and questions are written in [CompMD](https://compmd.dev/), Markdown with components,
 and render as (this Help and What's new render with CompMD too):
 
 - **Markdown and GFM** — headings, lists (nested too), tables, task lists, code, quotes, alerts, footnotes and links;

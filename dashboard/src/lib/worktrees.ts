@@ -4,6 +4,7 @@
 // judged by atm, like every other task. A task is shown from the worktree where it got furthest, with that
 // worktree's branch on its card.
 import { browserFetch, fetchProjectFile, type Fetch, type Validators } from './api/http';
+import { compareTasks } from './keys';
 import type { Task } from './types';
 import { kindOf, type StatusKind, type Vocabulary } from './vocab';
 
@@ -57,9 +58,7 @@ export function mergeWorktrees(tasks: Task[], worktrees: readonly Worktree[], vo
   }
   if (!branches.size) return { tasks, branches };
   const known = new Set(tasks.map((t) => t.id));
-  const added = [...shown.values()]
-    .filter((t) => !known.has(t.id))
-    .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+  const added = [...shown.values()].filter((t) => !known.has(t.id)).sort(compareTasks);
   return { tasks: [...tasks.map((t) => shown.get(t.id)!), ...added], branches };
 }
 

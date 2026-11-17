@@ -1,47 +1,38 @@
 //! The app's commands (docs/guides/tauri.md): thin mappings to atm-lib's `Workspaces`, `Workspace` and `Member`, the
 //! REST API's v2 routes as commands (ADR-003 §5), answering what those routes answer (without `generated_at`). Their
 //! arguments and results are serde types, their errors one tagged enum the UI matches on. Live changes come through
-//! one channel per subscription, from a watcher on the folders the store reports. (In a module of their own: Tauri's
-//! command macros can't be defined at a library's root.)
+//! one channel per subscription, from atm-lib's subscriptions to a workspace or a project (the stores', T-555). (In a
+//! module of their own: Tauri's command macros can't be defined at a library's root.)
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crate::badge::NeedsYou;
 use crate::links::Links;
 use crate::menu::Menus;
 use crate::session::Session;
-use atm_lib::Workspaces;
 use atm_lib::query::Filters;
 use atm_lib::workspaces::{Member, Workspace};
-use notify::RecursiveMode;
-use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
+use atm_lib::{OnChange, Subscription, Workspaces};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use specta::Type;
 use tauri::ipc::Channel;
 use tauri::{Runtime, State, WebviewWindow};
 
-/// How long the watcher waits for a burst of changes (an atm command writes a file or two, git many) to settle.
-const SETTLE: Duration = Duration::from_millis(300);
-
-type Watcher = Debouncer<notify::RecommendedWatcher, RecommendedCache>;
-
-/// A live subscription: the window whose page made it, and its watcher.
-struct Subscription {
+/// A live subscription: the window whose page made it, and atm-lib's subscription.
+struct Live {
     window: String,
-    /// Held only: it watches until it is dropped
-    _watcher: Watcher,
+    /// Held only: it tells until it is dropped
+    _subscription: Subscription,
 }
 
 /// What every command shares: the user's workspaces, opened when the app starts, the live subscriptions (each its
 /// window's, T-511), the links for each window's page, and which window is in front.
 pub struct AppState {
     workspaces: Workspaces,
-    subscriptions: Mutex<HashMap<u32, Subscription>>,
+    subscriptions: Mutex<HashMap<u32, Live>>,
     next: AtomicU32,
     /// The deep links the app was opened with (T-459), and each new window's first page
     links: Links,
@@ -147,43 +138,33 @@ impl AppState {
         &self.workspaces
     }
 
-    /// Watch `folders` (those that are there; not their subfolders) for `window`'s page, sending `message` on `channel`
-    /// once each burst of changes has settled. The subscription's ID, for `unsubscribe`.
+    /// Subscribe for `window`'s page with `subscribe` (atm-lib's, a workspace's or a project's), sending `message` on
+    /// `channel` on each change it tells (on the store's thread). The subscription's ID, for `unsubscribe`.
     fn watch(
         &self,
         window: &str,
-        folders: &[PathBuf],
+        subscribe: impl FnOnce(OnChange) -> atm_common::Result<Subscription>,
         channel: Channel<Changed>,
         message: Changed,
     ) -> Result<u32, AppError> {
-        let failed = |e: notify::Error| AppError::Failed(e.to_string());
-        let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
-            if result.is_ok_and(|events| !events.is_empty()) {
-                let _ = channel.send(message.clone());
-            }
-        })
-        .map_err(failed)?;
-        for folder in folders.iter().filter(|f| f.is_dir()) {
-            watcher
-                .watch(folder, RecursiveMode::NonRecursive)
-                .map_err(failed)?;
-        }
+        let subscription = subscribe(Arc::new(move || {
+            let _ = channel.send(message.clone());
+        }))?;
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         self.subscriptions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
                 id,
-                Subscription {
+                Live {
                     window: window.to_owned(),
-                    _watcher: watcher,
+                    _subscription: subscription,
                 },
             );
         Ok(id)
     }
 
-    /// End `window`'s subscription `id` (its watcher stops when dropped); another window's stays. Whether there was
-    /// one.
+    /// End `window`'s subscription `id` (it stops when dropped); another window's stays. Whether there was one.
     fn unwatch(&self, window: &str, id: u32) -> bool {
         let mut subscriptions = self
             .subscriptions
@@ -588,7 +569,7 @@ pub async fn logo(
 /// Be told on `channel` when a workspace's list or any of its projects changes. The subscription's ID.
 ///
 /// # Errors
-/// No such workspace; a folder that can't be watched.
+/// No such workspace; a list or project that can't be watched.
 #[tauri::command]
 #[specta::specta]
 pub async fn subscribe_workspace<R: Runtime>(
@@ -598,19 +579,17 @@ pub async fn subscribe_workspace<R: Runtime>(
     channel: Channel<Changed>,
 ) -> Result<u32, AppError> {
     let found = self::workspace(&state.workspaces, &workspace)?;
-    let mut folders = found.watch_folders();
-    folders.push(state.workspaces.folder());
     let message = Changed {
         workspace,
         project: None,
     };
-    state.watch(window.label(), &folders, channel, message)
+    state.watch(window.label(), |c| found.subscribe(c), channel, message)
 }
 
 /// Be told on `channel` when a project's data changes. The subscription's ID.
 ///
 /// # Errors
-/// No such workspace or project; a folder that can't be watched.
+/// No such workspace or project; a project that can't be watched.
 #[tauri::command]
 #[specta::specta]
 pub async fn subscribe_project<R: Runtime>(
@@ -620,12 +599,12 @@ pub async fn subscribe_project<R: Runtime>(
     project: String,
     channel: Channel<Changed>,
 ) -> Result<u32, AppError> {
-    let folders = member(&state.workspaces, &workspace, &project)?.watch_folders();
+    let found = member(&state.workspaces, &workspace, &project)?;
     let message = Changed {
         workspace,
         project: Some(project),
     };
-    state.watch(window.label(), &folders, channel, message)
+    state.watch(window.label(), |c| found.subscribe(c), channel, message)
 }
 
 /// `atm agents status`: per harness atm knows, whether it is installed here, and each of atm's skills' state in the
@@ -690,12 +669,13 @@ pub async fn unsubscribe<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn a_subscription_says_when_a_watched_folder_changes_and_ends_with_unsubscribe() {
         let dir = std::env::temp_dir().join(format!("atm-app-watch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a folder");
+        std::fs::create_dir_all(dir.join("workspaces")).expect("a folder");
         let state = AppState::new(Workspaces::at(&dir));
         let (sent, received) = std::sync::mpsc::channel();
         let channel = Channel::new(move |body| {
@@ -706,13 +686,13 @@ mod tests {
             workspace: "work".into(),
             project: Some("abcd1234".into()),
         };
-        // A folder that isn't there is skipped, not an error
-        let folders = [dir.clone(), dir.join("not-there")];
+        // The default workspace's: its list, in the state folder
+        let workspace = state.workspaces.default_workspace();
         let id = state
-            .watch("main", &folders, channel, message)
+            .watch("main", |c| workspace.subscribe(c), channel, message)
             .expect("watching");
         std::thread::sleep(Duration::from_millis(200));
-        std::fs::write(dir.join("tasks.json"), "{}").expect("a change");
+        std::fs::write(dir.join("workspaces").join("default.json"), "{}").expect("a change");
         let body = received
             .recv_timeout(Duration::from_secs(10))
             .expect("told of the change");
@@ -741,10 +721,11 @@ mod tests {
             workspace: "default".into(),
             project: None,
         };
+        let workspace = state.workspaces.default_workspace();
         let subscribe = |window: &str| {
             let channel = Channel::new(|_| Ok(()));
             state
-                .watch(window, std::slice::from_ref(&dir), channel, message.clone())
+                .watch(window, |c| workspace.subscribe(c), channel, message.clone())
                 .expect("watching")
         };
         let mains = [subscribe("main"), subscribe("main")];

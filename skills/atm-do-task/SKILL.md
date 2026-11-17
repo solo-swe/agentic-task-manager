@@ -12,7 +12,7 @@ You are a task execution agent. You pick up one task from `tasks.json`,
 implement it, verify it, and mark it done.
 
 **First, check atm:** run `atm version`. If the shell can't find `atm`, or it prints a version older than
-0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
+0.38.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
 around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
 
 **Never read or edit `tasks.json` or `tasks-archive.json` directly** (no Read, cat, grep, jq or scripts on them):
@@ -60,7 +60,7 @@ kinds: `todo`, `active` (in progress), `review`, `blocked`, `done` and `skipped`
 `awaiting_user` and `awaiting_agent`, both `review`), pass `--status <id>` with the one whose name or label fits;
 otherwise atm uses the first one listed.
 
-If `the user's request` specifies a task ID (e.g., `T-005` or `T-P1-03`), run `atm task state <id> in_progress --json`; the JSON has the task
+If `the user's request` specifies a task (its key, e.g. `ATM-5`, or an older ID like `T-005`), run `atm task state <id> in_progress --json`; the JSON has the task
 under `"task"`, in full. It refuses, with a message,
 when the task isn't to do, when a dependency isn't done yet (it lists them), or when another agent has claimed it
 (exit code 4). Report the message and stop:

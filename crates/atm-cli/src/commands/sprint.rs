@@ -147,36 +147,79 @@ fn plural(n: u64) -> &'static str {
     if n == 1 { "" } else { "s" }
 }
 
-fn describe_sprint(s: &Value) -> String {
-    let mut details = vec![py_str_opt(s.get("state"))];
-    for key in ["release", "due"] {
-        if let Some(value) = s.get(key).filter(|v| truthy(v)) {
-            details.push(format!("{key} {}", py_str(value)));
+/// The sprints as a table (docs/cli-output-design.md §4): name, state, release, due, tasks, the counts by kind (done
+/// first); an open sprint's goal under it; the backlog last.
+fn sprint_lines(sprints: &[Value], backlog: u64) -> Vec<String> {
+    use crate::output::{Cell, DIM, Table, kind_style};
+    let mut table = Table::new().right(4);
+    for s in sprints {
+        let state = py_str_opt(s.get("state"));
+        let state_kind = match state.as_str() {
+            "active" => Some(atm_common::Kind::Active),
+            "closed" => Some(atm_common::Kind::Skipped),
+            _ => None,
+        };
+        let field = |key: &str| {
+            s.get(key)
+                .filter(|v| truthy(v))
+                .map_or_else(String::new, |v| {
+                    format!("{}{}", if key == "due" { "due " } else { "" }, py_str(v))
+                })
+        };
+        let mut counts: Vec<(String, String)> = s["by_kind"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(kind, n)| (kind.clone(), py_str(n)))
+            .collect();
+        counts.sort_by_key(|(kind, _)| kind != "done");
+        let mut each: Vec<String> = counts
+            .iter()
+            .map(|(kind, n)| format!("{kind} {n}"))
+            .collect();
+        if let Some(n) = s.get("review_pending").filter(|v| truthy(v)) {
+            each.push(format!("{} waiting for the sprint review", py_str(n)));
+        }
+        let tasks = s["tasks"].as_u64().unwrap_or(0);
+        table.row(vec![
+            // The active sprint stands out
+            Cell::styled(
+                py_str_opt(s.get("id")),
+                if state_kind == Some(atm_common::Kind::Active) {
+                    crate::output::HEADING
+                } else {
+                    anstyle::Style::new()
+                },
+            ),
+            Cell::styled(state, kind_style(state_kind)),
+            Cell::new(field("release")),
+            Cell::new(field("due")),
+            Cell::new(format!("{tasks} task{}", plural(tasks))),
+            Cell::new(each.join(" · ")),
+        ]);
+    }
+    table.row(vec![
+        Cell::new("backlog"),
+        Cell::new(""),
+        Cell::new(""),
+        Cell::new(""),
+        Cell::new(format!("{backlog} task{}", plural(backlog))),
+        Cell::styled("(atm sprint backlog)", DIM),
+    ]);
+    let mut lines = Vec::new();
+    for (n, line) in table.lines().into_iter().enumerate() {
+        lines.push(line);
+        if let Some(s) = sprints.get(n)
+            && s.get("state").and_then(Value::as_str) != Some("closed")
+            && let Some(goal) = s.get("goal").filter(|v| truthy(v))
+        {
+            lines.extend(crate::output::wrap(
+                &format!("  {}", py_str(goal)),
+                crate::output::width(),
+            ));
         }
     }
-    let counts: Vec<String> = s["by_kind"]
-        .as_object()
-        .into_iter()
-        .flatten()
-        .map(|(kind, n)| format!("{kind} {}", py_str(n)))
-        .collect();
-    let tasks = s["tasks"].as_u64().unwrap_or(0);
-    let mut line = format!(
-        "{} · {}: {tasks} task{}",
-        py_str_opt(s.get("id")),
-        details.join(" · "),
-        plural(tasks)
-    );
-    if !counts.is_empty() {
-        let _ = write!(line, " ({})", counts.join(", "));
-    }
-    if let Some(n) = s.get("review_pending").filter(|v| truthy(v)) {
-        let _ = write!(line, "; {} waiting for the sprint review", py_str(n));
-    }
-    if let Some(goal) = s.get("goal").filter(|v| truthy(v)) {
-        let _ = write!(line, "\n  goal: {}", py_str(goal));
-    }
-    line
+    lines
 }
 
 fn show_close(result: &Closed, ctx: Context) {
@@ -286,11 +329,9 @@ pub fn run(command: SprintCommand, ctx: Context, cwd: &Path) -> Result<()> {
                     }
                 );
             }
-            for s in &listed.sprints {
-                println!("{}", describe_sprint(s));
+            for line in sprint_lines(&listed.sprints, listed.backlog as u64) {
+                crate::output::emit(&line);
             }
-            let n = listed.backlog as u64;
-            println!("backlog: {n} task{} (atm sprint backlog)", plural(n));
         }
         SprintCommand::Add {
             name,
@@ -433,7 +474,9 @@ pub fn run(command: SprintCommand, ctx: Context, cwd: &Path) -> Result<()> {
             if dry(ctx, &format!("move {} to {to}", ids.join(", "))) {
                 return Ok(());
             }
-            let moved = move_tasks(&mut actor_project(agent.as_deref(), cwd)?, &ids, &to)?;
+            let mut project = actor_project(agent.as_deref(), cwd)?;
+            let ids = project.resolve_tasks(&ids)?;
+            let moved = move_tasks(&mut project, &ids, &to)?;
             if ctx.json {
                 print_json(&Value::Array(moved));
                 return Ok(());
@@ -468,9 +511,13 @@ pub fn run(command: SprintCommand, ctx: Context, cwd: &Path) -> Result<()> {
             } else if rows.is_empty() {
                 println!("The backlog is empty.");
             } else {
-                for line in list_lines(&rows) {
-                    println!("{line}");
+                for line in list_lines(&rows, &crate::output::Palette::of_vocab(vocab)) {
+                    crate::output::emit(&line);
                 }
+                crate::output::emit(&crate::output::paint(
+                    crate::output::DIM,
+                    &super::task::count_line(&rows),
+                ));
             }
         }
     }

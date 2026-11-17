@@ -11,7 +11,9 @@
   import TaskGrid from '../tasks/TaskGrid.svelte';
 
   const view = $derived(dashboard.tab);
-  const tabs: Partial<Record<ViewId, HTMLButtonElement>> = {};
+  // The tab buttons, for moving the focus with the arrow keys. `$state`, as `bind:this` into an object's property
+  // needs (Svelte's binding_property_non_reactive); elements aren't proxied, only the object holding them
+  const tabs: Partial<Record<ViewId, HTMLButtonElement>> = $state({});
 
   // The address is the source of truth (FR-2.2): selecting a tab writes it, back/forward and links read it
   // (state.svelte.ts onNavigate).

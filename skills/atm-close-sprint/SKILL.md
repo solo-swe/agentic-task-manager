@@ -13,7 +13,7 @@ each step. Closing records the sprint's report (what was done, carried over and 
 unfinished tasks on, keeping their status and their history.
 
 **First, check atm:** run `atm version`. If the shell can't find `atm`, or it prints a version older than
-0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
+0.38.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
 around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
 
 **Never read or edit `tasks.json` or `tasks-archive.json` directly** (no Read, cat, grep, jq or scripts on them):

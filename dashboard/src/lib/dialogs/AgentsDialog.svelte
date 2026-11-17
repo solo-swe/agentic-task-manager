@@ -1,7 +1,8 @@
 <script lang="ts">
-  // Connect your agents (T-458): in the atm app, a button per harness atm knows (Claude Code for now) that puts this
-  // version's skills where it reads the user's, the same code as `atm agents install`, and says what it wrote where,
-  // and what it left alone. It runs only when clicked: opening the dialog only reads the status. In the browser
+  // Connect your agents (T-458): in the atm app, a button per harness atm knows (a folder agent tools read skills
+  // from: Claude Code's, the one Codex, Copilot, Cursor, OpenCode and Gemini CLI share, Antigravity's; T-413) that
+  // puts this version's skills where it reads the user's, the same code as `atm agents install`, and says what it wrote
+  // where, and what it left alone. It runs only when clicked: opening the dialog only reads the status. In the browser
   // (atm serve never writes into the user's folders) it gives the command to run instead.
   import { agentsStatus, connectAgents, connected, type Connected, type HarnessStatus } from '../api/agents';
   import { inApp } from '../api/http';
@@ -44,14 +45,18 @@
   }
 
   const count = (status: HarnessStatus, state: string) => status.skills.filter((s) => s.state === state).length;
+  /** The tools found here that read a folder several share (a single tool's folder is named after it already) */
+  const readers = (status: HarnessStatus) =>
+    (status.tools ?? []).length > 1 ? (status.tools ?? []).filter((t) => t.detected).map((t) => t.label) : [];
 </script>
 
 <Dialog id="agents" title="Connect your agents" {open} onclose={() => dashboard.closeDialog()}>
   {#if !inApp}
     <p class="agents-intro">
       Let your AI agents use Agentic Task Manager: run <code>atm agents install</code> in a terminal. It puts its skills
-      where your agent harness reads them (Claude Code: <code>~/.claude/skills</code>); <code>atm agents status</code> shows
-      what is installed.
+      where your agent harnesses read them (Claude Code: <code>~/.claude/skills</code>; Codex, Copilot, Cursor, OpenCode
+      and Gemini CLI: <code>~/.agents/skills</code>; Antigravity: <code>~/.gemini/config/skills</code>);
+      <code>atm agents status</code> shows what is installed.
     </p>
   {:else}
     <p class="agents-intro">
@@ -76,6 +81,14 @@
                   'stale',
                 )} from another version{/if}{#if count(status, "not atm's")}, {count(status, "not atm's")} not atm's{/if}
             </p>
+            {#if readers(status).length}
+              <p class="agents-harness-tools">Found here: {readers(status).join(', ')}</p>
+            {/if}
+            {#if status.duplicates?.length}
+              <p class="agents-harness-twice">
+                {status.duplicates.join(', ')} also reads another folder atm is in, so it lists atm's skills twice.
+              </p>
+            {/if}
             <button
               class="agents-connect"
               data-harness={status.harness}

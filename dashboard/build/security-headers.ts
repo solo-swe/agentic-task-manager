@@ -56,7 +56,15 @@ export function withPagePolicy(res: ServerResponse, csp: (html: string) => strin
   const contentType = () =>
     String(head?.[1]?.['content-type'] ?? head?.[1]?.['Content-Type'] ?? res.getHeader('Content-Type') ?? '');
   const isHtml = () => (html ??= /text\/html/i.test(contentType()));
+  // Node's own end and write send the head through `this.writeHead` when nothing sent it yet (`_implicitHeader`): give
+  // them back before handing over, or that call would only be held here and the response go out without its head
+  const restore = () => {
+    res.writeHead = writeHead as typeof res.writeHead;
+    res.write = write as typeof res.write;
+    res.end = end as typeof res.end;
+  };
   const flushHead = () => {
+    restore();
     if (head) writeHead(...head);
     head = null;
   };
@@ -78,6 +86,13 @@ export function withPagePolicy(res: ServerResponse, csp: (html: string) => strin
   }) as typeof res.write;
   res.end = ((chunk?: unknown, ...rest: unknown[]) => {
     if (!isHtml()) {
+      // A 304 has no body to hash, and the browser keeps the headers it sends for what it stored: the policy without
+      // the page's hashes would block the stored page's inline scripts. The stored response's policy stands
+      if ((head?.[0] ?? res.statusCode) === 304) {
+        res.removeHeader('Content-Security-Policy');
+        if (head?.[1])
+          for (const key of Object.keys(head[1])) if (/^content-security-policy$/i.test(key)) delete head[1][key];
+      }
       flushHead();
       return end(chunk, ...rest);
     }
@@ -105,7 +120,10 @@ export function securityHeaders(): Plugin {
     name: 'atm-security-headers',
     apply: 'serve',
     configureServer(server) {
-      server.middlewares.use((_req, res, next) => {
+      server.middlewares.use((req, res, next) => {
+        // A page is rendered again on every load, never answered with a 304: its policy is its own inline scripts'
+        // hashes, so it comes with the page
+        if (/text\/html/i.test(req.headers.accept ?? '')) delete req.headers['if-none-match'];
         res.setHeader('Content-Security-Policy', devCsp([]));
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');

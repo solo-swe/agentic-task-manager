@@ -1,6 +1,7 @@
 // The Project tab's Stats (docs/project-stats-proposal.md §4, T-253): the project's numbers over its whole history.
 // Work time as everywhere else (work.ts, timeuse.ts); no git calls: commits and PRs are what atm recorded on tasks.
 import { INTERACTIVE_LABEL } from './forecast';
+import { keyOf } from './keys';
 import { median } from './insights';
 import { completions } from './timeline';
 import { NO_SPRINTS, type SprintModel } from './sprints';
@@ -103,6 +104,8 @@ export function projectStats(
 
 export interface TimedTask {
   id: string;
+  /** Its key, with task keys (lib/keys.ts) */
+  key?: string;
   name: string;
   minutes: number;
   /** An `interactive` task: its time includes working with you */
@@ -147,7 +150,15 @@ export function timeHistogram(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABUL
     const end = ms(t.review_requested_at) ?? ms(t.completed_at);
     return start === null || end === null || end < start
       ? []
-      : [{ id: t.id, name: t.name, minutes: (end - start) / 60_000, withYou: !!t.labels?.includes(INTERACTIVE_LABEL) }];
+      : [
+          {
+            id: t.id,
+            ...keyOf(t),
+            name: t.name,
+            minutes: (end - start) / 60_000,
+            withYou: !!t.labels?.includes(INTERACTIVE_LABEL),
+          },
+        ];
   });
   const bins: TimeBin[] = TIME_BINS.map((from, i) => {
     const to = TIME_BINS[i + 1] ?? Infinity;

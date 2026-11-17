@@ -2,6 +2,7 @@
 // and activity over time (completions, who was working, time per task).
 import { isAgent } from './actors';
 import { INTERACTIVE_LABEL } from './forecast';
+import { keyOf } from './keys';
 import { completions, type Completion } from './timeline';
 import type { Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, type StatusKind, type Vocabulary } from './vocab';
@@ -106,6 +107,8 @@ export interface ActivityBucket {
 
 export interface CycleTime {
   id: string;
+  /** Its key, with task keys (lib/keys.ts) */
+  key?: string;
   name: string;
   type: string;
   /** When it was completed (ms) */
@@ -434,6 +437,7 @@ export function activitySeries(
     )
     .map(({ t, s, c, w }) => ({
       id: t.id,
+      ...keyOf(t),
       name: t.name,
       type: t.type,
       time: c!,

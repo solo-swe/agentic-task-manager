@@ -11,11 +11,13 @@ use atm_common::home::state_dir;
 use atm_common::time::{format_iso, now};
 use atm_common::{Error, Result};
 use atm_db::registry::{DEFAULT_WORKSPACE, FileRegistry, read_recent, workspace_ids, write_recent};
+use atm_db::{OnChange, Subscription};
 use serde_json::{Map, Value, json};
 
 use crate::Project;
 use crate::archive::{project_stamp, task_snapshot};
 use crate::documents::{read_document, read_image};
+use crate::foreign;
 use crate::query::{Filters, list_claims};
 use crate::settings::get_logo;
 use crate::summary::project_summary;
@@ -51,12 +53,6 @@ impl Workspaces {
         }
     }
 
-    /// The folder their files are in: it changes when one is made, removed or its list changes.
-    #[must_use]
-    pub fn folder(&self) -> PathBuf {
-        self.home.join(atm_db::registry::WORKSPACES_DIR)
-    }
-
     /// Their IDs, `default` first.
     #[must_use]
     pub fn ids(&self) -> Vec<String> {
@@ -73,6 +69,42 @@ impl Workspaces {
             .map(|w| json!({"id": w.id(), "projects": w.entries().len()}))
             .collect();
         json!({"workspaces": list, "recent": self.recent()})
+    }
+
+    /// The registered projects, in any workspace, whose short name (`meta.key`, ADR-007 §2) is `key` in any case, other
+    /// than the one in `except`: `(workspace, project's name)`, for `atm project key set`'s warning. A project that
+    /// can't be read is left out.
+    #[must_use]
+    pub fn key_users(&self, key: &str, except: &Path) -> Vec<(String, String)> {
+        let except = std::fs::canonicalize(except).unwrap_or_else(|_| except.to_path_buf());
+        let mut found = Vec::new();
+        for id in self.ids() {
+            let Some(workspace) = self.get(&id) else {
+                continue;
+            };
+            for entry in workspace.entries() {
+                let path = folder(&entry);
+                if std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone()) == except {
+                    continue;
+                }
+                let Ok(project) = Workspace::project_tolerant(&entry) else {
+                    continue;
+                };
+                let Ok(document) = project.store().document() else {
+                    continue;
+                };
+                if atm_common::keys::project_key(document)
+                    .is_some_and(|k| k.eq_ignore_ascii_case(key))
+                {
+                    let name = entry
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or_else(|| entry["id"].as_str().unwrap_or_default());
+                    found.push((id.clone(), name.to_string()));
+                }
+            }
+        }
+        found
     }
 
     /// The workspace `id`, if there is one.
@@ -200,10 +232,19 @@ impl Workspaces {
 }
 
 /// One workspace: its list of projects, and each one's summary, computed again only when its task data or claims
-/// changed, or the day did (the completions count by day).
+/// changed, or the day did (the completions count by day), or a project its tasks depend on did (T-553).
 pub struct Workspace {
     registry: FileRegistry,
-    summaries: Mutex<HashMap<String, (Value, Value)>>,
+    summaries: Mutex<HashMap<String, Summarized>>,
+}
+
+/// A project's summary, and what it was worked out from: the project's stamp, and the other projects its tasks
+/// depend on, by ID, with their [`foreign::version`].
+struct Summarized {
+    stamp: Value,
+    others: Vec<String>,
+    version: Value,
+    summary: Value,
 }
 
 /// A workspace's projects as the dashboard lists them, read once: what the list depends on (`stamp`, for an `ETag`)
@@ -283,6 +324,14 @@ impl Member {
         task_snapshot(&Workspace::project_tolerant(&self.entry)?, filters)
     }
 
+    /// What the other projects its tasks name are now ([`foreign::named_version`]): with [`Member::stamp`], what its
+    /// task views depend on, for the tasks route's `ETag` (docs/cross-project-freshness-design.md §5.3 D). Null when
+    /// it can't be opened.
+    #[must_use]
+    pub fn others_version(&self) -> Value {
+        Workspace::project_tolerant(&self.entry).map_or(Value::Null, |p| foreign::named_version(&p))
+    }
+
     /// The claims of all its worktrees, from the shared claims store.
     #[must_use]
     pub fn claims(&self) -> Vec<Value> {
@@ -319,12 +368,13 @@ impl Member {
         read_image(self.project()?.vcs().as_ref(), path)
     }
 
-    /// The folders to watch for its data to change.
-    #[must_use]
-    pub fn watch_folders(&self) -> Vec<PathBuf> {
-        self.project()
-            .map(|p| p.store().watch_folders())
-            .unwrap_or_default()
+    /// Be told when its data changes (its store's subscription), until the subscription is dropped. `on_change` runs
+    /// on the store's thread.
+    ///
+    /// # Errors
+    /// As [`Project::open`]; a store that can't be watched.
+    pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
+        self.project()?.store().subscribe(on_change)
     }
 }
 
@@ -456,24 +506,21 @@ impl Workspace {
         Ok(Member { entry, stamp })
     }
 
-    /// The folders to watch for its list to change: its file's, and each listed project's.
-    #[must_use]
-    pub fn watch_folders(&self) -> Vec<PathBuf> {
-        let mut folders: Vec<PathBuf> = self
-            .registry
-            .file()
-            .parent()
-            .map(Path::to_path_buf)
-            .into_iter()
-            .collect();
+    /// Be told when it changes, until the subscription is dropped: its list (and the list of workspaces), and the data
+    /// of each project it lists now that can be opened, their subscriptions merged. `on_change` runs on the stores'
+    /// threads, and atm-lib holds no lock while it runs.
+    ///
+    /// # Errors
+    /// Its list or a project's store can't be watched.
+    pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
+        let mut parts = Vec::new();
         for entry in self.entries() {
             if let Ok(project) = Self::project(&entry) {
-                folders.extend(project.store().watch_folders());
+                parts.push(project.store().subscribe(Arc::clone(&on_change))?);
             }
         }
-        folders.sort();
-        folders.dedup();
-        folders
+        parts.push(self.registry.subscribe(on_change)?);
+        Ok(Subscription::merged(parts))
     }
 
     fn summary(&self, entry: &Value, stamp: &Value) -> Value {
@@ -482,16 +529,32 @@ impl Workspace {
             .summaries
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some((cached, summary)) = cache.get(&key)
-            && cached == stamp
+        if let Some(cached) = cache.get(&key)
+            && cached.stamp == *stamp
+            && foreign::version(&cached.others) == cached.version
         {
-            return summary.clone();
+            return cached.summary.clone();
         }
         // An unreadable tasks.json or an unusable vocabulary: listed as missing
-        let summary = Self::project(entry)
+        let project = Self::project(entry);
+        let others = project
+            .as_ref()
+            .map(foreign::referenced)
+            .unwrap_or_default();
+        // Before the summary, so a change in another project meanwhile is seen on the next use
+        let version = foreign::version(&others);
+        let summary = project
             .and_then(|p| project_summary(&p))
             .unwrap_or(Value::Null);
-        cache.insert(key, (stamp.clone(), summary.clone()));
+        cache.insert(
+            key,
+            Summarized {
+                stamp: stamp.clone(),
+                others,
+                version,
+                summary: summary.clone(),
+            },
+        );
         summary
     }
 
@@ -524,7 +587,17 @@ impl Workspace {
             .iter()
             .map(|l| l.as_ref().map_or(Value::Null, |(file, _)| file_stamp(file)))
             .collect();
-        let stamp = json!([self.stamp(), stamps, trees, logo_stamps]);
+        // The other projects each one's tasks name: their summaries (waiting, next) show them
+        let others: Vec<Value> = entries
+            .iter()
+            .zip(&stamps)
+            .map(|(e, s)| {
+                s.as_ref()
+                    .and_then(|_| Self::project(e).ok())
+                    .map_or(Value::Null, |p| foreign::named_version(&p))
+            })
+            .collect();
+        let stamp = json!([self.stamp(), stamps, trees, logo_stamps, others]);
         Listing {
             workspace: self,
             entries,
@@ -707,6 +780,53 @@ mod tests {
         assert_eq!(projects[0]["worktrees"], json!([]));
         assert!(workspace.search("anything").is_empty());
         assert!(workspace.find("gone").is_some() && workspace.find("x").is_none());
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    /// T-555: a workspace's subscription is its members' stores' and its list's, merged: a change in a member's task
+    /// file and in the workspace's file are both told, and nothing once it is dropped
+    #[test]
+    fn a_workspace_subscription_tells_its_members_changes_and_its_lists() {
+        use std::sync::mpsc::{Receiver, channel};
+        use std::time::Duration;
+        /// Whether nothing more is told for a second, what was told so far dropped first
+        fn quiet(received: &Receiver<()>) -> bool {
+            while received.try_recv().is_ok() {}
+            received.recv_timeout(Duration::from_secs(1)).is_err()
+        }
+        let home = state("subscribe");
+        let project = home.join("project");
+        let tasks = project.join(atm_common::TASK_DIR).join("tasks.json");
+        std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
+        std::fs::write(&tasks, r#"{"meta": {"id": "one"}, "tasks": []}"#).unwrap();
+        let workspaces = Workspaces::at(&home);
+        let workspace = workspaces.default_workspace();
+        workspace
+            .add_project(Some(&project.to_string_lossy()), &home)
+            .unwrap();
+        let (sent, received) = channel();
+        let on_change: OnChange = Arc::new(move || {
+            let _ = sent.send(());
+        });
+        let subscription = workspace.subscribe(on_change).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(
+            &tasks,
+            r#"{"meta": {"id": "one"}, "tasks": [{"id": "T-1"}]}"#,
+        )
+        .unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the member's change");
+        let _ = quiet(&received);
+        workspace.remove_project("one", &home).unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the list's change");
+        drop(subscription);
+        std::thread::sleep(Duration::from_millis(100));
+        std::fs::write(&tasks, r#"{"meta": {"id": "one"}, "tasks": []}"#).unwrap();
+        assert!(quiet(&received), "nothing once dropped");
         std::fs::remove_dir_all(&home).unwrap();
     }
 }

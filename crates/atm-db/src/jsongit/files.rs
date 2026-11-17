@@ -5,7 +5,9 @@ use std::path::Path;
 
 use atm_common::Shown;
 
-use atm_common::ids::valid_task_id;
+use atm_common::ids::{
+    KEYS_FORMAT, file_format, valid_project_key, valid_task_id, valid_task_uuid,
+};
 use atm_common::py::repr_str;
 use atm_common::{Error, Result, Task, Vocabulary};
 use serde_json::Value;
@@ -58,15 +60,84 @@ fn read_task_file(paths: &Paths) -> Result<Value> {
         })
 }
 
+/// The file's format (ADR-007 §6), checked: one this atm reads, or an error saying what to do. A file written by a
+/// newer atm is never read, so this one can't half-understand and rewrite it.
+///
+/// # Errors
+/// When `meta.format` isn't a whole number of at least 1, or is newer than [`KEYS_FORMAT`].
+pub fn checked_format(document: &Value, file: &str) -> Result<u64> {
+    let Some(format) = file_format(document) else {
+        return Err(Error::failed(format!(
+            "{file}: meta.format must be a whole number (1 or {KEYS_FORMAT}); run atm doctor"
+        )));
+    };
+    if format > KEYS_FORMAT {
+        return Err(Error::failed(format!(
+            "{file} is format {format}, written by a newer atm (this one reads formats up to {KEYS_FORMAT}): upgrade \
+             atm to work on this project"
+        )));
+    }
+    Ok(format)
+}
+
+/// What a task of a keys-format file (ADR-007 §1) must hold beyond a legacy one's: a UUID `id`, a `number` of at least
+/// 1, and, when present, a boolean `key_final` and `aliases` that are a list of keys. None when it holds them.
+fn keys_problem(task: &Value) -> Option<&'static str> {
+    let id = task.get("id").and_then(Value::as_str).unwrap_or_default();
+    if !valid_task_uuid(id) {
+        return Some("its id isn't a UUID (a format-2 file stores tasks by UUID)");
+    }
+    if task
+        .get("number")
+        .and_then(Value::as_u64)
+        .is_none_or(|n| n < 1)
+    {
+        return Some("it has no number (a whole number of at least 1)");
+    }
+    if task.get("key_final").is_some_and(|v| !v.is_boolean()) {
+        return Some("its key_final isn't true or false");
+    }
+    if task
+        .get("aliases")
+        .is_some_and(|a| !a.as_array().is_some_and(|a| a.iter().all(Value::is_string)))
+    {
+        return Some("its aliases aren't a list of keys");
+    }
+    None
+}
+
+/// `meta.key` of a keys-format file: the project's short name (3 to 6 letters and digits), which its keys need.
+fn meta_key_problem(document: &Value) -> Option<String> {
+    let key = document.get("meta").and_then(|m| m.get("key"));
+    match key.and_then(Value::as_str) {
+        Some(k) if valid_project_key(k) => None,
+        Some(k) => Some(format!(
+            "meta.key {} isn't a short name (3 to 6 letters and digits)",
+            repr_str(k)
+        )),
+        None => {
+            Some("meta.key, the project's short name its tasks' keys start with, is missing".into())
+        }
+    }
+}
+
 /// `tasks.json`, read strictly: an unusable vocabulary, a task that isn't an object with an ID, an ID with characters
-/// atm doesn't allow or dependencies that aren't a list of IDs stop every command, before anything is written.
+/// atm doesn't allow or dependencies that aren't a list of IDs stop every command, before anything is written. A file
+/// of a newer format than this atm's is refused (ADR-007 §6); in a keys-format file every task needs a UUID and a
+/// number, and `meta` the project's short name.
 ///
 /// # Errors
 /// When there is no task file, it isn't one, or one of the checks above fails; the message says which.
 pub fn load_tasks(paths: &Paths) -> Result<Loaded> {
     let document = read_task_file(paths)?;
-    let vocabulary = Vocabulary::of_document(&document)?;
     let file = paths.tasks.shown();
+    let format = checked_format(&document, &file)?;
+    let vocabulary = Vocabulary::of_document(&document)?;
+    if format == KEYS_FORMAT
+        && let Some(problem) = meta_key_problem(&document)
+    {
+        return Err(Error::failed(format!("{file}: {problem}; run atm doctor")));
+    }
     for (i, task) in document["tasks"]
         .as_array()
         .into_iter()
@@ -98,6 +169,13 @@ pub fn load_tasks(paths: &Paths) -> Result<Loaded> {
                 "{file}: {id}'s dependencies aren't a list of IDs; run atm doctor"
             )));
         }
+        if format == KEYS_FORMAT
+            && let Some(problem) = keys_problem(task)
+        {
+            return Err(Error::failed(format!(
+                "{file}: task {id}: {problem}; run atm doctor"
+            )));
+        }
     }
     Ok(Loaded {
         document,
@@ -114,6 +192,8 @@ pub fn load_tasks(paths: &Paths) -> Result<Loaded> {
 /// When there is no task file, or it isn't one at all.
 pub fn load_tasks_tolerant(paths: &Paths) -> Result<(Loaded, Problems)> {
     let mut document = read_task_file(paths)?;
+    // A newer format can't be shown as if it were this one's
+    let format = checked_format(&document, &paths.tasks.shown())?;
     let mut problems = Problems::default();
     let mut kept = Vec::new();
     let tasks = document["tasks"].as_array().cloned().unwrap_or_default();
@@ -149,12 +229,22 @@ pub fn load_tasks_tolerant(paths: &Paths) -> Result<(Loaded, Problems)> {
                     .into(),
             ));
         }
+        if format == KEYS_FORMAT
+            && let Some(problem) = keys_problem(&task)
+        {
+            own.push(Value::String(problem.into()));
+        }
         if !own.is_empty() {
             problems.tasks.insert(id, Value::Array(own));
         }
         kept.push(task);
     }
     document["tasks"] = Value::Array(kept);
+    if format == KEYS_FORMAT
+        && let Some(problem) = meta_key_problem(&document)
+    {
+        problems.file.push(problem);
+    }
     // The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
     let (vocabulary, vocabulary_problems, meta) = Vocabulary::tolerant(document.get("meta"));
     problems.file.extend(vocabulary_problems);
@@ -281,6 +371,93 @@ mod tests {
         assert!(
             error(r#"{"tasks": [{"id": "T-1", "dependencies": "T-2"}]}"#)
                 .ends_with(": T-1's dependencies aren't a list of IDs; run atm doctor")
+        );
+    }
+
+    #[test]
+    fn a_newer_format_is_refused_saying_to_upgrade() {
+        let message = error(r#"{"meta": {"format": 3}, "tasks": []}"#);
+        assert!(
+            message.ends_with(
+                " is format 3, written by a newer atm (this one reads formats up to 2): upgrade atm to work on this \
+                 project"
+            ),
+            "{message}"
+        );
+        assert!(
+            error(r#"{"meta": {"format": "2"}, "tasks": []}"#)
+                .ends_with(": meta.format must be a whole number (1 or 2); run atm doctor")
+        );
+        // Shown on the dashboard neither
+        let (_dir, paths) = project(r#"{"meta": {"format": 3}, "tasks": []}"#);
+        assert!(load_tasks_tolerant(&paths).is_err());
+    }
+
+    #[test]
+    fn a_keys_format_file_holds_uuids_numbers_and_the_projects_short_name() {
+        let uuid = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8091";
+        let good = format!(
+            r#"{{"meta": {{"format": 2, "key": "ATM"}}, "tasks": [{{"id": "{uuid}", "number": 527, "key_final": true, "aliases": ["T-527"]}}]}}"#
+        );
+        let (_dir, paths) = project(&good);
+        let loaded = load_tasks(&paths).unwrap();
+        assert_eq!(loaded.tasks().next().unwrap()["number"], json!(527));
+
+        assert!(
+            error(r#"{"meta": {"format": 2, "key": "ATM"}, "tasks": [{"id": "T-1", "number": 1}]}"#)
+                .ends_with(": task T-1: its id isn't a UUID (a format-2 file stores tasks by UUID); run atm doctor")
+        );
+        for (task, problem) in [
+            (
+                format!(r#"{{"id": "{uuid}"}}"#),
+                "it has no number (a whole number of at least 1)",
+            ),
+            (
+                format!(r#"{{"id": "{uuid}", "number": 0}}"#),
+                "it has no number (a whole number of at least 1)",
+            ),
+            (
+                format!(r#"{{"id": "{uuid}", "number": 1, "key_final": "yes"}}"#),
+                "its key_final isn't true or false",
+            ),
+            (
+                format!(r#"{{"id": "{uuid}", "number": 1, "aliases": "T-1"}}"#),
+                "its aliases aren't a list of keys",
+            ),
+        ] {
+            let message = error(&format!(
+                r#"{{"meta": {{"format": 2, "key": "ATM"}}, "tasks": [{task}]}}"#
+            ));
+            assert!(
+                message.ends_with(&format!(": task {uuid}: {problem}; run atm doctor")),
+                "{message}"
+            );
+        }
+        assert!(error(r#"{"meta": {"format": 2}, "tasks": []}"#).ends_with(
+            ": meta.key, the project's short name its tasks' keys start with, is missing; run atm doctor"
+        ));
+        assert!(error(r#"{"meta": {"format": 2, "key": "TaskMan"}, "tasks": []}"#).ends_with(
+            ": meta.key 'TaskMan' isn't a short name (3 to 6 letters and digits); run atm doctor"
+        ));
+        // A legacy file is read as before: its IDs needn't be UUIDs, nor have numbers
+        let (_dir, paths) = project(r#"{"tasks": [{"id": "T-1"}]}"#);
+        assert!(load_tasks(&paths).is_ok());
+    }
+
+    #[test]
+    fn a_keys_format_files_problems_are_shown_not_refused_on_the_dashboard() {
+        let (_dir, paths) = project(r#"{"meta": {"format": 2}, "tasks": [{"id": "T-1"}]}"#);
+        let (loaded, problems) = load_tasks_tolerant(&paths).unwrap();
+        assert_eq!(loaded.tasks().count(), 1);
+        assert_eq!(
+            problems.tasks["T-1"],
+            json!(["its id isn't a UUID (a format-2 file stores tasks by UUID)"])
+        );
+        assert!(
+            problems
+                .file
+                .iter()
+                .any(|p| p.starts_with("meta.key, the project's short name"))
         );
     }
 

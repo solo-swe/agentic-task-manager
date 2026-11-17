@@ -9,7 +9,25 @@
 // backticks would show too (`in_progress`, `ATM_AGENT`)
 #![allow(clippy::doc_markdown)]
 
+// Everything atm prints goes through `output::clean`, so no control character of task text reaches the terminal:
+// these shadow std's macros in the whole crate (defined before its modules, as macros are scoped by their place).
+macro_rules! println {
+    () => { ::std::println!() };
+    ($($arg:tt)*) => { ::std::println!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+}
+macro_rules! print {
+    ($($arg:tt)*) => { ::std::print!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+}
+macro_rules! eprintln {
+    () => { ::std::eprintln!() };
+    ($($arg:tt)*) => { ::std::eprintln!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+}
+macro_rules! eprint {
+    ($($arg:tt)*) => { ::std::eprint!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+}
+
 mod commands;
+mod output;
 mod process;
 
 use std::ffi::OsString;
@@ -55,6 +73,18 @@ struct Cli {
     /// Don't execute, just show what would be done
     #[arg(short = 'n', long = "dry-run", global = true)]
     dry_run: bool,
+
+    /// When to style the output: auto (on a terminal, without NO_COLOR), always or never
+    #[arg(
+        long = "color",
+        global = true,
+        value_enum,
+        default_value_t,
+        value_name = "WHEN",
+        hide_possible_values = true,
+        hide_default_value = true
+    )]
+    color: output::ColorWhen,
 
     #[command(subcommand)]
     command: Command,
@@ -137,7 +167,8 @@ enum Command {
         #[arg(value_parser = ["bash", "zsh", "fish", "powershell"])]
         shell: String,
     },
-    /// Install atm's skills where your agent harnesses read them (Claude Code for now)
+    /// Install atm's skills where your agent harnesses read them (Claude Code, Codex, Copilot, Cursor, OpenCode,
+    /// Gemini CLI, Antigravity)
     #[command(subcommand)]
     Agents(AgentsCommand),
     /// Show the list of commands.
@@ -208,7 +239,8 @@ fn renew_own_claims(args: &[OsString], cwd: &Path) {
 /// An error as atm reports it: `atm: <message>` on stderr, or `{"error", "code"}` with `--json`.
 fn report(message: &str, code: u8, as_json: bool) {
     if as_json {
-        eprintln!("{}", to_json(&json!({"error": message, "code": code})));
+        // Exactly, as print_json prints
+        ::std::eprintln!("{}", to_json(&json!({"error": message, "code": code})));
     } else {
         eprintln!("atm: {message}");
     }
@@ -298,6 +330,7 @@ fn run(args: &[OsString]) -> u8 {
         Ok(cli) => cli,
         Err(e) => return parse_error(&e, as_json),
     };
+    output::init(cli.color, cli.json);
     let ctx = Context {
         json: cli.json,
         dry_run: cli.dry_run,
@@ -376,10 +409,15 @@ fn run(args: &[OsString]) -> u8 {
     match result {
         Ok(code) => code,
         Err(error) => {
-            report(&error.to_string(), error.code(), as_json);
+            report(&labelled(&error.to_string(), &cwd), error.code(), as_json);
             error.code()
         }
     }
+}
+
+/// A message as people read it: its task UUIDs as labels (`commands::labelled`).
+fn labelled(message: &str, cwd: &Path) -> String {
+    commands::labelled(cwd, message)
 }
 
 fn main() -> ExitCode {

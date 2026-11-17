@@ -36,7 +36,7 @@
     },
     "args": ["task", "state", "T-002", "in_progress"],
     "expect": {
-      "stdoutIncludes": ["T-002: todo -> in_progress\nT-002  Task T-002\n", "depends on: T-001 (done)"],
+      "stdoutIncludes": ["T-002: todo -> in_progress\nT-002  Task T-002\n", "depends on  T-001 (done)"],
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {
@@ -610,6 +610,21 @@
     "expect": {
       "exit": 1,
       "stderrIncludes": ["is not a valid task file"]
+    }
+  },
+  {
+    "name": "a task file of a newer format is refused, saying to upgrade atm (ADR-007 §6, T-538)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": "{\"meta\": {\"format\": 3, \"key\": \"ATM\"}, \"tasks\": [{\"id\": \"T-001\", \"status\": \"todo\"}]}"
+      }
+    },
+    "args": ["project", "status"],
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": [
+        "is format 3, written by a newer atm (this one reads formats up to 2): upgrade atm to work on this project"
+      ]
     }
   },
   {

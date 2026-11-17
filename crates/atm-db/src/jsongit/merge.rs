@@ -9,6 +9,8 @@ use std::path::Path;
 use atm_common::Shown;
 
 use atm_common::home::write_text_atomic;
+use atm_common::ids::task_key;
+use atm_common::keys::{keys_format, project_key};
 use atm_common::py::{py_repr, py_str, to_json};
 use atm_common::{Error, Kind, Result, Vocabulary};
 use serde_json::{Map, Value, json};
@@ -450,10 +452,135 @@ fn lookup<'a>(
     tasks.iter().find(|(k, _)| k == id).map(|(_, t)| *t)
 }
 
-/// Merge three versions of tasks.json: the merged document, and the conflicts in words (ours was kept for each).
+/// The three versions in one format (ADR-007 §6): when a side is in the keys format, every side still in the old one
+/// (the common ancestor too) is migrated first, as the first migration does it, so a branch made before the
+/// migration merges task by task (a migrated task's UUID is the same wherever it was migrated).
+fn same_format(base: &Value, ours: &Value, theirs: &Value) -> [Value; 3] {
+    let mut sides = [base.clone(), ours.clone(), theirs.clone()];
+    if sides.iter().any(keys_format) {
+        for side in &mut sides {
+            let mut archive = json!({"tasks": []});
+            let _ = super::migrate::to_keys_format(side, &mut archive, &mut Map::new());
+        }
+    }
+    sides
+}
+
+/// In a keys-format merge (ADR-007 §4), no two tasks may share a number. Of two that do: a final one keeps it (only
+/// the base branch makes numbers final); of two provisional ones, ours keeps it and theirs takes the next free number
+/// (above every number and both sides' `meta.next_number`), keeping its old key as an alias. Two final ones can't
+/// happen; if they do, both are kept and it is a conflict. The next free number, for `meta.next_number`.
+fn renumber_clashes(
+    tasks: &mut [Value],
+    ours: &[(Value, &Map<String, Value>)],
+    key: &str,
+    stored_next: u64,
+    conflicts: &mut Vec<String>,
+) -> u64 {
+    let number = |t: &Value| t.get("number").and_then(Value::as_u64);
+    let final_ = |t: &Value| t.get("key_final").and_then(Value::as_bool) == Some(true);
+    let mut next = tasks
+        .iter()
+        .filter_map(number)
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1)
+        .max(stored_next);
+    let mut seen: Vec<(u64, usize)> = Vec::new();
+    for i in 0..tasks.len() {
+        let Some(n) = number(&tasks[i]) else {
+            continue;
+        };
+        let Some(&(_, j)) = seen.iter().find(|(m, _)| *m == n) else {
+            seen.push((n, i));
+            continue;
+        };
+        let (a, b) = (&tasks[j], &tasks[i]);
+        let mover = match (final_(a), final_(b)) {
+            (true, true) => {
+                conflicts.push(format!(
+                    "{}: two final tasks have this number ({} and {}); both kept, give one another number by hand",
+                    task_key(key, n),
+                    py_str(&id_of_value(a)),
+                    py_str(&id_of_value(b))
+                ));
+                continue;
+            }
+            (true, false) => i,
+            (false, true) => j,
+            // Both provisional: ours keeps it
+            (false, false) => {
+                if lookup(ours, &id_of_value(b)).is_some()
+                    && lookup(ours, &id_of_value(a)).is_none()
+                {
+                    j
+                } else {
+                    i
+                }
+            }
+        };
+        if mover == j {
+            // The one seen first moves: the other takes its place
+            if let Some(slot) = seen.iter_mut().find(|(m, _)| *m == n) {
+                slot.1 = i;
+            }
+        }
+        let task = &mut tasks[mover];
+        let old = task_key(key, n);
+        let mut aliases: Vec<Value> = task
+            .get("aliases")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        if !aliases.iter().any(|a| a == old.as_str()) {
+            aliases.push(json!(old));
+        }
+        task["number"] = json!(next);
+        task["aliases"] = Value::Array(aliases);
+        seen.push((next, mover));
+        next += 1;
+    }
+    next
+}
+
+fn id_of_value(task: &Value) -> Value {
+    task.get("id").cloned().unwrap_or(Value::Null)
+}
+
+/// Merge three versions of tasks.json: the merged document, and the conflicts in words (ours was kept for each). A
+/// side in the old format is migrated first when another is in the keys format ([`same_format`]); in the keys
+/// format, tasks match by UUID and numbers that clash are settled ([`renumber_clashes`]).
 #[must_use]
-#[allow(clippy::too_many_lines)] // reason: one pass per side, then meta, in the order the Python merge_task_files runs
 pub fn merge_task_files(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<String>) {
+    let [base, ours, theirs] = same_format(base, ours, theirs);
+    let (mut merged, mut conflicts) = merge_same_format(&base, &ours, &theirs);
+    if keys_format(&merged) {
+        let key = project_key(&merged).unwrap_or_default().to_string();
+        let stored = |d: &Value| {
+            d.get("meta")
+                .and_then(|m| m.get("next_number"))
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+        };
+        let stored_next = stored(&ours).max(stored(&theirs));
+        let our_list = tasks_of(&ours);
+        let our_tasks = by_id(&our_list);
+        let next = merged
+            .get_mut("tasks")
+            .and_then(Value::as_array_mut)
+            .map_or(stored_next, |tasks| {
+                renumber_clashes(tasks, &our_tasks, &key, stored_next, &mut conflicts)
+            });
+        if let Some(meta) = merged.get_mut("meta").and_then(Value::as_object_mut) {
+            meta.insert("next_number".into(), json!(next));
+        }
+    }
+    (merged, conflicts)
+}
+
+#[allow(clippy::too_many_lines)] // reason: one pass per side, then meta, in the order the Python merge_task_files runs
+fn merge_same_format(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<String>) {
+    let keyed = keys_format(ours);
     let vocab = merge_vocabulary(ours, theirs);
     let (base_list, our_list, their_list) = (tasks_of(base), tasks_of(ours), tasks_of(theirs));
     let (base_tasks, our_tasks, their_tasks) =
@@ -509,6 +636,14 @@ pub fn merge_task_files(base: &Value, ours: &Value, theirs: &Value) -> (Value, V
         if let Some(ours_task) = lookup(&our_tasks, &id) {
             if *ours_task == task {
                 continue; // the same task added on both sides
+            }
+            if keyed {
+                // One UUID added on both branches with different fields: never two tasks of one UUID
+                conflicts.push(format!(
+                    "{}: added on both branches with different fields",
+                    py_str(&id)
+                ));
+                continue;
             }
             let new_id = next_free_id(&py_str(&id), &used);
             used.push(new_id.clone());

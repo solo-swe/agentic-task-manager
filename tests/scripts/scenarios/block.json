@@ -292,9 +292,9 @@
     "args": ["project", "status"],
     "expect": {
       "stdoutIncludes": [
-        "blocked: T-1 Decide (on user)\n",
-        "waiting on dependencies: T-2 Build (on T-1)\n",
-        "next: none (1 todo task(s) waiting on dependencies)\n"
+        "Blocked (1)\n  T-1  Decide  on user\n",
+        "Waiting on dependencies (1)\n  T-2  Build  on T-1\n",
+        "Next\n  none: 1 todo task(s) waiting on dependencies\n"
       ]
     }
   }

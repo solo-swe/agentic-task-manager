@@ -243,6 +243,28 @@ pub fn task_stage(vocab: &Vocabulary, task: &Task) -> Option<&'static str> {
     })
 }
 
+/// The other projects' tasks a task names (`<project id>:<UUID>` in `dependencies`, `related` or `duplicate_of`), by
+/// reference, as [`crate::foreign::Lookup::view`] shows them.
+fn foreign_views(task: &Task, lookup: &mut crate::foreign::Lookup) -> Map<String, Value> {
+    let listed = |field: &str| -> Vec<&str> {
+        match task.get(field) {
+            Some(Value::Array(items)) => items.iter().filter_map(Value::as_str).collect(),
+            Some(Value::String(one)) => vec![one.as_str()],
+            _ => Vec::new(),
+        }
+    };
+    let mut out = Map::new();
+    for reference in ["dependencies", "related", "duplicate_of"]
+        .iter()
+        .flat_map(|f| listed(f))
+    {
+        if atm_common::rules::is_foreign_reference(reference) && !out.contains_key(reference) {
+            out.insert(reference.to_string(), lookup.view(reference));
+        }
+    }
+    out
+}
+
 /// The tasks the filters keep, each as `{task, derived}`: what atm derives for it (the REST API's tasks,
 /// docs/layered-architecture.md §6.2): its kind, whether it is ready, the dependencies it waits for, who a blocked
 /// task waits on, its effective priority, review mode and release, its stage, and whether it is archived. What
@@ -266,6 +288,7 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
     } else {
         store.problems()?.tasks
     };
+    let mut lookup = crate::foreign::Lookup::default();
     let mut views = Vec::new();
     for t in list_matching(project, filters)? {
         let kind = vocab.kind_of(t.get("status"));
@@ -304,7 +327,15 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
             derived.insert("stage".into(), json!(stage));
         }
         derived.insert("archived".into(), json!(filters.archived));
-        views.push(json!({"task": t, "derived": derived}));
+        // The other projects' tasks it names, as they are there (ADR-007 §7), so a front end shows them with only
+        // this project open
+        let others = foreign_views(t, &mut lookup);
+        if !others.is_empty() {
+            derived.insert("foreign".into(), Value::Object(others));
+        }
+        // Its key beside its UUID, with task keys (ADR-007 §1)
+        let shown = atm_common::keys::with_key(store.document()?, t);
+        views.push(json!({"task": shown, "derived": derived}));
     }
     Ok(views)
 }

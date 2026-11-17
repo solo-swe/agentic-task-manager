@@ -14,7 +14,7 @@ the work; you run it and relay what it prints. Never read or edit `tasks.json` o
 `atm project status`, `atm task details` and `atm task list` answer questions about the tasks.
 
 **First, check atm:** run `atm version`. If the shell can't find `atm`, or it prints a version older than
-0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
+0.38.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
 around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
 
 ## Step 1: Parse arguments

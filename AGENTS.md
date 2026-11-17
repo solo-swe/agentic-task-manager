@@ -69,8 +69,9 @@ the release build it before the binary that embeds it.
 **pnpm**, installed with its [standalone installer](https://pnpm.io/installation) (not corepack, not npm), at the
 version CI installs (`.github/workflows/ci.yml`). Install with `pnpm install --frozen-lockfile`: it installs exactly the
 locked versions and never updates the lockfile (`pnpm-lock.yaml`); a plain `pnpm install` only when you change
-`package.json` on purpose. Overrides (security pins) are in `pnpm-workspace.yaml`. The guide's `devEngines` pins come
-with T-436, once CompMD reads pnpm 12's two-document lockfile.
+`package.json` on purpose. Overrides (security pins) are in `pnpm-workspace.yaml`. `package.json`'s `devEngines` pins
+pnpm and Node.js as the [Svelte guide](docs/guides/svelte.md) asks (T-436): pnpm switches to the pinned pnpm and
+downloads the pinned Node.js, and records both in the lockfile; bump the pnpm version there with CI's.
 The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4.0.html` (see `docs/svelte-migration-plan.md`).
 
 Commands (run in `dashboard/`):

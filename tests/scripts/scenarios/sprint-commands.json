@@ -23,7 +23,7 @@
     },
     "args": ["sprint", "list"],
     "expect": {
-      "stdout": "Themes · active · release 0.23.0 · due 2026-11-02: 2 tasks (todo 1, done 1)\n  goal: Two themes\nNext · planned: 0 tasks\nbacklog: 1 task (atm sprint backlog)\n"
+      "stdout": "Themes   active   0.23.0  due 2026-11-02  2 tasks  done 1 · todo 1\n  Two themes\nNext     planned                          0 tasks\nbacklog                                    1 task  (atm sprint backlog)\n"
     }
   },
   {
@@ -37,7 +37,7 @@
       }
     },
     "args": ["sprint", "list", "--all"],
-    "expect": { "stdout": "Old · closed: 1 task (done 1)\nbacklog: 0 tasks (atm sprint backlog)\n" }
+    "expect": { "stdout": "Old      closed   1 task  done 1\nbacklog          0 tasks  (atm sprint backlog)\n" }
   },
   {
     "name": "atm sprints add, with a goal, release and due date, after a given sprint",
@@ -494,7 +494,7 @@
       }
     },
     "args": ["sprint", "backlog"],
-    "expect": { "stdout": "T-2  todo  P2  Unplanned\n" }
+    "expect": { "stdout": "T-2  todo  P2  Unplanned\n1 task: 1 todo\n" }
   },
   {
     "name": "atm backlog --all adds the finished tasks with no sprint",
@@ -509,7 +509,7 @@
       }
     },
     "args": ["sprint", "backlog", "--all"],
-    "expect": { "stdout": "T-2  todo  P2  Unplanned\nT-3  done  P2  Old work\n" }
+    "expect": { "stdout": "T-2  todo  P2  Unplanned\nT-3  done  P2  Old work\n2 tasks: 1 todo, 1 done\n" }
   },
   {
     "name": "an empty backlog says so",

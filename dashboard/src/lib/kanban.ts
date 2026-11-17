@@ -1,4 +1,5 @@
 import { BACKLOG } from './filters';
+import { compareTasks } from './keys';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import type { Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, priorityOf, priorityRank, type StatusKind, type Vocabulary } from './vocab';
@@ -37,7 +38,8 @@ export interface BoardOptions {
   nextUp?: string | null;
 }
 
-const byId = (a: Task, b: Task) => a.id.localeCompare(b.id, undefined, { numeric: true });
+// By number with task keys, else by ID (lib/keys.ts)
+const byId = compareTasks;
 const byPhaseThenId = (a: Task, b: Task) => a.phase - b.phase || byId(a, b);
 const time = (iso: string | undefined) => (iso ? Date.parse(iso) || 0 : 0);
 const newestFirst = (when: (t: Task) => string | undefined) => (a: Task, b: Task) =>

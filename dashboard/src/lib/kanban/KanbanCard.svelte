@@ -13,6 +13,7 @@
   import PriorityBadge from '../ui/PriorityBadge.svelte';
   import SprintMarker from '../progress/SprintMarker.svelte';
   import StageChip from '../ui/StageChip.svelte';
+  import TaskKey from '../ui/TaskKey.svelte';
 
   // `showSprint`: the board shows tasks of more than one sprint, so the card names its own (SR-7.3)
   let { card, showSprint = false }: { card: KanbanCard; showSprint?: boolean } = $props();
@@ -28,6 +29,12 @@
   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
   const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
   const block = $derived(blockWait(task, dashboard.loadedAt, dashboard.vocab));
+  // The tasks it waits for, by their keys (ADR-007)
+  const waitingOn = $derived(
+    card.readiness && !card.readiness.ready
+      ? card.readiness.waitingOn.map((id) => dashboard.refOf(id).label).join(', ')
+      : '',
+  );
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -49,7 +56,7 @@
   onkeydown={onKeydown}
 >
   <div class="kanban-card-top">
-    <span class="kanban-card-id">{task.id}</span>
+    <span class="kanban-card-id"><TaskKey {task} /></span>
     {#if showSprint}
       <span
         class="badge kanban-card-sprint"
@@ -96,7 +103,7 @@
     {#if card.readiness.ready}
       <div class="kanban-readiness ready">Ready</div>
     {:else}
-      <div class="kanban-readiness waiting">Waiting on {card.readiness.waitingOn.join(', ')}</div>
+      <div class="kanban-readiness waiting">Waiting on {waitingOn}</div>
     {/if}
   {/if}
 </div>

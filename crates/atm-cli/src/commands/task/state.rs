@@ -133,7 +133,9 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
     };
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    let task_id = args.task_id.as_str();
+    // A key, an earlier prefix, an alias or a UUID in a keys-format project (ADR-007 §5)
+    let stored = project.resolve_task(&args.task_id)?;
+    let task_id = stored.as_str();
     if state == "todo" {
         // Back to to do is a different command for each kind the task is in (a failure says why: --reason)
         command = todo_command(&project, task_id, args.reason.is_some())?;
@@ -169,8 +171,12 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
         println!("[dry-run] would {} {task_id}", command.name());
         return Ok(());
     }
-    let result = change_task_status(&mut project, command, task_id, &options(command, args))?;
-    report(command, &result, ctx);
+    let mut opts = options(command, args);
+    if let Some(duplicate) = &opts.duplicate_of {
+        opts.duplicate_of = Some(project.resolve_task(duplicate)?);
+    }
+    let result = change_task_status(&mut project, command, task_id, &opts)?;
+    report(command, &result, ctx, cwd);
     Ok(())
 }
 
@@ -186,7 +192,8 @@ fn report_expired(expired: &[Value]) {
 }
 
 /// Print what a status change did, as the Python atm's `run_status` prints it.
-pub fn report(command: Command, result: &StatusChange, ctx: Context) {
+pub fn report(command: Command, result: &StatusChange, ctx: Context, cwd: &Path) {
+    let say = |line: &str| crate::commands::say(cwd, line);
     report_expired(&result.expired);
     if ctx.json {
         let mut out = result.task.clone();
@@ -204,22 +211,23 @@ pub fn report(command: Command, result: &StatusChange, ctx: Context) {
         return;
     }
     let text = |v: Option<&Value>| atm_common::py::py_str_opt(v);
-    println!(
+    say(&format!(
         "{}: {} -> {}",
         text(result.task.get("id")),
         atm_common::py::py_str(&result.previous),
         text(result.task.get("status"))
-    );
+    ));
     if let Some(stranded) = &result.stranded {
-        println!("  {stranded}");
+        say(&format!("  {stranded}"));
     }
     if command == Command::Start
         && let Some(view) = &result.view
     {
-        println!("{}", render_task(view));
+        let labels = crate::commands::Labeller::open(cwd);
+        crate::output::emit(&labels.text(&render_task(view, &labels.palette())));
     }
     if !result.unblocked.is_empty() {
-        println!("Now ready: {}", result.unblocked.join(", "));
+        say(&format!("Now ready: {}", result.unblocked.join(", ")));
     }
     if let Some(hint) = &result.hint {
         println!("{}", text(hint.get("text")));

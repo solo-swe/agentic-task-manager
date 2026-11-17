@@ -43,7 +43,7 @@
 
 5. **Follow an agile Software Development Process along the way** - Either start going right away and use Kanban with the dashboard, or use a more structured agile SDL with a backlog, sprint planning, tracking, etc
 
-6. Keep track of task data - Rick [CompMD](https://compmd.hakanserce.com) powered task descriptions and notes with code highlighting, mermaid diagram, task relations, commit/pr links, related files/documents.
+6. Keep track of task data - Rick [CompMD](https://compmd.dev) powered task descriptions and notes with code highlighting, mermaid diagram, task relations, commit/pr links, related files/documents.
 
 7. Manage project data - releases, components, labels, types, statuses, priorities
 
@@ -573,13 +573,23 @@ it. atm suggests it when `tasks.json` passes 1 MB or 500 archivable tasks (`meta
 commit of its own. Archived tasks still count as done for dependencies, `atm task details` and `atm task list --archived` read
 them, and `atm db unarchive <id>` brings one back. The dashboard loads the archive only when a view needs history.
 
+### Task keys
+
+Each task is stored by a UUID and shown by its project's key and a number, `ATM-527`
+([ADR-007](docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md)). Keys let a task depend on another
+project's (`atm task edit LFB-5 --add-dep ATM-978`, found among your registered projects). A task added on a branch
+has a provisional key (`~ATM-538`, a draft mark on the dashboard) that may move to another number when the branch
+merges; it is final once on the base branch and never changes after. A project from before keys keeps its IDs until
+`atm project key set <KEY>` gives every task a key with the same number (`T-527` becomes `ATM-527`, and still finds
+it); the same command changes the key later. atm 0.38.0 or later reads such a project: upgrade every clone first.
+
 ---
 
 ## Dashboard
 
 The dashboard is a single self-contained HTML file, served by atm for all your projects. It reads each project's
 `tasks.json` from the server and renders an interactive view. Task text, Help and What's new are rendered with
-[CompMD](https://compmd.hakanserce.com/) (Markdown with components), which is built into atm and served by the
+[CompMD](https://compmd.dev/) (Markdown with components), which is built into atm and served by the
 same local server, loaded the first time a page shows Markdown; nothing is fetched from anywhere else.
 
 ### Features
@@ -588,7 +598,7 @@ same local server, loaded the first time a page shows Markdown; nothing is fetch
 - **Top bar** - Stays in view while you scroll. A progress ring (click for completion overall, by phase and by type) and an activity sparkline (click for tasks completed by type, agents working, time per task and idle stretches, over a period you pick: hour, day, week, month, all time or custom, with ‹ › to step back); reload, auto-refresh, mode and theme menus on the right
 - **Needs you** - The header counts the tasks waiting for you: in review, or blocked on a question for you. Click it for the Kanban board
 - **Search and filters** - Keyword search over ID, name, description, type and labels, and filters by phase, type, status, priority, stage, label and who started the task (multi-select) in one line that shows what's selected and how many tasks match. Every filter button shows how many tasks it would show given the other filters, and empty choices are dimmed. **Include archived** adds the archived tasks
-- **Rich task text** - Descriptions, notes and questions render as [CompMD](https://compmd.hakanserce.com/): tables, task lists, alerts, layout components, ` ```mermaid ` diagrams (drawn in a sandboxed frame, in light or dark), and the task's own values (`{{md.data.task.status}}`)
+- **Rich task text** - Descriptions, notes and questions render as [CompMD](https://compmd.dev/): tables, task lists, alerts, layout components, ` ```mermaid ` diagrams (drawn in a sandboxed frame, in light or dark), and the task's own values (`{{md.data.task.status}}`)
 - **Detail panel** - Click a task to see its full description, dependencies (an archived one shows as "archived, done"), files and timestamps, who created, started and completed it (and who tried before), its notes newest first, its commit, and a blocked task's questions with how to answer them
 - **Priorities, labels and stages** - Each card shows its priority, its labels as small chips, and its stage once done: **PR #12** (linking to the pull request) or **Merged**
 - **Views** - Tabs for the Dependency Graph, Kanban Board, Task List, Agents and Progress; the view fills the rest of the window and the selected tab is kept in the URL

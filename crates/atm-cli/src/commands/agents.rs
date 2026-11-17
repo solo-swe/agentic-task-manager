@@ -25,7 +25,8 @@ pub enum AgentsCommand {
     /// Put atm's skills, this version's, where the harness reads them: linked to atm's folder (copied with --copy or
     /// --project). Prints every path it wrote; never replaces a folder atm didn't write.
     Install {
-        /// Only this harness (claude); all of them without it
+        /// Only this harness (claude, agents, antigravity) or the one a tool reads (codex, copilot, cursor, opencode,
+        /// gemini); without it, Claude Code's and the shared ~/.agents/skills, and those of the tools found here
         #[arg(long)]
         harness: Option<String>,
         #[command(flatten)]
@@ -34,14 +35,15 @@ pub enum AgentsCommand {
         #[arg(long)]
         copy: bool,
     },
-    /// Where atm's skills are for each harness: linked, copied, missing, stale, or someone else's.
+    /// Where atm's skills are for each harness: linked, copied, missing, stale, or someone else's; the tools that read
+    /// each folder, and those that would list atm's skills twice.
     Status {
         #[command(flatten)]
         scope: Scope,
     },
     /// Remove exactly what `atm agents install` wrote, and nothing else.
     Uninstall {
-        /// Only this harness (claude); all of them without it
+        /// Only this harness (claude, agents, antigravity) or the one a tool reads; all of them without it
         #[arg(long)]
         harness: Option<String>,
         #[command(flatten)]
@@ -57,6 +59,57 @@ fn project_dir(scope: &Scope, cwd: &Path) -> Result<Option<PathBuf>> {
     Ok(Some(
         project_folder(&Project::open(cwd)?).unwrap_or_else(|| cwd.to_path_buf()),
     ))
+}
+
+/// One harness's report of `atm agents status`, for people: where it reads skills, the tools found here that read a
+/// folder several share, those that list atm's skills twice, and each skill's state.
+fn status_lines(h: &Value) -> Vec<String> {
+    let here = if h["detected"] == true {
+        "installed here"
+    } else {
+        "not found here"
+    };
+    let text = |key: &str| h[key].as_str().unwrap_or_default().to_string();
+    let mut lines = vec![format!(
+        "{} ({here}), {}: {}",
+        text("label"),
+        text("scope"),
+        text("folder")
+    )];
+    let list = |key: &str| h[key].as_array().cloned().unwrap_or_default();
+    let tools = list("tools");
+    let found: Vec<&str> = tools
+        .iter()
+        .filter(|t| t["detected"] == true)
+        .filter_map(|t| t["label"].as_str())
+        .collect();
+    if tools.len() > 1 && !found.is_empty() {
+        lines.push(format!("  read by {} here", found.join(", ")));
+    }
+    let twice: Vec<String> = list("duplicates")
+        .iter()
+        .filter_map(|d| d.as_str().map(str::to_string))
+        .collect();
+    if !twice.is_empty() {
+        lines.push(format!(
+            "  listed twice in {} (it reads another folder atm is in too; --harness installs into fewer)",
+            twice.join(", ")
+        ));
+    }
+    let skills = list("skills");
+    let width = skills
+        .iter()
+        .map(|s| s["skill"].as_str().unwrap_or_default().chars().count())
+        .max()
+        .unwrap_or(0);
+    for s in &skills {
+        let skill = s["skill"].as_str().unwrap_or_default();
+        lines.push(format!(
+            "  {skill:<width$}  {}",
+            s["state"].as_str().unwrap_or_default()
+        ));
+    }
+    lines
 }
 
 /// Run an `atm agents` command in `cwd`. Returns the exit code: 1 when install left a folder alone.
@@ -115,34 +168,7 @@ pub fn run(command: AgentsCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 print_json(&Value::Array(report));
                 return Ok(0);
             }
-            let mut lines = Vec::new();
-            for h in &report {
-                let here = if h["detected"] == true {
-                    "installed here"
-                } else {
-                    "not found here"
-                };
-                let text = |key: &str| h[key].as_str().unwrap_or_default().to_string();
-                lines.push(format!(
-                    "{} ({here}), {}: {}",
-                    text("label"),
-                    text("scope"),
-                    text("folder")
-                ));
-                let skills = h["skills"].as_array().cloned().unwrap_or_default();
-                let width = skills
-                    .iter()
-                    .map(|s| s["skill"].as_str().unwrap_or_default().chars().count())
-                    .max()
-                    .unwrap_or(0);
-                for s in &skills {
-                    let skill = s["skill"].as_str().unwrap_or_default();
-                    lines.push(format!(
-                        "  {skill:<width$}  {}",
-                        s["state"].as_str().unwrap_or_default()
-                    ));
-                }
-            }
+            let lines: Vec<String> = report.iter().flat_map(status_lines).collect();
             println!("{}", lines.join("\n"));
             Ok(0)
         }

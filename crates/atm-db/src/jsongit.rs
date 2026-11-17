@@ -22,6 +22,7 @@ use serde_json::Value;
 
 use crate::git::checked_out_branch;
 use crate::interface::{Problems, Raw, Store};
+use crate::subscription::{OnChange, Subscription};
 use crate::working::{Here, Working};
 use claims::{claims_store_path, locked_with_claims, read_store, write_store};
 use files::{
@@ -302,23 +303,8 @@ impl Store for JsonGitStore {
         worktrees::worktrees(&self.paths.root)
     }
 
-    fn watch_folders(&self) -> Vec<std::path::PathBuf> {
-        let relative = self.relative_tasks();
-        let mut folders = vec![
-            self.paths.dir.clone(),
-            crate::jsongit::claims::claims_dir(&self.paths),
-        ];
-        for tree in worktrees::worktrees(&self.paths.root) {
-            if let Some(path) = tree.get("path").and_then(Value::as_str)
-                && let Some(dir) = std::path::Path::new(path).join(&relative).parent()
-            {
-                folders.push(dir.to_path_buf());
-            }
-        }
-        folders.sort();
-        folders.dedup();
-        folders.retain(|f| f.is_dir());
-        folders
+    fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
+        crate::subscription::watch(&self.watched_folders(), on_change)
     }
 
     fn copy_tasks(&self, folder: &str) -> Vec<Value> {
@@ -339,6 +325,29 @@ impl Store for JsonGitStore {
     fn copy_store(&self, folder: &str) -> Result<Box<dyn Store>> {
         let paths = paths::find_paths(std::path::Path::new(folder))?;
         Ok(Box::new(JsonGitStore::tolerant(paths)))
+    }
+}
+
+impl JsonGitStore {
+    /// The folders whose files change when the project's data does: the task folder, the claims store's, and each
+    /// working copy's task folder (those that are there; watched without their subfolders).
+    fn watched_folders(&self) -> Vec<std::path::PathBuf> {
+        let relative = self.relative_tasks();
+        let mut folders = vec![
+            self.paths.dir.clone(),
+            crate::jsongit::claims::claims_dir(&self.paths),
+        ];
+        for tree in worktrees::worktrees(&self.paths.root) {
+            if let Some(path) = tree.get("path").and_then(Value::as_str)
+                && let Some(dir) = std::path::Path::new(path).join(&relative).parent()
+            {
+                folders.push(dir.to_path_buf());
+            }
+        }
+        folders.sort();
+        folders.dedup();
+        folders.retain(|f| f.is_dir());
+        folders
     }
 }
 
@@ -471,6 +480,41 @@ mod tests {
             .unwrap();
         assert_eq!(store.list_tasks().unwrap().len(), 0);
         assert!(store.get_archived_task("T-1").unwrap().is_some());
+    }
+
+    /// T-555: the store watches its own files: a change in its task file and in its claims store (in git's folder,
+    /// shared by the worktrees) is told, and nothing once the subscription is dropped
+    #[test]
+    fn a_subscription_tells_a_change_in_the_task_file_and_the_claims_store_until_dropped() {
+        use crate::subscription::{quiet, told};
+        use std::time::Duration;
+        let (dir, store) = project_with("{\"tasks\": []}");
+        crate::git::git(&["init", "-q"], dir.path()).expect("git");
+        let claims = claims::claims_store_path(store.paths());
+        let claims_folder = claims.parent().expect("a folder").to_path_buf();
+        assert_ne!(
+            claims_folder,
+            store.paths().dir,
+            "the claims store is git's"
+        );
+        std::fs::create_dir_all(&claims_folder).unwrap();
+        let (on_change, received) = told();
+        let subscription = store.subscribe(on_change).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(&store.paths().tasks, "{\"tasks\": [{\"id\": \"T-1\"}]}").unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the task file's change");
+        // What else the file system says of that write, then the claims store
+        let _ = quiet(&received);
+        std::fs::write(&claims, "{}").unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the claims store's change");
+        drop(subscription);
+        std::thread::sleep(Duration::from_millis(100));
+        std::fs::write(&store.paths().tasks, "{\"tasks\": []}").unwrap();
+        assert!(quiet(&received), "nothing once dropped");
     }
 
     #[test]

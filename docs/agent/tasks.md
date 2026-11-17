@@ -2,8 +2,13 @@
 
 For reading `atm task details --json` and the other commands' JSON, not for editing the file.
 
+- **Keys** (a project with task keys, `meta.format` 2): `id` is the task's UUID, never shown; `key` is how people and
+  you name it (`ATM-527`: `meta.key` and its `number`); `key_final` false means provisional (shown `~ATM-538`, final
+  once merged into the base branch); `aliases` are keys it had (they still find it). Before task keys, `id` is the ID
+  (`T-527`) and there is no `key`. Name tasks by their key in commands, notes and commit messages.
 - **Definition:** `id`, `name`, `type` (`feature`, `bugfix`, `test`, `infra`, `docs`, `refactor`, `polish` by default),
-  `description` (Markdown), `dependencies` (task IDs), `priority` (`P0`–`P3` by default; none counts as `P2`), `labels`,
+  `description` (Markdown), `dependencies` (the tasks' UUIDs, or IDs before task keys; `<project id>:<UUID>` is another
+  project's task), `priority` (`P0`–`P3` by default; none counts as `P2`), `labels`,
   `sprint`, `release`, `components`, `review` (its review mode), `with` (`user`: done together with the user),
   `requirements`, `use_cases`, `files`, `related`.
 - **Status:** `status` (with its kind), `created_at`, `updated_at`, `started_at`, `completed_at`, `skipped_at`,
@@ -19,7 +24,8 @@ For reading `atm task details --json` and the other commands' JSON, not for edit
 - **The project's `meta`:** `project`, `id`, `description`, `repository` (its web address), `statuses`, `types`,
   `priorities`, `default_priority`, `labels`, `sprints`, `releases`, `components`, `workflow`
   (`{type: direct|pull-request, base, verify, max_rounds, commit_template, trailers}`), `lease_minutes`, `archive`,
-  `archived`, `next_id`.
+  `archived`, `next_id` (before task keys); with task keys `format`, `key`, `key_history` (earlier prefixes) and
+  `next_number`.
 
 ## Task text
 Descriptions, notes and questions render on the dashboard as Markdown with CompMD: tables, task lists, ` ```mermaid `

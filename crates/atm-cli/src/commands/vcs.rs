@@ -124,6 +124,8 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             let mut project =
                 Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+            // A key, an earlier prefix, an alias or a UUID (ADR-007 §5)
+            let task_id = project.resolve_task(&task_id)?;
             let vcs = project.vcs();
             let vcs = vcs.as_ref();
             if let Some(rev) = record {
@@ -173,10 +175,13 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 .next()
                 .unwrap_or_default()
                 .to_string();
-            println!(
-                "{}: committed {} {first}",
-                py_str(&result["task"]),
-                &sha[..7.min(sha.len())]
+            super::say(
+                cwd,
+                &format!(
+                    "{}: committed {} {first}",
+                    py_str(&result["task"]),
+                    &sha[..7.min(sha.len())]
+                ),
             );
             let listed: Vec<String> = result["files"]
                 .as_array()
@@ -205,11 +210,15 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             let mut project =
                 Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+            let ids = project.resolve_tasks(&ids)?;
             let recorded = record_pr(&mut project, &ids, number, &url)?;
             if ctx.json {
                 print_json(&json!({"tasks": recorded, "pr": {"number": number, "url": url}}));
             } else {
-                println!("{}: in PR #{number} ({url})", recorded.join(", "));
+                super::say(
+                    cwd,
+                    &format!("{}: in PR #{number} ({url})", recorded.join(", ")),
+                );
             }
         }
         VcsCommand::Pushed { pr, at, agent } => {
@@ -223,10 +232,19 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             let mut project =
                 Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
-            let result = record_merge(&mut project, pr, at.as_deref())?;
+            let mut result = record_merge(&mut project, pr, at.as_deref())?;
+            // Keys of tasks now on the base branch are final (ADR-007 §3)
+            let vcs = project.vcs();
+            let finalized = atm_lib::code::finalize_keys(&mut project, vcs.as_ref())?;
+            if !finalized.is_empty() {
+                result["keys_final"] = json!(finalized);
+            }
             if ctx.json {
                 print_json(&result);
                 return Ok(());
+            }
+            if !finalized.is_empty() {
+                println!("Final now (on the base branch): {}", finalized.join(", "));
             }
             let ids: Vec<String> = result["tasks"]
                 .as_array()

@@ -71,6 +71,7 @@ with the task that adds it.
 | I7 | **A `--file` names one file**: git runs with literal pathspecs; whole-tree pathspecs are refused | `tests/scripts/git.test.mjs` |
 | I8 | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load | `tests/scripts/scenarios/security.json` |
 | I9 | **The merge driver's command comes from the clone's own git config**, never from the repository | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`) |
+| I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::clean` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's), which drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal" |
 
 ### Dashboard server (B3, B5)
 
@@ -85,7 +86,7 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page, except a link to the dashboard's own address, which only moves the page to that page of it (`dashboardAddress`, T-394, T-429), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
+| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page (in the app, in the user's browser through `open_url`, I25, T-551), except a link to the dashboard's own address, which only moves the page to that page of it (`dashboardAddress`, T-394, T-429), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
 | I15 | **No `{@html}` on data**: only on the bundled logo (the icons are Lucide's components since T-432) | `security-invariants.test.ts` (`{@html}` only in `Logo.svelte`) |
 | I16 | **The page runs under its CSP**: nothing it does is refused | the e2e `cspGuard` fixture (every e2e test) |
 | I17 | **No request leaves localhost** | the e2e `externalRequestGuard` fixture |
@@ -103,7 +104,7 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused. The capability covers `main` and the windows the app opens, `window-<n>` (T-511), and no other label. A command about a window (`set_title`, the subscriptions, `unsubscribe`, `subscribe_links`) acts on the window that calls it, never on one it names; `open_window` takes only one of the dashboard's pages, checked as a deep link is (I28), as do `save_tabs` and the windows' file the app reads at the start (T-518) | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands`, `a_window_the_app_opens_has_the_main_windows_capability_and_no_other`; `windows.rs`'s tests (`open_window`'s check); `session.rs`'s (the file and the tabs checked); `commands.rs`'s (a window ends only its own subscriptions) |
+| I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused. The capability covers `main` and the windows the app opens, `window-<n>` (T-511), and no other label. A command about a window (`set_title`, the subscriptions, `unsubscribe`, `subscribe_links`) acts on the window that calls it, never on one it names; `open_window` takes only one of the dashboard's pages, checked as a deep link is (I28), as do `save_tabs` and the windows' file the app reads at the start (T-518); `open_url` opens outside the app only an `https:` or `http:` URL with a host or a `mailto:` one, and the opener plugin's own commands are refused (T-551) | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands`, `a_window_the_app_opens_has_the_main_windows_capability_and_no_other`, `the_window_opens_links_only_through_open_url`; `external.rs`'s tests (the URL check); `windows.rs`'s tests (`open_window`'s check); `session.rs`'s (the file and the tabs checked); `commands.rs`'s (a window ends only its own subscriptions) |
 | I26 | **The window's page has the server's strict CSP** (I13): `default-src 'none'`, scripts only the bundle's hashes and two folders, by path, with `'wasm-unsafe-eval'`: atm's CompMD build on the app's `atm:` scheme (`atm://localhost/assets/compmd/`) and CompMD's frames (`compmd://localhost/frames/`), each also in its `http://….localhost` form for Windows; never `blob:`, `data:` or `'self'`; frames only CompMD's origin; images only the app's own or `data:` (the app's logos come as `data:`, T-457); connections only to Tauri's IPC and the same two folders; `frame-ancestors 'none'`; `freezePrototype`, no global Tauri object. Tauri doesn't modify `style-src` (`dangerousDisableAssetCspModification: ["style-src"]`): its nonce made `'unsafe-inline'` ignored, the same allowance the server's policy makes. Debug builds use `devCsp`, the same policy plus only the CLI's live-reload socket (`ws://127.0.0.1:1430/__tauri_cli`). **Two schemes are entry points** (ADR-006, T-524), which any page in the webview can request: **`compmd:`**, CompMD's plugin (`tauri-plugin-compmd`, crates.io, pinned), serving the bundle the dashboard's build wrote and the app's `build.rs` embedded (the frames under their hash, the packs by their place) by CompMD's serving contract (`compmd-host`'s `respond`: `GET` only, a `404` with why for anything else, the manifest included, every file sandboxed); and **`atm:`**, the app's own (`app/src-tauri/src/assets.rs`), serving only `compmd.js` and its `.wasm` from the dashboard's CompMD build (no HTML, no file reached through a symlink), by exact path of plain segments, `GET` and `HEAD` only, every refusal a `404` or `405` with its reason, logged, with `atm serve`'s headers for those files (I11: readable cross-origin, `nosniff`). A pack's module loads in a frame by its place, checked against the `sha384` the bundle's manifest pins; the page never fetches one. `atm:` is also the deep links' scheme (T-459), but no asset address opens a page. Neither is IPC: a page or frame on them can't call the app's commands (I25) | `the_windows_csp_is_strict` (devCsp in step); `the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them` (`atm:` against `tests/scripts/compmd-host-headers.json`'s page rows, whose bundle rows `serve.test.mjs` checks `atm serve`'s `respond` against); `assets.rs`'s tests (refusals, no deep link); `the_main_windows_capability_lets_it_call_the_commands` (refused from `compmd:` and `atm:` in both forms); `the_page_is_served_with_a_policy_it_works_under`; `compmd.test.ts` (the sandbox's options, the modules' hashes); the e2e `cspGuard` on `app.spec.ts`, and its diagram drawn from the plugin's origin |
 | I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12); the commands write nothing but the last opened workspace (`list_projects`, as its route) and, on the user's click only, the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write) | `each_command_answers_what_its_rest_route_does`; `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests |
 | I28 | **A deep link is an address, never a request**: an `atm://` link becomes a dashboard address only when its path is one of the dashboard's pages, without `.`/`..`, empty segments, a fragment or other characters (4 KB at most), and the page navigates to it only if it is one of its pages; nothing is fetched, read or run because of a link | `app/src-tauri/src/links.rs`'s tests; `tests/unit/links.test.ts`; `app.spec.ts` "deep links" |
@@ -644,6 +645,15 @@ tool's folder (`~/.claude/skills/`, or with `--project` the project's `.claude/s
 - **What the skills carry** is reviewed with the skills (T-441 above): Claude Code's copy adds the same pre-approvals
   the plugin's copy has, from `skills/claude-code.json`.
 
+**More harnesses' folders (T-413).** The same command, the same bounds, into two more folders of a table built into
+atm: `~/.agents/skills/` (Codex, Copilot CLI, Cursor, OpenCode and Gemini CLI read it; a project's `.agents/skills/`
+with `--project`) and Antigravity's `~/.gemini/config/skills/`. Without `--harness` it writes Claude Code's folder
+and the shared one, and Antigravity's only when Antigravity CLI is found (`~/.gemini/antigravity-cli`); detection
+only checks that a path exists, it reads nothing there. Their copies are the portable core alone: no pre-approval,
+as no other harness reads `allowed-tools` the way Claude Code does (Copilot CLI's would pre-approve commands, so atm
+leaves it out). A tool name (`--harness codex`) only picks its folder; `uninstall` of a folder several tools share
+removes it for all of them, as `--harness`'s help says. Written review: no new command, path read, URL or permission.
+
 **The release machinery (T-452, `packaging/README.md`).** The first workflows that publish anything, so the first
 CI permission beyond reading and the first secrets:
 - **Who can release:** a `v*` tag runs `.github/workflows/release.yml`, and only people who can push tags can make
@@ -722,9 +732,10 @@ commands, which mirror them: `list_workspaces`, `list_projects`, `search`, `proj
   capability lists exactly these commands, refused to any other page (`the_main_windows_capability_lets_it_call_the_commands`).
 - **One write, a choice of view:** `list_projects` (like its route) records the workspace as the last opened, in
   `recent.json`, only when it changes.
-- **Subscriptions watch only what the store reports** (`Store::watch_folders`: the task folder, the claims store's
-  folder, the worktrees' task folders; for a workspace, also the state folder's `workspaces/`), not their subfolders,
-  with notify 8.2.1 and its debouncer 0.7.0 (approved, CC0-1.0 in `deny.toml`). A change sends only which workspace
+- **Subscriptions watch only the store's own data** (`Store::subscribe`, T-555: the JSON store watches its task
+  folder, the claims store's folder and the worktrees' task folders; for a workspace, the registry also watches the
+  state folder's `workspaces/`), not their subfolders, in atm-db, with notify 8.2.1 and its debouncer 0.7.0
+  (approved, CC0-1.0 in `deny.toml`). A change sends only which workspace
   or project changed, on that subscription's channel; the page reads again through the commands.
 
 **The `atm workspace` commands (T-493, ADR-003 §3).** `atm project list|add|remove|prune` are replaced by
@@ -741,9 +752,40 @@ only its file, never a project's.
   skill's pre-approvals narrow: `atm workspace list` and `atm workspace projects` (reads) replace `atm project
   list|add|remove|prune`, so an agent serving the dashboard no longer has the list's writes pre-approved.
 
+**Dependencies across projects (T-544, ADR-007 §7).** A new entry point: atm reads *another* project's task folder,
+when a task here depends on (or is related to) a task there, stored as `<project id>:<UUID>` and written by its key
+(`atm task edit LFB-5 --add-dep ATM-978`).
+- **Only projects the user registered** (`workspaces/<w>.json` in atm's state folder, as `atm workspace add-project`
+  and every skill's `atm db migrate` record them), found by their `meta.id` or `meta.key`; a reference can't name a
+  path, so task text can't point atm at a folder (`crates/atm-lib/src/foreign.rs`).
+- **Read through the same store and its checks** (`Workspace::project_tolerant`: the task folder's symlink rules, the
+  file's format check), read only, for the task's status, name and key: nothing in it is run, followed or written.
+- **What can't be found counts as not done**: a project not registered, gone, or the task not there leaves the
+  dependency unmet for `atm loop next` and `atm task state … in_progress`, and `atm doctor` warns, so a deleted or
+  unregistered project can't release work by its absence.
+- Checked by `tests/scripts/keys.test.mjs` (a dependency across two registered projects waits until it is done
+  there; the other project removed: not done, and doctor's warning).
+
+**Other projects' tasks in the task views (T-549, ADR-007 §7).** No new route or command: the views the REST API's
+tasks route (`api/v1/projects/<p>/tasks`, `api/v2/…`) and the app's `project_tasks` give, and `atm task list
+--derived`, carry `derived.foreign`, the other projects' tasks a task names, by reference, so the dashboard shows them
+with only this project open.
+- **The same lookup as above** (`foreign::Lookup`): only registered projects, found by `meta.id`, through the same
+  store, read only; per read the registered list is read once and each reference looked up once.
+- **Only what the dashboard shows leaves the other project**: its `meta.id` and name, the workspaces and IDs it is
+  registered under (`places`), and the task's key, name, status and its kind; no description, notes, paths or
+  anything else. What can't be found says only why (`unregistered`, `missing`).
+- **The dashboard makes a link of it only to its own page** (`/projects/<id>?task=<key>`, or `/w/<w>/…`), built from
+  `places`, never from a value of the task; the address is only text for the router (lib/keys.ts `foreignAddress`).
+  A reference not found is shown as text, without a link.
+- **Served as the views are**: same Host check, localhost only, read only; the route's `ETag` also follows the task
+  data of the projects named (T-554), which adds no read beyond the stamps the lookup already takes.
+- Checked by `tests/scripts/keys.test.mjs` (the views and the summary of a task across two registered projects; the
+  missing task, the unregistered project) and `dashboard/tests/e2e/keys.spec.ts`.
+
 **The app's "Connect your agents" button (T-458).** The app's one command that writes outside atm's own folders:
 `connect_agents(harness)` puts this version's skills where the harness reads the user's (`~/.claude/skills` for
-Claude Code), through the same atm-lib `install_skills` as `atm agents install`, with its rules (a harness atm knows,
+Claude Code, `~/.agents/skills` for the tools that share it, `~/.gemini/config/skills` for Antigravity: T-413), through the same atm-lib `install_skills` as `atm agents install`, with its rules (a harness atm knows,
 or `Invalid` before anything is written; a folder in the way that atm didn't write is refused, never replaced; every
 path written recorded in `agents.json` and listed back). It runs only on the user's click in the dialog; opening it
 calls only `agents_status`, a read (`app.spec.ts` checks the calls). The main window's capability allows both; a page
@@ -959,6 +1001,59 @@ checklist:
   moves out of the ten releases it shows; it now checks the oldest one shown, and passes); the Linux screenshots in Docker (84; the List's five
   regenerated).
 
+**External links in the app (T-551, `app/src-tauri/src/external.rs`).** The window's webview opens no link itself
+(a `target="_blank"` one does nothing), so the page hands each external link to one new command, and the app opens it
+with one new plugin:
+- **`open_url(url)`**, in I25's capability: the app parses `url` itself and opens only an absolute `https:` or
+  `http:` URL with a host, or a `mailto:` one, in the user's browser (their mail app); anything else (`file:`,
+  `atm:`, `javascript:`, `data:`, any other scheme the system would hand to an app, a path) is refused with a typed
+  error (`refused`, `invalid`) and nothing opens. The page sends it from one place (`routes/+layout.svelte`'s click
+  listener, `lib/external-links.ts`, which checks the same schemes; Help ▸ atm on GitHub and CompMD through
+  `menu-actions.ts`'s `open`); links within the page (its addresses, `?task=`, `#…`, a document's relative links)
+  stay its own. A link in rendered task text reaches it only after CompMD's link pass (`safeHref`, I14), and
+  the app checks it again.
+- **The opener** (`tauri-plugin-opener` 2.7.2, approved by Hakan 2026-11-16): used from Rust only, by `open_url`. The
+  page gets **no permission of the plugin's** (I25's test: the capability lists only the app's commands; its own
+  commands, `plugin:opener|open_url` and `open_path`, are refused from the window), and the plugin's script that
+  would send the page's link clicks to those commands is left out (`open_js_links_on_click(false)`). In the browser
+  (`atm serve`) nothing changes: external links open in a new tab, `noopener noreferrer`.
+
+**The CLI's styled output (T-488, `crates/atm-cli/src/output.rs`).** No new command, path or URL: atm styles its own
+words (`--color auto|always|never`; never in a pipe, with `NO_COLOR` or with `--json`, so agents get plain text, as
+`output.test.mjs` checks) and cuts lines to the terminal's width only on a terminal. Reviewing it for 0.38.0 found
+that task text reached the terminal as written, with this release and every one before it: a task's name, note or
+description (anyone's who can change `tasks.json`) could carry escape sequences the terminal acts on, such as OSC 52,
+which sets the clipboard in many terminals, a window title, an OSC 8 link, a screen clear or hidden text, or a
+carriage return printing over the line. Fixed in the same release: I30. Agents were never at risk (they read the
+bytes as text; the sequences showed as text to them), and the dashboard renders task text with CompMD (I14).
+
+**Release 0.38.0 (the sprint Keys and reach, T-413, T-436, T-488, T-534, T-538 to T-556; T-507 skipped).** The
+checklist:
+- **Skills and `docs/agent/` changed** (T-547). No API key is used for the agent sandbox, so this written review takes
+  the live run's place: every skill's version check asks for 0.38.0 (a keyed task file is format 2, which older atm
+  doesn't check; T-540's note); the create-tasks skill gives a new project a `key`, confirmed with the user, and names
+  a dependency by key, another project's too; the do-task skill takes a task's key. `atm docs commands` and
+  `atm docs tasks` describe keys, provisional keys, `atm project key show|set` ("only with the user's say: it
+  rewrites every task's ID") and dependencies across projects, and say a pipe gets plain text. None reads a path, a
+  URL or outside text, or runs anything; no skill's pre-approvals change (`skills/claude-code.json`). The skills
+  are installed into more harnesses' folders (T-413, recorded above), with the portable core only.
+- **Entry points, fields, CI permissions:** reading another registered project's task folder (T-544, recorded above
+  with its checks; kept fresh by T-553 to T-555, which read nothing more: stamps, then the same reads); `open_url`
+  and the opener plugin (T-551, recorded above, in I25); `atm agents`' folders (T-413); the CLI's output (T-488,
+  T-556, I30). New fields agents and the dashboard act on: `key`, `key_final`, `aliases`, `number`, `meta.key`,
+  `key_history`, `meta.format` (atm's own, checked on load: T-538), and `<project id>:<UUID>` references (resolved
+  only among the user's registered projects). New dependencies, each approved by Hakan: `uuid`, `anstyle`,
+  `anstream`, `terminal_size`, `tauri-plugin-opener` 2.7.2; CompMD 0.7.1 (`tauri-plugin-compmd`, `compmd-host`, the
+  sandbox and the Mermaid pack); `notify` moved from the app into atm-db (T-555). `package.json`'s `devEngines` makes
+  pnpm download the pinned Node.js (T-436), recorded in the lockfile. No CI permission changes.
+- **What ships is what is described:** the dashboard shows keys (T-546, T-549; the fixtures keep legacy IDs, so only
+  the Help screenshots changed, for compmd.dev's link); the CLI's output for people is styled on a terminal and
+  plain in a pipe; the app opens external links in the browser. Upgrading every clone before `atm project key set`
+  is in the release notes (CHANGELOG.md, WHATS-NEW.md); T-413's support table records which harnesses ran a task.
+- **Checks run:** `cargo test` (317), clippy, fmt and deny; the unit tests with coverage (1361, 95.4% of lines);
+  `pnpm run check`; the CLI suite (646); the functional e2e suite (451); the Linux screenshots in Docker (84; Help's
+  two regenerated).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
@@ -984,7 +1079,8 @@ Such a PR adds the threat (with its boundary) and, if it needs one, the invarian
     (stapled); `spctl -a -vv atm.app` says "Notarized Developer ID"; `atm` from the cask runs and is the app's
     (`readlink $(which atm)`); `open 'atm://projects/<id>/list'` opens that page, running or not; `open
     'atm://api/projects'` and `open 'atm://projects/../x'` change nothing; the window's DevTools are off in the release
-    build; Connect your agents writes only under `~/.claude/skills` and `atm agents status` agrees.
+    build; Connect your agents writes only under the folder of the harness clicked (`~/.claude/skills`,
+    `~/.agents/skills` or `~/.gemini/config/skills`, T-413) and `atm agents status` agrees.
   - **In-app updates** (T-483) will add an entry point that downloads and installs code: its own review when it lands
     (blocked on the plugin, the key and the Homebrew choice).
   - **Windows and Linux** (T-482 and later): deep links need the deep-link plugin there; I28's checks are the same.

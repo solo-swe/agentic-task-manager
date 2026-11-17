@@ -19,6 +19,8 @@
   import { blockSummary, reviewSummary } from '../waiting';
   import KanbanScroll from '../kanban/KanbanScroll.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
+  import TaskKey from '../ui/TaskKey.svelte';
+  import { shortId } from '../keys';
 
   let { projects }: { projects: ProjectEntry[] } = $props();
 
@@ -80,7 +82,9 @@
     }
     if (column === 'done' && card.completed_at) return `Done ${formatAgo(card.completed_at, dashboard.loadedAt)}`;
     // To do, but not for the loop now (T-349): waiting on dependencies, or done with you
-    if (column === 'todo' && card.waiting_for?.length) return `Waits on ${card.waiting_for.join(', ')}`;
+    // With task keys, by the keys the summary gives (T-549)
+    if (column === 'todo' && card.waiting_for?.length)
+      return `Waits on ${(card.waiting_for_labels ?? card.waiting_for.map(shortId)).join(', ')}`;
     if (column === 'todo' && card.with_user) return 'With you';
     return null;
   }
@@ -137,7 +141,7 @@
                   ></button
                 >
               {/if}
-              <span class="kanban-card-id">{card.id}</span>
+              <span class="kanban-card-id"><TaskKey task={card} /></span>
               <span class="badge" style="background:{ts.bg};color:{ts.color}">{card.type}</span>
               {#if card.priority}
                 {@const ps = priorityStyle(priorityRank(DEFAULT_VOCABULARY, card.priority))}

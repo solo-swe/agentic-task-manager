@@ -64,6 +64,49 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "What atm finds wrong with the task (T-377); it isn't ready then"
+        },
+        "foreign": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/ForeignTask" },
+          "description": "The other projects' tasks it names (<project id>:<UUID> in dependencies, related or duplicate_of), by reference, as they are there (ADR-007 §7); absent when it names none"
+        }
+      }
+    },
+    "ForeignPlace": {
+      "type": "object",
+      "description": "Where another project is registered: a workspace, and the project's ID there",
+      "required": ["workspace", "project"],
+      "properties": {
+        "workspace": { "type": "string" },
+        "project": { "type": "string" }
+      }
+    },
+    "ForeignTask": {
+      "type": "object",
+      "description": "Another project's task, read from the registered projects only (ADR-007 §7): found, its key, name and status there; not found, why",
+      "required": ["project", "found"],
+      "properties": {
+        "project": { "type": "string", "description": "The project's meta.id, as the reference names it" },
+        "found": { "type": "boolean" },
+        "reason": {
+          "enum": ["unregistered", "missing"],
+          "description": "Not found: no registered project has that ID (or its folder is gone), or the project has no such task"
+        },
+        "project_name": { "type": ["string", "null"], "description": "The project's name (meta.project), when it is registered" },
+        "places": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ForeignPlace" },
+          "description": "Where the project is registered, when it is"
+        },
+        "name": { "type": "string" },
+        "status": { "type": ["string", "null"] },
+        "kind": { "type": "string", "description": "Its status's kind there (done when archived)" },
+        "archived": { "type": "boolean" },
+        "key": { "type": "string", "description": "Its key there, with task keys" },
+        "key_final": { "type": "boolean", "description": "Whether that key is final (ADR-007 §3)" },
+        "ambiguous": {
+          "type": "boolean",
+          "description": "Another registered project uses the same key: show the UUID's first 8 characters instead (ADR-007 §8)"
         }
       }
     },
@@ -192,7 +235,9 @@
         "task": { "type": "string" },
         "name": { "type": "string", "description": "The task's name, capped at 80 characters" },
         "agent": { "type": ["string", "null"] },
-        "branch": { "type": ["string", "null"] }
+        "branch": { "type": ["string", "null"] },
+        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" },
+        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
       }
     },
     "TaskName": {
@@ -201,7 +246,9 @@
       "required": ["id", "name"],
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" }
+        "name": { "type": "string" },
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
+        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
       }
     },
     "LastDone": {
@@ -211,7 +258,9 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "completed_at": { "type": "string" }
+        "completed_at": { "type": "string" },
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
+        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
       }
     },
     "NeedsYou": {
@@ -231,7 +280,9 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "reason": { "enum": ["review", "blocked", "together"] }
+        "reason": { "enum": ["review", "blocked", "together"] },
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
+        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
       }
     },
     "GitPr": {
@@ -274,7 +325,14 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "To do (T-349): the dependencies it waits for"
-        }
+        },
+        "waiting_for_labels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "With task keys: the same dependencies as people read them (a key, ~ before a provisional one; another project's by its key there)"
+        },
+        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" },
+        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
       }
     },
     "BoardColumn": {

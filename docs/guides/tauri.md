@@ -26,8 +26,9 @@ atm's own rules for the atm app, the desktop distribution proposed in
 ## Streams
 
 - **One `tauri::ipc::Channel` per subscription** for live data, delivering messages in order, and an `unsubscribe`
-  command to end it. A subscription watches the folders the store reports (`Store::watch_folders`, not their
-  subfolders) with `notify`, debounced, and says only what changed (a workspace, a project); the page reads it again.
+  command to end it. A subscription is atm-lib's (`Workspace::subscribe`, `Member::subscribe`: the stores' own,
+  `Store::subscribe`, T-555), held until it ends; the app watches no folder itself and doesn't know whether a store
+  pushes or polls. It says only what changed (a workspace, a project); the page reads it again.
 - No global events for data changes.
 - **The page reacts, it doesn't poll** (T-506): in the app (`dashboard.live`) the root layout subscribes to the
   workspace and the open project (`lib/api/changes.ts`'s `watchChanges`), reloads on a message, and ends the
@@ -50,6 +51,15 @@ atm's own rules for the atm app, the desktop distribution proposed in
   page checks them again (`lib/api/links.ts`) and navigates; never fetched or run. On macOS the scheme is in
   `Info.plist` and the links come as `RunEvent::Opened`, without a plugin; Windows and Linux need the deep-link plugin
   when the app ships there.
+- **External links open in the user's browser** (T-551): the webview opens none itself (a `target="_blank"` link
+  does nothing). One click listener on the page (`routes/+layout.svelte`, with the new-tab clicks; `lib/external-links.ts`)
+  takes every click on an `https:`, `http:` or `mailto:` link, before the link's own handlers, and hands the URL to
+  the app's `open_url` (`api/shell.ts` `openUrl`); the menu's links go there too (`menu-actions.ts` `pageActions.open`).
+  The app checks the URL again (`src/external.rs`: those three schemes, a host for the web ones, a typed error for
+  anything else) and opens it with the opener plugin from Rust. The page has none of the plugin's permissions and no
+  `@tauri-apps/plugin-opener`, and the plugin's own click script is off (`open_js_links_on_click(false)`). Links within
+  the page (its addresses, `?task=`, `#…`, a document's relative links) stay its own. A new external link needs
+  nothing: an anchor with `target="_blank" rel="noopener noreferrer"`, as in the browser, works in both.
 
 ## Security
 
@@ -66,7 +76,7 @@ atm's own rules for the atm app, the desktop distribution proposed in
   - **every debug build** (`cargo run`, `cargo tauri dev`, the tests) uses `devCsp`, not `csp`: the same policy plus only
     the CLI's live-reload socket. A test keeps the two in step.
 - **CompMD from two schemes** ([ADR-006](../adr/ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md), CompMD 0.7.0's
-  [Tauri chapter](https://compmd.hakanserce.com/guides/developers/a-tauri-app/)):
+  [Tauri chapter](https://compmd.dev/guides/developers/a-tauri-app/)):
   - **CompMD's bundle** (the sandbox's frames under their hash, the packs by their place) from CompMD's own plugin
     (crates.io, pinned to the `@compmd/*` version: bump them together), on `compmd://localhost/`
     (`http://compmd.localhost` on Windows and Android). The dashboard's build writes the bundle
@@ -98,7 +108,9 @@ atm's own rules for the atm app, the desktop distribution proposed in
 
 - Platform features (notifications, files, …) are host services: traits in atm-lib, implemented in the app with Tauri
   plugins.
-- Any new plugin is a new dependency and is proposed to the user first ([Rust guide](rust.md)).
+- Any new plugin is a new dependency and is proposed to the user first ([Rust guide](rust.md)). A plugin is used from
+  Rust, behind the app's own commands, and the page gets none of its permissions (the notifications, the updater, the
+  opener).
 - Installing the agent skills is the same code as `atm agents install`
   ([better-way-to-distribute-atm.md](../better-way-to-distribute-atm.md) §4); the app's button calls it, never a second
   implementation.

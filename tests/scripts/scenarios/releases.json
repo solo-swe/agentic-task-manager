@@ -86,7 +86,7 @@
     },
     "args": ["release", "list"],
     "expect": {
-      "stdout": "1.0 “First” · planned · target 2026-06-01: 4 tasks (todo 1, done 3); done 1, in pr 1, merged 1\n1.1 · planned: 1 task (todo 1)\n"
+      "stdout": "1.0  “First”  planned (target 2026-06-01)  4 tasks  done 3 · todo 1 · 1 not merged · 1 in a PR\n1.1           planned                       1 task  todo 1\n"
     }
   },
   {
@@ -409,7 +409,7 @@
       }
     },
     "args": ["release", "list"],
-    "expect": { "stdout": "0.36.0 · released · released 2026-11-13: 1 task (done 1); done 1\n" }
+    "expect": { "stdout": "0.36.0  released 2026-11-13  1 task  done 1 · 1 not merged\n" }
   },
   {
     "name": "atm release edit --released refuses a release with tasks still open, naming them; nothing changes (T-527)",

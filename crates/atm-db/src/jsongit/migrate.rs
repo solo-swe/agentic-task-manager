@@ -3,6 +3,7 @@
 //! per-project dashboards (0.10.0-0.14.0: the dashboard now comes from the plugin, served by `atm service` for all
 //! projects), and bring old task data up to date (finish times, phases to sprints, `with: user`). Never commits.
 
+mod keys;
 mod phases;
 
 use std::path::Path;
@@ -22,7 +23,70 @@ use super::paths::{DASHBOARD_FILE, Paths, legacy_files};
 use super::setup::{ensure_merge_driver, in_git, is_tracked, rel, stage};
 use crate::git::git;
 
+pub use keys::{KeysReport, migrated_uuid, suggested_key, to_keys_format};
 pub use phases::{describe_sprints_from_phases, phases_to_sprints};
+
+/// The first task-keys migration (ADR-007 §6, [`to_keys_format`]) on the files, under the task folder's lock and the
+/// claims store's: `tasks.json`, the archive and the claims store rewritten, the task files staged in git (not
+/// committed). None when the file is in the keys format already (nothing written).
+///
+/// # Errors
+/// When the files can't be read (the task file strictly) or written.
+pub fn migrate_to_keys(paths: &Paths) -> Result<Option<KeysReport>> {
+    let report = {
+        let _locks = super::claims::locked_with_claims(paths)?;
+        let mut document = load_tasks(paths)?.document;
+        let mut archived = archive_document(paths)?;
+        let mut store = read_store(paths);
+        let before = store.clone();
+        let Some(report) = to_keys_format(&mut document, &mut archived, &mut store) else {
+            return Ok(None);
+        };
+        Vocabulary::of_document(&document)?;
+        write_json(&paths.tasks, &document)?;
+        let archive = paths.archive();
+        if archive.is_file() {
+            write_json(&archive, &archived)?;
+        }
+        if store != before {
+            super::claims::write_store(paths, &store)?;
+        }
+        report
+    };
+    if in_git(&paths.root) {
+        let archive = paths.archive();
+        let mut files: Vec<&Path> = vec![&paths.tasks];
+        if archive.is_file() {
+            files.push(&archive);
+        }
+        stage(&paths.root, &files);
+    }
+    Ok(Some(report))
+}
+
+/// What the task-keys migration did, in words.
+#[must_use]
+pub fn describe_keys_migration(report: &KeysReport) -> Vec<String> {
+    let mut lines = vec![format!(
+        "Task keys: {} tasks ({} archived) are stored by UUID now and shown as {}-<number>, keeping their numbers{} \
+         (staged, not committed).",
+        report.tasks,
+        report.archived,
+        report.key,
+        report
+            .old_prefix
+            .as_ref()
+            .map(|p| format!("; {p}-<number> still finds each"))
+            .unwrap_or_default()
+    )];
+    for (old, number) in &report.renumbered {
+        lines.push(format!(
+            "  {old} is {}-{number} (its old ID still finds it)",
+            report.key
+        ));
+    }
+    lines
+}
 
 /// Runtime files in the task folder that must not be committed (the dashboard and server files are from before
 /// 0.15.0; they stay listed so leftovers stay out of git).

@@ -12,7 +12,7 @@ You are a task decomposition agent. Your job is to analyze project requirements
 and create a granular task list in `tasks.json`.
 
 **First, check atm:** run `atm version`. If the shell can't find `atm`, or it prints a version older than
-0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
+0.38.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
 around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
 
 **Never read or edit `tasks.json` or `tasks-archive.json` directly** (no Read, Write, cat, grep, jq or scripts on
@@ -166,8 +166,9 @@ Write the `meta` keys to a scratch file outside the repository (your scratchpad,
 atm db init --meta-file <that file>
 ```
 
-For a new project the file holds `project` (from the README or the directory name), `description` (one line) and any
-vocabularies that differ from the defaults; for an existing one, only the keys that change (skip this step when
+For a new project the file holds `project` (from the README or the directory name), `description` (one line), `key`
+(the project's short name, 3 to 6 letters and digits, its tasks' prefix: `ATM` makes `ATM-1`; propose the name's
+initials and confirm it with the user in Step 3) and any vocabularies that differ from the defaults; for an existing one, only the keys that change (skip this step when
 nothing does). It creates `.agentic-task-manager/tasks.json` if there is none, merges the keys into `meta` (keeping
 `meta.id`, and adding one if missing), and checks the vocabularies before writing: if it reports a problem (for
 example `meta.statuses needs at least one status of the kind 'done'`), fix the file as it says and run it again.
@@ -224,8 +225,9 @@ atm task add --json-file <that file> --json [--agent '<the user’s name>']
 ```
 
 - `id` is a **placeholder** (`new-1`, `new-2`, ...): other new tasks use it in `dependencies`, and atm replaces it
-  with the next real ID in the project's pattern (`T-001`, ... or after the existing tasks). A dependency on an
-  existing task uses its real ID. atm sets the status, the timestamps and `created_by`.
+  with the next real one: the next key (`ATM-12`) in a project with task keys, else the next ID in the project's
+  pattern (`T-001`, ...). A dependency on an existing task uses its key (or ID); on another project's task, that
+  task's key (`LFB-5`). atm sets the status, the timestamps and `created_by`.
 - `sprint` names a planned or active sprint (atm refuses a closed or unknown one); leave it out for the backlog
   (`new-2` above). Don't write a `phase`: phases are sprints now.
 - `--agent '<name>'`: when the user asked for these tasks, pass the user (their git user name) so the tasks show who

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatMinutes } from '../format';
+  import { taskLabel } from '../keys';
   import type { TimeHistogram } from '../projectstats';
   import { dashboard } from '../state.svelte';
   import InfoTip from '../ui/InfoTip.svelte';
@@ -34,7 +35,7 @@
   const binTitle = (b: (typeof bins)[number]) =>
     [
       `${b.label}: ${b.alone.length} alone, ${b.withYou.length} with you`,
-      ...[...b.alone, ...b.withYou].slice(0, 5).map((t) => `${t.id} ${t.name} (${formatMinutes(t.minutes)})`),
+      ...[...b.alone, ...b.withYou].slice(0, 5).map((t) => `${taskLabel(t)} ${t.name} (${formatMinutes(t.minutes)})`),
       ...(b.alone.length + b.withYou.length > 5 ? [`+${b.alone.length + b.withYou.length - 5} more`] : []),
     ].join('\n');
 </script>
@@ -137,7 +138,7 @@
       <span class="kpi-label">Slowest</span>
       {#each histogram.slowest as t (t.id)}
         <button class="link-button" data-id={t.id} title={t.name} onclick={() => dashboard.showDetail(t.id)}
-          >{t.id} {formatMinutes(t.minutes)}</button
+          >{taskLabel(t)} {formatMinutes(t.minutes)}</button
         >
       {/each}
     </div>

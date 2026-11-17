@@ -106,7 +106,9 @@ export function mergedTasks(sources: readonly ProjectSource[]): MergedTasks {
     for (const task of own) {
       const key = `${project.name}: ${task.id}`;
       const kind = kindOf(vocab, task.status);
-      tasks.push({ ...task, id: key, status: (kind && DEFAULT_STATUS.get(kind)) ?? task.status });
+      // Shown by its project's name and its key, with task keys (ADR-007)
+      const shown = task.key ? { key: `${project.name}: ${task.key}` } : {};
+      tasks.push({ ...task, id: key, ...shown, status: (kind && DEFAULT_STATUS.get(kind)) ?? task.status });
       origin.set(key, { project, id: task.id });
       const claim = live.get(task.id);
       if (claim) claims.set(key, { ...claim, task: key });

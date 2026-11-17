@@ -9,7 +9,7 @@ resolver = "3"
 # atm's version, the one source (T-477): the dashboard is stamped with it, and CHANGELOG.md and WHATS-NEW.md need an
 # entry for it (dashboard/scripts/check-versions.mjs). The dashboard's About dialog shows the description, the author,
 # the licence and the repository
-version = "0.37.0"
+version = "0.38.0"
 description = "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard."
 authors = ["Hakan Serce <hakanserce@gmail.com>"]
 edition = "2024"
@@ -27,12 +27,19 @@ atm-api = { path = "crates/atm-api" }
 # CompMD in a Tauri app (ADR-006, T-524): CompMD's own plugin serves the bundle the page's build wrote (the frames and
 # the packs) on a compmd: scheme, embedded by the app's build.rs (the `build` feature). Its version is
 # @compmd/sandbox's (dashboard/package.json): they are released together
-tauri-plugin-compmd = "=0.7.0"
+tauri-plugin-compmd = "=0.7.1"
 # CompMD's serving contract, which atm serve answers its bundle with as the plugin does in the app (ADR-006)
-compmd-host = "=0.7.0"
+compmd-host = "=0.7.1"
 clap = { version = "4.5", features = ["derive"] }
 # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
+# The CLI's styled output (T-488, docs/cli-output-design.md; approved by Hakan): the styles, and stdout with them on or
+# off by NO_COLOR, CLICOLOR_FORCE, TERM and whether it is a terminal. Both already in the tree through clap
+anstyle = "1"
+anstream = "1"
+# The terminal's width, to cut long lines there (T-488; approved by Hakan). Its own dependencies (rustix, windows-sys)
+# are in the tree already
+terminal_size = "0.4"
 # JSON as atm writes it (docs/porting-to-rust.md §3): keys in the order they come, so a task prints as it is stored
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
@@ -42,6 +49,9 @@ sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 signal-hook = "0.4"
 # The local time zone (TZ, /etc/localtime, the system's tz database), for sprints named by the time (T-471)
 jiff = "0.2"
+# Tasks' IDs (ADR-007, T-538; approved by Hakan): UUIDs, version 7 (they sort by creation). Already in the tree through
+# Tauri
+uuid = { version = "1.29", features = ["v7"] }
 # `atm service`'s server (T-449, docs/porting-to-rust.md §3): HTTP/1 on localhost; the rest of atm stays synchronous
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros"] }
@@ -63,10 +73,15 @@ tauri-plugin-updater = { version = "2.14.1", default-features = false, features 
 # The app's notifications of what needs the user (T-520, approved 2026-11-12): sent from Rust only, the page gets no
 # permission of the plugin's; pinned to the newest release at least two weeks old then
 tauri-plugin-notification = "=2.8.0"
+# The page's external links in the user's browser (T-551, approved by Hakan 2026-11-16): opened from Rust only, by the
+# app's `open_url` command, which checks the URL; the page gets no permission of the plugin's; pinned to the newest
+# release at least two weeks old then
+tauri-plugin-opener = "=2.7.2"
 specta ={ version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
-# The app's live changes (T-456, approved): a watcher on the folders the store reports, its events debounced
+# The store's live changes (T-456, approved; atm-db's since T-555): the JSON store's watcher on its folders, its
+# events debounced
 notify = "8.2.1"
 notify-debouncer-full = "0.7.0"
 

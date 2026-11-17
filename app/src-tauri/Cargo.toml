@@ -33,11 +33,10 @@ tauri.workspace = true
 tauri-plugin-single-instance.workspace = true
 tauri-plugin-updater.workspace = true
 tauri-plugin-notification.workspace = true
+tauri-plugin-opener.workspace = true
 specta.workspace = true
 tauri-specta.workspace = true
 specta-typescript.workspace = true
-notify.workspace = true
-notify-debouncer-full.workspace = true
 
 [dev-dependencies]
 tauri = { workspace = true, features = ["test"] }

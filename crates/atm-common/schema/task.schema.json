@@ -6,7 +6,24 @@
   "type": "object",
   "required": ["id", "name", "type", "status"],
   "properties": {
-    "id": { "type": "string", "description": "Letters, digits, '.', '_' and '-' (T-001)" },
+    "id": {
+      "type": "string",
+      "description": "The task's UUID (version 7, lower case, hyphenated), given once and never changed (ADR-007); in a file from before task keys (meta.format absent), its ID (letters, digits, '.', '_' and '-': T-001)"
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Its number in the project: its key is meta.key, '-' and this (ATM-527, ADR-007 §1). Final once key_final"
+    },
+    "key_final": {
+      "type": "boolean",
+      "description": "Whether its number is final: true once the task is on the base branch, never changed after (ADR-007 §3); false or absent, provisional"
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Keys it had before (a provisional number that moved in a merge, an ID from before task keys), which still find it (ADR-007 §4, §6)"
+    },
     "name": { "type": "string" },
     "type": { "type": "string", "description": "A type ID from the vocabulary (meta.types)" },
     "status": { "type": "string", "description": "A status ID from the vocabulary (meta.statuses); atm acts on its kind" },
@@ -21,7 +38,11 @@
       "items": { "type": "string" },
       "description": "Free-form tags that group tasks across sprints and types, e.g. [\"spike-2\", \"ux\"] (DM-4.6)"
     },
-    "dependencies": { "type": "array", "items": { "type": "string" }, "description": "Task IDs it waits for" },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "The tasks it waits for: their UUIDs, or '<project id>:<UUID>' for another project's (ADR-007 §7); in a file from before task keys, their IDs"
+    },
     "requirements": { "type": "array", "items": { "type": "string" } },
     "use_cases": { "type": "array", "items": { "type": "string" } },
     "files": { "type": "array", "items": { "type": "string" }, "description": "Files it creates or changes" },
@@ -86,7 +107,7 @@
     "related": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Related tasks (a link that doesn't block), stored on one side and shown on both (SR-2.8)"
+      "description": "Related tasks (a link that doesn't block), stored on one side and shown on both (SR-2.8): UUIDs as dependencies are"
     },
     "resolution": {
       "type": "string",

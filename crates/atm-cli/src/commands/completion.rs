@@ -144,9 +144,9 @@ fn topics() -> Vec<(String, String)> {
 }
 
 fn harnesses() -> Vec<(String, String)> {
-    atm_lib::agents::HARNESSES
-        .iter()
-        .map(|h| (h.id.to_string(), h.label.to_string()))
+    atm_lib::agents::harness_ids()
+        .into_iter()
+        .map(|(id, label)| (id.to_string(), label.to_string()))
         .collect()
 }
 

@@ -85,7 +85,8 @@ impl StoreMaintenance {
     }
 
     /// `atm db migrate` (and `atm service`, before it shows a project): bring the task folder up to date. With
-    /// `register_it`, the project joins the default workspace too (every skill runs migrate first).
+    /// `register_it`, the project joins the default workspace too (every skill runs migrate first). Task IDs are left
+    /// as they are: giving them keys is `atm project key set` ([`StoreMaintenance::migrate_to_keys`]).
     ///
     /// # Errors
     /// The task folder's checks, a file that can't be moved, read or written.
@@ -102,6 +103,32 @@ impl StoreMaintenance {
             lines,
             tasks_exists,
         })
+    }
+
+    /// The first task-keys migration (ADR-007 §6), which `atm project key set` runs on a project of IDs (`T-527`):
+    /// every task stored by UUID, numbered, the references and claims rewritten, the files staged. Its report as JSON
+    /// (`{key, old_prefix, tasks, archived, renumbered}`) and in words; none when the project has keys already.
+    ///
+    /// # Errors
+    /// The task folder's checks, files that can't be read or written.
+    pub fn migrate_to_keys(&self) -> Result<Option<(serde_json::Value, Vec<String>)>> {
+        let paths = self.paths()?;
+        let Some(r) = atm_db::jsongit::migrate::migrate_to_keys(&paths)? else {
+            return Ok(None);
+        };
+        let json = serde_json::json!({
+            "key": r.key,
+            "old_prefix": r.old_prefix,
+            "tasks": r.tasks,
+            "archived": r.archived,
+            "renumbered": r.renumbered.iter()
+                .map(|(old, n)| serde_json::json!({"from": old, "number": n}))
+                .collect::<Vec<_>>(),
+        });
+        Ok(Some((
+            json,
+            atm_db::jsongit::migrate::describe_keys_migration(&r),
+        )))
     }
 
     /// `atm _lock-test <seconds>`: hold the task folder's lock for `seconds`, logging `acquire <pid>` and

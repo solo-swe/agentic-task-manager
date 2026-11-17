@@ -115,7 +115,7 @@
     },
     "args": ["task", "state", "T-2", "in_progress"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
-    "expect": { "stdoutIncludes": ["T-2: backlog -> coding\n", "depends on: T-1 (shipped)"] }
+    "expect": { "stdoutIncludes": ["T-2: backlog -> coding\n", "depends on  T-1 (shipped)"] }
   },
   {
     "name": "--status picks one of the statuses of that kind",

@@ -108,7 +108,7 @@ describe('docs/help.md', () => {
       if (href.startsWith('#')) expect(slugs).toContain(href.slice(1));
       else {
         expect(href).toMatch(
-          /^https:\/\/(github\.com\/solo-swe\/agentic-task-manager|compmd\.hakanserce\.com\/$|mermaid\.js\.org\/$)/,
+          /^https:\/\/(github\.com\/solo-swe\/agentic-task-manager|compmd\.dev\/$|mermaid\.js\.org\/$)/,
         );
         expect(a).toHaveAttribute('target', '_blank');
         expect(a).toHaveAttribute('rel', 'noopener noreferrer');

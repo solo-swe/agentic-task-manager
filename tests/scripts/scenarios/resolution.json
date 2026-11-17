@@ -187,7 +187,7 @@
     },
     "args": ["task", "details", "T-1", "T-2", "T-3"],
     "expect": {
-      "stdout": "T-1  One\n  done · backlog · feature · P2\n  related: T-3\n  duplicated by: T-2\n\nT-2  Two\n  skipped · backlog · feature · P2\n  resolution: duplicate (of T-1)\n\nT-3  Three\n  todo · backlog · feature · P2\n  related: T-4, T-1\n"
+      "stdout": "T-1  One\n  done · backlog · feature · P2\n\n  related        T-3\n  duplicated by  T-2\n\nT-2  Two\n  skipped · backlog · feature · P2\n\n  resolution  duplicate (of T-1)\n\nT-3  Three\n  todo · backlog · feature · P2\n\n  related  T-4\n           T-1\n"
     }
   },
   {
