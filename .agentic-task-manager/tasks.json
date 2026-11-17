@@ -14901,7 +14901,7 @@
       "description": "Ship the sprint *Keys follow-ups and housekeeping* as 0.39.0, as AGENTS.md's *Versions* and *CI* sections describe. Work is on `dev/0.39.0`.\n\n## Change\n- **The version:** `Cargo.toml`'s `[workspace.package]` to `0.39.0` (the dashboard's meta tag and the app follow it); `Cargo.lock` updated by the build.\n- **`CHANGELOG.md`:** the `[0.39.0]` entry, dated the release day, every change with its commands and flags: keys in every line for people (ATM-557), the Help and the dashboard's hints (ATM-558), the app's build filling Tauri's asset cache (ATM-559, the `tauri-codegen` build dependency), Dependabot #5 analysed (ATM-560), the lock's queue (ATM-481), the suite on Windows and what it fixed (ATM-482: the claim watcher's shell, `atm service`'s port checks and stop, git queried once per command), the CI review (ATM-487), the code review design (ATM-337).\n- **`WHATS-NEW.md`:** 3–6 short plain-language bullets about what a user notices, from the changelog; no flags or file names.\n- **The Help's screenshots:** regenerate the Linux baselines ATM-558 changed (`pnpm run test:e2e:visual:update`, Docker: the About and Help, the blocked task's panel, the projects overview), look at one, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): a §3.x entry for 0.39.0: the new build dependency `tauri-codegen` (pinned to tauri-macros' version); CI's new third-party action `Swatinem/rust-cache` (pinned by SHA, saved from main only: I19), the push trigger and the runner images; no skill, `docs/agent/` or new entry point changed this release (check it), so no sandbox run; the Dependabot alert's state (dismissing it is Hakan's).\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPush with `/atm-push`: it opens the release PR from `dev/0.39.0` to `main` and watches CI. **Before Hakan merges it, the live ruleset on GitHub must be updated** to the renamed required checks (`.github/rulesets/main.json`, ATM-487): show him the steps then. Merging, tagging and publishing are his.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -14912,7 +14912,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-17T07:05:35Z",
-      "updated_at": "2026-11-17T07:39:30Z",
+      "updated_at": "2026-11-17T07:48:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14929,7 +14929,18 @@
       "number": 579,
       "key_final": false,
       "started_at": "2026-11-17T07:39:30Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "9d012e0f6e0ffcfd804c4e9c4147976506f5fd6a",
+      "completed_at": "2026-11-17T07:48:04Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T07:48:04Z",
+          "kind": "outcome",
+          "text": "Release 0.39.0 prepared: version, CHANGELOG and WHATS-NEW, the security checklist (§3.3), eight Linux screenshots regenerated; verify, cargo test, clippy and deny green. The release PR comes with /atm-push.",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
