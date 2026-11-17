@@ -31,15 +31,42 @@ export function loadReview(
   return getJson(reviewUrl(project, review, round, against), fetchFn);
 }
 
-/** A round's side: the project's files as commit or tree `revision` has them; never changing, so loaded once */
+/** The sides made, by client and `project@revision`: the same source each time, so a page asked for again (its
+ * refresh) shows what it has rather than loading it again */
+const sources = new WeakMap<Fetch, Map<string, DocumentSource>>();
+/** At most this many sides are kept per client; the oldest go first */
+export const SOURCES_CAP = 64;
+
+/** A round's side: the project's files as commit or tree `revision` has them; never changing, so each file is loaded
+ * once (a failed load is asked again next time) */
 export function revisionDocuments(project: string, revision: string, fetchFn: Fetch = browserFetch): DocumentSource {
-  return {
-    id: `${project}@${revision}`,
-    load: (path) => loadDocument(project, path, fetchFn, undefined, revision),
+  const id = `${project}@${revision}`;
+  let made = sources.get(fetchFn);
+  if (!made) sources.set(fetchFn, (made = new Map()));
+  const known = made.get(id);
+  if (known) return known;
+  const files = new Map<string, ReturnType<typeof loadDocument>>();
+  const source: DocumentSource = {
+    id,
+    load: (path) => {
+      let loading = files.get(path);
+      if (!loading) {
+        loading = loadDocument(project, path, fetchFn, undefined, revision);
+        files.set(path, loading);
+        loading.then(
+          (result) => 'error' in result && files.delete(path),
+          () => files.delete(path),
+        );
+      }
+      return loading;
+    },
     // A rendered side's images show their alt text: the files route reads the working copy, not a revision
     imageUrl: () => null,
     repositoryLink: () => null,
   };
+  made.set(id, source);
+  if (made.size > SOURCES_CAP) made.delete(made.keys().next().value!);
+  return source;
 }
 
 /** Where the ticks are kept in this browser */

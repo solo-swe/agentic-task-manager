@@ -67,6 +67,31 @@ export function driftedOf(chains: PlacedChain[], file: ViewFile): PlacedChain[] 
   return chains.filter((c) => c.drifted && (c.anchor.path === file.path || c.anchor.path === file.old_path));
 }
 
+/** Whether a chain is resolved: each of its top-level comments is (a chain with none isn't) */
+export function isResolved(chain: Chain): boolean {
+  return chain.comments.length > 0 && chain.comments.every((c) => c.resolved === true);
+}
+
+/** Which chains the Comments tab lists */
+export type ChainFilter = 'all' | 'open' | 'resolved';
+
+/** The chains a filter keeps, in their order */
+export function filterChains<C extends Chain>(chains: C[], filter: ChainFilter): C[] {
+  return filter === 'all' ? chains : chains.filter((c) => isResolved(c) === (filter === 'resolved'));
+}
+
+/** A review's page's title, the window's and the tab's: the project's short name, the review's reference, its title */
+export function reviewTitle(project: string | null | undefined, reference: string, title: string): string {
+  return [project, reference].filter(Boolean).join(' ') + (title ? `: ${title}` : '');
+}
+
+/** The file tree's width, kept between its least and at most half the page */
+export const TREE_WIDTH = { least: 160, default: 280 } as const;
+export function treeWidth(width: number, page: number): number {
+  const most = Math.max(TREE_WIDTH.least, Math.floor(page / 2));
+  return Math.round(Math.min(most, Math.max(TREE_WIDTH.least, Number.isFinite(width) ? width : TREE_WIDTH.default)));
+}
+
 /** A short hash of a text (FNV-1a), for a key that changes with a file's change */
 export function hashOf(text: string): string {
   let hash = 0x811c9dc5;

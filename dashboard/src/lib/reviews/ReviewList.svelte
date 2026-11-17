@@ -4,7 +4,7 @@
   // The reviews page (docs/code-review-design.md §3.11, ATM-574): a project's reviews, the latest activity first,
   // with search (title, summary and comments, every word) and filters (status, author, reviewer, task, branch); those
   // that need the user marked, and *Next review needing you*. The list and the query are the page's: it asks the
-  // server again when the query changes (`onquery`), and opens a review (`onopen`, with ⌘ or Ctrl in a new tab).
+  // server again when the query changes (`onquery`), and opens a review (`onopen`, saying whether ⌘ or Ctrl was held; the page opens it in a tab of its own).
 
   let {
     entries,

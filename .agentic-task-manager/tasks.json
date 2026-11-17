@@ -15126,7 +15126,7 @@
       "description": "The pages of [§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), in the app and the browser.\n\n## Change\n- `/projects/<id>/reviews` (and across the workspace on the overview): search (title, summary, comments), filters (status, author, reviewer, task, branch), latest activity first; *Next review needing you*.\n- `/projects/<id>/reviews/CR-7` (`?round=`, `&against=`, `&file=`): the header, the file tree with viewed ticks (kept in the page's preferences by review, round and file content), the diff viewer, the round picker (whole change, or a round against another), drifted chains with a link to where they were made, *Submit* (approve, request changes, comment).\n- A clashing reference (`CR-8`) shows both CR-8.1 and CR-8.2 to choose.\n- Routes listed in `docs/multi-project-api.md` §2.7.\n\n## Tests\nE2e specs (the fixture serves reviews); the performance budget for a large review.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
         "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",
@@ -15139,7 +15139,7 @@
         "dashboard/tests/e2e/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T18:03:50Z",
+      "updated_at": "2026-11-17T18:31:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 574,
@@ -15161,6 +15161,12 @@
           "kind": "review",
           "text": "Review in Crit: the Reviews tab (search, status chips, filters, Next review needing you) and a review page (rounds, file tree with viewed ticks, the diff viewer and its keys, comments, replies, resolve, Submit, drifted links, the CR-8 clash). Open for Hakan: (1) the page is 943,462 bytes, over the 900 KiB guardrail: raise it or cut something; not pushed until then. (2) Reviews across the workspace on the overview: not done, a follow-up.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T18:31:30Z",
+          "kind": "rejection",
+          "text": "Hakan, in chat: no flicker on refresh, a review in its own browser tab titled KEY CR-N title with Crit-like styling, a + on the line and drag for multi-line, resolved shown above the comment, Overview, Files and Comments tabs (all, open, resolved), a movable splitter, Rendered honours Unified with line numbers on the document viewer, viewed collapses the file, prev and next change buttons. Budget raised to 1 MiB.",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -15170,11 +15176,16 @@
         }
       ],
       "sprint": "Code reviews: records and CLI",
-      "started_at": "2026-11-17T16:52:31Z",
+      "started_at": "2026-11-17T18:31:34Z",
       "started_by": "claude:0f56a916",
       "commit": "c50fbc2fae462211c97e837916d6ee00b0dc43ff",
-      "review_requested_at": "2026-11-17T18:03:50Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-17T18:03:50Z",
+          "to": "2026-11-17T18:31:30Z",
+          "outcome": "changes_requested"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e27bb7d4274",

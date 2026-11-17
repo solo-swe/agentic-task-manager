@@ -1,16 +1,15 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import CompMd from '../documents/CompMd.svelte';
   import type { ProjectDocument } from '../documents';
   import type { DocumentSource } from '../documents/source';
-  import type { DrawnLine } from '../compmd';
   import ChainBox from './ChainBox.svelte';
   import DiffCode, { type CodeLine } from './DiffCode.svelte';
+  import { focusOnShow } from './focus';
+  import RenderedSide from './RenderedSide.svelte';
   import {
     changeStarts,
     changedLines,
     foldKey,
-    linesUnder,
     nextChange,
     parseHunks,
     splitBlocks,
@@ -23,10 +22,12 @@
 
   // The diff viewer (docs/code-review-design.md §3.7, ATM-573): one file of a round, its two sides read from document
   // sources (the round's base and head; none for a side the file doesn't have) and its hunks from the round's patch.
-  // Split or unified; source (each run of lines a code block CompMD renders) or rendered (a Markdown file, both sides
-  // rendered, the changed blocks marked by CompMD's source-line map). Unchanged runs fold (*show more* opens one).
-  // Keys: n / p the next and previous change, ] / [ the next and previous file, v viewed. Picking lines (or selecting
-  // text in the rendered view) offers a comment on them; the file's chains show in place, after their last line.
+  // Split or unified; source (each run of lines a code block CompMD renders) or rendered (a Markdown file rendered on
+  // the document viewer's page, with its line numbers, the changed lines marked: both sides in split, the new one in
+  // unified). Unchanged runs fold (*show more* opens one). Pressing a line's + (or its number) picks it, dragging
+  // extends the pick, Shift-press extends it too; the comment is written right under the lines (selecting text in the
+  // rendered view does the same). The file's chains show in place, after their last line. Keys (`keyboard`, when the
+  // viewer is the page's only one): n / p the next and previous change, ] / [ the next and previous file, v viewed.
   // What a comment, a reply, a resolve or another file does is the page's: the handlers.
   let {
     path,
@@ -38,6 +39,9 @@
     mode = $bindable('split'),
     view = $bindable('source'),
     viewed = false,
+    header = true,
+    keyboard = true,
+    busy = false,
     oncomment,
     onreply,
     onresolve,
@@ -54,7 +58,12 @@
     mode?: 'split' | 'unified';
     view?: 'source' | 'rendered';
     viewed?: boolean;
-    oncomment?: (picked: Picked) => void;
+    /** Its own header (the path, the layout and view switches, Viewed); the review's page has its own */
+    header?: boolean;
+    /** Its keys on the window: off where the page has several viewers and the keys itself */
+    keyboard?: boolean;
+    busy?: boolean;
+    oncomment?: (picked: Picked, body: string) => void;
     onreply?: (to: string, body: string) => void;
     onresolve?: (comment: string, resolved: boolean) => void;
     onviewed?: () => void;
@@ -62,11 +71,12 @@
     onprevfile?: () => void;
   } = $props();
 
-  // The two sides
+  // The two sides, kept while the same ones load again (a refresh): nothing flickers
   let oldDoc = $state.raw<ProjectDocument | null>(null);
   let newDoc = $state.raw<ProjectDocument | null>(null);
   let problem = $state<string | null>(null);
   let loaded = $state(false);
+  let loadedFor = '';
 
   async function side(source: DocumentSource | null, file: string) {
     if (!source) return null;
@@ -77,18 +87,24 @@
 
   $effect(() => {
     const [b, a, from, to] = [before, after, oldPath, path];
-    loaded = false;
-    problem = null;
+    const key = `${b?.id ?? ''}:${from}|${a?.id ?? ''}:${to}`;
+    if (untrack(() => key !== loadedFor)) {
+      loaded = false;
+      problem = null;
+    }
     void Promise.all([side(b, from), side(a, to)])
       .then(([o, n]) => {
         if (b !== before || a !== after) return; // another file meanwhile
-        oldDoc = o;
-        newDoc = n;
+        if (oldDoc?.text !== o?.text || oldDoc?.path !== o?.path) oldDoc = o;
+        if (newDoc?.text !== n?.text || newDoc?.path !== n?.path) newDoc = n;
+        problem = null;
         loaded = true;
+        loadedFor = key;
       })
       .catch((e: unknown) => {
         problem = e instanceof Error ? e.message : String(e);
         loaded = true;
+        loadedFor = key;
       });
   });
 
@@ -99,12 +115,15 @@
   const newText = $derived(newDoc?.text ?? oldDoc?.text ?? null);
 
   let expanded = $state(new Set<number>());
-  // Another file: its folds start closed, nothing picked
+  // Another file: its folds start closed, nothing picked (the same file given again, a refresh, keeps them)
+  let shownPath = untrack(() => path);
   $effect(() => {
-    void path;
+    if (path === shownPath) return;
+    shownPath = path;
     untrack(() => {
       expanded = new Set();
       picked = null;
+      renderedPick = null;
       current = null;
     });
   });
@@ -113,6 +132,7 @@
     mode === 'split' ? splitBlocks(hunks, newText, expanded) : unifiedBlocks(hunks, newText, expanded),
   );
   const starts = $derived(changeStarts(blocks));
+  const startKeys = $derived(new Set(starts.map(([b, r]) => `${b}-${r}`)));
 
   /** Where a chain goes: after the row of its last line, on its side */
   const endsAt = (row: SplitRow | UnifiedRow, s: Side) =>
@@ -152,17 +172,34 @@
       return { text, old: s === 'old' ? r.old : null, new: s === 'new' ? r.new : null, kind };
     });
   const unifiedLines = (rows: UnifiedRow[]): CodeLine[] => rows.map((r) => ({ ...r }));
+  /** The lines of a segment that start a change, by their index in it */
+  const changesIn = (block: number, first: number, count: number) =>
+    Array.from({ length: count }, (_, i) => i).filter((i) => startKeys.has(`${block}-${first + i}`));
 
-  // Picking lines: a click on a line number, Shift extends it, in one run of one side; a run is a block's rows, the
-  // chains shown between them included (`from` and `to` are rows of the block)
-  let picked = $state<{ block: number; side: Side; from: number; to: number } | null>(null);
+  // Picking lines: a press on a line's + or number, dragged or Shift-pressed further, in one run of one side; a run is
+  // a block's rows, the chains shown between them included (`from` and `to` are rows of the block, `at` where the
+  // pick began)
+  let picked = $state<{ block: number; side: Side; at: number; from: number; to: number } | null>(null);
+  let dragging = $state(false);
+  let draft = $state('');
 
   function pick(block: number, s: Side, row: number, extend: boolean) {
     const p = picked;
-    picked =
-      extend && p && p.block === block && p.side === s
-        ? { ...p, from: Math.min(p.from, row), to: Math.max(p.to, row) }
-        : { block, side: s, from: row, to: row };
+    if (extend && p && p.block === block && p.side === s) {
+      picked = { ...p, from: Math.min(p.from, row), to: Math.max(p.to, row) };
+    } else {
+      picked = { block, side: s, at: row, from: row, to: row };
+      draft = '';
+    }
+    dragging = true;
+  }
+
+  /** While dragging: the pick runs from where it began to the line under the pointer */
+  function over(block: number, s: Side, row: number) {
+    const p = picked;
+    if (!dragging || !p || p.block !== block || p.side !== s) return;
+    const [from, to] = [Math.min(p.at, row), Math.max(p.at, row)];
+    if (from !== p.from || to !== p.to) picked = { ...p, from, to };
   }
 
   /** The rows of a segment (its first row, how many) picked on side `s`, as the segment's own indices */
@@ -193,10 +230,26 @@
     return { side: s, lines: [same[0].n, same.at(-1)!.n], quote: same.map((r) => r.text).join('\n') };
   });
 
-  function comment() {
-    if (pickedLines) oncomment?.(pickedLines);
+  // The rendered view's pick: the lines under the text selected
+  let renderedPick = $state<Picked | null>(null);
+  const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
+
+  function cancel() {
     picked = null;
+    renderedPick = null;
+    draft = '';
   }
+
+  function save() {
+    const body = draft.trim();
+    if (!body || !composing) return;
+    oncomment?.(composing, body);
+    cancel();
+  }
+
+  const whereLabel = (p: Picked) =>
+    (p.lines[0] === p.lines[1] ? `Line ${p.lines[0]}` : `Lines ${p.lines[0]}–${p.lines[1]}`) +
+    (p.side === 'old' ? ' (before)' : '');
 
   // n / p: the change after or before the current one, scrolled to; ] / [ and v: the page's
   let current = $state<[number, number] | null>(null);
@@ -210,7 +263,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!keyboard || e.metaKey || e.ctrlKey || e.altKey) return;
     // Not while typing (the window itself, when nothing has the focus, is no element)
     const target = e.target instanceof Element ? e.target : null;
     if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
@@ -220,64 +273,69 @@
     act();
   }
 
-  // The rendered view: where CompMD drew each source line, per side, to mark the changed ones and map a selection
+  // The rendered view: both sides in split, the new one (the old, for a file deleted) in unified
   const changed = $derived(changedLines(hunks));
-  let drawn = $state.raw<Record<Side, DrawnLine[]>>({ old: [], new: [] });
-  let panes = $state<Record<Side, HTMLElement | undefined>>({ old: undefined, new: undefined });
-
-  function placeLines(s: Side, lines: DrawnLine[], from: HTMLElement) {
-    const pane = panes[s];
-    if (!pane) return;
-    const box = pane.getBoundingClientRect();
-    const at = from.getBoundingClientRect();
-    const dx = at.left - box.left;
-    const dy = at.top - box.top;
-    drawn = {
-      ...drawn,
-      [s]: lines.map((l) => ({ line: l.line, rects: l.rects.map((r) => ({ ...r, x: r.x + dx, y: r.y + dy })) })),
-    };
-  }
-
-  const marks = (s: Side) =>
-    drawn[s].filter((l) => (s === 'old' ? changed.old : changed.new).has(l.line)).flatMap((l) => l.rects);
-
-  function selectText(s: Side) {
-    const pane = panes[s];
-    const selection = window.getSelection();
-    if (!pane || !selection || selection.isCollapsed || !oncomment) return;
-    const box = pane.getBoundingClientRect();
-    const rects = [...selection.getRangeAt(0).getClientRects()].map((r) => ({
-      top: r.top - box.top,
-      bottom: r.bottom - box.top,
-    }));
-    const lines = linesUnder(drawn[s], rects);
-    if (lines) oncomment({ side: s, lines, quote: selection.toString() });
-  }
-
   const sides = $derived<Side[]>(
-    [oldDoc ? ('old' as const) : null, newDoc ? ('new' as const) : null].filter((s): s is Side => s !== null),
+    mode === 'unified'
+      ? newDoc
+        ? ['new']
+        : oldDoc
+          ? ['old']
+          : []
+      : [oldDoc ? ('old' as const) : null, newDoc ? ('new' as const) : null].filter((s): s is Side => s !== null),
   );
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} onmouseup={() => (dragging = false)} />
 
-<div class="diff-view" bind:this={root} data-mode={mode} data-view={shownView} data-path={path}>
-  <header class="diff-header">
-    <span class="diff-path">{oldPath !== path ? `${oldPath} → ${path}` : path}</span>
-    <div class="diff-switch" role="group" aria-label="Layout">
-      <button aria-pressed={mode === 'split'} onclick={() => (mode = 'split')}>Split</button>
-      <button aria-pressed={mode === 'unified'} onclick={() => (mode = 'unified')}>Unified</button>
+{#snippet composer(p: Picked)}
+  <form
+    class="diff-composer"
+    onsubmit={(e) => {
+      e.preventDefault();
+      save();
+    }}
+  >
+    <div class="diff-composer-where">
+      <span class="diff-composer-plus" aria-hidden="true">+</span>
+      {whereLabel(p)}
     </div>
-    {#if markdown}
-      <div class="diff-switch" role="group" aria-label="View">
-        <button aria-pressed={shownView === 'source'} onclick={() => (view = 'source')}>Source</button>
-        <button aria-pressed={shownView === 'rendered'} onclick={() => (view = 'rendered')}>Rendered</button>
+    <textarea
+      class="diff-composer-body"
+      aria-label="Comment on {whereLabel(p).toLowerCase()}"
+      rows="3"
+      bind:value={draft}
+      {@attach focusOnShow}
+      onkeydown={(e) => {
+        if (e.key === 'Escape') cancel();
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
+      }}></textarea>
+    <div class="diff-composer-actions">
+      <button type="button" onclick={cancel}>Cancel</button>
+      <button type="submit" class="primary" disabled={!draft.trim() || busy}>Comment</button>
+    </div>
+  </form>
+{/snippet}
+
+<div class="diff-view" class:framed={header} bind:this={root} data-mode={mode} data-view={shownView} data-path={path}>
+  {#if header}
+    <header class="diff-header">
+      <span class="diff-path">{oldPath !== path ? `${oldPath} → ${path}` : path}</span>
+      <div class="diff-switch" role="group" aria-label="Layout">
+        <button aria-pressed={mode === 'split'} onclick={() => (mode = 'split')}>Split</button>
+        <button aria-pressed={mode === 'unified'} onclick={() => (mode = 'unified')}>Unified</button>
       </div>
-    {/if}
-    {#if onviewed}
-      <label class="diff-viewed"><input type="checkbox" checked={viewed} onchange={() => onviewed()} /> Viewed</label>
-    {/if}
-  </header>
+      {#if markdown}
+        <div class="diff-switch" role="group" aria-label="View">
+          <button aria-pressed={shownView === 'source'} onclick={() => (view = 'source')}>Source</button>
+          <button aria-pressed={shownView === 'rendered'} onclick={() => (view = 'rendered')}>Rendered</button>
+        </div>
+      {/if}
+      {#if onviewed}
+        <label class="diff-viewed"><input type="checkbox" checked={viewed} onchange={() => onviewed()} /> Viewed</label>
+      {/if}
+    </header>
+  {/if}
 
   {#if problem}
     <p class="diff-problem" role="alert">{problem}</p>
@@ -297,6 +355,7 @@
         {#each segments(block.rows as (SplitRow | UnifiedRow)[]) as segment (segment.first)}
           {@const keys = segment.rows.map((_, i) => `${b}-${segment.first + i}`)}
           {@const isPicked = (s: Side) => pickedIn(b, segment.first, segment.rows.length, s)}
+          {@const changes = changesIn(b, segment.first, segment.rows.length)}
           <div class="diff-run" data-keys={keys.join(' ')}>
             {#if mode === 'split'}
               {#each ['old', 'new'] as const as s (s)}
@@ -306,8 +365,10 @@
                     {language}
                     numbers={s}
                     {keys}
+                    changes={s === 'new' ? changes : []}
                     picked={isPicked(s)}
-                    onpick={(i, extend) => pick(b, s, segment.first + i, extend)}
+                    onpick={oncomment ? (i, extend) => pick(b, s, segment.first + i, extend) : undefined}
+                    onover={(i) => over(b, s, segment.first + i)}
                   />
                 </div>
               {/each}
@@ -318,24 +379,16 @@
                   {language}
                   numbers="both"
                   {keys}
+                  {changes}
                   picked={isPicked('new')}
-                  onpick={(i, extend) => pick(b, 'new', segment.first + i, extend)}
+                  onpick={oncomment ? (i, extend) => pick(b, 'new', segment.first + i, extend) : undefined}
+                  onover={(i) => over(b, 'new', segment.first + i)}
                 />
               </div>
             {/if}
           </div>
-          {#if picked && picked.block === b && picked.to >= segment.first && picked.to < segment.first + segment.rows.length && pickedLines && oncomment}
-            <div class="diff-picked">
-              <span>
-                {pickedLines.lines[0] === pickedLines.lines[1]
-                  ? `Line ${pickedLines.lines[0]}`
-                  : `Lines ${pickedLines.lines[0]}–${pickedLines.lines[1]}`}{pickedLines.side === 'old'
-                  ? ' (before)'
-                  : ''}
-              </span>
-              <button onclick={comment}>Comment</button>
-              <button onclick={() => (picked = null)}>Cancel</button>
-            </div>
+          {#if composing && picked && picked.block === b && picked.to >= segment.first && picked.to < segment.first + segment.rows.length && oncomment}
+            {@render composer(composing)}
           {/if}
           {#each segment.chains as chain (chain.id)}<ChainBox {chain} {onreply} {onresolve} />{/each}
         {/each}
@@ -345,28 +398,29 @@
     <div class="diff-rendered" class:single={sides.length < 2}>
       {#each sides as s (s)}
         {@const doc = s === 'old' ? oldDoc : newDoc}
-        <!-- svelte-ignore a11y_no_static_element_interactions (a selection, made with the mouse, offers a comment) -->
-        <div class="diff-pane diff-{s}" bind:this={panes[s]} onmouseup={() => selectText(s)}>
-          <div class="diff-pane-label">{s === 'old' ? 'Before' : 'After'}</div>
-          {#each marks(s) as rect, i (i)}
-            <div
-              class="diff-block-mark diff-{s === 'old' ? 'removed' : 'added'}"
-              style:left="{rect.x}px"
-              style:top="{rect.y}px"
-              style:width="{rect.width}px"
-              style:height="{rect.height}px"
-            ></div>
-          {/each}
-          {#if doc}
-            <CompMd
-              text={doc.text ?? doc.document}
-              path={doc.path}
-              onlines={(lines, from) => placeLines(s, lines, from)}
-            />
-          {/if}
-        </div>
+        {#if doc}
+          <RenderedSide
+            {doc}
+            side={s}
+            changed={s === 'old' ? changed.old : changed.new}
+            label={sides.length < 2
+              ? s === 'old'
+                ? 'Before (deleted)'
+                : 'After, the changes marked'
+              : s === 'old'
+                ? 'Before'
+                : 'After'}
+            onpick={oncomment
+              ? (p) => {
+                  renderedPick = p;
+                  draft = '';
+                }
+              : undefined}
+          />
+        {/if}
       {/each}
     </div>
+    {#if composing && oncomment}{@render composer(composing)}{/if}
   {/if}
 
   {#if loaded && !problem && elsewhere.length}
@@ -378,9 +432,11 @@
 
 <style>
   .diff-view {
+    background: var(--bg);
+  }
+  .diff-view.framed {
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    background: var(--bg);
   }
   .diff-header {
     position: sticky;
@@ -452,13 +508,70 @@
     text-align: left;
     cursor: pointer;
   }
-  .diff-picked {
+  /* The comment being written, right under its lines */
+  .diff-composer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin: var(--space-3) var(--space-4) var(--space-4) var(--space-10);
+    padding: var(--space-4) var(--space-6);
+    border: 1px solid var(--accent);
+    border-left-width: 3px;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    font-family: var(--font-sans);
+    font-size: var(--text-md);
+  }
+  .diff-composer-where {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-2) var(--space-6) var(--space-2) var(--space-10);
-    font-size: var(--text-xs);
+    gap: var(--space-3);
     color: var(--text-muted);
+    font-size: var(--text-xs);
+  }
+  .diff-composer-plus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--space-7);
+    height: var(--space-7);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
+  }
+  .diff-composer-body {
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+  }
+  .diff-composer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+  }
+  .diff-composer-actions button {
+    padding: var(--space-2) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+  }
+  .diff-composer-actions button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+  .diff-composer-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .diff-rendered {
     display: grid;
@@ -467,29 +580,11 @@
   .diff-rendered.single {
     grid-template-columns: 1fr;
   }
-  .diff-pane {
-    position: relative;
-    min-width: 0;
-    padding: var(--space-6) var(--space-7);
-  }
-  .diff-rendered .diff-old {
+  .diff-rendered :global(.diff-pane.diff-old) {
     border-right: 1px solid var(--border);
   }
-  .diff-pane-label {
-    color: var(--text-muted);
-    font-size: var(--text-xs);
-    margin-bottom: var(--space-3);
-  }
-  .diff-block-mark {
-    position: absolute;
-    pointer-events: none;
-    border-radius: var(--radius-sm);
-  }
-  .diff-block-mark.diff-removed {
-    background: color-mix(in srgb, var(--red) 16%, transparent);
-  }
-  .diff-block-mark.diff-added {
-    background: color-mix(in srgb, var(--green) 16%, transparent);
+  .diff-rendered.single :global(.diff-pane.diff-old) {
+    border-right: none;
   }
   .diff-problem,
   .diff-loading {

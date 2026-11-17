@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { chainsOf, driftedOf, fileTree, hashOf, lineCounts, reviewChains, viewedKey } from '../../src/lib/reviews/page';
+import {
+  TREE_WIDTH,
+  chainsOf,
+  driftedOf,
+  fileTree,
+  filterChains,
+  hashOf,
+  isResolved,
+  lineCounts,
+  reviewChains,
+  reviewTitle,
+  treeWidth,
+  viewedKey,
+  type ChainFilter,
+} from '../../src/lib/reviews/page';
 import type { PlacedChain, ViewFile } from '../../src/lib/reviews/types';
 
 // A review's page's own logic (lib/reviews/page.ts, ATM-574)
@@ -150,5 +164,57 @@ describe('a viewed tick’s key', () => {
       expect(hashOf(text)).toBe(hashOf(text));
     }
     expect(hashOf('a')).not.toBe(hashOf('b'));
+  });
+});
+
+describe('the Comments tab’s filter', () => {
+  const comment = (resolved: boolean | null) => ({ id: 'c', author: 'a', at: '', body: '', resolved, replies: [] });
+  const withComments = (id: string, ...resolved: (boolean | null)[]) =>
+    chain(id, null, null, { comments: resolved.map(comment) });
+
+  it('a chain is resolved when each of its top-level comments is; one with none is open', () => {
+    expect(isResolved(withComments('a', true))).toBe(true);
+    expect(isResolved(withComments('b', true, true))).toBe(true);
+    expect(isResolved(withComments('c', true, false))).toBe(false);
+    expect(isResolved(withComments('d', false))).toBe(false);
+    expect(isResolved(withComments('e', null))).toBe(false);
+    expect(isResolved(withComments('f'))).toBe(false);
+  });
+
+  it('keeps all, the open or the resolved ones, in their order; nothing from nothing', () => {
+    const chains = [withComments('a', true), withComments('b', false), withComments('c', true), withComments('d')];
+    const ids = (filter: ChainFilter) => filterChains(chains, filter).map((c) => c.id);
+    expect(ids('all')).toEqual(['a', 'b', 'c', 'd']);
+    expect(ids('open')).toEqual(['b', 'd']);
+    expect(ids('resolved')).toEqual(['a', 'c']);
+    for (const filter of ['all', 'open', 'resolved'] as const) expect(filterChains([], filter)).toEqual([]);
+  });
+});
+
+describe('a review’s page title', () => {
+  it('the project’s short name, the reference and the title; each left out when there is none', () => {
+    expect(reviewTitle('ATM', 'CR-7', 'Trim the names')).toBe('ATM CR-7: Trim the names');
+    expect(reviewTitle(null, 'CR-7', 'Trim the names')).toBe('CR-7: Trim the names');
+    expect(reviewTitle('', 'CR-7', 'Trim the names')).toBe('CR-7: Trim the names');
+    expect(reviewTitle('ATM', 'CR-7', '')).toBe('ATM CR-7');
+    expect(reviewTitle(undefined, 'CR-8.1', '')).toBe('CR-8.1');
+  });
+});
+
+describe('the file tree’s width', () => {
+  it('kept between its least and half the page, whole pixels; anything not a number is the default', () => {
+    expect(treeWidth(300, 1200)).toBe(300);
+    expect(treeWidth(300.6, 1200)).toBe(301);
+    expect(treeWidth(100, 1200)).toBe(TREE_WIDTH.least);
+    expect(treeWidth(TREE_WIDTH.least, 1200)).toBe(TREE_WIDTH.least);
+    expect(treeWidth(900, 1200)).toBe(600);
+    expect(treeWidth(600, 1200)).toBe(600);
+    expect(treeWidth(Number.NaN, 1200)).toBe(TREE_WIDTH.default);
+    expect(treeWidth(Number.POSITIVE_INFINITY, 1200)).toBe(TREE_WIDTH.default);
+  });
+
+  it('a page too narrow for half still leaves the tree its least', () => {
+    expect(treeWidth(250, 200)).toBe(TREE_WIDTH.least);
+    expect(treeWidth(250, 0)).toBe(TREE_WIDTH.least);
   });
 });

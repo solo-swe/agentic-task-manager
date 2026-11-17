@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Fetch } from '../../src/lib/api/http';
 import { writeStored } from '../../src/lib/prefs';
 import {
+  SOURCES_CAP,
   VIEWED_CAP,
   VIEWED_KEY,
   isViewed,
@@ -71,6 +72,55 @@ describe('a round’s side', () => {
     expect(urlOf(fetch)).toBe('/api/v1/projects/p1/documents?path=a.md&at=3fa1');
     expect(side.imageUrl('img.png')).toBeNull();
     expect(side.repositoryLink(doc as never, { path: 'a.md', lines: null } as never)).toBeNull();
+  });
+
+  it('is the same side each time it is asked for, each file read once: a refresh reads nothing again', async () => {
+    const fetch = fetching(200, JSON.stringify({ path: 'a.md', kind: 'markdown', text: '# A' }));
+    const side = revisionDocuments('p1', 'c1', fetch);
+    expect(revisionDocuments('p1', 'c1', fetch)).toBe(side);
+    // Another revision, another project or another client is another side
+    expect(revisionDocuments('p1', 'c2', fetch)).not.toBe(side);
+    expect(revisionDocuments('p2', 'c1', fetch)).not.toBe(side);
+    expect(revisionDocuments('p1', 'c1', fetching(200, '{}'))).not.toBe(side);
+    const [first, again] = await Promise.all([side.load('a.md'), side.load('a.md')]);
+    expect(again).toEqual(first);
+    await side.load('a.md');
+    await side.load('b.md');
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      '/api/v1/projects/p1/documents?path=a.md&at=c1',
+      '/api/v1/projects/p1/documents?path=b.md&at=c1',
+    ]);
+  });
+
+  it('a file that couldn’t be read, refused or failed, is asked for again the next time', async () => {
+    // Refused, then a failed request, then read: read once it is, and kept
+    const answers: (Response | Error)[] = [
+      new Response('{"error":"busy"}', { status: 500 }),
+      new Error('network down'),
+      new Response('{"path":"a.md"}'),
+    ];
+    const flaky = vi.fn(async () => {
+      const next = answers.shift()!;
+      if (next instanceof Error) throw next;
+      return next;
+    }) as unknown as Fetch & ReturnType<typeof vi.fn>;
+    const side = revisionDocuments('p1', 'flaky', flaky);
+    expect(await side.load('a.md')).toMatchObject({ error: expect.any(String) });
+    await side.load('a.md').then(
+      (result) => expect(result).toMatchObject({ error: expect.any(String) }),
+      (e: unknown) => expect(e).toBeInstanceOf(Error),
+    );
+    expect(await side.load('a.md')).toMatchObject({ document: { path: 'a.md' } });
+    expect(await side.load('a.md')).toMatchObject({ document: { path: 'a.md' } });
+    expect(flaky).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps the latest sides only, per client: the oldest made again when asked for', () => {
+    const fetch = fetching(200, '{}');
+    const first = revisionDocuments('p1', 'r0', fetch);
+    for (let i = 1; i <= SOURCES_CAP; i++) revisionDocuments('p1', `r${i}`, fetch);
+    expect(revisionDocuments('p1', `r${SOURCES_CAP}`, fetch)).toBe(revisionDocuments('p1', `r${SOURCES_CAP}`, fetch));
+    expect(revisionDocuments('p1', 'r0', fetch)).not.toBe(first);
   });
 
   it('a file the revision doesn’t have, or one atm won’t show, is the viewer’s to say', async () => {
