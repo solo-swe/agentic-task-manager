@@ -9469,7 +9469,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-17T02:51:06Z",
+      "updated_at": "2026-11-17T03:14:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9513,7 +9513,7 @@
       ],
       "started_at": "2026-11-17T02:50:33Z",
       "started_by": "claude:0f56a916",
-      "commit": "ab376f5992e7ad91909912dd18db1eeceaef2379"
+      "commit": "a20436bf53e9711ace69acb50d478df67a3a1826"
     },
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
@@ -9807,7 +9807,7 @@
       "description": "Go through `.github/workflows/` with the user and propose changes, based on what CI did during *The Rust port* and the first releases. Each change is agreed first: editing CI is the user's call.\n\n## What to look at\n- **What runs when:** pushes to a release branch run nothing unless dispatched (`gh workflow run CI --ref <branch>`); a PR runs again after every push. Is that still the right trade?\n- **Time and caching:** a run takes about 4–5 minutes. Look at the cargo and pnpm caches, the jobs that build the dashboard and atm more than once (Rust ×3, `atm for the e2e suite`, Playwright), and whether artifacts could be shared instead.\n- **The app (T-455 onwards)** is part of `cargo build`/`test`, so the Linux job needs the webview's system packages and Windows builds against WebView2. See what that adds to each job, and whether the e2e binary and the release should build only `-p atm-cli`.\n- **Windows:** the suite runs only partly there (T-480, T-482), and the stress test fails (T-481). Decide what the Windows job checks until those are done.\n- **macOS:** the stress test hit lock timeouts twice (T-481). Is that a slow runner or a real bug?\n- **Screenshots:** CI makes missing Linux baselines, and the local scripts get a Linux atm (T-485). Check that the two use the same binary and the same steps.\n- **Runner images:** `ubuntu-latest` moves to Ubuntu 26 (CI's annotation); the e2e binary is built on 22.04 for an older glibc. Pin the images we depend on.\n- **Required checks:** the ruleset names jobs by their display names (`Rust (ubuntu-latest)`, …), so renaming a job breaks merges. Keep the names in one place, or test that `.github/rulesets/main.json` matches `ci.yml` (`ci-workflow.test.ts`).\n- **Release workflows:** `release.yml`, `homebrew.yml` and `skills.yml` worked first time for 0.32.0 and 0.33.0. Note anything worth keeping in `packaging/README.md`.\n\n## Outcome\nThe agreed changes in the workflows, `ci-workflow.test.ts` and `AGENTS.md`'s CI section, with `docs/security-architecture.md` updated if a permission or secret changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         ".github/workflows/ci.yml",
@@ -9816,7 +9816,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T08:09:05Z",
-      "updated_at": "2026-11-17T02:52:07Z",
+      "updated_at": "2026-11-17T03:15:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "with": "user",
@@ -9834,7 +9834,9 @@
           "text": "Hakan, 2026-11-17: start the CI review from what was learned (the Rust port, the releases, 0.38.0’s flaky runs: the macOS lock timeout ATM-481, the Linux asset cache race ATM-559, Windows ATM-482), propose the changes, then block on him for the decisions he has to give.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-17T03:15:12Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "2238c9b2-a361-848f-ac56-42807145ee8b",
