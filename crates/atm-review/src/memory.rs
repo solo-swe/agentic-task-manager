@@ -10,8 +10,8 @@ use atm_common::time::now_iso;
 use atm_common::{Error, Result};
 
 use crate::model::{
-    Actor, Anchor, Chain, ChainId, Comment, CommentId, Patch, Review, ReviewHeader, ReviewId,
-    ReviewRef, Round, Status,
+    Actor, Anchor, Chain, Comment, CommentId, Patch, Review, ReviewHeader, ReviewId, ReviewRef,
+    Round, Status,
 };
 use crate::store::{CommentFilter, NewReview, NewRound, ReviewFilter, ReviewStore};
 
@@ -37,34 +37,12 @@ impl Drop for Unlisten {
     }
 }
 
-/// The number in an ID like `c9` or `t4`.
-fn ordinal(id: &str) -> u32 {
-    id[1..].parse().unwrap_or(0)
-}
-
-fn reply_into(comments: &mut [Comment], to: &CommentId, reply: &Comment) -> bool {
-    for comment in comments {
-        if &comment.id == to {
-            comment.replies.push(reply.clone());
-            return true;
-        }
-        if reply_into(&mut comment.replies, to, reply) {
-            return true;
-        }
+/// Tell `listeners` of a change.
+pub(crate) fn tell(listeners: &Listeners) {
+    let listeners = listeners.lock().map(|l| l.clone()).unwrap_or_default();
+    for (_, on_change) in listeners {
+        on_change();
     }
-    false
-}
-
-fn find_mut<'a>(comments: &'a mut [Comment], id: &CommentId) -> Option<&'a mut Comment> {
-    for comment in comments {
-        if &comment.id == id {
-            return Some(comment);
-        }
-        if let Some(found) = find_mut(&mut comment.replies, id) {
-            return Some(found);
-        }
-    }
-    None
 }
 
 impl MemoryStore {
@@ -74,20 +52,6 @@ impl MemoryStore {
         Self::default()
     }
 
-    fn tell(&self) {
-        let listeners = self.listeners.lock().map(|l| l.clone()).unwrap_or_default();
-        for (_, on_change) in listeners {
-            on_change();
-        }
-    }
-
-    fn review_mut(&mut self, id: &ReviewId) -> Result<&mut Review> {
-        self.reviews
-            .iter_mut()
-            .find(|r| &r.header.id == id)
-            .ok_or_else(|| Error::NotFound(format!("no review {}", id.0)))
-    }
-
     fn by_id(&self, id: &ReviewId) -> Result<&Review> {
         self.reviews
             .iter()
@@ -95,20 +59,17 @@ impl MemoryStore {
             .ok_or_else(|| Error::NotFound(format!("no review {}", id.0)))
     }
 
-    /// The next comment ID in a review.
-    fn next_comment(review: &Review) -> CommentId {
-        let last = review
-            .comments()
-            .map(|c| ordinal(&c.id.0))
-            .max()
-            .unwrap_or(0);
-        CommentId(format!("c{}", last + 1))
-    }
-
-    fn changed(&mut self, id: &ReviewId) -> Result<()> {
-        self.review_mut(id)?.header.updated = now_iso();
-        self.tell();
-        Ok(())
+    /// Apply `edit` to a review, mark it updated and tell the subscriptions.
+    fn edit<T>(&mut self, id: &ReviewId, edit: impl FnOnce(&mut Review) -> Result<T>) -> Result<T> {
+        let review = self
+            .reviews
+            .iter_mut()
+            .find(|r| &r.header.id == id)
+            .ok_or_else(|| Error::NotFound(format!("no review {}", id.0)))?;
+        let out = edit(review)?;
+        review.header.updated = now_iso();
+        tell(&self.listeners);
+        Ok(out)
     }
 }
 
@@ -167,39 +128,35 @@ impl ReviewStore for MemoryStore {
                 at: now,
             }],
         });
-        self.tell();
+        tell(&self.listeners);
         Ok(header)
     }
 
     fn set_status(&mut self, id: &ReviewId, status: Status, _by: &Actor) -> Result<()> {
-        self.review_mut(id)?.header.status = status;
-        self.changed(id)
+        self.edit(id, |review| {
+            review.header.status = status;
+            Ok(())
+        })
     }
 
     fn edit_summary(&mut self, id: &ReviewId, title: &str, summary: &str) -> Result<()> {
-        let review = self.review_mut(id)?;
-        title.clone_into(&mut review.header.title);
-        summary.clone_into(&mut review.summary);
-        self.changed(id)
+        self.edit(id, |review| {
+            title.clone_into(&mut review.header.title);
+            summary.clone_into(&mut review.summary);
+            Ok(())
+        })
     }
 
     fn set_tasks(&mut self, id: &ReviewId, tasks: Vec<String>) -> Result<()> {
-        self.review_mut(id)?.header.tasks = tasks;
-        self.changed(id)
+        self.edit(id, |review| {
+            review.header.tasks = tasks;
+            Ok(())
+        })
     }
 
     fn add_round(&mut self, id: &ReviewId, round: NewRound) -> Result<u32> {
-        let review = self.review_mut(id)?;
-        let number = review.rounds.last().map_or(1, |r| r.number + 1);
-        review.rounds.push(Round {
-            number,
-            kind: round.kind,
-            files: round.files,
-            by: round.by,
-            at: now_iso(),
-        });
+        let number = self.edit(id, |review| Ok(review.push_round(&round, &now_iso())))?;
         self.patches.insert((id.clone(), number), round.patch);
-        self.changed(id)?;
         Ok(number)
     }
 
@@ -211,20 +168,11 @@ impl ReviewStore for MemoryStore {
     }
 
     fn list_comments(&self, id: &ReviewId, filter: &CommentFilter) -> Result<Vec<Chain>> {
-        Ok(self
-            .by_id(id)?
-            .chains
-            .iter()
-            .filter(|c| !filter.open_only || c.comments.iter().any(|t| t.resolved == Some(false)))
-            .cloned()
-            .collect())
+        Ok(self.by_id(id)?.chains_by(filter))
     }
 
     fn get_comment(&self, id: &ReviewId, comment: &CommentId) -> Result<Comment> {
-        self.by_id(id)?
-            .comment(comment)
-            .cloned()
-            .ok_or_else(|| Error::NotFound(format!("no comment {comment}")))
+        self.by_id(id)?.comment_owned(comment)
     }
 
     fn add_comment(
@@ -234,29 +182,9 @@ impl ReviewStore for MemoryStore {
         body: &str,
         by: &Actor,
     ) -> Result<CommentId> {
-        let review = self.review_mut(id)?;
-        let comment_id = Self::next_comment(review);
-        let chain = review
-            .chains
-            .iter()
-            .map(|c| ordinal(&c.id.0))
-            .max()
-            .unwrap_or(0)
-            + 1;
-        review.chains.push(Chain {
-            id: ChainId(format!("t{chain}")),
-            anchor,
-            comments: vec![Comment {
-                id: comment_id.clone(),
-                author: by.clone(),
-                at: now_iso(),
-                body: body.to_string(),
-                resolved: Some(false),
-                replies: Vec::new(),
-            }],
-        });
-        self.changed(id)?;
-        Ok(comment_id)
+        self.edit(id, |review| {
+            Ok(review.push_chain(anchor, body, by, &now_iso()))
+        })
     }
 
     fn reply(
@@ -266,47 +194,15 @@ impl ReviewStore for MemoryStore {
         body: &str,
         by: &Actor,
     ) -> Result<CommentId> {
-        let review = self.review_mut(id)?;
-        let reply = Comment {
-            id: Self::next_comment(review),
-            author: by.clone(),
-            at: now_iso(),
-            body: body.to_string(),
-            resolved: None,
-            replies: Vec::new(),
-        };
-        let placed = review
-            .chains
-            .iter_mut()
-            .any(|chain| reply_into(&mut chain.comments, to, &reply));
-        if !placed {
-            return Err(Error::NotFound(format!("no comment {to}")));
-        }
-        self.changed(id)?;
-        Ok(reply.id)
+        self.edit(id, |review| review.push_reply(to, body, by, &now_iso()))
     }
 
     fn edit_comment(&mut self, id: &ReviewId, comment: &CommentId, body: &str) -> Result<()> {
-        let review = self.review_mut(id)?;
-        let found = review
-            .chains
-            .iter_mut()
-            .find_map(|chain| find_mut(&mut chain.comments, comment))
-            .ok_or_else(|| Error::NotFound(format!("no comment {comment}")))?;
-        body.clone_into(&mut found.body);
-        self.changed(id)
+        self.edit(id, |review| review.set_body(comment, body))
     }
 
     fn resolve(&mut self, id: &ReviewId, top_level: &CommentId, resolved: bool) -> Result<()> {
-        let review = self.review_mut(id)?;
-        let found = review
-            .chains
-            .iter_mut()
-            .flat_map(|chain| chain.comments.iter_mut())
-            .find(|c| &c.id == top_level)
-            .ok_or_else(|| Error::NotFound(format!("no top-level comment {top_level}")))?;
-        found.resolved = Some(resolved);
-        self.changed(id)
+        self.edit(id, |review| review.set_resolved(top_level, resolved))
     }
 
     fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {

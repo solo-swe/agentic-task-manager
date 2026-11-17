@@ -325,12 +325,22 @@ name = "atm-db"
 version = "0.39.0"
 dependencies = [
  "atm-common",
+ "atm-fs",
+ "serde_json",
+ "sysinfo",
+ "uuid",
+]
+
+[[package]]
+name = "atm-fs"
+version = "0.39.0"
+dependencies = [
+ "atm-common",
  "notify",
  "notify-debouncer-full",
  "serde_json",
  "signal-hook",
  "sysinfo",
- "uuid",
 ]
 
 [[package]]
@@ -349,6 +359,7 @@ name = "atm-review"
 version = "0.39.0"
 dependencies = [
  "atm-common",
+ "atm-fs",
  "serde",
  "serde_json",
  "toml 1.2.1+spec-1.1.0",

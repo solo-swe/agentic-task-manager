@@ -8,11 +8,16 @@
 //!
 //! A component of its own (§3.1): it knows a task only as a key (a string), and depends on neither atm-db nor atm-lib.
 
+pub mod edits;
 pub mod files;
+pub mod folder;
 pub mod memory;
 pub mod model;
 pub mod rules;
 pub mod store;
+
+#[cfg(test)]
+mod test_dir;
 
 pub use model::{
     Actor, Anchor, Chain, ChainId, Comment, CommentId, FileChange, FileStatus, Patch, Review,

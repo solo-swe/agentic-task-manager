@@ -216,7 +216,7 @@ One folder per review, under the task folder:
 
 ```text
 .agentic-task-manager/reviews/
-  CR-7-3fa1/           the review's number and the start of its UUID (§3.4)
+  CR-7-3fa1/           the review's number and the end of its UUID (§3.10)
     review.md          the header and the summary
     comments.md        every comment chain
     rounds/
@@ -516,7 +516,8 @@ folder (the JSON store's watcher, ATM-555). Its numbers:
 
 - **A new review takes the next number** from a counter shared by the clone's worktrees (`.git/atm/`, beside the
   claims), so two worktrees never take the same one.
-- **Its folder is named by its number and the start of its UUID** (`CR-7-3fa1`), so two clones' CR-8s are two folders,
+- **Its folder is named by its number and the end of its UUID** (`CR-7-3fa1`: a v7 UUID starts with the time, so
+  its start is shared by reviews made weeks apart; its end is random), so two clones' CR-8s are two folders,
   and a merge never collides on them (a plain `CR-8` folder on both sides would be one folder with two reviews' files
   in conflict, which nothing but a person can untangle).
 - **A clash gets minor numbers:** two reviews with the same number (made in two clones, then merged) are **CR-8.1 and

@@ -18,7 +18,7 @@ use atm_common::time::{now_iso, parse_iso, real_now};
 use atm_common::{Error, Result};
 use serde_json::{Value, json};
 
-use super::files::read_json;
+use crate::read_json;
 
 /// The lock's folder, in the folder it locks.
 pub const LOCK_DIR: &str = ".lock";

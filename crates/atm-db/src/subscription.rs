@@ -3,43 +3,18 @@
 //! store watches its files ([`watch`]), the memory store is told by its own writes, and a store that can't push may
 //! poll its stamp ([`poll_stamp`]). What subscribes can't tell which.
 
-use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::Arc;
 use std::sync::mpsc::{RecvTimeoutError, channel};
 use std::time::Duration;
 
 use atm_common::{Error, Result};
-use notify::RecursiveMode;
-use notify_debouncer_full::{DebounceEventResult, new_debouncer};
 use serde_json::Value;
 
 // atm-common's, shared with the review store (atm-review, ATM-561), so atm-lib can merge the two
 pub use atm_common::subscription::{OnChange, Subscription};
-
-/// How long a file watcher waits for a burst of changes (an atm command writes a file or two, git many) to settle.
-pub const SETTLE: Duration = Duration::from_millis(300);
-
-/// Watch `folders` (those that are there; not their subfolders), calling `on_change` once each burst of changes in
-/// them has settled ([`SETTLE`]), on the watcher's thread.
-///
-/// # Errors
-/// The watcher can't be started, or a folder can't be watched.
-pub fn watch(folders: &[PathBuf], on_change: OnChange) -> Result<Subscription> {
-    let failed = |e: notify::Error| Error::failed(format!("watching for changes: {e}"));
-    let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
-        if result.is_ok_and(|events| !events.is_empty()) {
-            on_change();
-        }
-    })
-    .map_err(failed)?;
-    for folder in folders.iter().filter(|f| f.is_dir()) {
-        watcher
-            .watch(folder, RecursiveMode::NonRecursive)
-            .map_err(failed)?;
-    }
-    Ok(Subscription::new(watcher))
-}
+// The folder watcher is atm-fs's, shared with the review store (ATM-563)
+pub use atm_fs::watch::{SETTLE, watch};
 
 /// Poll a store's stamp (`stamp`, a value that changes when the data does, as [`crate::Store::stamp`]) every `every`,
 /// calling `on_change` when it differs from the one before, on the poller's own thread: for a store that can't push.

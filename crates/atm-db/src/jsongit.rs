@@ -3,7 +3,8 @@
 
 pub mod claims;
 pub mod files;
-pub mod lock;
+// atm-fs's, shared with the review store (ATM-563)
+pub use atm_fs::lock;
 pub mod logo;
 pub mod merge;
 pub mod migrate;
