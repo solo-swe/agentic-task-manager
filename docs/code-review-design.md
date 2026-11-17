@@ -146,8 +146,8 @@ stateDiagram-v2
     draft --> open: the author asks for review
     open --> changes_requested: a reviewer submits "request changes"
     changes_requested --> open: the author adds a round
-    open --> approved: a reviewer approves (every comment resolved)
-    live --> approved: a reviewer approves (every comment resolved)
+    open --> approved: a reviewer approves (every top-level comment resolved)
+    live --> approved: a reviewer approves (every top-level comment resolved)
     live --> open: the author ends the live review with a round
     draft --> closed
     open --> closed
@@ -166,39 +166,49 @@ stateDiagram-v2
 | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
 | `closed` | ended without approval (abandoned, replaced) | the author, or a reviewer |
 
-**How it relates to a task** (the review's decisions are the task's, §3.8):
+**How it relates to its tasks** (the review's decisions are its tasks', §3.8). A review names **one task or several**,
+and the names can be given at three points, marked ① ② ③ below:
 
 ```mermaid
 flowchart LR
-    subgraph task["the task"]
+    subgraph tasks["its tasks (ATM-482, ATM-483, …)"]
         ip["in progress"]
         ir["in review"]
         cr["changes requested"]
         ap["approved"]
         done["done"]
     end
-    subgraph review["its CR"]
+    subgraph review["the CR"]
+        rlive["live"]
         ro["open<br/>(round n)"]
         rcr["changes requested"]
         rap["approved"]
-        rlive["live"]
     end
 
-    ip -- "atm review create --task" --> ir
-    ir -.- ro
-    ro -- "request changes" --> rcr
-    rcr -.- cr
-    cr -- "the agent takes it back" --> ip
-    ip -- "atm review round" --> ir
-    ro -- "approve" --> rap
-    rap -.- ap
-    ap --> done
-    ip -.- rlive
+    ip -- "① atm review create --task ATM-482 --task ATM-483" --> ro
+    ro -. "each task named goes in review" .-> ir
+    ip -- "② atm review live --task ATM-482" --> rlive
     rlive -- "approve, nothing changed since" --> rap
+    ro -- "request changes" --> rcr
+    rcr -. "each task named" .-> cr
+    cr -- "its agent takes it back, fixes, atm review round" --> ro
+    ro -- "approve (every top-level comment resolved)" --> rap
+    rap -. "each task named" .-> ap
+    ap --> done
+    link3["③ later: atm review tasks CR-7 --add ATM-484 / --remove ATM-483,<br/>or the app's Add to review on a task or the CR's Tasks field"]
+    link3 -.-> review
 ```
 
-A static review (open, then rounds) puts the task in review and waits; a **live** review runs beside the task while it
-is in progress, and its approval is the task's review when the task's change hasn't moved since (§3.5).
+- **① When it is created:** `--task` as many times as there are tasks (a change that finished two tasks, a sprint's
+  batch review). Each task named that is in progress goes in review.
+- **② When a live review starts:** `--task` the same way; the tasks stay in progress while it runs.
+- **③ At any time after:** `atm review tasks CR-7 --add ATM-484` (or `--remove`), or in the app, *Add to review* on a
+  task, or the review's Tasks field. A task added to an open review goes in review; one removed leaves it (back to in
+  progress, with a note). A review can start with no task (a review of the user's own change) and get one later.
+
+Every decision then goes to every task named (§3.8). A static review (open, then rounds) puts its tasks in review and
+waits; a **live** review runs beside them while they are in progress, and its approval is their review when their
+change hasn't moved since (§3.5).
 
 ### 3.3 The records
 
@@ -267,9 +277,10 @@ answered and resolved in round 3).
 2. **the quote** (`>`): the lines, or the text selected in the rendered view, that it was made on, which its anchor
    follows (§3.6);
 3. **its comments, as a nested list**: each comment is a list item, a reply is an item nested under the comment it
-   answers, as deep as the conversation goes. Each item starts with its **resolved** box (`[ ]` open, `[x]`
-   resolved, as a Markdown task list), then the author, the time and the comment's ID; its text follows, indented
-   under it (Markdown, rendered with CompMD as task text is).
+   answers, as deep as the conversation goes. A **top-level comment** (one that answers nothing) starts with its
+   **resolved** box (`[ ]` open, `[x]` resolved, as a Markdown task list); a **reply** has none, it belongs to its
+   top-level comment. Then the author, the time and the comment's ID; its text follows, indented under it (Markdown,
+   rendered with CompMD as task text is).
 
 ```markdown
 ## crates/atm-cli/src/process.rs:40-52 · round 1 · t4
@@ -277,9 +288,9 @@ answered and resolved in round 3).
 
 - [ ] **Hakan Serce** · 2026-11-17 03:31 · c9
   On Windows this follows the idle process. Find the parent instead?
-  - [x] **claude:0f56a916** · 2026-11-17 03:40 · c10
+  - **claude:0f56a916** · 2026-11-17 03:40 · c10
     Done in round 2: `shell_pid()`, past Git Bash's forked copy of itself.
-    - [ ] **Hakan Serce** · 2026-11-17 04:05 · c12
+    - **Hakan Serce** · 2026-11-17 04:05 · c12
       What if the parent's parent is a different shell?
 - [x] **Hakan Serce** · 2026-11-17 03:33 · c11
   Nit: the comment above it says "launchers".
@@ -289,10 +300,11 @@ answered and resolved in round 3).
   Overall fine; the two above first.
 ```
 
-**Resolved, per comment.** Every comment has its own resolved box. A reviewer resolves any comment; an author
-resolves their own replies (an agent's "done" is resolved by the agent, the question it answers by the reviewer).
-**A review is approved only when every comment in it is resolved**: `atm review submit --approve` (and the app's
-Approve) refuse while one is open, and name them.
+**Resolved, per top-level comment.** Each top-level comment has its resolved box, which covers it and its replies:
+c9 is open until its question (and the follow-up in c12) is settled, however many replies it has. A reviewer resolves
+(or reopens) a top-level comment; its author may resolve their own. **A review is approved only when every top-level
+comment in it is resolved**: `atm review submit --approve` (and the app's Approve) refuse while one is open, and name
+them.
 
 **Why a Markdown file:** people can read the whole discussion top to bottom in any editor, and a pull request or
 `git log -p .agentic-task-manager/reviews/CR-7-3fa1/comments.md` shows how it grew, comment by comment, like any
@@ -314,9 +326,11 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
 - **Commenting:** at any time, on what is there. When a comment is added, atm records a **checkpoint**: a round of
   kind `working`, the diff against the base at that moment (§3.3), so the comment is anchored to what the reviewer
   saw, and moves with the code afterwards (§3.6) like any other.
-- **The agent listens** with `atm review watch` (§3.9): each comment as it comes, so it can answer and adjust right
-  away, without stopping its task.
-- **Ending it:** a reviewer **approves** it (every comment resolved), on the latest checkpoint; or the author ends it
+- **The agent listens** with `atm review watch` (§3.9), started with its task, **before any review exists**: it
+  watches for live comments on its task (`--task ATM-482`), or on its working copy, and picks up whichever live review
+  the user starts there, whenever they start it. Each comment comes as it is added, so the agent can answer and adjust
+  right away, without stopping its task; it never needs to know the review's number.
+- **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author ends it
   with a round, which makes it an ordinary `open` review; or it is closed.
 - **Instead of a review at the end:** a task whose change was approved in a live review needs no other CR. When the
   task is finished, atm compares its change with the approved checkpoint: **unchanged since, the live review's
@@ -377,17 +391,18 @@ lacks one), it goes into CompMD; everything a diff needs on top of rendering is 
 atm review create [--task KEY]… (--range BASE..HEAD | --uncommitted | --file PATH…) [--title T] [--summary-file F] [--draft]
 atm review live [--base COMMIT] [--task KEY]…
 atm review round CR-7 [--range …|--uncommitted]       # the next round, after addressing comments
+atm review tasks CR-7 [--add KEY]… [--remove KEY]…    # the tasks it reviews, at any time (§3.2 ③)
 atm review list [--status S] [--task KEY] [--mine] [--search TEXT] [--json]
 atm review show CR-7 [--round N] [--against M] [--json]
 atm review comments CR-7 [--open] [--since ID] [--json]
 atm review comment CR-7 --file PATH --lines 40-52 [--quote TEXT] --body-file F
 atm review reply CR-7 c9 --body-file F
 atm review edit CR-7 c9 --body-file F                 # one's own comment
-atm review resolve CR-7 c9 [--reopen]
+atm review resolve CR-7 c9 [--reopen]                # a top-level comment
 atm review submit CR-7 (--approve | --request-changes | --comment) [--body-file F]   # a reviewer's
 atm review close CR-7 --reason TEXT
 atm review wait CR-7 [--for submitted|decision] [--timeout 2h]
-atm review watch CR-7 [--timeout 2h]                  # each new comment, as it comes (live reviews)
+atm review watch [--task KEY] [--timeout 2h]          # live comments, before (and whether or not) a review exists
 ```
 
 **Two ways to listen:**
@@ -396,8 +411,11 @@ atm review watch CR-7 [--timeout 2h]                  # each new comment, as it 
   comments, the decision). For a static review: the agent waits as it waits for CI, with its claim held (`atm claim
   hold ATM-482 && atm review wait CR-7`, in the background), then reads the comments, replies to each, fixes, commits,
   `atm review round`, waits again; until approved.
-- **`atm review watch`** prints each comment as it is added, one JSON object a line, until the review ends or the
-  timeout. For a live review: the agent runs it in the background beside its work and answers as comments come.
+- **`atm review watch`** is for live reviews, and names no review: the agent starts it with its task (`atm claim
+  hold ATM-482 && atm review watch --task ATM-482`, in the background, beside its work), or with nothing, for its
+  working copy. It waits for a live review to start there, if none has, then prints each comment as it is added, one
+  JSON object a line, with the review it belongs to (`"review": "CR-9"`), until the live review ends or the timeout.
+  The agent answers as comments come, by the review the comment names.
 
 Both are on the store's subscription, not a poll the agent writes. The skills get both loops.
 
@@ -430,7 +448,7 @@ pub trait ReviewStore {
     fn add_comment(&mut self, id: &ReviewId, anchor: Anchor, body: &str, by: &Actor) -> Result<CommentId>;
     fn reply(&mut self, id: &ReviewId, to: &CommentId, body: &str, by: &Actor) -> Result<CommentId>;
     fn edit_comment(&mut self, id: &ReviewId, comment: &CommentId, body: &str, by: &Actor) -> Result<()>;
-    fn resolve(&mut self, id: &ReviewId, comment: &CommentId, resolved: bool, by: &Actor) -> Result<()>;
+    fn resolve(&mut self, id: &ReviewId, top_level: &CommentId, resolved: bool, by: &Actor) -> Result<()>;
 
     fn subscribe(&self, on_change: OnChange) -> Result<Subscription>;
 }
@@ -535,7 +553,7 @@ That needs authentication of its own; no task for it yet.
    decision is the user's (I23); an agent may comment and reply.
 2. **The folders' names:** `CR-7-3fa1` (proposed: no merge ever collides), or plain `CR-7` with a merge that stops on
    a clash and an `atm review resolve-merge` that splits the two into `CR-7.1/` and `CR-7.2/`.
-3. **Who resolves:** as proposed (a reviewer any comment, an author their own replies), or only reviewers.
+3. **Who resolves:** as proposed (a reviewer any top-level comment, its author their own), or only reviewers.
 4. **Links in a pushed PR:** whether `/atm-push` lists a branch's CRs in the PR body.
 
 Decided in round 1: the header is TOML; the browser writes, as the app does; no snapshots (rounds rebuild their files
@@ -604,14 +622,15 @@ Each with how the proposal covers it.
 --task ATM-482 --range origin/dev..HEAD --summary-file …`: CR-7 round 1, the task in review with the link. The user
 sees CR-7 under *Reviews needing you* in the app's sidebar, opens it in a tab, comments on two places, submits with
 *request changes*. The task's review is `changes_requested`; the agent, waiting with `atm claim hold ATM-482 && atm
-review wait CR-7`, gets the two comments as JSON, replies to each and resolves its own replies, fixes, commits,
-`atm review round CR-7`, waits. The user opens round 2 against round 1, sees only the fixes, resolves both chains,
-approves. The task is approved; the agent finishes it (`atm task state ATM-482 done`). §3.2, §3.8, §3.9, §3.6.
+review wait CR-7`, gets the two comments as JSON, replies to each, fixes, commits, `atm review round CR-7`, waits.
+The user opens round 2 against round 1, sees only the fixes, resolves both top-level comments, approves. The task is approved; the agent finishes it (`atm task state ATM-482 done`). §3.2, §3.8, §3.9, §3.6.
 
-**U2. Pairing on a long task** (a live review). The user starts `atm review live --task ATM-490` as the agent begins.
-Ten minutes in, a new module appears in the live page; the user comments "this belongs in atm-lib". The agent, running
-`atm review watch CR-9` in the background, sees it at once, replies, moves the module. At the end the user resolves
-the chains and approves the live review; the task's change hasn't moved since, so the task is approved with no other
+**U2. Pairing on a long task** (a live review). The agent starts ATM-490 and, beside its work, `atm claim hold ATM-490
+&& atm review watch --task ATM-490` in the background: no review exists yet. Ten minutes in, the user opens a live
+review on the task (`atm review live --task ATM-490`, or *New live review* on it in the app), sees a new module
+appear, and comments "this belongs in atm-lib". The agent's watch picks up the new live review and prints the comment
+at once, naming CR-9; the agent replies there and moves the module. At the end the user resolves the top-level
+comments and approves the live review; the task's change hasn't moved since, so the task is approved with no other
 CR. §3.5.
 
 **U3. A review of uncommitted changes**, before committing (the user's own, or an agent's: "show me before you

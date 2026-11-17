@@ -1848,7 +1848,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-17T03:23:23Z",
+      "updated_at": "2026-11-17T06:06:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -1893,7 +1893,7 @@
       "sprint": "Keys follow-ups and housekeeping",
       "started_at": "2026-11-17T03:19:09Z",
       "started_by": "claude:0f56a916",
-      "commit": "40ae0eca876fda6258172f4414052967818a1213",
+      "commit": "c92e161b5a17d82d528ee1efda779d551e83c0cb",
       "review_requested_at": "2026-11-17T03:23:23Z",
       "review_state": "waiting"
     },
