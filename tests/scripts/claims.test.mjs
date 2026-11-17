@@ -324,11 +324,19 @@ describe('claims', () => {
         // The shell forgets the renewal hold made, then waits: a renewal while it waits puts renewed_at back
         // The store's path from the environment: in the shell's line, a Windows path's backslashes would be eaten
         const forgetIt = `node -e "const fs=require('fs');const f=process.env.CLAIMS_STORE;const s=JSON.parse(fs.readFileSync(f,'utf8'));delete s.claims['T-001'].renewed_at;fs.writeFileSync(f,JSON.stringify(s))"`;
-        const r = shell(root, '--every 0.3', `${forgetIt} && sleep 1.5`, 20);
+        // On Windows the shell's processes too (MSYS `ps -W`: Windows pids and their parents), taken while it runs, for
+        // the message should the watcher follow the wrong one
+        const processes = process.platform === 'win32' ? 'ps -W > ps.txt 2>&1; ' : '';
+        const r = shell(root, '--every 0.3', `${processes}${forgetIt} && sleep 1.5`, 20);
         assert.equal(r.code, 0, r.stderr);
         assert.equal(r.held.task, 'T-001');
         assert.equal(r.held.claim.lease_expires_at, at(50));
-        assert.equal(claimOf(root, 'T-001').renewed_at, at(20));
+        const seen = () => {
+          const ps = path.join(root, 'ps.txt');
+          const list = fs.existsSync(ps) ? fs.readFileSync(ps, 'utf8') : '';
+          return `held ${JSON.stringify(r.held)}; watcher alive ${alive(r.held.watcher)}\n${list}`;
+        };
+        assert.equal(claimOf(root, 'T-001').renewed_at, at(20), seen());
         // The shell is gone: so is the watcher, within one interval
         assert.ok(
           until(() => !alive(r.held.watcher)),

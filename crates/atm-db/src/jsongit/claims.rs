@@ -16,7 +16,6 @@ use serde_json::{Map, Value, json};
 use super::files::read_json;
 use super::lock::{Lock, lock};
 use super::paths::Paths;
-use crate::git::git;
 
 const CLAIMS_STORE: &str = "claims.json"; // in <git common dir>/atm/, shared by all worktrees of a clone
 const CLAIMS_STORE_NO_GIT: &str = "claims-store.json"; // in the task folder, outside git
@@ -26,7 +25,7 @@ pub const CLAIMS_SNAPSHOT: &str = "claims.json";
 /// Where the claims store is: `<git common dir>/atm/`, or the task folder outside git.
 #[must_use]
 pub fn claims_dir(paths: &Paths) -> PathBuf {
-    match git(&["rev-parse", "--git-common-dir"], &paths.root) {
+    match crate::git::where_in_git("--git-common-dir", &paths.root) {
         Some(common) => normalize(&paths.root.join(common)).join("atm"),
         None => paths.dir.clone(),
     }

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use atm_common::{ARCHIVE_FILE, Error, Result, TASK_DIR, TASKS_FILE};
 
-use crate::git::git;
+use crate::git::where_in_git;
 
 /// The files atm reads and writes in the task folder; a repository can commit any of them as a symlink.
 const FOLDER_FILES: [&str; 4] = [TASKS_FILE, ARCHIVE_FILE, ".gitignore", ".gitattributes"];
@@ -77,7 +77,7 @@ pub fn check_task_folder(root: &Path, task_dir: &Path) -> Result<()> {
 /// working folder is, so that paths under one compare with paths under the other.
 #[must_use]
 pub fn project_root(cwd: &Path) -> PathBuf {
-    if let Some(top) = git(&["rev-parse", "--show-toplevel"], cwd) {
+    if let Some(top) = where_in_git("--show-toplevel", cwd) {
         return atm_common::pathtext::real(Path::new(&top));
     }
     let mut d = cwd;
@@ -96,7 +96,7 @@ pub fn project_root(cwd: &Path) -> PathBuf {
 /// repository once, by its main worktree).
 #[must_use]
 pub fn main_worktree(root: &Path) -> PathBuf {
-    if let Some(common) = git(&["rev-parse", "--git-common-dir"], root) {
+    if let Some(common) = where_in_git("--git-common-dir", root) {
         let normal =
             crate::jsongit::logo::normalize(&atm_common::home::absolute(&root.join(common)));
         if normal.file_name().is_some_and(|n| n == ".git") {
