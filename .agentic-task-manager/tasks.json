@@ -1208,10 +1208,28 @@
       },
       {
         "id": "Keys follow-ups and housekeeping",
-        "state": "active",
+        "state": "closed",
         "goal": "Keys everywhere in atm’s output, the dated Help text, CI’s flaky tests and Windows suite, the open Dependabot alert, and the code review design",
         "release": "0.39.0",
-        "start": "2026-11-17T01:47:59Z"
+        "start": "2026-11-17T01:47:59Z",
+        "end": "2026-11-17T08:47:44Z",
+        "report": {
+          "done": [
+            "949645c4-9213-833c-9f10-435f787a9ab8",
+            "9d40a6f4-f771-86d4-8e8c-ed80bcf6d10b",
+            "9153a747-c75d-8428-b697-bb04fcd9768c",
+            "39bccfe9-b2ea-87ce-be13-e6b4d9fefdb4",
+            "01a1e730-852d-7469-8ae7-dbcf71c291b1",
+            "01a1e730-852d-7469-8ae7-dbd0eec2957d",
+            "01a1e730-852d-7469-8ae7-dbd197353e7a",
+            "01a1e730-852d-7469-8ae7-dbd223764546",
+            "01a1e853-4d39-7220-b293-f23710b6d068"
+          ],
+          "carried": [],
+          "added": [
+            "01a1e853-4d39-7220-b293-f23710b6d068"
+          ]
+        }
       }
     ],
     "releases": [
