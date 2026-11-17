@@ -9469,7 +9469,7 @@
       "description": "Left over from T-480 (on `dev/0.33.0-switch`). T-480 took the suite on CI's Windows runner from 40 failures and two hanging files to a handful; CI's Windows job runs `cargo test` but not the suite until this task.\n\n## Still failing (CI run 42429818032, before T-480's last push)\n- `claims.test.mjs`: `claim hold`'s watcher doesn't end with its shell on Windows (its folder can't be removed afterwards, `EPERM`). The watcher follows its shell by process ID; under Git's `sh` (MSYS) the Windows parent of `atm.exe` may not be the shell. Likely also what keeps T-481's folder busy.\n- `serve.test.mjs`: still runs into the watchdog (400 s on Windows); `start, reuse, status, stop` failed on the home ID (fixed in T-480's last push, `home_id` hashes the shown path: not yet seen on CI).\n- `claims.test.mjs` `worktrees of one clone share claims`: path spelling (fixed in T-480's last push, not yet seen on CI).\n- `dev-api.test.mjs`: the dev server's test on Windows (the API server's restart after a rebuild, and its stop when Vite is ended at once).\n- `stress.test.mjs`: T-481 (skipped on Windows until then).\n\n## Done when\nThe suite passes on CI's Windows runner, and `.github/workflows/ci.yml` runs it there again (the `if` on the suite step goes).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "9d40a6f4-f771-86d4-8e8c-ed80bcf6d10b"
       ],
@@ -9480,7 +9480,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-17T04:21:37Z",
+      "updated_at": "2026-11-17T04:49:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9506,6 +9506,12 @@
           "kind": "answer",
           "text": "It ends by changing `.github/workflows/ci.yml` (dropping the `if` that skips the suite on Windows): is that change yours to approve, and may I make it here? → Yes: change ci.yml to run the suite on Windows (approved by Hakan, 2026-11-17).; The Windows failures can only be checked on CI’s Windows runner (no Windows here): may I push `dev/0.39.0` and dispatch CI runs on it while I fix them (`gh workflow run CI --ref dev/0.39.0`), a few rounds? → Yes: push dev/0.39.0 and dispatch CI runs on it while fixing; review the result together in Crit when done.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T04:49:35Z",
+          "kind": "review",
+          "text": "CI run 44018327874: the suite passes on Windows, macOS and Linux (Playwright fails only on ATM-558’s screenshots). Commits ab376f5..b22ca4e. Review in Crit: the watcher’s shell on Windows (shell_pid), the service’s port checks, git rev-parse remembered 5 s, the lock’s Queue on made-up times, the tests’ Windows guards. Open: dev-api’s 20 s wait for Vite failed once on a slow Windows runner, left as is.",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -9524,7 +9530,9 @@
       ],
       "started_at": "2026-11-17T02:50:33Z",
       "started_by": "claude:0f56a916",
-      "commit": "657f42c4b46413fbfdb59bec7cb7ab2e1032b0bb"
+      "commit": "b22ca4e1ff1b45e0b297da73b98989859f18e3f6",
+      "review_requested_at": "2026-11-17T04:49:35Z",
+      "review_state": "waiting"
     },
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
