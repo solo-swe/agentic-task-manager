@@ -10,10 +10,10 @@ const svelteConfig = { preprocess: vitePreprocess() };
 // The task manager's own modules: its state, its task model, its areas and its document source. The document viewer
 // and the review tool are components of their own (docs/code-review-design.md §3.1, ATM-571), which never import them
 const TASK_AREAS = ['shell', 'kanban', 'tasks', 'graph', 'details', 'dialogs', 'progress', 'agents', 'overview'];
+// (lib/state.svelte, lib/types and lib/project-documents, reached from lib/<component>/ as ../<module>; a component's
+// own modules, ./types, are its own)
 const TASK_MANAGER = [
-  '**/state.svelte',
-  '**/types',
-  '**/project-documents',
+  ...['state.svelte', 'types', 'project-documents'].flatMap((module) => [`**/lib/${module}`, `../${module}`]),
   ...TASK_AREAS.flatMap((area) => [`**/lib/${area}/**`, `../${area}/**`]),
 ];
 const boundary = (who) => ({

@@ -32,6 +32,10 @@ describe('the component boundaries (ESLint no-restricted-imports)', () => {
 
   it('the review tool reaches the task areas only through lib/reviews/links', async () => {
     expect(await refused('src/lib/reviews/Probe.ts', '../state.svelte')).toHaveLength(1);
+    expect(await refused('src/lib/reviews/Probe.ts', '../types')).toHaveLength(1);
+    // Its own types, and the document viewer, are its own to use
+    expect(await refused('src/lib/reviews/Probe.ts', './types')).toEqual([]);
+    expect(await refused('src/lib/reviews/Probe.ts', '../documents/CompMd.svelte')).toEqual([]);
     expect(await refused('src/lib/reviews/links/Probe.ts', '../../state.svelte')).toEqual([]);
     // The task manager itself may use them
     expect(await refused('src/lib/details/Probe.ts', '../state.svelte')).toEqual([]);
