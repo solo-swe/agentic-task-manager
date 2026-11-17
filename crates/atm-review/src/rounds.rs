@@ -1,12 +1,13 @@
 //! Rounds from git, compared, and anchors followed (docs/code-review-design.md §3.3, §3.6, ATM-564).
 //!
 //! A round is made from a commit range, the working tree against a commit (uncommitted changes, a live review's
-//! checkpoints), or files as they are; its diff is kept (binary files only listed). Two rounds compare by their
+//! checkpoints), or files as they are; its diff is kept (binary files only listed). atm's own task folder is never in
+//! it: the task file a task's commit carries, and the reviews themselves, aren't the change under review. Two rounds compare by their
 //! trees: a range's head, or the round's files rebuilt from its base and its diff (no snapshots). A chain's anchor
 //! moves to a later round through the change between the two: the lines around it move it; inside a changed part its
 //! quote finds it again; else it has **drifted**, shown at its last place, with the round and lines it was made on.
 
-use atm_common::{Error, Result};
+use atm_common::{Error, Result, TASK_DIR};
 use atm_vcs::{ChangedFile, Diff, GitVcs};
 
 use crate::model::{Actor, Anchor, FileChange, FileStatus, Patch, Review, Round, RoundKind};
@@ -47,7 +48,7 @@ pub fn from_range(vcs: &GitVcs, base: &str, head: &str, by: &Actor) -> Result<Ne
             .ok_or_else(|| Error::Invalid(format!("{rev} isn't a commit here")))
     };
     let (base, head) = (resolve(base)?, resolve(head)?);
-    let diff = vcs.diff_range(&base, &head)?;
+    let diff = vcs.diff_range(&base, &head, &[TASK_DIR])?;
     Ok(round(RoundKind::Range { base, head }, diff, by))
 }
 
@@ -60,7 +61,7 @@ pub fn from_working(vcs: &GitVcs, base: &str, by: &Actor) -> Result<NewRound> {
     let base = vcs
         .resolve(base)
         .ok_or_else(|| Error::Invalid(format!("{base} isn't a commit here")))?;
-    let diff = vcs.diff_working(&base)?;
+    let diff = vcs.diff_working(&base, &[TASK_DIR])?;
     Ok(round(RoundKind::Working { base }, diff, by))
 }
 

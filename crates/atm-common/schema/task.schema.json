@@ -79,6 +79,11 @@
       "items": { "$ref": "#/$defs/ReviewRound" },
       "description": "Past reviews, oldest first"
     },
+    "code_reviews": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/CodeReviewLink" },
+      "description": "The code reviews (CRs) of this task, oldest first (docs/code-review-design.md §3.8, ATM-565)"
+    },
     "notes": {
       "type": "array",
       "items": { "$ref": "#/$defs/Note" },
@@ -142,6 +147,14 @@
         "from": { "type": "string", "description": "ISO 8601 UTC" },
         "to": { "type": "string", "description": "ISO 8601 UTC" },
         "on": { "type": "string", "description": "user or agent" }
+      }
+    },
+    "CodeReviewLink": {
+      "type": "object",
+      "required": ["id", "ref"],
+      "properties": {
+        "id": { "type": "string", "description": "The review's UUID: what the link follows (a CR's number can change on a clash)" },
+        "ref": { "type": "string", "description": "What people read: CR-7 (or CR-8.1)" }
       }
     },
     "ReviewRound": {

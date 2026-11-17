@@ -14581,7 +14581,7 @@
       "description": "Rounds and anchors ([§3.3](docs/code-review-design.md#:~:text=3.3%20The%20records), [§3.6](docs/code-review-design.md#:~:text=3.6%20Rounds%2C%20anchors%20and%20drift)), through `atm-vcs`.\n\n## Change\n- A round's diff from a commit range, the working tree against its base (uncommitted changes, live checkpoints), or files as they are (as if added); `git diff -M`, three lines of context; binary files listed with their blob IDs, never copied; deleted files as a line.\n- No snapshots: two rounds compared by rebuilding each round's files from its base and diff on a temporary index (`GIT_INDEX_FILE`, `git apply --cached`, `git write-tree`), never touching the user's index or working tree.\n- Anchors moved from the round they were made on to a later one through the change between them; a chain whose quote is gone is drifted, at its last place, with the round and lines it was made on.\n\n## Tests\nRounds of each kind, two uncommitted rounds compared, an anchor moved and one drifted, the user's index unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14590,7 +14590,7 @@
         "crates/atm-vcs/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T09:08:08Z",
+      "updated_at": "2026-11-17T09:13:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 564,
@@ -14603,7 +14603,18 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T09:08:08Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "725fc566f6dbce359c8eef0b94c17137d4de0bd1",
+      "completed_at": "2026-11-17T09:13:14Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:13:14Z",
+          "kind": "outcome",
+          "text": "atm-vcs diff.rs: a range’s diff, the working tree’s (temporary index, new files in, the user’s index untouched), files as added, a round’s tree rebuilt from base+patch, trees compared. atm-review rounds.rs: rounds of each kind, compare (no snapshots), anchors followed line by line through hunks (kept, found again by quote, or drifted with where made). 10 tests; I24’s list has the new git starts.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40",
@@ -14616,7 +14627,7 @@
       "description": "atm-lib's `reviews` module, the one place reviews and tasks meet ([§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The task schema gains `reviews` (a list of review references, linked by UUID underneath); the generated types follow.\n- Tasks named when a review is created, when a live review starts, or later (add, remove), with what each does to the task's status ([§3.2](docs/code-review-design.md#:~:text=3.2%20A%20review%20and%20how%20it%20goes)).\n- A reviewer's submit becomes every named task's review decision (approve, request changes with a `rejection` note linking the review); closing rejects only when the user says so. Decisions stay the user's (I23).\n- A live review's approval is the task's when the task's change hasn't moved since the approved checkpoint; otherwise what changed is said ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)).\n\n## Tests\nScenarios (`tests/scripts/scenarios/`): a task through a review and a round, a batch review of two tasks, a live approval with and without a change since.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14625,7 +14636,7 @@
         "crates/atm-common/schema/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T09:13:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 565,
@@ -14636,7 +14647,9 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:13:14Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed",

@@ -373,7 +373,8 @@ lacks one), it goes into CompMD; everything a diff needs on top of rendering is 
 
 ### 3.8 Tasks and reviews
 
-- A task records its reviews: `reviews: ["CR-7"]`, a list in the task (the schema gains it), shown as links on the
+- A task records its reviews: `code_reviews: [{"id": "<UUID>", "ref": "CR-7"}]`, a list in the task (the schema
+  gains it; `reviews` was taken, by a task's past review rounds), followed by its UUID, shown as links on the
   card and in the details (`CR-7 · changes requested`), each opening the review, in a new tab with ⌘-click.
 - **Opening a review for a task** (`atm review create --task ATM-482 …`) puts the task in review when it is in
   progress (as `atm task state ATM-482 in_review` does, with the review's link in its `review` note).

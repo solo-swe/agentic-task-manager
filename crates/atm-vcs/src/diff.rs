@@ -34,6 +34,16 @@ pub struct Diff {
     pub files: Vec<ChangedFile>,
 }
 
+/// A pathspec of the whole working copy but `leave_out`'s folders; none when nothing is left out.
+fn pathspec(leave_out: &[&str]) -> Vec<String> {
+    if leave_out.is_empty() {
+        return Vec::new();
+    }
+    let mut spec = vec!["--".to_string(), ".".to_string()];
+    spec.extend(leave_out.iter().map(|p| format!(":(exclude){p}")));
+    spec
+}
+
 /// The common options of every diff atm reads: renames found, no colour or external diff tool, paths unquoted.
 const DIFF: [&str; 5] = [
     "-c",
@@ -147,28 +157,32 @@ impl GitVcs {
         self.git_with(&all, env, None)
     }
 
-    /// The diff of a commit range, `base` to `head`.
+    /// The diff of a commit range, `base` to `head`, the folders `leave_out` left out (atm's own task folder).
     ///
     /// # Errors
     /// Either isn't a commit, or git fails.
-    pub fn diff_range(&self, base: &str, head: &str) -> Result<Diff> {
-        let range = [base, head];
+    pub fn diff_range(&self, base: &str, head: &str, leave_out: &[&str]) -> Result<Diff> {
+        let spec = pathspec(leave_out);
+        let mut args = vec![base, head];
+        args.extend(spec.iter().map(String::as_str));
         Ok(Diff {
-            patch: self.patch(&range, &[])?,
-            files: self.changed_files(&range, &[])?,
+            patch: self.patch(&args, &[])?,
+            files: self.changed_files(&args, &[])?,
         })
     }
 
-    /// The working tree's changes against `base`, new files included (ignored ones not), as if everything were
-    /// staged: through a temporary index, so the user's index is untouched.
+    /// The working tree's changes against `base`, new files included (ignored ones not), the folders `leave_out` left
+    /// out, as if everything were staged: through a temporary index, so the user's index is untouched.
     ///
     /// # Errors
     /// `base` isn't a commit, or git fails.
-    pub fn diff_working(&self, base: &str) -> Result<Diff> {
+    pub fn diff_working(&self, base: &str, leave_out: &[&str]) -> Result<Diff> {
+        let spec = pathspec(leave_out);
         self.with_temporary_index(|env| {
             self.git_with(&["read-tree", base], env, None)?;
             self.git_with(&["add", "-A"], env, None)?;
-            let args = ["--cached", base];
+            let mut args = vec!["--cached", base];
+            args.extend(spec.iter().map(String::as_str));
             Ok(Diff {
                 patch: self.patch(&args, env)?,
                 files: self.changed_files(&args, env)?,
@@ -312,7 +326,7 @@ mod tests {
         write(&vcs, "a.txt", "one\ntwo\n");
         std::fs::write(vcs.root.join("logo.png"), [0u8, 159, 146, 150, 0, 1]).unwrap();
         let head = commit(&vcs, "head");
-        let diff = vcs.diff_range(&base, &head).unwrap();
+        let diff = vcs.diff_range(&base, &head, &[]).unwrap();
         assert!(diff.patch.contains("+two"), "{}", diff.patch);
         assert!(
             diff.patch.contains("Binary files"),
@@ -349,7 +363,7 @@ mod tests {
         write(&vcs, "new.txt", "brand new\n");
         write(&vcs, "secret", "never\n");
         let staged_before = git(&vcs, &["diff", "--cached"]);
-        let diff = vcs.diff_working(&base).unwrap();
+        let diff = vcs.diff_working(&base, &[]).unwrap();
         assert!(
             diff.patch.contains("+not staged") && diff.patch.contains("+brand new"),
             "{}",
@@ -363,6 +377,37 @@ mod tests {
         );
         let status = git(&vcs, &["status", "--porcelain"]);
         assert!(status.contains("?? new.txt"), "{status}");
+    }
+
+    #[test]
+    fn a_folder_left_out_is_in_neither_diff() {
+        let (_repo, vcs) = repo();
+        std::fs::create_dir(vcs.root.join(".agentic-task-manager")).unwrap();
+        write(&vcs, ".agentic-task-manager/tasks.json", "{}\n");
+        write(&vcs, "a.txt", "one\n");
+        let base = commit(&vcs, "base");
+        write(
+            &vcs,
+            ".agentic-task-manager/tasks.json",
+            "{\"changed\": true}\n",
+        );
+        write(&vcs, "a.txt", "one\ntwo\n");
+        let working = vcs.diff_working(&base, &[".agentic-task-manager"]).unwrap();
+        assert_eq!(
+            working
+                .files
+                .iter()
+                .map(|f| f.path.as_str())
+                .collect::<Vec<_>>(),
+            ["a.txt"]
+        );
+        assert!(!working.patch.contains("changed"));
+        let head = commit(&vcs, "head");
+        let range = vcs
+            .diff_range(&base, &head, &[".agentic-task-manager"])
+            .unwrap();
+        assert_eq!(range.files.len(), 1);
+        assert!(!range.patch.contains("tasks.json"));
     }
 
     #[test]
@@ -385,9 +430,9 @@ mod tests {
         write(&vcs, "a.txt", "one\ntwo\nthree\n");
         let base = commit(&vcs, "base");
         write(&vcs, "a.txt", "one\nTWO\nthree\n");
-        let round1 = vcs.diff_working(&base).unwrap();
+        let round1 = vcs.diff_working(&base, &[]).unwrap();
         write(&vcs, "a.txt", "one\nTWO\nthree\nfour\n");
-        let round2 = vcs.diff_working(&base).unwrap();
+        let round2 = vcs.diff_working(&base, &[]).unwrap();
 
         let tree1 = vcs.tree_after(Some(&base), &round1.patch, &[]).unwrap();
         let tree2 = vcs.tree_after(Some(&base), &round2.patch, &[]).unwrap();

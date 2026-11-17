@@ -19,6 +19,7 @@ pub mod maintenance;
 pub mod project;
 pub mod query;
 pub mod releases;
+pub mod reviews;
 pub mod settings;
 pub mod sprints;
 pub mod state;

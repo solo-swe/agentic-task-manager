@@ -349,6 +349,7 @@ version = "0.39.0"
 dependencies = [
  "atm-common",
  "atm-db",
+ "atm-review",
  "atm-vcs",
  "serde_json",
  "sysinfo",
