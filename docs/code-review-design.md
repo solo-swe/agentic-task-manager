@@ -1,6 +1,6 @@
 # Code reviews in atm (ATM-337)
 
-Status: **draft, round 2, for review with Hakan.** A code review tool built into atm, recorded in the project, to
+Status: **approved** (Hakan, in Crit, 2026-11-17, after five rounds). A code review tool built into atm, recorded in the project, to
 replace Crit for the reviews atm's work needs. Hakan's requirements (2026-11-17) are in ATM-337's description, and his
 first round of comments is worked in here; [the appendix](#appendix-use-cases) walks through the use cases it has to
 cover.
