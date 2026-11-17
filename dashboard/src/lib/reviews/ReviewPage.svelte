@@ -614,7 +614,9 @@
                   >
                   <span class="review-round-facts"
                     >{r.files.length}
-                    {r.files.length === 1 ? 'file' : 'files'} · {r.by}{r.at ? ` · ${when(r.at)}` : ''}</span
+                    {r.files.length === 1 ? 'file' : 'files'}{r.submodule ? ` in the submodule ${r.submodule}` : ''} · {r.by}{r.at
+                      ? ` · ${when(r.at)}`
+                      : ''}</span
                   >
                   {#if r.number === view.round}<span class="review-round-shown">shown</span>{/if}
                 </li>

@@ -29,13 +29,52 @@ fn file_changes(files: Vec<ChangedFile>) -> Vec<FileChange> {
         .collect()
 }
 
-fn round(kind: RoundKind, diff: Diff, by: &Actor) -> NewRound {
+/// A round made with `vcs`: the project's repository, or a submodule's ([`GitVcs::submodule_at`]), which it records.
+fn round(vcs: &GitVcs, kind: RoundKind, diff: Diff, by: &Actor) -> NewRound {
     NewRound {
         kind,
+        submodule: vcs.shown_folder().map(String::from),
         files: file_changes(diff.files),
         patch: Patch(diff.patch),
         by: by.clone(),
     }
+}
+
+/// The repository a round's commits are in (ATM-583): the project's (`vcs`), or the submodule's it records.
+///
+/// # Errors
+/// `NotFound` when that submodule isn't checked out in this clone.
+pub fn repository(vcs: &GitVcs, round: &Round) -> Result<GitVcs> {
+    match &round.submodule {
+        None => Ok(vcs.clone()),
+        Some(folder) => vcs.submodule_at(folder).ok_or_else(|| {
+            Error::NotFound(format!(
+                "round {} is of the submodule {folder}, which isn't checked out here (git submodule update --init {folder})",
+                round.number
+            ))
+        }),
+    }
+}
+
+/// The one repository two rounds are compared in; `Invalid` when they are of different ones (the project's and a
+/// submodule's): their trees are in different repositories.
+fn shared_repository(vcs: &GitVcs, a: &Round, b: &Round) -> Result<GitVcs> {
+    if a.submodule != b.submodule {
+        let name = |r: &Round| {
+            r.submodule.as_ref().map_or_else(
+                || "the project".to_string(),
+                |f| format!("the submodule {f}"),
+            )
+        };
+        return Err(Error::Invalid(format!(
+            "round {} is of {} and round {} of {}: rounds of different repositories don't compare",
+            a.number,
+            name(a),
+            b.number,
+            name(b)
+        )));
+    }
+    repository(vcs, b)
 }
 
 /// A round of a commit range (both resolved to their commits first, so the round names them for good).
@@ -49,7 +88,7 @@ pub fn from_range(vcs: &GitVcs, base: &str, head: &str, by: &Actor) -> Result<Ne
     };
     let (base, head) = (resolve(base)?, resolve(head)?);
     let diff = vcs.diff_range(&base, &head, &[TASK_DIR])?;
-    Ok(round(RoundKind::Range { base, head }, diff, by))
+    Ok(round(vcs, RoundKind::Range { base, head }, diff, by))
 }
 
 /// A round of the working tree against `base` (`HEAD` by default): uncommitted changes, new files included, or a
@@ -62,7 +101,7 @@ pub fn from_working(vcs: &GitVcs, base: &str, by: &Actor) -> Result<NewRound> {
         .resolve(base)
         .ok_or_else(|| Error::Invalid(format!("{base} isn't a commit here")))?;
     let diff = vcs.diff_working(&base, &[TASK_DIR])?;
-    Ok(round(RoundKind::Working { base }, diff, by))
+    Ok(round(vcs, RoundKind::Working { base }, diff, by))
 }
 
 /// A round of files as they are, reviewed whole (a plan, a design).
@@ -73,15 +112,16 @@ pub fn from_files(vcs: &GitVcs, paths: &[String], by: &Actor) -> Result<NewRound
     if paths.is_empty() {
         return Err(Error::Invalid("name at least one file to review".into()));
     }
-    Ok(round(RoundKind::Files, vcs.diff_files(paths)?, by))
+    Ok(round(vcs, RoundKind::Files, vcs.diff_files(paths)?, by))
 }
 
 /// A round's tree: a range's head commit's, else its files rebuilt from its base (the empty tree for files reviewed
 /// whole) and its diff, binary files left as they were.
 ///
 /// # Errors
-/// The base is gone from this clone, or the diff doesn't apply to it.
+/// The base is gone from this clone, or the diff doesn't apply to it; the round's submodule isn't checked out here.
 pub fn tree(vcs: &GitVcs, round: &Round, patch: &Patch) -> Result<String> {
+    let vcs = &repository(vcs, round)?;
     let binary: Vec<String> = round
         .files
         .iter()
@@ -118,8 +158,10 @@ pub fn compare(
     to: u32,
 ) -> Result<Patch> {
     let (a, b) = (round_of(review, from)?, round_of(review, to)?);
+    let repo = shared_repository(vcs, a, b)?;
     let tree_a = tree(vcs, a, &store.round_diff(&review.header.id, from)?)?;
     let tree_b = tree(vcs, b, &store.round_diff(&review.header.id, to)?)?;
+    let vcs = &repo;
     let mut paths: Vec<String> = a
         .files
         .iter()
@@ -340,8 +382,10 @@ pub fn place(
         return Ok(Placement::At(lines));
     }
     let (a, b) = (round_of(review, anchor.round)?, round_of(review, to)?);
+    let repo = shared_repository(vcs, a, b)?;
     let tree_a = tree(vcs, a, &store.round_diff(&review.header.id, a.number)?)?;
     let tree_b = tree(vcs, b, &store.round_diff(&review.header.id, b.number)?)?;
+    let vcs = &repo;
     let between = vcs.diff_trees(&tree_a, &tree_b, std::slice::from_ref(path))?;
     let new_text = vcs.file_in(&tree_b, path);
     Ok(follow(
@@ -679,6 +723,7 @@ mod tests {
                 status: Status::Open,
                 first: NewRound {
                     kind: RoundKind::Files,
+                    submodule: None,
                     files: Vec::new(),
                     patch: Patch::default(),
                     by,
@@ -808,6 +853,7 @@ mod tests {
         let kept = Round {
             number: 1,
             kind: round.kind.clone(),
+            submodule: round.submodule.clone(),
             files: round.files.clone(),
             by: by.clone(),
             at: String::new(),
@@ -866,6 +912,7 @@ mod tests {
         let kept = Round {
             number: 1,
             kind: round.kind.clone(),
+            submodule: round.submodule.clone(),
             files: round.files.clone(),
             by,
             at: String::new(),

@@ -19,6 +19,7 @@ fn hakan() -> Actor {
 fn round(patch: &str) -> NewRound {
     NewRound {
         kind: RoundKind::Working { base: "a1".into() },
+        submodule: None,
         files: Vec::new(),
         patch: Patch(patch.into()),
         by: agent(),

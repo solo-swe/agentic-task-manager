@@ -72,6 +72,8 @@ export type RoundKind =
 export interface Round {
   number: number;
   kind: RoundKind;
+  /** The submodule its commits are in (its folder), none for the project's own (ATM-583) */
+  submodule?: string | null;
   files: { path: string; binary: boolean }[];
   by: string;
   at: string;
@@ -84,6 +86,9 @@ export interface ViewFile {
   old_path: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed';
   binary: boolean;
+  /** A submodule this change moved (ATM-583): the commits it was and is at (none where added or removed), and its
+   * repository's web address when it has one; none for a file */
+  submodule?: { from: string | null; to: string | null; repository: string | null } | null;
   patch: string;
   before: string | null;
   after: string | null;

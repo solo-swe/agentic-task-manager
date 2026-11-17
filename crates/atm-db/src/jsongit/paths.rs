@@ -72,13 +72,16 @@ pub fn check_task_folder(root: &Path, task_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The project's root for `cwd`: git's top level; outside git, the nearest folder with a task folder or
-/// `docs/tasks.json`, else `cwd` itself. On Windows its real, long form (atm-common's `pathtext::real`), as the
-/// working folder is, so that paths under one compare with paths under the other.
+/// The project's root for `cwd`: git's top level; in a submodule without a task folder of its own, the project it
+/// is a submodule of (the nearest superproject with one, ATM-583: an agent working in a submodule works on the
+/// project's tasks); outside git, the nearest folder with a task folder or `docs/tasks.json`, else `cwd` itself. On
+/// Windows its real, long form (atm-common's `pathtext::real`), as the working folder is, so that paths under one
+/// compare with paths under the other.
 #[must_use]
 pub fn project_root(cwd: &Path) -> PathBuf {
     if let Some(top) = where_in_git("--show-toplevel", cwd) {
-        return atm_common::pathtext::real(Path::new(&top));
+        let top = atm_common::pathtext::real(Path::new(&top));
+        return superproject_with_tasks(&top).unwrap_or(top);
     }
     let mut d = cwd;
     loop {
@@ -90,6 +93,24 @@ pub fn project_root(cwd: &Path) -> PathBuf {
             None => return cwd.to_path_buf(),
         }
     }
+}
+
+/// For a repository's top level `top` with no task folder that is a submodule: the nearest superproject's top level
+/// that has one (or `docs/tasks.json`); none otherwise.
+fn superproject_with_tasks(top: &Path) -> Option<PathBuf> {
+    let has_tasks =
+        |d: &Path| d.join(TASK_DIR).is_dir() || d.join("docs").join(TASKS_FILE).is_file();
+    let mut current = top.to_path_buf();
+    // A bound on the nesting, against a loop git would never make
+    for _ in 0..8 {
+        if has_tasks(&current) {
+            return (current != top).then_some(current);
+        }
+        let outer =
+            where_in_git("--show-superproject-working-tree", &current).filter(|s| !s.is_empty())?;
+        current = atm_common::pathtext::real(Path::new(&outer));
+    }
+    None
 }
 
 /// The main worktree's folder for a project root: itself, unless it is a linked git worktree (the registry lists a
@@ -178,6 +199,51 @@ mod tests {
     fn without_a_task_folder_the_root_is_where_atm_runs() {
         let folder = TestDir::new();
         assert_eq!(project_root(folder.path()), folder.path());
+    }
+
+    /// ATM-583: in a submodule, the project is the superproject's, unless the submodule is an atm project itself
+    #[test]
+    fn in_a_submodule_the_root_is_the_superprojects_unless_it_has_its_own_tasks() {
+        let run = |args: &[&str], cwd: &Path| {
+            let mut all = vec!["-c", "user.name=t", "-c", "user.email=t@example.com"];
+            all.extend_from_slice(args);
+            assert!(atm_fs::git::git(&all, cwd).is_some(), "git {args:?}");
+        };
+        let sub = TestDir::new();
+        run(&["init", "-q"], sub.path());
+        fs::write(sub.path().join("b.txt"), "b\n").unwrap();
+        run(&["add", "-A"], sub.path());
+        run(&["commit", "-q", "-m", "b"], sub.path());
+        let project = TestDir::new();
+        let root = atm_common::pathtext::real(project.path());
+        run(&["init", "-q"], &root);
+        fs::create_dir(root.join(TASK_DIR)).unwrap();
+        fs::write(root.join(TASK_DIR).join(TASKS_FILE), "{}\n").unwrap();
+        let source = sub.path().to_string_lossy().into_owned();
+        run(
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                "-q",
+                &source,
+                "lib",
+            ],
+            &root,
+        );
+        fs::create_dir(root.join("lib/deeper")).unwrap();
+        assert_eq!(project_root(&root.join("lib")), root);
+        assert_eq!(project_root(&root.join("lib/deeper")), root);
+        assert_eq!(project_root(&root), root);
+        // A submodule with a task folder of its own is a project of its own
+        fs::create_dir(root.join("lib").join(TASK_DIR)).unwrap();
+        assert_eq!(project_root(&root.join("lib/deeper")), root.join("lib"));
+        // A repository nobody includes stays its own root, task folder or not
+        assert_eq!(
+            project_root(sub.path()),
+            atm_common::pathtext::real(sub.path())
+        );
     }
 
     #[cfg(unix)]

@@ -138,6 +138,9 @@ pub fn open(root: &Path, kind: &str) -> Result<GitVcs> {
 #[derive(Debug, Clone)]
 pub struct GitVcs {
     root: PathBuf,
+    /// For a submodule's repository opened from the project (ATM-583): its folder from the project's root, with a
+    /// trailing `/` (`lib/`), which its diffs show paths under and its patches are applied without; else empty.
+    shown: String,
 }
 
 impl GitVcs {
@@ -146,7 +149,48 @@ impl GitVcs {
     pub fn new(root: &Path) -> Self {
         Self {
             root: root.to_path_buf(),
+            shown: String::new(),
         }
+    }
+
+    /// The repository of the submodule at `folder` (from this root, `/`-separated), its diffs showing paths as the
+    /// project has them (`lib/b.txt`), so a review's round of commits made in it reads like any other (ATM-583). None
+    /// when `folder` isn't a submodule checked out here (a nested submodule's folder included: name the outer one).
+    #[must_use]
+    pub fn submodule_at(&self, folder: &str) -> Option<GitVcs> {
+        let folder = folder.trim_end_matches('/');
+        let (found, _) = self.submodule(&format!("{folder}/-"))?;
+        (found == folder).then(|| GitVcs {
+            root: self.root.join(folder),
+            shown: format!("{}{folder}/", self.shown),
+        })
+    }
+
+    /// The folder (from this root) of the submodule that `dir` is in, nearest the root; none when it is in none.
+    #[must_use]
+    pub fn submodule_containing(&self, dir: &Path) -> Option<String> {
+        let relative = relative_to(&real_path(dir), &real_path(&self.root));
+        if relative == "." || relative.starts_with("..") {
+            return None;
+        }
+        self.submodule(&format!("{relative}/-"))
+            .map(|(folder, _)| folder)
+    }
+
+    /// The folder of the submodule this repository is, from the project's root (`lib`), or none for the project's own.
+    #[must_use]
+    pub fn shown_folder(&self) -> Option<&str> {
+        (!self.shown.is_empty()).then(|| self.shown.trim_end_matches('/'))
+    }
+
+    /// A path as the project has it, from one as this repository has it.
+    fn shown_path(&self, inside: &str) -> String {
+        format!("{}{inside}", self.shown)
+    }
+
+    /// A path as this repository has it, from one as the project has it; none for a path outside it.
+    fn inside_path<'a>(&self, shown: &'a str) -> Option<&'a str> {
+        shown.strip_prefix(self.shown.as_str())
     }
 
     /// Whether the folder is in a git repository.
@@ -475,7 +519,8 @@ impl GitVcs {
     }
 
     /// The submodule's own version control and the path inside it, or none outside one.
-    fn in_submodule(&self, relative: &str) -> Option<(GitVcs, String)> {
+    #[must_use]
+    pub fn in_submodule(&self, relative: &str) -> Option<(GitVcs, String)> {
         self.submodule(relative)
             .map(|(folder, inside)| (GitVcs::new(&self.root.join(folder)), inside))
     }

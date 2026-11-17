@@ -183,6 +183,84 @@ describe('ReviewFile: the header', () => {
   });
 });
 
+describe('ReviewFile: a submodule’s move (ATM-583)', () => {
+  const moved = (from: string | null, to: string | null, repository: string | null = null) =>
+    file({
+      path: 'lib',
+      old_path: 'lib',
+      status: from && to ? 'modified' : to ? 'added' : 'deleted',
+      patch: '@@ -1 +1 @@\n-Subproject commit x\n+Subproject commit y\n',
+      submodule: { from, to, repository },
+    });
+
+  it.each([
+    ['moved', moved('1111111aaaa', '2222222bbbb'), 'The submodule moved from 1111111 to 2222222.'],
+    ['added', moved(null, '3333333cccc'), 'The submodule was added, at 3333333.'],
+    ['removed', moved('4444444dddd', null), 'The submodule was removed; it was at 4444444.'],
+  ])('%s: says so with its commits, no diff and no lines loaded', (_, entry, says) => {
+    const load = vi.fn();
+    const { container } = show({ file: entry, before: { ...side(''), load }, after: { ...side(''), load } });
+    expect(container.querySelector('.review-submodule-move')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(says);
+    expect(container.querySelector('.review-file-counts')?.textContent?.trim()).toBe('submodule');
+    expect(container.querySelector('.diff-view')).toBeNull();
+    expect(container.querySelector('.review-file-card')).not.toHaveAttribute('data-pending');
+    expect(load).not.toHaveBeenCalled();
+    expect(container.querySelector('.review-submodule-move a')).toBeNull();
+  });
+
+  it('its commits link to its repository when it has a web address', () => {
+    const { container } = show({ file: moved('1111111aaaa', '2222222bbbb', 'https://github.com/o/lib') });
+    const links = [...container.querySelectorAll('.review-submodule-move a')].map((a) => a.getAttribute('href'));
+    expect(links).toEqual([
+      'https://github.com/o/lib/commit/1111111aaaa',
+      'https://github.com/o/lib/commit/2222222bbbb',
+    ]);
+  });
+
+  it('a comment on it is on the entry as a whole; its comments show under it', async () => {
+    const chain = {
+      id: 't1',
+      anchor: { round: 1, path: 'lib', side: 'new', lines: null, quote: null },
+      comments: [
+        {
+          id: 'c1',
+          author: 'Hakan Serce',
+          at: '2026-11-18T10:00:00Z',
+          body: 'Why this version?',
+          resolved: false,
+          replies: [],
+        },
+      ],
+    } as unknown as PlacedChain;
+    const { container, oncomment } = show({ file: moved('1111111aaaa', '2222222bbbb'), chains: [chain] });
+    // The chain, as a whole file's (its body is CompMD's to render, not loaded here)
+    expect(container.querySelector('.review-submodule')?.textContent).toMatch(/The file[\s\S]*Hakan Serce/);
+    await fireEvent.click(screen.getByText('Comment on this submodule'));
+    const box = screen.getByLabelText('Comment on lib') as HTMLTextAreaElement;
+    expect(screen.getByText('Comment')).toBeDisabled();
+    await fireEvent.input(box, { target: { value: '  Pin it.  ' } });
+    await fireEvent.click(screen.getByText('Comment'));
+    expect(oncomment).toHaveBeenCalledWith(null, 'Pin it.');
+    expect(screen.queryByLabelText('Comment on lib')).toBeNull();
+  });
+
+  it('a comment refused stays, saying why; Cancel and Escape close the box', async () => {
+    const oncomment = vi.fn(async () => 'the review is closed');
+    show({ file: moved('1111111aaaa', '2222222bbbb'), oncomment });
+    await fireEvent.click(screen.getByText('Comment on this submodule'));
+    const box = screen.getByLabelText('Comment on lib') as HTMLTextAreaElement;
+    await fireEvent.input(box, { target: { value: 'Pin it.' } });
+    await fireEvent.keyDown(box, { key: 'Enter', metaKey: true });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not saved: the review is closed');
+    expect(box.value).toBe('Pin it.');
+    await fireEvent.keyDown(box, { key: 'Escape' });
+    expect(screen.queryByLabelText('Comment on lib')).toBeNull();
+    await fireEvent.click(screen.getByText('Comment on this submodule'));
+    await fireEvent.click(screen.getByText('Cancel'));
+    expect(screen.queryByLabelText('Comment on lib')).toBeNull();
+  });
+});
+
 describe('ReviewFile: folding', () => {
   it('folded: the header alone, the fold says Show; open: the diff, the fold says Hide', async () => {
     const { container, onfold, rerender } = show({ folded: true, viewed: true });

@@ -53,6 +53,7 @@ impl Review {
         self.rounds.push(Round {
             number,
             kind: round.kind.clone(),
+            submodule: round.submodule.clone(),
             files: round.files.clone(),
             by: round.by.clone(),
             at: at.to_string(),
@@ -347,6 +348,7 @@ mod tests {
         let mut review = empty();
         let round = NewRound {
             kind: RoundKind::Files,
+            submodule: None,
             files: Vec::new(),
             patch: Patch::default(),
             by: hakan(),

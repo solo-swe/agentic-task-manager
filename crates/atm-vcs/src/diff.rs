@@ -154,7 +154,8 @@ impl GitVcs {
         work(&[("GIT_INDEX_FILE", removed.0.as_path())])
     }
 
-    /// The files of a diff (`args` select it, without the format options), binary ones marked.
+    /// The files of a diff (`args` select it, without the format options), binary ones marked; their paths as the
+    /// project has them (a submodule's under its folder).
     fn changed_files(&self, args: &[&str], env: &[(&str, &Path)]) -> Result<Vec<ChangedFile>> {
         let with = |format: &[&str]| {
             let mut all: Vec<&str> = DIFF.to_vec();
@@ -177,19 +178,42 @@ impl GitVcs {
             };
             files.push(ChangedFile {
                 binary: binary.contains(&path),
-                path,
+                path: self.shown_path(&path),
                 status,
-                from,
+                from: from.map(|f| self.shown_path(&f)),
             });
         }
         Ok(files)
     }
 
+    /// A submodule's diffs name its files as the project has them: under its folder (`a/lib/b.txt`).
+    fn prefixes(&self) -> Vec<String> {
+        match self.shown_folder() {
+            Some(folder) => vec![
+                format!("--src-prefix=a/{folder}/"),
+                format!("--dst-prefix=b/{folder}/"),
+            ],
+            None => Vec::new(),
+        }
+    }
+
     fn patch(&self, args: &[&str], env: &[(&str, &Path)]) -> Result<String> {
+        let prefixes = self.prefixes();
         let mut all: Vec<&str> = DIFF.to_vec();
         all.push("-M");
+        all.extend(prefixes.iter().map(String::as_str));
         all.extend_from_slice(args);
         self.git_with(&all, env, None)
+    }
+
+    /// A path as this repository has it, or `Invalid` for one outside it (a submodule's round names only its files).
+    fn inside<'a>(&self, path: &'a str) -> Result<&'a str> {
+        self.inside_path(path).ok_or_else(|| {
+            Error::Invalid(format!(
+                "{path} isn't in the submodule {}",
+                self.shown_folder().unwrap_or_default()
+            ))
+        })
     }
 
     /// The diff of a commit range, `base` to `head`, the folders `leave_out` left out (atm's own task folder).
@@ -234,10 +258,14 @@ impl GitVcs {
     /// A file git can't add, or git fails.
     pub fn diff_files(&self, paths: &[String]) -> Result<Diff> {
         let empty = self.empty_tree()?;
+        let inside: Vec<&str> = paths
+            .iter()
+            .map(|p| self.inside(p))
+            .collect::<Result<_>>()?;
         self.with_temporary_index(|env| {
             self.git_with(&["read-tree", "--empty"], env, None)?;
             let mut add = vec!["--literal-pathspecs", "add", "-f", "--"];
-            add.extend(paths.iter().map(String::as_str));
+            add.extend(inside.iter().copied());
             self.git_with(&add, env, None)?;
             let args = ["--cached", empty.as_str()];
             Ok(Diff {
@@ -270,8 +298,16 @@ impl GitVcs {
                 None => self.git_with(&["read-tree", "--empty"], env, None)?,
             };
             if !patch.trim().is_empty() {
-                let excludes: Vec<String> = skip.iter().map(|p| format!("--exclude={p}")).collect();
-                let mut apply = vec!["apply", "--cached", "--whitespace=nowarn"];
+                // A submodule's patch names its files under its folder: applied without it (`-p` one more per part)
+                let depth = format!(
+                    "-p{}",
+                    1 + self.shown_folder().map_or(0, |f| f.split('/').count())
+                );
+                let excludes: Vec<String> = skip
+                    .iter()
+                    .map(|p| format!("--exclude={}", self.inside_path(p).unwrap_or(p)))
+                    .collect();
+                let mut apply = vec!["apply", "--cached", "--whitespace=nowarn", depth.as_str()];
                 apply.extend(excludes.iter().map(String::as_str));
                 apply.push("-");
                 self.git_with(&apply, env, Some(patch.as_bytes()))?;
@@ -285,18 +321,24 @@ impl GitVcs {
     /// # Errors
     /// Either isn't one, or git fails.
     pub fn diff_trees(&self, from: &str, to: &str, paths: &[String]) -> Result<String> {
-        let mut args = vec![from, to, "--"];
-        args.extend(paths.iter().map(String::as_str));
+        let inside: Vec<&str> = paths
+            .iter()
+            .map(|p| self.inside(p))
+            .collect::<Result<_>>()?;
+        let prefixes = self.prefixes();
         let mut all: Vec<&str> = vec!["--literal-pathspecs"];
         all.extend(DIFF);
         all.push("-M");
-        all.extend(args);
+        all.extend(prefixes.iter().map(String::as_str));
+        all.extend([from, to, "--"]);
+        all.extend(inside);
         self.git_with(&all, &[], None)
     }
 
-    /// A file's text in a tree (or commit), none when it isn't there.
+    /// A file's text in a tree (or commit), none when it isn't there (or, in a submodule's, isn't under its folder).
     #[must_use]
     pub fn file_in(&self, tree: &str, path: &str) -> Option<String> {
+        let path = self.inside_path(path)?;
         self.git_with(&["show", &format!("{tree}:{path}")], &[], None)
             .ok()
     }
@@ -494,6 +536,143 @@ mod tests {
             diff.patch
         );
         assert_eq!(diff.files[0].status, 'A');
+    }
+
+    /// A repository with the submodule `lib` (its own repository, one commit), committed: (the repo, its vcs, the
+    /// submodule's repository, kept alive as long as the test, its vcs in the checkout).
+    fn with_submodule() -> (Repo, GitVcs, Repo, GitVcs) {
+        let (sub_repo, sub) = repo();
+        write(&sub, "b.txt", "one\n");
+        commit(&sub, "sub base");
+        let (repo, vcs) = repo();
+        write(&vcs, "a.txt", "one\n");
+        let source = sub.root.to_string_lossy().into_owned();
+        git(
+            &vcs,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                "-q",
+                &source,
+                "lib",
+            ],
+        );
+        commit(&vcs, "base");
+        let checkout = GitVcs::new(&vcs.root.join("lib"));
+        (repo, vcs, sub_repo, checkout)
+    }
+
+    #[test]
+    fn a_range_that_moves_a_submodule_lists_it_and_rebuilds_its_tree() {
+        let (_repo, vcs, _sub, lib) = with_submodule();
+        let base = git(&vcs, &["rev-parse", "HEAD"]).trim().to_string();
+        write(&lib, "b.txt", "one\ntwo\n");
+        commit(&lib, "sub change");
+        write(&vcs, "a.txt", "one\nchanged\n");
+        let head = commit(&vcs, "move lib");
+        let diff = vcs.diff_range(&base, &head, &[]).unwrap();
+        assert!(diff.patch.contains("+Subproject commit "), "{}", diff.patch);
+        assert!(
+            diff.files
+                .iter()
+                .any(|f| f.path == "lib" && f.status == 'M')
+        );
+        let tree = vcs.tree_after(Some(&base), &diff.patch, &[]).unwrap();
+        assert_eq!(
+            tree,
+            vcs.tree_of(&head).unwrap(),
+            "the round's tree is the head's"
+        );
+    }
+
+    #[test]
+    fn uncommitted_changes_with_a_moved_and_dirty_submodule_rebuild_their_tree() {
+        let (_repo, vcs, _sub, lib) = with_submodule();
+        let base = git(&vcs, &["rev-parse", "HEAD"]).trim().to_string();
+        write(&lib, "b.txt", "one\ntwo\n");
+        commit(&lib, "sub change");
+        write(&lib, "b.txt", "one\ntwo\nthree, not committed\n");
+        write(&vcs, "a.txt", "one\nchanged\n");
+        let diff = vcs.diff_working(&base, &[]).unwrap();
+        let tree = vcs.tree_after(Some(&base), &diff.patch, &[]);
+        assert!(tree.is_ok(), "{tree:?}\n{}", diff.patch);
+    }
+
+    #[test]
+    fn a_submodules_repository_diffs_its_commits_with_the_projects_paths() {
+        let (_repo, vcs, _sub, lib) = with_submodule();
+        let base = git(&lib, &["rev-parse", "HEAD"]).trim().to_string();
+        write(&lib, "b.txt", "one\ntwo\n");
+        write(&lib, "c.txt", "new\n");
+        let head = commit(&lib, "sub change");
+        let sub = vcs.submodule_at("lib").expect("lib is a submodule");
+        assert_eq!(sub.shown_folder(), Some("lib"));
+        let diff = sub.diff_range(&base, &head, &[]).unwrap();
+        assert!(
+            diff.patch.contains("diff --git a/lib/b.txt b/lib/b.txt")
+                && diff.patch.contains("+++ b/lib/c.txt"),
+            "{}",
+            diff.patch
+        );
+        assert_eq!(
+            diff.files
+                .iter()
+                .map(|f| f.path.as_str())
+                .collect::<Vec<_>>(),
+            ["lib/b.txt", "lib/c.txt"]
+        );
+        // Its round's files rebuild in its own repository, read and compared by the project's paths
+        let tree = sub.tree_after(Some(&base), &diff.patch, &[]).unwrap();
+        assert_eq!(tree, sub.tree_of(&head).unwrap());
+        assert_eq!(sub.file_in(&tree, "lib/b.txt").unwrap(), "one\ntwo\n");
+        assert_eq!(
+            sub.file_in(&tree, "b.txt"),
+            None,
+            "a path outside it is none"
+        );
+        let between = sub.diff_trees(&base, &tree, &["lib/b.txt".into()]).unwrap();
+        assert!(
+            between.contains("+++ b/lib/b.txt") && between.contains("+two"),
+            "{between}"
+        );
+        assert!(matches!(
+            sub.diff_trees(&base, &tree, &["a.txt".into()]),
+            Err(atm_common::Error::Invalid(_))
+        ));
+        // Uncommitted changes in it, and its files as they are
+        write(&lib, "b.txt", "one\ntwo\nthree\n");
+        let working = sub.diff_working(&head, &[]).unwrap();
+        assert_eq!(working.files[0].path, "lib/b.txt");
+        let whole = sub.diff_files(&["lib/b.txt".into()]).unwrap();
+        assert!(whole.patch.contains("+++ b/lib/b.txt"), "{}", whole.patch);
+        assert!(sub.tree_after(None, &whole.patch, &[]).is_ok());
+    }
+
+    #[test]
+    fn only_a_checked_out_submodules_folder_opens_its_repository() {
+        let (_repo, vcs, _sub, _lib) = with_submodule();
+        assert!(
+            vcs.submodule_at("lib/").is_some(),
+            "a trailing slash is the same folder"
+        );
+        for not_one in ["", ".", "a.txt", "nothing", "lib/inner"] {
+            assert!(vcs.submodule_at(not_one).is_none(), "{not_one}");
+        }
+        assert_eq!(
+            vcs.submodule_containing(&vcs.root.join("lib")).as_deref(),
+            Some("lib")
+        );
+        std::fs::create_dir(vcs.root.join("lib/deeper")).unwrap();
+        assert_eq!(
+            vcs.submodule_containing(&vcs.root.join("lib/deeper"))
+                .as_deref(),
+            Some("lib")
+        );
+        assert_eq!(vcs.submodule_containing(&vcs.root), None);
+        assert_eq!(vcs.submodule_containing(&std::env::temp_dir()), None);
+        assert_eq!(vcs.shown_folder(), None);
     }
 
     #[test]

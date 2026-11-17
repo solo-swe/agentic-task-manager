@@ -34,6 +34,8 @@ pub struct NewReview {
 pub struct NewRound {
     /// What it was made from.
     pub kind: RoundKind,
+    /// The submodule its commits are in, none for the project's own (ATM-583).
+    pub submodule: Option<String>,
     /// Its files.
     pub files: Vec<FileChange>,
     /// Its diff.

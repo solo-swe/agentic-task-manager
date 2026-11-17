@@ -46,7 +46,9 @@
 <script lang="ts">
   import type { DocumentSource } from '../documents/source';
   import Icon from '../ui/Icon.svelte';
+  import ChainBox from './ChainBox.svelte';
   import DiffView from './DiffView.svelte';
+  import { focusOnShow } from './focus';
   import { lineCounts } from './page';
   import type { Chain, PlacedChain, Picked, ViewFile } from './types';
 
@@ -92,7 +94,8 @@
     wanted?: boolean;
     onfold: () => void;
     onviewed: () => void;
-    oncomment: (picked: Picked, body: string) => Promise<string | null> | void;
+    /** A comment on lines (`picked`), or on the file as a whole (none: a submodule's move) */
+    oncomment: (picked: Picked | null, body: string) => Promise<string | null> | void;
     onreply: (to: string, body: string) => void;
     onresolve: (comment: string, resolved: boolean) => void;
     onround: (round: number) => void;
@@ -100,6 +103,24 @@
 
   const counts = $derived(lineCounts(file.patch));
   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
+
+  // A submodule's move (ATM-583): its two commits, linked to its repository when it has a web address; comments on it
+  // are on the entry as a whole
+  const moved = $derived(file.submodule ?? null);
+  const short = (sha: string) => sha.slice(0, 7);
+  const commitUrl = (sha: string) => (moved?.repository ? `${moved.repository}/commit/${sha}` : null);
+  let writing = $state(false);
+  let draft = $state('');
+  let problem = $state<string | null>(null);
+  async function save() {
+    const body = draft.trim();
+    if (!body) return;
+    problem = (await oncomment(null, body)) ?? null;
+    if (!problem) {
+      draft = '';
+      writing = false;
+    }
+  }
 
   // A card in view is made at once; one only near it (within MARGIN), once the page is idle. Right after a jump, only
   // the file gone to (`wanted`) is made at once, the others a moment later: its sides load first
@@ -138,7 +159,7 @@
   class:folded
   bind:this={el}
   data-file={file.path}
-  data-pending={!folded && !near && !file.binary ? '' : undefined}
+  data-pending={!folded && !near && !file.binary && !moved ? '' : undefined}
   data-comments={chains.length ? '' : undefined}
   aria-label={file.path}
 >
@@ -152,7 +173,7 @@
     <span class="review-file-status status-{file.status}" title={file.status}>{statusLetter[file.status]}</span>
     <span class="review-file-path">{file.old_path !== file.path ? `${file.old_path} → ${file.path}` : file.path}</span>
     <span class="review-file-counts">
-      {#if file.binary}binary{:else}<span class="added">+{counts.added}</span>
+      {#if moved}submodule{:else if file.binary}binary{:else}<span class="added">+{counts.added}</span>
         <span class="removed">−{counts.removed}</span>{/if}
     </span>
     {#if chains.length}<span class="review-file-chains"
@@ -175,7 +196,50 @@
           </button>
         </p>
       {/each}
-      {#if file.binary}
+      {#if moved}
+        <div class="review-submodule">
+          <p class="review-submodule-move">
+            <Icon name="git-commit" size={14} />
+            {#snippet commit(sha: string)}
+              {@const url = commitUrl(sha)}
+              {#if url}<a href={url} target="_blank" rel="noopener noreferrer"><code>{short(sha)}</code></a>{:else}<code
+                  >{short(sha)}</code
+                >{/if}
+            {/snippet}
+            {#if moved.from && moved.to}
+              The submodule moved from {@render commit(moved.from)} to {@render commit(moved.to)}.
+            {:else if moved.to}
+              The submodule was added, at {@render commit(moved.to)}.
+            {:else if moved.from}
+              The submodule was removed; it was at {@render commit(moved.from)}.
+            {/if}
+          </p>
+          {#each chains as chain (chain.id)}
+            <ChainBox {chain} {onreply} {onresolve} />
+          {/each}
+          {#if writing}
+            <div class="review-submodule-composer">
+              <textarea
+                aria-label="Comment on {file.path}"
+                bind:value={draft}
+                {@attach focusOnShow}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save();
+                  if (e.key === 'Escape') writing = false;
+                }}></textarea>
+              {#if problem}<p class="review-submodule-problem" role="alert">Not saved: {problem}</p>{/if}
+              <div class="review-submodule-actions">
+                <button onclick={() => (writing = false)}>Cancel</button>
+                <button class="primary" disabled={busy || !draft.trim()} onclick={() => void save()}>Comment</button>
+              </div>
+            </div>
+          {:else}
+            <button class="review-submodule-comment" onclick={() => (writing = true)}>
+              <Icon name="message-square" size={13} /> Comment on this submodule
+            </button>
+          {/if}
+        </div>
+      {:else if file.binary}
         <p class="review-empty">A binary file: listed, not shown.</p>
       {:else if near}
         <DiffView
@@ -310,5 +374,81 @@
   .review-empty {
     padding: var(--space-6);
     color: var(--text-muted);
+  }
+  .review-submodule {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
+  }
+  .review-submodule-move {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+  .review-submodule-move code {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    color: var(--text);
+  }
+  .review-submodule-move a {
+    color: var(--accent);
+  }
+  .review-submodule-comment {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+  .review-submodule-composer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .review-submodule-composer textarea {
+    min-height: calc(var(--space-8) * 3);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+  .review-submodule-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+  }
+  .review-submodule-actions button {
+    padding: var(--space-1) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+  .review-submodule-actions button.primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .review-submodule-problem {
+    margin: 0;
+    color: var(--red);
+    font-size: var(--text-xs);
   }
 </style>

@@ -337,16 +337,22 @@ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Res
     if revision.is_empty() || revision.starts_with('-') || revision.contains('\0') {
         return Err(Error::Invalid(format!("{revision}: not a revision")));
     }
-    // A commit, or a tree (a review's round rebuilt from its diff, which no commit has)
-    let commit = vcs.resolve(revision);
-    let object = match &commit {
-        Some(commit) => commit.clone(),
+    // A commit, or a tree (a review's round rebuilt from its diff, which no commit has): the project's, or, for a file
+    // in a submodule, the submodule's own (a review's round of commits made in it, ATM-583), read by its path there
+    let found = |repo: &GitVcs| {
+        let commit = repo.resolve(revision);
+        let object = commit.clone().or_else(|| repo.resolve_tree(revision))?;
+        Some((commit, object))
+    };
+    let (repo, inside, commit, object) = match found(vcs) {
+        Some((commit, object)) => (vcs.clone(), path.to_string(), commit, object),
         None => vcs
-            .resolve_tree(revision)
+            .in_submodule(path)
+            .and_then(|(sub, inside)| found(&sub).map(|(c, o)| (sub, inside, c, o)))
             .ok_or_else(|| Error::NotFound(format!("{revision}: no such commit")))?,
     };
-    let (size, blob) = vcs
-        .blob_in(&object, path)
+    let (size, blob) = repo
+        .blob_in(&object, &inside)
         .ok_or_else(|| Error::NotFound(format!("{path}: not a file in {revision}")))?;
     if vcs.ignored(path) {
         return Err(Error::Refused(format!(
@@ -365,7 +371,7 @@ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Res
             limit / 1_000_000
         )));
     }
-    let data = vcs.blob_bytes(&blob)?;
+    let data = repo.blob_bytes(&blob)?;
     let rendered = render(path, kind, detail, &data);
     Ok(json!({
         "path": path,
@@ -799,6 +805,51 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    /// ATM-583: a review's round of commits made in a submodule names them by the submodule's commits (or trees)
+    #[test]
+    fn a_file_in_a_submodule_at_one_of_its_revisions_is_read_from_its_own_repository() {
+        let sub = Repo::new();
+        let project = Repo::new();
+        let source = sub.0.to_string_lossy().into_owned();
+        project.git(&[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            &source,
+            "lib",
+        ]);
+        project.git(&["commit", "-q", "-m", "add lib"]);
+        let lib = Repo(project.0.join("lib"));
+        lib.git(&["config", "user.email", "t@example.invalid"]);
+        lib.git(&["config", "user.name", "t"]);
+        lib.commit("a.md", "# Three, in lib\n");
+        let head = atm_fs::git::git(&["rev-parse", "HEAD"], &lib.0).unwrap();
+        let tree = atm_fs::git::git(&["rev-parse", "HEAD^{tree}"], &lib.0).unwrap();
+        let vcs = project.vcs();
+        let at_commit = read_document_at(Some(&vcs), &head, "lib/a.md").unwrap();
+        assert_eq!(at_commit["text"], json!("# Three, in lib\n"));
+        assert_eq!(at_commit["path"], json!("lib/a.md"));
+        assert_eq!(at_commit["commit"], json!(head));
+        let at_tree = read_document_at(Some(&vcs), &tree, "lib/a.md").unwrap();
+        assert_eq!(at_tree["text"], json!("# Three, in lib\n"));
+        // The project's own revisions still read the project's files; the submodule's name none of them
+        assert_eq!(
+            read_document_at(Some(&vcs), "first", "a.md").unwrap()["text"],
+            json!("# One\n")
+        );
+        assert!(matches!(
+            read_document_at(Some(&vcs), &head, "a.md"),
+            Err(Error::NotFound(_))
+        ));
+        assert!(matches!(
+            read_document_at(Some(&vcs), &head, "lib/none.md"),
+            Err(Error::NotFound(_))
+        ));
+        std::mem::forget(lib); // inside the project, which removes it
     }
 
     #[test]

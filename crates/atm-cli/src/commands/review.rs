@@ -10,7 +10,7 @@ use atm_lib::actor::agent_identity;
 use atm_lib::reviews::comments_md::{self, CommentsFile};
 use atm_lib::reviews::{
     self, Actor, Anchor, CommentFilter, CommentId, FileStore, NewReview, NewRound, ReviewFilter,
-    ReviewHeader, ReviewRef, ReviewStore, Reviews, RoundKind, Side, Status, Verdict, rounds,
+    ReviewHeader, ReviewRef, ReviewStore, Reviews, Round, RoundKind, Side, Status, Verdict, rounds,
     vcs as vcs_of,
 };
 use clap::{Args, Subcommand};
@@ -300,12 +300,13 @@ fn text_of(body: Body, cwd: &Path) -> Result<String> {
     Ok(text)
 }
 
-/// A round from what the command names; with nothing named, the same kind as `previous` (a range needs naming).
+/// A round from what the command names; with nothing named, the same kind as `previous` (a range needs naming), in
+/// the same repository.
 fn new_round(
     project: &Project,
     change: Change,
     cwd: &Path,
-    previous: Option<&RoundKind>,
+    previous: Option<&Round>,
     previous_files: &[String],
 ) -> Result<NewRound> {
     let vcs = vcs_of(project)?;
@@ -314,18 +315,36 @@ fn new_round(
         let (base, head) = range
             .split_once("..")
             .ok_or_else(|| Error::Invalid(format!("--range takes BASE..HEAD, not {range}")))?;
-        return rounds::from_range(&vcs, base, if head.is_empty() { "HEAD" } else { head }, &by);
+        let here = reviews::repository_here(&vcs, cwd)?;
+        return rounds::from_range(
+            &here,
+            base,
+            if head.is_empty() { "HEAD" } else { head },
+            &by,
+        );
     }
     if !change.files.is_empty() {
         let paths = vcs.paths(&change.files, Some(cwd))?;
-        return rounds::from_files(&vcs, &paths, &by);
+        return rounds::from_files(&reviews::repository_of_files(&vcs, &paths)?, &paths, &by);
     }
     match (change.uncommitted, previous) {
-        (true, _) => rounds::from_working(&vcs, change.base.as_deref().unwrap_or("HEAD"), &by),
-        (false, Some(RoundKind::Working { base })) => {
-            rounds::from_working(&vcs, change.base.as_deref().unwrap_or(base), &by)
+        (true, _) => rounds::from_working(
+            &reviews::repository_here(&vcs, cwd)?,
+            change.base.as_deref().unwrap_or("HEAD"),
+            &by,
+        ),
+        (false, Some(last)) => {
+            let same = rounds::repository(&vcs, last)?;
+            match &last.kind {
+                RoundKind::Working { base } => {
+                    rounds::from_working(&same, change.base.as_deref().unwrap_or(base), &by)
+                }
+                RoundKind::Files => rounds::from_files(&same, previous_files, &by),
+                RoundKind::Range { .. } => Err(Error::Invalid(
+                    "say what to review: --range BASE..HEAD, --uncommitted, or --file PATH".into(),
+                )),
+            }
         }
-        (false, Some(RoundKind::Files)) => rounds::from_files(&vcs, previous_files, &by),
         _ => Err(Error::Invalid(
             "say what to review: --range BASE..HEAD, --uncommitted, or --file PATH".into(),
         )),
@@ -592,7 +611,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             let files: Vec<String> = last
                 .map(|r| r.files.iter().map(|f| f.path.clone()).collect())
                 .unwrap_or_default();
-            let round = new_round(&project, change, cwd, last.map(|r| &r.kind), &files)?;
+            let round = new_round(&project, change, cwd, last, &files)?;
             if ctx.dry_run {
                 println!("[dry-run] would add a round to {}", found.header.reference);
                 return Ok(0);

@@ -186,6 +186,10 @@ pub struct Round {
     pub number: u32,
     /// What it was made from.
     pub kind: RoundKind,
+    /// The submodule its commits are in (its folder from the project's root, `lib`), none for the project's own
+    /// (ATM-583); its files are named as the project has them (`lib/b.txt`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submodule: Option<String>,
     /// Its files.
     pub files: Vec<FileChange>,
     /// Who made it.

@@ -54,6 +54,8 @@ function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['
     rounds: [1, 2, 3].map((number) => ({
       number,
       kind: { kind: 'files' },
+      // Round 2 of commits made in a submodule (ATM-583)
+      submodule: number === 2 ? 'lib' : undefined,
       files: [{ path: 'src/a.rs', binary: false }],
       by: 'claude:a',
       at: `2026-11-1${number}`,
@@ -204,7 +206,7 @@ describe('ReviewPage: Overview', () => {
       [...container.querySelectorAll('.review-round-list li')].map((li) => li.textContent?.replace(/\s+/g, ' ').trim()),
     ).toEqual([
       expect.stringMatching(/^Round 3 1 file · claude:a · .+ shown$/),
-      expect.stringMatching(/^Round 2 1 file · claude:a · /),
+      expect.stringMatching(/^Round 2 1 file in the submodule lib · claude:a · /),
       expect.stringMatching(/^Round 1 1 file · claude:a · /),
     ]);
     // A round opens its whole change on the Diffs tab

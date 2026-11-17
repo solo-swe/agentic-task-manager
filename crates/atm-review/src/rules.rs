@@ -440,6 +440,7 @@ mod tests {
                 base: "a1".into(),
                 head: "b2".into(),
             },
+            submodule: None,
             files: Vec::new(),
             patch: Patch("diff --git a/x b/x\n".into()),
             by: by.clone(),

@@ -123,6 +123,7 @@ impl ReviewStore for MemoryStore {
             rounds: vec![Round {
                 number: 1,
                 kind: new.first.kind,
+                submodule: new.first.submodule,
                 files: new.first.files,
                 by: new.first.by,
                 at: now,
@@ -289,6 +290,7 @@ mod tests {
                 status: Status::Open,
                 first: NewRound {
                     kind: RoundKind::Files,
+                    submodule: None,
                     files: Vec::new(),
                     patch: Patch::default(),
                     by: by.clone(),

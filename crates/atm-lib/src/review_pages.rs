@@ -163,8 +163,29 @@ pub struct FilePatch {
     pub status: &'static str,
     /// Binary: listed, no lines.
     pub binary: bool,
+    /// A submodule this change moved (ATM-583): the commits it was at and is at (none where it was added or
+    /// removed), a `-dirty` mark dropped; none for a file.
+    pub submodule: Option<(Option<String>, Option<String>)>,
     /// Its part of the patch.
     pub patch: String,
+}
+
+/// A submodule's move, from its part of the patch: git writes it as `-Subproject commit <old>` and `+Subproject
+/// commit <new>`, no file lines.
+fn moved_submodule(lines: &[&str]) -> Option<(Option<String>, Option<String>)> {
+    let commit = |sign: char| {
+        lines.iter().find_map(|l| {
+            let rest = l.trim_end_matches('\n').strip_prefix(sign)?;
+            let sha = rest.strip_prefix("Subproject commit ")?;
+            Some(sha.trim_end_matches("-dirty").to_string())
+        })
+    };
+    let gitlink = lines
+        .iter()
+        .take_while(|l| !l.starts_with("@@"))
+        .any(|l| l.contains(" 160000"));
+    let (old, new) = (commit('-'), commit('+'));
+    (gitlink && (old.is_some() || new.is_some())).then_some((old, new))
 }
 
 /// The two paths of a `diff --git a/<p> b/<p>` line, when it names one path twice (a path with a space included).
@@ -235,6 +256,7 @@ fn one_file(lines: &[&str]) -> Option<FilePatch> {
         path,
         status,
         binary,
+        submodule: moved_submodule(lines),
         patch: lines.concat(),
     })
 }
@@ -287,12 +309,23 @@ fn view(
         }
     };
     let patches = file_patches(&patch.0);
+    // A moved submodule's entry: its two commits and its repository's web address, when it has one, for links
+    let submodule = |file: &FilePatch| {
+        file.submodule.as_ref().map(|(from, to)| {
+            let repository = vcs
+                .submodule_at(&file.path)
+                .and_then(|sub| sub.remote_url())
+                .and_then(|url| atm_common::repository::repository_url(&url));
+            json!({ "from": from, "to": to, "repository": repository })
+        })
+    };
     let side = |file: &FilePatch| {
         json!({
             "path": file.path,
             "old_path": file.old_path,
             "status": file.status,
             "binary": file.binary,
+            "submodule": submodule(file),
             "patch": file.patch,
             "before": if file.status == "added" { None } else { before.clone() },
             "after": if file.status == "deleted" { None } else { Some(after.clone()) },
@@ -317,6 +350,7 @@ fn view(
                         reviews::FileStatus::Modified => "modified",
                     },
                     binary: f.binary,
+                    submodule: None,
                     patch: String::new(),
                 }))
             })
@@ -593,6 +627,43 @@ mod tests {
         assert_eq!(
             files.iter().map(|f| f.patch.as_str()).collect::<String>(),
             all
+        );
+    }
+
+    /// A submodule entry's two commits, as the test reads them.
+    type Commits<'a> = Option<(Option<&'a str>, Option<&'a str>)>;
+
+    /// ATM-583: a moved, added or removed submodule is one entry with its commits; a file saying the words isn't one
+    #[test]
+    fn a_submodules_move_is_an_entry_with_its_two_commits() {
+        let moved = "diff --git a/lib b/lib\nindex 1111111..2222222 160000\n--- a/lib\n+++ b/lib\n@@ -1 +1 @@\n-Subproject commit 1111111111\n+Subproject commit 2222222222-dirty\n";
+        let added = "diff --git a/ext b/ext\nnew file mode 160000\nindex 0000000..3333333\n--- /dev/null\n+++ b/ext\n@@ -0,0 +1 @@\n+Subproject commit 3333333333\n";
+        let removed = "diff --git a/old b/old\ndeleted file mode 160000\nindex 4444444..0000000\n--- a/old\n+++ /dev/null\n@@ -1 +0,0 @@\n-Subproject commit 4444444444\n";
+        let text = "diff --git a/notes.md b/notes.md\nindex 5..6 100644\n--- a/notes.md\n+++ b/notes.md\n@@ -1 +1 @@\n-Subproject commit 1\n+Subproject commit 2\n";
+        let files = file_patches(&[moved, added, removed, text, MODIFIED].concat());
+        let entries: Vec<(&str, &str, Commits)> = files
+            .iter()
+            .map(|f| {
+                let sub = f
+                    .submodule
+                    .as_ref()
+                    .map(|(a, b)| (a.as_deref(), b.as_deref()));
+                (f.path.as_str(), f.status, sub)
+            })
+            .collect();
+        assert_eq!(
+            entries,
+            [
+                (
+                    "lib",
+                    "modified",
+                    Some((Some("1111111111"), Some("2222222222")))
+                ),
+                ("ext", "added", Some((None, Some("3333333333")))),
+                ("old", "deleted", Some((Some("4444444444"), None))),
+                ("notes.md", "modified", None),
+                ("src/a.rs", "modified", None),
+            ]
         );
     }
 
