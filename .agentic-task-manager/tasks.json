@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 584
+    "next_number": 585
   },
   "tasks": [
     {
@@ -15699,6 +15699,43 @@
         "cli"
       ],
       "number": 583,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebb2-ca1d-7715-be24-bd14151c1d4f",
+      "name": "App: menu → Reload leaves an empty window with an error in the title bar",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "In the atm app, choosing **Reload** in the menu (⌘R) leaves the window empty, with an error showing in the title bar (Hakan, 2026-11-18). Reload should show the same page again, as it was.\n\n## Reproduce first\nOpen a project's page (and a review in its tab, a task's details, a document), choose Reload; note the address, what the window shows, the title bar's text and the web inspector's console. Try it on the root page too.\n\n## Likely cause\nThe menu's `reload` action runs `location.reload()` ([`menu-actions.ts`](dashboard/src/lib/menu-actions.ts#L48)). The page's addresses are its routes (`/projects/<id>/list`, `…/reviews/CR-7`), and the app's window serves the built dashboard as one HTML file: a reload asks the app for the route's path itself, which it has no file for, unless it falls back to the page. Check how the app serves the page (`app/src-tauri/src/lib.rs`, `assets.rs`, `tauri.conf.json`) and how the title bar shows a load error (`AppTitleBar.svelte`).\n\n## Change\nMake Reload show the page again at the same address, with its tabs: either the app answers every page route with the dashboard (as `atm serve`'s `PAGE_PATH` does, `docs/multi-project-api.md` §2.7; never for asset or API paths), or the page reloads through the app's root with the address handed over. Whatever made the title bar show an error says what went wrong in words, if it can still happen.\n\n## Tests\nAn e2e test in `dashboard/tests/e2e/app.spec.ts`: Reload on a project's tab, a review's tab and the root shows the same page and tabs, no error in the title bar; a unit test in the app for the route fallback if that's the fix (asset and unknown paths still 404).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/menu-actions.ts",
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/assets.rs",
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-17T22:48:45Z",
+      "updated_at": "2026-11-17T22:48:45Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T22:48:45Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 584,
       "key_final": false
     }
   ]
