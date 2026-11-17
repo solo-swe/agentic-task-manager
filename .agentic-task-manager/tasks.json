@@ -11930,7 +11930,7 @@
         "app/src-tauri/tauri.conf.json"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-17T01:47:59Z",
+      "updated_at": "2026-11-17T07:03:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -11939,10 +11939,18 @@
       "sprint_history": [
         {
           "sprint": "Keys follow-ups and housekeeping",
-          "from": "2026-11-17T01:47:59Z"
+          "from": "2026-11-17T01:47:59Z",
+          "to": "2026-11-17T07:03:50Z"
         }
       ],
-      "sprint": "Keys follow-ups and housekeeping"
+      "notes": [
+        {
+          "at": "2026-11-17T07:03:50Z",
+          "kind": "note",
+          "text": "Back to the backlog (Hakan, 2026-11-17): it needs a Windows 11 and a Linux desktop (X11 and Wayland) to try the window on; CI can’t. Its dependencies are done.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "630921c6-a3f5-8368-bf02-d4a32c263ec8",
