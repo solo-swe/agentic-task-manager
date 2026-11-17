@@ -71,16 +71,16 @@ pub fn parse_version(text: &str) -> Vec<u64> {
 }
 
 /// Ask the atm server on this port (on localhost) who it is: none if nothing, or not an atm server, answers in
-/// `timeout`.
+/// `timeout`. On `127.0.0.1` only: an atm server always listens there (its `[::1]` listener only keeps that address
+/// from anyone else), and each address tried costs the whole timeout on a port nothing listens on where connecting
+/// to it isn't refused at once (Windows tries again for about two seconds: ATM-482).
 #[must_use]
 pub fn whoami(port: u64, timeout: std::time::Duration) -> Option<Map<String, Value>> {
     use std::io::{Read, Write};
-    use std::net::{TcpStream, ToSocketAddrs};
+    use std::net::{Ipv4Addr, SocketAddr, TcpStream};
     let port = u16::try_from(port).ok()?;
-    let mut stream = ("localhost", port)
-        .to_socket_addrs()
-        .ok()?
-        .find_map(|address| TcpStream::connect_timeout(&address, timeout).ok())?;
+    let mut stream =
+        TcpStream::connect_timeout(&SocketAddr::from((Ipv4Addr::LOCALHOST, port)), timeout).ok()?;
     stream.set_read_timeout(Some(timeout)).ok()?;
     stream.set_write_timeout(Some(timeout)).ok()?;
     write!(

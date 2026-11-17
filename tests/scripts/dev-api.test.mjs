@@ -162,11 +162,16 @@ test(NAME, { skip }, async () => {
     assert.ok(await until(projects, 'api/projects after the restart'));
 
     // Stopping Vite stops the API server and removes its home. Windows has no SIGTERM: Vite is ended at once, its exit
-    // handler never runs, so there the test stops the server itself
+    // handler never runs, so there the test stops the server itself, unless it has ended with Vite already (ESRCH)
     vite.kill('SIGTERM');
     await exited;
     if (process.platform === 'win32') {
-      process.kill(second);
+      try {
+        process.kill(second);
+      } catch (e) {
+        if (e.code !== 'ESRCH') throw e;
+      }
+      await until(() => !alive(second), 'the API server to end', 5_000);
       removeDir(home);
     }
     await until(() => !alive(second), 'the API server to stop', 5_000);

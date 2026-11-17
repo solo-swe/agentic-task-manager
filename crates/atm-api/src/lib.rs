@@ -196,15 +196,24 @@ async fn handle(State(served): State<Arc<Served>>, request: Request) -> Response
     .unwrap_or_else(|_| send_error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"))
 }
 
-/// Something accepts connections on `127.0.0.1:port` or `[::1]:port` (`localhost` may resolve to either).
+/// Something accepts connections on `127.0.0.1:port` or `[::1]:port` (`localhost` may resolve to either). Both asked
+/// at once: on a free port each can take the whole timeout (Windows tries again before giving up: ATM-482).
 fn port_in_use(port: u16) -> bool {
     let addresses = [
         SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
     ];
-    addresses
-        .iter()
-        .any(|a| TcpStream::connect_timeout(a, Duration::from_millis(500)).is_ok())
+    std::thread::scope(|scope| {
+        let asks: Vec<_> = addresses
+            .iter()
+            .map(|a| {
+                scope.spawn(move || {
+                    TcpStream::connect_timeout(a, Duration::from_millis(500)).is_ok()
+                })
+            })
+            .collect();
+        asks.into_iter().any(|ask| ask.join().unwrap_or(false))
+    })
 }
 
 /// The first free port from `first`: listening on `127.0.0.1` and, where there is IPv6, on `[::1]` too, so no
