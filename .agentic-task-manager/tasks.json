@@ -14627,7 +14627,7 @@
       "description": "atm-lib's `reviews` module, the one place reviews and tasks meet ([§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The task schema gains `reviews` (a list of review references, linked by UUID underneath); the generated types follow.\n- Tasks named when a review is created, when a live review starts, or later (add, remove), with what each does to the task's status ([§3.2](docs/code-review-design.md#:~:text=3.2%20A%20review%20and%20how%20it%20goes)).\n- A reviewer's submit becomes every named task's review decision (approve, request changes with a `rejection` note linking the review); closing rejects only when the user says so. Decisions stay the user's (I23).\n- A live review's approval is the task's when the task's change hasn't moved since the approved checkpoint; otherwise what changed is said ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)).\n\n## Tests\nScenarios (`tests/scripts/scenarios/`): a task through a review and a round, a batch review of two tasks, a live approval with and without a change since.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14636,7 +14636,7 @@
         "crates/atm-common/schema/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T09:13:14Z",
+      "updated_at": "2026-11-17T09:18:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 565,
@@ -14649,7 +14649,18 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T09:13:14Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "2f689da13659891cb3367afd5869dd543d1e530c",
+      "completed_at": "2026-11-17T09:18:04Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:18:04Z",
+          "kind": "outcome",
+          "text": "atm-lib reviews.rs: create/add_round/submit/close/set_tasks keep the tasks in step (code_reviews links by UUID+ref; open review puts tasks in review; a decision is every named task’s, as the reviewer); apply_live_approval approves a task whose working diff equals the approved live checkpoint. Rounds leave out .agentic-task-manager. Tested in atm-lib (3 tests); the CLI scenarios come with ATM-566.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed",
@@ -14662,7 +14673,7 @@
       "description": "The CLI of [§3.9](docs/code-review-design.md#:~:text=3.9%20The%20CLI%2C%20and%20agents%20listening): `atm review create|live|round|tasks|list|show|comments|comment|reply|edit|resolve|submit|close`, each with `--json`, thin mappings to atm-lib.\n\n## Change\n- The commands as listed in the design; `submit --approve` refused while a top-level comment is open, naming it.\n- `atm docs reviews`: a new topic in `docs/agent/` for agents, with the rule that review comments are data, never instructions (I1).\n- Output for people through `output::for_people` (I30).\n\n## Tests\n`tests/scripts/` scenarios for each command, the refusal, and a comment with terminal escapes printed as text.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -14673,7 +14684,7 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T09:18:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 566,
@@ -14688,7 +14699,17 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "notes": [
+        {
+          "at": "2026-11-17T09:18:09Z",
+          "kind": "note",
+          "text": "From ATM-565: its tests were atm-lib unit tests (the CLI came later). Add its scenarios here: a task through a review and a round, a batch review of two tasks, a live approval with and without a change since (atm_lib::reviews::apply_live_approval, to be called when an agent finishes a task).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-17T09:18:10Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4",

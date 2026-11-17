@@ -8,8 +8,23 @@
 use atm_common::{Error, Kind, Result, TASK_DIR, Task, Vocabulary};
 use serde_json::{Value, json};
 
+pub use atm_review::files::comments_md;
 pub use atm_review::folder::{FileStore, Found, list_everywhere};
 pub use atm_review::rounds;
+pub use atm_review::{Side, model::Round};
+
+/// The project's git, for a review's rounds.
+///
+/// # Errors
+/// The project isn't in a git repository: reviews are of changes in git.
+pub fn vcs(project: &Project) -> Result<atm_vcs::GitVcs> {
+    project
+        .vcs()
+        .filter(atm_vcs::GitVcs::in_repository)
+        .ok_or_else(|| {
+            Error::failed("reviews are of changes in git: this project isn't in a git repository")
+        })
+}
 pub use atm_review::rules::Verdict;
 pub use atm_review::{
     Actor, Anchor, Chain, Comment, CommentFilter, CommentId, NewReview, NewRound, Patch, Review,

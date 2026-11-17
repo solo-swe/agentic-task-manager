@@ -26,6 +26,7 @@ in a project without keys, its ID (`atm docs tasks`). A key shown with a `~` (`~
 - `atm task note <id> '<text>'`: a note on a task
 - `atm claim hold <id> && <command>`: keep your claim alive while a long command runs
 - `atm vcs commit <id> --file F …`: commit the task's files (`atm docs rules`)
+- `atm review create|show|comments|reply|round …`: a code review of your task's change (`atm docs reviews`)
 
 ## Pushing
 - `atm vcs pr <id>… --number N --url U`: record the pull request that contains the tasks

@@ -49,6 +49,7 @@ use commands::{
     loop_::LoopCommand,
     project::ProjectCommand,
     release::ReleaseCommand,
+    review::ReviewCommand,
     sprint::SprintCommand,
     task::TaskCommand,
     vcs::VcsCommand,
@@ -103,6 +104,9 @@ enum Command {
     /// Claim lifecycle
     #[command(subcommand)]
     Claim(ClaimCommand),
+    /// Code reviews recorded in the project (CR-1, CR-2, …): open, comment, reply, decide
+    #[command(subcommand)]
+    Review(ReviewCommand),
     /// Version control integration
     #[command(subcommand)]
     Vcs(VcsCommand),
@@ -353,9 +357,20 @@ fn run(args: &[OsString]) -> u8 {
     if cli.command.renews_claims() {
         renew_own_claims(args, &cwd);
     }
-    // Each command's exit code when it ends without an error (`agents install` ends with 1 when it left a folder alone,
-    // `loop next` with 3 when no task is available)
-    let result: Result<u8, Error> = match cli.command {
+    match dispatch(cli.command, ctx, &cwd) {
+        Ok(code) => code,
+        Err(error) => {
+            report(&labelled(&error.to_string(), &cwd), error.code(), as_json);
+            error.code()
+        }
+    }
+}
+
+/// Run one command in `cwd`: its exit code when it ends without an error (`agents install` ends with 1 when it left a
+/// folder alone, `loop next` with 3 when no task is available).
+fn dispatch(command: Command, ctx: Context, cwd: &Path) -> Result<u8, Error> {
+    let cwd = cwd.to_path_buf();
+    match command {
         Command::Task(command) => commands::task::run(command, ctx, &cwd).map(|()| 0),
         Command::Project(command) => commands::project::run(command, ctx, &cwd).map(|()| 0),
         Command::Sprint(command) => commands::sprint::run(command, ctx, &cwd).map(|()| 0),
@@ -365,6 +380,7 @@ fn run(args: &[OsString]) -> u8 {
         Command::Label(command) => commands::label::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
+        Command::Review(command) => commands::review::run(command, ctx, &cwd).map(|()| 0),
         Command::Vcs(command) => commands::vcs::run(command, ctx, &cwd).map(|()| 0),
         Command::Db(command) => commands::db::run(command, ctx, &cwd),
         Command::Doctor { files } => commands::maintenance::doctor(files, ctx, &cwd),
@@ -407,13 +423,6 @@ fn run(args: &[OsString]) -> u8 {
         Command::ClaimWatch(args) => {
             commands::claim::watch(&args, &cwd);
             Ok(0)
-        }
-    };
-    match result {
-        Ok(code) => code,
-        Err(error) => {
-            report(&labelled(&error.to_string(), &cwd), error.code(), as_json);
-            error.code()
         }
     }
 }

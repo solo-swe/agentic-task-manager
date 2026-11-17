@@ -175,6 +175,17 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
     if let Some(duplicate) = &opts.duplicate_of {
         opts.duplicate_of = Some(project.resolve_task(duplicate)?);
     }
+    // A task finished whose change an approved live review covers as it is now needs no other review
+    // (docs/code-review-design.md §3.5): it is approved, naming the review, first. Never in the way of done itself
+    if command == Command::Done
+        && let Ok(Some(header)) = atm_lib::reviews::apply_live_approval(&mut project, task_id)
+        && !ctx.json
+    {
+        println!(
+            "{task_id}: approved in the live review {}",
+            header.reference
+        );
+    }
     let result = change_task_status(&mut project, command, task_id, &opts)?;
     report(command, &result, ctx, cwd);
     Ok(())

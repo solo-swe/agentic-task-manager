@@ -67,7 +67,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I5 | **atm never runs a shell**: processes get argument lists (`Command::new` with a program, never `sh`, `bash`, `cmd` or PowerShell); Rust evaluates no code | `dashboard/tests/unit/security-invariants.test.ts` (a static check) |
-| I6 | **atm never reads or writes through a symlink** in the task folder, nor a task folder outside the project | `tests/scripts/symlinks.test.mjs` |
+| I6 | **atm never reads or writes through a symlink** in the task folder, nor a task folder outside the project; its code reviews too (`reviews/`, a review's folder and files: ATM-563) | `tests/scripts/symlinks.test.mjs`; atm-review's `folder.rs` tests |
 | I7 | **A `--file` names one file**: git runs with literal pathspecs; whole-tree pathspecs are refused | `tests/scripts/git.test.mjs` |
 | I8 | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load | `tests/scripts/scenarios/security.json` |
 | I9 | **The merge driver's command comes from the clone's own git config**, never from the repository | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`) |
