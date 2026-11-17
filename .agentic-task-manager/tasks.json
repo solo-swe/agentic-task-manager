@@ -9458,7 +9458,7 @@
       "description": "Left over from T-480 (on `dev/0.33.0-switch`). T-480 took the suite on CI's Windows runner from 40 failures and two hanging files to a handful; CI's Windows job runs `cargo test` but not the suite until this task.\n\n## Still failing (CI run 42429818032, before T-480's last push)\n- `claims.test.mjs`: `claim hold`'s watcher doesn't end with its shell on Windows (its folder can't be removed afterwards, `EPERM`). The watcher follows its shell by process ID; under Git's `sh` (MSYS) the Windows parent of `atm.exe` may not be the shell. Likely also what keeps T-481's folder busy.\n- `serve.test.mjs`: still runs into the watchdog (400 s on Windows); `start, reuse, status, stop` failed on the home ID (fixed in T-480's last push, `home_id` hashes the shown path: not yet seen on CI).\n- `claims.test.mjs` `worktrees of one clone share claims`: path spelling (fixed in T-480's last push, not yet seen on CI).\n- `dev-api.test.mjs`: the dev server's test on Windows (the API server's restart after a rebuild, and its stop when Vite is ended at once).\n- `stress.test.mjs`: T-481 (skipped on Windows until then).\n\n## Done when\nThe suite passes on CI's Windows runner, and `.github/workflows/ci.yml` runs it there again (the `if` on the suite step goes).",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [
         "9d40a6f4-f771-86d4-8e8c-ed80bcf6d10b"
       ],
@@ -9469,7 +9469,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-17T02:09:12Z",
+      "updated_at": "2026-11-17T02:50:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9489,6 +9489,12 @@
           "kind": "note",
           "text": "From ATM-481: the lock’s wait now starts again each time the lock changes hands (up to 6× the wait), and the stress test no longer raises the wait on Windows. Unskip `stress.test.mjs` on Windows here and check it passes at atm’s default wait; the EPERM on its folder is this task’s claim watcher.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T02:50:33Z",
+          "kind": "answer",
+          "text": "It ends by changing `.github/workflows/ci.yml` (dropping the `if` that skips the suite on Windows): is that change yours to approve, and may I make it here? → Yes: change ci.yml to run the suite on Windows (approved by Hakan, 2026-11-17).; The Windows failures can only be checked on CI’s Windows runner (no Windows here): may I push `dev/0.39.0` and dispatch CI runs on it while I fix them (`gh workflow run CI --ref dev/0.39.0`), a few rounds? → Yes: push dev/0.39.0 and dispatch CI runs on it while fixing; review the result together in Crit when done.",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -9498,14 +9504,15 @@
         }
       ],
       "sprint": "Keys follow-ups and housekeeping",
-      "started_at": "2026-11-17T02:09:05Z",
-      "started_by": "claude:0f56a916",
-      "waiting_on": "user",
-      "questions": [
-        "It ends by changing `.github/workflows/ci.yml` (dropping the `if` that skips the suite on Windows): is that change yours to approve, and may I make it here?",
-        "The Windows failures can only be checked on CI’s Windows runner (no Windows here): may I push `dev/0.39.0` and dispatch CI runs on it while I fix them (`gh workflow run CI --ref dev/0.39.0`), a few rounds?"
+      "blocks": [
+        {
+          "from": "2026-11-17T02:09:12Z",
+          "to": "2026-11-17T02:50:33Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-17T02:09:12Z"
+      "started_at": "2026-11-17T02:50:33Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
@@ -14154,14 +14161,14 @@
       "description": "On PR #51 (0.38.0), CI run 43990284864's `Rust (ubuntu-latest)` failed `app/src-tauri/src/lib.rs`'s `the_page_is_served_with_a_policy_it_works_under` with \"the dashboard's page in the app's files\" (the asset resolver had no `tasks-dashboard.html`); the same code passed on the run before and on the re-run, and on macOS and Windows. The dashboard had been built before `cargo test` (`pnpm run build`).\n\n## To find\nWhy the mock app's asset resolver can miss the page: another test in the same process changing what the context embeds or reads (the tests run in parallel threads; `context()` is generated per call), Tauri reading assets from disk in debug builds while something rewrites `dashboard/dist/`, or the build order in CI's job. Reproduce in the Linux container if needed.\n\n## Done when\nThe cause is found and fixed (or the test made independent of it), without retrying or skipping the test.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/lib.rs",
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T02:26:30Z",
+      "updated_at": "2026-11-17T02:31:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14185,6 +14192,12 @@
           "kind": "answer",
           "text": "Fix A: pre-fill Tauri’s asset cache from app/src-tauri/build.rs (one `tauri_codegen::context_codegen` call with the app’s config, before either compile), adding `tauri-codegen` (already in Cargo.lock through Tauri) as a direct build-dependency. Fix B: in ci.yml, run `cargo build --locked` before clippy and test, so one compile fills the cache. Which do you want (or both)? → A: pre-fill Tauri’s asset cache from app/src-tauri/build.rs, with tauri-codegen as a direct build-dependency (approved by Hakan, 2026-11-17).; May I open an issue on tauri-apps/tauri about the cache being written in place (no temp file and rename), with the cause above? → Not answered: no Tauri issue for now.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T02:31:28Z",
+          "kind": "outcome",
+          "text": "Cause: tauri-codegen’s asset cache is written in place when missing, and cargo test / clippy --all-targets expand generate_context! twice at once. Fix A (approved): build.rs runs tauri_codegen::context_codegen once first (tauri-codegen =2.7.4, tauri-macros’ own), the macro then finds every file whole; a test guards one tauri-codegen in Cargo.lock. Same file names checked (3 HTML per cache).",
+          "by": "claude:0f56a916"
         }
       ],
       "blocks": [
@@ -14195,7 +14208,10 @@
         }
       ],
       "started_at": "2026-11-17T02:26:30Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "1ad28b0408d8fc49dc3bccf5804ba11bf8e83a0b",
+      "completed_at": "2026-11-17T02:31:28Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd223764546",

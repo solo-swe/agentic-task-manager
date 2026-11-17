@@ -84,9 +84,8 @@ jobs:
         run: |
           cargo install cargo-deny --locked --version 0.20.2
           cargo deny check
-      # Not on Windows until T-482
+      # On the three platforms (ATM-482, approved by Hakan 2026-11-17)
       - name: The suite
-        if: runner.os != 'Windows'
         run: node tests/scripts/run.mjs
       # Large task files (1k and 10k tasks): fails only far over generous limits (tests/scripts/bench.mjs)
       - name: Benchmark atm
