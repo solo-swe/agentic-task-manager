@@ -1839,7 +1839,7 @@
       "labels": [
         "code-review"
       ],
-      "description": "Write a design, reviewed with Hakan, for code and document reviews built into atm and its dashboard, recorded in the project, so they can replace Crit fully: a person reviews a task's diff (or a plan, a document, a PR) in the dashboard, leaves comments on lines or quoted text, and finishes a round; agents wait for that, read the comments, reply, change the code and start the next round.\n\n## Questions to settle\n- **What is reviewed:** a task's commits, a branch against its base, a PR, a single document; how rounds work (a new round after the agent's changes; comments that drift when lines move: anchors and quotes).\n- **Where it is recorded:** in `.agentic-task-manager/` (e.g. a reviews file or folder per task), committed and merged by atm's merge driver; how it relates to the task's review state (`atm review`, `approve`, `request-changes`) and notes.\n- **Writing from the browser:** the dashboard only reads today ([I11](docs/security-architecture.md#:~:text=Nothing%20changes%20state%20over%20HTTP): nothing changes state over HTTP). Comments need writes: what a write route would be (loopback only, the Host check, a per-session token against CSRF from other pages, which fields it may change), or another way (comments written by `atm` from the browser's form through a local helper). The threat model and invariants in [`docs/security-architecture.md`](docs/security-architecture.md) change with it.\n- **Agents:** atm commands to list, add and reply to comments and resolve them (`atm comments`, `atm comment --reply-to`), and to **wait for a state change** (a round finished, approved) without polling by hand (`atm review wait <id>`, keeping the claim alive like `atm run`); how the skills use them; review comments are task text ([I1](docs/security-architecture.md#:~:text=Task%20text%20is%20data%2C%20not%20commands)), never instructions to run.\n- **The dashboard:** a diff view (files, side by side or unified), inline comments and threads, finishing a round, approving; Markdown documents rendered (CompMD, T-284).\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md` with requirements, options and choices, the security changes spelled out, and the follow-up tasks proposed through `/atm:create-tasks` once approved.\n",
+      "description": "Write a detailed design, reviewed with Hakan (in Crit), for a **full-fledged code review tool built into atm**, recorded in the project, to replace Crit. Hakan's requirements (2026-11-17) are below; the design works them out and checks them against the use cases.\n\n## Sections the design has\nProblem, context, proposal, risks, open issues, alternatives considered; and an **appendix of customer use cases / scenarios**, walked through to show the proposal covers each.\n\n## Hakan's requirements (2026-11-17)\n\n### Storage\n- Review records are **stored locally, in the project**. The storage is abstracted like the tasks' store (the JsonGit store of atm-db), but the first implementation is files:\n  - a **`reviews/` folder under `.agentic-task-manager/`**;\n  - **one folder per review, named `CR-1`, `CR-2`, …**: the numbering is **local to the project**;\n  - each review's folder holds the **diffs of each round** and the **comments**;\n  - the **comments file** (per round? to decide) is a **concise, human-readable representation of each comment chain**, each starting with the **file and range** it is about;\n  - each review has a **header section**: a **summary of the changes**, and the review's **status** (approved, sent back for fixes, …).\n\n### Tasks and reviews\n- A task **in review** shows **clickable CR links**.\n- When a review is **approved** or **sent back**, that is reflected in the **task's review status**.\n\n### The code reviews section\n- atm has a **code reviews section, separate from tasks**, with a **search view** and **process capability** (working through reviews).\n- A **diff to review** can be a **commit range**, or **unstaged / uncommitted changes**.\n- While reviewing, options to render code and documents as **Crit** does: **source, rendered, split, unified**, **jump to the next / previous change**, **mark files viewed**, and so on.\n- A review **opens in its own tab**.\n- The **Tauri app's sidebar** has a **tab for CRs**.\n- **Several rounds** of one CR: see the **whole diff**, or the **diff between selected rounds**.\n- When comments are **submitted, agents can listen and respond**.\n- **Markdown renders with CompMD**, as the document viewer does.\n\n### Architecture\nThree components in atm, **separable when needed into separate apps** (separate crates and Svelte components) **without too much effort**:\n1. **Task manager**: what atm is today.\n2. **Document viewer**: what task-referenced documents use today.\n3. **Code review tool**: uses (2), and relates to (1).\n\n## Questions the earlier draft of this task raised (still to settle in the design)\n- **Writing from the browser:** the dashboard only reads today ([I11](docs/security-architecture.md#:~:text=Nothing%20changes%20state%20over%20HTTP)); comments need writes. In the app, Tauri commands (IPC); in the browser, a write route (loopback, the Host check, a per-session token against CSRF), or read-only there. The threat model and invariants in [`docs/security-architecture.md`](docs/security-architecture.md) change with it.\n- **Agents:** atm commands to list, add, reply to and resolve comments, and to **wait for a state change** (a round finished, approved) without polling by hand, keeping the claim alive; how the skills use them. Review comments are task text ([I1](docs/security-architecture.md#:~:text=Task%20text%20is%20data%2C%20not%20commands)): data, never instructions to run.\n- **Merging:** review records on branches, merged by atm's merge driver or kept per branch.\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md`, reviewed with Hakan in Crit; once approved, the follow-up tasks through `/atm-create-tasks`.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -1848,7 +1848,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-17T01:47:59Z",
+      "updated_at": "2026-11-17T02:51:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9469,7 +9469,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-17T02:50:33Z",
+      "updated_at": "2026-11-17T02:51:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9512,7 +9512,8 @@
         }
       ],
       "started_at": "2026-11-17T02:50:33Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "ab376f5992e7ad91909912dd18db1eeceaef2379"
     },
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
@@ -9815,7 +9816,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T08:09:05Z",
-      "updated_at": "2026-11-17T01:47:59Z",
+      "updated_at": "2026-11-17T02:52:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "with": "user",
@@ -9825,7 +9826,15 @@
           "from": "2026-11-17T01:47:59Z"
         }
       ],
-      "sprint": "Keys follow-ups and housekeeping"
+      "sprint": "Keys follow-ups and housekeeping",
+      "notes": [
+        {
+          "at": "2026-11-17T02:52:07Z",
+          "kind": "note",
+          "text": "Hakan, 2026-11-17: start the CI review from what was learned (the Rust port, the releases, 0.38.0’s flaky runs: the macOS lock timeout ATM-481, the Linux asset cache race ATM-559, Windows ATM-482), propose the changes, then block on him for the decisions he has to give.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "2238c9b2-a361-848f-ac56-42807145ee8b",
