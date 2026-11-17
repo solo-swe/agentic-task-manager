@@ -135,7 +135,9 @@
 
   {#if project.missing}
     <p class="project-card-note">
-      Not found: its folder or tasks.json is gone. Remove it with <code>atm projects remove {project.id}</code>.
+      Not found: its folder or tasks.json is gone. Remove it with <code
+        >atm workspace prune{dashboard.workspace === 'default' ? '' : ` ${dashboard.workspace}`}</code
+      >.
     </p>
   {:else if !s}
     <p class="project-card-note">No numbers yet</p>

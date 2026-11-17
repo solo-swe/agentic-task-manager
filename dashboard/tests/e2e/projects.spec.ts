@@ -576,7 +576,7 @@ test.describe('projects', () => {
   test('a project whose folder is gone says how to remove it', async ({ page, tasksServer }) => {
     tasksServer.addProject('open', 'minimal', 'Open', summary()).goneProject('old1234', 'Old Project');
     await openDashboard(page, tasksServer, 'standard');
-    await expect(page.locator('.project-card[data-id="old1234"]')).toContainText('atm projects remove old1234');
+    await expect(page.locator('.project-card[data-id="old1234"]')).toContainText('atm workspace prune.');
   });
 
   test('a project the server doesn’t list has its own page, with a way back to all projects', async ({

@@ -9405,14 +9405,14 @@
       "description": "Found in T-480 on `dev/0.33.0-switch`. `tests/scripts/stress.test.mjs` (16 concurrent agents in two worktrees) fails on CI's Windows runner and passes on Linux and macOS.\n\n## What CI showed\n- With atm's 10 s lock wait: agents time out waiting for the lock (`timed out waiting for the lock …/wt2/.agentic-task-manager/.lock`).\n- With the test's lock wait raised to 60 s on Windows (decided with Hakan, `ATM_LOCK_TIMEOUT`): the test fails after 29 s, with the cleanup's `EPERM` on the test's folder, which hides the assertion underneath: some process still has the folder open.\n\n## To find\n- What still holds the folder: an atm process that outlives the test (a `claim hold` watcher not ending with its shell on Windows is a suspect: the same `EPERM` shows in `claims.test.mjs`'s watcher test), or a slow exit.\n- Whether the lock is slow on Windows (git and process starts there are several times slower), and whether agents queue longer than they should.\n\n## Done when\nThe test passes on CI's Windows runner, ideally at atm's default lock wait.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "tests/scripts/stress.test.mjs",
         "crates/atm-db/src/jsongit/lock.rs"
       ],
       "created_at": "2026-11-08T00:38:28Z",
-      "updated_at": "2026-11-17T02:05:47Z",
+      "updated_at": "2026-11-17T02:09:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9424,6 +9424,12 @@
           "kind": "note",
           "text": "Also on macOS CI, twice on 2026-11-08 (runs 42433227055 on `dev/0.33.0`, 42439602611 on `dev/0.32.0`), each passing on another run: agent-16 timed out on atm’s 10 s lock wait in `wt2`. So the lock queues too long under 16 agents on slow runners, not only on Windows.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-17T02:09:05Z",
+          "kind": "outcome",
+          "text": "The lock’s queue: the wait starts again when the lock changes hands (owner.json’s new token), up to 6× the wait; unit tests for both. The macOS CI timeout is this; the Windows run is checked in ATM-482 (the suite isn’t run on Windows CI until then), which also owns the EPERM (claim watcher).",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -9434,7 +9440,10 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "started_at": "2026-11-17T02:05:47Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "c6e6c0463cc2fe9d9abf5f26f4c84f0d6b5c0079",
+      "completed_at": "2026-11-17T02:09:05Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "9153a747-c75d-8428-b697-bb04fcd9768c",
@@ -9449,7 +9458,7 @@
       "description": "Left over from T-480 (on `dev/0.33.0-switch`). T-480 took the suite on CI's Windows runner from 40 failures and two hanging files to a handful; CI's Windows job runs `cargo test` but not the suite until this task.\n\n## Still failing (CI run 42429818032, before T-480's last push)\n- `claims.test.mjs`: `claim hold`'s watcher doesn't end with its shell on Windows (its folder can't be removed afterwards, `EPERM`). The watcher follows its shell by process ID; under Git's `sh` (MSYS) the Windows parent of `atm.exe` may not be the shell. Likely also what keeps T-481's folder busy.\n- `serve.test.mjs`: still runs into the watchdog (400 s on Windows); `start, reuse, status, stop` failed on the home ID (fixed in T-480's last push, `home_id` hashes the shown path: not yet seen on CI).\n- `claims.test.mjs` `worktrees of one clone share claims`: path spelling (fixed in T-480's last push, not yet seen on CI).\n- `dev-api.test.mjs`: the dev server's test on Windows (the API server's restart after a rebuild, and its stop when Vite is ended at once).\n- `stress.test.mjs`: T-481 (skipped on Windows until then).\n\n## Done when\nThe suite passes on CI's Windows runner, and `.github/workflows/ci.yml` runs it there again (the `if` on the suite step goes).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "9d40a6f4-f771-86d4-8e8c-ed80bcf6d10b"
       ],
@@ -9460,7 +9469,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-17T02:09:00Z",
+      "updated_at": "2026-11-17T02:09:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9488,7 +9497,15 @@
           "from": "2026-11-17T01:47:59Z"
         }
       ],
-      "sprint": "Keys follow-ups and housekeeping"
+      "sprint": "Keys follow-ups and housekeeping",
+      "started_at": "2026-11-17T02:09:05Z",
+      "started_by": "claude:0f56a916",
+      "waiting_on": "user",
+      "questions": [
+        "It ends by changing `.github/workflows/ci.yml` (dropping the `if` that skips the suite on Windows): is that change yours to approve, and may I make it here?",
+        "The Windows failures can only be checked on CI’s Windows runner (no Windows here): may I push `dev/0.39.0` and dispatch CI runs on it while I fix them (`gh workflow run CI --ref dev/0.39.0`), a few rounds?"
+      ],
+      "blocked_at": "2026-11-17T02:09:12Z"
     },
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
@@ -14091,7 +14108,7 @@
       "description": "The dashboard's Help (`docs/help.md`, seen in the regenerated Help screenshots of 0.38.0) still says `atm projects` / `atm projects remove` (now `atm workspace …`) and \"Updating the plugin updates this dashboard\" (the plugin is retired since 0.32.0; atm and the app update it).\n\n## Change\nRead the whole Help against today's atm: the commands (`atm workspace`, `atm service`), the app, task keys (ATM-123, provisional keys), dependencies across projects, the refresh settings in the browser and live updates in the app. Keep its structure and tone; no command flags beyond what a user types.\n\n## Tests\nThe Help's unit and e2e tests; the Linux screenshots in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/help.md",
@@ -14099,9 +14116,9 @@
         "dashboard/tests/e2e/help.spec.ts"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T01:47:59Z",
+      "updated_at": "2026-11-17T02:09:13Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Keys follow-ups and housekeeping",
@@ -14110,7 +14127,9 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 558,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-17T02:09:13Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd197353e7a",
