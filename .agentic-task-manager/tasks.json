@@ -1233,9 +1233,10 @@
       },
       {
         "id": "Code reviews: records and CLI",
-        "state": "planned",
+        "state": "active",
         "goal": "Reviews recorded in the project through the CLI: agents open, wait for and watch reviews with atm review, and the skills use it instead of Crit; the document viewer becomes its own component, and the diff viewer is built on it",
-        "release": "0.40.0"
+        "release": "0.40.0",
+        "start": "2026-11-17T08:53:26Z"
       }
     ],
     "releases": [
