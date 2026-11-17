@@ -22,6 +22,8 @@ path = "src/lib.rs"
 [build-dependencies]
 tauri-plugin-compmd = { workspace = true, features = ["build"] }
 tauri-build.workspace = true
+# Fills Tauri's asset cache before the app compiles (ATM-559)
+tauri-codegen.workspace = true
 
 [dependencies]
 atm-common.workspace = true

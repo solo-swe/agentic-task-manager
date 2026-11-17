@@ -9,7 +9,7 @@ resolver = "3"
 # atm's version, the one source (T-477): the dashboard is stamped with it, and CHANGELOG.md and WHATS-NEW.md need an
 # entry for it (dashboard/scripts/check-versions.mjs). The dashboard's About dialog shows the description, the author,
 # the licence and the repository
-version = "0.38.0"
+version = "0.39.0"
 description = "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard."
 authors = ["Hakan Serce <hakanserce@gmail.com>"]
 edition = "2024"
@@ -65,6 +65,10 @@ dirs = "7"
 serde = { version = "1", features = ["derive"] }
 tauri = "2.12.5"
 tauri-build = "2.7.4"
+# The app's build script fills Tauri's asset cache once, before the app is compiled twice at once by `cargo test` and
+# `clippy --all-targets` (ATM-559, approved by Hakan 2026-11-17): the version tauri-macros uses, exactly, so its files
+# are the ones generate_context! looks for. Already in the tree through Tauri
+tauri-codegen = "=2.7.4"
 tauri-plugin-single-instance = "2.5.5"
 # The app's own updates (T-483, approved): Tauri's updater, its signed update manifest on each GitHub release. The
 # system's TLS (native-tls: Security.framework on macOS) rather than rustls, whose root certificates come as a crate

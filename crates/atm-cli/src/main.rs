@@ -9,21 +9,22 @@
 // backticks would show too (`in_progress`, `ATM_AGENT`)
 #![allow(clippy::doc_markdown)]
 
-// Everything atm prints goes through `output::clean`, so no control character of task text reaches the terminal:
-// these shadow std's macros in the whole crate (defined before its modules, as macros are scoped by their place).
+// Everything atm prints for people goes through `output::for_people`: no control character of task text reaches the
+// terminal (`clean`, I30), and a task named by its UUID shows by its key (ATM-557). These shadow std's macros in the
+// whole crate (defined before its modules, as macros are scoped by their place); JSON is printed with std's own.
 macro_rules! println {
     () => { ::std::println!() };
-    ($($arg:tt)*) => { ::std::println!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+    ($($arg:tt)*) => { ::std::println!("{}", crate::output::for_people(&::std::format!($($arg)*))) };
 }
 macro_rules! print {
-    ($($arg:tt)*) => { ::std::print!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+    ($($arg:tt)*) => { ::std::print!("{}", crate::output::for_people(&::std::format!($($arg)*))) };
 }
 macro_rules! eprintln {
     () => { ::std::eprintln!() };
-    ($($arg:tt)*) => { ::std::eprintln!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+    ($($arg:tt)*) => { ::std::eprintln!("{}", crate::output::for_people(&::std::format!($($arg)*))) };
 }
 macro_rules! eprint {
-    ($($arg:tt)*) => { ::std::eprint!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+    ($($arg:tt)*) => { ::std::eprint!("{}", crate::output::for_people(&::std::format!($($arg)*))) };
 }
 
 mod commands;
@@ -343,6 +344,8 @@ fn run(args: &[OsString]) -> u8 {
             return 1;
         }
     };
+    // The project whose task keys the printed lines use for its tasks' UUIDs (ATM-557)
+    output::set_project_dir(&cwd);
     if cli.command.refreshes_server() {
         // Never in the way of the command itself
         let _ = commands::maintenance::refresh_server(&atm_common::home::state_dir());

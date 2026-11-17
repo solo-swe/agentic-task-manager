@@ -61,6 +61,38 @@ fn main() {
     }
     tauri_build::try_build(attributes).expect("the app's Tauri build");
     embed_assets();
+    fill_tauri_asset_cache();
+}
+
+/// Tauri's asset cache, filled before the crate compiles (ATM-559). `generate_context!` compresses each of the
+/// dashboard's files into `OUT_DIR/tauri-codegen-assets/<hash>.<ext>`, writing a file in place when it isn't there yet.
+/// `cargo test` and `cargo clippy --all-targets` compile the library twice at once (the library itself and its tests),
+/// so one expansion could find the page there half-written by the other and embed it so: it wouldn't decompress, and
+/// the app would have no page. Running Tauri's own code generation here first, once, with what the macro uses (the
+/// config, and `dev` as Tauri's `custom-protocol` feature has it), writes every file whole before either compile; the
+/// macro then finds them all. Its generated code is thrown away.
+fn fill_tauri_asset_cache() {
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    // The dashboard's build, which the app embeds (the config's frontendDist)
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest.join("../../dashboard/dist").display()
+    );
+    let (config, config_parent) = tauri_codegen::get_config(&manifest.join("tauri.conf.json"))
+        .expect("the app's tauri.conf.json");
+    // reason: the root path only names the crate in the code thrown away; its type is proc-macro2's, which would be
+    // one more build-dependency just to spell `TokenStream::default()`
+    #[allow(clippy::default_trait_access)]
+    tauri_codegen::context_codegen(tauri_codegen::ContextData {
+        dev: tauri_build::is_dev(),
+        config,
+        config_parent,
+        root: Default::default(),
+        capabilities: None,
+        assets: None,
+        test: false,
+    })
+    .expect("Tauri's code generation, as generate_context! runs it");
 }
 
 /// Where the dashboard's `CompMD` build is: `dashboard/dist/assets/compmd/<version>/`.

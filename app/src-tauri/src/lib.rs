@@ -889,6 +889,22 @@ mod tests {
         );
     }
 
+    /// ATM-559: the build script fills Tauri's asset cache with its own `tauri-codegen`, so that must be the one
+    /// `generate_context!` (tauri-macros) uses: one version in the lockfile. Two would name the cache's files apart,
+    /// and the macro would write the page itself again, as two compiles at once can embed it half-written.
+    #[test]
+    fn the_build_script_fills_the_cache_with_the_macros_tauri_codegen() {
+        let lock = std::fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.lock"),
+        )
+        .expect("the lockfile");
+        let versions = lock.matches("name = \"tauri-codegen\"\n").count();
+        assert_eq!(
+            versions, 1,
+            "tauri-codegen in Cargo.lock {versions} times: pin the workspace's to tauri-macros' version"
+        );
+    }
+
     /// T-502: the policy Tauri serves the dashboard's page with lets it work as under `atm serve`: its inline styles
     /// and `style` attributes apply (a nonce would make the browser ignore `'unsafe-inline'`), and `CompMD` loads and
     /// fetches its files from atm's scheme and its frames' folder

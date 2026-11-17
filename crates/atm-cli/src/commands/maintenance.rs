@@ -39,7 +39,13 @@ const REAP_WAIT: Duration = Duration::from_secs(2);
 /// When there is no task data at all.
 pub fn doctor(files: bool, ctx: Context, cwd: &Path) -> Result<u8> {
     let result = check_project(&Project::open(cwd)?, files)?;
-    let (errors, warnings) = (&result.errors, &result.warnings);
+    // Messages name tasks as people know them, by key (ATM-557), in --json too (they are text, not data); before
+    // grouping, so the lines of keys are packed by the keys' width
+    let labeller = super::Labeller::open(cwd);
+    let label = |messages: &[String]| -> Vec<String> {
+        messages.iter().map(|m| labeller.text(m)).collect()
+    };
+    let (errors, warnings) = (&label(&result.errors), &label(&result.warnings));
     if ctx.json {
         print_json(&json!({"errors": errors, "warnings": warnings}));
     } else {
@@ -418,8 +424,9 @@ fn wait_gone(pid: u32, wait: Duration, kill: bool) -> bool {
 /// Stop a server of the user's (whose pid whoami confirmed): SIGTERM, then SIGKILL if it outlives the wait. Its record
 /// goes only once it is gone, and only if it is that server's: a server still running is never forgotten.
 fn stop_server(home: &Path, pid: u32) -> Result<()> {
-    let _ = signal_process(pid, false);
-    if !wait_gone(pid, STOP_WAIT, false) {
+    // Where there is no SIGTERM to send (Windows), straight to ending it, rather than waiting out STOP_WAIT for nothing
+    let asked = signal_process(pid, false);
+    if !asked || !wait_gone(pid, STOP_WAIT, false) {
         let _ = signal_process(pid, true);
         if !wait_gone(pid, KILL_WAIT, true) {
             return Err(Error::failed(format!(
@@ -433,11 +440,17 @@ fn stop_server(home: &Path, pid: u32) -> Result<()> {
     Ok(())
 }
 
-/// The atm servers answering on the usual ports (from `first_port`).
+/// The atm servers answering on the usual ports (from `first_port`), asked all at once: a port nothing listens on can
+/// take the whole timeout to answer (Windows: ATM-482), so one after the other they would add up to seconds.
 fn servers_on(first_port: u16) -> Vec<Map<String, Value>> {
-    (first_port..first_port.saturating_add(SCAN_PORTS))
-        .filter_map(|port| whoami(u64::from(port), Duration::from_millis(500)))
-        .collect()
+    std::thread::scope(|scope| {
+        let asks: Vec<_> = (first_port..first_port.saturating_add(SCAN_PORTS))
+            .map(|port| scope.spawn(move || whoami(u64::from(port), Duration::from_millis(500))))
+            .collect();
+        asks.into_iter()
+            .filter_map(|ask| ask.join().ok().flatten())
+            .collect()
+    })
 }
 
 /// The servers of this atm folder among `servers` that the record doesn't name: a server whose record was lost or

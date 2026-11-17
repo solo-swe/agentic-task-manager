@@ -16,13 +16,12 @@ const tasks = {
   tasks: ids.map((id) => ({ id, name: id, phase: 0, type: 'feature', status: 'todo', dependencies: [] })),
 };
 
-// 16 agents queue for one lock; on Windows, where starting git and atm is several times slower, the queue outlasts
-// atm's 10 s wait, so there it waits longer (decided with Hakan, T-480): this test is about correctness, not speed
-const LOCK_WAIT = process.platform === 'win32' ? { ATM_LOCK_TIMEOUT: '60' } : {};
+// 16 agents queue for one lock at atm's own wait: the wait starts again each time the lock changes hands (ATM-481), so
+// a long queue that moves, as on a slow runner, doesn't time out a waiter that keeps losing
 
 function atm(args, cwd, agent) {
   return new Promise((resolve) => {
-    const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_AGENT: agent, ...LOCK_WAIT } });
+    const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_AGENT: agent } });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));
@@ -44,60 +43,53 @@ async function worker(name, cwd, log) {
   }
 }
 
-// Fails on Windows: T-481 (decided with Hakan, T-480)
-const onWindows = process.platform === 'win32' && 'T-481: fails on Windows';
-
-test(
-  '16 concurrent agents in two worktrees: every task done exactly once, files always valid',
-  { skip: onWindows },
-  async () => {
-    const root = makeProject({ commit: true, files: { '.agentic-task-manager/tasks.json': tasks } });
-    const wt = path.join(tempDir(), 'wt2');
-    git(['worktree', 'add', '-q', '-b', 'agent-2', wt], root);
-    const watched = [root, wt].flatMap((dir) => [
-      path.join(dir, '.agentic-task-manager/tasks.json'),
-      path.join(dir, '.agentic-task-manager/claims.json'),
-    ]);
-    let reads = 0;
-    const torn = [];
-    const reader = setInterval(() => {
-      for (const file of watched) {
-        let text;
-        try {
-          text = fs.readFileSync(file, 'utf8');
-        } catch {
-          continue; // the snapshot doesn't exist until the first claim
-        }
-        reads++;
-        try {
-          JSON.parse(text);
-        } catch {
-          torn.push(`${file}: ${text.slice(0, 80)}`);
-        }
+test('16 concurrent agents in two worktrees: every task done exactly once, files always valid', async () => {
+  const root = makeProject({ commit: true, files: { '.agentic-task-manager/tasks.json': tasks } });
+  const wt = path.join(tempDir(), 'wt2');
+  git(['worktree', 'add', '-q', '-b', 'agent-2', wt], root);
+  const watched = [root, wt].flatMap((dir) => [
+    path.join(dir, '.agentic-task-manager/tasks.json'),
+    path.join(dir, '.agentic-task-manager/claims.json'),
+  ]);
+  let reads = 0;
+  const torn = [];
+  const reader = setInterval(() => {
+    for (const file of watched) {
+      let text;
+      try {
+        text = fs.readFileSync(file, 'utf8');
+      } catch {
+        continue; // the snapshot doesn't exist until the first claim
       }
-    }, 2);
-    try {
-      const log = [];
-      await Promise.all(Array.from({ length: WORKERS }, (_, i) => worker(`agent-${i + 1}`, i % 2 ? wt : root, log)));
-      clearInterval(reader);
-
-      const claimed = log.map(([, id]) => id).sort();
-      assert.deepEqual(claimed, ids, 'each task handed out exactly once');
-      // Each task is done in exactly one worktree's tasks.json (the other learns about it when the branches merge)
-      const doneIn = (dir) =>
-        JSON.parse(fs.readFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), 'utf8'))
-          .tasks.filter((t) => t.status === 'done')
-          .map((t) => t.id);
-      assert.deepEqual([...doneIn(root), ...doneIn(wt)].sort(), ids);
-      const store = JSON.parse(fs.readFileSync(path.join(root, '.git/atm/claims.json'), 'utf8'));
-      assert.deepEqual(store.claims, {});
-      assert.deepEqual(Object.keys(store.completed).sort(), ids);
-      assert.deepEqual(torn, [], 'readers saw a partially written file');
-      assert.ok(reads > 100, `the reader should have sampled the files often (${reads} reads)`);
-    } finally {
-      clearInterval(reader);
-      removeDir(root);
-      removeDir(path.dirname(wt));
+      reads++;
+      try {
+        JSON.parse(text);
+      } catch {
+        torn.push(`${file}: ${text.slice(0, 80)}`);
+      }
     }
-  },
-);
+  }, 2);
+  try {
+    const log = [];
+    await Promise.all(Array.from({ length: WORKERS }, (_, i) => worker(`agent-${i + 1}`, i % 2 ? wt : root, log)));
+    clearInterval(reader);
+
+    const claimed = log.map(([, id]) => id).sort();
+    assert.deepEqual(claimed, ids, 'each task handed out exactly once');
+    // Each task is done in exactly one worktree's tasks.json (the other learns about it when the branches merge)
+    const doneIn = (dir) =>
+      JSON.parse(fs.readFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), 'utf8'))
+        .tasks.filter((t) => t.status === 'done')
+        .map((t) => t.id);
+    assert.deepEqual([...doneIn(root), ...doneIn(wt)].sort(), ids);
+    const store = JSON.parse(fs.readFileSync(path.join(root, '.git/atm/claims.json'), 'utf8'));
+    assert.deepEqual(store.claims, {});
+    assert.deepEqual(Object.keys(store.completed).sort(), ids);
+    assert.deepEqual(torn, [], 'readers saw a partially written file');
+    assert.ok(reads > 100, `the reader should have sampled the files often (${reads} reads)`);
+  } finally {
+    clearInterval(reader);
+    removeDir(root);
+    removeDir(path.dirname(wt));
+  }
+});

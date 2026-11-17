@@ -71,7 +71,7 @@ with the task that adds it.
 | I7 | **A `--file` names one file**: git runs with literal pathspecs; whole-tree pathspecs are refused | `tests/scripts/git.test.mjs` |
 | I8 | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load | `tests/scripts/scenarios/security.json` |
 | I9 | **The merge driver's command comes from the clone's own git config**, never from the repository | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`) |
-| I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::clean` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's), which drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal" |
+| I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::for_people` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's; it also shows tasks named by UUID by their key, ATM-557), whose `output::clean` drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal" |
 
 ### Dashboard server (B3, B5)
 
@@ -96,7 +96,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I18 | **CI tokens are read-only by default; checkouts don't keep credentials.** The one exception is the release workflow's last job, which drafts the release and builds nothing (T-452) | `dashboard/tests/unit/ci-workflow.test.ts` |
-| I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`) and `cargo build --locked` exactly `Cargo.lock`, its crates checked by `cargo deny`; Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
+| I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version, CI's runner images by version (never a `-latest` label, ATM-487); installs take exactly the lockfile** (`pnpm install --frozen-lockfile`) and `cargo build --locked` exactly `Cargo.lock`, its crates checked by `cargo deny`; Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart). **The Rust build cache** (`Swatinem/rust-cache`, ATM-487) **is saved from `main` only**: a pull request, a fork's or a release branch's run reads main's cache and never writes one another run would read (cache poisoning); the release workflow uses no cache and builds from nothing | `ci-workflow.test.ts` (the pins, the runner images, `save-if` on every cache, no cache in the release workflows); `.github/dependabot.yml` |
 | I20 | **What users run is what was reviewed**: the dashboard and CompMD's runtime are never committed; CI and the release workflow build them from the reviewed sources (the lockfile, exactly) before the binary that embeds them (T-477); a release is built from a `v*` tag on `main`, the macOS builds signed and notarized, every archive in `SHA256SUMS`, and the formula's checksums are the release's (T-452). Nothing generated is committed since the Python atm went (T-454) | the `rust` jobs and `release.yml` build the dashboard first; `ci-workflow.test.ts` |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
 
@@ -1054,6 +1054,30 @@ checklist:
   `pnpm run check`; the CLI suite (646); the functional e2e suite (451); the Linux screenshots in Docker (84; Help's
   two regenerated).
 
+**Release 0.39.0 (the sprint Keys follow-ups and housekeeping, ATM-337, ATM-481, ATM-482, ATM-487, ATM-557 to
+ATM-560; ATM-519 back to the backlog).** The checklist:
+- **Skills and `docs/agent/`:** unchanged since 0.38.0. **atm output agents act on** changed in one way (ATM-557):
+  the lines printed for people name a project's tasks by key where they showed a UUID, and the task a status change
+  or `atm loop next` returns has its `key` in `--json` beside `id`. This written review takes the sandbox run's place
+  (no API key): the key is the task's own (resolved from the project's file, a UUID that isn't one of its tasks is
+  left as it is), the same text agents already read and act on since 0.38.0 (I1), and the output still goes through
+  `output::clean` (I30); `--json` prints exactly. Nothing new is read, run or written.
+- **Entry points, fields, CI permissions:** none new in atm. `atm service`'s port checks ask `127.0.0.1` only (atm's
+  server always listens there; the `[::1]` listener stays, so nobody else can take that address, F10). The lock's
+  `owner.json` gains a `token` (atm's own, compared, never run). CI (ATM-487): the token stays read-only (I18); a new
+  third-party action, `Swatinem/rust-cache` (pinned by SHA, saving from `main` only: I19, with its check), and runs on
+  every push to `dev/**`; the runner images pinned; `cargo-deny` a job of its own and a required check (the ruleset,
+  I21, renamed checks: applied on GitHub by the owner with the merge). New dependency, approved by Hakan:
+  `tauri-codegen` as the app's build dependency (ATM-559), pinned to tauri-macros' version; nothing at run time.
+- **What ships is what is described:** the dashboard's hints and the Help name today's commands (ATM-558; their
+  screenshots regenerated); the claim watcher ends with its shell on Windows too (ATM-482, I24 unchanged: it still
+  starts only its own binary). Dependabot alert #5 (`glib`, ATM-560) is analysed in §5 and left open: dismissing it
+  is the owner's call.
+- **Checks run:** `cargo test` (325), clippy, fmt and deny; the unit tests with coverage (1366, 95.4% of lines);
+  `pnpm run check`; the CLI suite (648); the functional e2e suite (451); the Linux screenshots in Docker (84; eight
+  regenerated for ATM-558: the Help, a blocked task's panel, the projects overview); CI's suite on Linux, macOS and
+  Windows.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
@@ -1086,3 +1110,9 @@ Such a PR adds the threat (with its boundary) and, if it needs one, the invarian
   - **Windows and Linux** (T-482 and later): deep links need the deep-link plugin there; I28's checks are the same.
   - **Accepted**: in the app a document's relative images show their alt text (T-457), and a reload on a deep page
     has no fallback page yet; neither reaches anything outside the window.
+- **Dependabot alert #5, `glib` < 0.20 (ATM-560, 2026-11-17):** unsound `Iterator` impls of `glib::VariantStrIter`.
+  `glib` 0.18.5 is in the build only through Tauri's Linux stack (`gtk` 0.18, the GTK 3 bindings tao, wry, webkit2gtk
+  and muda are built on); the gtk-rs releases with `glib` 0.20 dropped GTK 3, so no Tauri release moves it. Nothing
+  in the build calls the unsound code: no crate in the dependency tree but `glib` itself names `VariantStrIter` or
+  `Variant::array_iter_str` (searched in every crate's source), and atm's own code doesn't use `glib`. Not reachable,
+  so the alert can be dismissed as "vulnerable code not used" (Hakan's call); it goes when Tauri moves to GTK 4.

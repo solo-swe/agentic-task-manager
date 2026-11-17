@@ -170,6 +170,70 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
   }
 });
 
+test('every line for people names tasks by key, never by UUID; --json has the key too (ATM-557)', () => {
+  const root = makeProject({
+    files: {
+      [FILE]: {
+        meta: {
+          id: '3f2a9c1e',
+          project: 'Agentic Task Manager',
+          components: [{ id: 'cli', label: 'CLI', paths: ['src/**'] }],
+        },
+        tasks: [
+          { id: 'T-001', name: 'one', type: 'feature', status: 'done', files: ['docs/x.md'] },
+          { id: 'T-002', name: 'two', type: 'feature', status: 'todo', files: ['docs/y.md'] },
+          { id: 'T-003', name: 'three', type: 'feature', status: 'todo', dependencies: ['T-002'] },
+        ],
+      },
+    },
+    git: true,
+    commit: true,
+  });
+  const ANY_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+  const ok = (args) => {
+    const r = runAtm(args, root);
+    assert.ok(r.code === 0 || (args[0] === 'doctor' && r.code <= 1), `${args.join(' ')}: ${r.stderr}`);
+    // JSON holds the UUID on purpose (`id`); a line for people never does
+    if (!args.includes('--json'))
+      assert.doesNotMatch(
+        r.stdout + r.stderr,
+        ANY_UUID,
+        `${args.join(' ')} names a task by UUID:\n${r.stdout}${r.stderr}`,
+      );
+    return r.stdout;
+  };
+  try {
+    ok(['project', 'key', 'set', 'ATM']);
+    // The backlog's table, by key
+    assert.match(ok(['sprint', 'backlog']), /^ATM-2 +todo/m);
+    // Doctor's grouped warning: its tasks' keys
+    assert.match(ok(['doctor']), /its files match no component.*\n {2}ATM-1 ATM-2/);
+    // Moving into a sprint says which task moved, by key
+    ok(['sprint', 'add', 'Next']);
+    assert.match(ok(['sprint', 'move', 'ATM-2', '--to', 'Next']), /^ATM-2: backlog -> Next$/m);
+    ok(['sprint', 'start', 'Next']);
+    for (const args of [
+      ['sprint', 'list'],
+      ['project', 'status'],
+      ['project', 'status', '--all'],
+      ['task', 'list', '--blocked'],
+      ['task', 'deps', 'ATM-3'],
+    ])
+      ok(args);
+    // The loop's and a state change's JSON carry the key beside the UUID
+    const next = JSON.parse(ok(['loop', 'next', '--claim', '--json']));
+    assert.equal(next.task.key, 'ATM-2');
+    assert.match(next.task.id, ANY_UUID);
+    ok(['claim', 'list']);
+    const done = JSON.parse(runAtm(['task', 'state', 'ATM-2', 'done', '--json'], root).stdout);
+    assert.equal(done.key, 'ATM-2');
+    // Done says what it made ready, by key
+    assert.match(ok(['task', 'state', 'ATM-3', 'in_progress']), /^ATM-3: todo -> in_progress$/m);
+  } finally {
+    removeDir(root);
+  }
+});
+
 test('a key becomes final once its task is on origin’s base branch, read from git (T-542)', () => {
   const remote = tempDir('atm-remote-');
   const root = makeProject({
@@ -370,9 +434,48 @@ test('two projects with one key: refused by key, named by UUID, shown by UUID, w
   }
 });
 
-test('migrate --keys on a copy of this repository’s own task files loses nothing', () => {
+// This repository's own files were keyed ATM on 2026-11-17 (`atm project key set ATM`), so a copy of them can't be keyed
+// again: what is checked of them now is that they came through whole. A file still of IDs (another checkout) gets
+// the migration check below.
+test('this repository’s own task files, keyed: a UUID and one number each, known references, old IDs still found', () => {
   const own = JSON.parse(fs.readFileSync(path.join(REPO, FILE), 'utf8'));
   const ownArchive = JSON.parse(fs.readFileSync(path.join(REPO, ARCHIVE), 'utf8'));
+  if (own.meta.format !== 2) return;
+  const root = makeProject({ files: { [FILE]: own, [ARCHIVE]: ownArchive } });
+  try {
+    assert.equal(own.meta.key, 'ATM');
+    assert.deepEqual(own.meta.key_history, ['T']);
+    const all = [...own.tasks, ...ownArchive.tasks];
+    const known = new Set(all.map((t) => t.id));
+    const numbers = new Set();
+    for (const t of all) {
+      assert.match(t.id, UUID, t.name);
+      assert.ok(Number.isInteger(t.number) && !numbers.has(t.number), `${t.name}: number ${t.number} once`);
+      numbers.add(t.number);
+      for (const d of [...(t.dependencies ?? []), ...(t.related ?? [])])
+        if (!d.includes(':')) assert.ok(known.has(d), `${t.name}: ${d} is a task of the project`);
+    }
+    assert.ok(own.meta.next_number > Math.max(...numbers));
+    // The old IDs still find their tasks, an archived one too (T-413 is archived later, T-556 is in the file)
+    for (const [old, key] of [
+      ['T-556', 'ATM-556'],
+      ['T-1', 'ATM-1'],
+    ]) {
+      const r = runAtm(['task', 'details', old, '--json'], root);
+      assert.equal(r.code, 0, `${old}: ${r.stderr}`);
+      assert.equal(JSON.parse(r.stdout)[0].key, key, old);
+    }
+    const doctor = JSON.parse(runAtm(['doctor', '--json'], root).stdout);
+    assert.deepEqual(doctor.errors, []);
+  } finally {
+    removeDir(root);
+  }
+});
+
+test('migrate --keys on a copy of this repository’s own task files loses nothing (while they are of IDs)', () => {
+  const own = JSON.parse(fs.readFileSync(path.join(REPO, FILE), 'utf8'));
+  const ownArchive = JSON.parse(fs.readFileSync(path.join(REPO, ARCHIVE), 'utf8'));
+  if (own.meta.format === 2) return;
   const root = makeProject({ files: { [FILE]: own, [ARCHIVE]: ownArchive } });
   try {
     const r = runAtm(['project', 'key', 'set', 'ATM', '--json'], root);

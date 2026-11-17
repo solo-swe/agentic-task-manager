@@ -281,10 +281,7 @@ fn hold(args: &HoldArgs, ctx: Context, cwd: &Path) -> Result<()> {
         .every
         .unwrap_or((renewed.minutes * 60.0 / 3.0).max(60.0));
     // The shell that ran atm: atm's parent (the launchers exec)
-    #[cfg(unix)]
-    let shell = std::os::unix::process::parent_id();
-    #[cfg(not(unix))]
-    let shell = 0;
+    let shell = crate::process::shell_pid();
     #[allow(clippy::cast_precision_loss)] // reason: seconds since 1970 fit an f64 exactly
     let deadline = real_now() as f64 + args.max_minutes * 60.0;
     let started = process_started(shell).unwrap_or(0);

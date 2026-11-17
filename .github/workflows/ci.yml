@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Pushes to main and to the release branches (ATM-487: runs are free for open source); a pull request runs too, so
+  # with one open a push to its branch runs twice (the push's, the pull request's)
   push:
-    branches: [main]
+    branches: [main, "dev/**"]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -16,16 +18,24 @@ on:
 permissions:
   contents: read
 
+# A newer push cancels the run still going for the same branch (or pull request); main's runs all finish
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 defaults:
   run:
     working-directory: dashboard
 
 # Actions and images are pinned by commit SHA and digest (I19), pnpm by version; Dependabot (.github/dependabot.yml)
 # proposes updates for the actions and the dashboard's packages (its npm ecosystem reads pnpm-lock.yaml). The images are updated by hand: the Playwright image must match @playwright/test's version.
+# The runner images are pinned too (ATM-487), bumped by hand: a `-latest` label moves to a new image unannounced. The
+# jobs are named by platform, not by image, so a new image doesn't rename a required check (.github/rulesets/main.json,
+# which ci-workflow.test.ts checks against these names)
 jobs:
   check:
     name: Lint, unit tests, build freshness
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,12 +54,15 @@ jobs:
   # (tests/scripts/) against the binary. The runners' rustup installs the toolchain rust-toolchain.toml pins (no
   # third-party action)
   rust:
-    name: Rust (${{ matrix.os }})
+    name: Rust (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - { platform: Linux, os: ubuntu-24.04 }
+          - { platform: macOS, os: macos-15 }
+          - { platform: Windows, os: windows-2025 }
     defaults:
       run:
         working-directory: .
@@ -58,6 +71,11 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup show active-toolchain
+      # The build's cache, per platform (ATM-487): saved from main only, so a pull request or a branch reads main's and
+      # never writes one another run would read (docs/security-architecture.md I19). Never in the release workflow
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # The atm app (T-455) is in the workspace and builds on the system's webview: WebKitGTK on Linux (macOS and
       # Windows have theirs), from Ubuntu's own packages
       - name: The webview's libraries
@@ -78,20 +96,32 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
       - run: cargo build --locked
-      # Licences, advisories, bans and sources of every dependency (cargo-deny at a pinned version, from crates.io)
-      - name: cargo-deny
-        if: runner.os == 'Linux'
-        run: |
-          cargo install cargo-deny --locked --version 0.20.2
-          cargo deny check
-      # Not on Windows until T-482
+      # On the three platforms (ATM-482, approved by Hakan 2026-11-17)
       - name: The suite
-        if: runner.os != 'Windows'
         run: node tests/scripts/run.mjs
       # Large task files (1k and 10k tasks): fails only far over generous limits (tests/scripts/bench.mjs)
       - name: Benchmark atm
         if: runner.os == 'Linux'
         run: node tests/scripts/bench.mjs --cli --check
+
+  # Licences, advisories, bans and sources of every dependency (cargo-deny at a pinned version, from crates.io), beside
+  # the Rust jobs rather than after one of them (ATM-487); it reads Cargo.lock and builds nothing of atm's
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # cargo-deny's own build, cached as the Rust jobs' are (saved from main only)
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo install cargo-deny --locked --version 0.20.2
+      - run: cargo deny check
 
   # The binary the e2e job's fixture runs (its task views and summaries are atm's own): built on the oldest Ubuntu the
   # release supports, so it runs in the Playwright image too
@@ -124,7 +154,7 @@ jobs:
   e2e:
     name: Playwright regression suite
     needs: atm-linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Pinned image = pinned fonts/rendering, so Linux screenshot baselines are reproducible
     container: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
     steps:
@@ -168,11 +198,17 @@ jobs:
         run: |
           echo "::error::Linux screenshot baselines were generated, not compared. Download the linux-screenshot-baselines artifact, commit its new *-linux.png files under dashboard/tests/e2e/__screenshots__/, and push."
           exit 1
+      # The functional suite and the screenshots as two steps (ATM-487), so a run whose only failures are screenshots
+      # changed on purpose (regenerated in the release task) says so, and the functional result isn't hidden by them
       - name: Run e2e tests
+        id: functional
         if: steps.baselines.outputs.generate == 'false'
-        run: pnpm exec playwright test
+        run: pnpm exec playwright test --grep-invert visual
+      - name: Compare the screenshots
+        if: ${{ !cancelled() && steps.baselines.outputs.generate == 'false' }}
+        run: pnpm exec playwright test visual
       - name: Benchmark the dashboard
-        if: steps.baselines.outputs.generate == 'false'
+        if: ${{ !cancelled() && steps.functional.outcome == 'success' }}
         run: pnpm run bench --dashboard --check
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ failure() }}

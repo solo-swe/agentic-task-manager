@@ -230,7 +230,7 @@ describe('DetailPanel', () => {
       'REST or GraphQL?',
       'Which DB?',
     ]);
-    expect(section).toHaveTextContent('atm unblock T-005 --answer');
+    expect(section).toHaveTextContent("atm task state T-005 todo --answer '…'");
   });
 
   it('says who created, started and completed it, and who tried before', () => {

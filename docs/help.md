@@ -1,6 +1,7 @@
 This dashboard shows the tasks of every project you use atm in, from each project's
-`.agentic-task-manager/tasks.json`, live: it reloads every 5 seconds while agents work through the tasks (and does
-nothing when nothing changed). It only reads the files; agents and the `atm` command change them.
+`.agentic-task-manager/tasks.json`, live: in the atm app it follows each change as it happens, and in a browser it
+reloads every 5 seconds while agents work through the tasks (and does nothing when nothing changed). It only reads the
+files; agents and the `atm` command change them.
 
 Jump to: [your projects](#your-projects), [the views](#views), [filters and saved views](#filters-and-saved-views),
 [statuses](#statuses-and-kinds), [waiting on you](#waiting-on-you), [priorities and labels](#priorities-and-labels),
@@ -13,19 +14,23 @@ Jump to: [your projects](#your-projects), [the views](#views), [filters and save
 - **The arrow next to the title** switches projects. Type to filter the list; a bar shows each project's progress and
   a dot marks the ones with something waiting for you. A badge on the arrow counts what waits for you in the other
   projects.
-- **All projects** (first in that list) shows a card per project: its progress, the phase it is in, the agents at work,
-  what needs you and when it last moved. Click a card to open the project, or its "need you" to see those tasks on its
-  Kanban board. **Active only** hides projects with nothing open and nothing done in the last two weeks.
-- A project appears here once atm has run in it. `atm projects` lists them, and `atm projects remove` takes one off.
-- Updating the plugin updates this dashboard: when a new version is ready, a bar offers to reload.
+- **All projects** (first in that list) shows a card per project: its progress, the sprint it is in, the agents at
+  work, what needs you and when it last moved. Click a card to open the project, or its "need you" to see those tasks
+  on its Kanban board. **Active only** hides projects with nothing open and nothing done in the last two weeks.
+- A project appears here once atm has run in it. Projects are grouped in **workspaces**: `atm workspace projects`
+  lists a workspace's projects, `atm workspace remove-project` takes one off, and `atm workspace create` makes another
+  workspace.
+- Updating atm (with Homebrew, or the app's own update) updates this dashboard: when a new version is ready, a bar
+  offers to reload.
 
 ## The top bar
 
-- **Progress** — the share of tasks done. Click it for the split by status, phase and type.
+- **Progress** — the share of tasks done. Click it for the split by status, sprint and type.
 - **Activity** — tasks completed over time. Click it for the details: completions by type, agents at work, time per
   task and idle stretches, for a period you choose.
 - **N need you** — tasks waiting for your review or for your answer. Click it for the Kanban board.
-- **Refresh** — reload now, or change how often the dashboard reloads by itself.
+- **Refresh** — in a browser, reload now, or change how often the dashboard reloads by itself. The app needs none: it
+  shows each change as it happens.
 - **Appearance** — light or dark mode, one of 11 themes, picked from a drop-down list, and the document viewer's
   style.
 
@@ -34,18 +39,18 @@ Jump to: [your projects](#your-projects), [the views](#views), [filters and save
 - **Dependency Graph** — tasks as boxes, in the order their dependencies allow. Drag to move, use the buttons or
   Ctrl/⌘ + scroll to zoom. Click a task for its details.
 - **Kanban Board** — a column per status. To Do shows which tasks are ready and which one the loop takes next.
-  Group the board by phase, or show skipped tasks, with the options above it.
+  Group the board by sprint, or show skipped tasks, with the options above it.
 - **Task List** — every task as a card, in the file's order or by priority.
 - **Agents** — who worked on what, and when: a lane per agent (🤖) or person (👤), with a bar per task. A green mark
   at the end of a bar means someone else completed it, usually a reviewer approving it. Zoom and move the time range,
   or tick **Live** to follow the current time.
-- **Progress** — each phase's progress and an estimate of the agent work left, a burndown chart, and how busy the
+- **Progress** — each sprint's progress and an estimate of the agent work left, a burndown chart, and how busy the
   agents have been.
 
 ## Filters and saved views
 
-**Filters** narrows every view by phase, type, status, priority, stage, label and who started the task (the last
-three appear when the project uses them); the search box matches task IDs, names, descriptions, types and labels.
+**Filters** narrows every view by sprint, type, status, priority, stage, label and who started the task (the last
+three appear when the project uses them); the search box matches task keys, names, descriptions, types and labels.
 Within a group, any selected value matches; across groups, all must match. Each button says how many tasks it would
 show.
 
@@ -71,22 +76,22 @@ lists the ones this project uses.
 
 An agent that can't go on without a decision asks instead of guessing: the task is **Blocked**, and its card says
 **Waiting on you** (or **on an agent**), for how long, and how many questions. The task's details list the questions.
-Answer them in Claude Code, or with `atm unblock <id> --answer "…"` (one answer per question); the task goes back to
-To Do with your answers attached for the next agent.
+Answer them to your agent, or with `atm task state <key> todo --answer '…'` (one answer per question); the task goes
+back to To Do with your answers attached for the next agent.
 
-A task **In Review** waits for you to look at it: pass it with `atm done <id>`, or send it back with
-`atm reject <id> --reason "…"`.
+A task **In Review** waits for you to look at it: approve it with `atm task review approve <key>`, ask for changes with
+`atm task review request-changes <key> --reason '…'`, or reject it with `atm task review reject <key> --reason '…'`.
 
 ## Priorities and labels
 
-Agents take tasks phase by phase and, within a phase, the most urgent first:
+Agents take the active sprint's tasks, the most urgent first:
 
 - **P0** Critical / Required
 - **P1** High
 - **P2** Medium (tasks without a priority count as this)
 - **P3** Low / Nice to have
 
-**Labels** are tags that group tasks across phases and types, such as `spike-2` or `ux`. They show as small chips on
+**Labels** are tags that group tasks across sprints and types, such as `spike-2` or `ux`. They show as small chips on
 the cards, and the filter and the search find them.
 
 ## Task keys
@@ -165,7 +170,7 @@ depend on a task can start as soon as it is done.
 
 ## The archive
 
-Finished tasks pile up. `atm archive` moves old ones to `tasks-archive.json`, so `tasks.json` stays small and quick
+Finished tasks pile up. `atm db archive` moves old ones to `tasks-archive.json`, so `tasks.json` stays small and quick
 to read; agents do it when `atm` suggests it, and the footer says when the file has grown big enough. The header
 counts the archived tasks.
 

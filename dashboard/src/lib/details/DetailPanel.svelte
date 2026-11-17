@@ -500,7 +500,7 @@
             {#each block.questions as question, i (i)}<li><CompMd text={question} {task} inline /></li>{/each}
           </ol>
           <div style="color:var(--text-muted)">
-            Answer with <code>atm unblock {taskLabel(task)} --answer "…"</code>, one per question.
+            Answer with <code>atm task state {taskLabel(task)} todo --answer '…'</code>, one per question.
           </div>
         {/if}
       </div>

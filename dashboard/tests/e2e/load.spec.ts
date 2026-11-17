@@ -62,7 +62,7 @@ test.describe('loading tasks.json', () => {
     tasksServer.noProjects();
     await page.goto('/');
     await expect(page.locator('#no-projects')).toContainText('/atm-create-tasks');
-    await expect(page.locator('#no-projects')).toContainText('atm projects add <path>');
+    await expect(page.locator('#no-projects')).toContainText('atm workspace add-project');
   });
 
   test('a malformed tasks.json is shown as far as atm reads it, with what is wrong (T-377)', async ({

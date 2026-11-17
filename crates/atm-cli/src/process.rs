@@ -31,6 +31,48 @@ pub fn pid_exists(pid: u32) -> bool {
     system.process(pid).is_some()
 }
 
+/// The shell that ran atm, 0 when it can't be found (ATM-482: without it, a claim's watcher on Windows followed pid 0,
+/// and outlived its shell). On Unix atm's parent, the kernel's answer. On Windows from sysinfo's process list, and one
+/// level further up when the parent's parent is the same program: Git Bash (MSYS, as Claude Code's shell there) runs a
+/// program that isn't the line's last command from a forked copy of itself, which stays only until the program ends,
+/// so the shell that goes on running the line is that copy's parent.
+#[must_use]
+pub fn shell_pid() -> u32 {
+    #[cfg(unix)]
+    {
+        std::os::unix::process::parent_id()
+    }
+    #[cfg(not(unix))]
+    {
+        let Ok(mut system) = sysinfo::System::new() else {
+            return 0;
+        };
+        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        let parent_of = |pid: u32| {
+            system
+                .process(sysinfo::Pid::from_u32(pid))
+                .and_then(sysinfo::Process::parent)
+                .map(sysinfo::Pid::as_u32)
+        };
+        let name_of = |pid: u32| {
+            system
+                .process(sysinfo::Pid::from_u32(pid))
+                .map(|p| p.name().to_string_lossy().to_lowercase())
+        };
+        let Some(parent) = parent_of(std::process::id()) else {
+            return 0;
+        };
+        match parent_of(parent) {
+            Some(grandparent)
+                if name_of(parent).is_some() && name_of(parent) == name_of(grandparent) =>
+            {
+                grandparent
+            }
+            _ => parent,
+        }
+    }
+}
+
 /// Ask process `pid` to stop (SIGTERM), or with `kill`, end it (SIGKILL). Whether the signal was sent.
 #[must_use]
 pub fn signal_process(pid: u32, kill: bool) -> bool {
@@ -59,5 +101,12 @@ mod tests {
         let me = std::process::id();
         assert!(pid_alive(me) && pid_exists(me));
         assert!(process_started(me).is_some_and(|t| t > 0));
+    }
+
+    #[test]
+    fn the_shell_is_a_running_process() {
+        let parent = shell_pid();
+        assert_ne!(parent, 0);
+        assert!(pid_alive(parent));
     }
 }
