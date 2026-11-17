@@ -8,6 +8,7 @@
 //!
 //! A component of its own (§3.1): it knows a task only as a key (a string), and depends on neither atm-db nor atm-lib.
 
+pub mod files;
 pub mod memory;
 pub mod model;
 pub mod rules;

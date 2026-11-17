@@ -88,6 +88,9 @@ specta-typescript = "=0.0.13"
 # The store's live changes (T-456, approved; atm-db's since T-555): the JSON store's watcher on its folders, its
 # events debounced
 notify = "8.2.1"
+# A review's header (review.md's front matter, docs/code-review-design.md §3.3; approved by Hakan in the design
+# review, ATM-562). Already in the tree through Tauri
+toml = "1.2"
 notify-debouncer-full = "0.7.0"
 
 [workspace.lints.rust]
