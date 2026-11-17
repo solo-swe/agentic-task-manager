@@ -11,7 +11,8 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 - The server binds to `127.0.0.1` only.
 - **Host check.** A request whose `Host` header isn't `localhost:<port>` or `127.0.0.1:<port>` (the server's own port)
   gets `403` with `{"error": "unexpected Host header"}`, whatever the path. This blocks DNS rebinding.
-- Only `GET` and `HEAD`. Anything else gets `405`.
+- `GET` and `HEAD`; `POST`, `PATCH` and `PUT` only on a project's reviews, from atm's own page (§2.9). Anything else
+  gets `405` (`OPTIONS` too: no CORS preflight is answered).
 - Every response has `Cache-Control: no-store`, except a project's logo (§2.3). No CORS headers are sent.
 - Error responses are JSON, `{"error": "<what went wrong>"}`, with `Content-Type: application/json`.
 - **Conditional requests.** Responses marked *ETag* below carry a strong `ETag`. A request with a matching
@@ -38,6 +39,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /api/v2/workspaces/<w>/projects/<id>/tasks` | as `api/v1/projects/<id>/tasks`, in that workspace | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/documents?path=`, `files?path=` | as the v1 file routes (§2.6) | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/claims`, `worktrees`, `logo` | as `/p/<id>/claims.json`, `worktrees.json`, `logo` | yes |
+| `POST`, `PATCH`, `PUT` `/api/v2/workspaces/<w>/projects/<id>/reviews/…` | a change to that project's code reviews, from atm's own page (§2.9) | no |
 | anything else | `404` | |
 
 The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/…`) are the `default` workspace's
@@ -227,6 +229,36 @@ old parameters from its hash and moves to the new address.
 - The app's commands answer the same (without `generated_at`): `list_workspaces`, `list_projects`, `search`,
   `project_tasks`, `claims`, `worktrees`, `document`, `file` and `logo`, and `subscribe_workspace`,
   `subscribe_project` and `unsubscribe` for live changes (docs/guides/tauri.md).
+
+### 2.9 A project's code reviews: the routes that change something (ATM-572)
+
+The only routes that change anything (docs/code-review-design.md §3.12), under
+`/api/v2/workspaces/<w>/projects/<id>/reviews`. Each is the same atm-lib call as its `atm review …` command, acting as
+the user at the machine (their git name, never an agent's identity), with the review's rules: its author can't decide
+it, only one's own text is changed, a review is approved only with every top-level comment resolved.
+
+| Method and resource | Body (JSON) | Does | Answers |
+|---|---|---|---|
+| `POST reviews` | `{title, summary?, tasks?, reviewers?, start?: open\|draft\|live, change: {range?: "BASE..HEAD", uncommitted?, base?, files?}}` | opens a review (`atm review create`, `live`) | `201`, its header |
+| `PATCH reviews/<CR>` | `{status: "closed", reason, reject_tasks?}` | closes it (`close`) | `200`, its header |
+| `PUT reviews/<CR>/tasks` | `{tasks: [<key>, …]}` | the tasks it reviews, as a whole (`tasks`) | `200`, its header |
+| `POST reviews/<CR>/decisions` | `{decision: approve\|request_changes\|comment, body?}` | a reviewer's decision (`submit`) | `201`, its header |
+| `POST reviews/<CR>/comments` | `{path?, lines?: [a, b], side?: new\|old, quote?, round?, body}` | a new chain (`comment`) | `201`, `{review, comment}` |
+| `PATCH reviews/<CR>/comments/<c>` | `{body}` or `{resolved}` | one's own text, or a top-level comment's box (`edit`, `resolve`) | `200`, `{review, comment}` |
+| `POST reviews/<CR>/comments/<c>/replies` | `{body}` | a reply (`reply`) | `201`, `{review, comment, reply_to}` |
+
+- **Only from atm's own page.** Besides the Host check (§1): an `Origin` that is the server's own
+  (`http://localhost:<port>` or `http://127.0.0.1:<port>`), this start's session token in `X-Atm-Session` (random, in
+  the page atm serves as `<meta name="atm-session" content="…">`; another site's page can't read it), and
+  `Content-Type: application/json`. Without them: `403` (`a change comes from atm's own page`, `no session token, or
+  not this server's`) or `415` (`the body is JSON`). The body is at most 1 MB (`413`).
+- **Bodies are exact**: a field a request doesn't take (another author, an action) gets `400`, as does a missing
+  one; texts are not empty and at most 100,000 characters; files are inside the repository; revisions are resolved to
+  commits before git sees them. A resource no route has gets `404`; a method a resource doesn't take `405`; what the
+  review's rules refuse `403`, `404` or `400`.
+- The app's commands do the same, one each (no session token: the app's own IPC, I25): `create_review`,
+  `close_review`, `set_review_tasks`, `submit_review_decision`, `add_review_comment`, `update_review_comment`,
+  `reply_to_review_comment`.
 
 ## 3. `GET /api/projects`
 

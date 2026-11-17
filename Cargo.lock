@@ -267,6 +267,7 @@ dependencies = [
  "compmd-host",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -362,6 +363,7 @@ dependencies = [
  "atm-docs",
  "atm-review",
  "atm-vcs",
+ "serde",
  "serde_json",
  "sysinfo",
 ]

@@ -308,6 +308,16 @@ impl Member {
         Workspace::project(&self.entry)
     }
 
+    /// The project, opened to act as the user at the machine (the app's and the browser's review requests, ATM-572):
+    /// never an agent's identity, whatever environment the server runs in.
+    ///
+    /// # Errors
+    /// As [`Project::open`].
+    pub fn project_as_user(&self) -> Result<Project> {
+        let root = folder(&self.entry);
+        Ok(Project::open(&root)?.with_actor(Some(crate::actor::user_identity(&root))))
+    }
+
     /// Its tasks the filters keep, each with its derived values, and in the same snapshot its meta and how big its
     /// task data is; read tolerantly (a malformed task file is shown with what is wrong with it, T-377).
     ///

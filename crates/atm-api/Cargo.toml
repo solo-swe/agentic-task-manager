@@ -14,6 +14,8 @@ axum.workspace = true
 compmd-host.workspace = true
 tokio.workspace = true
 serde_json.workspace = true
+# The session token the review write routes ask for (ATM-572): random, from the system's source (v4)
+uuid = { workspace = true, features = ["v4"] }
 
 [lints]
 workspace = true

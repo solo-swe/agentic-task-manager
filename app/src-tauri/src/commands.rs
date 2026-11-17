@@ -13,6 +13,7 @@ use crate::links::Links;
 use crate::menu::Menus;
 use crate::session::Session;
 use atm_lib::query::Filters;
+use atm_lib::review_requests;
 use atm_lib::workspaces::{Member, Workspace};
 use atm_lib::{OnChange, Subscription, Workspaces};
 use serde::{Deserialize, Serialize};
@@ -432,6 +433,191 @@ pub fn logo_of(workspaces: &Workspaces, w: &str, p: &str) -> Result<Option<FileD
         content_type: content_type.into(),
         data,
     }))
+}
+
+/// A review request's body, as the page sends it and the REST route takes it (ATM-572; atm-lib's `review_requests`
+/// reads it, refusing what doesn't fit).
+#[derive(Debug, Clone, PartialEq, Deserialize, Type)]
+#[serde(transparent)]
+pub struct ReviewRequest(#[specta(type = JsonShape)] pub Value);
+
+/// Project `p` of workspace `w`, opened to act as the user (never an agent's identity).
+fn as_user(workspaces: &Workspaces, w: &str, p: &str) -> Result<atm_lib::Project, AppError> {
+    Ok(member(workspaces, w, p)?.project_as_user()?)
+}
+
+fn header_json(header: &atm_lib::reviews::ReviewHeader) -> Result<Value, AppError> {
+    serde_json::to_value(header).map_err(|e| AppError::Failed(e.to_string()))
+}
+
+fn review_ref(review: &str) -> atm_lib::reviews::ReviewRef {
+    atm_lib::reviews::ReviewRef(review.to_string())
+}
+
+fn comment_id(comment: &str) -> atm_lib::reviews::CommentId {
+    atm_lib::reviews::CommentId(comment.to_string())
+}
+
+// The app's review commands (docs/code-review-design.md §3.12, ATM-572): each the REST route of the same name, the same
+// atm-lib call as its `atm review …` command, acting as the user. Only ever on the user's action in the page (a new
+// exception to I27, beside connecting agents and installing an update); CompMD's frames, which show the comments,
+// still call nothing (I25).
+
+/// `POST …/reviews`: a review opened (or a draft, or a live review).
+///
+/// # Errors
+/// No such workspace or project; a body that isn't one; what the review's rules refuse.
+#[tauri::command]
+#[specta::specta]
+pub async fn create_review(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    opening: ReviewRequest,
+) -> Result<Json, AppError> {
+    let mut project = as_user(&state.workspaces, &workspace, &project)?;
+    let opening = review_requests::request_from(opening.0)?;
+    header_json(&review_requests::open_review(&mut project, opening)?).map(Json)
+}
+
+/// `PATCH …/reviews/<CR>`: the review closed.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn close_review(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    closing: ReviewRequest,
+) -> Result<Json, AppError> {
+    let mut project = as_user(&state.workspaces, &workspace, &project)?;
+    let closing = review_requests::request_from(closing.0)?;
+    header_json(&review_requests::close_review(
+        &mut project,
+        &review_ref(&review),
+        &closing,
+    )?)
+    .map(Json)
+}
+
+/// `PUT …/reviews/<CR>/tasks`: the tasks it reviews, as a whole.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn set_review_tasks(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    tasks: Vec<String>,
+) -> Result<Json, AppError> {
+    let mut project = as_user(&state.workspaces, &workspace, &project)?;
+    let wanted = review_requests::ReviewTasks { tasks };
+    header_json(&review_requests::set_review_tasks(
+        &mut project,
+        &review_ref(&review),
+        &wanted,
+    )?)
+    .map(Json)
+}
+
+/// `POST …/reviews/<CR>/decisions`: a reviewer's decision.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn submit_review_decision(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    decision: ReviewRequest,
+) -> Result<Json, AppError> {
+    let mut project = as_user(&state.workspaces, &workspace, &project)?;
+    let decision = review_requests::request_from(decision.0)?;
+    header_json(&review_requests::submit_decision(
+        &mut project,
+        &review_ref(&review),
+        &decision,
+    )?)
+    .map(Json)
+}
+
+/// `POST …/reviews/<CR>/comments`: a new chain.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn add_review_comment(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    comment: ReviewRequest,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let comment = review_requests::request_from(comment.0)?;
+    let id = review_requests::add_comment(&project, &review_ref(&review), comment)?;
+    Ok(Json(json!({ "review": review, "comment": id })))
+}
+
+/// `PATCH …/reviews/<CR>/comments/<c>`: a comment's text (one's own), or its resolved box.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn update_review_comment(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    comment: String,
+    update: ReviewRequest,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let update = review_requests::request_from(update.0)?;
+    review_requests::update_comment(
+        &project,
+        &review_ref(&review),
+        &comment_id(&comment),
+        update,
+    )?;
+    Ok(Json(json!({ "review": review, "comment": comment })))
+}
+
+/// `POST …/reviews/<CR>/comments/<c>/replies`: a reply.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn reply_to_review_comment(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    comment: String,
+    body: String,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let reply = review_requests::NewReply { body };
+    let id = review_requests::reply_to_comment(
+        &project,
+        &review_ref(&review),
+        &comment_id(&comment),
+        &reply,
+    )?;
+    Ok(Json(
+        json!({ "review": review, "comment": id, "reply_to": comment }),
+    ))
 }
 
 /// atm's version.

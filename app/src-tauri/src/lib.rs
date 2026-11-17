@@ -23,6 +23,10 @@ use commands::{
     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
     subscribe_workspace, unsubscribe, version, worktrees,
 };
+use commands::{
+    add_review_comment, close_review, create_review, reply_to_review_comment, set_review_tasks,
+    submit_review_decision, update_review_comment,
+};
 use external::open_url;
 use menu::{menu, menu_state, subscribe_menu};
 use updates::{check_update, install_update, restart_app};
@@ -53,6 +57,13 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         unsubscribe::<tauri::Wry>,
         agents_status,
         connect_agents,
+        create_review,
+        close_review,
+        set_review_tasks,
+        submit_review_decision,
+        add_review_comment,
+        update_review_comment,
+        reply_to_review_comment,
         subscribe_links::<tauri::Wry>,
         check_update,
         install_update,
@@ -652,15 +663,7 @@ mod tests {
         let window = tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::default())
             .build()
             .expect("a window");
-        let request = |command: &str, args: &Value, url: &str| tauri::webview::InvokeRequest {
-            cmd: command.into(),
-            callback: tauri::ipc::CallbackFn(0),
-            error: tauri::ipc::CallbackFn(1),
-            url: url.parse().expect("a URL"),
-            body: tauri::ipc::InvokeBody::Json(args.clone()),
-            headers: tauri::http::HeaderMap::default(),
-            invoke_key: tauri::test::INVOKE_KEY.to_string(),
-        };
+        let request = ipc_request;
         // Each command reaches its atm-lib call: it answers what the plain function does. `work` is opened first, as
         // list_projects (last) opens it
         workspaces.opened("work").expect("recent.json");
@@ -729,6 +732,101 @@ mod tests {
             ),
         );
         assert!(remote.is_err(), "connect_agents answered a remote page");
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// A call of `command` with `args` from a page at `url`.
+    fn ipc_request(command: &str, args: &Value, url: &str) -> tauri::webview::InvokeRequest {
+        tauri::webview::InvokeRequest {
+            cmd: command.into(),
+            callback: tauri::ipc::CallbackFn(0),
+            error: tauri::ipc::CallbackFn(1),
+            url: url.parse().expect("a URL"),
+            body: tauri::ipc::InvokeBody::Json(args.clone()),
+            headers: tauri::http::HeaderMap::default(),
+            invoke_key: tauri::test::INVOKE_KEY.to_string(),
+        }
+    }
+
+    /// The review commands (ATM-572) reach atm-lib's review requests, which refuse a body that isn't the request and
+    /// a review that isn't there before changing anything; a page from anywhere else can't call them
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn the_review_commands_reach_atm_lib_and_only_from_the_apps_page() {
+        let home = a_state_with_a_project("review-ipc");
+        let app = tauri::test::mock_builder()
+            .manage(AppState::new(atm_lib::Workspaces::at(&home)))
+            .invoke_handler(tauri::generate_handler![
+                create_review,
+                close_review,
+                set_review_tasks,
+                submit_review_decision,
+                add_review_comment,
+                update_review_comment,
+                reply_to_review_comment,
+            ])
+            .build(context())
+            .expect("the mock app");
+        let window = tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::default())
+            .build()
+            .expect("a window");
+        let request = ipc_request;
+        let on = |extra: Value| {
+            let mut args = json!({"workspace": "work", "project": "abcd1234", "review": "CR-9"});
+            args.as_object_mut()
+                .expect("an object")
+                .extend(extra.as_object().expect("an object").clone());
+            args
+        };
+        let calls = [
+            (
+                "add_review_comment",
+                on(json!({"comment": {"body": "Why?"}})),
+            ),
+            (
+                "reply_to_review_comment",
+                on(json!({"comment": "c1", "body": "Done."})),
+            ),
+            (
+                "update_review_comment",
+                on(json!({"comment": "c1", "update": {"resolved": true}})),
+            ),
+            (
+                "submit_review_decision",
+                on(json!({"decision": {"decision": "approve"}})),
+            ),
+            (
+                "close_review",
+                on(json!({"closing": {"status": "closed", "reason": "No."}})),
+            ),
+            ("set_review_tasks", on(json!({"tasks": []}))),
+        ];
+        for (command, args) in &calls {
+            let missing =
+                tauri::test::get_ipc_response(&window, request(command, args, "tauri://localhost"))
+                    .expect_err(command);
+            assert_eq!(missing["kind"], json!("not_found"), "{command}: {missing}");
+            for elsewhere in ELSEWHERE {
+                assert!(
+                    tauri::test::get_ipc_response(&window, request(command, args, elsewhere))
+                        .is_err(),
+                    "{command} answered a page from {elsewhere}"
+                );
+            }
+        }
+        let not_one = tauri::test::get_ipc_response(
+            &window,
+            request(
+                "add_review_comment",
+                &on(json!({"comment": {"body": "x", "author": "claude:x"}})),
+                "tauri://localhost",
+            ),
+        )
+        .expect_err("not a comment");
+        assert_eq!(not_one["kind"], json!("invalid"), "{not_one}");
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 

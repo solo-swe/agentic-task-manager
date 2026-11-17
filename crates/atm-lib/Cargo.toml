@@ -15,6 +15,8 @@ atm-docs.workspace = true
 # Code reviews, and their link to tasks (docs/code-review-design.md §3.1, ATM-565)
 atm-review.workspace = true
 atm-vcs.workspace = true
+# The review writes the app and the browser send, read from their JSON (ATM-572)
+serde.workspace = true
 serde_json.workspace = true
 # The actor's host name (`user@host`, when nothing else names who works)
 sysinfo.workspace = true

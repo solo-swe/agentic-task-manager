@@ -1,6 +1,6 @@
 //! The dashboard server (the REST API; the Python atm's `api/server.py`): one per user, a detached process serving
 //! every registered project, on axum. It holds the dashboard page and its assets in memory (embedded in the binary)
-//! and answers only GET and HEAD, only for the Host `localhost:<port>` or `127.0.0.1:<port>` (DNS rebinding), with
+//! and answers GET and HEAD (and POST, PATCH and PUT on a project's reviews, from its own page only: ATM-572), only for the Host `localhost:<port>` or `127.0.0.1:<port>` (DNS rebinding), with
 //! the security headers and the page's Content-Security-Policy of docs/security-architecture.md I12–I13. Its routes
 //! and record are described in docs/multi-project-api.md. It never depends on the CLI: `atm service` starts it as a
 //! process (`atm _serve <home> <port>`).
@@ -46,6 +46,117 @@ struct Served {
     home: String,
     hashes: Vec<String>,
     projects: routes::Projects,
+    /// This start's session token (ATM-572): in the page it serves, asked of every write
+    session: String,
+    /// The page, with the session token in it
+    page: Vec<u8>,
+}
+
+/// The header a review change carries the session token in.
+const SESSION_HEADER: &str = "x-atm-session";
+/// The largest body a review change may send.
+const MAX_CHANGE_BYTES: usize = 1_000_000;
+
+/// The methods of the review routes that change something (`routes::serve_review_change`).
+fn changes_something(method: &Method) -> bool {
+    *method == Method::POST || *method == Method::PATCH || *method == Method::PUT
+}
+
+/// A random token for this start: 244 bits from the system's source, as two v4 UUIDs.
+fn session_token() -> String {
+    format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    )
+}
+
+/// The page with the session token in a `meta` tag the page reads (`atm-session`), right after `<head>`. Another
+/// site's page can't read it (the same-origin policy), so it can't change anything.
+fn with_session(page: &[u8], token: &str) -> Vec<u8> {
+    let text = String::from_utf8_lossy(page);
+    let tag = format!(r#"<meta name="atm-session" content="{token}">"#);
+    match text.find("<head>") {
+        Some(at) => {
+            let end = at + "<head>".len();
+            format!("{}{tag}{}", &text[..end], &text[end..]).into_bytes()
+        }
+        None => page.to_vec(),
+    }
+}
+
+/// Whether two tokens are equal, comparing every byte (no early exit to time).
+fn same_token(a: &str, b: &str) -> bool {
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
+}
+
+/// Why a review change is refused before anything is read (docs/code-review-design.md §3.12): it must come from the
+/// page this server served, with its token, as JSON. None when it may go on.
+fn review_change_refused(served: &Served, host: &str, headers: &HeaderMap) -> Option<Response> {
+    let value = |name: header::HeaderName| headers.get(name).and_then(|v| v.to_str().ok());
+    // The request's Origin is this server's own (the page atm serves; never another site, never none)
+    let port = served.port;
+    let origin_ok = value(header::ORIGIN).is_some_and(|o| {
+        o == format!("http://{host}")
+            && (o == format!("http://localhost:{port}") || o == format!("http://127.0.0.1:{port}"))
+    });
+    if !origin_ok {
+        return Some(send_error(
+            StatusCode::FORBIDDEN,
+            "a change comes from atm's own page",
+        ));
+    }
+    let token = headers.get(SESSION_HEADER).and_then(|v| v.to_str().ok());
+    if !token.is_some_and(|t| same_token(t, &served.session)) {
+        return Some(send_error(
+            StatusCode::FORBIDDEN,
+            "no session token, or not this server's",
+        ));
+    }
+    // JSON, which a plain form can't send
+    let json = value(header::CONTENT_TYPE).is_some_and(|t| {
+        let kind = t.split(';').next().unwrap_or_default().trim();
+        kind.eq_ignore_ascii_case("application/json")
+    });
+    if !json {
+        return Some(send_error(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "the body is JSON",
+        ));
+    }
+    None
+}
+
+/// A review change (ATM-572): checked, its body read (at most [`MAX_CHANGE_BYTES`]), then its route's atm-lib call
+/// off the async workers.
+async fn serve_checked_review_change(
+    served: Arc<Served>,
+    host: String,
+    request: Request,
+) -> Response {
+    if let Some(refused) = review_change_refused(&served, &host, request.headers()) {
+        return refused;
+    }
+    let method = request.method().clone();
+    let path = request.uri().path().to_string();
+    let Ok(bytes) = axum::body::to_bytes(request.into_body(), MAX_CHANGE_BYTES).await else {
+        return send_error(StatusCode::PAYLOAD_TOO_LARGE, "the body is too large");
+    };
+    let Ok(body) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return send_error(StatusCode::BAD_REQUEST, "the body isn't JSON");
+    };
+    tokio::task::spawn_blocking(move || {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            routes::serve_review_change(&served.projects, &method, &path, body)
+        }))
+        .unwrap_or_else(|_| send_error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"))
+    })
+    .await
+    .unwrap_or_else(|_| send_error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"))
 }
 
 /// A response as atm sends them: `Cache-Control: no-store` unless `headers` say otherwise, no content sniffing, and
@@ -121,9 +232,19 @@ fn send_conditional(
     send(StatusCode::OK, body(), content_type, Some(etag), headers)
 }
 
-async fn handle(State(served): State<Arc<Served>>, request: Request) -> Response {
-    if request.method() != Method::GET && request.method() != Method::HEAD {
-        return send_error(StatusCode::METHOD_NOT_ALLOWED, "only GET and HEAD");
+/// Every request the server takes: the Host checked, then the page, its assets, whoami, the read API, or a review
+/// change.
+async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> Response {
+    let method = request.method().clone();
+    let changes_reviews =
+        changes_something(&method) && routes::is_reviews_path(request.uri().path());
+    if method != Method::GET && method != Method::HEAD && !changes_reviews {
+        // OPTIONS among them: no CORS preflight is ever answered, so no other site can send the session header; and
+        // every path but a project's reviews is read-only
+        return send_error(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "only GET and HEAD, and POST, PATCH or PUT on reviews",
+        );
     }
     let host = request
         .headers()
@@ -136,12 +257,15 @@ async fn handle(State(served): State<Arc<Served>>, request: Request) -> Response
         // A page on another site that points its own domain at 127.0.0.1 (DNS rebinding) is refused
         return send_error(StatusCode::FORBIDDEN, "unexpected Host header");
     }
+    if changes_reviews {
+        return serve_checked_review_change(Arc::clone(&served), host, request).await;
+    }
     let path = request.uri().path();
     if pages::is_page(path) {
         let policy = page_csp(&served.hashes, &format!("http://{host}"));
         return send(
             StatusCode::OK,
-            PAGE.to_vec(),
+            served.page.clone(),
             "text/html; charset=utf-8",
             None,
             &[("Content-Security-Policy", &policy)],
@@ -263,6 +387,7 @@ pub fn serve(home: &Path, first_port: u16) -> Result<(), String> {
         ));
     };
     let port = v4.local_addr().map_err(|e| e.to_string())?.port();
+    let session = session_token();
     let served = Arc::new(Served {
         port,
         version: version.clone(),
@@ -270,6 +395,8 @@ pub fn serve(home: &Path, first_port: u16) -> Result<(), String> {
         home: home_id(home),
         hashes: script_hashes(PAGE),
         projects: routes::Projects::new(home),
+        page: with_session(PAGE, &session),
+        session,
     });
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -278,7 +405,7 @@ pub fn serve(home: &Path, first_port: u16) -> Result<(), String> {
     let record_path: PathBuf = home.join(SERVER_RECORD);
     runtime.block_on(async move {
         let app = Router::new()
-            .fallback(handle)
+            .fallback(serve_request)
             .with_state(Arc::clone(&served));
         let mut listeners = vec![v4];
         listeners.extend(v6);
