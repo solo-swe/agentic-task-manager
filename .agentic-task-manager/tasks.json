@@ -5241,7 +5241,7 @@
         "docs/better-way-to-distribute-atm.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-16T23:02:07Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -5288,7 +5288,11 @@
       "started_by": "claude:0f56a916",
       "commit": "57db7ca656f715979d4da0b59e1d2280b2e014f8",
       "completed_at": "2026-11-16T23:02:07Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-414",
@@ -6629,7 +6633,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T06:52:44Z",
-      "updated_at": "2026-11-16T07:41:03Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -6679,7 +6683,11 @@
       "started_by": "claude:0f56a916",
       "commit": "855d3ed915928f41036b6f5dd98b3893a4d49b07",
       "completed_at": "2026-11-16T06:58:51Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-437",
@@ -9488,7 +9496,7 @@
         "docs/agent/"
       ],
       "created_at": "2026-11-08T08:30:53Z",
-      "updated_at": "2026-11-16T06:29:33Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -9542,7 +9550,11 @@
         }
       ],
       "completed_at": "2026-11-16T06:29:33Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-489",
@@ -12215,7 +12227,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-13T11:37:44Z",
-      "updated_at": "2026-11-16T03:02:31Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -12279,7 +12291,11 @@
       ],
       "review_requested_at": "2026-11-15T11:20:38Z",
       "completed_at": "2026-11-16T03:02:31Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-535",
@@ -12465,7 +12481,7 @@
         "crates/atm-db/src/jsongit/files.rs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:06:12Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12496,7 +12512,11 @@
       "started_by": "claude:0f56a916",
       "commit": "1e9edb59e11f5ec0318843abf0e6c53f2e03d157",
       "completed_at": "2026-11-16T03:06:12Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-539",
@@ -12519,7 +12539,7 @@
         "crates/atm-common/src/rules.rs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:11:42Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12541,7 +12561,11 @@
           "text": "atm-common keys.rs: resolve (UUID, key any case, earlier prefix, alias; archive too; a current key wins over an alias; ambiguity and misses say why), key_of, task_order, next_task_number. Keys-format task add: UUID, next number, provisional, references by key stored as UUIDs; archive moves next_number. Loop and summary order by number. Legacy files unchanged (split_id/id_format stay until T-540 migrates every file). Commands still match IDs exactly: T-543 wires them to resolve.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-540",
@@ -12566,7 +12590,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:33:44Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12597,7 +12621,11 @@
       "started_by": "claude:0f56a916",
       "commit": "c80ed4a0994b5605d21a156be146549b943a1209",
       "completed_at": "2026-11-16T03:33:44Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-541",
@@ -12619,7 +12647,7 @@
         "tests/scripts/merge.test.mjs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:38:09Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12644,7 +12672,11 @@
           "text": "Merge driver: an old-format side (base too) is migrated first when another is keyed, so pre-migration branches merge task by task; keyed: one UUID added differently on both is a conflict; number clashes: final keeps it, of two provisional ours does, the mover takes the next free number with its old key as alias; two final: conflict, both kept; next_number the larger. next_free_id stays for legacy files until T-543. Unit tests and two real git merges.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-542",
@@ -12667,7 +12699,7 @@
         "tests/scripts/git.test.mjs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:00:22Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12692,7 +12724,11 @@
           "text": "finalize_keys: provisional tasks whose UUID and number are in origin/<base>’s tasks.json or archive (git show, base from meta.workflow.base or origin/HEAD) become final; run by atm vcs pushed and atm db migrate (keys_final in --json, a line when any). Test with a bare remote in keys.test.mjs.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-543",
@@ -12718,7 +12754,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:54:59Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12755,7 +12791,11 @@
       "started_by": "claude:0f56a916",
       "commit": "17a30090f457e3f9578945ca46259660a6732e0b",
       "completed_at": "2026-11-16T03:54:59Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-544",
@@ -12781,7 +12821,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:05:40Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12807,7 +12847,11 @@
           "text": "Cross-project deps/related: written by key (resolve_dependency finds the registered project with that meta.key), stored <meta.id>:<UUID>; rules get a foreign-status hook (atm-lib foreign.rs, read only, cached per command): done there releases the task here, unfound counts as not done; details show key and status; doctor warns. Security doc entry added. keys.test.mjs: two registered projects.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-545",
@@ -12830,7 +12874,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:27:49Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12855,7 +12899,11 @@
           "text": "Two registered projects with one key: naming the other’s task by key is refused (rename one); by UUID or <project id>:<UUID> it is found and stored; shown by its UUID’s first 8 characters where the key would be ambiguous; own keys stay inside each project; atm doctor and project status warn (key_warning in --json). keys.test.mjs: three projects.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-546",
@@ -12885,7 +12933,7 @@
         "dashboard/tests/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:25:02Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12910,7 +12958,11 @@
           "text": "Dashboard and app show keys (lib/keys.ts, ui/TaskKey.svelte): cards, rows, details, graph, deps/related, search; provisional ones lighter with a DRAFT tag and the tooltip; ?task= takes key/old prefix/alias/UUID and rewrites to the key; order by number. Unit 1351, e2e 443 (keys.spec.ts, keys fixture). Left: overview cards and All projects board (summary has no keys, Rust), other project’s task shown by key only when loaded, no link.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-547",
@@ -12936,7 +12988,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:32:37Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -12973,7 +13025,11 @@
       "started_by": "claude:0f56a916",
       "commit": "f2acd31ed3391f95819d8851389817154cdb9cf5",
       "completed_at": "2026-11-16T04:32:37Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-548",
@@ -12998,7 +13054,7 @@
         "dashboard/tests/e2e/help.spec.ts"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:35:26Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13024,7 +13080,11 @@
           "text": "compmd.dev everywhere (menu link, About dialog, help.md, README, Tauri guide, ADR-006, tests); the About dialog now uses atm’s own COMPMD_URL, as CompMD 0.7.0’s package still names its old homepage. CHANGELOG past entries kept. Unit 1351, e2e passed.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-549",
@@ -13050,7 +13110,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-16T06:38:45Z",
-      "updated_at": "2026-11-16T07:45:04Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13080,7 +13140,11 @@
           "text": "Keys and `key_final` in the project summary (cards, board, needs-you), `waiting_for_labels`; `derived.foreign` in the task views gives another project’s task its key, name, status and places from the server, or why it’s missing; no new route. Open: the tasks route’s ETag covers only this project, so another project’s change shows on this one’s next change",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-550",
@@ -13104,7 +13168,7 @@
         "tests/scripts/compmd-host-headers.json"
       ],
       "created_at": "2026-11-16T06:38:45Z",
-      "updated_at": "2026-11-16T06:55:16Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13130,7 +13194,11 @@
           "text": "CompMD 0.7.1 (packages, `tauri-plugin-compmd`, `compmd-host`) and mermaid 0.1.2 (also pinned in `compmd.config.json`); the release-age exclusions moved to the new versions. No changelog ships in the packages; all suites pass. Not checked: a diagram in the app window (`cargo run -p atm-app`)",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-551",
@@ -13157,7 +13225,7 @@
         "dashboard/tests/"
       ],
       "created_at": "2026-11-16T17:30:21Z",
-      "updated_at": "2026-11-16T19:37:48Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13189,7 +13257,11 @@
       "started_by": "claude:0f56a916",
       "commit": "deab2d1dbd22b9f3ba1eb0eba36f7c63c5eeba62",
       "completed_at": "2026-11-16T19:37:48Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-552",
@@ -13210,7 +13282,7 @@
         "docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T18:18:58Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13235,7 +13307,11 @@
           "text": "ADR-008 written (any registered project referable, loaded when needed, never watched; the browser polls, the app is pushed; the store owns how it hears of changes; another project as its main copy). ADR-007 and the design point to it",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-553",
@@ -13258,7 +13334,7 @@
         "app/src-tauri/src/commands.rs"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T18:32:41Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13284,7 +13360,11 @@
           "text": "One cache for the rules and the display (`foreign.rs`), by registered folder, checked against the store’s `tasks`/`archive` stamp, 5 s expiry; the registry cached by its workspace files’ stamps; no lock held while reading. The workspace summary follows the projects it depends on. A long-running `atm serve` now shows another project’s done task as ready, without a restart. No app test (another agent had the app): it calls the same atm-lib",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-554",
@@ -13311,7 +13391,7 @@
         "dashboard/tests/e2e/keys.spec.ts"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T18:36:08Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13339,7 +13419,11 @@
           "text": "The tasks route’s ETag (and the overview’s) also covers the task data of the projects named in `dependencies`, `related`, `duplicate_of` (archive too; `foreign::named_by`, worked out once per stamp of the project’s own data). A poll sees a named project’s change; an unrelated change stays a 304 (serve.test.mjs). No e2e: the fixture server has no ETags of atm’s",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-555",
@@ -13368,7 +13452,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T19:52:26Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13393,7 +13477,11 @@
           "text": "`Store::subscribe(on_change)` in atm-db replaces `watch_folders`: the JSON store watches its own folders (notify, moved from the app), the memory store tells its writes, `poll_stamp` for stores that poll; the registry subscribes to the workspaces folder; atm-lib merges them (`Workspace::subscribe`, `Member::subscribe`). The app’s messages are the same; a burst touching two projects may now send two",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     },
     {
       "id": "T-556",
@@ -13417,7 +13505,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-16T23:36:48Z",
-      "updated_at": "2026-11-16T23:37:55Z",
+      "updated_at": "2026-11-17T00:45:56Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13439,7 +13527,11 @@
           "text": "output::clean drops task text’s control characters before the terminal (I30); --json exact. Found in 0.38.0’s security review of T-488; the CLI suite (647) passes.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 51,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/51"
+      }
     }
   ]
 }
