@@ -14885,7 +14885,7 @@
       "description": "Phase 2 ([§3.1](docs/code-review-design.md#:~:text=3.1%20Three%20components)): the document viewer as a component of its own.\n\n## Change\n- `crates/atm-docs`: what `crates/atm-lib/src/documents.rs` does (a project's file with its checks, I11, I12), moved, plus a file at a revision through `atm-vcs`, with the same checks.\n- atm-lib, the REST API and the app use it; their routes and commands answer as before.\n- `layers.test.mjs` gains the crate (no task model in it).\n\n## Tests\nThe moved tests pass unchanged; a file at a revision; `serve.test.mjs`'s document tests unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-docs/",
@@ -14894,7 +14894,7 @@
         "tests/scripts/layers.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T09:51:25Z",
+      "updated_at": "2026-11-17T10:09:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 570,
@@ -14910,7 +14910,18 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T09:51:25Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "1f6dcb2b82ab08389162bc9aa99d5b33635f51de",
+      "completed_at": "2026-11-17T10:09:53Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T10:09:53Z",
+          "kind": "outcome",
+          "text": "atm-docs crate holds the document viewer, re-exported as atm_lib documents. Adds read_document_at for a file at a revision, with the same checks. Layer rule updated, serve, app and lib tests pass.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e23fc37ffd6",
@@ -14923,7 +14934,7 @@
       "description": "The dashboard's side of phase 2 ([§3.1](docs/code-review-design.md#:~:text=3.1%20Three%20components)).\n\n## Change\n- `DocumentViewer.svelte` and `CompMd.svelte` stop reading the dashboard's state (`state.svelte`) and the `Task` type: they take a document source (load a path, at a revision or the working copy) and the links' handler as props; the task manager passes its own.\n- An ESLint rule (`no-restricted-imports`): `lib/documents` imports only itself and `lib/ui`; `lib/reviews` (when it comes) the task areas only through `lib/reviews/links`.\n\n## Tests\nThe viewer's unit and e2e tests unchanged (`documents` specs); a component test with a source of its own.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e22f7deb631"
       ],
@@ -14932,7 +14943,7 @@
         "dashboard/eslint.config.js"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T10:20:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 571,
@@ -14946,7 +14957,9 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T10:20:04Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",

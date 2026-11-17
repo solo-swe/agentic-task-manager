@@ -18,7 +18,8 @@ export interface ProjectDocument {
   line_offset: number;
   lines: number;
   bytes: number;
-  modified_at: string;
+  /** When the working copy's file last changed; null for a file at a revision (atm-docs, ATM-570) */
+  modified_at: string | null;
   /** Whether git tracks the file; null outside git */
   tracked: boolean | null;
   /** The current commit; null outside git */

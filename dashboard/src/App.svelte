@@ -17,6 +17,19 @@
   import Sidebar from './lib/shell/Sidebar.svelte';
   import SettingsSheet from './lib/dialogs/SettingsSheet.svelte';
   import { inApp } from './lib/api/http';
+  import { projectDocuments } from './lib/project-documents';
+
+  // The document viewer's files (ATM-571): the shown project's working copy; on the Omniboard, that of the project
+  // whose task is open over it (T-411)
+  const documentProject = $derived(
+    dashboard.route.page === 'project' || dashboard.peeking ? dashboard.projectId : null,
+  );
+  const documents = $derived(documentProject ? projectDocuments(documentProject, () => dashboard.meta) : null);
+  // Asked for again on the dashboard's refresh in the browser; in the app (T-506), each time the dashboard reloads
+  const documentRefresh = $derived({
+    every: dashboard.polls ? dashboard.autoRefreshSeconds : null,
+    reloadedAt: dashboard.live ? dashboard.loadedAt : 0,
+  });
 
   onMount(() => {
     dashboard.load();
@@ -50,7 +63,15 @@
 <Footer />
 <LoadError />
 <DetailPanel />
-<DocumentViewer />
+<DocumentViewer
+  source={documents}
+  ref={dashboard.docRef}
+  refresh={documentRefresh}
+  docStyle={dashboard.docStyle}
+  onback={() => dashboard.documentBack()}
+  onclose={() => dashboard.closeDocument()}
+  onopen={(ref) => dashboard.openDocument(ref)}
+/>
 <WhatsNew />
 <AboutDialog />
 <AgentsDialog />
