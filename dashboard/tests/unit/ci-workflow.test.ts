@@ -43,6 +43,51 @@ describe('CI workflow hardening (T-230)', () => {
     expect(images.length).toBeGreaterThan(0);
     for (const line of images) expect(line).toMatch(/@sha256:[0-9a-f]{64}\s*$/);
   });
+
+  it('every runner image is pinned, never a -latest label (ATM-487)', () => {
+    const images = [
+      ...lines.filter((line) => /^\s+runs-on: /.test(line) && !line.includes('${{')).map((l) => l.split(': ')[1]),
+      ...[...workflow.matchAll(/\bos: ([\w.-]+)/g)].map((m) => m[1]),
+    ];
+    expect(images.length).toBeGreaterThan(0);
+    for (const image of images) expect(image).toMatch(/^(ubuntu|macos|windows)-\d[\d.]*(-arm)?$/);
+  });
+
+  it('the build cache is saved from main only (ATM-487, I19)', () => {
+    const caches = lines.flatMap((line, i) => (/uses: Swatinem\/rust-cache@/.test(line) ? [i] : []));
+    expect(caches.length).toBeGreaterThan(0);
+    for (const i of caches)
+      expect(lines.slice(i + 1, i + 3).join('\n')).toMatch(/save-if: \$\{\{ github\.ref == 'refs\/heads\/main' \}\}/);
+  });
+});
+
+// The ruleset requires checks by their names (I21): a job renamed in ci.yml would block every merge to main
+describe('the ruleset names CI’s jobs (ATM-487)', () => {
+  const ruleset = JSON.parse(readFileSync(new URL('../../../.github/rulesets/main.json', import.meta.url), 'utf8')) as {
+    rules: { type: string; parameters?: { required_status_checks?: { context: string }[] } }[];
+  };
+  const required = ruleset.rules
+    .flatMap((rule) => rule.parameters?.required_status_checks ?? [])
+    .map((check) => check.context);
+  /** Each job's name, a matrix's expanded by its `platform`s */
+  const jobNames = workflow
+    .split(/^ {2}(?=[\w-]+:\n)/m)
+    .slice(1)
+    .flatMap((job) => {
+      const name = /^ {4}name: (.+)$/m.exec(job)?.[1];
+      if (!name) return [];
+      if (!name.includes('${{ matrix.platform }}')) return [name];
+      return [...job.matchAll(/platform: ([\w-]+)/g)].map((m) => name.replace('${{ matrix.platform }}', m[1]));
+    });
+
+  it('every required check is one of ci.yml’s jobs', () => {
+    expect(required.length).toBeGreaterThan(0);
+    for (const check of required) expect(jobNames).toContain(check);
+  });
+
+  it('the jobs are named by platform, not by runner image', () => {
+    expect(jobNames).toEqual(expect.arrayContaining(['Rust (Linux)', 'Rust (macOS)', 'Rust (Windows)', 'cargo-deny']));
+  });
 });
 
 // The release workflows (T-452): read-only like CI, but for the one job that drafts the release, which builds nothing
@@ -72,6 +117,10 @@ describe('release workflows (I18, I19; T-452)', () => {
           expect(lines.slice(i + 1, i + 3).join('\n')).toMatch(/persist-credentials: false/);
       });
     }
+  });
+
+  it('the release builds from nothing: no cache (ATM-487)', () => {
+    for (const w of [release, homebrew]) expect(w).not.toMatch(/rust-cache|actions\/cache/);
   });
 
   it('releases come from v* tags only, and the formula from published releases', () => {

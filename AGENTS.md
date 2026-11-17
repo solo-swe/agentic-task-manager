@@ -152,6 +152,16 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain 
   README.
 - **Workflow:** `pull-request` (also in `tasks.json` `meta.workflow`, so `/atm-push` knows): work happens on a
   release branch (e.g. `dev/v4`) and reaches `main` through **one combined PR per release branch**.
+- **When CI runs** (ATM-487, [docs/ci-review.md](docs/ci-review.md)): on every push to `main` and `dev/**`, on pull
+  requests, and dispatched (`gh workflow run CI --ref <branch>`, for `update-snapshots`). A newer push cancels the
+  branch's run still going (not on `main`); with the release PR open, a push runs twice, the push's and the PR's.
+  The jobs are named by platform (`Rust (Linux)`, …), and `.github/rulesets/main.json` requires them by those names:
+  rename a job and the ruleset together (`ci-workflow.test.ts` checks), and apply the ruleset on GitHub.
+- **The Rust build cache** (`Swatinem/rust-cache`): per platform, saved from `main` only, so a branch's first run
+  after `Cargo.lock` changes builds more; the release workflow has none.
+- **Playwright's two steps:** the functional specs, then the screenshots (`visual`). Mid-sprint, screenshots the
+  sprint changed on purpose fail until the release task regenerates them; the functional step's result is the one to
+  read then.
 - **Linux screenshot baselines:** made locally with `pnpm run test:e2e:visual:update` (Docker), normally. As a
   fallback, CI generates missing ones: it fails until the `-linux.png` baselines are committed, and attaches them as
   the `linux-screenshot-baselines` artifact. Find its ID with
@@ -161,7 +171,8 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain 
   `gh api repos/solo-swe/agentic-task-manager/actions/artifacts/<id>/zip > <scratch>/baselines.zip` (`gh run download`
   fails on the zip's duplicate entries), extract only the missing `*-linux.png` files into
   `dashboard/tests/e2e/__screenshots__/` (`unzip -n`), look at one to check it shows what you expect, then commit them.
-- **Pinned:** actions by commit SHA, container images by digest, pnpm by version (installed from the npm registry in
+- **Pinned:** actions by commit SHA, container images by digest, runner images by version (`ubuntu-24.04`,
+  `macos-15`, `windows-2025`, bumped by hand), pnpm by version (installed from the npm registry in
   each job, and in the Docker screenshot scripts), the token read-only (`permissions: contents: read`), checkouts
   without stored credentials. Dependabot proposes action and package updates, grouped: one PR a week for the actions,
   one for the packages' minor and patch updates, and one per major (T-275; its `npm` ecosystem reads

@@ -1,5 +1,11 @@
 # CI review (ATM-487), November 2026
 
+**Decided (Hakan, 2026-11-17):** 2.1 `Swatinem/rust-cache`; 2.2 cargo-deny its own job, a required check; 2.3 the
+images pinned and the jobs named by platform (Hakan applies the ruleset); 2.4 the ruleset test; 2.5 CI on every push
+to `dev/**` too, automatically ("runs are free for open source"), with cancel-in-progress, and a push runs twice while
+the PR is open; 2.7 the screenshots as their own step, regenerated in the release task as before; 2.6 a backlog task.
+Made in ATM-487's commit.
+
 What CI taught us from the Rust port to 0.38.0, and the changes proposed for `.github/workflows/`. Each change is
 Hakan's decision (editing CI is the user's call); the decisions to make are at the end, §4.
 
