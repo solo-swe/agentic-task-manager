@@ -1536,7 +1536,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 578
+    "next_number": 579
   },
   "tasks": [
     {
@@ -9866,7 +9866,7 @@
       "description": "Go through `.github/workflows/` with the user and propose changes, based on what CI did during *The Rust port* and the first releases. Each change is agreed first: editing CI is the user's call.\n\n## What to look at\n- **What runs when:** pushes to a release branch run nothing unless dispatched (`gh workflow run CI --ref <branch>`); a PR runs again after every push. Is that still the right trade?\n- **Time and caching:** a run takes about 4–5 minutes. Look at the cargo and pnpm caches, the jobs that build the dashboard and atm more than once (Rust ×3, `atm for the e2e suite`, Playwright), and whether artifacts could be shared instead.\n- **The app (T-455 onwards)** is part of `cargo build`/`test`, so the Linux job needs the webview's system packages and Windows builds against WebView2. See what that adds to each job, and whether the e2e binary and the release should build only `-p atm-cli`.\n- **Windows:** the suite runs only partly there (T-480, T-482), and the stress test fails (T-481). Decide what the Windows job checks until those are done.\n- **macOS:** the stress test hit lock timeouts twice (T-481). Is that a slow runner or a real bug?\n- **Screenshots:** CI makes missing Linux baselines, and the local scripts get a Linux atm (T-485). Check that the two use the same binary and the same steps.\n- **Runner images:** `ubuntu-latest` moves to Ubuntu 26 (CI's annotation); the e2e binary is built on 22.04 for an older glibc. Pin the images we depend on.\n- **Required checks:** the ruleset names jobs by their display names (`Rust (ubuntu-latest)`, …), so renaming a job breaks merges. Keep the names in one place, or test that `.github/rulesets/main.json` matches `ci.yml` (`ci-workflow.test.ts`).\n- **Release workflows:** `release.yml`, `homebrew.yml` and `skills.yml` worked first time for 0.32.0 and 0.33.0. Note anything worth keeping in `packaging/README.md`.\n\n## Outcome\nThe agreed changes in the workflows, `ci-workflow.test.ts` and `AGENTS.md`'s CI section, with `docs/security-architecture.md` updated if a permission or secret changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         ".github/workflows/ci.yml",
@@ -9875,7 +9875,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T08:09:05Z",
-      "updated_at": "2026-11-17T06:53:57Z",
+      "updated_at": "2026-11-17T06:54:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "with": "user",
@@ -9898,9 +9898,15 @@
           "kind": "answer",
           "text": "Rust build cache (docs/ci-review.md §2.1): Swatinem/rust-cache (third-party, pinned by SHA), actions/cache (GitHub’s own), or none? Saved from main only, never in release.yml. → A: Swatinem/rust-cache.; cargo-deny in its own job, in parallel, and added to the required checks (§2.2)? → Yes: its own job, a required check.; Pin the runner images (ubuntu-24.04, macos-15, windows-2025) and rename the jobs Rust (Linux) / Rust (macOS) / Rust (Windows), you updating the live ruleset when it merges (§2.3)? → Yes: pin the images, name the jobs by platform; Hakan applies the ruleset.; CI on pushes to dev/** with cancel-in-progress, or keep dispatching by hand (§2.5)? → Trigger automatically: runs are free for open source, and atm is open source.; Screenshots: their own step, regenerated in the release task as now, or regenerated in the task that changes the UI (§2.7)? → A: the screenshots as their own step, regenerated in the release task.; A backlog task for the Linux build’s image (ubuntu-22.04 is retired around April 2027) (§2.6)? → A backlog task is fine.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T06:54:53Z",
+          "kind": "outcome",
+          "text": "Hakan’s six decisions made (docs/ci-review.md): push CI on dev/**, rust-cache from main, cargo-deny job, pinned images and platform job names, the screenshots their own step; ATM-578 for the Linux image. Hakan applies the ruleset on GitHub.",
+          "by": "claude:0f56a916"
         }
       ],
-      "commit": "087b5a5dc95532437a1eb0c381965733bb9ddf0a",
+      "commit": "57a502a462e665c0ce09312633bc8a756fd02907",
       "blocks": [
         {
           "from": "2026-11-17T03:19:02Z",
@@ -9909,7 +9915,9 @@
         }
       ],
       "started_at": "2026-11-17T06:53:57Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "completed_at": "2026-11-17T06:54:53Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "2238c9b2-a361-848f-ac56-42807145ee8b",
@@ -14844,6 +14852,35 @@
       "components": [
         "docs"
       ]
+    },
+    {
+      "id": "01a1e849-7d18-70e6-a36e-15e5d46649df",
+      "name": "The Linux builds' image before ubuntu-22.04 is retired",
+      "type": "infra",
+      "priority": "P3",
+      "labels": [
+        "rust"
+      ],
+      "description": "From [the CI review §2.6](docs/ci-review.md#:~:text=2.6%20The%20Linux%20build) (Hakan: a backlog task). The release's Linux builds (`release.yml`, `ubuntu-22.04` and `ubuntu-22.04-arm`) and CI's `atm for the e2e suite` run on Ubuntu 22.04 for its glibc (2.35), so atm runs on older systems. GitHub retires runner images around the end of their release's standard support (22.04: April 2027; watch GitHub's announcement).\n\n## To decide with Hakan\nThe glibc floor atm supports, then where the Linux builds run:\n- a pinned container on a newer runner, as `pnpm run build:atm-linux` builds the screenshots' atm (the `rust` image, Debian 12, glibc 2.36: drops Ubuntu 22.04 users), or an older Debian image (`bullseye`, glibc 2.31);\n- the e2e binary and the release built the same way, so the screenshots' local and CI binaries match.\n\nEditing the workflows is Hakan's call: block on him with the options before changing them.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        ".github/workflows/release.yml",
+        ".github/workflows/ci.yml",
+        "dashboard/package.json"
+      ],
+      "created_at": "2026-11-17T06:54:52Z",
+      "updated_at": "2026-11-17T06:54:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard",
+        "ci"
+      ],
+      "number": 578,
+      "key_final": false
     }
   ]
 }
