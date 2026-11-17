@@ -10,6 +10,9 @@ use std::process::{Command, Output, Stdio};
 use atm_common::py::{repr_str, strip};
 use atm_common::{Error, Result};
 
+pub mod diff;
+pub use diff::{ChangedFile, Diff};
+
 /// Pathspecs that stage more than the files named: another agent's work can be in the same tree.
 const WHOLE_TREE: [&str; 7] = [".", "-A", "--all", "-u", "--update", ":/", "*"];
 /// git reads a path as a pattern (`*.env` is every .env file); with this, a path names exactly one file (F6).

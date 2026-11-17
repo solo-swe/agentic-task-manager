@@ -14,6 +14,8 @@ publish.workspace = true
 atm-common.workspace = true
 # git, the folder lock and the watcher, which the task store uses too (ATM-563)
 atm-fs.workspace = true
+# The rounds' diffs, a round's files rebuilt, two rounds compared (ATM-564)
+atm-vcs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

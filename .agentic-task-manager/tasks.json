@@ -14536,7 +14536,7 @@
       "description": "The first `ReviewStore`: `.agentic-task-manager/reviews/` ([§3.10](docs/code-review-design.md#:~:text=3.10%20The%20store)).\n\n## Change\n- One folder per review, `CR-<n>-<first 4 hex of its UUID>`, with `review.md`, `comments.md` and `rounds/<n>.diff` / `<n>.json`.\n- A new review's number from a counter shared by the clone's worktrees (`.git/atm/`, beside the claims; the task folder outside git), under a lock.\n- Two reviews with one number (two clones, merged) are `CR-8.1` and `CR-8.2`, by creation time then UUID; a reference to `CR-8` resolves to both, and the store says so.\n- One lock per review; writes to a temporary file renamed into place, as `tasks.json`'s are.\n- `subscribe` on the folder's watcher (as the JSON store's, ATM-555).\n- The reviews of the project's worktrees listed with the main working copy's, each with its branch.\n- The folder's checks: no symlinks, paths inside the task folder (as I6).\n\n## Tests\nThe store's operations, the counter across two worktrees, a merged clash read as CR-8.1/CR-8.2, a symlinked folder refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1a9a33bc82"
       ],
@@ -14544,7 +14544,7 @@
         "crates/atm-review/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T09:01:10Z",
+      "updated_at": "2026-11-17T09:08:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 563,
@@ -14557,7 +14557,18 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T09:01:10Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "acb29652246d9214714170598d2e394176e3ded0",
+      "completed_at": "2026-11-17T09:08:04Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:08:04Z",
+          "kind": "outcome",
+          "text": "FileStore in reviews/CR-<n>-<4 hex>/: a lock per review, atomic writes, a counter the worktrees share, CR-8.1/CR-8.2 on clashes (CR-8 names both), no symlinks, a watcher, list_everywhere over worktrees with branches. New crate atm-fs (git, lock, watcher, moved from atm-db and re-exported) so atm-review needs no atm-db; folder suffix is the UUID’s random end (design corrected). 7 tests; suite’s lock/stress/claims/serve pass.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84",
@@ -14570,7 +14581,7 @@
       "description": "Rounds and anchors ([§3.3](docs/code-review-design.md#:~:text=3.3%20The%20records), [§3.6](docs/code-review-design.md#:~:text=3.6%20Rounds%2C%20anchors%20and%20drift)), through `atm-vcs`.\n\n## Change\n- A round's diff from a commit range, the working tree against its base (uncommitted changes, live checkpoints), or files as they are (as if added); `git diff -M`, three lines of context; binary files listed with their blob IDs, never copied; deleted files as a line.\n- No snapshots: two rounds compared by rebuilding each round's files from its base and diff on a temporary index (`GIT_INDEX_FILE`, `git apply --cached`, `git write-tree`), never touching the user's index or working tree.\n- Anchors moved from the round they were made on to a later one through the change between them; a chain whose quote is gone is drifted, at its last place, with the round and lines it was made on.\n\n## Tests\nRounds of each kind, two uncommitted rounds compared, an anchor moved and one drifted, the user's index unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14579,7 +14590,7 @@
         "crates/atm-vcs/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T09:08:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 564,
@@ -14590,7 +14601,9 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:08:08Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40",

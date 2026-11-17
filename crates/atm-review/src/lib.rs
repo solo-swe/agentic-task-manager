@@ -13,6 +13,7 @@ pub mod files;
 pub mod folder;
 pub mod memory;
 pub mod model;
+pub mod rounds;
 pub mod rules;
 pub mod store;
 
