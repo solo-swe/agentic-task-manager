@@ -123,6 +123,8 @@ atm's own rules for the atm app, the desktop distribution proposed in
 
 ## Tests
 
+- **Every case, not a coverage number** (AGENTS.md, Testing conventions): each command with each class of result
+  it can give, refusals included.
 - **Domain behaviour** is tested in atm-lib, not through Tauri.
 - **Command wiring** gets tests with Tauri's mock runtime: each command reaches the right atm-lib call, and errors
   serialize as expected.

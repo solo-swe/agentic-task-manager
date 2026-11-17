@@ -1570,7 +1570,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 580
+    "next_number": 581
   },
   "tasks": [
     {
@@ -15015,7 +15015,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T16:21:12Z",
+      "updated_at": "2026-11-17T16:26:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "review": "blocker",
@@ -15035,7 +15035,7 @@
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T11:02:22Z",
       "started_by": "claude:0f56a916",
-      "commit": "5221bf363b089f091e7523679005118f45568cb0",
+      "commit": "29c5806cab39e366017fd194b4a4c52bb52f5a3b",
       "review_requested_at": "2026-11-17T11:22:51Z",
       "review_state": "waiting",
       "notes": [
@@ -15321,6 +15321,31 @@
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
       },
       "merged_at": "2026-11-17T08:26:00Z"
+    },
+    {
+      "id": "01a1ea5b-4e0f-7635-88b8-895069b68eca",
+      "name": "Tests: every case, not a coverage number (scan the repo)",
+      "type": "test",
+      "priority": "P1",
+      "labels": [
+        "tests"
+      ],
+      "description": "Scan the whole repository's tests against the model in [AGENTS.md, Testing conventions](AGENTS.md#:~:text=What%20to%20test), and add or update tests where cases are missing.\n\n## The model\nEach unit's tests cover every case it promises, not just the lines that run: the happy paths, each failure mode and refusal, each class of input (empty, one, many; missing, malformed, too large; at and past each limit), each state, and where two of these meet. The coverage thresholds stay as guardrails. Use judgement to keep the tests maintainable: one test per behaviour, tables of cases, shared fixtures, and each layer tests its own rules.\n\n## The known gap\n**Claims** (`crates/atm-lib/src/claims.rs`, `claims/tests.rs`, `leases.rs`, `crates/atm-db/src/jsongit/claims.rs`, `memory.rs`): the Rust tests cover the heartbeat and expiry only. Missing:\n- a free task is claimed;\n- a task claimed by another agent is refused;\n- a task is refused from another worktree or branch of the same project;\n- the holder claims its own task again;\n- release, and claiming after a release;\n- an expired lease is taken over.\n\nSome of these are checked end to end in `tests/scripts/claims.test.mjs`, but not in the layer that owns the rule.\n\n## The scan\nGo crate by crate, then the app and the dashboard. List each unit's cases next to its tests and fill the gaps:\n- [ ] `atm-common`, `atm-fs`, `atm-vcs`, `atm-db` (the stores, the merge driver, the registry)\n- [ ] `atm-docs`, `atm-review`\n- [ ] `atm-lib` (claims, leases, the status machine, sprints, reviews, workspaces, query)\n- [ ] `atm-cli` (each command's refusals and exit codes) and `tests/scripts/`\n- [ ] `app/src-tauri` (each command's results and refusals)\n- [ ] `dashboard/` (unit and component tests: API errors, 304s, empty data)\n\nRecord in the task's outcome note what was added per area, and anything left out on purpose, with the reason.\n\nThe REST API's routes (`crates/atm-api/src/routes/`) are being done separately, in ATM-572.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/claims/tests.rs",
+        "crates/atm-lib/src/leases.rs",
+        "crates/atm-db/src/jsongit/claims.rs"
+      ],
+      "created_at": "2026-11-17T16:33:34Z",
+      "updated_at": "2026-11-17T16:33:34Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "number": 580,
+      "key_final": false
     }
   ]
 }

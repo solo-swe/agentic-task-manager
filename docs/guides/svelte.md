@@ -79,6 +79,9 @@ atm's own rules for the dashboard in `dashboard/`, served by `atm serve` and lat
 
 ## Tests
 
+- **Every case, not a coverage number** (AGENTS.md, Testing conventions): each component and module tested for its
+  happy paths, failure modes (an API error, a 304, no data), input classes and states; the 90% threshold is the
+  guardrail, not the goal.
 - **Vitest** for live-data helpers, state modules and components (with Testing Library for Svelte).
 - **Playwright** for end-to-end flows, against the API played by the `tasksServer` fixture (AGENTS.md, Testing
   conventions), and with mocked Tauri IPC for the app ([Tauri guide](tauri.md)).

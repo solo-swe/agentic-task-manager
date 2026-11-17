@@ -112,6 +112,16 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain 
 - The e2e suite's fixture gets its task views and summaries from the binary too (`pnpm run test:e2e` builds it).
 
 ## Testing conventions
+- **What to test: every case, not a coverage number.** A unit's tests cover each case it has, judged from what it
+  promises, not from which lines ran: the happy paths, each failure mode and refusal, each class of input (empty,
+  one, many; missing, malformed, too large; at and past each limit), each state it can be in (a task free, claimed by
+  you, claimed by another agent, in another worktree or branch, expired), and the cases where two of these meet. A
+  coverage threshold is a guardrail that catches what was forgotten; reaching it says nothing about whether the cases
+  are tested. Keep them maintainable with judgement: one test per behaviour, tables of cases for one rule over many
+  inputs, shared fixtures rather than copies, and no test of the framework or of another layer's rule (a route tests
+  its own mapping, statuses and caching, plus that it reaches its atm-lib call with each class of result; the claiming
+  rules themselves are atm-lib's tests). Each layer tests its own cases: unit tests next to the code, the CLI suite
+  (`tests/scripts/`) for behaviour as users run it, e2e for the dashboard's flows.
 - e2e specs import `test`/`expect` from `tests/e2e/helpers.ts`. `tasks.json` is never served from disk: use the
   `tasksServer` fixture (`openDashboard(page, tasksServer, 'standard')` or an inline object), which plays atm serve's
   API: `api/projects` lists one project (`FIXTURE_PROJECT`), its tasks are served by the v1 route the dashboard loads
