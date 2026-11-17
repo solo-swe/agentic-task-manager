@@ -114,11 +114,12 @@
 
   const go = (address: string, replace = false) => navigate(address, { replace });
 
-  /** A review opened from the list: in a browser tab of its own (in the app, where there is none, in place) */
-  function open(reference: string) {
+  /** A review opened from the list: in place (its page has a way back); with ⌘ or Ctrl, in a browser tab of its own
+   * (in the app, where there is none, in place too) */
+  function open(reference: string, newTab = false) {
     const address = withReview(currentAddress(), { review: reference });
-    if (inApp) go(address);
-    else window.open(address, '_blank', 'noopener');
+    if (newTab && !inApp) window.open(address, '_blank', 'noopener');
+    else go(address);
   }
 
   /** A change made: the page as it is now; or why it was refused, shown and given back (a comment's box keeps it) */
@@ -205,7 +206,7 @@
       {problem}
       href={(reference) => withReview(currentAddress(), { review: reference })}
       onquery={(next) => (query = next)}
-      onopen={(reference) => open(reference)}
+      onopen={(reference, newTab) => open(reference, newTab)}
     />
   {/if}
 </div>

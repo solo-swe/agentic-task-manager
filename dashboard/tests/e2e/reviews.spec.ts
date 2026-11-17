@@ -177,30 +177,34 @@ test.describe('the reviews tab', () => {
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
   });
 
-  test('opens a review in a browser tab of its own, and the one needing you next; the list stays', async ({
-    page,
-    tasksServer,
-  }) => {
-    // The new tab's own page has no fixture behind it (it is the page's): its address is what is checked here, the
-    // review's page itself by the tests that open its address
+  test('opens a review in place, and back; the one needing you next too', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    await page.locator('.review-row[data-review="CR-2"] .review-link').click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    expect(shown(page)).toBe(reviewPath(tasksServer, '/CR-2'));
+    expect(page.context().pages()).toHaveLength(1);
+    await page.getByRole('link', { name: 'Reviews', exact: true }).click();
+    await expect(page.locator('#review-list')).toBeVisible();
+    expect(shown(page)).toBe(reviewPath(tasksServer));
+    await page.getByRole('button', { name: /Next review needing you/ }).click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    await page.goBack();
+    await expect(page.locator('#review-list')).toBeVisible();
+  });
+
+  test('⌘ or Ctrl opens a review in a browser tab of its own; the list stays', async ({ page, tasksServer }) => {
+    // The new tab's own page has no fixture behind it (it is the page's): its address is what is checked here
     await openReviews(page, tasksServer);
     const [opened] = await Promise.all([
       page.waitForEvent('popup'),
-      page.locator('.review-row[data-review="CR-2"] .review-link').click(),
+      page.locator('.review-row[data-review="CR-2"] .review-link').click({ modifiers: ['ControlOrMeta'] }),
     ]);
     await opened.waitForURL(/\/reviews\/CR-2/);
     expect(shown(opened)).toBe(reviewPath(tasksServer, '/CR-2'));
-    // Opened without a handle back on this page
     expect(await opened.evaluate(() => window.opener)).toBeNull();
     await opened.close();
     await expect(page.locator('#review-list')).toBeVisible();
     expect(shown(page)).toBe(reviewPath(tasksServer));
-    const [next] = await Promise.all([
-      page.waitForEvent('popup'),
-      page.getByRole('button', { name: /Next review needing you/ }).click(),
-    ]);
-    await next.waitForURL(/\/reviews\/CR-2/);
-    await next.close();
   });
 
   test('a reference two reviews share offers both to choose from', async ({ page, tasksServer }) => {

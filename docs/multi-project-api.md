@@ -213,7 +213,7 @@ text the page reads, never a file it looks up.
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
 | `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` its other tabs |
 | `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`) |
-| `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64), with `?round=&against=&file=` the view and the file gone to: a window of its own, without the dashboard's title bar and tabs, titled by the project's key, the reference and the title; the Reviews tab opens it in a browser tab (in the app, in place) |
+| `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64), with `?round=&against=&file=` the view and the file gone to: a window of its own, without the dashboard's title bar and tabs, titled by the project's key, the reference and the title; the Reviews tab opens it in place (with ⌘ or Ctrl, in a browser tab) |
 | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
 
 What is open over a page is in the query: `?task=T-1` a task's details, `?doc=docs/x.md:L40` (or `#heading`, encoded) a
