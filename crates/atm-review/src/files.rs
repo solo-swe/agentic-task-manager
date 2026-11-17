@@ -1,0 +1,615 @@
+//! The two text files of a review (docs/code-review-design.md §3.3, §3.4), written and read back: `review.md`, the
+//! header (TOML front matter) and the summary, and `comments.md`, every chain of comments. Text only, no files: the
+//! file store (ATM-563) reads and writes them. People read and may edit both; what atm can't read back is kept as it is
+//! and reported (for `atm doctor`), never dropped.
+
+/// `review.md`: the header between `+++` lines, then the author's summary.
+pub mod review_md {
+    use atm_common::{Error, Result};
+    use serde::{Deserialize, Serialize};
+    use toml::value::Datetime;
+
+    use crate::model::{Actor, ReviewHeader, ReviewId, ReviewRef, Status};
+
+    /// The header as written: the dates as TOML dates, the reference left to the store (`CR-8.1` on a clash).
+    #[derive(Serialize, Deserialize)]
+    struct Header {
+        id: String,
+        number: u32,
+        title: String,
+        status: Status,
+        #[serde(default)]
+        tasks: Vec<String>,
+        /// None (left out) while whose change it is isn't known
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        author: Option<String>,
+        #[serde(default)]
+        reviewers: Vec<String>,
+        created: Datetime,
+        updated: Datetime,
+    }
+
+    fn date(text: &str, what: &str) -> Result<Datetime> {
+        text.parse()
+            .map_err(|e| Error::Invalid(format!("the review's {what} isn't a date ({text}): {e}")))
+    }
+
+    /// The file's text.
+    ///
+    /// # Errors
+    /// A date in the header that isn't one.
+    pub fn write(header: &ReviewHeader, summary: &str) -> Result<String> {
+        let toml = toml::to_string(&Header {
+            id: header.id.0.clone(),
+            number: header.number,
+            title: header.title.clone(),
+            status: header.status,
+            tasks: header.tasks.clone(),
+            author: header.author.as_ref().map(|a| a.0.clone()),
+            reviewers: header.reviewers.iter().map(|r| r.0.clone()).collect(),
+            created: date(&header.created, "creation time")?,
+            updated: date(&header.updated, "update time")?,
+        })
+        .map_err(|e| Error::failed(format!("the review's header: {e}")))?;
+        let summary = summary.trim_end();
+        Ok(if summary.is_empty() {
+            format!("+++\n{toml}+++\n")
+        } else {
+            format!("+++\n{toml}+++\n\n{summary}\n")
+        })
+    }
+
+    /// The header and the summary, from the file's text; the reference is `CR-<number>` (the store makes it
+    /// `CR-<number>.<n>` when two reviews share the number).
+    ///
+    /// # Errors
+    /// No header, or one that can't be read: the review can't be known without it.
+    pub fn read(text: &str) -> Result<(ReviewHeader, String)> {
+        let text = text.replace("\r\n", "\n");
+        let rest = text.strip_prefix("+++\n").ok_or_else(|| {
+            Error::Invalid("review.md doesn't start with its header (+++)".into())
+        })?;
+        let end = rest
+            .find("\n+++\n")
+            .map(|at| (at + 1, at + 5))
+            .or_else(|| {
+                rest.strip_suffix("\n+++")
+                    .map(|head| (head.len() + 1, rest.len()))
+            })
+            .ok_or_else(|| Error::Invalid("review.md's header has no closing +++".into()))?;
+        let header: Header = toml::from_str(&rest[..end.0])
+            .map_err(|e| Error::Invalid(format!("review.md's header can't be read: {e}")))?;
+        let after = &rest[end.1..];
+        let summary = after
+            .strip_prefix('\n')
+            .unwrap_or(after)
+            .trim_end()
+            .to_string();
+        Ok((
+            ReviewHeader {
+                id: ReviewId(header.id),
+                reference: ReviewRef::numbered(header.number),
+                number: header.number,
+                title: header.title,
+                status: header.status,
+                tasks: header.tasks,
+                author: header.author.map(Actor),
+                reviewers: header.reviewers.into_iter().map(Actor).collect(),
+                created: header.created.to_string(),
+                updated: header.updated.to_string(),
+            },
+            summary,
+        ))
+    }
+}
+
+/// `comments.md`: a `##` heading per chain (what it is about, the round, its ID), the quote, then its comments as a
+/// nested list: a top-level comment starts with its resolved box (`[ ]`, `[x]`), a reply has none; then the author,
+/// the time and the ID in bold and `·`s, and the text indented under it.
+pub mod comments_md {
+    use crate::model::{Actor, Anchor, Chain, ChainId, Comment, CommentId, Side};
+
+    /// A line atm couldn't read, kept where it was: after the chain it followed (or at the top).
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Unread {
+        /// The chain it came after, none at the top of the file.
+        pub after: Option<ChainId>,
+        /// Its line number in the file read (1-based).
+        pub line: usize,
+        /// The line, as it was.
+        pub text: String,
+    }
+
+    /// A review's `comments.md`: its chains, and what couldn't be read.
+    #[derive(Debug, Clone, PartialEq, Eq, Default)]
+    pub struct CommentsFile {
+        /// The chains, in the file's order.
+        pub chains: Vec<Chain>,
+        /// The lines atm couldn't read, kept.
+        pub unread: Vec<Unread>,
+    }
+
+    impl CommentsFile {
+        /// What `atm doctor` says about the file: a line per line it couldn't read.
+        #[must_use]
+        pub fn problems(&self) -> Vec<String> {
+            self.unread
+                .iter()
+                .map(|u| {
+                    format!(
+                        "comments.md line {}: not a comment atm can read: {}",
+                        u.line, u.text
+                    )
+                })
+                .collect()
+        }
+    }
+
+    const SEP: &str = " · ";
+    const THE_REVIEW: &str = "(the review)";
+    const OLD_SIDE: &str = "old side";
+
+    fn heading(chain: &Chain) -> String {
+        let anchor = &chain.anchor;
+        let what = match &anchor.path {
+            None => THE_REVIEW.to_string(),
+            Some(path) => match anchor.lines {
+                Some((first, last)) if first == last => format!("{path}:{first}"),
+                Some((first, last)) => format!("{path}:{first}-{last}"),
+                None => path.clone(),
+            },
+        };
+        let side = if anchor.side == Side::Old {
+            format!("{SEP}{OLD_SIDE}")
+        } else {
+            String::new()
+        };
+        format!(
+            "## {what}{SEP}round {}{side}{SEP}{}",
+            anchor.round, chain.id.0
+        )
+    }
+
+    fn write_comment(out: &mut Vec<String>, comment: &Comment, depth: usize) {
+        let indent = "  ".repeat(depth);
+        let resolved = match comment.resolved {
+            Some(true) => "[x] ",
+            Some(false) => "[ ] ",
+            None => "",
+        };
+        out.push(format!(
+            "{indent}- {resolved}**{}**{SEP}{}{SEP}{}",
+            comment.author.0, comment.at, comment.id.0
+        ));
+        for line in comment.body.trim_end().lines() {
+            out.push(if line.is_empty() {
+                String::new()
+            } else {
+                format!("{indent}  {line}")
+            });
+        }
+        for reply in &comment.replies {
+            write_comment(out, reply, depth + 1);
+        }
+    }
+
+    /// The file's text.
+    #[must_use]
+    pub fn write(file: &CommentsFile) -> String {
+        fn unread_after(file: &CommentsFile, after: Option<&ChainId>) -> Vec<String> {
+            file.unread
+                .iter()
+                .filter(|u| u.after.as_ref() == after)
+                .map(|u| u.text.clone())
+                .collect()
+        }
+        let mut out: Vec<String> = unread_after(file, None);
+        for chain in &file.chains {
+            if !out.is_empty() {
+                out.push(String::new());
+            }
+            out.push(heading(chain));
+            if let Some(quote) = &chain.anchor.quote {
+                for line in quote.lines() {
+                    out.push(if line.is_empty() {
+                        ">".into()
+                    } else {
+                        format!("> {line}")
+                    });
+                }
+                out.push(String::new());
+            }
+            for comment in &chain.comments {
+                write_comment(&mut out, comment, 0);
+            }
+            out.extend(unread_after(file, Some(&chain.id)));
+        }
+        if out.is_empty() {
+            return String::new();
+        }
+        out.join("\n") + "\n"
+    }
+
+    /// A heading's anchor and chain ID, if it is one atm wrote.
+    fn read_heading(line: &str) -> Option<(Anchor, ChainId)> {
+        let mut parts: Vec<&str> = line.strip_prefix("## ")?.split(SEP).collect();
+        let id = parts.pop()?;
+        if !id.starts_with('t') || id[1..].parse::<u32>().is_err() {
+            return None;
+        }
+        let side = if parts.last() == Some(&OLD_SIDE) {
+            parts.pop();
+            Side::Old
+        } else {
+            Side::New
+        };
+        let round: u32 = parts.pop()?.strip_prefix("round ")?.parse().ok()?;
+        let what = parts.join(SEP);
+        let (path, lines) = if what == THE_REVIEW {
+            (None, None)
+        } else {
+            let lines = what.rsplit_once(':').and_then(|(path, range)| {
+                let (first, last) = range.split_once('-').unwrap_or((range, range));
+                Some((path.to_string(), (first.parse().ok()?, last.parse().ok()?)))
+            });
+            match lines {
+                Some((path, lines)) => (Some(path), Some(lines)),
+                None => (Some(what), None),
+            }
+        };
+        if path.as_deref().is_some_and(str::is_empty) {
+            return None;
+        }
+        Some((
+            Anchor {
+                round,
+                path,
+                side,
+                lines,
+                quote: None,
+            },
+            ChainId(id.to_string()),
+        ))
+    }
+
+    /// A comment's first line: its depth and the comment, if it is one atm wrote.
+    fn read_item(line: &str) -> Option<(usize, Comment)> {
+        let spaces = line.len() - line.trim_start_matches(' ').len();
+        if !spaces.is_multiple_of(2) {
+            return None;
+        }
+        let rest = line[spaces..].strip_prefix("- ")?;
+        let (resolved, rest) = if let Some(rest) = rest.strip_prefix("[ ] ") {
+            (Some(false), rest)
+        } else if let Some(rest) = rest.strip_prefix("[x] ") {
+            (Some(true), rest)
+        } else {
+            (None, rest)
+        };
+        let (author, rest) = rest.strip_prefix("**")?.split_once(&format!("**{SEP}"))?;
+        let (at, id) = rest.rsplit_once(SEP)?;
+        if author.is_empty()
+            || at.is_empty()
+            || !id.starts_with('c')
+            || id[1..].parse::<u32>().is_err()
+        {
+            return None;
+        }
+        Some((
+            spaces / 2,
+            Comment {
+                id: CommentId(id.to_string()),
+                author: Actor(author.to_string()),
+                at: at.to_string(),
+                body: String::new(),
+                resolved,
+                replies: Vec::new(),
+            },
+        ))
+    }
+
+    /// Nest a chain's comments by their depth, the first `depth` items under the comment before them.
+    fn nest(
+        items: &mut std::iter::Peekable<std::vec::IntoIter<(usize, Comment)>>,
+        depth: usize,
+    ) -> Vec<Comment> {
+        let mut out = Vec::new();
+        while let Some((d, _)) = items.peek() {
+            if *d != depth {
+                break;
+            }
+            let (_, mut comment) = items.next().expect("peeked");
+            comment.replies = nest(items, depth + 1);
+            out.push(comment);
+        }
+        out
+    }
+
+    /// One chain as it is read: its heading's anchor, its quote and its comments, flat with their depths.
+    struct Reading {
+        anchor: Anchor,
+        id: ChainId,
+        quote: Vec<String>,
+        items: Vec<(usize, Comment)>,
+    }
+
+    impl Reading {
+        fn finish(mut self) -> Chain {
+            for (_, comment) in &mut self.items {
+                comment.body = comment.body.trim_end().to_string();
+            }
+            if !self.quote.is_empty() {
+                self.anchor.quote = Some(self.quote.join("\n"));
+            }
+            Chain {
+                id: self.id,
+                anchor: self.anchor,
+                comments: nest(&mut self.items.into_iter().peekable(), 0),
+            }
+        }
+    }
+
+    /// The chains in a file's text, and the lines atm couldn't read (kept, with where they were).
+    #[must_use]
+    pub fn read(text: &str) -> CommentsFile {
+        let text = text.replace("\r\n", "\n");
+        let mut file = CommentsFile::default();
+        let mut current: Option<Reading> = None;
+        let mut last_chain: Option<ChainId> = None;
+        for (number, line) in text.lines().enumerate().map(|(i, l)| (i + 1, l)) {
+            let unread = |file: &mut CommentsFile, after: Option<ChainId>| {
+                file.unread.push(Unread {
+                    after,
+                    line: number,
+                    text: line.to_string(),
+                });
+            };
+            if line.starts_with("## ") {
+                if let Some(done) = current.take() {
+                    file.chains.push(done.finish());
+                }
+                match read_heading(line) {
+                    Some((anchor, id)) => {
+                        last_chain = Some(id.clone());
+                        current = Some(Reading {
+                            anchor,
+                            id,
+                            quote: Vec::new(),
+                            items: Vec::new(),
+                        });
+                    }
+                    None => unread(&mut file, last_chain.clone()),
+                }
+                continue;
+            }
+            let Some(chain) = current.as_mut() else {
+                if !line.is_empty() {
+                    unread(&mut file, last_chain.clone());
+                }
+                continue;
+            };
+            if chain.items.is_empty() && (line == ">" || line.starts_with("> ")) {
+                chain
+                    .quote
+                    .push(line.strip_prefix("> ").unwrap_or("").to_string());
+                continue;
+            }
+            let previous_depth = chain.items.last().map(|(d, _)| *d);
+            if let Some((depth, comment)) = read_item(line) {
+                let fits = match previous_depth {
+                    None => depth == 0,
+                    Some(previous) => depth <= previous + 1,
+                };
+                // A top-level comment has its box, a reply none
+                if fits && (depth == 0) == comment.resolved.is_some() {
+                    chain.items.push((depth, comment));
+                    continue;
+                }
+            }
+            if let Some((depth, comment)) = chain.items.last_mut() {
+                let indent = "  ".repeat(*depth + 1);
+                if line.is_empty() {
+                    comment.body.push('\n');
+                    continue;
+                }
+                if let Some(body) = line.strip_prefix(&indent) {
+                    comment.body.push_str(body);
+                    comment.body.push('\n');
+                    continue;
+                }
+            } else if line.is_empty() {
+                continue;
+            }
+            unread(&mut file, Some(chain.id.clone()));
+        }
+        if let Some(done) = current.take() {
+            file.chains.push(done.finish());
+        }
+        file
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::comments_md::{self, CommentsFile};
+    use super::review_md;
+    use crate::model::{Actor, ChainId, ReviewHeader, ReviewId, ReviewRef, Side, Status};
+
+    /// docs/code-review-design.md §3.4's example, as atm writes it.
+    const COMMENTS: &str = "\
+## crates/atm-cli/src/process.rs:40-52 · round 1 · t4
+> let shell = 0;
+
+- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c9
+  On Windows this follows the idle process. Find the parent instead?
+  - **claude:0f56a916** · 2026-11-17T03:40:00Z · c10
+    Done in round 2: `shell_pid()`, past Git Bash's forked copy of itself.
+
+    A second paragraph.
+    - **Hakan Serce** · 2026-11-17T04:05:00Z · c12
+      What if the parent's parent is a different shell?
+- [x] **Hakan Serce** · 2026-11-17T03:33:00Z · c11
+  Nit: the comment above it says \"launchers\".
+  - a list in the text
+  - **not** a reply
+
+## docs/plan.md · round 2 · old side · t5
+- [ ] **Hakan Serce** · 2026-11-17T04:00:00Z · c13
+  The old wording was clearer.
+
+## (the review) · round 1 · t1
+- [ ] **Hakan Serce** · 2026-11-17T03:45:00Z · c14
+  Overall fine; the two above first.
+";
+
+    #[test]
+    fn the_designs_example_is_read_as_nested_chains_and_written_back_exactly() {
+        let file = comments_md::read(COMMENTS);
+        assert!(file.unread.is_empty(), "{:?}", file.unread);
+        assert_eq!(file.chains.len(), 3);
+        let t4 = &file.chains[0];
+        assert_eq!(t4.id, ChainId("t4".into()));
+        assert_eq!(
+            t4.anchor.path.as_deref(),
+            Some("crates/atm-cli/src/process.rs")
+        );
+        assert_eq!(t4.anchor.lines, Some((40, 52)));
+        assert_eq!(t4.anchor.quote.as_deref(), Some("let shell = 0;"));
+        assert_eq!(t4.comments.len(), 2);
+        let c9 = &t4.comments[0];
+        assert_eq!((c9.id.0.as_str(), c9.resolved), ("c9", Some(false)));
+        assert_eq!(c9.replies[0].author, Actor::from("claude:0f56a916"));
+        assert_eq!(c9.replies[0].resolved, None);
+        assert_eq!(
+            c9.replies[0].body,
+            "Done in round 2: `shell_pid()`, past Git Bash's forked copy of itself.\n\nA second paragraph."
+        );
+        assert_eq!(c9.replies[0].replies[0].id.0, "c12");
+        // A list in a comment's text isn't a reply: no author, time and ID
+        assert!(
+            t4.comments[1]
+                .body
+                .ends_with("- a list in the text\n- **not** a reply")
+        );
+        assert_eq!(file.chains[1].anchor.side, Side::Old);
+        assert_eq!(file.chains[1].anchor.lines, None);
+        assert_eq!(file.chains[2].anchor.path, None);
+        assert_eq!(comments_md::write(&file), COMMENTS);
+    }
+
+    #[test]
+    fn what_atm_cant_read_is_kept_where_it_was_and_reported() {
+        let broken = "\
+A note someone put at the top.
+
+## src/a.rs:3 · round 1 · t1
+- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1
+  Why?
+written at the margin by hand
+- **a reply without its box** · 2026-11-17T03:32:00Z · c2
+
+## a heading without an ID
+- [ ] **Hakan Serce** · 2026-11-17T03:33:00Z · c3
+";
+        let file = comments_md::read(broken);
+        assert_eq!(file.chains.len(), 1);
+        assert_eq!(file.chains[0].comments[0].body, "Why?");
+        let lines: Vec<usize> = file.unread.iter().map(|u| u.line).collect();
+        assert_eq!(lines, [1, 6, 7, 9, 10]);
+        assert_eq!(file.unread[0].after, None);
+        assert_eq!(file.unread[1].after, Some(ChainId("t1".into())));
+        assert!(file.problems()[1].starts_with("comments.md line 6: not a comment atm can read"));
+        // Written back, nothing is lost; read again, the same
+        let again = comments_md::read(&comments_md::write(&file));
+        assert_eq!(again.chains, file.chains);
+        assert_eq!(
+            again
+                .unread
+                .iter()
+                .map(|u| u.text.clone())
+                .collect::<Vec<_>>(),
+            file.unread
+                .iter()
+                .map(|u| u.text.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn windows_line_ends_read_the_same_and_an_empty_file_is_no_chains() {
+        let file = comments_md::read(&COMMENTS.replace('\n', "\r\n"));
+        assert_eq!(comments_md::write(&file), COMMENTS);
+        assert_eq!(comments_md::read(""), CommentsFile::default());
+        assert_eq!(comments_md::write(&CommentsFile::default()), "");
+    }
+
+    fn header() -> ReviewHeader {
+        ReviewHeader {
+            id: ReviewId("3fa1c0d2-0000-7000-8000-000000000000".into()),
+            reference: ReviewRef::numbered(7),
+            number: 7,
+            title: "Claim hold on Windows".into(),
+            status: Status::ChangesRequested,
+            tasks: vec!["ATM-482".into()],
+            author: Some(Actor::from("claude:0f56a916")),
+            reviewers: vec![Actor::from("Hakan Serce")],
+            created: "2026-11-17T03:20:00Z".into(),
+            updated: "2026-11-17T04:02:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn review_md_is_the_header_in_toml_then_the_summary_and_reads_back() {
+        let text = review_md::write(
+            &header(),
+            "The watcher found its shell as pid 0 on Windows.\n",
+        )
+        .unwrap();
+        assert_eq!(
+            text,
+            "+++\nid = \"3fa1c0d2-0000-7000-8000-000000000000\"\nnumber = 7\ntitle = \"Claim hold on Windows\"\n\
+             status = \"changes_requested\"\ntasks = [\"ATM-482\"]\nauthor = \"claude:0f56a916\"\n\
+             reviewers = [\"Hakan Serce\"]\ncreated = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T04:02:00Z\n+++\n\n\
+             The watcher found its shell as pid 0 on Windows.\n"
+        );
+        let (read, summary) = review_md::read(&text).unwrap();
+        assert_eq!(read, header());
+        assert_eq!(summary, "The watcher found its shell as pid 0 on Windows.");
+        assert_eq!(review_md::write(&read, &summary).unwrap(), text);
+        // No summary: the header alone
+        let bare = review_md::write(&header(), "").unwrap();
+        assert!(bare.ends_with("+++\n"));
+        assert_eq!(review_md::read(&bare).unwrap().1, "");
+        // No author yet (a live review a person opened): the line left out, read back as none
+        let unknown = ReviewHeader {
+            author: None,
+            ..header()
+        };
+        let text = review_md::write(&unknown, "").unwrap();
+        assert!(!text.contains("author"), "{text}");
+        assert_eq!(review_md::read(&text).unwrap().0.author, None);
+    }
+
+    #[test]
+    fn a_review_md_without_a_readable_header_is_refused_naming_why() {
+        assert!(
+            review_md::read("no header")
+                .unwrap_err()
+                .to_string()
+                .contains("doesn't start")
+        );
+        assert!(
+            review_md::read("+++\nid = 1\n")
+                .unwrap_err()
+                .to_string()
+                .contains("no closing")
+        );
+        let wrong = review_md::read("+++\nid = 1\n+++\n")
+            .unwrap_err()
+            .to_string();
+        assert!(wrong.contains("can't be read"), "{wrong}");
+        let mut bad = header();
+        bad.created = "yesterday".into();
+        assert!(review_md::write(&bad, "").is_err());
+    }
+}

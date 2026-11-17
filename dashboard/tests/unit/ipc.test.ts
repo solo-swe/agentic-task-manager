@@ -43,6 +43,60 @@ describe('the IPC transport (T-457)', () => {
       expect(callFor(url), url).toBeNull();
   });
 
+  it('maps a project’s reviews, a review’s page and a file at a revision to their commands (ATM-574)', () => {
+    const at = (workspace: string) => ({ workspace, project: 'p1' });
+    const none = { q: '', status: [], author: undefined, reviewer: undefined, task: undefined, branch: undefined };
+    for (const [url, workspace] of [
+      ['/api/v2/workspaces/w/projects/p1/reviews', 'w'],
+      ['/api/v1/projects/p1/reviews', 'default'],
+    ] as const)
+      expect(callFor(url), url).toEqual({ command: 'project_reviews', args: { ...at(workspace), filters: none } });
+    expect(
+      callFor(
+        '/api/v1/projects/p1/reviews?q=two+words&status=open&status=live&status=&author=claude%3Aa&reviewer=Ana&task=ATM-1&branch=dev%2F1',
+      ),
+    ).toEqual({
+      command: 'project_reviews',
+      args: {
+        ...at('default'),
+        filters: {
+          q: 'two words',
+          status: ['open', 'live'],
+          author: 'claude:a',
+          reviewer: 'Ana',
+          task: 'ATM-1',
+          branch: 'dev/1',
+        },
+      },
+    });
+    expect(callFor('/api/v2/workspaces/w/projects/p1/reviews/CR-7?round=3&against=1')).toEqual({
+      command: 'project_review',
+      args: { ...at('w'), review: 'CR-7', round: 3, against: 1 },
+    });
+    expect(callFor('/api/v1/projects/p1/reviews/CR%208.2')).toEqual({
+      command: 'project_review',
+      args: { ...at('default'), review: 'CR 8.2', round: undefined, against: undefined },
+    });
+    // A round that isn't a number goes to the command as it is, which refuses it as the route does
+    expect(callFor('/api/v1/projects/p1/reviews/CR-7?round=x')!.args.round).toBeNaN();
+    expect(callFor('/api/v1/projects/p1/documents?path=a.md&at=3fa1')).toEqual({
+      command: 'document',
+      args: { ...at('default'), path: 'a.md', at: '3fa1' },
+    });
+    expect(callFor('/api/v1/projects/p1/documents?path=a.md&at=')!.args.at).toBeUndefined();
+    // No review named, deeper than a review, or under p/
+    for (const url of [
+      '/api/v1/projects/p1/reviews/',
+      '/api/v1/projects/p1/reviews/CR-7/comments',
+      '/api/v2/workspaces/w/projects/p1/reviews/CR-7/x',
+      '/p/p1/reviews',
+      '/p/p1/tasks',
+      '/p/p1/documents?path=a.md',
+      '/api/v1/projects/p1/tasks/',
+    ])
+      expect(callFor(url), url).toBeNull();
+  });
+
   it('answers with the command’s JSON, an image’s bytes, or the error as its HTTP status', async () => {
     mockIPC((command, args) => {
       if (command === 'list_projects')

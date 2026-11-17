@@ -216,7 +216,7 @@ One folder per review, under the task folder:
 
 ```text
 .agentic-task-manager/reviews/
-  CR-7-3fa1/           the review's number and the start of its UUID (§3.4)
+  CR-7-3fa1/           the review's number and the end of its UUID (§3.10)
     review.md          the header and the summary
     comments.md        every comment chain
     rounds/
@@ -330,6 +330,15 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
   watch`, §3.9), naming no review and no task: it prints the user's comments and replies **about the agent's work**,
   from any review, as they are added, whether the agent is on a task, between tasks, or changing something with no
   task at all. If the user opens a live review and comments, the agent sees it at once and reacts, without stopping.
+- **Who is who** (decided with Hakan, ATM-572): a live review a person opens is a review of an agent's work, so the
+  person is its **reviewer** and the change, its **author**, is the agent's: the agent holding a task in that working
+  copy, else the one that started a task it names, else nobody yet (the review's author is empty); the agent's first
+  round, or a task named later, fills it in. So the person who opened it can approve it, and the agent can't.
+- **Overriding the rules** (Hakan): a person may decide a review the rules wouldn't let them (their own, with
+  feedback received elsewhere and entered by them), saying why: `atm review submit --override-rules '<why>'`, or the
+  page's *Override and decide*. The review records it, a resolved chain naming who and why. It lifts who decides only;
+  an approval still needs every top-level comment resolved. An agent never uses it on its own: no skill pre-approves
+  `atm review submit`, so its harness asks the user each time.
 - **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author
   ends it with a round, which makes it an ordinary `open` review; or it is closed.
 - **When the task is finished**, the agent asks for its review as its review mode says, and atm sees which case it is:
@@ -373,7 +382,8 @@ lacks one), it goes into CompMD; everything a diff needs on top of rendering is 
 
 ### 3.8 Tasks and reviews
 
-- A task records its reviews: `reviews: ["CR-7"]`, a list in the task (the schema gains it), shown as links on the
+- A task records its reviews: `code_reviews: [{"id": "<UUID>", "ref": "CR-7"}]`, a list in the task (the schema
+  gains it; `reviews` was taken, by a task's past review rounds), followed by its UUID, shown as links on the
   card and in the details (`CR-7 · changes requested`), each opening the review, in a new tab with ⌘-click.
 - **Opening a review for a task** (`atm review create --task ATM-482 …`) puts the task in review when it is in
   progress (as `atm task state ATM-482 in_review` does, with the review's link in its `review` note).
@@ -516,7 +526,8 @@ folder (the JSON store's watcher, ATM-555). Its numbers:
 
 - **A new review takes the next number** from a counter shared by the clone's worktrees (`.git/atm/`, beside the
   claims), so two worktrees never take the same one.
-- **Its folder is named by its number and the start of its UUID** (`CR-7-3fa1`), so two clones' CR-8s are two folders,
+- **Its folder is named by its number and the end of its UUID** (`CR-7-3fa1`: a v7 UUID starts with the time, so
+  its start is shared by reviews made weeks apart; its end is random), so two clones' CR-8s are two folders,
   and a merge never collides on them (a plain `CR-8` folder on both sides would be one folder with two reviews' files
   in conflict, which nothing but a person can untangle).
 - **A clash gets minor numbers:** two reviews with the same number (made in two clones, then merged) are **CR-8.1 and

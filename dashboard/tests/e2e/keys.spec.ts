@@ -1,7 +1,8 @@
 import { addressOf, expect, follow, loadFixture, openDashboard, test } from './helpers';
 
 // Task keys (ADR-007, T-546): a project in the keys format stores its tasks by UUID and shows them by key (ATM-10),
-// a provisional key lighter with a "draft" mark; ?task= takes a key, an earlier prefix's key, an alias or the UUID,
+// a provisional key lighter, in italics, with an ⓘ its tooltip explains; ?task= takes a key, an earlier prefix's key,
+// an alias or the UUID,
 // and the address then shows the key. A project from before task keys shows its IDs as it always has.
 
 const SETUP = '0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8001';
@@ -11,14 +12,28 @@ const FOREIGN = '3f2a9c1e:0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8f99';
 const TIP = 'Provisional until merged into main: the number may change if another branch took it';
 
 test.describe('task keys', () => {
-  test('cards and list rows show keys, a provisional one with its draft mark', async ({ page, tasksServer }) => {
+  test('the dependency graph shows a provisional key in italics, its tooltip saying why; no DRAFT label', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDashboard(page, tasksServer, 'keys', { tab: 'graph' });
+    const key = page.locator('#dep-graph .graph-provisional');
+    await expect(key).toHaveCount(1);
+    await expect(key).toHaveAttribute('font-style', 'italic');
+    await expect(key.locator('title')).toHaveText(TIP);
+    await expect(page.locator('#dep-graph')).not.toContainText('DRAFT');
+  });
+
+  test('cards and list rows show keys, a provisional one in italics with its ⓘ', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'keys', { tab: 'kanban' });
     await expect(page.locator(`.kanban-card[data-id="${LOGIN}"] .kanban-card-id`)).toHaveText('ATM-10');
     const draft = page.locator(`.kanban-card[data-id="${ONBOARDING}"] .kanban-card-id .provisional`);
-    await expect(draft).toHaveText('ATM-11draft');
+    await expect(draft).toHaveText('ATM-11');
     await expect(draft).toHaveAttribute('title', TIP);
-    await expect(draft.locator('.draft-mark')).toHaveText('draft');
-    await expect(page.locator(`.kanban-card[data-id="${LOGIN}"] .draft-mark`)).toHaveCount(0);
+    // Italic, with an ⓘ the key's tooltip explains; no badge
+    await expect(draft).toHaveCSS('font-style', 'italic');
+    await expect(draft.locator('.draft-info .icon-info')).toHaveCount(1);
+    await expect(page.locator(`.kanban-card[data-id="${LOGIN}"] .draft-info`)).toHaveCount(0);
 
     await follow(page, `/projects/${tasksServer.projectId}/list`);
     await expect(page.locator(`.task-card[data-id="${SETUP}"] .task-id`)).toHaveText('ATM-2');
@@ -40,7 +55,7 @@ test.describe('task keys', () => {
     await expect(page.locator('#detail-key')).toHaveText('ATM-10');
     expect(addressOf(page)).toBe(`/projects/${tasksServer.projectId}/list?task=ATM-10`);
     await expect(page.locator('#detail-panel .detail-dep-item').first()).toContainText('ATM-2');
-    await expect(page.locator('#detail-related .detail-dep-item')).toContainText('ATM-11draft');
+    await expect(page.locator('#detail-related .detail-dep-item')).toContainText('ATM-11');
     // The provisional task: its heading marked, the other project's dependency said to be not loaded here
     await page.locator('#detail-related .detail-dep-item').click();
     await expect(page.locator('#detail-key .provisional')).toHaveAttribute('title', TIP);
@@ -65,7 +80,7 @@ test.describe('task keys', () => {
       ['atm-10', 'ATM-10'],
     ]) {
       await follow(page, `/projects/${tasksServer.projectId}/list?task=${ref}`);
-      await expect(page.locator('#detail-key')).toHaveText(key === 'ATM-11' ? 'ATM-11draft' : key);
+      await expect(page.locator('#detail-key')).toHaveText(key === 'ATM-11' ? 'ATM-11' : key);
       await expect.poll(() => addressOf(page)).toBe(`/projects/${tasksServer.projectId}/list?task=${key}`);
     }
   });
@@ -80,17 +95,17 @@ test.describe('task keys', () => {
     await openDashboard(page, tasksServer, 'keys', { tab: 'list' });
     await page.locator(`.task-card[data-id="${ONBOARDING}"] .task-name`).click();
     const other = page.locator(`#detail-panel a.detail-dep-item.foreign[data-foreign="${FOREIGN}"]`);
-    await expect(other.locator('.provisional')).toHaveText('LFB-5draft');
+    await expect(other.locator('.provisional')).toHaveText('LFB-5');
     await expect(other.locator('.detail-dep-name')).toHaveText('Write the post about the onboarding');
     await expect(other.locator('.badge')).toHaveText('in progress');
     await expect(other).toHaveAttribute('href', '/projects/3f2a9c1e?task=LFB-5');
     await expect(other).toHaveAttribute('title', /\(a task of Learn Forever Blog\)/);
     // The list's dependency link by its key too
-    await expect(page.locator(`.task-card[data-id="${ONBOARDING}"] .dep-link`).nth(1)).toHaveText('LFB-5draft');
+    await expect(page.locator(`.task-card[data-id="${ONBOARDING}"] .dep-link`).nth(1)).toHaveText('LFB-5');
     // A click opens it in its project, its details open
     await other.click();
     await expect(page.locator('#dashboard-title')).toHaveText('Learn Forever Blog');
-    await expect(page.locator('#detail-key')).toHaveText('LFB-5draft');
+    await expect(page.locator('#detail-key')).toHaveText('LFB-5');
     // On its project's own tab
     await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/3f2a9c1e(\/[a-z]+)?\?task=LFB-5$/);
   });
@@ -129,7 +144,7 @@ test.describe('task keys', () => {
     await expect(tabs).toHaveCount(2);
     await expect(page.locator('#dashboard-title')).toHaveText('Learn Forever Blog');
     await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/3f2a9c1e(\/[a-z]+)?\?task=LFB-5$/);
-    await expect(page.locator('#detail-key')).toHaveText('LFB-5draft');
+    await expect(page.locator('#detail-key')).toHaveText('LFB-5');
   });
 
   test('the overview’s cards and the All projects board show keys, a provisional one marked (T-549)', async ({
@@ -142,7 +157,7 @@ test.describe('task keys', () => {
     const card = page.locator(`.project-card[data-id="${tasksServer.projectId}"]`);
     await expect(card.locator('.project-card-work-line .project-card-work-id')).toHaveText('ATM-10');
     await expect(card.locator('.project-card-last .project-card-work-id')).toHaveText('ATM-2');
-    await expect(card.locator('.draft-mark')).toHaveCount(0);
+    await expect(card.locator('.draft-info')).toHaveCount(0);
 
     await follow(page, '/board');
     // No sprint is active: the board of all tasks
@@ -150,7 +165,7 @@ test.describe('task keys', () => {
     const board = page.locator('#all-board');
     await expect(board.locator(`.board-card[data-id="${LOGIN}"] .kanban-card-id`)).toHaveText('ATM-10');
     const draft = board.locator(`.board-card[data-id="${ONBOARDING}"]`);
-    await expect(draft.locator('.kanban-card-id .provisional')).toHaveText('ATM-11draft');
+    await expect(draft.locator('.kanban-card-id .provisional')).toHaveText('ATM-11');
     await expect(draft.locator('.kanban-card-id .provisional')).toHaveAttribute('title', TIP);
     await expect(draft.locator('.board-card-status')).toHaveText('Waits on ATM-10, 3f2a9c1e:0193a5b2');
   });
@@ -158,7 +173,7 @@ test.describe('task keys', () => {
   test('a project from before task keys still shows its IDs', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
     await expect(page.locator('.task-card[data-id="T-004"] .task-id')).toHaveText('T-004');
-    await expect(page.locator('.draft-mark')).toHaveCount(0);
+    await expect(page.locator('.draft-info')).toHaveCount(0);
     await page.locator('.task-card[data-id="T-004"] .task-name').click();
     await expect(page.locator('#detail-key')).toHaveText('T-004');
     expect(new URL(page.url()).searchParams.get('task')).toBe('T-004');

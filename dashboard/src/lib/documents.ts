@@ -1,7 +1,7 @@
 // The document viewer (docs/compmd-viewer-design.md): which file a reference names, the address parameter that says
 // what is open (?doc=<path>:L<n>), and loading a file through the documents route (T-392). atm renders nothing itself:
 // the route gives the CompMD document atm wrapped the file in, and CompMd.svelte renders it.
-import { type Fetch, v1DocumentUrl, type Validators } from './api/http';
+import { type Fetch, v1DocumentAtUrl, v1DocumentUrl, type Validators } from './api/http';
 import { addressParams, formatAddress } from './address';
 import { markdownPlainText } from './plain-text';
 
@@ -18,7 +18,8 @@ export interface ProjectDocument {
   line_offset: number;
   lines: number;
   bytes: number;
-  modified_at: string;
+  /** When the working copy's file last changed; null for a file at a revision (atm-docs, ATM-570) */
+  modified_at: string | null;
   /** Whether git tracks the file; null outside git */
   tracked: boolean | null;
   /** The current commit; null outside git */
@@ -291,19 +292,22 @@ async function reason(resp: Response): Promise<string> {
   }
 }
 
-/** A project's file through the documents route; conditional with the last load's ETag (a 304 is `unchanged`). A
- * missing file (404) and one atm won't show (400, 403, 413) are results, not failures: the viewer says which. */
+/** A project's file through the documents route (`at` a commit or tree: a review round's side, ATM-574); conditional
+ * with the last load's ETag (a 304 is `unchanged`). A missing file (404) and one atm won't show (400, 403, 413) are
+ * results, not failures: the viewer says which. */
 export async function loadDocument(
   project: string,
   path: string,
   fetchFn: Fetch,
   since?: Validators,
+  at?: string,
 ): Promise<DocumentResult> {
   const headers: Record<string, string> = {};
   if (since?.etag) headers['If-None-Match'] = since.etag;
   let resp: Response;
   try {
-    resp = await fetchFn(v1DocumentUrl(project, path), { cache: 'no-store', headers });
+    const url = at ? v1DocumentAtUrl(project, path, at) : v1DocumentUrl(project, path);
+    resp = await fetchFn(url, { cache: 'no-store', headers });
   } catch (e) {
     return { unchanged: false, error: 'failed', message: (e as Error).message };
   }

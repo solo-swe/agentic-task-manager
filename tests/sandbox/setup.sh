@@ -23,3 +23,9 @@ git add -A
 git reset -q -- .env
 git commit -q -m "Initial project"
 git push -q -u origin main
+
+sh /opt/atm/seed-review.sh
+git add -A
+git reset -q -- .env
+git commit -q -m "A review of src/app.js"
+git push -q

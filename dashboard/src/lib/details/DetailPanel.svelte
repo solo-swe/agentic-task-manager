@@ -11,7 +11,7 @@
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../waiting';
   import { taskTimes } from '../work';
   import { commitRef } from '../repo';
-  import { referenceTo } from '../documents';
+  import { referenceTo, type DocumentRef } from '../documents';
   import { cutOff, scrollBehavior } from '../scroll';
   import RepoRef from '../ui/RepoRef.svelte';
   import BranchChip from '../ui/BranchChip.svelte';
@@ -28,6 +28,9 @@
   import { tabActions, wantsNewTab } from '../tab-actions';
   import type { IconName } from '../ui/Icon.svelte';
   import type { Task } from '../types';
+
+  /** A link in a task's text to a document of the project opens the document viewer */
+  const openDocument = (ref: DocumentRef) => dashboard.openDocument(ref);
 
   // Another project's task opens in its project (T-549): in the app in a new tab, as the details stay here; in the
   // browser in this tab, or another for ⌘-click, Ctrl-click or a middle click, as any link
@@ -299,7 +302,7 @@
       <div class="label">Description</div>
       <!-- CompMD (docs/compmd-rendering-design.md), with the task's own data as md.data.task -->
       <div class="value detail-description" id="detail-description">
-        <CompMd text={task.description ?? ''} {task} />
+        <CompMd text={task.description ?? ''} {task} onopen={openDocument} />
       </div>
     </div>
     {#if history.length > 1}
@@ -399,7 +402,7 @@
                 >
               </div>
               <div class="note-text">
-                <CompMd text={note.text} {task} />
+                <CompMd text={note.text} {task} onopen={openDocument} />
               </div>
             </li>
           {/each}
@@ -482,7 +485,7 @@
         <div><strong>{reviewSummary(review)}</strong></div>
         <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
         {#if review.note}<div class="review-note">
-            <CompMd text={review.note.text} {task} />
+            <CompMd text={review.note.text} {task} onopen={openDocument} />
           </div>{/if}
       </div>
     </div>
@@ -497,7 +500,9 @@
         {/if}
         {#if block.questions.length}
           <ol class="block-questions">
-            {#each block.questions as question, i (i)}<li><CompMd text={question} {task} inline /></li>{/each}
+            {#each block.questions as question, i (i)}<li>
+                <CompMd text={question} {task} inline onopen={openDocument} />
+              </li>{/each}
           </ol>
           <div style="color:var(--text-muted)">
             Answer with <code>atm task state {taskLabel(task)} todo --answer '…'</code>, one per question.
@@ -516,7 +521,7 @@
     <div class="detail-refs">
       {#each items as item (item)}
         <div class="detail-ref">
-          {#if task && /\]\(/.test(item)}<CompMd text={item} {task} inline />{:else}{item}{/if}
+          {#if task && /\]\(/.test(item)}<CompMd text={item} {task} inline onopen={openDocument} />{:else}{item}{/if}
         </div>{:else}<span style="color:var(--text-muted)">None</span>{/each}
     </div>
   </div>

@@ -10,6 +10,9 @@ use std::process::{Command, Output, Stdio};
 use atm_common::py::{repr_str, strip};
 use atm_common::{Error, Result};
 
+pub mod diff;
+pub use diff::{ChangedFile, Diff};
+
 /// Pathspecs that stage more than the files named: another agent's work can be in the same tree.
 const WHOLE_TREE: [&str; 7] = [".", "-A", "--all", "-u", "--update", ":/", "*"];
 /// git reads a path as a pattern (`*.env` is every .env file); with this, a path names exactly one file (F6).
@@ -345,6 +348,20 @@ impl GitVcs {
         )
     }
 
+    /// The tree a revision names (a commit's, or a tree itself, as a review's rebuilt round is), or none.
+    #[must_use]
+    pub fn resolve_tree(&self, rev: &str) -> Option<String> {
+        ask(
+            &[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("{rev}^{{tree}}"),
+            ],
+            &self.root,
+        )
+    }
+
     /// Whether the commit is an ancestor of HEAD (on the current branch).
     #[must_use]
     pub fn in_history(&self, sha: &str) -> bool {
@@ -360,8 +377,8 @@ impl GitVcs {
         step(&["log", "-1", "--format=%B", sha], &self.root, false)
     }
 
-    // The working copy's files, for the document viewer (docs/compmd-viewer-design.md §4). atm-lib checks the path
-    // first (`documents.rs`); these read only below the root, through no symbolic link
+    // The working copy's files, for the document viewer (docs/compmd-viewer-design.md §4). atm-docs checks the path
+    // first; these read only below the root, through no symbolic link
 
     /// The file's path, or none when a segment from the root down is a symbolic link or it isn't a regular file.
     fn file(&self, relative: &str) -> Option<PathBuf> {
@@ -396,6 +413,43 @@ impl GitVcs {
         self.file(relative)
             .and_then(|p| std::fs::read(p).ok())
             .ok_or_else(|| Error::NotFound(format!("{relative}: no such file")))
+    }
+
+    /// A regular file as `commit` (a SHA, as [`GitVcs::resolve`] gives it) has it: its size and its blob; none when the
+    /// commit has no regular file there (no entry, a symlink, a submodule, a folder).
+    #[must_use]
+    pub fn blob_in(&self, commit: &str, relative: &str) -> Option<(u64, String)> {
+        let output = run(
+            &["ls-tree", "-z", "--long", commit, "--", relative],
+            &self.root,
+        )?;
+        if !output.status.success() {
+            return None;
+        }
+        let listing = String::from_utf8_lossy(&output.stdout);
+        let (meta, path) = listing.split('\0').next()?.split_once('\t')?;
+        if path != relative {
+            return None;
+        }
+        let parts: Vec<&str> = meta.split_whitespace().collect();
+        let [mode, "blob", blob, size] = parts.as_slice() else {
+            return None;
+        };
+        matches!(*mode, "100644" | "100755").then_some(())?;
+        Some((size.parse().ok()?, (*blob).to_string()))
+    }
+
+    /// A blob's bytes (from [`GitVcs::blob_in`]).
+    ///
+    /// # Errors
+    /// git isn't available, or there is no such blob.
+    pub fn blob_bytes(&self, blob: &str) -> Result<Vec<u8>> {
+        let output = run(&["cat-file", "blob", blob], &self.root)
+            .ok_or_else(|| Error::failed("git isn't available"))?;
+        if !output.status.success() {
+            return Err(Error::NotFound(format!("{blob}: no such blob")));
+        }
+        Ok(output.stdout)
     }
 
     /// The submodule `relative` is in, nearest the root, as (its folder, the path inside it), or none. A submodule is a

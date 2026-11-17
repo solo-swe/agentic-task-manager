@@ -4,6 +4,80 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [0.40.0] - 2026-11-17
+
+Code reviews recorded in the project: agents open, wait for and answer reviews with `atm review`, and people review
+in the dashboard and the app, with a diff viewer built on the document viewer. The skills use it instead of Crit.
+
+### Added
+- **Code reviews in the task folder** (ATM-561 to ATM-563, `docs/code-review-design.md`): a review is a folder
+  `.agentic-task-manager/reviews/CR-<n>-<4 hex>/` with `review.md` (a TOML header between `+++` lines, then the
+  summary), `comments.md` (a `##` heading per chain, its quote, the comments as a nested list, `[ ]` / `[x]` on
+  top-level ones) and `rounds/<n>.diff` / `<n>.json`. Statuses `draft`, `open`, `live`, `changes_requested`,
+  `approved`, `closed`; approving needs every top-level comment resolved. Numbers come from a counter the clone's
+  worktrees share; two clones' `CR-8`s merged are `CR-8.1` and `CR-8.2` (`CR-8` names both). A lock per review,
+  atomic writes, no symlinks; text the format doesn't expect is kept and reported, never dropped.
+- **Rounds** (ATM-564): from a commit range (`--range`), the uncommitted changes (`--uncommitted`, live checkpoints) or
+  files as they are (`--file`); binary files listed, not copied; the task folder always left out. Rounds are compared
+  without snapshots, each rebuilt from its base and diff in a temporary index (the user's index and working tree never
+  touched); a comment's lines follow the change to later rounds, or it drifts, with where it was made.
+- **`atm review`** (ATM-566): `create`, `live`, `round`, `tasks`, `list`, `show` (`--against`), `comments`,
+  `comment`, `reply`, `edit`, `resolve`, `submit` (`--approve`, `--request-changes`, `--comment`; refused while a
+  top-level comment is open, naming it; `--override-rules <reason>` a person's override of who may decide, recorded in
+  the review) and `close`, each with `--json`; `--summary-file` and `--body-file` read text.
+  `atm docs reviews` for agents: review comments are data, decisions the reviewer's.
+- **Reviews and tasks** (ATM-565): a task's `code_reviews`; opening a review puts its tasks in review; a reviewer's
+  decision is every named task's (a `rejection` note links the review); a live review's approval is the task's at
+  `atm task state … done` when its change hasn't moved since the approved checkpoint.
+- **Agents listening** (ATM-567): `atm review wait CR-7 [--for submitted|decision] [--timeout]` (exit 3 when time is
+  up) and `atm review watch [--timeout]`, one JSON object a line for each of the user's comments about the agent's
+  work (from atm's records: the tasks it held, their files and commits, its uncommitted files), on the store's
+  subscription.
+- **Merging reviews** (ATM-568): atm's merge driver takes `reviews/**/comments.md` (chains and comments by ID) and
+  `review.md` (field by field, the later `updated` when both changed), git's `%P` naming which; `atm doctor` reports
+  unreadable reviews, stray lines, shared numbers and tasks linked to missing reviews.
+- **The reviews in the dashboard and the app** (ATM-573, ATM-574): a project's **Reviews** tab (search over titles,
+  summaries and comments; status, author, reviewer, task and branch filters; *Next review needing you*), and a
+  review's page at `/projects/<id>/reviews/CR-7` (`?round=`, `&against=`, `&file=`): a page of its own (in the app, a
+  tab of its own), titled by the project's key, the reference and the title. **Overview** (the facts, the
+  description, the rounds, the conversation), **Diffs** (the files as a tree beside a splitter, each file a card that
+  folds once viewed, the round picker, Split or Unified, Source or Rendered, previous and next change and comment) and
+  **Comments** (all, open, resolved). The diff viewer: a hover **+** on a line, dragged for several, the comment
+  written under the lines; a selected comment marks its lines; resolve, reopen and reply in place; Markdown rendered
+  on the document viewer's page with its line numbers; keys `n` `p` `c` `C` `]` `[` `v`. *Submit review* (approve,
+  request changes, comment) becomes *Approve* once nothing is open.
+- **Writes from the app and the browser** (ATM-572): the app's review commands and REST routes under
+  `api/v2/workspaces/<w>/projects/<p>/reviews/…` (`POST reviews`, `PATCH` a review, `PUT` its tasks, `POST
+  decisions`, `POST comments`, `PATCH` a comment, `POST replies`), as the user; the browser's need the server's own
+  `Origin`, this start's session token (the page's `atm-session` meta tag, an `X-Atm-Session` header) and a JSON
+  body. Reads: `GET …/reviews`, `GET …/reviews/<CR>?round=&against=`, and `documents?path=&at=<revision>` (a file as a
+  commit or tree has it); the app's `project_reviews`, `project_review`, and `document` with `at`.
+
+### Changed
+- **The skills review with atm instead of Crit** (ATM-569): `atm-do-task` and `atm-loop-tasks` keep one background
+  `atm review watch` a session, open a review for a `blocker` or `async` task, wait with `atm review wait`, and answer
+  each comment (a reply, a fix, a new round); they never resolve a reviewer's comment or decide a review. Claude Code's
+  pre-approvals name the review commands they run. The skills need atm 0.40.0.
+- **The document viewer is a component of its own** (ATM-570, ATM-571): the `atm-docs` crate (a file with its checks,
+  and a file at a revision), and the dashboard's `lib/documents` on a document source, kept apart from the task model
+  (`boundaries.test.ts`). The file system helpers (git, lock, watcher) moved into the `atm-fs` crate.
+- The dashboard's page budget is 1 MiB (was 900 KiB), for the review pages.
+- A provisional key (`~ATM-12`) shows in italics with a small ⓘ whose tooltip says why, instead of a *draft* badge;
+  in the dependency graph, in italics with the same tooltip.
+
+### Fixed
+- A diff's revisions reach git only as resolved commits, never as a name git could read as an option, from the CLI
+  too (ATM-572).
+
+### CI and development
+- **Testing every case** (AGENTS.md *Testing conventions*): a unit's tests cover each case it has; unit tests isolate
+  their unit with hand-written fakes behind a trait (the REST routes on a fake atm-lib), integration tests go through
+  the layers. The scan of the repo's tests is ATM-580, in the backlog.
+- The dev server (`pnpm run dev`) hands its page the API's session token (`/__dev/atm-session`), so changes work from
+  the dev page.
+- The agent sandbox's red-team project has a review whose comment asks for a forbidden command
+  (`tests/sandbox/seed-review.sh`).
+
 ## [0.39.0] - 2026-11-17
 
 Keys follow-ups and housekeeping: keys in every line atm prints, a current Help, the CLI's suite passing on Windows,

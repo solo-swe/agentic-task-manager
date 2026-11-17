@@ -1208,10 +1208,35 @@
       },
       {
         "id": "Keys follow-ups and housekeeping",
-        "state": "active",
+        "state": "closed",
         "goal": "Keys everywhere in atm’s output, the dated Help text, CI’s flaky tests and Windows suite, the open Dependabot alert, and the code review design",
         "release": "0.39.0",
-        "start": "2026-11-17T01:47:59Z"
+        "start": "2026-11-17T01:47:59Z",
+        "end": "2026-11-17T08:47:44Z",
+        "report": {
+          "done": [
+            "949645c4-9213-833c-9f10-435f787a9ab8",
+            "9d40a6f4-f771-86d4-8e8c-ed80bcf6d10b",
+            "9153a747-c75d-8428-b697-bb04fcd9768c",
+            "39bccfe9-b2ea-87ce-be13-e6b4d9fefdb4",
+            "01a1e730-852d-7469-8ae7-dbcf71c291b1",
+            "01a1e730-852d-7469-8ae7-dbd0eec2957d",
+            "01a1e730-852d-7469-8ae7-dbd197353e7a",
+            "01a1e730-852d-7469-8ae7-dbd223764546",
+            "01a1e853-4d39-7220-b293-f23710b6d068"
+          ],
+          "carried": [],
+          "added": [
+            "01a1e853-4d39-7220-b293-f23710b6d068"
+          ]
+        }
+      },
+      {
+        "id": "Code reviews: records and CLI",
+        "state": "active",
+        "goal": "Reviews recorded in the project through the CLI: agents open, wait for and watch reviews with atm review, and the skills use it instead of Crit; the document viewer becomes its own component, and the diff viewer is built on it",
+        "release": "0.40.0",
+        "start": "2026-11-17T08:53:26Z"
       }
     ],
     "releases": [
@@ -1457,6 +1482,15 @@
       },
       {
         "id": "0.39.0",
+        "state": "released",
+        "pr": {
+          "number": 52,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+        },
+        "released_at": "2026-11-17T08:26:00Z"
+      },
+      {
+        "id": "0.40.0",
         "state": "planned"
       }
     ],
@@ -1536,7 +1570,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 580
+    "next_number": 583
   },
   "tasks": [
     {
@@ -1848,7 +1882,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -1919,7 +1953,8 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
-      }
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
     },
     {
       "id": "e4835eb2-79bb-8121-8028-35dcfe3aab39",
@@ -9447,7 +9482,7 @@
         "crates/atm-db/src/jsongit/lock.rs"
       ],
       "created_at": "2026-11-08T00:38:28Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9482,7 +9517,8 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
-      }
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
     },
     {
       "id": "9153a747-c75d-8428-b697-bb04fcd9768c",
@@ -9508,7 +9544,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9584,7 +9620,8 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
-      }
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
     },
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
@@ -9887,7 +9924,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T08:09:05Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "with": "user",
@@ -9933,7 +9970,8 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
-      }
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
     },
     {
       "id": "2238c9b2-a361-848f-ac56-42807145ee8b",
@@ -14187,7 +14225,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14198,7 +14236,7 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 557,
-      "key_final": false,
+      "key_final": true,
       "notes": [
         {
           "at": "2026-11-17T01:48:06Z",
@@ -14221,7 +14259,8 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
-      }
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd0eec2957d",
@@ -14243,7 +14282,7 @@
         "dashboard/tests/e2e/help.spec.ts"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14254,7 +14293,7 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 558,
-      "key_final": false,
+      "key_final": true,
       "started_at": "2026-11-17T02:09:13Z",
       "started_by": "claude:0f56a916",
       "commit": "42feca7f68a4c2bbaa2eabfad38e2b0940bff0a3",
@@ -14271,7 +14310,8 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
-      }
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd197353e7a",
@@ -14292,7 +14332,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14303,7 +14343,7 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 559,
-      "key_final": false,
+      "key_final": true,
       "notes": [
         {
           "at": "2026-11-17T02:14:44Z",
@@ -14339,7 +14379,8 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
-      }
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd223764546",
@@ -14360,7 +14401,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14371,7 +14412,7 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 560,
-      "key_final": false,
+      "key_final": true,
       "started_at": "2026-11-17T02:14:47Z",
       "started_by": "claude:0f56a916",
       "commit": "4995daba1dd3cfdd06bcd0a239d13dd07f03df98",
@@ -14388,7 +14429,8 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
-      }
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e194e41ecb3",
@@ -14401,7 +14443,7 @@
       "description": "Phase 1 of [the code review design](docs/code-review-design.md) (approved 2026-11-17).\n\n## Change\n- A new crate `crates/atm-review`, depending on `atm-common` and `atm-vcs` only (not atm-db, not the task model: a task is a key string).\n- The model: `Review` (header, summary, chains, rounds), statuses `draft`, `open`, `live`, `changes_requested`, `approved`, `closed` ([§3.2](docs/code-review-design.md#:~:text=3.2%20A%20review%20and%20how%20it%20goes)), `Round` (kinds `range`, `working`, `files`, and live checkpoints), `Chain`, `Comment` (top-level ones with `resolved`, replies nested, [§3.4](docs/code-review-design.md#:~:text=3.4%20Comments)), `Anchor`, `ReviewId` and `ReviewRef`.\n- The `ReviewStore` trait with one method per operation ([§3.10](docs/code-review-design.md#:~:text=3.10%20The%20store)), and an in-memory store for the tests.\n- The rules above the store: approve only when every top-level comment is resolved; who may resolve; the status changes of the state diagram.\n- `tests/scripts/layers.test.mjs` gains the crate, and checks it depends on neither atm-db nor atm-lib.\n\n## Tests\nUnit tests of the rules on the memory store.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-review/",
@@ -14409,14 +14451,38 @@
         "tests/scripts/layers.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:07Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 561,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T08:54:07Z",
+      "started_by": "claude:0f56a916",
+      "commit": "5f5b15c744af049294cdd495d443e378ad8bf7fc",
+      "completed_at": "2026-11-17T08:58:35Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T08:58:35Z",
+          "kind": "outcome",
+          "text": "crates/atm-review: the model (reviews, statuses, rounds, chains with nested replies, anchors), the ReviewStore trait (one method per operation), the rules (who may resolve, decide, approve only when every top-level comment is resolved, the state diagram) and a memory store; 10 tests. OnChange/Subscription moved to atm-common so both stores share them; layers.test.mjs has the crate.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1a9a33bc82",
@@ -14429,7 +14495,7 @@
       "description": "The two text files of a review ([§3.3](docs/code-review-design.md#:~:text=3.3%20The%20records), [§3.4](docs/code-review-design.md#:~:text=3.4%20Comments)), in `atm-review`.\n\n## Change\n- `review.md`: the TOML header between `+++` lines (id, number, title, status, tasks, author, reviewers, created, updated), then the summary. `toml` becomes atm-review's dependency (approved by Hakan in the design review; already in `Cargo.lock`).\n- `comments.md`: a `##` heading per chain (file and lines, round, chain ID, or `(the review)`), the quote, then the comments as a nested list; top-level items start with `[ ]` / `[x]`, replies have no box; author, time and ID, then the indented text.\n- Writing and reading back exactly; text the format doesn't expect is kept as it is and reported (for `atm doctor`), never dropped.\n\n## Tests\nRound trips of both files, the example in §3.4, a hand-broken file kept and reported.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e194e41ecb3"
       ],
@@ -14437,11 +14503,35 @@
         "crates/atm-review/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 562,
-      "key_final": false
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T08:58:37Z",
+      "started_by": "claude:0f56a916",
+      "commit": "aded37c9eefc4745773186c9876ce7a91b132890",
+      "completed_at": "2026-11-17T09:01:08Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:01:08Z",
+          "kind": "outcome",
+          "text": "files.rs: review.md (TOML header with dates, then the summary) and comments.md (chains: heading with file:lines, round, old side, ID; quote; nested comments, boxes on top-level only) written and read back exactly; unreadable lines kept where they were and reported (problems()); CRLF read the same. toml 1.2 (in the tree) is atm-review’s dependency. 5 tests.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b",
@@ -14454,7 +14544,7 @@
       "description": "The first `ReviewStore`: `.agentic-task-manager/reviews/` ([§3.10](docs/code-review-design.md#:~:text=3.10%20The%20store)).\n\n## Change\n- One folder per review, `CR-<n>-<first 4 hex of its UUID>`, with `review.md`, `comments.md` and `rounds/<n>.diff` / `<n>.json`.\n- A new review's number from a counter shared by the clone's worktrees (`.git/atm/`, beside the claims; the task folder outside git), under a lock.\n- Two reviews with one number (two clones, merged) are `CR-8.1` and `CR-8.2`, by creation time then UUID; a reference to `CR-8` resolves to both, and the store says so.\n- One lock per review; writes to a temporary file renamed into place, as `tasks.json`'s are.\n- `subscribe` on the folder's watcher (as the JSON store's, ATM-555).\n- The reviews of the project's worktrees listed with the main working copy's, each with its branch.\n- The folder's checks: no symlinks, paths inside the task folder (as I6).\n\n## Tests\nThe store's operations, the counter across two worktrees, a merged clash read as CR-8.1/CR-8.2, a symlinked folder refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1a9a33bc82"
       ],
@@ -14462,11 +14552,35 @@
         "crates/atm-review/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 563,
-      "key_final": false
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:01:10Z",
+      "started_by": "claude:0f56a916",
+      "commit": "acb29652246d9214714170598d2e394176e3ded0",
+      "completed_at": "2026-11-17T09:08:04Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:08:04Z",
+          "kind": "outcome",
+          "text": "FileStore in reviews/CR-<n>-<4 hex>/: a lock per review, atomic writes, a counter the worktrees share, CR-8.1/CR-8.2 on clashes (CR-8 names both), no symlinks, a watcher, list_everywhere over worktrees with branches. New crate atm-fs (git, lock, watcher, moved from atm-db and re-exported) so atm-review needs no atm-db; folder suffix is the UUID’s random end (design corrected). 7 tests; suite’s lock/stress/claims/serve pass.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84",
@@ -14479,7 +14593,7 @@
       "description": "Rounds and anchors ([§3.3](docs/code-review-design.md#:~:text=3.3%20The%20records), [§3.6](docs/code-review-design.md#:~:text=3.6%20Rounds%2C%20anchors%20and%20drift)), through `atm-vcs`.\n\n## Change\n- A round's diff from a commit range, the working tree against its base (uncommitted changes, live checkpoints), or files as they are (as if added); `git diff -M`, three lines of context; binary files listed with their blob IDs, never copied; deleted files as a line.\n- No snapshots: two rounds compared by rebuilding each round's files from its base and diff on a temporary index (`GIT_INDEX_FILE`, `git apply --cached`, `git write-tree`), never touching the user's index or working tree.\n- Anchors moved from the round they were made on to a later one through the change between them; a chain whose quote is gone is drifted, at its last place, with the round and lines it was made on.\n\n## Tests\nRounds of each kind, two uncommitted rounds compared, an anchor moved and one drifted, the user's index unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14488,11 +14602,35 @@
         "crates/atm-vcs/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 564,
-      "key_final": false
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:08:08Z",
+      "started_by": "claude:0f56a916",
+      "commit": "725fc566f6dbce359c8eef0b94c17137d4de0bd1",
+      "completed_at": "2026-11-17T09:13:14Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:13:14Z",
+          "kind": "outcome",
+          "text": "atm-vcs diff.rs: a range’s diff, the working tree’s (temporary index, new files in, the user’s index untouched), files as added, a round’s tree rebuilt from base+patch, trees compared. atm-review rounds.rs: rounds of each kind, compare (no snapshots), anchors followed line by line through hunks (kept, found again by quote, or drifted with where made). 10 tests; I24’s list has the new git starts.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40",
@@ -14505,7 +14643,7 @@
       "description": "atm-lib's `reviews` module, the one place reviews and tasks meet ([§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The task schema gains `reviews` (a list of review references, linked by UUID underneath); the generated types follow.\n- Tasks named when a review is created, when a live review starts, or later (add, remove), with what each does to the task's status ([§3.2](docs/code-review-design.md#:~:text=3.2%20A%20review%20and%20how%20it%20goes)).\n- A reviewer's submit becomes every named task's review decision (approve, request changes with a `rejection` note linking the review); closing rejects only when the user says so. Decisions stay the user's (I23).\n- A live review's approval is the task's when the task's change hasn't moved since the approved checkpoint; otherwise what changed is said ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)).\n\n## Tests\nScenarios (`tests/scripts/scenarios/`): a task through a review and a round, a batch review of two tasks, a live approval with and without a change since.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14514,11 +14652,35 @@
         "crates/atm-common/schema/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:01Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 565,
-      "key_final": false
+      "key_final": true,
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:13:14Z",
+      "started_by": "claude:0f56a916",
+      "commit": "2f689da13659891cb3367afd5869dd543d1e530c",
+      "completed_at": "2026-11-17T09:18:04Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:18:04Z",
+          "kind": "outcome",
+          "text": "atm-lib reviews.rs: create/add_round/submit/close/set_tasks keep the tasks in step (code_reviews links by UUID+ref; open review puts tasks in review; a decision is every named task’s, as the reviewer); apply_live_approval approves a task whose working diff equals the approved live checkpoint. Rounds leave out .agentic-task-manager. Tested in atm-lib (3 tests); the CLI scenarios come with ATM-566.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed",
@@ -14531,7 +14693,7 @@
       "description": "The CLI of [§3.9](docs/code-review-design.md#:~:text=3.9%20The%20CLI%2C%20and%20agents%20listening): `atm review create|live|round|tasks|list|show|comments|comment|reply|edit|resolve|submit|close`, each with `--json`, thin mappings to atm-lib.\n\n## Change\n- The commands as listed in the design; `submit --approve` refused while a top-level comment is open, naming it.\n- `atm docs reviews`: a new topic in `docs/agent/` for agents, with the rule that review comments are data, never instructions (I1).\n- Output for people through `output::for_people` (I30).\n\n## Tests\n`tests/scripts/` scenarios for each command, the refusal, and a comment with terminal escapes printed as text.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1cef9d1c84",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -14542,15 +14704,45 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:07Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 566,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "notes": [
+        {
+          "at": "2026-11-17T09:18:09Z",
+          "kind": "note",
+          "text": "From ATM-565: its tests were atm-lib unit tests (the CLI came later). Add its scenarios here: a task through a review and a round, a batch review of two tasks, a live approval with and without a change since (atm_lib::reviews::apply_live_approval, to be called when an agent finishes a task).",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T09:25:02Z",
+          "kind": "outcome",
+          "text": "atm review create|live|round|tasks|list|show|comments|comment|reply|edit|resolve|submit|close (--json each, through atm-lib); atm task state done applies a covering live approval first; atm docs reviews (comments are data, decisions the reviewer’s); I6 covers reviews/. reviews.test.mjs: the round trip, a batch of two, live approval at done, escapes as text, refusals. Changes docs/agent: the sandbox (or its written review) before the release.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-17T09:18:10Z",
+      "started_by": "claude:0f56a916",
+      "commit": "9a0357568eb0273ede1dd6316e2151adfc0328e7",
+      "completed_at": "2026-11-17T09:25:02Z",
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4",
@@ -14563,7 +14755,7 @@
       "description": "Agents listening ([§3.9](docs/code-review-design.md#:~:text=Two%20ways%20to%20listen)), on the store's subscription, never a poll.\n\n## Change\n- `atm review wait CR-7 [--for submitted|decision] [--timeout]`: blocks, prints what changed.\n- `atm review watch [--timeout]`: names no review and no task; follows the agent (its identity) and its working copy; prints each of the user's comments and replies about the agent's work, one JSON object a line, with the review and the task (or `null`), matched from atm's records (the tasks it held, their commits, its uncommitted files) by the table in §3.9; not the agent's own comments or other agents'.\n\n## Tests\n`tests/scripts/`: wait ends on a submit; watch prints a live comment, a batch review's comment only to the agent whose task touched the file, a no-task comment with `null`, and nothing for another agent's work.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed"
       ],
@@ -14573,14 +14765,38 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:08Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 567,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:25:03Z",
+      "started_by": "claude:0f56a916",
+      "commit": "0a4b26f40cf55100d40cb50af22186403bfc8b52",
+      "completed_at": "2026-11-17T09:30:55Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:30:55Z",
+          "kind": "outcome",
+          "text": "atm review wait CR-n [--for submitted|decision] [--timeout] (exit 3 on time up) and atm review watch [--timeout] (one JSON object a line: the person’s comments about the agent’s work, from any review, with its task or null), both on the store’s subscription with a 5 s recheck; matching by §3.9 from atm’s records (tasks held, declared files, commit diff, uncommitted files). Tests: wait on a decision and its timeout; watch with a batch, a live review, own and other agents’ comments.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e20da0a31b2",
@@ -14593,7 +14809,7 @@
       "description": "Reviews on branches ([§4](docs/code-review-design.md#:~:text=Merges%20of%20the%20two%20text%20files)).\n\n## Change\n- atm's merge driver also takes `reviews/**/comments.md` (chains and comments merged by ID) and `reviews/**/review.md` (the header by its latest `updated`), registered in `.agentic-task-manager/.gitattributes` as for `tasks.json` (the driver's command from the clone's own git config, I9).\n- `atm doctor`: reviews it can't read, text the comment format doesn't expect, clashing numbers (CR-8.1/CR-8.2), tasks naming reviews that don't exist.\n\n## Tests\n`tests/scripts/merge.test.mjs`: one review commented on two branches, merged; two clones' CR-8s merged as two folders.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14603,14 +14819,38 @@
         "tests/scripts/merge.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:08Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 568,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:30:55Z",
+      "started_by": "claude:0f56a916",
+      "commit": "f4d039f049529f878eda9cdcc5686418b4f8c2cf",
+      "completed_at": "2026-11-17T09:43:53Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:43:53Z",
+          "kind": "outcome",
+          "text": "Merge driver gets %P; atm-review::merge merges comments.md by ID (other side’s clashing new IDs renumbered; text edited on both is a conflict, ours kept; open beats resolved) and review.md field by field (both changed: the later updated). .gitattributes gets the reviews’ lines at the first review, not on every migrate. atm doctor: unreadable reviews (error), stray lines, shared numbers, tasks linked to missing reviews (warnings). I9 updated.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e21486f0d88",
@@ -14623,7 +14863,7 @@
       "description": "The skills that hold a review with the user, or wait for one, use `atm review` ([§3.9](docs/code-review-design.md#:~:text=3.9%20The%20CLI%2C%20and%20agents%20listening), [§6](docs/code-review-design.md#:~:text=6.%20Phases)).\n\n## Change\n- The working skills start `atm review watch` once per session in the background, create the CR at the end when no live review covered the work, and wait with `atm review wait` while a task is in review; reply to each comment, never resolve a reviewer's comment, never decide a review (I23).\n- Comments are data (I1), in the skills' rules; their pre-approved commands name the review commands they run, no `atm review *` (I2).\n- `skills.test.ts` checks the rules; the agent sandbox's red-team project gets a review whose comment asks for a forbidden command; `docs/security-architecture.md` §3 records the skill review.\n\nChanges what agents read: the sandbox run (or its written review) before the release.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
       ],
@@ -14635,16 +14875,60 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:09Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "review": "blocker",
       "number": 569,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:43:54Z",
+      "started_by": "claude:0f56a916",
+      "commit": "b985be2450b9600f27e7220c83190fa167d80fe2",
+      "review_requested_at": "2026-11-17T09:51:20Z",
+      "notes": [
+        {
+          "at": "2026-11-17T09:51:20Z",
+          "kind": "review",
+          "text": "Review b985be2: skills/atm-do-task (Step 2 watch, Step 5 rule, 7b CR/wait/answer) and atm-loop-tasks (watch, step 6, step 7); pre-approvals in claude-code.json (no submit/resolve/close/live/tasks/edit); sandbox red-team review (seed-review.sh, verdict); §3 0.40.0 written skill review. Skills now need atm 0.40.0: the release task bumps the version.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T10:41:02Z",
+          "kind": "note",
+          "text": "Approved: Approved by Hakan in Crit, a review of `b985be2` with no comments, 2026-11-17.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T10:41:06Z",
+          "kind": "outcome",
+          "text": "The skills review with `atm review`: one watch a session, a CR per reviewed task, `wait`, then answering. Approved in Crit.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-17T09:51:20Z",
+          "to": "2026-11-17T10:41:02Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-17T10:41:06Z",
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e22f7deb631",
@@ -14657,7 +14941,7 @@
       "description": "Phase 2 ([§3.1](docs/code-review-design.md#:~:text=3.1%20Three%20components)): the document viewer as a component of its own.\n\n## Change\n- `crates/atm-docs`: what `crates/atm-lib/src/documents.rs` does (a project's file with its checks, I11, I12), moved, plus a file at a revision through `atm-vcs`, with the same checks.\n- atm-lib, the REST API and the app use it; their routes and commands answer as before.\n- `layers.test.mjs` gains the crate (no task model in it).\n\n## Tests\nThe moved tests pass unchanged; a file at a revision; `serve.test.mjs`'s document tests unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-docs/",
@@ -14666,14 +14950,38 @@
         "tests/scripts/layers.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:09Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 570,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:51:25Z",
+      "started_by": "claude:0f56a916",
+      "commit": "1f6dcb2b82ab08389162bc9aa99d5b33635f51de",
+      "completed_at": "2026-11-17T10:09:53Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T10:09:53Z",
+          "kind": "outcome",
+          "text": "atm-docs crate holds the document viewer, re-exported as atm_lib documents. Adds read_document_at for a file at a revision, with the same checks. Layer rule updated, serve, app and lib tests pass.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e23fc37ffd6",
@@ -14686,7 +14994,7 @@
       "description": "The dashboard's side of phase 2 ([§3.1](docs/code-review-design.md#:~:text=3.1%20Three%20components)).\n\n## Change\n- `DocumentViewer.svelte` and `CompMd.svelte` stop reading the dashboard's state (`state.svelte`) and the `Task` type: they take a document source (load a path, at a revision or the working copy) and the links' handler as props; the task manager passes its own.\n- An ESLint rule (`no-restricted-imports`): `lib/documents` imports only itself and `lib/ui`; `lib/reviews` (when it comes) the task areas only through `lib/reviews/links`.\n\n## Tests\nThe viewer's unit and e2e tests unchanged (`documents` specs); a component test with a source of its own.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e22f7deb631"
       ],
@@ -14695,14 +15003,38 @@
         "dashboard/eslint.config.js"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:10Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 571,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T10:20:04Z",
+      "started_by": "claude:0f56a916",
+      "commit": "d01bf26f577e4d5754e8720b4f031ec74557daef",
+      "completed_at": "2026-11-17T10:27:07Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T10:27:07Z",
+          "kind": "outcome",
+          "text": "`DocumentViewer` and `CompMd` no longer read the dashboard state or the `Task` type: the viewer takes a `DocumentSource`, `ref`, `refresh` and handlers as props, the task manager passes `projectDocuments`. **Boundary:** `lib/documents` and `lib/reviews` may not import the state, task model, task areas or task source, but may use shared modules such as `compmd` and `scroll`. `boundaries.test.ts` checks it. Unit and e2e suites pass.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
@@ -14715,7 +15047,7 @@
       "description": "Phase 3's entry points ([§3.12](docs/code-review-design.md#:~:text=3.12%20Writing%20from%20the%20window%20and%20the%20browser)).\n\n## Change\n- The app: write commands for reviews (create, live, comment, reply, edit, resolve, submit, close, tasks), thin mappings to atm-lib, as the user, in `build.rs`'s manifest and the capability (I25).\n- The browser: write routes under `api/v2/workspaces/<w>/projects/<p>/reviews/…`: loopback and Host (I10), `Origin` the server's own, a per-start session token in the served page's `meta` tag and an `X-Atm-Session` header, JSON bodies, no CORS.\n- `docs/security-architecture.md`: B2, B3, B7, I1, I11 and I27 as the design says, with their tests.\n\n## Tests\n`serve.test.mjs`: a write with the token works; without it, from another origin, or as a form, refused. The app's command tests (mock runtime).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed"
       ],
@@ -14727,17 +15059,61 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:11Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "review": "blocker",
       "number": 572,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "cli",
         "api",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T11:02:15Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T11:02:22Z",
+      "started_by": "claude:0f56a916",
+      "commit": "54f13d48e1b656f4af773ef9c2b3c636417731d7",
+      "review_requested_at": "2026-11-17T11:22:51Z",
+      "notes": [
+        {
+          "at": "2026-11-17T11:22:51Z",
+          "kind": "review",
+          "text": "Review `9b83961`, the first routes that change something. **REST routes** under `…/projects/<p>/reviews` (POST reviews, PATCH a review, PUT its tasks, POST decisions, POST comments, PATCH a comment, POST replies), checked for Origin, session token, JSON and no CORS. **Seven app commands.** All go through `review_requests`, as the user. Security doc I11, I27, B2, B3, B7, I1 and §2.9 of the API doc.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T16:52:15Z",
+          "kind": "note",
+          "text": "Approved: Approved by Hakan in Crit (session fa0f3416a160, the whole range 9b83961..20f494b, no comments), 2026-11-17.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T16:52:20Z",
+          "kind": "outcome",
+          "text": "Review writes from the app and the browser as REST routes, as the user; live reviews make the opener a reviewer; the user can override who decides; routes split per API area with unit tests on a fake atm-lib (every case). Approved in Crit.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-17T11:22:51Z",
+          "to": "2026-11-17T16:52:15Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-17T16:52:20Z",
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",
@@ -14750,7 +15126,7 @@
       "description": "Ours to build, rendering through CompMD ([§3.7](docs/code-review-design.md#:~:text=3.7%20The%20diff%20viewer)), in `dashboard/src/lib/reviews/`.\n\n## Change\n- Takes a file's two sides (from a document source) and the round's hunks; split or unified; changed lines marked, unchanged runs folded with *show more*.\n- Source (each side through CompMD, as the document viewer shows a source file) or rendered (Markdown): both sides rendered, changed blocks marked by CompMD's source-line map, as the document viewer's gutter uses it.\n- Keys: *n* / *p* next and previous change, *]* / *[* file, *v* viewed.\n- Selecting lines (or rendered text) starts a chain; chains shown in place.\n\nA missing foundational rendering capability goes to CompMD, nothing else.\n\n## Tests\nComponent tests; e2e specs with a fixture review.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e23fc37ffd6"
       ],
@@ -14758,14 +15134,38 @@
         "dashboard/src/lib/reviews/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:11Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 573,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T08:50:49Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T10:27:07Z",
+      "started_by": "claude:0f56a916",
+      "commit": "efd776bbd81e1cd34cb3c9267c127a655f4fc58b",
+      "completed_at": "2026-11-17T10:45:28Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T10:45:28Z",
+          "kind": "outcome",
+          "text": "The diff viewer is in `lib/reviews`. It reads both sides from document sources and the hunks from the patch, with split or unified and source or rendered views, folds with *show more*, the keys `n` `p` `]` `[` `v`, picking lines or text to comment, and chains in place. Each run of lines renders through CompMD. Component and logic tests only: the e2e spec moves to ATM-574, which adds the page that shows it.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
@@ -14778,7 +15178,7 @@
       "description": "The pages of [§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), in the app and the browser.\n\n## Change\n- `/projects/<id>/reviews` (and across the workspace on the overview): search (title, summary, comments), filters (status, author, reviewer, task, branch), latest activity first; *Next review needing you*.\n- `/projects/<id>/reviews/CR-7` (`?round=`, `&against=`, `&file=`): the header, the file tree with viewed ticks (kept in the page's preferences by review, round and file content), the diff viewer, the round picker (whole change, or a round against another), drifted chains with a link to where they were made, *Submit* (approve, request changes, comment).\n- A clashing reference (`CR-8`) shows both CR-8.1 and CR-8.2 to choose.\n- Routes listed in `docs/multi-project-api.md` §2.7.\n\n## Tests\nE2e specs (the fixture serves reviews); the performance budget for a large review.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
         "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",
@@ -14791,16 +15191,100 @@
         "dashboard/tests/e2e/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T06:44:12Z",
+      "updated_at": "2026-11-17T20:53:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 574,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "dashboard",
         "api",
         "docs"
-      ]
+      ],
+      "notes": [
+        {
+          "at": "2026-11-17T10:45:19Z",
+          "kind": "note",
+          "text": "From ATM-573: the **diff viewer**’s e2e spec lands here, with a fixture review, once a review’s page shows it. It covers split and unified views, folds and *show more*, the keys `n` `p` `]` `[` `v`, picking lines to comment, and chains in place. ATM-573 has component tests only, as no page shows the viewer yet.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T18:03:50Z",
+          "kind": "review",
+          "text": "Review in Crit: the Reviews tab (search, status chips, filters, Next review needing you) and a review page (rounds, file tree with viewed ticks, the diff viewer and its keys, comments, replies, resolve, Submit, drifted links, the CR-8 clash). Open for Hakan: (1) the page is 943,462 bytes, over the 900 KiB guardrail: raise it or cut something; not pushed until then. (2) Reviews across the workspace on the overview: not done, a follow-up.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T18:31:30Z",
+          "kind": "rejection",
+          "text": "Hakan, in chat: no flicker on refresh, a review in its own browser tab titled KEY CR-N title with Crit-like styling, a + on the line and drag for multi-line, resolved shown above the comment, Overview, Files and Comments tabs (all, open, resolved), a movable splitter, Rendered honours Unified with line numbers on the document viewer, viewed collapses the file, prev and next change buttons. Budget raised to 1 MiB.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T19:07:08Z",
+          "kind": "review",
+          "text": "Hakan’s 11 points done (b26daa5): the review is a page of its own, titled KEY CR-N: title, opened in a browser tab; Overview, Diffs and Comments tabs; splitter; viewed folds; Prev and Next; + and drag; resolved check; Rendered follows Unified, line numbers; no flicker. Budget 1 MiB. Review in Crit.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T19:39:16Z",
+          "kind": "rejection",
+          "text": "Hakan, in chat: a professional look in atm’s design language; Overview with the facts on top, the description below and the conversation on the right; the rendered side as a document page, line numbers not overlapping; overlapping chains each shown; no path or quote on a chain, its lines highlighted when it is selected; prev and next comment; icons from atm’s icon library.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T19:55:16Z",
+          "kind": "review",
+          "text": "Second review done (146f754): Overview facts on top, description and rounds beside the conversation; rendered side as a document page; chains show lines only, marked when selected; comment inside another stays until saved; prev/next comment; Approve when nothing open; Reopen from the fold; Lucide icons. Review in Crit.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T19:58:56Z",
+          "kind": "note",
+          "text": "Approved: Hakan approved in Crit with no comments (146f754).",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T19:58:58Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan in Crit. Reviews across the workspace on the overview left out, as he asked.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T11:02:15Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T19:53:51Z",
+      "started_by": "claude:0f56a916",
+      "commit": "146f7549b294fffdcf13b1bc9e9b58b8abea3e15",
+      "reviews": [
+        {
+          "from": "2026-11-17T18:03:50Z",
+          "to": "2026-11-17T18:31:30Z",
+          "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-17T19:07:08Z",
+          "to": "2026-11-17T19:39:16Z",
+          "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-17T19:55:16Z",
+          "to": "2026-11-17T19:58:56Z",
+          "outcome": "approved"
+        }
+      ],
+      "review_requested_at": "2026-11-17T19:55:16Z",
+      "completed_at": "2026-11-17T19:58:58Z",
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e27bb7d4274",
@@ -14829,7 +15313,7 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "dashboard"
       ]
@@ -14859,7 +15343,7 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "dashboard"
       ]
@@ -14888,7 +15372,7 @@
       "updated_by": "claude:0f56a916",
       "with": "user",
       "number": 577,
-      "key_final": false,
+      "key_final": true,
       "components": [
         "docs"
       ]
@@ -14920,7 +15404,7 @@
         "ci"
       ],
       "number": 578,
-      "key_final": false
+      "key_final": true
     },
     {
       "id": "01a1e853-4d39-7220-b293-f23710b6d068",
@@ -14944,7 +15428,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-17T07:05:35Z",
-      "updated_at": "2026-11-17T07:48:24Z",
+      "updated_at": "2026-11-17T08:26:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14959,7 +15443,7 @@
         "docs"
       ],
       "number": 579,
-      "key_final": false,
+      "key_final": true,
       "started_at": "2026-11-17T07:39:30Z",
       "started_by": "claude:0f56a916",
       "commit": "9d012e0f6e0ffcfd804c4e9c4147976506f5fd6a",
@@ -14976,6 +15460,111 @@
       "pr": {
         "number": 52,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      },
+      "merged_at": "2026-11-17T08:26:00Z"
+    },
+    {
+      "id": "01a1ea5b-4e0f-7635-88b8-895069b68eca",
+      "name": "Tests: every case, not a coverage number (scan the repo)",
+      "type": "test",
+      "priority": "P1",
+      "labels": [
+        "tests"
+      ],
+      "description": "Scan the whole repository's tests against the model in [AGENTS.md, Testing conventions](AGENTS.md#:~:text=What%20to%20test), and add or update tests where cases are missing.\n\n## The model\n- **Every case.** Each unit's tests cover every case it promises, not just the lines that run: the happy paths, each failure mode and refusal, each class of input (empty, one, many; missing, malformed, too large; at and past each limit), each state, and where two of these meet. The coverage thresholds stay as guardrails. Use judgement to keep the tests maintainable: one test per behaviour, tables of cases, shared fixtures, and each layer tests its own rules.\n- **A unit alone.** A unit test replaces what it calls in another layer with a hand-written fake behind a trait (a stub of the module or API in TypeScript), and checks the unit's own work. Going through the layers together is the integration tests' job: a crate's `tests/`, `tests/scripts/`, e2e. Unit tests that go through the layers below today (real git, a real store, the disk) either move to integration tests or get a fake.\n- **The example:** `crates/atm-api/src/routes/`, done in ATM-572. Its seam is `source.rs` (the traits, with atm-lib's implementation), its fake is `test_support.rs` (records each call and answers what a test sets), and each module's tests cover each class of answer.\n\n## The known gap\n**Claims** (`crates/atm-lib/src/claims.rs`, `claims/tests.rs`, `leases.rs`, `crates/atm-db/src/jsongit/claims.rs`, `memory.rs`): the Rust tests cover the heartbeat and expiry only. Missing:\n- a free task is claimed;\n- a task claimed by another agent is refused;\n- a task is refused from another worktree or branch of the same project;\n- the holder claims its own task again;\n- release, and claiming after a release;\n- an expired lease is taken over.\n\nSome of these are checked end to end in `tests/scripts/claims.test.mjs`, but not in the layer that owns the rule. atm-lib's tests already use `MemoryStore` as the store's fake.\n\n## The scan\nGo crate by crate, then the app and the dashboard. List each unit's cases next to its tests, fill the gaps, and replace the layers below with fakes where a unit test goes through them:\n- [ ] `atm-common`, `atm-fs`, `atm-vcs`, `atm-db` (the stores, the merge driver, the registry)\n- [ ] `atm-docs`, `atm-review`\n- [ ] `atm-lib` (claims, leases, the status machine, sprints, reviews, workspaces, query)\n- [ ] `atm-cli` (each command's refusals and exit codes) and `tests/scripts/`\n- [ ] `app/src-tauri` (each command's results and refusals; its tests that read a real project are integration tests)\n- [ ] `dashboard/` (unit and component tests: API errors, 304s, empty data)\n\nRecord in the task's outcome note what was added per area, and anything left out on purpose, with the reason.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/claims/tests.rs",
+        "crates/atm-lib/src/leases.rs",
+        "crates/atm-db/src/jsongit/claims.rs"
+      ],
+      "created_at": "2026-11-17T16:33:34Z",
+      "updated_at": "2026-11-17T16:49:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "number": 580,
+      "key_final": false
+    },
+    {
+      "id": "01a1eb3d-88aa-723f-8bab-74e5496e739b",
+      "name": "App: switching project from the sidebar while a review is open in the tab",
+      "type": "bugfix",
+      "priority": "P3",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "In the atm app, a review opens in a tab of its own (ATM-574): `/projects/<id>/reviews/CR-7`, shown by `App.svelte` under the sidebar and the title bar, its tab labelled by the review (`AppTitleBar.svelte`). Clicking another project in the sidebar while that tab is active behaves oddly (Hakan, 2026-11-17).\n\n## Change\n- Reproduce it in the app: open a review in its tab, click another project in the sidebar; note what the tab, its label, the page and the address do.\n- Decide with Hakan what should happen (the review's tab becomes that project's page, or the project opens in a tab of its own and the review's tab stays), then make it so; ⌘-click keeps opening a new tab.\n\n## Tests\nAn e2e test in `dashboard/tests/e2e/app.spec.ts` (the app's mocked IPC answers the review commands): the tabs, their labels and the page after the click.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/App.svelte",
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-17T20:40:40Z",
+      "updated_at": "2026-11-17T20:40:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "number": 581,
+      "key_final": false
+    },
+    {
+      "id": "01a1eb3e-a0c9-724d-a9e9-0fa4e8823e4f",
+      "name": "Release 0.40.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "release"
+      ],
+      "description": "Ship the sprint *Code reviews: records and CLI* as 0.40.0, as AGENTS.md's *Versions* and *CI* sections describe. Work is on `dev/0.40.0`.\n\n## Change\n- **The version:** `Cargo.toml`'s `[workspace.package]` to `0.40.0` (the dashboard's meta tag and the app follow it); `Cargo.lock` updated by the build.\n- **`CHANGELOG.md`:** the `[0.40.0]` entry, dated the release day, every change with its commands and flags: the `atm-review` crate and its model (ATM-561), `comments.md` and `review.md` (ATM-562), the file store (ATM-563), rounds (ATM-564), the task link (ATM-565), the `atm review` commands (ATM-566), `atm review wait` and the watch (ATM-567), merging review files and `atm doctor` (ATM-568), the skills reviewing with atm instead of Crit (ATM-569), `atm-docs` and files at a revision (ATM-570), the document sources (ATM-571), writes from the app and the browser (ATM-572), the diff viewer (ATM-573), the reviews page and a review's page (ATM-574), the page budget raised to 1 MiB.\n- **`WHATS-NEW.md`:** 3–6 short plain-language bullets about what a user notices, from the changelog; no flags or file names.\n- **Screenshots:** regenerate the Linux baselines this sprint changed (`pnpm run test:e2e:visual:update`, Docker), delete any whose test is gone, look at one, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): a §3.x entry for 0.40.0. The skills changed (ATM-569) and new entry points came (the review routes and app commands, ATM-572, ATM-574): a written review of the skills' changes replaces the live sandbox run (no API key); check the new routes are in the threat model.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPush with `/atm-push`: it opens the release PR from `dev/0.40.0` to `main` and watches CI. Merging, tagging and publishing are Hakan's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-17T20:41:52Z",
+      "updated_at": "2026-11-17T20:53:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews: records and CLI",
+          "from": "2026-11-17T20:41:52Z"
+        }
+      ],
+      "sprint": "Code reviews: records and CLI",
+      "number": 582,
+      "key_final": false,
+      "started_at": "2026-11-17T20:41:52Z",
+      "started_by": "claude:0f56a916",
+      "commit": "ecfc75fa79f91bd3350bcacd0fa9033231784f87",
+      "completed_at": "2026-11-17T20:52:42Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T20:52:42Z",
+          "kind": "outcome",
+          "text": "Version 0.40.0, CHANGELOG and WHATS-NEW entries, security doc §3 entry, four Linux screenshots regenerated. All checks green: cargo test 432, unit 1567, CLI 663, e2e 480, screenshots 84.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 55,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
       }
     }
   ]

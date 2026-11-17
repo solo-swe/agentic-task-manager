@@ -1,0 +1,1430 @@
+<script lang="ts">
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import CompMd from '../documents/CompMd.svelte';
+  import type { DocumentSource } from '../documents/source';
+  import { formatWhen } from '../format';
+  import { readStored, writeStored } from '../prefs';
+  import Icon from '../ui/Icon.svelte';
+  import ChainBox from './ChainBox.svelte';
+  import { focusOnShow } from './focus';
+  import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
+  import {
+    chainsOf,
+    driftedOf,
+    fileTree,
+    filterChains,
+    isResolved,
+    lineCounts,
+    reviewChains,
+    treeWidth,
+    TREE_WIDTH,
+    type ChainFilter,
+  } from './page';
+  import { STATUS_LABELS, type PlacedChain, type Picked, type ReviewPageData, type ViewFile } from './types';
+
+  // A review's page (docs/code-review-design.md §3.11, ATM-574), a page of its own: a top bar (the project's short
+  // name, the reference and title, its status, *Submit review*, which is *Approve* once no comment is open) and three
+  // tabs. *Overview*: who and what at the top (author, reviewers, branch, tasks, rounds), the description, and the
+  // conversation on the review beside it. *Diffs*: the round picker (a round's whole change, or a round against an
+  // earlier one), the files as a tree beside the list of their diffs (a splitter between them, its width kept), each
+  // file a card that folds once viewed, the previous and next change and comment, the layout (split, unified) and view
+  // (source, rendered) for all. *Comments*: every chain, all, open or resolved. Keys on the Diffs tab: n / p the next
+  // and previous change, c / C the next and previous comment, ] / [ the next and previous file, v the file at the top
+  // viewed. Everything it does is the page's: the handlers. Which round and file are shown is the address's.
+  let {
+    page,
+    project = null,
+    file = null,
+    side,
+    isViewed,
+    taskHref,
+    backHref,
+    busy = false,
+    problem = null,
+    docStyle = null,
+    onback,
+    onfile,
+    onround,
+    onviewed,
+    oncomment,
+    onreply,
+    onresolve,
+    onsubmit,
+  }: {
+    page: ReviewPageData;
+    /** The project's short name (its key), before the reference */
+    project?: string | null;
+    /** The file in view (its path): the Diffs tab opens at it */
+    file?: string | null;
+    /** A side's files: the commit or tree a round's side is read from */
+    side: (revision: string) => DocumentSource;
+    isViewed: (file: ViewFile) => boolean;
+    /** A task's address, for its link */
+    taskHref?: (key: string) => string;
+    /** The reviews page's address, for the link back */
+    backHref?: string;
+    busy?: boolean;
+    problem?: string | null;
+    /** The document style picked in Settings, for a Markdown file's rendered view */
+    docStyle?: string | null;
+    onback?: () => void;
+    onfile: (path: string) => void;
+    onround: (round: number, against: number | null) => void;
+    onviewed: (file: ViewFile) => void;
+    /** A comment made; why it wasn't saved, if it wasn't (its box keeps it) */
+    oncomment: (comment: { path: string | null; picked: Picked | null; body: string }) => Promise<string | null> | void;
+    onreply: (to: string, body: string) => void;
+    onresolve: (comment: string, resolved: boolean) => void;
+    onsubmit: (decision: 'approve' | 'request_changes' | 'comment', body: string) => void;
+  } = $props();
+
+  const review = $derived(page.review);
+  const view = $derived(page.view);
+  const files = $derived(view.files);
+  const tree = $derived(fileTree(files));
+  const ended = $derived(review.status === 'approved' || review.status === 'closed');
+  const rounds = $derived(page.rounds.map((r) => r.number));
+  const sideOf = (revision: string | null) => (revision ? side(revision) : null);
+  const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
+  const totals = $derived(
+    files.reduce(
+      (sum, f) => {
+        const c = lineCounts(f.patch);
+        return { added: sum.added + c.added, removed: sum.removed + c.removed };
+      },
+      { added: 0, removed: 0 },
+    ),
+  );
+  const when = (at: string) => {
+    const ts = Date.parse(at);
+    return Number.isNaN(ts) ? at : formatWhen(ts, Date.now());
+  };
+
+  // The tab: Diffs when the address names a file, else Overview
+  let tab = $state<'overview' | 'diffs' | 'comments'>('overview');
+  onMount(() => {
+    if (file) tab = 'diffs';
+  });
+
+  // The layout and view of every diff, and the tree's width: kept in this browser
+  const LAYOUT_KEY = 'atm-review-layout';
+  const stored = readStored(LAYOUT_KEY);
+  let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
+  let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
+  let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
+  $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width }));
+  const hasMarkdown = $derived(files.some((f) => /\.(md|markdown|mdx)$/i.test(f.path)));
+
+  // A file folds once viewed; its fold button opens or folds it again whatever its tick
+  let folds = $state<Record<string, boolean>>({});
+  const folded = (f: ViewFile) => folds[f.path] ?? isViewed(f);
+  function toggleViewed(f: ViewFile) {
+    const rest = { ...folds };
+    delete rest[f.path];
+    folds = rest;
+    onviewed(f);
+  }
+  const viewedCount = $derived(files.filter((f) => isViewed(f)).length);
+
+  // The list of diffs, and the file at its top (the tree marks it; ] [ and v act on it)
+  let list = $state<HTMLElement | null>(null);
+  let atFile = $state<string | null>(null);
+  const cards = () => [...(list?.querySelectorAll<HTMLElement>('.review-file-card') ?? [])];
+  /** The file gone to (the tree, ] and [): it stays the one marked while its card is in view, even where the list
+   * can't scroll it to the top (the last files) */
+  let chosen: string | null = null;
+  function findTop() {
+    const box = list?.getBoundingClientRect();
+    if (!box) return;
+    const kept = chosen
+      ? cards()
+          .find((c) => c.dataset.file === chosen)
+          ?.getBoundingClientRect()
+      : undefined;
+    if (kept && kept.top >= box.top - 4 && kept.top < box.bottom) {
+      atFile = chosen;
+      return;
+    }
+    chosen = null;
+    const card = cards().find((c) => c.getBoundingClientRect().bottom > box.top + 48);
+    atFile = card?.dataset.file ?? null;
+  }
+  let scrolling = 0;
+  function onscroll() {
+    if (scrolling) return;
+    scrolling = requestAnimationFrame(() => {
+      scrolling = 0;
+      findTop();
+    });
+  }
+
+  let writing: (() => void) | null = null;
+  onDestroy(() => writing?.());
+  /** The file just gone to: its card is made at once, the others after it */
+  let wanted = $state<string | null>(null);
+  const cardOf = (path: string) =>
+    list?.querySelector<HTMLElement>(`.review-file-card[data-file="${CSS.escape(path)}"]`) ?? null;
+  async function showFile(path: string, address = true) {
+    tab = 'diffs';
+    holdNearCards();
+    wanted = path;
+    await tick();
+    cardOf(path)?.scrollIntoView({ block: 'start' });
+    atFile = chosen = pinned = path;
+    // The address follows once the page is idle: the file is drawn first (a navigation re-renders the layout)
+    writing?.();
+    if (address) writing = whenIdle(() => onfile(path));
+  }
+
+  // The file gone to stays at the top while the cards around it are made (each as tall as its diff, not its
+  // estimate), until the user scrolls, clicks or presses a key in the list, or another jump
+  let pinned: string | null = null;
+  $effect(() => {
+    const el = list;
+    void files;
+    if (!el) return;
+    const unpin = () => (pinned = null);
+    const settle = new ResizeObserver(() => {
+      if (pinned) cardOf(pinned)?.scrollIntoView({ block: 'start' });
+    });
+    for (const card of el.querySelectorAll('.review-file-card')) settle.observe(card);
+    const events = ['wheel', 'touchstart', 'mousedown', 'keydown'] as const;
+    for (const name of events) el.addEventListener(name, unpin, { passive: true });
+    return () => {
+      settle.disconnect();
+      for (const name of events) el.removeEventListener(name, unpin);
+    };
+  });
+  // The address's file, once the list is there
+  let opened = false;
+  $effect(() => {
+    if (opened || !list || !file || !files.some((f) => f.path === file)) return;
+    opened = true;
+    void showFile(file, false);
+  });
+
+  function stepFile(by: number) {
+    const i = files.findIndex((f) => f.path === (atFile ?? files[0]?.path));
+    const next = files[i + by];
+    if (next) void showFile(next.path);
+  }
+
+  // The previous and next change, or comment, across the files: the next one below (or above) the last one gone to,
+  // or the top of the list; a file not made yet is made first, and its first (or last) one gone to
+  const TARGETS = {
+    change: { marks: '[data-change]', pending: '.review-file-card[data-pending]', inside: '[data-change]' },
+    comment: {
+      marks: '.review-file-card .chain',
+      pending: '.review-file-card[data-pending][data-comments]',
+      inside: '.chain',
+    },
+  } as const;
+  let at: Element | null = null;
+  /** Wait for a card's diff to show what is looked for: its sides load first */
+  async function marksOf(card: HTMLElement, selector: string) {
+    for (let i = 0; i < 120; i++) {
+      const marks = card.querySelectorAll(selector);
+      if (marks.length) return [...marks];
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return [];
+  }
+  async function jump(back: boolean, kind: keyof typeof TARGETS = 'change') {
+    tab = 'diffs';
+    holdNearCards();
+    pinned = null;
+    await tick();
+    if (!list) return;
+    const target = TARGETS[kind];
+    const from = at?.isConnected ? at.getBoundingClientRect().top : list.getBoundingClientRect().top + (back ? 0 : -1);
+    // In page order (a rendered split's two sides interleave)
+    const marks = [...list.querySelectorAll<HTMLElement>(`${target.marks}, ${target.pending}`)]
+      .map((el) => ({ el, top: el.getBoundingClientRect().top }))
+      .sort((a, b) => a.top - b.top);
+    const above = marks.filter((m) => m.top < from - 2);
+    let to: Element | undefined = back ? above.at(-1)?.el : marks.find((m) => m.top > from + 2)?.el;
+    if (!to) return;
+    if (to.matches('.review-file-card')) {
+      wanted = (to as HTMLElement).dataset.file ?? null;
+      to.scrollIntoView({ block: 'start' });
+      const found = await marksOf(to as HTMLElement, target.inside);
+      to = back ? found.at(-1) : found[0];
+      if (!to) return;
+    }
+    for (const old of list.querySelectorAll('.review-current-change')) old.classList.remove('review-current-change');
+    to.classList.add('review-current-change');
+    to.scrollIntoView({ block: 'center' });
+    at = to;
+    chosen = null;
+    findTop();
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    if (tab !== 'diffs' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const target = e.target instanceof Element ? e.target : null;
+    if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const top = files.find((f) => f.path === (atFile ?? files[0]?.path));
+    const act = {
+      n: () => jump(false),
+      p: () => jump(true),
+      c: () => jump(false, 'comment'),
+      C: () => jump(true, 'comment'),
+      ']': () => stepFile(1),
+      '[': () => stepFile(-1),
+      v: () => top && toggleViewed(top),
+    }[e.key];
+    if (!act) return;
+    e.preventDefault();
+    void act();
+  }
+
+  // The splitter: dragged, or moved with the arrow keys
+  let split = $state<HTMLElement>();
+  /** The width the tree and the diffs share (the window's, before the page is laid out) */
+  const pageWidth = () => split?.clientWidth || window.innerWidth;
+  function drag(e: PointerEvent) {
+    const bar = e.currentTarget as HTMLElement;
+    bar.setPointerCapture(e.pointerId);
+    const left = split?.getBoundingClientRect().left ?? 0;
+    const move = (m: PointerEvent) => (width = treeWidth(m.clientX - left, pageWidth()));
+    const up = () => {
+      bar.removeEventListener('pointermove', move);
+      bar.removeEventListener('pointerup', up);
+    };
+    bar.addEventListener('pointermove', move);
+    bar.addEventListener('pointerup', up);
+  }
+  function nudge(e: KeyboardEvent) {
+    const by = { ArrowLeft: -16, ArrowRight: 16 }[e.key];
+    if (!by) return;
+    e.preventDefault();
+    width = treeWidth(width + by, pageWidth());
+  }
+
+  // A chain on the review as a whole: kept, with what was written, until the page says it is saved
+  let composing = $state(false);
+  let draft = $state('');
+  let refused = $state<string | null>(null);
+  async function saveComment() {
+    const body = draft.trim();
+    if (!body) return;
+    refused = null;
+    const problem = await oncomment({ path: null, picked: null, body });
+    if (typeof problem === 'string') {
+      refused = problem;
+      return;
+    }
+    composing = false;
+    draft = '';
+  }
+
+  // Submit: a summary and a decision
+  let submitting = $state(false);
+  let summary = $state('');
+  function submit(decision: 'approve' | 'request_changes' | 'comment') {
+    onsubmit(decision, summary.trim());
+    submitting = false;
+  }
+  // A decision made (the review's `updated` moves): the summary box starts empty; a refresh that changed nothing else
+  // keeps what is being written
+  let updatedAt = untrack(() => review.updated);
+  $effect(() => {
+    if (review.updated === updatedAt) return;
+    updatedAt = review.updated;
+    summary = '';
+  });
+
+  // The Comments tab
+  let filter = $state<ChainFilter>('all');
+  const chainCounts = $derived({
+    all: page.chains.length,
+    open: page.chains.filter((c) => !isResolved(c)).length,
+    resolved: page.chains.filter((c) => isResolved(c)).length,
+  });
+  /** Nothing left open: the decision at hand is to approve */
+  const settled = $derived(chainCounts.open === 0);
+  const listed = $derived(filterChains(page.chains, filter));
+  /** A chain as the Comments tab shows it: where it was made (a drifted one at its own lines) */
+  const asMade = (c: PlacedChain) => ({
+    ...c,
+    anchor: { ...c.anchor, lines: c.placed ?? c.drifted?.lines ?? c.anchor.lines },
+  });
+
+  const tabs = $derived([
+    { id: 'overview', label: 'Overview', icon: 'info', count: null },
+    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length },
+    { id: 'comments', label: 'Comments', icon: 'message-square', count: page.chains.length },
+  ] as const);
+</script>
+
+<svelte:window {onkeydown} />
+
+<article class="review-page" id="review-page" data-review={review.reference} data-tab={tab} aria-busy={busy}>
+  <header class="review-top">
+    <div class="review-top-row">
+      {#if backHref || onback}
+        <a
+          class="review-back"
+          href={backHref ?? '#'}
+          title="All reviews"
+          onclick={(e) => {
+            if (!onback) return;
+            e.preventDefault();
+            onback();
+          }}><Icon name="arrow-left" size={15} /><span>Reviews</span></a
+        >
+        <span class="review-divider" aria-hidden="true"></span>
+      {/if}
+      <h1 class="review-title">
+        {#if project}<span class="review-project">{project}</span>{/if}
+        <span class="review-ref">{review.reference}</span>
+        <span class="review-name">{review.title}</span>
+      </h1>
+      <span class="review-status status-{review.status}" data-status={review.status}
+        >{STATUS_LABELS[review.status]}</span
+      >
+      {#if page.needs_you}<span class="review-needs">Needs you</span>{/if}
+      {#if !ended}
+        <div class="review-submit-anchor">
+          {#if settled}
+            <div class="review-split-button">
+              <button
+                class="review-button primary approve"
+                id="review-approve"
+                disabled={busy}
+                title="Every comment is resolved"
+                onclick={() => submit('approve')}><Icon name="check" size={15} /> Approve</button
+              >
+              <button
+                class="review-button primary approve more"
+                aria-label="Other decisions"
+                aria-expanded={submitting}
+                onclick={() => (submitting = !submitting)}><Icon name="chevron-down" size={15} /></button
+              >
+            </div>
+          {:else}
+            <button
+              class="review-button primary review-submit-toggle"
+              aria-expanded={submitting}
+              onclick={() => (submitting = !submitting)}>Submit review <Icon name="chevron-down" size={15} /></button
+            >
+          {/if}
+          {#if submitting}
+            <section class="review-submit" aria-label="Submit">
+              <h2 class="review-submit-title">Finish your review</h2>
+              <textarea
+                id="review-summary-body"
+                bind:value={summary}
+                rows="4"
+                placeholder="A summary of your review (needed to comment)"
+                aria-label="Summary"
+                {@attach focusOnShow}></textarea>
+              <div class="review-actions">
+                <button
+                  class="review-button"
+                  data-decision="comment"
+                  disabled={busy || !summary.trim()}
+                  onclick={() => submit('comment')}>Comment</button
+                >
+                <button
+                  class="review-button danger"
+                  data-decision="request_changes"
+                  disabled={busy}
+                  onclick={() => submit('request_changes')}>Request changes</button
+                >
+                <button
+                  class="review-button primary"
+                  data-decision="approve"
+                  disabled={busy}
+                  onclick={() => submit('approve')}><Icon name="check" size={14} /> Approve</button
+                >
+              </div>
+            </section>
+          {/if}
+        </div>
+      {/if}
+    </div>
+    <div class="review-top-row review-bar">
+      <div class="review-tabs" role="tablist" aria-label="Review">
+        {#each tabs as t (t.id)}
+          <button role="tab" id="review-tab-{t.id}" aria-selected={tab === t.id} onclick={() => (tab = t.id)}
+            ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
+                class="review-count">{t.count}</span
+              >{/if}</button
+          >
+        {/each}
+      </div>
+      {#if tab === 'diffs'}
+        <div class="review-tools">
+          <label class="review-select">
+            <span>Round</span>
+            <select id="review-round" value={view.round} onchange={(e) => onround(Number(e.currentTarget.value), null)}>
+              {#each rounds as n (n)}<option value={n}>{n} of {rounds.length}</option>{/each}
+            </select>
+          </label>
+          <select
+            class="review-select-bare"
+            id="review-against"
+            aria-label="Showing"
+            value={view.against ?? ''}
+            onchange={(e) => onround(view.round, e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+          >
+            <option value="">Whole change</option>
+            {#each rounds.filter((n) => n < view.round) as n (n)}<option value={n}>Since round {n}</option>{/each}
+          </select>
+          <span class="review-progress" title="{viewedCount} of {files.length} files viewed">
+            <span class="review-meter"
+              ><span style:width="{files.length ? (viewedCount / files.length) * 100 : 0}%"></span></span
+            >
+            <span class="review-viewed-count">{viewedCount} of {files.length} viewed</span>
+          </span>
+          <span class="review-tool-divider" aria-hidden="true"></span>
+          <div class="review-icons" role="group" aria-label="Changes">
+            <Icon name="file-diff" size={14} />
+            <button
+              class="review-icon-button"
+              id="review-prev-change"
+              aria-label="Previous change"
+              title="Previous change (p)"
+              onclick={() => jump(true)}><Icon name="chevron-up" size={16} /></button
+            >
+            <button
+              class="review-icon-button"
+              id="review-next-change"
+              aria-label="Next change"
+              title="Next change (n)"
+              onclick={() => jump(false)}><Icon name="chevron-down" size={16} /></button
+            >
+          </div>
+          <div class="review-icons" role="group" aria-label="Comments">
+            <Icon name="message-square" size={14} />
+            <button
+              class="review-icon-button"
+              id="review-prev-comment"
+              aria-label="Previous comment"
+              title="Previous comment (Shift C)"
+              onclick={() => jump(true, 'comment')}><Icon name="chevron-up" size={16} /></button
+            >
+            <button
+              class="review-icon-button"
+              id="review-next-comment"
+              aria-label="Next comment"
+              title="Next comment (c)"
+              onclick={() => jump(false, 'comment')}><Icon name="chevron-down" size={16} /></button
+            >
+          </div>
+          <span class="review-tool-divider" aria-hidden="true"></span>
+          <div class="review-segmented" role="group" aria-label="Layout">
+            <button aria-pressed={mode === 'split'} aria-label="Split" title="Split" onclick={() => (mode = 'split')}
+              ><Icon name="columns-2" size={15} /></button
+            >
+            <button
+              aria-pressed={mode === 'unified'}
+              aria-label="Unified"
+              title="Unified"
+              onclick={() => (mode = 'unified')}><Icon name="rows-2" size={15} /></button
+            >
+          </div>
+          {#if hasMarkdown}
+            <div class="review-segmented" role="group" aria-label="View">
+              <button
+                aria-pressed={rendered === 'source'}
+                aria-label="Source"
+                title="Source"
+                onclick={() => (rendered = 'source')}><Icon name="code" size={15} /></button
+              >
+              <button
+                aria-pressed={rendered === 'rendered'}
+                aria-label="Rendered"
+                title="Rendered"
+                onclick={() => (rendered = 'rendered')}><Icon name="eye" size={15} /></button
+              >
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </header>
+
+  {#if problem}<p class="review-problem" role="alert">{problem}</p>{/if}
+
+  {#if tab === 'overview'}
+    <div class="review-overview" role="tabpanel" aria-labelledby="review-tab-overview">
+      <dl class="review-facts">
+        <div class="review-fact">
+          <dt><Icon name="user" size={13} /> Author</dt>
+          <dd>{review.author ?? 'nobody yet'}</dd>
+        </div>
+        <div class="review-fact">
+          <dt><Icon name="circle-check" size={13} /> Decided by</dt>
+          <dd>{review.reviewers.length ? review.reviewers.join(', ') : 'anyone but its author'}</dd>
+        </div>
+        {#if page.branch}
+          <div class="review-fact">
+            <dt><Icon name="git-branch" size={13} /> Branch</dt>
+            <dd class="review-branch">{page.branch}</dd>
+          </div>
+        {/if}
+        {#if review.tasks.length}
+          <div class="review-fact">
+            <dt><Icon name="list-todo" size={13} /> Tasks</dt>
+            <dd>
+              {#each review.tasks as task (task)}
+                {#if taskHref}<a class="review-task" href={taskHref(task)}>{task}</a>{:else}<span class="review-task"
+                    >{task}</span
+                  >{/if}
+              {/each}
+            </dd>
+          </div>
+        {/if}
+        <div class="review-fact">
+          <dt><Icon name="file-diff" size={13} /> Changes</dt>
+          <dd>
+            {files.length}
+            {files.length === 1 ? 'file' : 'files'}
+            <span class="added">+{totals.added}</span>
+            <span class="removed">−{totals.removed}</span>
+          </dd>
+        </div>
+        <div class="review-fact">
+          <dt><Icon name="message-square" size={13} /> Comments</dt>
+          <dd>{chainCounts.open} open · {chainCounts.resolved} resolved</dd>
+        </div>
+      </dl>
+
+      <div class="review-overview-body">
+        <div class="review-main">
+          <section class="review-card review-summary" aria-label="Description">
+            <h2 class="review-card-title">Description</h2>
+            {#if page.summary.trim()}<CompMd text={page.summary} />{:else}<p class="review-empty">
+                No description.
+              </p>{/if}
+          </section>
+          <section class="review-card" aria-label="Rounds">
+            <h2 class="review-card-title">Rounds</h2>
+            <ol class="review-round-list">
+              {#each [...page.rounds].reverse() as r (r.number)}
+                <li>
+                  <button
+                    class="review-link"
+                    onclick={() => {
+                      onround(r.number, null);
+                      tab = 'diffs';
+                    }}>Round {r.number}</button
+                  >
+                  <span class="review-round-facts"
+                    >{r.files.length}
+                    {r.files.length === 1 ? 'file' : 'files'} · {r.by}{r.at ? ` · ${when(r.at)}` : ''}</span
+                  >
+                  {#if r.number === view.round}<span class="review-round-shown">shown</span>{/if}
+                </li>
+              {/each}
+            </ol>
+          </section>
+        </div>
+
+        <aside class="review-conversation" aria-label="Comments on the review">
+          <h2 class="review-card-title">Conversation</h2>
+          {#each reviewChains(page.chains) as chain (chain.id)}<ChainBox {chain} {onreply} {onresolve} />{/each}
+          {#if !reviewChains(page.chains).length && !composing}
+            <p class="review-empty">No comments on the review as a whole yet.</p>
+          {/if}
+          {#if composing}
+            <div class="review-composer">
+              <textarea
+                id="review-comment-body"
+                bind:value={draft}
+                rows="4"
+                aria-label="Comment"
+                placeholder="Leave a comment on the review…"
+                {@attach focusOnShow}></textarea>
+              {#if refused}<p class="review-refused" role="alert">Not saved: {refused}</p>{/if}
+              <div class="review-actions">
+                <button class="review-button" onclick={() => (composing = false)}>Cancel</button>
+                <button class="review-button primary" disabled={!draft.trim() || busy} onclick={saveComment}
+                  >Comment</button
+                >
+              </div>
+            </div>
+          {:else}
+            <button class="review-button review-add-comment" onclick={() => (composing = true)}
+              ><Icon name="message-square" size={14} /> Comment on the review</button
+            >
+          {/if}
+        </aside>
+      </div>
+    </div>
+  {:else if tab === 'diffs'}
+    <div
+      class="review-split"
+      role="tabpanel"
+      aria-labelledby="review-tab-diffs"
+      bind:this={split}
+      style:--tree="{width}px"
+    >
+      <nav class="review-files" aria-label="Files">
+        <div class="review-files-head">
+          <span>Files</span>
+          <span class="review-files-total"
+            ><span class="added">+{totals.added}</span> <span class="removed">−{totals.removed}</span></span
+          >
+        </div>
+        {#if !files.length}<p class="review-empty">No files changed here.</p>{/if}
+        <ul>
+          {#each tree as row (row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`)}
+            {#if row.kind === 'folder'}
+              <li class="review-folder" style:--depth={row.depth}>
+                <Icon name="folder" size={13} />{row.name}
+              </li>
+            {:else}
+              {@const counts = lineCounts(row.file.patch)}
+              <li
+                class="review-file"
+                class:current={row.file.path === atFile}
+                class:viewed={isViewed(row.file)}
+                style:--depth={row.depth}
+              >
+                <input
+                  type="checkbox"
+                  aria-label="Viewed {row.file.path}"
+                  checked={isViewed(row.file)}
+                  onchange={() => toggleViewed(row.file)}
+                />
+                <button class="review-file-name" data-file={row.file.path} onclick={() => showFile(row.file.path)}>
+                  <span class="review-file-status status-{row.file.status}">{statusLetter[row.file.status]}</span>
+                  {row.name}
+                </button>
+                <span class="review-file-counts">
+                  {#if row.file.binary}bin{:else}<span class="added">+{counts.added}</span>
+                    <span class="removed">−{counts.removed}</span>{/if}
+                </span>
+              </li>
+            {/if}
+          {/each}
+        </ul>
+      </nav>
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (a splitter is
+           dragged, and moved with the arrow keys) -->
+      <div
+        class="review-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the files"
+        aria-valuenow={width}
+        aria-valuemin={TREE_WIDTH.least}
+        tabindex="0"
+        onpointerdown={drag}
+        onkeydown={nudge}
+      ></div>
+      <div class="review-diffs" bind:this={list} {onscroll}>
+        {#each files as f (f.path)}
+          <ReviewFile
+            file={f}
+            chains={chainsOf(page.chains, f)}
+            drifted={driftedOf(page.chains, f)}
+            before={sideOf(f.before)}
+            after={sideOf(f.after)}
+            viewed={isViewed(f)}
+            folded={folded(f)}
+            {mode}
+            view={rendered}
+            {busy}
+            {docStyle}
+            root={list}
+            wanted={f.path === wanted}
+            onfold={() => (folds = { ...folds, [f.path]: !folded(f) })}
+            onviewed={() => toggleViewed(f)}
+            oncomment={(picked, body) => oncomment({ path: f.path, picked, body })}
+            {onreply}
+            {onresolve}
+            onround={(round) => onround(round, null)}
+          />
+        {/each}
+      </div>
+    </div>
+  {:else}
+    <div class="review-comments" role="tabpanel" aria-labelledby="review-tab-comments">
+      <div class="review-segmented review-filter" role="group" aria-label="Show">
+        {#each [['all', 'All'], ['open', 'Open'], ['resolved', 'Resolved']] as const as [id, label] (id)}
+          <button aria-pressed={filter === id} data-filter={id} onclick={() => (filter = id)}
+            >{label} <span class="review-count">{chainCounts[id]}</span></button
+          >
+        {/each}
+      </div>
+      {#if !listed.length}
+        <p class="review-empty">
+          {filter === 'all' ? 'No comments yet.' : filter === 'open' ? 'Nothing open.' : 'Nothing resolved yet.'}
+        </p>
+      {/if}
+      {#each listed as chain (chain.id)}
+        <ChainBox
+          chain={asMade(chain)}
+          detailed
+          {onreply}
+          {onresolve}
+          onwhere={chain.anchor.path ? () => showFile(chain.anchor.path!) : () => (tab = 'overview')}
+        />
+      {/each}
+    </div>
+  {/if}
+</article>
+
+<style>
+  .review-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-size: var(--text-md);
+  }
+  /* The top bar: the title and the decision, then the tabs and the Diffs tab's tools */
+  .review-top {
+    flex: none;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .review-top-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    padding: var(--space-6) var(--space-8) 0;
+  }
+  .review-bar {
+    flex-wrap: wrap;
+    padding-top: var(--space-4);
+    padding-bottom: 0;
+  }
+  .review-back {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .review-back:hover {
+    color: var(--text);
+    background: var(--surface2);
+  }
+  .review-divider {
+    width: 1px;
+    height: var(--space-8);
+    background: var(--border);
+  }
+  .review-title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    min-width: 0;
+    margin: 0;
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .review-project,
+  .review-ref {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: var(--text-lg);
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .review-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .review-status,
+  .review-needs {
+    padding: var(--space-1) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--text-muted);
+  }
+  .review-status.status-approved {
+    color: var(--green);
+    border-color: color-mix(in srgb, var(--green) 50%, transparent);
+    background: color-mix(in srgb, var(--green) 10%, transparent);
+  }
+  .review-status.status-changes_requested {
+    color: var(--red);
+    border-color: color-mix(in srgb, var(--red) 50%, transparent);
+    background: color-mix(in srgb, var(--red) 10%, transparent);
+  }
+  .review-status.status-open,
+  .review-status.status-live {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  .review-needs {
+    color: var(--purple);
+    border-color: color-mix(in srgb, var(--purple) 50%, transparent);
+    background: color-mix(in srgb, var(--purple) 10%, transparent);
+  }
+  /* Buttons, as the dashboard's dialogs draw theirs */
+  .review-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface2);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-md);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .review-button:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--text-muted) 60%, var(--border));
+  }
+  .review-button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+  .review-button.primary.approve {
+    background: var(--green);
+    border-color: var(--green);
+  }
+  .review-button.danger {
+    color: var(--red);
+  }
+  .review-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .review-submit-anchor {
+    position: relative;
+    margin-left: auto;
+  }
+  .review-split-button {
+    display: flex;
+  }
+  .review-split-button .review-button:first-child {
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+  }
+  .review-split-button .more {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+    border-left: 1px solid color-mix(in srgb, var(--on-accent) 25%, transparent);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
+  .review-submit {
+    position: absolute;
+    right: 0;
+    top: calc(100% + var(--space-3));
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    width: min(28rem, 90vw);
+    padding: var(--space-7);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: 0 12px 36px color-mix(in srgb, var(--overlay) 45%, transparent);
+  }
+  .review-submit-title,
+  .review-card-title {
+    margin: 0;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  /* The tabs */
+  .review-tabs {
+    display: flex;
+    gap: var(--space-2);
+  }
+  .review-tabs button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-6) var(--space-5);
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--text-md);
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .review-tabs button:hover {
+    color: var(--text);
+  }
+  .review-tabs button[aria-selected='true'] {
+    color: var(--text);
+    font-weight: 600;
+    border-bottom-color: var(--accent);
+  }
+  .review-count {
+    min-width: var(--space-8);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-pill);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-align: center;
+  }
+  /* The Diffs tab's tools */
+  .review-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-5);
+    margin-left: auto;
+    padding-bottom: var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+  }
+  .review-select {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .review-tools select {
+    height: 28px;
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+  .review-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+  .review-meter {
+    width: 64px;
+    height: var(--space-3);
+    border-radius: var(--radius-pill);
+    background: var(--surface2);
+    overflow: hidden;
+  }
+  .review-meter span {
+    display: block;
+    height: 100%;
+    background: var(--green);
+  }
+  .review-tool-divider {
+    width: 1px;
+    height: var(--space-8);
+    background: var(--border);
+  }
+  .review-icons {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-1) 0 var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text-muted);
+  }
+  .review-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .review-icon-button:hover {
+    color: var(--text);
+    background: var(--surface2);
+  }
+  .review-segmented {
+    display: flex;
+    padding: var(--space-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+  }
+  .review-segmented button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-width: 28px;
+    height: 24px;
+    padding: 0 var(--space-3);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+  .review-segmented button:hover {
+    color: var(--text);
+  }
+  .review-segmented button[aria-pressed='true'] {
+    background: var(--surface2);
+    color: var(--text);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--overlay) 25%, transparent);
+  }
+  .review-problem {
+    margin: var(--space-5) var(--space-8) 0;
+    padding: var(--space-4) var(--space-6);
+    border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--red) 10%, transparent);
+    color: var(--red);
+  }
+  /* Overview: the facts across the top, the description and rounds, the conversation beside them */
+  .review-overview,
+  .review-comments {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--space-8);
+  }
+  .review-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    margin: 0 0 var(--space-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .review-fact {
+    padding: var(--space-5) var(--space-7);
+  }
+  .review-fact + .review-fact {
+    border-left: 1px solid var(--border);
+  }
+  .review-fact dt {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .review-fact dd {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-4);
+    font-size: var(--text-lg);
+  }
+  .review-branch {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: var(--text-md) !important;
+  }
+  .review-task {
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: var(--text-sm);
+    text-decoration: none;
+  }
+  .review-overview-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+    gap: var(--space-8);
+    align-items: start;
+  }
+  .review-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-width: 0;
+  }
+  .review-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    padding: var(--space-7) var(--space-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+  .review-summary :global(.compmd) {
+    font-size: var(--text-lg);
+    line-height: 1.6;
+  }
+  .review-round-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .review-round-list li {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-5);
+  }
+  .review-round-facts {
+    color: var(--text-muted);
+  }
+  .review-round-shown {
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-pill);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+  }
+  .review-conversation {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    min-width: 0;
+  }
+  .review-conversation :global(.chain),
+  .review-comments :global(.chain) {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .review-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .review-link:hover {
+    text-decoration: underline;
+  }
+  .review-add-comment {
+    align-self: flex-start;
+  }
+  .review-composer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+  .review-refused {
+    margin: 0;
+    color: var(--red);
+    font-size: var(--text-sm);
+  }
+  /* Diffs: the tree, the splitter, the list */
+  .review-split {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: var(--tree) 5px minmax(0, 1fr);
+  }
+  .review-files {
+    overflow: auto;
+    padding: 0 0 var(--space-6);
+    font-size: var(--text-sm);
+    background: var(--surface);
+  }
+  .review-files-head {
+    position: sticky;
+    top: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-5) var(--space-6);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .review-files-total {
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .review-files ul {
+    list-style: none;
+    margin: var(--space-3) 0 0;
+    padding: 0;
+  }
+  .review-folder,
+  .review-file {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: 0 var(--space-3);
+    padding: var(--space-2) var(--space-4) var(--space-2) calc(var(--space-4) + var(--depth) * var(--space-7));
+    border-radius: var(--radius-md);
+  }
+  .review-folder {
+    color: var(--text-muted);
+  }
+  .review-file:hover {
+    background: var(--surface2);
+  }
+  .review-file.current {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .review-file.viewed .review-file-name {
+    color: var(--text-muted);
+  }
+  .review-file input {
+    margin: 0;
+    accent-color: var(--green);
+  }
+  .review-file-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .review-file-status {
+    display: inline-block;
+    width: 1.2em;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-weight: 700;
+    color: var(--yellow);
+  }
+  .review-file-status.status-added {
+    color: var(--green);
+  }
+  .review-file-status.status-deleted {
+    color: var(--red);
+  }
+  .review-file-status.status-renamed {
+    color: var(--accent);
+  }
+  .review-file-counts {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: var(--text-2xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .added {
+    color: var(--green);
+  }
+  .removed {
+    color: var(--red);
+  }
+  .review-splitter {
+    cursor: col-resize;
+    border-left: 1px solid var(--border);
+    background: transparent;
+    touch-action: none;
+    transition: background 0.12s ease;
+  }
+  .review-splitter:hover,
+  .review-splitter:focus-visible {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    outline: none;
+  }
+  .review-diffs {
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-7);
+    padding: var(--space-7) var(--space-8) 50vh;
+    background: var(--bg);
+  }
+  .review-diffs :global(.review-current-change) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  /* Comments */
+  .review-comments {
+    max-width: 960px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+  .review-filter {
+    align-self: flex-start;
+    display: inline-flex;
+    margin-bottom: var(--space-7);
+  }
+  .review-filter button {
+    height: 26px;
+    padding: 0 var(--space-5);
+  }
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    resize: vertical;
+  }
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  .review-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-4);
+  }
+  .review-empty {
+    margin: 0;
+    color: var(--text-muted);
+  }
+  @media (max-width: 960px) {
+    .review-overview-body {
+      grid-template-columns: 1fr;
+    }
+    .review-conversation {
+      position: static;
+    }
+  }
+  @media (max-width: 720px) {
+    .review-split {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+    }
+    .review-splitter {
+      display: none;
+    }
+    .review-files {
+      max-height: 30vh;
+    }
+  }
+</style>

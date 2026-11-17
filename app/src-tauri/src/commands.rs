@@ -13,6 +13,7 @@ use crate::links::Links;
 use crate::menu::Menus;
 use crate::session::Session;
 use atm_lib::query::Filters;
+use atm_lib::review_requests;
 use atm_lib::workspaces::{Member, Workspace};
 use atm_lib::{OnChange, Subscription, Workspaces};
 use serde::{Deserialize, Serialize};
@@ -222,6 +223,37 @@ impl From<atm_common::Error> for AppError {
     }
 }
 
+/// Which of a project's reviews are listed: the REST route's query parameters; what isn't given keeps everything.
+#[derive(Debug, Clone, Default, Deserialize, Type)]
+#[serde(default)]
+pub struct ReviewFilters {
+    /// Every word in the title, summary or comments.
+    pub q: String,
+    /// One of these statuses.
+    pub status: Vec<String>,
+    /// This author.
+    pub author: Option<String>,
+    /// This reviewer among them.
+    pub reviewer: Option<String>,
+    /// It reviews this task.
+    pub task: Option<String>,
+    /// On this branch.
+    pub branch: Option<String>,
+}
+
+impl From<ReviewFilters> for atm_lib::review_pages::ReviewQuery {
+    fn from(f: ReviewFilters) -> Self {
+        Self {
+            q: f.q,
+            status: f.status,
+            author: f.author,
+            reviewer: f.reviewer,
+            task: f.task,
+            branch: f.branch,
+        }
+    }
+}
+
 /// What a project's tasks are filtered by: the REST route's query parameters (`atm task list`'s options); what isn't
 /// given keeps everything.
 #[derive(Debug, Clone, Default, Deserialize, Type)]
@@ -389,17 +421,50 @@ pub fn worktrees_of(workspaces: &Workspaces, w: &str, p: &str) -> Result<Value, 
     Ok(json!({"worktrees": member(workspaces, w, p)?.worktrees()}))
 }
 
-/// `GET …/projects/<p>/documents?path=`.
+/// `GET …/projects/<p>/documents?path=` (`&at=`: as a commit or tree has it, a review round's side).
 ///
 /// # Errors
-/// No such workspace or project; a path atm refuses or can't find.
+/// No such workspace or project; a path atm refuses or can't find; a revision that isn't one.
 pub fn document_of(
     workspaces: &Workspaces,
     w: &str,
     p: &str,
     path: &str,
+    at: Option<&str>,
 ) -> Result<Value, AppError> {
-    Ok(member(workspaces, w, p)?.document(path)?)
+    let member = member(workspaces, w, p)?;
+    Ok(match at.filter(|a| !a.is_empty()) {
+        Some(revision) => member.document_at(path, revision)?,
+        None => member.document(path)?,
+    })
+}
+
+/// `GET …/projects/<p>/reviews`: its reviews the filters keep, which need the user.
+///
+/// # Errors
+/// No such workspace or project; a status that isn't one; reviews that can't be read.
+pub fn reviews_of(
+    workspaces: &Workspaces,
+    w: &str,
+    p: &str,
+    filters: ReviewFilters,
+) -> Result<Value, AppError> {
+    Ok(member(workspaces, w, p)?.reviews(&filters.into())?)
+}
+
+/// `GET …/projects/<p>/reviews/<CR>?round=&against=`: a review's page for one view.
+///
+/// # Errors
+/// No such workspace, project, review or round; a round's tree that can't be had here.
+pub fn review_of(
+    workspaces: &Workspaces,
+    w: &str,
+    p: &str,
+    review: &str,
+    round: Option<u32>,
+    against: Option<u32>,
+) -> Result<Value, AppError> {
+    Ok(member(workspaces, w, p)?.review(&review_ref(review), round, against)?)
 }
 
 /// `GET …/projects/<p>/files?path=`.
@@ -432,6 +497,191 @@ pub fn logo_of(workspaces: &Workspaces, w: &str, p: &str) -> Result<Option<FileD
         content_type: content_type.into(),
         data,
     }))
+}
+
+/// A review request's body, as the page sends it and the REST route takes it (ATM-572; atm-lib's `review_requests`
+/// reads it, refusing what doesn't fit).
+#[derive(Debug, Clone, PartialEq, Deserialize, Type)]
+#[serde(transparent)]
+pub struct ReviewRequest(#[specta(type = JsonShape)] pub Value);
+
+/// Project `p` of workspace `w`, opened to act as the user (never an agent's identity).
+fn as_user(workspaces: &Workspaces, w: &str, p: &str) -> Result<atm_lib::Project, AppError> {
+    Ok(member(workspaces, w, p)?.project_as_user()?)
+}
+
+fn header_json(header: &atm_lib::reviews::ReviewHeader) -> Result<Value, AppError> {
+    serde_json::to_value(header).map_err(|e| AppError::Failed(e.to_string()))
+}
+
+fn review_ref(review: &str) -> atm_lib::reviews::ReviewRef {
+    atm_lib::reviews::ReviewRef(review.to_string())
+}
+
+fn comment_id(comment: &str) -> atm_lib::reviews::CommentId {
+    atm_lib::reviews::CommentId(comment.to_string())
+}
+
+// The app's review commands (docs/code-review-design.md §3.12, ATM-572): each the REST route of the same name, the same
+// atm-lib call as its `atm review …` command, acting as the user. Only ever on the user's action in the page (a new
+// exception to I27, beside connecting agents and installing an update); CompMD's frames, which show the comments,
+// still call nothing (I25).
+
+/// `POST …/reviews`: a review opened (or a draft, or a live review).
+///
+/// # Errors
+/// No such workspace or project; a body that isn't one; what the review's rules refuse.
+#[tauri::command]
+#[specta::specta]
+pub async fn create_review(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    opening: ReviewRequest,
+) -> Result<Json, AppError> {
+    let mut project = as_user(&state.workspaces, &workspace, &project)?;
+    let opening = review_requests::request_from(opening.0)?;
+    header_json(&review_requests::open_review(&mut project, opening)?).map(Json)
+}
+
+/// `PATCH …/reviews/<CR>`: the review closed.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn close_review(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    closing: ReviewRequest,
+) -> Result<Json, AppError> {
+    let mut project = as_user(&state.workspaces, &workspace, &project)?;
+    let closing = review_requests::request_from(closing.0)?;
+    header_json(&review_requests::close_review(
+        &mut project,
+        &review_ref(&review),
+        &closing,
+    )?)
+    .map(Json)
+}
+
+/// `PUT …/reviews/<CR>/tasks`: the tasks it reviews, as a whole.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn set_review_tasks(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    tasks: Vec<String>,
+) -> Result<Json, AppError> {
+    let mut project = as_user(&state.workspaces, &workspace, &project)?;
+    let wanted = review_requests::ReviewTasks { tasks };
+    header_json(&review_requests::set_review_tasks(
+        &mut project,
+        &review_ref(&review),
+        &wanted,
+    )?)
+    .map(Json)
+}
+
+/// `POST …/reviews/<CR>/decisions`: a reviewer's decision.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn submit_review_decision(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    decision: ReviewRequest,
+) -> Result<Json, AppError> {
+    let mut project = as_user(&state.workspaces, &workspace, &project)?;
+    let decision = review_requests::request_from(decision.0)?;
+    header_json(&review_requests::submit_decision(
+        &mut project,
+        &review_ref(&review),
+        &decision,
+    )?)
+    .map(Json)
+}
+
+/// `POST …/reviews/<CR>/comments`: a new chain.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn add_review_comment(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    comment: ReviewRequest,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let comment = review_requests::request_from(comment.0)?;
+    let id = review_requests::add_comment(&project, &review_ref(&review), comment)?;
+    Ok(Json(json!({ "review": review, "comment": id })))
+}
+
+/// `PATCH …/reviews/<CR>/comments/<c>`: a comment's text (one's own), or its resolved box.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn update_review_comment(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    comment: String,
+    update: ReviewRequest,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let update = review_requests::request_from(update.0)?;
+    review_requests::update_comment(
+        &project,
+        &review_ref(&review),
+        &comment_id(&comment),
+        update,
+    )?;
+    Ok(Json(json!({ "review": review, "comment": comment })))
+}
+
+/// `POST …/reviews/<CR>/comments/<c>/replies`: a reply.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn reply_to_review_comment(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    comment: String,
+    body: String,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let reply = review_requests::NewReply { body };
+    let id = review_requests::reply_to_comment(
+        &project,
+        &review_ref(&review),
+        &comment_id(&comment),
+        &reply,
+    )?;
+    Ok(Json(
+        json!({ "review": review, "comment": id, "reply_to": comment }),
+    ))
 }
 
 /// atm's version.
@@ -522,7 +772,7 @@ pub async fn worktrees(
     worktrees_of(&state.workspaces, &workspace, &project).map(Json)
 }
 
-/// A document of a project, as the viewer shows it.
+/// A document of a project, as the viewer shows it: from the working copy, or `at` a commit or tree.
 ///
 /// # Errors
 /// As [`document_of`].
@@ -533,8 +783,56 @@ pub async fn document(
     workspace: String,
     project: String,
     path: String,
+    at: Option<String>,
 ) -> Result<Json, AppError> {
-    document_of(&state.workspaces, &workspace, &project, &path).map(Json)
+    document_of(
+        &state.workspaces,
+        &workspace,
+        &project,
+        &path,
+        at.as_deref(),
+    )
+    .map(Json)
+}
+
+/// A project's reviews, for the reviews page.
+///
+/// # Errors
+/// As [`reviews_of`].
+#[tauri::command]
+#[specta::specta]
+pub async fn project_reviews(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    filters: ReviewFilters,
+) -> Result<Json, AppError> {
+    reviews_of(&state.workspaces, &workspace, &project, filters).map(Json)
+}
+
+/// A review's page, for one view of it.
+///
+/// # Errors
+/// As [`review_of`].
+#[tauri::command]
+#[specta::specta]
+pub async fn project_review(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    round: Option<u32>,
+    against: Option<u32>,
+) -> Result<Json, AppError> {
+    review_of(
+        &state.workspaces,
+        &workspace,
+        &project,
+        &review,
+        round,
+        against,
+    )
+    .map(Json)
 }
 
 /// An image of a project.

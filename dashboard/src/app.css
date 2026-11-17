@@ -2540,8 +2540,9 @@ button.repo-ref {
   background: var(--surface2);
 }
 /* The document is a page on a desk, scrolling with a thin scrollbar in the theme's colours. A theme gives the desk
-   and the page its own look through these variables (themes/hand-drawn.css: a ruled notebook page) */
-.doc-viewer {
+   and the page its own look through these variables (themes/hand-drawn.css: a ruled notebook page). A `.doc-sheet`
+   is the same desk and page elsewhere: the diff viewer's rendered side (ATM-574) */
+:is(.doc-viewer, .doc-sheet) {
   --doc-desk: var(--bg);
   --doc-page: var(--surface);
   --doc-page-border: 1px solid var(--border);

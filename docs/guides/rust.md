@@ -72,6 +72,9 @@ atm's own Rust rules, for the Rust port of atm-cli ([porting-to-rust.md](../port
 
 ## Tests
 
+- **Every case, not a coverage number** (AGENTS.md, Testing conventions): happy paths, failure modes, input classes,
+  states and where they meet, each with its own test or a row in a table of cases. The coverage floor below is the
+  guardrail, not the goal.
 - **Unit tests stay with the code they test,** in a `#[cfg(test)] mod tests` at the bottom of its file, while the
   file reads well as a whole.
 - **When the tests hurt the code's readability, they move out** to a file of their own, `foo/tests.rs`, declared at

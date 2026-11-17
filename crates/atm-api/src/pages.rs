@@ -2,7 +2,8 @@
 //! one its path names. Nothing else is served under them: a project's ID or tab is only text the page reads.
 
 /// A page's path without its leading `/` and an optional trailing `/`: the root, `board`, `progress`, `agents`,
-/// `projects`, `projects/<id>` or `projects/<id>/<tab>` (a tab in lowercase letters).
+/// `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase letters) or a review's page,
+/// `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as `CR-8.2`).
 fn is_form(rest: &str) -> bool {
     if matches!(rest, "" | "board" | "progress" | "agents" | "projects") {
         return true;
@@ -10,12 +11,20 @@ fn is_form(rest: &str) -> bool {
     let Some(after) = rest.strip_prefix("projects/") else {
         return false;
     };
-    let mut parts = after.split('/');
-    let id = parts.next().unwrap_or_default();
-    let tab = parts.next();
-    !id.is_empty()
-        && parts.next().is_none()
-        && tab.is_none_or(|t| !t.is_empty() && t.bytes().all(|b| b.is_ascii_lowercase()))
+    let parts: Vec<&str> = after.split('/').collect();
+    let tab = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_lowercase());
+    let reference = |r: &str| {
+        !r.is_empty()
+            && r.len() <= 64
+            && r.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.')
+    };
+    match parts.as_slice() {
+        [id] => !id.is_empty(),
+        [id, t] => !id.is_empty() && tab(t),
+        [id, "reviews", r] => !id.is_empty() && reference(r),
+        _ => false,
+    }
 }
 
 /// Whether `path` is one of the dashboard's pages: one of the forms, or one in a workspace (`/w/<w>`, the workspace's
@@ -54,6 +63,11 @@ mod tests {
             "/w/work/",
             "/w/work/board",
             "/w/work/projects/abcd1234/list",
+            "/projects/abcd1234/reviews",
+            "/projects/abcd1234/reviews/CR-7",
+            "/projects/abcd1234/reviews/CR-8.2/",
+            "/projects/abcd1234/reviews/0193c0de-77aa",
+            "/w/work/projects/abcd1234/reviews/CR-7",
         ] {
             assert!(is_page(page), "{page}");
         }
@@ -70,6 +84,13 @@ mod tests {
             "/w//projects",
             "/w/work/tasks.json",
             "/w/work/projects/abcd1234/list/x",
+            "/projects/abcd1234/reviews//",
+            "/projects/abcd1234/reviews/CR-7/comments",
+            "/projects/abcd1234/reviews/CR 7",
+            "/projects/abcd1234/reviews/CR_7",
+            "/projects/abcd1234/reviews/<x>",
+            "/projects/abcd1234/list/CR-7",
+            "/projects//reviews/CR-7",
             "",
         ] {
             assert!(!is_page(other), "{other}");

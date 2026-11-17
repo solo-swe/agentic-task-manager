@@ -7,6 +7,7 @@
   import KanbanBoard from '../kanban/KanbanBoard.svelte';
   import ProgressTab from '../progress/ProgressTab.svelte';
   import ProjectTab from './ProjectTab.svelte';
+  import ReviewsTab from './ReviewsTab.svelte';
   import ScopeBar from './ScopeBar.svelte';
   import TaskGrid from '../tasks/TaskGrid.svelte';
 
@@ -86,6 +87,16 @@
     >
       <!-- Mounted only while selected, like the Agents tab: it counts the whole history -->
       {#if view === 'project'}<ProjectTab />{/if}
+    </div>
+    <div
+      class="view-panel"
+      id="panel-reviews"
+      role="tabpanel"
+      aria-labelledby="tab-reviews"
+      hidden={view !== 'reviews'}
+    >
+      <!-- Mounted only while selected: it asks the server for the reviews, and again now and then -->
+      {#if view === 'reviews'}<ReviewsTab />{/if}
     </div>
   </div>
 </div>

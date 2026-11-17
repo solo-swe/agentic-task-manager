@@ -11,7 +11,8 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 - The server binds to `127.0.0.1` only.
 - **Host check.** A request whose `Host` header isn't `localhost:<port>` or `127.0.0.1:<port>` (the server's own port)
   gets `403` with `{"error": "unexpected Host header"}`, whatever the path. This blocks DNS rebinding.
-- Only `GET` and `HEAD`. Anything else gets `405`.
+- `GET` and `HEAD`; `POST`, `PATCH` and `PUT` only on a project's reviews, from atm's own page (§2.9). Anything else
+  gets `405` (`OPTIONS` too: no CORS preflight is answered).
 - Every response has `Cache-Control: no-store`, except a project's logo (§2.3). No CORS headers are sent.
 - Error responses are JSON, `{"error": "<what went wrong>"}`, with `Content-Type: application/json`.
 - **Conditional requests.** Responses marked *ETag* below carry a strong `ETag`. A request with a matching
@@ -28,8 +29,10 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /p/<id>/worktrees.json` | that project's git worktrees and their changed tasks (§2.2) | yes |
 | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
 | `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
-| `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6) | yes |
+| `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6); `&at=<rev>` as a commit or tree has it | yes (no with `at`) |
 | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
+| `GET /api/v1/projects/<id>/reviews?q=&status=&…` | that project's code reviews (§2.9) | no |
+| `GET /api/v1/projects/<id>/reviews/<CR>?round=&against=` | a review's page for one view of it (§2.9) | no |
 | `GET /__atm/whoami` | who this server is (§4) | no |
 | `GET /_app/version.json` | `{"version": …}`, the page's own version: SvelteKit's check for a new deployment, which it makes when the tab regains focus (atm's reload offer comes from whoami) | no |
 | `GET /api/v2/workspaces` | the workspaces (§2.8) | no |
@@ -38,6 +41,8 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /api/v2/workspaces/<w>/projects/<id>/tasks` | as `api/v1/projects/<id>/tasks`, in that workspace | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/documents?path=`, `files?path=` | as the v1 file routes (§2.6) | yes |
 | `GET /api/v2/workspaces/<w>/projects/<id>/claims`, `worktrees`, `logo` | as `/p/<id>/claims.json`, `worktrees.json`, `logo` | yes |
+| `GET /api/v2/workspaces/<w>/projects/<id>/reviews`, `reviews/<CR>` | as the v1 review routes (§2.9) | no |
+| `POST`, `PATCH`, `PUT` `/api/v2/workspaces/<w>/projects/<id>/reviews/…` | a change to that project's code reviews, from atm's own page (§2.9) | no |
 | anything else | `404` | |
 
 The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/…`) are the `default` workspace's
@@ -52,7 +57,8 @@ The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/
   F7, F8), answers `404` for all of these.
 - An ETag is a hash of what the answer depends on (the store's stamps: its files' sizes and nanosecond mtimes, and the
   query), so two atm changes in the same second are two ETags.
-- Query strings are ignored, except `q` on `api/search`, the filters on the v1 route and `path` on the file routes.
+- Query strings are ignored, except `q` on `api/search`, the filters on the v1 route, `path` (and `at`) on the file
+  routes, and the reviews' filters and a review's `round` and `against` (§2.9).
 - The Projects Overview reads every listed project's tasks and archive (the v1 route, with `?archived=true` for the
   archive, T-355) and `claims.json` while it is shown, conditionally on each refresh (an unchanged answer is `304`),
   for its views across projects: the Agents tab (T-333), the title bar's Activity (T-328) and the Progress tab (T-329).
@@ -183,6 +189,12 @@ reads the working copy through the version control. `path` is relative to the pr
   submodule's own repository (`tracked`, and whether it is ignored), and `submodule` is `{path, commit, repository}`:
   the submodule's folder, its own HEAD and its origin's web address (`null` when it isn't one); `null` for any other
   file. The ETag is the file's size, mtime and the commit.
+- `documents?path=&at=<rev>` (ATM-574) answers the same fields for the file as commit or tree `<rev>` has it: a review
+  round's side, which the review's page names (a range's commits, or the tree a working-copy round is rebuilt to from
+  its diff). `revision` is the object's SHA, `commit` the commit's (`null` for a tree), `modified_at` and `submodule`
+  `null`, `tracked` true. The path's checks are the same, and git's ignore rules are the working copy's; a revision is
+  resolved before git sees it, so one that starts with `-` or isn't an object is `400`, one the clone doesn't have, or
+  a file it doesn't hold, `404`. It never changes: no ETag.
 - `files?path=` answers an image's bytes (PNG, JPEG, GIF, WebP, SVG whose bytes match its name) with its type,
   `Cache-Control: no-cache`, `nosniff` and a sandboxing CSP; any other file `403`. The ETag is the size and mtime.
 - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; a hidden file or
@@ -200,13 +212,14 @@ text the page reads, never a file it looks up.
 |---|---|
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
 | `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` its other tabs |
-| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`) |
+| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`) |
+| `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64), with `?round=&against=&file=` the view and the file gone to: a window of its own, without the dashboard's title bar and tabs, titled by the project's key, the reference and the title; the Reviews tab opens it in place (with ⌘ or Ctrl, in a browser tab) |
 | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
 
 What is open over a page is in the query: `?task=T-1` a task's details, `?doc=docs/x.md:L40` (or `#heading`, encoded) a
 document in the viewer, `?sprint=active` the Sprint filter, `?about` and `?help` the dialogs. The server ignores the
-query. The paths are `PAGE_PATH` in `api/server.py` (a tab is lowercase letters; nothing deeper than a tab), any other
-path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
+query. The paths are atm-api's `pages.rs` (and `PAGE_PATH` in `dashboard/src/lib/address.ts`): a tab is lowercase
+letters, nothing deeper than a tab but a review under `reviews`; any other path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
 old parameters from its hash and moves to the new address.
 
 ### 2.8 `api/v2/workspaces`: the workspaces (ADR-003, T-456)
@@ -225,8 +238,58 @@ old parameters from its hash and moves to the new address.
   `{"error": "unknown workspace"}`, an unknown project `{"error": "unknown project"}`. A project's ID is unique within
   a workspace; its logo is at `api/v2/workspaces/<w>/projects/<id>/logo` (in `default`, `p/<id>/logo`).
 - The app's commands answer the same (without `generated_at`): `list_workspaces`, `list_projects`, `search`,
-  `project_tasks`, `claims`, `worktrees`, `document`, `file` and `logo`, and `subscribe_workspace`,
-  `subscribe_project` and `unsubscribe` for live changes (docs/guides/tauri.md).
+  `project_tasks`, `claims`, `worktrees`, `document` (with `at`), `file`, `logo`, `project_reviews` and
+  `project_review`, and `subscribe_workspace`, `subscribe_project` and `unsubscribe` for live changes
+  (docs/guides/tauri.md).
+
+### 2.9 A project's code reviews (ATM-572, ATM-574)
+
+**The reads** (ATM-574; docs/code-review-design.md §3.11), read as the user (whose reviews need them), never cached
+(a review changes with each comment):
+
+- `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
+  branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
+  or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
+  needs_you}], you}`. A review needs the user when it is open or live with them a reviewer (anyone but its author when
+  it names none), or sent back with them its author. A status that isn't one is `400`.
+- `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
+  when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
+  against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you}`. Each file's `patch` is
+  its part of the diff, `before` and `after` the revisions its two sides are read from (`documents?path=&at=`, §2.6;
+  `null` for a side the file doesn't have). Each chain has `placed`, its lines in the round shown (followed there from
+  the round it was made on), and `drifted`, the round and lines it was made on when its text is gone from the round
+  shown. A round that isn't a whole number from 1 is `400`, one the review doesn't have `404`, a round against itself
+  `400`; a reference two reviews share (`CR-8`, two clones took the number) is `400` naming both (`CR-8.1`, `CR-8.2`).
+
+**The changes**: the only routes that change anything (docs/code-review-design.md §3.12), under
+`/api/v2/workspaces/<w>/projects/<id>/reviews`. Each is the same atm-lib call as its `atm review …` command, acting as
+the user at the machine (their git name, never an agent's identity), with the review's rules: its author can't decide
+it (unless the user overrides that, saying why), only one's own text is changed, a review is approved only with every
+top-level comment resolved. A live review the user opens makes them its reviewer; its author is the agent at work in
+that copy (or nobody yet).
+
+| Method and resource | Body (JSON) | Does | Answers |
+|---|---|---|---|
+| `POST reviews` | `{title, summary?, tasks?, reviewers?, start?: open\|draft\|live, change: {range?: "BASE..HEAD", uncommitted?, base?, files?}}` | opens a review (`atm review create`, `live`) | `201`, its header |
+| `PATCH reviews/<CR>` | `{status: "closed", reason, reject_tasks?}` | closes it (`close`) | `200`, its header |
+| `PUT reviews/<CR>/tasks` | `{tasks: [<key>, …]}` | the tasks it reviews, as a whole (`tasks`) | `200`, its header |
+| `POST reviews/<CR>/decisions` | `{decision: approve\|request_changes\|comment, body?, override_rules?: {reason}}` | a reviewer's decision (`submit`); with `override_rules`, the user's decision over the rule on who decides (their own review, say), recorded in the review with the reason | `201`, its header |
+| `POST reviews/<CR>/comments` | `{path?, lines?: [a, b], side?: new\|old, quote?, round?, body}` | a new chain (`comment`) | `201`, `{review, comment}` |
+| `PATCH reviews/<CR>/comments/<c>` | `{body}` or `{resolved}` | one's own text, or a top-level comment's box (`edit`, `resolve`) | `200`, `{review, comment}` |
+| `POST reviews/<CR>/comments/<c>/replies` | `{body}` | a reply (`reply`) | `201`, `{review, comment, reply_to}` |
+
+- **Only from atm's own page.** Besides the Host check (§1): an `Origin` that is the server's own
+  (`http://localhost:<port>` or `http://127.0.0.1:<port>`), this start's session token in `X-Atm-Session` (random, in
+  the page atm serves as `<meta name="atm-session" content="…">`; another site's page can't read it), and
+  `Content-Type: application/json`. Without them: `403` (`a change comes from atm's own page`, `no session token, or
+  not this server's`) or `415` (`the body is JSON`). The body is at most 1 MB (`413`).
+- **Bodies are exact**: a field a request doesn't take (another author, an action) gets `400`, as does a missing
+  one; texts are not empty and at most 100,000 characters; files are inside the repository; revisions are resolved to
+  commits before git sees them. A resource no route has gets `404`; a method a resource doesn't take `405`; what the
+  review's rules refuse `403`, `404` or `400`.
+- The app's commands do the same, one each (no session token: the app's own IPC, I25): `create_review`,
+  `close_review`, `set_review_tasks`, `submit_review_decision`, `add_review_comment`, `update_review_comment`,
+  `reply_to_review_comment`.
 
 ## 3. `GET /api/projects`
 

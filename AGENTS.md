@@ -112,6 +112,21 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain 
 - The e2e suite's fixture gets its task views and summaries from the binary too (`pnpm run test:e2e` builds it).
 
 ## Testing conventions
+- **What to test: every case, not a coverage number.** A unit's tests cover each case it has, judged from what it
+  promises, not from which lines ran: the happy paths, each failure mode and refusal, each class of input (empty,
+  one, many; missing, malformed, too large; at and past each limit), each state it can be in (a task free, claimed by
+  you, claimed by another agent, in another worktree or branch, expired), and the cases where two of these meet. A
+  coverage threshold is a guardrail that catches what was forgotten; reaching it says nothing about whether the cases
+  are tested. Keep them maintainable with judgement: one test per behaviour, tables of cases for one rule over many
+  inputs, shared fixtures rather than copies, and no test of the framework or of another layer's rule.
+- **A unit test tests its unit alone.** What it calls in another layer is replaced by a fake behind a trait (in
+  TypeScript, a stub of the module or the API): a REST route's tests give it a fake atm-lib that answers each class of
+  result (data, nothing, each refusal) and records what it was asked, and check the route's own work: the call it
+  makes, the status and body it maps each answer to, its `ETag`s and headers. The rules below (who may claim a task,
+  from which worktree) are that layer's own unit tests. Going through the layers together is what the integration
+  tests are for: a crate's `tests/`, the CLI suite (`tests/scripts/`) for behaviour as users run it, e2e for the
+  dashboard's flows. Fakes are hand-written, beside the tests that use them; a mocking library is a dependency like
+  any other.
 - e2e specs import `test`/`expect` from `tests/e2e/helpers.ts`. `tasks.json` is never served from disk: use the
   `tasksServer` fixture (`openDashboard(page, tasksServer, 'standard')` or an inline object), which plays atm serve's
   API: `api/projects` lists one project (`FIXTURE_PROJECT`), its tasks are served by the v1 route the dashboard loads

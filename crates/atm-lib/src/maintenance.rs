@@ -159,10 +159,38 @@ impl StoreMaintenance {
 }
 
 /// `atm db merge-driver` (git runs it, on three files, outside any opened project): merge the versions of a task file
-/// task by task, writing the result over `ours`. Returns the conflicts (this branch's version was kept for each).
+/// task by task, or of a review's `comments.md` or `review.md` (by `path`, the file git merges; none from a driver
+/// registered before reviews, which merged only task files), writing the result over `ours`. Returns the conflicts
+/// (this branch's version was kept for each).
 ///
 /// # Errors
-/// A version that isn't task data, or a result that can't be written.
-pub fn merge_versions(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String>> {
-    atm_db::jsongit::merge::merge_files(base, ours, theirs)
+/// A version that isn't task data (or a review header), or a result that can't be written.
+pub fn merge_versions(
+    base: &Path,
+    ours: &Path,
+    theirs: &Path,
+    path: Option<&str>,
+) -> Result<Vec<String>> {
+    let name = path.map(|p| p.rsplit('/').next().unwrap_or(p));
+    if !matches!(name, Some("comments.md" | "review.md")) {
+        return atm_db::jsongit::merge::merge_files(base, ours, theirs);
+    }
+    let read = |p: &Path| {
+        std::fs::read_to_string(p)
+            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", p.display())))
+    };
+    // The base is empty when both branches added the file
+    let (b, o, t) = (
+        std::fs::read_to_string(base).unwrap_or_default(),
+        read(ours)?,
+        read(theirs)?,
+    );
+    let (text, conflicts) = if name == Some("comments.md") {
+        atm_review::merge::merge_comments(&b, &o, &t)
+    } else {
+        (atm_review::merge::merge_review(&b, &o, &t)?, Vec::new())
+    };
+    atm_common::home::write_text_atomic(ours, &text)
+        .map_err(|e| atm_common::Error::failed(format!("{}: {e}", ours.display())))?;
+    Ok(conflicts)
 }

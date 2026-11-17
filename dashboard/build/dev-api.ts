@@ -133,6 +133,27 @@ function restartOnRebuild(api: Api, log: (line: string) => void): FSWatcher | nu
   }
 }
 
+/** Where the dev page asks for the API's session token (lib/api/review-changes.ts, in development only) */
+export const SESSION_ROUTE = '/__dev/atm-session';
+
+/** The session token in the API's own page (ATM-572): the page atm serves carries it in a meta tag; the dev page,
+ * which Vite serves, asks the plugin for it instead (SvelteKit leaves no hook to put it in the page) */
+function sessionToken(port: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const asked = request(
+      { host: '127.0.0.1', port, path: '/projects', headers: { host: `localhost:${port}` } },
+      (answer) => {
+        let page = '';
+        answer.setEncoding('utf8');
+        answer.on('data', (chunk: string) => (page += chunk));
+        answer.on('end', () => resolve(/<meta name="atm-session" content="([0-9a-f]+)">/.exec(page)?.[1] ?? null));
+      },
+    );
+    asked.on('error', () => resolve(null));
+    asked.end();
+  });
+}
+
 export function devApi(defaultDir: string): Plugin {
   const dirs = (process.env.ATM_DEV_DATA || defaultDir).split(path.delimiter).filter(Boolean);
   return {
@@ -151,7 +172,8 @@ export function devApi(defaultDir: string): Plugin {
       server.httpServer?.once('close', stop);
       process.once('exit', stop);
       server.middlewares.use((req, res, next) => {
-        if (!API_PATHS.test(req.url ?? '')) return next();
+        const asksToken = req.url === SESSION_ROUTE && req.method === 'GET';
+        if (!asksToken && !API_PATHS.test(req.url ?? '')) return next();
         const port = api.port();
         if (port === null) {
           res.statusCode = 503;
@@ -159,8 +181,19 @@ export function devApi(defaultDir: string): Plugin {
           res.end(JSON.stringify({ error: 'the atm API is starting' }));
           return;
         }
-        // The API checks the Host header (DNS rebinding): it is asked as itself
+        if (asksToken) {
+          void sessionToken(port).then((token) => {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Cache-Control', 'no-store');
+            res.end(JSON.stringify({ token }));
+          });
+          return;
+        }
+        // The API checks the Host header (DNS rebinding): it is asked as itself; and a review's change from the dev
+        // page comes from the API's own origin, as from atm's own page (another site's origin is passed on, refused)
         const headers = { ...req.headers, host: `localhost:${port}` };
+        if (req.headers.origin && req.headers.origin === `http://${req.headers.host}`)
+          headers.origin = `http://localhost:${port}`;
         const forwarded = request({ host: '127.0.0.1', port, path: req.url, method: req.method, headers }, (answer) => {
           res.writeHead(answer.statusCode ?? 502, answer.headers);
           answer.pipe(res);

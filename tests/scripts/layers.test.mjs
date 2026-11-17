@@ -9,9 +9,17 @@ import { REPO } from './helpers.mjs';
 
 const ALLOWED = {
   'crates/atm-common': [],
-  'crates/atm-db': ['atm-common'],
+  // What the file stores share (ATM-563): git, the lock, the watcher
+  'crates/atm-fs': ['atm-common'],
+  'crates/atm-db': ['atm-common', 'atm-fs'],
   'crates/atm-vcs': ['atm-common', 'atm-db'],
-  'crates/atm-lib': ['atm-common', 'atm-db', 'atm-vcs'],
+  // The code review tool (docs/code-review-design.md §3.1, ATM-561): a component of its own, which knows a task only
+  // as a key; never atm-db or atm-lib
+  'crates/atm-review': ['atm-common', 'atm-fs', 'atm-vcs'],
+  // The document viewer's files (§3.1, ATM-570): a component of its own, with no task model; never atm-db or atm-lib
+  'crates/atm-docs': ['atm-common', 'atm-vcs'],
+  // atm-review through its link to the tasks (docs/code-review-design.md §3.1, ATM-565); atm-docs re-exported
+  'crates/atm-lib': ['atm-common', 'atm-db', 'atm-docs', 'atm-review', 'atm-vcs'],
   'crates/atm-api': ['atm-common', 'atm-lib'],
   // The CLI enters the server (`atm _serve`), never calls it otherwise
   'crates/atm-cli': ['atm-common', 'atm-lib', 'atm-api'],
@@ -40,6 +48,8 @@ describe('layers', () => {
     assert.deepEqual(atmDependencies(path.join(REPO, 'crates/atm-lib/Cargo.toml')), [
       'atm-common',
       'atm-db',
+      'atm-docs',
+      'atm-review',
       'atm-vcs',
     ]);
     for (const [crate, allowed] of Object.entries(ALLOWED)) {

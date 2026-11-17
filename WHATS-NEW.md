@@ -2,6 +2,16 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.40.0] - 2026-11-17
+
+- Code reviews live in your project now: agents open one when a task needs your review, and wait for your answer.
+- Review in the dashboard or the app: a Reviews tab for each project, and a page for each review with its overview,
+  its changes side by side and every comment.
+- Hover a line and click its +, or drag over several lines, to comment right where the change is.
+- Resolve, reopen and reply to comments in place; once nothing is left open, approving is one click.
+- Markdown files show both ways: as text, or rendered as a page with its line numbers.
+- Agents answer your review comments as you write them, and never decide a review for you.
+
 ## [0.39.0] - 2026-11-17
 
 - atm names tasks by their short keys everywhere, never by a long ID.

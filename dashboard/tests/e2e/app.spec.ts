@@ -227,6 +227,60 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.windowTitles.slice(titles)).not.toContain('Task Dashboard');
   });
 
+  test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    const header = {
+      id: 'r2',
+      reference: 'CR-2',
+      number: 2,
+      title: 'Trim the names',
+      status: 'open',
+      tasks: [],
+      author: 'claude:a',
+      reviewers: [],
+      created: '2026-11-17T10:00:00Z',
+      updated: '2026-11-17T10:00:00Z',
+    };
+    tasksServer
+      .setReviews({ reviews: [{ review: header, branch: null, chains: 0, open: 0, needs_you: false }], you: 'Ana' })
+      .setReview('CR-2', {
+        review: header,
+        summary: '',
+        branch: null,
+        rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
+        chains: [],
+        view: { round: 1, against: null, files: [] },
+        needs_you: false,
+        you: 'Ana',
+      });
+    tasksServer.link(`/projects/${tasksServer.projectId}/reviews`);
+    await page.goto('/');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    await expect(page.locator('#review-list')).toBeVisible();
+    await expect(tabs).toHaveCount(1);
+
+    await page.locator('.review-row[data-review="CR-2"] .review-link').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    // The tab is the review's: its reference and title, no project chooser
+    await expect(page.locator('#dashboard-title')).toHaveText('CR-2: Trim the names');
+    await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
+    // The window's own bar and sidebar toggle are there, as on every tab
+    await expect(page.locator('#app-titlebar')).toBeVisible();
+    // The first tab still shows the reviews
+    await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
+    await tabs.nth(0).click();
+    await expect(page.locator('#review-list')).toBeVisible();
+    // And the review's tab keeps its name while another is shown
+    await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
+    expect(tasksServer.httpRequests).toEqual([]);
+  });
+
   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
     page,
     tasksServer,

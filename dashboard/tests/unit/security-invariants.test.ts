@@ -40,7 +40,10 @@ describe('security invariants (docs/security-architecture.md)', () => {
         'atm-cli/src/commands/claim.rs: own_binary',
         'atm-cli/src/commands/maintenance.rs: own_binary',
         'atm-cli/src/commands/maintenance.rs: opener',
-        'atm-db/src/git.rs: "git"',
+        // atm-db's questions to git, shared with the review store since ATM-563
+        'atm-fs/src/git.rs: "git"',
+        // A code review's diffs, on a temporary index (ATM-564)
+        'atm-vcs/src/diff.rs: "git"',
         'atm-vcs/src/lib.rs: "git"',
       ].sort(),
     );

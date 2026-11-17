@@ -100,6 +100,22 @@ test(NAME, { skip }, async () => {
       tasks.tasks.map((v) => [v.task.id, v.derived.ready]),
       [['T-1', true]],
     );
+    // A review's change from the dev page (ATM-574): the dev server hands its page the API's session token, and passes
+    // a change from its own origin on as from the API's; another site's origin is still refused
+    const { token } = await (await fetch(`${base}/__dev/atm-session`)).json();
+    assert.match(token, /^[0-9a-f]{64}$/);
+    const change = (origin, session = token) =>
+      fetch(`${base}/api/v2/workspaces/default/projects/devapi01/reviews/CR-9/comments/c1/replies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Atm-Session': session, Origin: origin },
+        body: JSON.stringify({ body: 'x' }),
+      });
+    const own = await change(base);
+    assert.equal(own.status, 404, await own.clone().text()); // past every check, to the store: no CR-9
+    const foreign = await change('https://evil.example');
+    assert.deepEqual([foreign.status, (await foreign.json()).error], [403, "a change comes from atm's own page"]);
+    const tokenless = await change(base, '');
+    assert.equal(tokenless.status, 403);
     // The assets too: the CompMD runtime the details panel loads (T-284), which atm embeds from the build
     const [version] = fs.readdirSync(path.join(DASHBOARD, 'dist/assets/compmd'));
     const runtime = await fetch(`${base}/assets/compmd/${version}/compmd.js`);

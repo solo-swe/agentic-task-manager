@@ -7,6 +7,9 @@
   // window, a double click maximizes it. The browser keeps its own title bar.
   import { onMount, type Snippet } from 'svelte';
   import ProjectSelector from './ProjectSelector.svelte';
+  import { reviewOf } from '../address';
+  import { reviewWindow } from '../reviews/window.svelte';
+  import Icon from '../ui/Icon.svelte';
   import {
     appShell,
     closeWindow,
@@ -71,13 +74,21 @@
       {@const id = tabProject(tab.address)}
       {@const listed = id === null ? undefined : dashboard.projects.find((p) => p.id === id)}
       {@const name = listed ? (dashboard.nameOf(listed.id) ?? listed.name) : id === null ? 'Projects Overview' : title}
-      {#if listed}<ProjectLogo project={listed} size={16} />{:else}<Logo size={16} />{/if}
-      {#if tab.id === appTabs.active}
-        <!-- The tab shown: its name is the page's heading, and the project chooser -->
-        <h1 id="dashboard-title">{name}</h1>
-        {#if dashboard.projects.length > 0}<span class="app-tab-chooser"><ProjectSelector badge={false} /></span>{/if}
+      {@const review = reviewOf(tab.address).review}
+      {#if review}
+        <!-- A review's tab (ATM-574): its reference and title, no project chooser -->
+        <Icon name="message-square" size={15} />
+        {#if tab.id === appTabs.active}<h1 id="dashboard-title">{reviewWindow.names[`${id}:${review}`] ?? review}</h1>
+        {:else}<span class="app-tab-name">{reviewWindow.names[`${id}:${review}`] ?? review}</span>{/if}
       {:else}
-        <span class="app-tab-name">{name}</span>
+        {#if listed}<ProjectLogo project={listed} size={16} />{:else}<Logo size={16} />{/if}
+        {#if tab.id === appTabs.active}
+          <!-- The tab shown: its name is the page's heading, and the project chooser -->
+          <h1 id="dashboard-title">{name}</h1>
+          {#if dashboard.projects.length > 0}<span class="app-tab-chooser"><ProjectSelector badge={false} /></span>{/if}
+        {:else}
+          <span class="app-tab-name">{name}</span>
+        {/if}
       {/if}
     {/snippet}
   </TitleBarTabs>

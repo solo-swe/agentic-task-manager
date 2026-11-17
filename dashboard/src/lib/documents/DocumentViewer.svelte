@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { browserFetch, inApp, v1FileUrl, type Validators } from '../api/http';
+  import type { Validators } from '../api/http';
   import {
     clampGeometry,
     defaultGeometry,
@@ -8,20 +8,18 @@
     findTextFragment,
     isGeometry,
     parseTextFragment,
-    loadDocument,
     pathToCopy,
-    repositoryFile,
     resolvePath,
     VIEWER_NARROW,
     type DocumentError,
+    type DocumentRef,
     type ProjectDocument,
     type ViewerGeometry,
   } from '../documents';
   import { getPref, setPref } from '../prefs';
-  import { fileRef } from '../repo';
   import { gutterRows, slug, type DrawnLine, type GutterRow } from '../compmd';
   import { compactAt } from '../scroll';
-  import { dashboard } from '../state.svelte';
+  import type { DocumentRefresh, DocumentSource } from './source';
   import CompMd from './CompMd.svelte';
   import Icon from '../ui/Icon.svelte';
 
@@ -29,22 +27,41 @@
   // project, as CompMD renders the document atm wraps it in. It moves by its title bar and resizes from its corner,
   // keeps where it was, and on a narrow window fills it. What is open is in the URL hash (#doc=), so Back, a link and
   // Reload work; the file is asked for again on the dashboard's refresh, a 304 while it is unchanged.
+  //
+  // A component of its own (docs/code-review-design.md §3.1, ATM-571): it reads no dashboard state. Whoever shows it
+  // passes what is open (`ref`), where the files come from (`source`; none, nothing to show), when to ask again
+  // (`refresh`), the page's style, and what Back, Close and a link to another document do.
+  let {
+    source,
+    ref,
+    refresh,
+    docStyle = 'auto',
+    onback,
+    onclose,
+    onopen,
+  }: {
+    source: DocumentSource | null;
+    ref: DocumentRef | null;
+    refresh: DocumentRefresh;
+    docStyle?: string;
+    onback: () => void;
+    onclose: () => void;
+    onopen: (ref: DocumentRef) => void;
+  } = $props();
 
-  const ref = $derived(dashboard.docRef);
-  // The shown project's files; on the Omniboard, those of the project whose task is open over it (T-411)
-  const project = $derived(dashboard.route.page === 'project' || dashboard.peeking ? dashboard.projectId : null);
-  const open = $derived(ref !== null && project !== null);
+  const open = $derived(ref !== null && source !== null);
 
   let doc = $state.raw<ProjectDocument | null>(null);
   let error = $state<{ kind: DocumentError; message: string } | null>(null);
   let loading = $state(false);
   let validators: Validators | undefined;
-  /** The project and path the shown document is of */
+  /** The source and path the shown document is of */
   let shownKey = '';
+  const keyOf = (from: DocumentSource | null, path: string | undefined) => `${from?.id}\u0000${path}`;
 
-  async function load(key: string, projectId: string, path: string, poll: boolean) {
-    const result = await loadDocument(projectId, path, browserFetch, poll ? validators : undefined);
-    if (key !== `${dashboard.projectId}\u0000${dashboard.docRef?.path}`) return; // another file was opened meanwhile
+  async function load(key: string, from: DocumentSource, path: string, poll: boolean) {
+    const result = await from.load(path, poll ? validators : undefined);
+    if (key !== keyOf(source, ref?.path)) return; // another file was opened meanwhile
     loading = false;
     if (result.unchanged) return;
     if ('error' in result) {
@@ -62,15 +79,15 @@
 
   // A file opened: load it (what was shown goes, so a stale file never shows under the new name)
   $effect(() => {
-    if (!open || !ref || !project) return;
-    const key = `${project}\u0000${ref.path}`;
+    if (!open || !ref || !source) return;
+    const key = keyOf(source, ref.path);
     if (key === shownKey) return;
     shownKey = key;
     doc = null;
     error = null;
     validators = undefined;
     loading = true;
-    void load(key, project, ref.path, false);
+    void load(key, source, ref.path, false);
   });
 
   // Closed: the next open starts afresh
@@ -80,9 +97,12 @@
 
   // Kept current as the dashboard refreshes: a conditional request, 304 while the file is unchanged
   $effect(() => {
-    if (!open || !ref || !project || !dashboard.polls) return;
-    const key = `${project}\u0000${ref.path}`;
-    const timer = setInterval(() => void load(key, project, ref.path, true), dashboard.autoRefreshSeconds * 1000);
+    const every = refresh.every;
+    if (!open || !ref || !source || every === null) return;
+    const key = keyOf(source, ref.path);
+    const from = source;
+    const path = ref.path;
+    const timer = setInterval(() => void load(key, from, path, true), every * 1000);
     return () => clearInterval(timer);
   });
 
@@ -90,27 +110,22 @@
   // dashboard reloads (a change in the project, the window regaining focus, the Reload button)
   let reloadsSeen = 0;
   $effect(() => {
-    const at = dashboard.loadedAt;
-    if (!dashboard.live || !open || !ref || !project || at === reloadsSeen) return;
+    const at = refresh.reloadedAt;
+    if (!at || !open || !ref || !source || at === reloadsSeen) return;
     const first = reloadsSeen === 0;
     reloadsSeen = at;
-    if (!first) void load(`${project}\u0000${ref.path}`, project, ref.path, true);
+    if (!first) void load(keyOf(source, ref.path), source, ref.path, true);
   });
 
   const title = $derived(doc ? documentTitle(doc) : (ref?.path.split('/').pop() ?? ''));
-  // Open on GitHub (or the project's host): only for a file git tracks, at the commit the server named; a file in a
-  // submodule in the submodule's own repository (T-408)
-  const repoFile = $derived.by(() => {
-    const where = doc && ref ? repositoryFile(doc, ref.path, dashboard.meta) : null;
-    return where && ref ? fileRef(where.meta, where.commit, where.path, ref.lines) : null;
-  });
+  // Open on GitHub (or the project's host), as the source says
+  const repoFile = $derived(doc && ref && source ? source.repositoryLink(doc, ref) : null);
 
-  /** A relative image in the document, resolved from its folder, loads from this server's files route (V5); any
-   * other image shows its alt text */
+  /** A relative image in the document, resolved from its folder, loads as the source says (V5); any other image
+   * shows its alt text */
   const localImage = (url: string): string | null => {
-    const resolved = doc && project ? resolvePath(url, doc.path) : null;
-    // In the atm app there is no files route to load from: the image shows its alt text for now (T-457's follow-up)
-    return resolved && project && !inApp ? v1FileUrl(project, resolved) : null;
+    const resolved = doc && source ? resolvePath(url, doc.path) : null;
+    return resolved && source ? source.imageUrl(resolved) : null;
   };
 
   // A code or text file's lines (V2a): CompMD renders it as one code block, its lines never wrapping, so the gutter
@@ -427,7 +442,7 @@
       tocOpen = false; // the contents first, then the viewer
       return;
     }
-    dashboard.documentBack();
+    onback();
   }
 
   const MESSAGES: Record<DocumentError, string> = {
@@ -449,7 +464,7 @@
     role="dialog"
     aria-label="Document: {title}"
     data-kind={doc?.kind ?? ''}
-    data-doc-style={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
+    data-doc-style={docStyle === 'auto' ? null : docStyle}
     style:left={narrow ? null : `${placed.x}px`}
     style:top={narrow ? null : `${placed.y}px`}
     style:width={narrow ? null : `${placed.w}px`}
@@ -467,7 +482,7 @@
       onpointercancel={endDrag}
       onkeydown={(e) => onKeys(e, false)}
     >
-      <button class="doc-back" id="doc-back" aria-label="Back" title="Back" onclick={() => dashboard.documentBack()}
+      <button class="doc-back" id="doc-back" aria-label="Back" title="Back" onclick={() => onback()}
         ><Icon name="chevron-left" /></button
       >
       <div class="doc-heading">
@@ -484,12 +499,8 @@
           ><Icon name="external-link" size={14} />Open on {repoFile.host}</a
         >
       {/if}
-      <button
-        class="doc-close"
-        id="doc-close"
-        aria-label="Close"
-        title="Close"
-        onclick={() => dashboard.closeDocument()}><Icon name="x" size={13} /></button
+      <button class="doc-close" id="doc-close" aria-label="Close" title="Close" onclick={() => onclose()}
+        ><Icon name="x" size={13} /></button
       >
     </div>
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (a click only clears the
@@ -601,7 +612,7 @@
             {/each}
           {/if}
           {#key `${ref.path}`}
-            <CompMd text={doc.document} path={doc.path} {localImage} onlines={placeMarkdownLines} />
+            <CompMd text={doc.document} path={doc.path} {localImage} {onopen} onlines={placeMarkdownLines} />
           {/key}
         </article>
       {:else if error}

@@ -69,7 +69,7 @@ describe('merge driver (real git merges)', () => {
       assert.match(
         git(['config', '--get', 'merge.atm.driver'], root),
         // this atm, by its full path, as it was run
-        /[/\\]atm(\.exe)?' db merge-driver %O %A %B$/,
+        /[/\\]atm(\.exe)?' db merge-driver %O %A %B %P$/,
       );
       assert.equal(
         fs.readFileSync(path.join(root, '.agentic-task-manager/.gitattributes'), 'utf8'),
@@ -427,6 +427,147 @@ describe('merge driver: task keys', () => {
       assert.equal(t15.status, 'done', 'the old branch’s change came through');
       assert.match(t15.id, /^[0-9a-f-]{36}$/);
     });
+  });
+});
+
+describe('merge driver: code reviews (ATM-568)', () => {
+  const HAKAN = { ATM_AGENT: 'Hakan Serce' };
+  const ANA = { ATM_AGENT: 'Ana' };
+  const ok = (args, root, env = HAKAN) => {
+    const r = runAtm(args, root, env);
+    assert.equal(r.code, 0, `atm ${args.join(' ')}: ${r.stderr}`);
+    return r;
+  };
+  const commitAll = (root, message) => {
+    git(['add', '-A'], root);
+    git(['commit', '-q', '-m', message], root);
+  };
+  /** A repo with `a.txt` and review CR-1 of it, committed. */
+  const reviewed = () => {
+    const root = repo();
+    fs.writeFileSync(path.join(root, 'a.txt'), 'one\ntwo\nthree\n');
+    commitAll(root, 'a.txt');
+    ok(['review', 'create', '--title', 'Look at a', '--file', 'a.txt'], root);
+    // The first review gives the reviews' files to atm's merge driver, staged with it
+    assert.match(
+      git(['diff', '--cached', '--', '.agentic-task-manager/.gitattributes'], root),
+      /\+reviews\/\*\/review\.md merge=atm\n\+reviews\/\*\/comments\.md merge=atm/,
+    );
+    commitAll(root, 'CR-1');
+    return root;
+  };
+  const bodies = (root, ref) =>
+    JSON.parse(ok(['review', 'comments', ref, '--json'], root).stdout).flatMap((chain) => {
+      const walk = (c) => [[c.id, c.author, c.body], ...c.replies.flatMap(walk)];
+      return chain.comments.flatMap(walk);
+    });
+
+  test('one review commented on two branches merges cleanly: every comment kept, the other’s renumbered', () => {
+    const root = reviewed();
+    try {
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why one?'], root);
+      commitAll(root, 'first comment');
+      git(['switch', '-q', '-c', 'other'], root);
+      ok(['review', 'reply', 'CR-1', 'c1', '--body', 'Because.'], root, ANA);
+      ok(['review', 'comment', 'CR-1', '--body', 'Overall fine.'], root, ANA);
+      commitAll(root, 'other');
+      git(['switch', '-q', 'main'], root);
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '3', '--body', 'And three?'], root);
+      ok(['review', 'resolve', 'CR-1', 'c1'], root);
+      commitAll(root, 'main');
+      const r = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root, encoding: 'utf8' });
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      // This branch's keep their IDs; the other's new ones (both c2 there) take the next free ones, c3 and c4
+      const all = bodies(root, 'CR-1').sort();
+      assert.deepEqual(all.slice(0, 2), [
+        ['c1', 'Hakan Serce', 'Why one?'],
+        ['c2', 'Hakan Serce', 'And three?'],
+      ]);
+      assert.deepEqual(
+        all.slice(2).map(([id, who]) => [id, who]),
+        [
+          ['c3', 'Ana'],
+          ['c4', 'Ana'],
+        ],
+      );
+      assert.deepEqual(all.map(([, , body]) => body).sort(), ['And three?', 'Because.', 'Overall fine.', 'Why one?']);
+      const c1 = JSON.parse(ok(['review', 'comments', 'CR-1', '--json'], root).stdout)
+        .flatMap((chain) => chain.comments)
+        .find((c) => c.id === 'c1');
+      assert.equal(c1.resolved, true, 'resolved on this branch');
+      assert.deepEqual(
+        c1.replies.map((r) => r.body),
+        ['Because.'],
+      );
+      const doctor = runAtm(['doctor', '--json'], root);
+      assert.deepEqual(JSON.parse(doctor.stdout), { errors: [], warnings: [] });
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('two clones’ CR-2s merge as two folders, CR-2.1 and CR-2.2, which doctor points out', () => {
+    const root = reviewed();
+    const clone = tempDir();
+    try {
+      git(['clone', '-q', root, clone], root);
+      // A clone has no identity of its own where git has none (CI): the project's, as makeProject gives it
+      git(['config', 'user.name', git(['config', 'user.name'], root).trim()], clone);
+      git(['config', 'user.email', git(['config', 'user.email'], root).trim()], clone);
+      for (const [where, title] of [
+        [root, 'Mine'],
+        [clone, 'Theirs'],
+      ]) {
+        ok(['review', 'create', '--title', title, '--file', 'a.txt'], where);
+        commitAll(where, title);
+      }
+      const r = spawnSync('git', ['pull', '-q', '--no-rebase', '--no-edit', clone, 'main'], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      const listed = JSON.parse(ok(['review', 'list', '--json'], root).stdout).map((f) => [
+        f.review.reference,
+        f.review.title,
+      ]);
+      assert.deepEqual(listed.map(([ref]) => ref).sort(), ['CR-1', 'CR-2.1', 'CR-2.2']);
+      assert.deepEqual(listed.map(([, t]) => t).sort(), ['Look at a', 'Mine', 'Theirs']);
+      const doctor = JSON.parse(runAtm(['doctor', '--json'], root).stdout);
+      assert.deepEqual(doctor.errors, []);
+      assert.match(doctor.warnings.join('\n'), /reviews CR-2\.\d and CR-2\.\d share the number 2/);
+    } finally {
+      removeDir(clone);
+      removeDir(root);
+    }
+  });
+
+  test('doctor: a review it can’t read is an error; a stray line and a task’s missing review are warnings', () => {
+    const root = reviewed();
+    try {
+      const folder = path.join(
+        root,
+        '.agentic-task-manager/reviews',
+        fs.readdirSync(path.join(root, '.agentic-task-manager/reviews'))[0],
+      );
+      fs.appendFileSync(path.join(folder, 'comments.md'), '\nA note typed by hand.\n');
+      const data = read(root);
+      data.tasks[0].code_reviews = [{ id: '0193a8f2-0000-7000-8000-00000000dead', ref: 'CR-9' }];
+      write(root, data);
+      let doctor = JSON.parse(runAtm(['doctor', '--json'], root).stdout);
+      assert.deepEqual(doctor.errors, []);
+      assert.match(
+        doctor.warnings.join('\n'),
+        /comments\.md line \d+: not a comment atm can read: A note typed by hand\./,
+      );
+      assert.match(doctor.warnings.join('\n'), /T-001: its code review CR-9 isn't in the project/);
+      fs.writeFileSync(path.join(folder, 'review.md'), 'no header\n');
+      const r = runAtm(['doctor', '--json'], root);
+      assert.equal(r.code, 1);
+      doctor = JSON.parse(r.stdout);
+      assert.match(doctor.errors.join('\n'), /review CR-1-[0-9a-f]{4}: .*review\.md/);
+    } finally {
+      removeDir(root);
+    }
   });
 });
 

@@ -55,14 +55,43 @@ function taskFilters(query: URLSearchParams): Record<string, unknown> {
   };
 }
 
-/** A project's route (`tasks`, `documents`, …) as its command */
-function projectCall(workspace: string, project: string, route: string, query: URLSearchParams): Call | null {
+/** The filters of a reviews route's query, as the `project_reviews` command takes them (`ReviewFilters`) */
+function reviewFilters(query: URLSearchParams): Record<string, unknown> {
+  const first = (name: string) => query.get(name) || undefined;
+  return {
+    q: query.get('q') ?? '',
+    status: query.getAll('status').filter(Boolean),
+    author: first('author'),
+    reviewer: first('reviewer'),
+    task: first('task'),
+    branch: first('branch'),
+  };
+}
+
+/** A round's number from a query, or undefined (the server's route refuses one that isn't; so does the command) */
+function roundOf(query: URLSearchParams, name: string): number | undefined {
+  const given = query.get(name);
+  return given ? Number(given) : undefined;
+}
+
+/** A project's route (`tasks`, `documents`, `reviews/<CR>`, …) as its command */
+function projectCall(workspace: string, project: string, route: string[], query: URLSearchParams): Call | null {
   const at = { workspace, project };
-  switch (route) {
+  const [first, review, ...more] = route;
+  if (first === 'reviews' && more.length === 0) {
+    if (review === undefined) return { command: 'project_reviews', args: { ...at, filters: reviewFilters(query) } };
+    if (review === '') return null;
+    return {
+      command: 'project_review',
+      args: { ...at, review, round: roundOf(query, 'round'), against: roundOf(query, 'against') },
+    };
+  }
+  if (route.length !== 1) return null;
+  switch (first) {
     case 'tasks':
       return { command: 'project_tasks', args: { ...at, filters: taskFilters(query) } };
     case 'documents':
-      return { command: 'document', args: { ...at, path: query.get('path') ?? '' } };
+      return { command: 'document', args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined } };
     case 'files':
       return { command: 'file', args: { ...at, path: query.get('path') ?? '' }, image: true };
     case 'claims':
@@ -83,14 +112,16 @@ export function callFor(url: string): Call | null {
   const parsed = new URL(url, 'http://app.invalid');
   const parts = parsed.pathname.split('/').filter(Boolean).map(decodeURIComponent);
   const query = parsed.searchParams;
+  // Empty segments matter here (`reviews/` names no review): keep them, past the leading slash
+  const all = parsed.pathname.split('/').slice(1).map(decodeURIComponent);
   const [a, b, c, d, e, f, g] = parts;
-  // The v2 routes: api/v2/workspaces[/<w>/projects | /<w>/search | /<w>/projects/<p>/<route>]
+  // The v2 routes: api/v2/workspaces[/<w>/projects | /<w>/search | /<w>/projects/<p>/<route…>]
   if (a === 'api' && b === 'v2' && c === 'workspaces') {
     if (d === undefined) return { command: 'list_workspaces', args: {} };
     if (e === 'projects' && f === undefined) return { command: 'list_projects', args: { workspace: d } };
     if (e === 'search' && f === undefined)
       return { command: 'search', args: { workspace: d, q: query.get('q') ?? '' } };
-    if (e === 'projects' && f && g && parts.length === 7) return projectCall(d, f, g, query);
+    if (e === 'projects' && f && g) return projectCall(d, f, all.slice(6), query);
     return null;
   }
   // The v1 routes: the default workspace's
@@ -98,9 +129,11 @@ export function callFor(url: string): Call | null {
     return { command: 'list_projects', args: { workspace: DEFAULT_WORKSPACE } };
   if (a === 'api' && b === 'search' && c === undefined)
     return { command: 'search', args: { workspace: DEFAULT_WORKSPACE, q: query.get('q') ?? '' } };
-  if (a === 'api' && b === 'v1' && c === 'projects' && d && e && parts.length === 5)
-    return projectCall(DEFAULT_WORKSPACE, d, e, query);
-  if (a === 'p' && b && c && parts.length === 3) return projectCall(DEFAULT_WORKSPACE, b, c, query);
+  if (a === 'api' && b === 'v1' && c === 'projects' && d && e)
+    return projectCall(DEFAULT_WORKSPACE, d, all.slice(4), query);
+  // p/<p>/…: its claims, worktrees and logo, as atm serve has them there
+  if (a === 'p' && b && parts.length === 3 && ['claims.json', 'worktrees.json', 'logo'].includes(c))
+    return projectCall(DEFAULT_WORKSPACE, b, [c], query);
   return null;
 }
 

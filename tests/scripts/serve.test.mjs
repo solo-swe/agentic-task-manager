@@ -1029,7 +1029,238 @@ describe('serve', () => {
     assert.deepEqual(await get('/tasks.json'), [404, 'not found']);
     assert.deepEqual(await get('/tasks-dashboard.html'), [404, 'not found']);
     assert.deepEqual(await get('/p/'), [404, 'not found']);
-    assert.deepEqual(await get('/api/projects', { method: 'POST' }), [405, 'only GET and HEAD']);
+    // Every path but a project's reviews is read-only (ATM-572): a POST, PUT or DELETE anywhere else is refused
+    for (const method of ['POST', 'PUT', 'DELETE'])
+      assert.deepEqual(await get('/api/projects', { method }), [
+        405,
+        'only GET and HEAD, and POST, PATCH or PUT on reviews',
+      ]);
+    atm(['service', 'stop'], root);
+  });
+
+  test('review changes (ATM-572): REST routes, only from atm’s own page with its session token, as JSON; as the user', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project({ meta: { id: 'abcd1234', project: 'Serve' }, tasks: [] }, { 'a.txt': 'one\ntwo\n' });
+    git(['add', '-A'], root);
+    git(['commit', '-q', '-m', 'a.txt'], root);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const origin = `http://localhost:${port}`;
+    // The page carries this start's token; another start's page would carry another
+    const page = await (await fetch(`${origin}/projects/abcd1234/list`)).text();
+    const token = /<meta name="atm-session" content="([0-9a-f]{64})">/.exec(page)?.[1];
+    assert.ok(token, 'the page has the session token');
+    const reviews = `${origin}/api/v2/workspaces/default/projects/abcd1234/reviews`;
+    const send = (method, url, body, headers = {}) =>
+      fetch(url, {
+        method,
+        headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Atm-Session': token, ...headers },
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+      });
+    const refused = async (r) => [r.status, (await r.json()).error];
+    const comments = () => JSON.parse(atm(['review', 'comments', 'CR-1', '--json'], root).stdout);
+
+    // With the token, from the page's origin, as JSON, each route its resource: a review, a chain, a reply, the
+    // reviewer's own text changed, the chain resolved, its tasks, a decision; as the user
+    let r = await send('POST', reviews, { title: 'Look at a', change: { files: ['a.txt'] } });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).reference, 'CR-1');
+    r = await send('POST', `${reviews}/CR-1/comments`, { path: 'a.txt', lines: [1, 1], body: 'Why one?' });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).comment, 'c1');
+    r = await send('POST', `${reviews}/CR-1/comments/c1/replies`, { body: 'Because.' });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).comment, 'c2');
+    r = await send('PATCH', `${reviews}/CR-1/comments/c1`, { body: 'Why line one?' });
+    assert.equal(r.status, 200, await r.clone().text());
+    r = await send('PATCH', `${reviews}/CR-1/comments/c1`, { resolved: true });
+    assert.equal(r.status, 200, await r.clone().text());
+    let [chain] = comments();
+    assert.deepEqual(
+      [chain.comments[0].body, chain.comments[0].resolved, chain.comments[0].replies[0].body],
+      ['Why line one?', true, 'Because.'],
+    );
+    // As the person at the machine (the project's git name), whatever agent's environment started the server
+    assert.equal(chain.comments[0].author, git(['config', 'user.name'], root).trim());
+    r = await send('PUT', `${reviews}/CR-1/tasks`, { tasks: [] });
+    assert.equal(r.status, 200, await r.clone().text());
+
+    // Without the token, with another, from another site, or as a form: refused, nothing written
+    const comment = { path: 'a.txt', lines: [2, 2], body: 'Not this one.' };
+    const onComments = `${reviews}/CR-1/comments`;
+    assert.deepEqual(await refused(await send('POST', onComments, comment, { 'X-Atm-Session': '' })), [
+      403,
+      "no session token, or not this server's",
+    ]);
+    assert.deepEqual(await refused(await send('POST', onComments, comment, { 'X-Atm-Session': 'f'.repeat(64) })), [
+      403,
+      "no session token, or not this server's",
+    ]);
+    assert.deepEqual(await refused(await send('POST', onComments, comment, { Origin: 'https://evil.example' })), [
+      403,
+      "a change comes from atm's own page",
+    ]);
+    assert.deepEqual(
+      await refused(
+        await fetch(onComments, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin, 'X-Atm-Session': token },
+          body: 'body=Not+this+one',
+        }),
+      ),
+      [415, 'the body is JSON'],
+    );
+    // No CORS: a preflight is never answered, so another site's page can't send the token's header
+    const preflight = await fetch(onComments, {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'POST' },
+    });
+    assert.equal(preflight.status, 405);
+    assert.equal(preflight.headers.get('access-control-allow-origin'), null);
+    // A resource no route has, a method a resource doesn't take, a field a request doesn't take (another author)
+    assert.equal((await send('POST', `${reviews}/CR-1/votes`, {})).status, 404);
+    assert.equal((await send('PUT', onComments, comment)).status, 405);
+    assert.equal(
+      (await send('POST', `${reviews}/CR-1/comments/c1/replies`, { body: 'x', author: 'claude:x' })).status,
+      400,
+    );
+    // Changing both a comment's text and its box at once, or a review to anything but closed
+    assert.equal((await send('PATCH', `${reviews}/CR-1/comments/c1`, { body: 'x', resolved: false })).status, 400);
+    assert.equal((await send('PATCH', `${reviews}/CR-1`, { status: 'approved', reason: 'x' })).status, 400);
+    [chain] = comments();
+    assert.equal(chain.comments.flatMap((c) => [c, ...c.replies]).length, 2, 'nothing refused was written');
+    // A decision goes through the review's rules: its author (here the user, who opened it) can't decide it, unless
+    // the user overrides that, saying why (feedback received elsewhere), which the review records
+    r = await send('POST', `${reviews}/CR-1/decisions`, { decision: 'approve' });
+    assert.equal(r.status, 403, await r.clone().text());
+    r = await send('POST', `${reviews}/CR-1/decisions`, { decision: 'approve', override_rules: { reason: ' ' } });
+    assert.equal(r.status, 400, await r.clone().text());
+    r = await send('POST', `${reviews}/CR-1/decisions`, {
+      decision: 'approve',
+      override_rules: { reason: 'Ana reviewed it on a call.' },
+    });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).status, 'approved');
+    const record = comments().at(-1).comments[0];
+    assert.match(record.body, /rules were overridden.*its author.*Ana reviewed it on a call\./);
+    assert.equal(record.resolved, true);
+
+    // Another review closed, as its author may
+    r = await send('POST', reviews, { title: 'Look at a again', change: { files: ['a.txt'] } });
+    assert.equal(r.status, 201, await r.clone().text());
+    r = await send('PATCH', `${reviews}/CR-2`, { status: 'closed', reason: 'Not needed.' });
+    assert.equal(r.status, 200, await r.clone().text());
+    assert.equal((await r.json()).status, 'closed');
+    atm(['service', 'stop'], root);
+  });
+
+  test('review reads (ATM-574): the list, a review’s page for each view, a round’s sides; read-only, as the user', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project({ meta: { id: 'abcd1234', project: 'Serve' }, tasks: [] }, { 'a.txt': 'one\ntwo\nthree\n' });
+    git(['add', '-A'], root);
+    git(['commit', '-q', '-m', 'one'], root);
+    const base = git(['rev-parse', 'HEAD'], root).trim();
+    fs.writeFileSync(path.join(root, 'a.txt'), 'one\nTWO\nthree\n');
+    git(['commit', '-q', '-am', 'two'], root);
+    assert.equal(atm(['review', 'create', '--title', 'Look at a', '--range', `${base}..HEAD`], root).code, 0);
+    assert.equal(
+      atm(
+        [
+          'review',
+          'comment',
+          'CR-1',
+          '--file',
+          'a.txt',
+          '--lines',
+          '2',
+          '--quote',
+          'TWO',
+          '--body',
+          'Why?',
+          '--agent',
+          'Ana',
+        ],
+        root,
+      ).code,
+      0,
+    );
+    fs.writeFileSync(path.join(root, 'a.txt'), 'one\nZWEI\nthree\nfour\n');
+    git(['commit', '-q', '-am', 'three'], root);
+    assert.equal(atm(['review', 'round', 'CR-1', '--range', `${base}..HEAD`], root).code, 0);
+    // An uncommitted change reviewed too: its round's after side is a tree no commit has
+    fs.writeFileSync(path.join(root, 'b.txt'), 'new\n');
+    assert.equal(atm(['review', 'create', '--title', 'The new file', '--uncommitted'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const origin = `http://localhost:${port}`;
+    const get = async (p) => {
+      const r = await fetch(`${origin}${p}`);
+      return [r.status, await r.json()];
+    };
+    const reviews = '/api/v2/workspaces/default/projects/abcd1234/reviews';
+
+    // The list: both, the latest activity first, each with its open chains and whether it needs the user
+    let [status, list] = await get(reviews);
+    assert.equal(status, 200, JSON.stringify(list));
+    assert.deepEqual(
+      list.reviews.map((e) => e.review.reference),
+      ['CR-2', 'CR-1'],
+    );
+    assert.deepEqual([list.reviews[1].chains, list.reviews[1].open], [1, 1]);
+    assert.equal(typeof list.you, 'string');
+    // As v1 too, and searched in the comments, filtered by status; a status that isn't one refused
+    assert.deepEqual(
+      (await get('/api/v1/projects/abcd1234/reviews?q=why')).at(1).reviews.map((e) => e.review.reference),
+      ['CR-1'],
+    );
+    assert.deepEqual((await get(`${reviews}?status=approved`)).at(1).reviews, []);
+    assert.equal((await get(`${reviews}?status=merged`))[0], 400);
+
+    // A review's page: the latest round's whole change, the chain found again in it by its quote
+    let page;
+    [status, page] = await get(`${reviews}/CR-1`);
+    assert.equal(status, 200, JSON.stringify(page));
+    assert.equal(page.view.round, 2);
+    assert.deepEqual(
+      page.view.files.map((f) => [f.path, f.status, f.before === base]),
+      [['a.txt', 'modified', true]],
+    );
+    assert.match(page.view.files[0].patch, /\+ZWEI/);
+    assert.equal(page.chains[0].drifted !== null, true, 'TWO is gone from round 2: drifted');
+    // Round 1, as it was made: the chain at its own lines
+    [, page] = await get(`${reviews}/CR-1?round=1`);
+    assert.deepEqual([page.chains[0].placed, page.chains[0].drifted], [[2, 2], null]);
+    // Round 2 against round 1: only what changed between them
+    [, page] = await get(`${reviews}/CR-1?round=2&against=1`);
+    assert.equal(page.view.against, 1);
+    assert.match(page.view.files[0].patch, /-TWO\n\+ZWEI/);
+    // Its sides read at their revisions, the before side as the round's base has it
+    const at = (file, revision) => get(`/api/v1/projects/abcd1234/documents?path=${file}&at=${revision}`);
+    assert.deepEqual(
+      (await at('a.txt', base)).map((x, i) => (i ? x.text : x)),
+      [200, 'one\ntwo\nthree\n'],
+    );
+    // The uncommitted round's after side: a tree, no commit
+    [, page] = await get(`${reviews}/CR-2`);
+    const added = page.view.files.find((f) => f.path === 'b.txt');
+    assert.deepEqual([added.status, added.before], ['added', null]);
+    const [treeStatus, doc] = await at('b.txt', added.after);
+    assert.deepEqual([treeStatus, doc.text, doc.commit], [200, 'new\n', null]);
+    // Refused: no such review, a round that isn't one, a round against itself, a revision that isn't one
+    assert.equal((await get(`${reviews}/CR-9`))[0], 404);
+    assert.equal((await get(`${reviews}/CR-1?round=0`))[0], 400);
+    assert.equal((await get(`${reviews}/CR-1?round=9`))[0], 404);
+    assert.equal((await get(`${reviews}/CR-1?round=2&against=2`))[0], 400);
+    assert.equal((await at('a.txt', '--output=x'))[0], 400);
+    assert.equal((await at('a.txt', 'f'.repeat(40)))[0], 404);
+    // The page is served at a review's address
+    const served = await fetch(`${origin}/projects/abcd1234/reviews/CR-1`);
+    assert.equal(served.status, 200);
+    assert.match(served.headers.get('content-type'), /text\/html/);
+    // Reading changed nothing: no new round, no comment
+    assert.deepEqual(JSON.parse(atm(['review', 'comments', 'CR-1', '--json'], root).stdout).length, 1);
     atm(['service', 'stop'], root);
   });
 

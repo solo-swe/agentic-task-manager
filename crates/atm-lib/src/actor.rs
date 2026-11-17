@@ -36,6 +36,15 @@ pub fn agent_identity(agent: Option<&str>, cwd: &Path) -> String {
     if let Some(session) = env("CLAUDE_CODE_SESSION_ID") {
         return session_identity(&session, cwd);
     }
+    user_identity(cwd)
+}
+
+/// The person at the machine, whatever agent's environment atm runs in: their git name, else `user@host`. What the
+/// app and the browser act as (docs/code-review-design.md §3.12): a server an agent's shell started must still write
+/// as the user, never as that agent.
+#[must_use]
+pub fn user_identity(cwd: &Path) -> String {
+    let env = |key: &str| std::env::var(key).ok().filter(|v| !v.is_empty());
     let root = project_root(cwd);
     if let Some(name) = atm_db::git::git(&["config", "user.name"], &root).filter(|n| !n.is_empty())
     {

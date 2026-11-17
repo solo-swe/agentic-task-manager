@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "atm-api"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "atm-common",
  "atm-lib",
@@ -267,11 +267,12 @@ dependencies = [
  "compmd-host",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
 name = "atm-app"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "atm-api",
  "atm-common",
@@ -294,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "atm-cli"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -311,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "atm-common"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "dirs",
  "jiff",
@@ -322,7 +323,28 @@ dependencies = [
 
 [[package]]
 name = "atm-db"
-version = "0.39.0"
+version = "0.40.0"
+dependencies = [
+ "atm-common",
+ "atm-fs",
+ "serde_json",
+ "sysinfo",
+ "uuid",
+]
+
+[[package]]
+name = "atm-docs"
+version = "0.40.0"
+dependencies = [
+ "atm-common",
+ "atm-fs",
+ "atm-vcs",
+ "serde_json",
+]
+
+[[package]]
+name = "atm-fs"
+version = "0.40.0"
 dependencies = [
  "atm-common",
  "notify",
@@ -330,23 +352,38 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "sysinfo",
- "uuid",
 ]
 
 [[package]]
 name = "atm-lib"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "atm-common",
  "atm-db",
+ "atm-docs",
+ "atm-review",
  "atm-vcs",
+ "serde",
  "serde_json",
  "sysinfo",
 ]
 
 [[package]]
+name = "atm-review"
+version = "0.40.0"
+dependencies = [
+ "atm-common",
+ "atm-fs",
+ "atm-vcs",
+ "serde",
+ "serde_json",
+ "toml 1.2.1+spec-1.1.0",
+ "uuid",
+]
+
+[[package]]
 name = "atm-vcs"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "atm-common",
  "serde_json",

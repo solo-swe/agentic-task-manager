@@ -308,6 +308,16 @@ impl Member {
         Workspace::project(&self.entry)
     }
 
+    /// The project, opened to act as the user at the machine (the app's and the browser's review requests, ATM-572):
+    /// never an agent's identity, whatever environment the server runs in.
+    ///
+    /// # Errors
+    /// As [`Project::open`].
+    pub fn project_as_user(&self) -> Result<Project> {
+        let root = folder(&self.entry);
+        Ok(Project::open(&root)?.with_actor(Some(crate::actor::user_identity(&root))))
+    }
+
     /// Its tasks the filters keep, each with its derived values, and in the same snapshot its meta and how big its
     /// task data is; read tolerantly (a malformed task file is shown with what is wrong with it, T-377).
     ///
@@ -358,6 +368,35 @@ impl Member {
     /// A path that is malformed, not there, too large or one atm doesn't show.
     pub fn document(&self, path: &str) -> Result<Value> {
         read_document(self.project()?.vcs().as_ref(), path)
+    }
+
+    /// The document at `path` as the commit or tree `revision` has it (a review's round's side).
+    ///
+    /// # Errors
+    /// As [`Member::document`], and a revision that isn't one, or doesn't have the file.
+    pub fn document_at(&self, path: &str, revision: &str) -> Result<Value> {
+        crate::documents::read_document_at(self.project()?.vcs().as_ref(), revision, path)
+    }
+
+    /// Its reviews the query keeps, the latest activity first, which need the user.
+    ///
+    /// # Errors
+    /// As [`crate::review_pages::list_reviews`].
+    pub fn reviews(&self, query: &crate::review_pages::ReviewQuery) -> Result<Value> {
+        crate::review_pages::list_reviews(&self.project_as_user()?, query)
+    }
+
+    /// A review's page for one view: round `round` (the latest when none), against round `against` when given.
+    ///
+    /// # Errors
+    /// As [`crate::review_pages::review_page`].
+    pub fn review(
+        &self,
+        review: &crate::reviews::ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Value> {
+        crate::review_pages::review_page(&self.project_as_user()?, review, round, against)
     }
 
     /// The image at `path` in its working copy, and its content type.

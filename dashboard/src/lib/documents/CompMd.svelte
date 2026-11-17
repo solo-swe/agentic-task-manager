@@ -12,11 +12,12 @@
     type CompmdModule,
     type DrawnLine,
   } from '../compmd';
-  import { docOf, referenceTo, viewerLink } from '../documents';
+  import { docOf, referenceTo, viewerLink, type DocumentRef } from '../documents';
   import { navigate } from '../navigation';
   import { scrollBehavior } from '../scroll';
-  import { dashboard } from '../state.svelte';
-  import type { Task } from '../types';
+
+  /** The data a task text is rendered with, as CompMD's processing takes it (the viewer knows no task model) */
+  type TextData = Parameters<typeof processText>[2];
 
   // Markdown rendered with CompMD (docs/compmd-rendering-design.md): a task text (description, note, question), which
   // is untrusted, or a text that comes with the plugin (Help, What's new; no `task`). Processed with the dashboard's
@@ -27,7 +28,8 @@
   // `localImage`, in the document viewer: a relative image's address on this server (null: shown as its alt text).
   // `onlines`, in the document viewer: each time the page's layout moved, where each line of the text was drawn
   // (CompMD's origins and its view's lines(), CompMD 0.5.0; T-406), for the viewer's line numbers, with the element the
-  // lines' boxes are measured from.
+  // lines' boxes are measured from. `onopen`: what a link to a document of the project does (the page showing the
+  // text says: the task manager opens its document viewer); without it, such a link does nothing (ATM-571).
   let {
     text,
     task,
@@ -35,13 +37,15 @@
     localImage,
     inline = false,
     onlines,
+    onopen,
   }: {
     text: string;
-    task?: Task;
+    task?: TextData;
     path?: string;
     localImage?: (url: string) => string | null;
     inline?: boolean;
     onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
+    onopen?: (ref: DocumentRef) => void;
   } = $props();
 
   /** A project's text (a task's, or a document's): a relative link in it opens the document viewer (V1a–V1c), resolved
@@ -160,7 +164,7 @@
       // A document of the project (a relative link, made a viewer link by safeTree): the viewer opens it
       const doc = docOf(href);
       if (doc) {
-        dashboard.openDocument(doc);
+        onopen?.(doc);
         return;
       }
       const wanted = decodeURIComponent(href.slice(1));

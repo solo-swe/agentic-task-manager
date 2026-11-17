@@ -13,6 +13,7 @@ pub mod maintenance;
 pub mod meta;
 pub mod project;
 pub mod release;
+pub mod review;
 pub mod sprint;
 pub mod task;
 pub mod vcs;

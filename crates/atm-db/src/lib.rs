@@ -2,7 +2,9 @@
 //!
 //! Part of atm's Rust port (T-415): docs/porting-to-rust.md, docs/layered-architecture.md, docs/guides/rust.md.
 
-pub mod git;
+// Running git, the lock and the folder watcher are atm-fs's, shared with the review store (ATM-563); here under their
+// old paths
+pub use atm_fs::git;
 pub mod interface;
 pub mod jsongit;
 pub mod memory;
