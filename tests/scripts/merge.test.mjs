@@ -511,6 +511,9 @@ describe('merge driver: code reviews (ATM-568)', () => {
     const clone = tempDir();
     try {
       git(['clone', '-q', root, clone], root);
+      // A clone has no identity of its own where git has none (CI): the project's, as makeProject gives it
+      git(['config', 'user.name', git(['config', 'user.name'], root).trim()], clone);
+      git(['config', 'user.email', git(['config', 'user.email'], root).trim()], clone);
       for (const [where, title] of [
         [root, 'Mine'],
         [clone, 'Theirs'],

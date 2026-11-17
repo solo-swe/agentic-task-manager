@@ -645,17 +645,8 @@ mod tests {
         git(&["init", "-q", "-b", "main"], &main);
         git(&["commit", "-q", "--allow-empty", "-m", "start"], &main);
         let wt = dir.path().join("wt");
-        git(
-            &[
-                "worktree",
-                "add",
-                "-q",
-                "-b",
-                "agent-2",
-                wt.to_str().unwrap(),
-            ],
-            &main,
-        );
+        // Relative to `main`: git takes no path in Windows' extended form (`\\?\C:\…`, the test folder's)
+        git(&["worktree", "add", "-q", "-b", "agent-2", "../wt"], &main);
 
         let mut here = FileStore::open(&main.join(".agentic-task-manager")).unwrap();
         let mut there = FileStore::open(&wt.join(".agentic-task-manager")).unwrap();

@@ -113,8 +113,17 @@ impl GitVcs {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
         let name = format!("atm-review-index-{}-{nanos}", std::process::id());
-        let relative = self.git_with(&["rev-parse", "--git-path", &name], &[], None)?;
-        let path = self.root.join(strip(&relative));
+        let answer = self.git_with(&["rev-parse", "--git-path", &name], &[], None)?;
+        let answer = strip(&answer);
+        // git answers with `/` between the parts: joined part by part, as a root in Windows' extended form
+        // (`\\?\C:\…`, which canonicalize gives) takes no `/`; an absolute answer (a worktree's) as it is
+        let path = if Path::new(answer).is_absolute() {
+            PathBuf::from(answer)
+        } else {
+            let mut path = self.root.clone();
+            path.extend(answer.split('/').filter(|part| !part.is_empty()));
+            path
+        };
         let removed = Removed(path);
         work(&[("GIT_INDEX_FILE", removed.0.as_path())])
     }
