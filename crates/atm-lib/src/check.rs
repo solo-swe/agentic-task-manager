@@ -456,6 +456,9 @@ pub fn check_project(project: &Project, files: bool) -> Result<Checked> {
     warnings.extend(shared_key_warning(project, &document));
     let mut errors: Vec<String> = raw.archive_error.into_iter().collect();
     errors.extend(found);
+    let (review_errors, review_warnings) = crate::reviews::check(project, &document);
+    errors.extend(review_errors);
+    warnings.extend(review_warnings);
     Ok(Checked {
         errors,
         warnings,

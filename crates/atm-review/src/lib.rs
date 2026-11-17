@@ -12,6 +12,7 @@ pub mod edits;
 pub mod files;
 pub mod folder;
 pub mod memory;
+pub mod merge;
 pub mod model;
 pub mod rounds;
 pub mod rules;

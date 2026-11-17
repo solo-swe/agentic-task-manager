@@ -14731,7 +14731,7 @@
       "description": "Agents listening ([§3.9](docs/code-review-design.md#:~:text=Two%20ways%20to%20listen)), on the store's subscription, never a poll.\n\n## Change\n- `atm review wait CR-7 [--for submitted|decision] [--timeout]`: blocks, prints what changed.\n- `atm review watch [--timeout]`: names no review and no task; follows the agent (its identity) and its working copy; prints each of the user's comments and replies about the agent's work, one JSON object a line, with the review and the task (or `null`), matched from atm's records (the tasks it held, their commits, its uncommitted files) by the table in §3.9; not the agent's own comments or other agents'.\n\n## Tests\n`tests/scripts/`: wait ends on a submit; watch prints a live comment, a batch review's comment only to the agent whose task touched the file, a no-task comment with `null`, and nothing for another agent's work.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed"
       ],
@@ -14741,7 +14741,7 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T09:25:03Z",
+      "updated_at": "2026-11-17T09:30:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 567,
@@ -14757,7 +14757,18 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T09:25:03Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "0a4b26f40cf55100d40cb50af22186403bfc8b52",
+      "completed_at": "2026-11-17T09:30:55Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T09:30:55Z",
+          "kind": "outcome",
+          "text": "atm review wait CR-n [--for submitted|decision] [--timeout] (exit 3 on time up) and atm review watch [--timeout] (one JSON object a line: the person’s comments about the agent’s work, from any review, with its task or null), both on the store’s subscription with a 5 s recheck; matching by §3.9 from atm’s records (tasks held, declared files, commit diff, uncommitted files). Tests: wait on a decision and its timeout; watch with a batch, a live review, own and other agents’ comments.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e20da0a31b2",
@@ -14770,7 +14781,7 @@
       "description": "Reviews on branches ([§4](docs/code-review-design.md#:~:text=Merges%20of%20the%20two%20text%20files)).\n\n## Change\n- atm's merge driver also takes `reviews/**/comments.md` (chains and comments merged by ID) and `reviews/**/review.md` (the header by its latest `updated`), registered in `.agentic-task-manager/.gitattributes` as for `tasks.json` (the driver's command from the clone's own git config, I9).\n- `atm doctor`: reviews it can't read, text the comment format doesn't expect, clashing numbers (CR-8.1/CR-8.2), tasks naming reviews that don't exist.\n\n## Tests\n`tests/scripts/merge.test.mjs`: one review commented on two branches, merged; two clones' CR-8s merged as two folders.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1b648fbf5b"
       ],
@@ -14780,7 +14791,7 @@
         "tests/scripts/merge.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T08:50:49Z",
+      "updated_at": "2026-11-17T09:30:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 568,
@@ -14794,7 +14805,9 @@
           "from": "2026-11-17T08:50:49Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T09:30:55Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e21486f0d88",

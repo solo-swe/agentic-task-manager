@@ -17,6 +17,11 @@ const GITATTRIBUTES_LINES: &str = "# 'atm' is defined in each clone's git config
      tasks.json merge=atm\n";
 /// The archive's line, added when a project first archives.
 const ARCHIVE_ATTRIBUTES_LINE: &str = "tasks-archive.json merge=atm";
+/// The code reviews' two text files (docs/code-review-design.md §4), merged by atm too.
+const REVIEW_ATTRIBUTES_LINES: [&str; 2] = [
+    "reviews/*/review.md merge=atm",
+    "reviews/*/comments.md merge=atm",
+];
 
 /// Whether `folder` is in a git repository: the one way atm asks.
 #[must_use]
@@ -57,11 +62,15 @@ pub fn stage(root: &Path, paths: &[&Path]) {
     let _ = git(&args, root);
 }
 
-/// The command git runs to merge the task files: this atm, quoted for the shell.
+/// The command git runs to merge the task files: this atm, quoted for the shell, given the three versions and the
+/// path being merged (`%P`, which tells a review's files from the task files).
 #[must_use]
 pub fn launcher_command() -> String {
     let exe = std::env::current_exe().map_or_else(|_| "atm".into(), |p| p.shown());
-    format!("'{}' db merge-driver %O %A %B", exe.replace('\'', "'\\''"))
+    format!(
+        "'{}' db merge-driver %O %A %B %P",
+        exe.replace('\'', "'\\''")
+    )
 }
 
 fn write(path: &Path, text: &str) -> Result<()> {
@@ -107,12 +116,8 @@ pub fn ensure_merge_driver(paths: &Paths) -> Result<bool> {
     Ok(true)
 }
 
-/// In git: the archive merges task by task too. Added when a project first archives, so projects that never do see no
-/// change. Returns whether `.gitattributes` changed (staged).
-///
-/// # Errors
-/// When `.gitattributes` can't be read or written.
-pub fn ensure_archive_merge(paths: &Paths) -> Result<bool> {
+/// In git: the driver set up, and `lines` in `.gitattributes`, those missing added (staged). Returns whether it changed.
+fn ensure_lines(paths: &Paths, lines: &[&str]) -> Result<bool> {
     let root = &paths.root;
     if !in_git(root) {
         return Ok(false);
@@ -121,16 +126,40 @@ pub fn ensure_archive_merge(paths: &Paths) -> Result<bool> {
     let attributes = paths.dir.join(".gitattributes");
     let text = std::fs::read_to_string(&attributes)
         .map_err(|e| Error::failed(format!("{}: {e}", attributes.shown())))?;
-    if text.lines().any(|l| l == ARCHIVE_ATTRIBUTES_LINE) {
+    let missing: Vec<&str> = lines
+        .iter()
+        .copied()
+        .filter(|line| !text.lines().any(|l| l == *line))
+        .collect();
+    if missing.is_empty() {
         return Ok(false);
     }
     let separator = if text.ends_with('\n') { "" } else { "\n" };
     write(
         &attributes,
-        &format!("{text}{separator}{ARCHIVE_ATTRIBUTES_LINE}\n"),
+        &format!("{text}{separator}{}\n", missing.join("\n")),
     )?;
     stage(root, &[&attributes]);
     Ok(true)
+}
+
+/// In git: the archive merges task by task too. Added when a project first archives, so projects that never do see no
+/// change. Returns whether `.gitattributes` changed (staged).
+///
+/// # Errors
+/// When `.gitattributes` can't be read or written.
+pub fn ensure_archive_merge(paths: &Paths) -> Result<bool> {
+    ensure_lines(paths, &[ARCHIVE_ATTRIBUTES_LINE])
+}
+
+/// In git: a review's `comments.md` and `review.md` merge by atm too (docs/code-review-design.md §4). Added when the
+/// project opens its first review, so projects without reviews see no change. Returns whether `.gitattributes`
+/// changed (staged).
+///
+/// # Errors
+/// When `.gitattributes` can't be read or written.
+pub fn ensure_review_merge(paths: &Paths) -> Result<bool> {
+    ensure_lines(paths, &REVIEW_ATTRIBUTES_LINES)
 }
 
 #[cfg(test)]
@@ -140,7 +169,7 @@ mod tests {
     #[test]
     fn the_launcher_is_quoted_for_the_shell() {
         let command = launcher_command();
-        assert!(command.starts_with('\'') && command.ends_with("' db merge-driver %O %A %B"));
+        assert!(command.starts_with('\'') && command.ends_with("' db merge-driver %O %A %B %P"));
         assert_eq!(rel(Path::new("/p"), Path::new("/p/a/b")), "a/b");
         assert_eq!(rel(Path::new("/p"), Path::new("/q")), "/q");
     }

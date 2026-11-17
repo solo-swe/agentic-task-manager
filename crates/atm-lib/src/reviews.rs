@@ -46,6 +46,68 @@ pub fn store(project: &Project) -> Result<FileStore> {
     FileStore::open(&root.join(TASK_DIR))
 }
 
+/// `atm doctor`'s checks of the reviews (docs/code-review-design.md §4): errors, a review atm can't read; warnings,
+/// lines of `comments.md` the comment format doesn't expect, numbers two reviews share (CR-8.1 and CR-8.2), and tasks
+/// linked to reviews the project doesn't have. A project without reviews has nothing to say.
+#[must_use]
+pub fn check(project: &Project, document: &Value) -> (Vec<String>, Vec<String>) {
+    let (mut errors, mut warnings) = (Vec::new(), Vec::new());
+    let Ok(store) = store(project) else {
+        return (errors, warnings);
+    };
+    match store.problems() {
+        Ok(problems) => {
+            for problem in problems {
+                if problem.contains("comments.md line ") {
+                    warnings.push(format!("review {problem}"));
+                } else {
+                    errors.push(format!("review {problem}"));
+                }
+            }
+        }
+        Err(e) => errors.push(format!("reviews: {e}")),
+    }
+    let headers = store
+        .list_reviews(&ReviewFilter::default())
+        .unwrap_or_default();
+    let mut shared: Vec<u32> = headers
+        .iter()
+        .filter(|h| h.reference.0.contains('.'))
+        .map(|h| h.number)
+        .collect();
+    shared.dedup();
+    for number in shared {
+        let refs: Vec<&str> = headers
+            .iter()
+            .filter(|h| h.number == number)
+            .map(|h| h.reference.0.as_str())
+            .collect();
+        warnings.push(format!(
+            "reviews {} share the number {number} (made in two clones; both are kept, by those names)",
+            refs.join(" and ")
+        ));
+    }
+    let known: std::collections::HashSet<&str> = headers.iter().map(|h| h.id.0.as_str()).collect();
+    for task in document["tasks"].as_array().into_iter().flatten() {
+        for link in task
+            .get("code_reviews")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let id = link.get("id").and_then(Value::as_str).unwrap_or_default();
+            if !known.contains(id) {
+                let name = link.get("ref").and_then(Value::as_str).unwrap_or(id);
+                warnings.push(format!(
+                    "{}: its code review {name} isn't in the project (not merged here yet, or deleted)",
+                    id_of(task).unwrap_or("?")
+                ));
+            }
+        }
+    }
+    (errors, warnings)
+}
+
 fn actor_of(project: &Project) -> Actor {
     Actor(project.actor().unwrap_or("someone").to_string())
 }
@@ -150,6 +212,12 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
         .collect();
     let mut reviews = store(project)?;
     let header = Reviews::new(&mut reviews).create(new)?;
+    // The first review: its files merge by atm on branches too (staged with the review's folder, by whoever commits)
+    if let Some(root) = project.root()
+        && let Ok(paths) = atm_db::jsongit::paths::find_paths(root)
+    {
+        let _ = atm_db::jsongit::setup::ensure_review_merge(&paths);
+    }
     link(project, &header, &ids, true)?;
     if header.status == Status::Open {
         ask_review(project, &ids, &header, &header.title)?;
