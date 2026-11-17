@@ -15551,7 +15551,7 @@
       "description": "Scan the whole repository's tests against the model in [AGENTS.md, Testing conventions](AGENTS.md#:~:text=What%20to%20test), and add or update tests where cases are missing.\n\n## The model\n- **Every case.** Each unit's tests cover every case it promises, not just the lines that run: the happy paths, each failure mode and refusal, each class of input (empty, one, many; missing, malformed, too large; at and past each limit), each state, and where two of these meet. The coverage thresholds stay as guardrails. Use judgement to keep the tests maintainable: one test per behaviour, tables of cases, shared fixtures, and each layer tests its own rules.\n- **A unit alone.** A unit test replaces what it calls in another layer with a hand-written fake behind a trait (a stub of the module or API in TypeScript), and checks the unit's own work. Going through the layers together is the integration tests' job: a crate's `tests/`, `tests/scripts/`, e2e. Unit tests that go through the layers below today (real git, a real store, the disk) either move to integration tests or get a fake.\n- **The example:** `crates/atm-api/src/routes/`, done in ATM-572. Its seam is `source.rs` (the traits, with atm-lib's implementation), its fake is `test_support.rs` (records each call and answers what a test sets), and each module's tests cover each class of answer.\n\n## The known gap\n**Claims** (`crates/atm-lib/src/claims.rs`, `claims/tests.rs`, `leases.rs`, `crates/atm-db/src/jsongit/claims.rs`, `memory.rs`): the Rust tests cover the heartbeat and expiry only. Missing:\n- a free task is claimed;\n- a task claimed by another agent is refused;\n- a task is refused from another worktree or branch of the same project;\n- the holder claims its own task again;\n- release, and claiming after a release;\n- an expired lease is taken over.\n\nSome of these are checked end to end in `tests/scripts/claims.test.mjs`, but not in the layer that owns the rule. atm-lib's tests already use `MemoryStore` as the store's fake.\n\n## The scan\nGo crate by crate, then the app and the dashboard. List each unit's cases next to its tests, fill the gaps, and replace the layers below with fakes where a unit test goes through them:\n- [ ] `atm-common`, `atm-fs`, `atm-vcs`, `atm-db` (the stores, the merge driver, the registry)\n- [ ] `atm-docs`, `atm-review`\n- [ ] `atm-lib` (claims, leases, the status machine, sprints, reviews, workspaces, query)\n- [ ] `atm-cli` (each command's refusals and exit codes) and `tests/scripts/`\n- [ ] `app/src-tauri` (each command's results and refusals; its tests that read a real project are integration tests)\n- [ ] `dashboard/` (unit and component tests: API errors, 304s, empty data)\n\nRecord in the task's outcome note what was added per area, and anything left out on purpose, with the reason.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/claims/tests.rs",
@@ -15559,7 +15559,7 @@
         "crates/atm-db/src/jsongit/claims.rs"
       ],
       "created_at": "2026-11-17T16:33:34Z",
-      "updated_at": "2026-11-17T22:15:54Z",
+      "updated_at": "2026-11-17T22:16:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 580,
@@ -15570,7 +15570,9 @@
           "from": "2026-11-17T22:15:54Z"
         }
       ],
-      "sprint": "Code reviews in the app"
+      "sprint": "Code reviews in the app",
+      "started_at": "2026-11-17T22:16:50Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1eb3d-88aa-723f-8bab-74e5496e739b",

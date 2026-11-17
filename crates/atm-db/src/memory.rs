@@ -18,6 +18,7 @@ pub struct MemoryStore {
     claims_store: Map<String, Value>,
     vocabulary: Vocabulary,
     listeners: Listeners,
+    here: Here,
 }
 
 /// Who is told of a memory store's changes: each live subscription's callback, by a number of its own. A clone of the
@@ -92,7 +93,22 @@ impl MemoryStore {
             claims_store,
             vocabulary: Vocabulary::of_meta(meta)?,
             listeners: Listeners::default(),
+            here: Here {
+                worktree: None,
+                branch: None,
+            },
         })
+    }
+
+    /// The same store, as the working copy in this folder, on this branch: so a test can play one worktree of a clone
+    /// whose claims store (`with_claims`) another worktree wrote (T-202). Without it, the store is in no working copy.
+    #[must_use]
+    pub fn with_here(mut self, worktree: &str, branch: &str) -> Self {
+        self.here = Here {
+            worktree: Some(worktree.into()),
+            branch: Some(branch.into()),
+        };
+        self
     }
 
     /// The same store with this claims store.
@@ -167,14 +183,10 @@ impl Store for MemoryStore {
 
     fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()> {
         let archive = json!({"meta": {}, "tasks": self.archive});
-        let here = Here {
-            worktree: None,
-            branch: None,
-        };
         let mut work = Working::new(
             self.document.clone(),
             self.claims_store.clone(),
-            here,
+            self.here.clone(),
             0,
             Box::new(move || Ok(archive.clone())),
         );
@@ -234,6 +246,36 @@ mod tests {
             .unwrap();
         assert!(store.get_task("T-1").unwrap().is_some());
         assert_eq!(store.read_claims()["claims"], json!({"T-1": {}}));
+    }
+
+    #[test]
+    fn a_change_is_made_in_the_working_copy_the_store_was_given() {
+        let here = |store: &mut MemoryStore| {
+            let mut seen = None;
+            store
+                .change(&mut |work| {
+                    seen = Some(work.here().clone());
+                    Ok(())
+                })
+                .unwrap();
+            seen.unwrap()
+        };
+        let mut none = MemoryStore::new(Vec::new(), Vec::new(), &Map::new()).unwrap();
+        assert_eq!(
+            here(&mut none),
+            Here {
+                worktree: None,
+                branch: None
+            }
+        );
+        let mut linked = none.with_here("/wt/agent-2", "agent-2");
+        assert_eq!(
+            here(&mut linked),
+            Here {
+                worktree: Some("/wt/agent-2".into()),
+                branch: Some("agent-2".into())
+            }
+        );
     }
 
     /// T-555: a memory store is told by its own writes; a failed one, a clone's or a dropped subscription's isn't
