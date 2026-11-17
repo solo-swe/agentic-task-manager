@@ -15126,7 +15126,7 @@
       "description": "The pages of [§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), in the app and the browser.\n\n## Change\n- `/projects/<id>/reviews` (and across the workspace on the overview): search (title, summary, comments), filters (status, author, reviewer, task, branch), latest activity first; *Next review needing you*.\n- `/projects/<id>/reviews/CR-7` (`?round=`, `&against=`, `&file=`): the header, the file tree with viewed ticks (kept in the page's preferences by review, round and file content), the diff viewer, the round picker (whole change, or a round against another), drifted chains with a link to where they were made, *Submit* (approve, request changes, comment).\n- A clashing reference (`CR-8`) shows both CR-8.1 and CR-8.2 to choose.\n- Routes listed in `docs/multi-project-api.md` §2.7.\n\n## Tests\nE2e specs (the fixture serves reviews); the performance budget for a large review.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
         "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",
@@ -15139,7 +15139,7 @@
         "dashboard/tests/e2e/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T19:55:16Z",
+      "updated_at": "2026-11-17T19:58:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 574,
@@ -15185,6 +15185,18 @@
           "kind": "review",
           "text": "Second review done (146f754): Overview facts on top, description and rounds beside the conversation; rendered side as a document page; chains show lines only, marked when selected; comment inside another stays until saved; prev/next comment; Approve when nothing open; Reopen from the fold; Lucide icons. Review in Crit.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T19:58:56Z",
+          "kind": "note",
+          "text": "Approved: Hakan approved in Crit with no comments (146f754).",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T19:58:58Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan in Crit. Reviews across the workspace on the overview left out, as he asked.",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -15207,10 +15219,16 @@
           "from": "2026-11-17T19:07:08Z",
           "to": "2026-11-17T19:39:16Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-17T19:55:16Z",
+          "to": "2026-11-17T19:58:56Z",
+          "outcome": "approved"
         }
       ],
       "review_requested_at": "2026-11-17T19:55:16Z",
-      "review_state": "waiting"
+      "completed_at": "2026-11-17T19:58:58Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e27bb7d4274",
