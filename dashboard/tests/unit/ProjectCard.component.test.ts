@@ -253,10 +253,12 @@ describe('ProjectCard: the git line and the task finished last (T-208)', () => {
       }),
     });
     const now = container.querySelector('.project-card-work-line')!;
-    expect(now.querySelector('.project-card-work-id .provisional')).toHaveTextContent('ATM-11draft');
+    const provisional = now.querySelector('.project-card-work-id .provisional');
+    expect(provisional?.textContent?.trim()).toBe('ATM-11');
+    expect(provisional?.querySelector('.draft-info .icon-info')).not.toBeNull();
     expect(now).toHaveAttribute('title', 'ATM-11 Draft — claude:e5ea9db0');
     expect(text(container.querySelector('.project-card-last'))).toMatch(/ ATM-2 Setup$/);
-    expect(container.querySelector('.project-card-last .draft-mark')).toBeNull();
+    expect(container.querySelector('.project-card-last .draft-info')).toBeNull();
     expect(container.querySelector('.project-card-last')?.getAttribute('title')).toMatch(/^Last finished: ATM-2 Setup/);
   });
 

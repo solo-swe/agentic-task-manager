@@ -344,11 +344,11 @@
               stroke-width="1.5"
             />
             <text x={node.x + 8} y={node.y + 18} fill={ts.color} font-weight="700" font-size="12"
-              >{`${statusEmoji(t.status)} `}{#if isProvisional(t)}<tspan class="graph-provisional" opacity="0.7"
-                  ><title>{PROVISIONAL_TIP}</title>{taskLabel(t)}</tspan
-                ><tspan class="draft-mark" dx="3" font-size="8" opacity="0.7">DRAFT</tspan>{:else}{taskLabel(
-                  t,
-                )}{/if}{` ${TYPE_EMOJI[t.type] ?? ''}`}</text
+              >{`${statusEmoji(t.status)} `}{#if isProvisional(t)}<tspan
+                  class="graph-provisional"
+                  opacity="0.7"
+                  font-style="italic"><title>{PROVISIONAL_TIP}</title>{taskLabel(t)}</tspan
+                >{:else}{taskLabel(t)}{/if}{` ${TYPE_EMOJI[t.type] ?? ''}`}</text
             >
             <text x={node.x + 8} y={node.y + 36} fill="var(--text-muted)" font-size="10" font-weight="400"
               >{node.label}</text
