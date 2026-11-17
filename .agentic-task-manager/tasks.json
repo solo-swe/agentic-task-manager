@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 585
+    "next_number": 587
   },
   "tasks": [
     {
@@ -15353,7 +15353,7 @@
       "description": "Where reviews show outside their pages ([§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), [§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The app's sidebar: a Reviews section under the projects (the reviews needing you, with a count; All reviews).\n- Cards and the details panel show a task's reviews as links (`CR-7 · changes requested`), a new tab with ⌘-click; *Add to review* on a task.\n- The needs-you menu counts reviews with tasks; deep links `atm://…/reviews/CR-7` (checked as I28).\n\n## Tests\nE2e (`app.spec.ts` for the sidebar, `detail.spec.ts` for the links); unit tests for the deep links.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -15365,7 +15365,7 @@
         "app/src-tauri/src/links.rs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T22:15:54Z",
+      "updated_at": "2026-11-17T23:22:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
@@ -15379,7 +15379,9 @@
           "from": "2026-11-17T22:15:54Z"
         }
       ],
-      "sprint": "Code reviews in the app"
+      "sprint": "Code reviews in the app",
+      "started_at": "2026-11-17T23:22:47Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
@@ -15735,7 +15737,7 @@
       "description": "In the atm app, choosing **Reload** in the menu (⌘R) leaves the window empty, with an error showing in the title bar (Hakan, 2026-11-18). Reload should show the same page again, as it was.\n\n## Reproduce first\nOpen a project's page (and a review in its tab, a task's details, a document), choose Reload; note the address, what the window shows, the title bar's text and the web inspector's console. Try it on the root page too.\n\n## Likely cause\nThe menu's `reload` action runs `location.reload()` ([`menu-actions.ts`](dashboard/src/lib/menu-actions.ts#L48)). The page's addresses are its routes (`/projects/<id>/list`, `…/reviews/CR-7`), and the app's window serves the built dashboard as one HTML file: a reload asks the app for the route's path itself, which it has no file for, unless it falls back to the page. Check how the app serves the page (`app/src-tauri/src/lib.rs`, `assets.rs`, `tauri.conf.json`) and how the title bar shows a load error (`AppTitleBar.svelte`).\n\n## Change\nMake Reload show the page again at the same address, with its tabs: either the app answers every page route with the dashboard (as `atm serve`'s `PAGE_PATH` does, `docs/multi-project-api.md` §2.7; never for asset or API paths), or the page reloads through the app's root with the address handed over. Whatever made the title bar show an error says what went wrong in words, if it can still happen.\n\n## Tests\nAn e2e test in `dashboard/tests/e2e/app.spec.ts`: Reload on a project's tab, a review's tab and the root shows the same page and tabs, no error in the title bar; a unit test in the app for the route fallback if that's the fix (asset and unknown paths still 404).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/menu-actions.ts",
@@ -15745,7 +15747,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-17T22:48:45Z",
-      "updated_at": "2026-11-17T23:13:33Z",
+      "updated_at": "2026-11-17T23:22:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15761,7 +15763,93 @@
       "number": 584,
       "key_final": false,
       "started_at": "2026-11-17T23:13:33Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "3b16d133ec4a46433061bd8f964b3c9acb604c03",
+      "completed_at": "2026-11-17T23:22:47Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-17T23:22:47Z",
+          "kind": "outcome",
+          "text": "Reload in the app goes through a new reload_window command: the window comes back with its tabs at the app page. Untested on a real app window: try menu Reload (Cmd+R) on a project tab and a review tab.",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1ebf2-f535-752d-88f8-ee898c60501d",
+      "name": "Details: a task in review links to its code review",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "When a task is in review and has a code review (`code_reviews` on the task: `[{id, ref}]`, the latest last), its details show the review as a link, prominently where the review is (the review section of [`DetailPanel.svelte`](dashboard/src/lib/details/DetailPanel.svelte), beside the `review` note), e.g. **CR-7 · open**: a click opens the review's page (`/projects/<id>/reviews/CR-7`), in a new tab with ⌘/Ctrl (in the app, an app tab), as the Reviews list opens one (`ReviewsTab.svelte`'s `open`). Hakan, 2026-11-18.\n\n## Details\n- Show the latest review the task names; with several, the others as smaller links after it.\n- The status next to the reference when the page knows it (the project's reviews list), else the reference alone; never a request per task.\n- A task with `code_reviews` that isn't in review (done, sent back) shows its reviews too, less prominently.\n- ATM-575 puts the same links on the cards and in the list: share the link component with it.\n\n## Tests\nA component test of the details panel (in review with one review, with two, without any, not in review); an e2e test in `detail.spec.ts` that the link opens the review's page, and ⌘-click a new tab.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/details/DetailPanel.svelte",
+        "dashboard/tests/unit/DetailPanel.component.test.ts",
+        "dashboard/tests/e2e/detail.spec.ts"
+      ],
+      "created_at": "2026-11-17T23:58:50Z",
+      "updated_at": "2026-11-17T23:58:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T23:58:50Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "01a1e83f-8c1c-74d3-83f6-0e27bb7d4274"
+      ],
+      "number": 585,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebf2-f535-752d-88f8-ee8ac3ce346e",
+      "name": "Code review: links in a review's description and comments open in the document viewer",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "A review's description (its summary, on the Overview tab) and its comments render through CompMD, but their references to the project's documents and files (`[the design](docs/x.md)`, `docs/x.md#routes`, `src/a.rs#L40-L45`, text-fragment links `#:~:text=…`) aren't opened in the document viewer, as they are in a task's description and notes (Hakan, 2026-11-18).\n\n## Change\n- Give the review page's `CompMd` (the summary in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte), the comment bodies in [`ChainBox.svelte`](dashboard/src/lib/reviews/ChainBox.svelte)) the same `onopen` the details panel gives its texts (`dashboard.openDocument`), so a relative link opens the document viewer over the review, at its heading, lines or text.\n- A link to a file under review could open that file in the Diffs tab instead: decide while doing it (a file the round changed → its diff; anything else → the viewer), and say which in the outcome note.\n- External links stay as they are (the user's browser, through `open_url` in the app).\n\n## Tests\nComponent tests that a summary's and a comment's relative link calls `onopen` with its document reference; an e2e test in `reviews.spec.ts` that a click on one opens the document viewer.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/reviews/ChainBox.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-17T23:58:50Z",
+      "updated_at": "2026-11-17T23:58:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T23:58:50Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 586,
+      "key_final": false
     }
   ]
 }
