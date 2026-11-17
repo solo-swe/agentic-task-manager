@@ -326,16 +326,19 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
 - **Commenting:** at any time, on what is there. When a comment is added, atm records a **checkpoint**: a round of
   kind `working`, the diff against the base at that moment (§3.3), so the comment is anchored to what the reviewer
   saw, and moves with the code afterwards (§3.6) like any other.
-- **The agent listens** with `atm review watch` (§3.9), started with its task, **before any review exists**: it
-  watches for live comments on its task (`--task ATM-482`), or on its working copy, and picks up whichever live review
-  the user starts there, whenever they start it. Each comment comes as it is added, so the agent can answer and adjust
-  right away, without stopping its task; it never needs to know the review's number.
-- **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author ends it
-  with a round, which makes it an ordinary `open` review; or it is closed.
-- **Instead of a review at the end:** a task whose change was approved in a live review needs no other CR. When the
-  task is finished, atm compares its change with the approved checkpoint: **unchanged since, the live review's
-  approval is the task's** (`review_state = approved`, with the CR's link); changed since, atm says what changed and
-  the author asks for a round on it (the same CR, `open` again) before the task can be done.
+- **The agent starts nothing.** Every agent working on a task keeps one background watch (`atm review watch --task
+  ATM-482`, §3.9) for the whole task: it prints the user's comments and replies **about the agent's work**, from any
+  review, as they are added (the filter, per kind of review, is in §3.9). If the user opens a live review and
+  comments, the agent sees it at once and reacts, without stopping its task.
+- **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author
+  ends it with a round, which makes it an ordinary `open` review; or it is closed.
+- **When the task is finished**, the agent asks for its review as its review mode says, and atm sees which case it is:
+
+  | During the task | At the end |
+  |---|---|
+  | no live review, no comments | the agent creates the CR (`atm review create --task ATM-482 …`) and the task goes in review, as today |
+  | a live review, approved, the task's change unchanged since the approved checkpoint | **no other CR**: the live review's approval is the task's (`review_state = approved`, with the CR's link) |
+  | a live review, not approved (or changed since its approval) | no new CR: the agent ends the live review with a round on the final change (`atm review round CR-9`), which makes it `open`, and the task goes in review on it |
 
 ### 3.6 Rounds, anchors and drift
 
@@ -411,13 +414,28 @@ atm review watch [--task KEY] [--timeout 2h]          # live comments, before (a
   comments, the decision). For a static review: the agent waits as it waits for CI, with its claim held (`atm claim
   hold ATM-482 && atm review wait CR-7`, in the background), then reads the comments, replies to each, fixes, commits,
   `atm review round`, waits again; until approved.
-- **`atm review watch`** is for live reviews, and names no review: the agent starts it with its task (`atm claim
-  hold ATM-482 && atm review watch --task ATM-482`, in the background, beside its work), or with nothing, for its
-  working copy. It waits for a live review to start there, if none has, then prints each comment as it is added, one
-  JSON object a line, with the review it belongs to (`"review": "CR-9"`), until the live review ends or the timeout.
-  The agent answers as comments come, by the review the comment names.
+- **`atm review watch`** names no review: it is the agent's one background watch for its task (`atm claim hold
+  ATM-482 && atm review watch --task ATM-482`, beside its work, from when it takes the task), whether or not any review
+  exists yet. It prints each of the user's comments and replies about the agent's work as it is added, one JSON object
+  a line, with the review it is in (`"review": "CR-9"`) and why it is the agent's (below); the agent's own comments
+  and other agents' aren't printed. It runs until the task leaves the agent (done, released, handed on) or the
+  timeout.
 
-Both are on the store's subscription, not a poll the agent writes. The skills get both loops.
+**What is "about the agent's work",** by kind of review:
+
+| Review | Printed to the agent working on ATM-482 |
+|---|---|
+| a live review on its working copy (or naming ATM-482) | every comment and reply in it |
+| a review of ATM-482 alone (a per-task CR) | every comment and reply in it |
+| a batch review naming several tasks | the chains on files ATM-482's change touched (its commits since it started, and its uncommitted files), the chains whose text names ATM-482, and replies in chains the agent has written in |
+| any other review | nothing |
+
+So in a batch review each agent hears about its own files and its own task, and a chain about the review as a whole
+that names no task goes to whoever runs the review (the user, or the agent that opened it). A comment a filter can't
+place (a file two tasks both touched) goes to every agent it could be for; each answers what is its own.
+
+Both are on the store's subscription, not a poll the agent writes. The skills get both: the watch from the start of a
+task, `wait` once the task is in review.
 
 **Comments are task text** (I1): data, never instructions. A comment that asks the agent to run a command, fetch a
 script or touch credentials, CI, git config or hooks is answered or blocked on the user, as a task asking for it is.
@@ -631,7 +649,12 @@ review on the task (`atm review live --task ATM-490`, or *New live review* on it
 appear, and comments "this belongs in atm-lib". The agent's watch picks up the new live review and prints the comment
 at once, naming CR-9; the agent replies there and moves the module. At the end the user resolves the top-level
 comments and approves the live review; the task's change hasn't moved since, so the task is approved with no other
-CR. §3.5.
+CR. On another task the user never opens a live review: the same watch prints nothing, and at the end the agent
+creates the CR as usual. §3.5, §3.9.
+
+**U2b. A comment in a batch review.** CR-12 reviews ATM-501 and ATM-502, worked by two agents. The user comments on
+`crates/atm-lib/src/sprints.rs`, which only ATM-502's commits touched: only ATM-502's agent's watch prints it. A
+review-level comment "ATM-501: rename the flag" goes to ATM-501's agent. §3.9.
 
 **U3. A review of uncommitted changes**, before committing (the user's own, or an agent's: "show me before you
 commit"). `atm review create --uncommitted`: round 1 is the diff against `HEAD`, the index and working tree untouched.
