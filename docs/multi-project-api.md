@@ -235,14 +235,16 @@ old parameters from its hash and moves to the new address.
 The only routes that change anything (docs/code-review-design.md §3.12), under
 `/api/v2/workspaces/<w>/projects/<id>/reviews`. Each is the same atm-lib call as its `atm review …` command, acting as
 the user at the machine (their git name, never an agent's identity), with the review's rules: its author can't decide
-it, only one's own text is changed, a review is approved only with every top-level comment resolved.
+it (unless the user overrides that, saying why), only one's own text is changed, a review is approved only with every
+top-level comment resolved. A live review the user opens makes them its reviewer; its author is the agent at work in
+that copy (or nobody yet).
 
 | Method and resource | Body (JSON) | Does | Answers |
 |---|---|---|---|
 | `POST reviews` | `{title, summary?, tasks?, reviewers?, start?: open\|draft\|live, change: {range?: "BASE..HEAD", uncommitted?, base?, files?}}` | opens a review (`atm review create`, `live`) | `201`, its header |
 | `PATCH reviews/<CR>` | `{status: "closed", reason, reject_tasks?}` | closes it (`close`) | `200`, its header |
 | `PUT reviews/<CR>/tasks` | `{tasks: [<key>, …]}` | the tasks it reviews, as a whole (`tasks`) | `200`, its header |
-| `POST reviews/<CR>/decisions` | `{decision: approve\|request_changes\|comment, body?}` | a reviewer's decision (`submit`) | `201`, its header |
+| `POST reviews/<CR>/decisions` | `{decision: approve\|request_changes\|comment, body?, override_rules?: {reason}}` | a reviewer's decision (`submit`); with `override_rules`, the user's decision over the rule on who decides (their own review, say), recorded in the review with the reason | `201`, its header |
 | `POST reviews/<CR>/comments` | `{path?, lines?: [a, b], side?: new\|old, quote?, round?, body}` | a new chain (`comment`) | `201`, `{review, comment}` |
 | `PATCH reviews/<CR>/comments/<c>` | `{body}` or `{resolved}` | one's own text, or a top-level comment's box (`edit`, `resolve`) | `200`, `{review, comment}` |
 | `POST reviews/<CR>/comments/<c>/replies` | `{body}` | a reply (`reply`) | `201`, `{review, comment, reply_to}` |

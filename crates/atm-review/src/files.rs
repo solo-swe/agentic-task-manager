@@ -20,7 +20,9 @@ pub mod review_md {
         status: Status,
         #[serde(default)]
         tasks: Vec<String>,
-        author: String,
+        /// None (left out) while whose change it is isn't known
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        author: Option<String>,
         #[serde(default)]
         reviewers: Vec<String>,
         created: Datetime,
@@ -43,7 +45,7 @@ pub mod review_md {
             title: header.title.clone(),
             status: header.status,
             tasks: header.tasks.clone(),
-            author: header.author.0.clone(),
+            author: header.author.as_ref().map(|a| a.0.clone()),
             reviewers: header.reviewers.iter().map(|r| r.0.clone()).collect(),
             created: date(&header.created, "creation time")?,
             updated: date(&header.updated, "update time")?,
@@ -91,7 +93,7 @@ pub mod review_md {
                 title: header.title,
                 status: header.status,
                 tasks: header.tasks,
-                author: Actor(header.author),
+                author: header.author.map(Actor),
                 reviewers: header.reviewers.into_iter().map(Actor).collect(),
                 created: header.created.to_string(),
                 updated: header.updated.to_string(),
@@ -549,7 +551,7 @@ written at the margin by hand
             title: "Claim hold on Windows".into(),
             status: Status::ChangesRequested,
             tasks: vec!["ATM-482".into()],
-            author: Actor::from("claude:0f56a916"),
+            author: Some(Actor::from("claude:0f56a916")),
             reviewers: vec![Actor::from("Hakan Serce")],
             created: "2026-11-17T03:20:00Z".into(),
             updated: "2026-11-17T04:02:00Z".into(),
@@ -578,6 +580,14 @@ written at the margin by hand
         let bare = review_md::write(&header(), "").unwrap();
         assert!(bare.ends_with("+++\n"));
         assert_eq!(review_md::read(&bare).unwrap().1, "");
+        // No author yet (a live review a person opened): the line left out, read back as none
+        let unknown = ReviewHeader {
+            author: None,
+            ..header()
+        };
+        let text = review_md::write(&unknown, "").unwrap();
+        assert!(!text.contains("author"), "{text}");
+        assert_eq!(review_md::read(&text).unwrap().0.author, None);
     }
 
     #[test]

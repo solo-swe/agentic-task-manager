@@ -413,6 +413,13 @@ impl ReviewStore for FileStore {
         })
     }
 
+    fn set_author(&mut self, id: &ReviewId, author: &Actor) -> Result<()> {
+        self.change(id, |review| {
+            review.header.author = Some(author.clone());
+            Ok(())
+        })
+    }
+
     fn add_round(&mut self, id: &ReviewId, round: NewRound) -> Result<u32> {
         let folder = self.by_id(id)?.folder;
         self.change(id, |review| {
@@ -551,7 +558,7 @@ mod tests {
             title: title.into(),
             summary: "Why and what.".into(),
             tasks: vec!["ATM-482".into()],
-            author: agent(),
+            author: Some(agent()),
             reviewers: vec![hakan()],
             status: Status::Open,
             first: NewRound {
@@ -590,7 +597,7 @@ mod tests {
         let question = reviews.comment(&cr, anchor, "Why?", &hakan()).unwrap();
         reviews.reply(&cr, &question, "Because.", &agent()).unwrap();
         reviews
-            .submit(&cr, Verdict::RequestChanges, None, &hakan())
+            .submit(&cr, Verdict::RequestChanges, None, None, &hakan())
             .unwrap();
         let mut second = new_review("").first;
         second.patch = Patch("diff --git a/x b/x\n+two\n".into());
@@ -686,7 +693,7 @@ mod tests {
             title: title.into(),
             status: Status::Open,
             tasks: Vec::new(),
-            author: agent(),
+            author: Some(agent()),
             reviewers: Vec::new(),
             created: created.into(),
             updated: created.into(),

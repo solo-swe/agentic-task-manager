@@ -171,6 +171,48 @@ describe('atm review', () => {
     }
   });
 
+  test('a live review a person opens is theirs to decide; the change is the agent’s, whose first round names it', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'one\ntwo\nthree\nfour\n');
+      // Hakan opens it on the working copy, no agent at work there and no task named: nobody's change yet
+      let header = ok(['review', 'live', '--json'], root, HAKAN).json();
+      assert.deepEqual([header.author, header.reviewers], [null, ['Hakan Serce']]);
+      assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /by nobody yet/);
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why one?'], root, HAKAN);
+      // His own round would make him the change's author: refused. The agent ends it with its round: its author now
+      assert.match(atm(['review', 'round', 'CR-1'], root, HAKAN).stderr, /not a reviewer's/);
+      ok(['review', 'round', 'CR-1'], root, AGENT);
+      header = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header;
+      assert.deepEqual([header.author, header.status], [AGENT.ATM_AGENT, 'open']);
+      // Hakan decides it, as its reviewer, once his comment is resolved; the agent can't
+      ok(['review', 'resolve', 'CR-1', 'c1'], root, HAKAN);
+      assert.notEqual(atm(['review', 'submit', 'CR-1', '--approve'], root, AGENT).code, 0);
+      ok(['review', 'submit', 'CR-1', '--approve'], root, HAKAN);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('a person may override who decides, saying why: recorded in the review', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      // Hakan's own review: by the rules not his to decide, unless he overrides that, with a reason
+      ok(['review', 'create', '--title', 'Mine', '--uncommitted'], root, HAKAN);
+      assert.match(atm(['review', 'submit', 'CR-1', '--approve'], root, HAKAN).stderr, /may override that/);
+      assert.notEqual(atm(['review', 'submit', 'CR-1', '--approve', '--override-rules', ' '], root, HAKAN).code, 0);
+      ok(['review', 'submit', 'CR-1', '--approve', '--override-rules', 'Ana reviewed it on a call.'], root, HAKAN);
+      const review = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
+      assert.equal(review.header.status, 'approved');
+      const record = ok(['review', 'comments', 'CR-1', '--json'], root, HAKAN).json().at(-1).comments[0];
+      assert.match(record.body, /rules were overridden.*Hakan Serce is its author.*Ana reviewed it on a call\./);
+      assert.equal(record.resolved, true);
+    } finally {
+      removeDir(root);
+    }
+  });
+
   test('a comment can’t drive the terminal: its escapes print as text, --json exactly', () => {
     const root = project();
     try {

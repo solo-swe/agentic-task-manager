@@ -118,6 +118,16 @@ pub struct Decision {
     pub decision: DecisionKind,
     #[serde(default)]
     pub body: Option<String>,
+    /// The person's explicit override of who may decide (their own review, say), with why: recorded in the review
+    #[serde(default)]
+    pub override_rules: Option<RulesOverride>,
+}
+
+/// A person's override of a review's rule on who decides it, and why (docs/code-review-design.md §3.2).
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RulesOverride {
+    pub reason: String,
 }
 
 /// `PATCH …/reviews/<CR>`: the review closed without approval (the one change of a review's own fields a page makes).
@@ -206,7 +216,7 @@ pub fn open_review(project: &mut Project, opening: ReviewOpening) -> Result<Revi
             title: text("the title", &opening.title)?.to_string(),
             summary: opening.summary,
             tasks: opening.tasks,
-            author: by,
+            author: Some(by),
             reviewers: opening.reviewers.into_iter().map(Actor).collect(),
             status: match opening.start {
                 ReviewStart::Open => Status::Open,
@@ -312,7 +322,12 @@ pub fn submit_decision(
             "a comment on the review needs its text".into(),
         ));
     }
-    reviews::submit(project, review, verdict, body)?;
+    let overriding = decision
+        .override_rules
+        .as_ref()
+        .map(|o| text("the reason for the override", &o.reason))
+        .transpose()?;
+    reviews::submit(project, review, verdict, body, overriding)?;
     Ok(reviews::store(project)?.get_review(review)?.header)
 }
 

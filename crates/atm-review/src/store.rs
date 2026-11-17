@@ -19,8 +19,8 @@ pub struct NewReview {
     pub summary: String,
     /// The keys of the tasks it reviews.
     pub tasks: Vec<String>,
-    /// Who asks for it.
-    pub author: Actor,
+    /// Whose change it is; none when not known yet (see `ReviewHeader::author`).
+    pub author: Option<Actor>,
     /// Who decides it; empty: anyone but the author.
     pub reviewers: Vec<Actor>,
     /// Draft, open or live.
@@ -96,6 +96,12 @@ pub trait ReviewStore {
     /// # Errors
     /// No such review, or it can't be written.
     fn set_tasks(&mut self, id: &ReviewId, tasks: Vec<String>) -> Result<()>;
+
+    /// Name whose change it is (a review whose author wasn't known when it was opened).
+    ///
+    /// # Errors
+    /// No such review, or it can't be written.
+    fn set_author(&mut self, id: &ReviewId, author: &Actor) -> Result<()>;
 
     /// Add a round; its number.
     ///

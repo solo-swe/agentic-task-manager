@@ -20,6 +20,12 @@
   reviewer or its own author; never resolve a reviewer's comment yourself. `atm review submit` (approve, request
   changes) is the reviewer's decision, which becomes your task's; an agent never submits a verdict on its own work, and
   no skill pre-approves it. A review is approved only when every top-level comment is resolved.
+  `--override-rules '<why>'` lets a person decide a review the rules wouldn't let them (their own, with feedback
+  received elsewhere), recorded in the review: the user's call, never yours. Don't use it unless the user asks for it
+  in the session; it is never pre-approved, so they are asked every time.
+- **A live review a person opens** is of your work: they are its reviewer, and the change is yours (the agent
+  holding a task in that working copy, or the one whose task it names; nobody's until then). Your first
+  `atm review round` names you its author.
 - **Listening, two ways** (never a loop of your own):
   - `atm review wait CR-7 [--for decision] [--timeout 2h] --json`, in the background, once your task is in review
     (its claim is released then, so there is none to hold): it ends when the reviewer submits (or decides) with what

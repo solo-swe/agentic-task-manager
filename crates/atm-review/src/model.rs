@@ -107,8 +107,9 @@ pub struct ReviewHeader {
     pub status: Status,
     /// The keys of the tasks it reviews (`ATM-482`), none for a review of no task (§3.2).
     pub tasks: Vec<String>,
-    /// Who asked for it.
-    pub author: Actor,
+    /// Whose change it is: who asked for it, or, for a live review a person opened on an agent's working copy, the
+    /// agent at work there; none until it is known (a task linked, or the first round of the change, names it).
+    pub author: Option<Actor>,
     /// Who decides it; empty: anyone but the author.
     pub reviewers: Vec<Actor>,
     /// When it was opened (ISO 8601).

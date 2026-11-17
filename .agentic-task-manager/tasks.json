@@ -15003,7 +15003,7 @@
       "description": "Phase 3's entry points ([§3.12](docs/code-review-design.md#:~:text=3.12%20Writing%20from%20the%20window%20and%20the%20browser)).\n\n## Change\n- The app: write commands for reviews (create, live, comment, reply, edit, resolve, submit, close, tasks), thin mappings to atm-lib, as the user, in `build.rs`'s manifest and the capability (I25).\n- The browser: write routes under `api/v2/workspaces/<w>/projects/<p>/reviews/…`: loopback and Host (I10), `Origin` the server's own, a per-start session token in the served page's `meta` tag and an `X-Atm-Session` header, JSON bodies, no CORS.\n- `docs/security-architecture.md`: B2, B3, B7, I1, I11 and I27 as the design says, with their tests.\n\n## Tests\n`serve.test.mjs`: a write with the token works; without it, from another origin, or as a form, refused. The app's command tests (mock runtime).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e1e839e6fed"
       ],
@@ -15015,7 +15015,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T11:02:22Z",
+      "updated_at": "2026-11-17T11:22:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "review": "blocker",
@@ -15034,7 +15034,18 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T11:02:22Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "9b83961f7a93d673f9b9c4dfb5eef53c8273257a",
+      "review_requested_at": "2026-11-17T11:22:51Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-17T11:22:51Z",
+          "kind": "review",
+          "text": "Review `9b83961`, the first routes that change something. **REST routes** under `…/projects/<p>/reviews` (POST reviews, PATCH a review, PUT its tasks, POST decisions, POST comments, PATCH a comment, POST replies), checked for Origin, session token, JSON and no CORS. **Seven app commands.** All go through `review_requests`, as the user. Security doc I11, I27, B2, B3, B7, I1 and §2.9 of the API doc.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",

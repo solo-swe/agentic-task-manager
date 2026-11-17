@@ -35,13 +35,28 @@ fn not_now(review: &Review, what: &str) -> Error {
     ))
 }
 
+/// Whether `who` is whose change `header`'s review is (none is, while that isn't known).
+#[must_use]
+pub fn is_author(header: &ReviewHeader, who: &Actor) -> bool {
+    header.author.as_ref() == Some(who)
+}
+
 /// Whether `who` decides `header`'s review: one of its reviewers; with none named, anyone but its author.
 #[must_use]
 pub fn decides(header: &ReviewHeader, who: &Actor) -> bool {
     if header.reviewers.is_empty() {
-        &header.author != who
+        !is_author(header, who)
     } else {
         header.reviewers.contains(who)
+    }
+}
+
+/// Why `who` may not decide `header`'s review, said in the record of an override.
+fn not_a_decider(header: &ReviewHeader, who: &Actor) -> &'static str {
+    if is_author(header, who) {
+        "its author"
+    } else {
+        "not one of its reviewers"
     }
 }
 
@@ -95,7 +110,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         if review.header.status != Status::Draft {
             return Err(not_now(&review, "be asked for again"));
         }
-        if &review.header.author != by {
+        if !is_author(&review.header, by) {
             return Err(refused(format!(
                 "only {}'s author asks for its review",
                 review.header.reference
@@ -105,17 +120,28 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     }
 
     /// The author's next round, after addressing the comments: a review sent back is open again, and a live one ends
-    /// as an ordinary open review (§3.5). Its number.
+    /// as an ordinary open review (§3.5). Its number. A review whose author isn't known yet (a live review a person
+    /// opened) takes the round's maker as its author, unless they are one of its reviewers.
     ///
     /// # Errors
-    /// An ended review, not its author, or the store's.
+    /// An ended review, not its author (or a reviewer, while there is none), or the store's.
     pub fn add_round(&mut self, reference: &ReviewRef, round: NewRound) -> Result<u32> {
         let review = self.not_ended(reference, "get another round")?;
-        if review.header.author != round.by {
-            return Err(refused(format!(
-                "only {}'s author adds its rounds",
-                review.header.reference
-            )));
+        match &review.header.author {
+            Some(author) if *author != round.by => {
+                return Err(refused(format!(
+                    "only {}'s author adds its rounds",
+                    review.header.reference
+                )));
+            }
+            None if review.header.reviewers.contains(&round.by) => {
+                return Err(refused(format!(
+                    "{}'s rounds are its author's, not a reviewer's",
+                    review.header.reference
+                )));
+            }
+            None => self.store.set_author(&review.header.id, &round.by)?,
+            Some(_) => {}
         }
         let by = round.by.clone();
         let number = self.store.add_round(&review.header.id, round)?;
@@ -232,7 +258,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         }
         if &found.author != by && !decides(&review.header, by) {
             return Err(refused(format!(
-                "{comment} is resolved by a reviewer of {} or by its author",
+                "{comment} is resolved by a reviewer of {} or by the comment's author",
                 review.header.reference
             )));
         }
@@ -242,27 +268,45 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     /// A reviewer submits: approve (only when every top-level comment is resolved), request changes, or a comment on
     /// the review as a whole. A body becomes a chain about the whole review (§3.4's `(the review)`).
     ///
+    /// `overriding`, a person's explicit override of who may decide, with why (feedback received elsewhere and entered
+    /// by them, say): it lets someone decide who otherwise may not, the review's author among them, and is recorded
+    /// in the review, a resolved chain about the whole review naming who and why. It lifts that rule only: an
+    /// approval still needs every top-level comment resolved. Who may use it is the front end's to keep (the CLI:
+    /// never pre-approved for an agent, so its harness asks the user each time).
+    ///
     /// # Errors
-    /// Not a reviewer, a review not waiting on its reviewers, an open comment on approving, or the store's.
+    /// Not a reviewer (without an override), an override without a reason, a review not waiting on its reviewers, an
+    /// open comment on approving, or the store's.
     pub fn submit(
         &mut self,
         reference: &ReviewRef,
         verdict: Verdict,
         body: Option<&str>,
+        overriding: Option<&str>,
         by: &Actor,
     ) -> Result<()> {
         let review = self.not_ended(reference, "be submitted on")?;
-        if !decides(&review.header, by) {
-            return Err(refused(format!(
-                "{} is decided by its reviewers{}",
-                review.header.reference,
-                if review.header.reviewers.is_empty() {
-                    ", not its author"
-                } else {
-                    ""
-                }
-            )));
-        }
+        let overridden = match overriding {
+            Some(reason) if reason.trim().is_empty() => {
+                return Err(Error::Invalid(
+                    "overriding the review's rules needs the reason why".into(),
+                ));
+            }
+            // One who may decide anyway: nothing to override
+            _ if decides(&review.header, by) => None,
+            Some(reason) => Some(reason),
+            None => {
+                return Err(refused(format!(
+                    "{} is decided by its reviewers{}; a person may override that, saying why",
+                    review.header.reference,
+                    if review.header.reviewers.is_empty() {
+                        ", not its author"
+                    } else {
+                        ""
+                    }
+                )));
+            }
+        };
         let status = review.header.status;
         let next = match verdict {
             Verdict::Approve => {
@@ -287,6 +331,23 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
             }
             Verdict::Comment => None,
         };
+        // The override, on the record: who, why they may not decide otherwise, and their reason
+        if let Some(reason) = overridden {
+            let anchor = Anchor {
+                round: review.rounds.last().map_or(1, |r| r.number),
+                ..Anchor::default()
+            };
+            let record = format!(
+                "**The review's rules were overridden** to decide it: {} is {}. Why: {}",
+                by.0,
+                not_a_decider(&review.header, by),
+                reason.trim()
+            );
+            let id = self
+                .store
+                .add_comment(&review.header.id, anchor, &record, by)?;
+            self.store.resolve(&review.header.id, &id, true)?;
+        }
         if let Some(body) = body.filter(|b| !b.trim().is_empty()) {
             let anchor = Anchor {
                 round: review.rounds.last().map_or(1, |r| r.number),
@@ -313,7 +374,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     /// An ended review, someone who may not, or the store's.
     pub fn close(&mut self, reference: &ReviewRef, reason: &str, by: &Actor) -> Result<()> {
         let review = self.not_ended(reference, "be closed")?;
-        if &review.header.author != by && !decides(&review.header, by) {
+        if !is_author(&review.header, by) && !decides(&review.header, by) {
             return Err(refused(format!(
                 "{} is closed by its author or a reviewer",
                 review.header.reference
@@ -343,7 +404,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         by: &Actor,
     ) -> Result<()> {
         let review = self.not_ended(reference, "change its tasks")?;
-        if &review.header.author != by && !decides(&review.header, by) {
+        if !is_author(&review.header, by) && !decides(&review.header, by) {
             return Err(refused(format!(
                 "{}'s tasks are changed by its author or a reviewer",
                 review.header.reference
@@ -385,7 +446,7 @@ mod tests {
             title: "Claim hold on Windows".into(),
             summary: "The watcher found its shell as pid 0.".into(),
             tasks: vec!["ATM-482".into()],
-            author: agent(),
+            author: Some(agent()),
             reviewers: vec![hakan()],
             status,
             first: round(&agent()),
@@ -446,6 +507,105 @@ mod tests {
     }
 
     #[test]
+    fn a_person_may_override_who_decides_saying_why_and_it_is_recorded() {
+        let mut store = MemoryStore::new();
+        let mut reviews = Reviews::new(&mut store);
+        // Hakan's own review, no reviewers named: by the rules, not his to decide
+        let mut own = new_review(Status::Open);
+        own.author = Some(hakan());
+        own.reviewers.clear();
+        reviews.create(own).unwrap();
+        let refused = reviews
+            .submit(&cr(1), Verdict::Approve, None, None, &hakan())
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("may override"), "{refused}");
+        // An override needs its reason
+        assert!(
+            reviews
+                .submit(&cr(1), Verdict::Approve, None, Some("  "), &hakan())
+                .is_err()
+        );
+        reviews
+            .submit(
+                &cr(1),
+                Verdict::Approve,
+                None,
+                Some("Ana reviewed it on a call; her notes are in the chains."),
+                &hakan(),
+            )
+            .unwrap();
+        let review = reviews.store().get_review(&cr(1)).unwrap();
+        assert_eq!(review.header.status, Status::Approved);
+        let record = &review.chains.last().unwrap().comments[0];
+        assert_eq!(record.author, hakan());
+        assert_eq!(record.resolved, Some(true));
+        assert!(
+            record.body.contains("overridden")
+                && record.body.contains("its author")
+                && record.body.contains("Ana reviewed it"),
+            "{}",
+            record.body
+        );
+
+        // It lifts who may decide, nothing else: an approval still needs every comment resolved
+        let mut other = new_review(Status::Open);
+        other.author = Some(hakan());
+        other.reviewers.clear();
+        reviews.create(other).unwrap();
+        reviews
+            .comment(&cr(2), on("a.rs", 1), "Still open.", &agent())
+            .unwrap();
+        assert!(
+            reviews
+                .submit(
+                    &cr(2),
+                    Verdict::Approve,
+                    None,
+                    Some("Decided elsewhere."),
+                    &hakan()
+                )
+                .unwrap_err()
+                .to_string()
+                .contains("comments are open")
+        );
+        // A reviewer who may decide records no override
+        reviews.create(new_review(Status::Open)).unwrap();
+        reviews
+            .submit(
+                &cr(3),
+                Verdict::Approve,
+                None,
+                Some("Not needed."),
+                &hakan(),
+            )
+            .unwrap();
+        assert_eq!(
+            reviews.store().get_review(&cr(3)).unwrap().chains.len(),
+            0,
+            "no override recorded"
+        );
+    }
+
+    #[test]
+    fn a_review_without_an_author_yet_takes_the_first_rounds_maker_never_a_reviewer() {
+        let mut store = MemoryStore::new();
+        let mut reviews = Reviews::new(&mut store);
+        // A live review Hakan opened on an agent's working copy, nobody's change yet
+        let mut live = new_review(Status::Live);
+        live.author = None;
+        reviews.create(live).unwrap();
+        // Hakan reviews it: his round would make him the change's author, so it is refused
+        assert!(reviews.add_round(&cr(1), round(&hakan())).is_err());
+        // The agent ends it with a round: it becomes the author, and Hakan, a reviewer, decides
+        reviews.add_round(&cr(1), round(&agent())).unwrap();
+        let header = reviews.store().get_review(&cr(1)).unwrap().header;
+        assert_eq!(header.author, Some(agent()));
+        assert_eq!(header.status, Status::Open);
+        assert!(decides(&header, &hakan()) && !decides(&header, &agent()));
+    }
+
+    #[test]
     fn sent_back_fixed_in_a_round_then_approved_once_every_comment_is_resolved() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
@@ -466,7 +626,7 @@ mod tests {
         assert!(reviews.resolve(&cr(1), &question, true, &agent()).is_err());
         assert!(
             reviews
-                .submit(&cr(1), Verdict::Approve, None, &agent())
+                .submit(&cr(1), Verdict::Approve, None, None, &agent())
                 .is_err()
         );
 
@@ -475,6 +635,7 @@ mod tests {
                 &cr(1),
                 Verdict::RequestChanges,
                 Some("One more thing."),
+                None,
                 &hakan(),
             )
             .unwrap();
@@ -484,7 +645,7 @@ mod tests {
 
         // Approving names what is still open: the question and the request's own words
         let refused = reviews
-            .submit(&cr(1), Verdict::Approve, None, &hakan())
+            .submit(&cr(1), Verdict::Approve, None, None, &hakan())
             .unwrap_err()
             .to_string();
         assert!(
@@ -512,7 +673,7 @@ mod tests {
             .clone();
         reviews.resolve(&cr(1), &request, true, &hakan()).unwrap();
         reviews
-            .submit(&cr(1), Verdict::Approve, Some("Good."), &hakan())
+            .submit(&cr(1), Verdict::Approve, Some("Good."), None, &hakan())
             .unwrap();
         assert_eq!(status(reviews.store(), 1), Status::Approved);
 
@@ -572,7 +733,7 @@ mod tests {
         reviews.create(new_review(Status::Draft)).unwrap();
         assert!(
             reviews
-                .submit(&cr(1), Verdict::Approve, None, &hakan())
+                .submit(&cr(1), Verdict::Approve, None, None, &hakan())
                 .is_err()
         );
         assert!(reviews.ask_for_review(&cr(1), &hakan()).is_err());
@@ -595,13 +756,13 @@ mod tests {
         // Sending back is for an open review; a live one is commented on as it grows
         assert!(
             reviews
-                .submit(&cr(1), Verdict::RequestChanges, None, &hakan())
+                .submit(&cr(1), Verdict::RequestChanges, None, None, &hakan())
                 .is_err()
         );
 
         reviews.create(new_review(Status::Live)).unwrap();
         reviews
-            .submit(&cr(2), Verdict::Approve, None, &hakan())
+            .submit(&cr(2), Verdict::Approve, None, None, &hakan())
             .unwrap();
         assert_eq!(status(reviews.store(), 2), Status::Approved);
 

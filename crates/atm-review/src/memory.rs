@@ -154,6 +154,13 @@ impl ReviewStore for MemoryStore {
         })
     }
 
+    fn set_author(&mut self, id: &ReviewId, author: &Actor) -> Result<()> {
+        self.edit(id, |review| {
+            review.header.author = Some(author.clone());
+            Ok(())
+        })
+    }
+
     fn add_round(&mut self, id: &ReviewId, round: NewRound) -> Result<u32> {
         let number = self.edit(id, |review| Ok(review.push_round(&round, &now_iso())))?;
         self.patches.insert((id.clone(), number), round.patch);

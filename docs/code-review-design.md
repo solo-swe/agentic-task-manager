@@ -330,6 +330,15 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
   watch`, §3.9), naming no review and no task: it prints the user's comments and replies **about the agent's work**,
   from any review, as they are added, whether the agent is on a task, between tasks, or changing something with no
   task at all. If the user opens a live review and comments, the agent sees it at once and reacts, without stopping.
+- **Who is who** (decided with Hakan, ATM-572): a live review a person opens is a review of an agent's work, so the
+  person is its **reviewer** and the change, its **author**, is the agent's: the agent holding a task in that working
+  copy, else the one that started a task it names, else nobody yet (the review's author is empty); the agent's first
+  round, or a task named later, fills it in. So the person who opened it can approve it, and the agent can't.
+- **Overriding the rules** (Hakan): a person may decide a review the rules wouldn't let them (their own, with
+  feedback received elsewhere and entered by them), saying why: `atm review submit --override-rules '<why>'`, or the
+  page's *Override and decide*. The review records it, a resolved chain naming who and why. It lifts who decides only;
+  an approval still needs every top-level comment resolved. An agent never uses it on its own: no skill pre-approves
+  `atm review submit`, so its harness asks the user each time.
 - **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author
   ends it with a round, which makes it an ordinary `open` review; or it is closed.
 - **When the task is finished**, the agent asks for its review as its review mode says, and atm sees which case it is:

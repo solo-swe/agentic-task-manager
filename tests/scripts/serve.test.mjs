@@ -1130,11 +1130,26 @@ describe('serve', () => {
     assert.equal((await send('PATCH', `${reviews}/CR-1`, { status: 'approved', reason: 'x' })).status, 400);
     [chain] = comments();
     assert.equal(chain.comments.flatMap((c) => [c, ...c.replies]).length, 2, 'nothing refused was written');
-    // A decision goes through the review's rules: its author (here the user, who opened it) can't decide it
+    // A decision goes through the review's rules: its author (here the user, who opened it) can't decide it, unless
+    // the user overrides that, saying why (feedback received elsewhere), which the review records
     r = await send('POST', `${reviews}/CR-1/decisions`, { decision: 'approve' });
     assert.equal(r.status, 403, await r.clone().text());
-    // The review closed, as its author may
-    r = await send('PATCH', `${reviews}/CR-1`, { status: 'closed', reason: 'Not needed.' });
+    r = await send('POST', `${reviews}/CR-1/decisions`, { decision: 'approve', override_rules: { reason: ' ' } });
+    assert.equal(r.status, 400, await r.clone().text());
+    r = await send('POST', `${reviews}/CR-1/decisions`, {
+      decision: 'approve',
+      override_rules: { reason: 'Ana reviewed it on a call.' },
+    });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).status, 'approved');
+    const record = comments().at(-1).comments[0];
+    assert.match(record.body, /rules were overridden.*its author.*Ana reviewed it on a call\./);
+    assert.equal(record.resolved, true);
+
+    // Another review closed, as its author may
+    r = await send('POST', reviews, { title: 'Look at a again', change: { files: ['a.txt'] } });
+    assert.equal(r.status, 201, await r.clone().text());
+    r = await send('PATCH', `${reviews}/CR-2`, { status: 'closed', reason: 'Not needed.' });
     assert.equal(r.status, 200, await r.clone().text());
     assert.equal((await r.json()).status, 'closed');
     atm(['service', 'stop'], root);

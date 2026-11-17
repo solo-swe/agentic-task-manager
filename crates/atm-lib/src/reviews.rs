@@ -5,6 +5,7 @@
 //!
 //! The front ends call these, never `atm-review`'s store directly, so the tasks always follow.
 
+use atm_common::edits::is_agent;
 use atm_common::{Error, Kind, Result, TASK_DIR, Task, Vocabulary};
 use serde_json::{Value, json};
 
@@ -130,6 +131,29 @@ fn kind_of(project: &Project, id: &str) -> Result<Option<(Kind, Option<String>)>
 }
 
 /// Add (or, with `add` false, remove) the link to `header`'s review on the tasks `ids`.
+/// The agent holding a claim in this working copy (a live review's author, §3.5), if one does.
+fn agent_at_work(project: &Project) -> Option<Actor> {
+    let root = project.root()?;
+    let here = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    crate::query::list_claims(project)
+        .into_iter()
+        .find_map(|claim| {
+            let worktree = claim.get("worktree").and_then(Value::as_str)?;
+            let there = std::fs::canonicalize(worktree).unwrap_or_else(|_| worktree.into());
+            let agent = claim.get("agent").and_then(Value::as_str)?;
+            (there == here && is_agent(Some(agent))).then(|| Actor(agent.to_string()))
+        })
+}
+
+/// The agent that worked the first of these tasks (who started it), if an agent did.
+fn agent_of_tasks(project: &Project, ids: &[String]) -> Option<Actor> {
+    ids.iter().find_map(|id| {
+        let task = project.store().get_task(id).ok().flatten()?;
+        let agent = task.get("started_by").and_then(Value::as_str)?;
+        is_agent(Some(agent)).then(|| Actor(agent.to_string()))
+    })
+}
+
 fn link(project: &mut Project, header: &ReviewHeader, ids: &[String], add: bool) -> Result<()> {
     if ids.is_empty() {
         return Ok(());
@@ -198,6 +222,17 @@ fn ask_review(
 /// What the review's rules refuse (`atm_review::rules`), an unknown task, or a store error.
 pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader> {
     let ids = resolve(project, &new.tasks)?;
+    // A live review a person opens is of an agent's work (§3.5): the person reviews it; the change is the agent's at
+    // work in this copy, else its tasks', else nobody's yet (an agent's first round, or a task linked later, names it)
+    if new.status == Status::Live
+        && let Some(opener) = new.author.clone()
+        && !is_agent(Some(&opener.0))
+    {
+        if !new.reviewers.contains(&opener) {
+            new.reviewers.push(opener);
+        }
+        new.author = agent_at_work(project).or_else(|| agent_of_tasks(project, &ids));
+    }
     // The review names its tasks by key, as people read them
     new.tasks = ids
         .iter()
@@ -240,7 +275,8 @@ pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) 
 
 /// A reviewer submits (§3.11's *Submit*); approving or sending back is every named task's decision, recorded as the
 /// reviewer: approved, or changes requested with a note linking the review (`atm loop next` then hands the task back).
-/// A task not in review (a live review's, still in progress) waits for [`apply_live_approval`].
+/// A task not in review (a live review's, still in progress) waits for [`apply_live_approval`]. `overriding`: a
+/// person's explicit override of who may decide, with why, recorded in the review (the rules' `submit`).
 ///
 /// # Errors
 /// What the review's rules refuse, or a store error.
@@ -249,10 +285,11 @@ pub fn submit(
     reference: &ReviewRef,
     verdict: Verdict,
     body: Option<&str>,
+    overriding: Option<&str>,
 ) -> Result<()> {
     let by = actor_of(project);
     let mut reviews = store(project)?;
-    Reviews::new(&mut reviews).submit(reference, verdict, body, &by)?;
+    Reviews::new(&mut reviews).submit(reference, verdict, body, overriding, &by)?;
     let review = reviews.get_review(reference)?;
     let command = match verdict {
         Verdict::Approve => Command::Approve,
@@ -344,6 +381,13 @@ pub fn set_tasks(
         }
     }
     Reviews::new(&mut reviews).set_tasks(reference, tasks, &by)?;
+    // A review nobody's change yet becomes the agent's whose task it now names
+    if header.author.is_none()
+        && let Some(agent) = agent_of_tasks(project, &added)
+        && !header.reviewers.contains(&agent)
+    {
+        reviews.set_author(&header.id, &agent)?;
+    }
     let header = reviews.get_review(reference)?.header;
     link(project, &header, &added, true)?;
     link(project, &header, &removed, false)?;
@@ -452,7 +496,7 @@ mod tests {
         let tasks = json!({
             "meta": { "project": "Reviews", "review": "blocker" },
             "tasks": [
-                { "id": "T-1", "name": "One", "type": "feature", "status": "in_progress" },
+                { "id": "T-1", "name": "One", "type": "feature", "status": "in_progress", "started_by": "claude:1" },
                 { "id": "T-2", "name": "Two", "type": "feature", "status": "in_progress" },
             ]
         });
@@ -492,7 +536,7 @@ mod tests {
                 title: "Both".into(),
                 summary: String::new(),
                 tasks: vec!["T-1".into(), "T-2".into()],
-                author: "claude:1".into(),
+                author: Some("claude:1".into()),
                 reviewers: vec!["Hakan".into()],
                 status: Status::Open,
                 first: round(),
@@ -524,7 +568,7 @@ mod tests {
                 &"Hakan".into(),
             )
             .unwrap();
-        super::submit(&mut project, &cr, Verdict::RequestChanges, None).unwrap();
+        super::submit(&mut project, &cr, Verdict::RequestChanges, None, None).unwrap();
         let t1 = task(&project, "T-1");
         assert_eq!(t1["review_state"], "changes_requested");
         assert!(
@@ -561,7 +605,7 @@ mod tests {
         super::Reviews::new(&mut reviews)
             .resolve(&cr, &open, true, &"Hakan".into())
             .unwrap();
-        super::submit(&mut project, &cr, Verdict::Approve, None).unwrap();
+        super::submit(&mut project, &cr, Verdict::Approve, None, None).unwrap();
         assert_eq!(task(&project, "T-1")["review_state"], "approved");
         // T-2 stayed in review with changes asked for: approved now too
         assert_eq!(task(&project, "T-2")["review_state"], "approved");
@@ -577,7 +621,7 @@ mod tests {
                 title: "Draft".into(),
                 summary: String::new(),
                 tasks: vec!["T-1".into()],
-                author: "claude:1".into(),
+                author: Some("claude:1".into()),
                 reviewers: Vec::new(),
                 status: Status::Draft,
                 first: round(),
@@ -608,32 +652,37 @@ mod tests {
         let dir = dir();
         git(&["init", "-q"], &dir.0);
         std::fs::write(dir.0.join("a.txt"), "one\n").unwrap();
-        let mut project = project(&dir.0, "claude:1");
+        let project = project(&dir.0, "claude:1");
         git(&["add", "-A"], &dir.0);
         git(&["commit", "-q", "-m", "base"], &dir.0);
         let vcs = project.vcs().unwrap();
         std::fs::write(dir.0.join("a.txt"), "one\ntwo\n").unwrap();
-        let checkpoint = super::rounds::from_working(&vcs, "HEAD", &"claude:1".into()).unwrap();
+        let checkpoint = super::rounds::from_working(&vcs, "HEAD", &"Hakan".into()).unwrap();
+        // Hakan opens a live review on the agent's work (§3.5): he reviews it, the change is the agent's who started
+        // T-1, so he decides it
+        let mut hakan = reopen(&dir.0, "Hakan");
         let header = super::create(
-            &mut project,
+            &mut hakan,
             NewReview {
                 title: "Live".into(),
                 summary: String::new(),
                 tasks: vec!["T-1".into()],
-                author: "claude:1".into(),
-                reviewers: vec!["Hakan".into()],
+                author: Some("Hakan".into()),
+                reviewers: Vec::new(),
                 status: Status::Live,
                 first: checkpoint,
             },
         )
         .unwrap();
+        assert_eq!(header.author, Some("claude:1".into()));
+        assert_eq!(header.reviewers, vec![super::Actor::from("Hakan")]);
         // Live: the task stays in progress
         assert_eq!(task(&project, "T-1")["status"], "in_progress");
-        let mut hakan = reopen(&dir.0, "Hakan");
         super::submit(
             &mut hakan,
             &ReviewRef(header.reference.0.clone()),
             Verdict::Approve,
+            None,
             None,
         )
         .unwrap();

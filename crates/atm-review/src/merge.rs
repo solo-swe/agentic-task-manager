@@ -399,7 +399,7 @@ mod tests {
             title: title.into(),
             status,
             tasks: vec!["ATM-1".into()],
-            author: Actor("claude:A".into()),
+            author: Some(Actor("claude:A".into())),
             reviewers: Vec::new(),
             created: T1.into(),
             updated: updated.into(),

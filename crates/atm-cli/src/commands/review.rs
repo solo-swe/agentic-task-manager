@@ -226,6 +226,10 @@ pub enum ReviewCommand {
         comment: bool,
         #[command(flatten)]
         body: Body,
+        /// Override who may decide it (your own review, say), with why: recorded in the review. A person's call: no
+        /// skill pre-approves it, so an agent's harness asks the user every time
+        #[arg(long, value_name = "REASON")]
+        override_rules: Option<String>,
         /// Who submits
         #[arg(long)]
         agent: Option<String>,
@@ -526,7 +530,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                     title,
                     summary,
                     tasks,
-                    author,
+                    author: Some(author),
                     reviewers: reviewers.into_iter().map(Actor).collect(),
                     status: if draft { Status::Draft } else { Status::Open },
                     first,
@@ -563,7 +567,8 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                     title,
                     summary: String::new(),
                     tasks,
-                    author,
+                    // A person opening it reviews an agent's work: atm-lib names the author (§3.5)
+                    author: Some(author),
                     reviewers: reviewers.into_iter().map(Actor).collect(),
                     status: Status::Live,
                     first,
@@ -652,7 +657,10 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 .collect();
             let mut found = Vec::new();
             for f in reviews::list_everywhere(root, &filter)? {
-                if mine && f.header.author != me && !f.header.reviewers.contains(&me) {
+                if mine
+                    && f.header.author.as_ref() != Some(&me)
+                    && !f.header.reviewers.contains(&me)
+                {
                     continue;
                 }
                 if !words.is_empty() {
@@ -725,7 +733,13 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 .collect();
             println!(
                 "  by {} · {} · opened {}",
-                found.header.author.0,
+                found
+                    .header
+                    .author
+                    .as_ref()
+                    .map_or("nobody yet (an agent's first round names them)", |a| a
+                        .0
+                        .as_str()),
                 if reviewers.is_empty() {
                     "decided by anyone but its author".to_string()
                 } else {
@@ -910,6 +924,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             request_changes,
             comment,
             body,
+            override_rules,
             agent,
         } => {
             let verdict = match (approve, request_changes, comment) {
@@ -937,7 +952,13 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("[dry-run] would submit on {review}");
                 return Ok(0);
             }
-            reviews::submit(&mut project, &reference(&review), verdict, text.as_deref())?;
+            reviews::submit(
+                &mut project,
+                &reference(&review),
+                verdict,
+                text.as_deref(),
+                override_rules.as_deref(),
+            )?;
             let header = reviews::store(&project)?
                 .get_review(&reference(&review))?
                 .header;

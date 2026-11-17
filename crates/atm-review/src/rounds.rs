@@ -455,7 +455,7 @@ mod tests {
                 title: "Rounds".into(),
                 summary: String::new(),
                 tasks: Vec::new(),
-                author: agent.clone(),
+                author: Some(agent.clone()),
                 reviewers: Vec::new(),
                 status: Status::Open,
                 first: from_working(&vcs, "HEAD", &agent).unwrap(),
