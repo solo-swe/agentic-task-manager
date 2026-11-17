@@ -15126,7 +15126,7 @@
       "description": "The pages of [§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), in the app and the browser.\n\n## Change\n- `/projects/<id>/reviews` (and across the workspace on the overview): search (title, summary, comments), filters (status, author, reviewer, task, branch), latest activity first; *Next review needing you*.\n- `/projects/<id>/reviews/CR-7` (`?round=`, `&against=`, `&file=`): the header, the file tree with viewed ticks (kept in the page's preferences by review, round and file content), the diff viewer, the round picker (whole change, or a round against another), drifted chains with a link to where they were made, *Submit* (approve, request changes, comment).\n- A clashing reference (`CR-8`) shows both CR-8.1 and CR-8.2 to choose.\n- Routes listed in `docs/multi-project-api.md` §2.7.\n\n## Tests\nE2e specs (the fixture serves reviews); the performance budget for a large review.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
         "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",
@@ -15139,7 +15139,7 @@
         "dashboard/tests/e2e/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T19:53:51Z",
+      "updated_at": "2026-11-17T19:55:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 574,
@@ -15179,6 +15179,12 @@
           "kind": "rejection",
           "text": "Hakan, in chat: a professional look in atm’s design language; Overview with the facts on top, the description below and the conversation on the right; the rendered side as a document page, line numbers not overlapping; overlapping chains each shown; no path or quote on a chain, its lines highlighted when it is selected; prev and next comment; icons from atm’s icon library.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T19:55:16Z",
+          "kind": "review",
+          "text": "Second review done (146f754): Overview facts on top, description and rounds beside the conversation; rendered side as a document page; chains show lines only, marked when selected; comment inside another stays until saved; prev/next comment; Approve when nothing open; Reopen from the fold; Lucide icons. Review in Crit.",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -15190,7 +15196,7 @@
       "sprint": "Code reviews: records and CLI",
       "started_at": "2026-11-17T19:53:51Z",
       "started_by": "claude:0f56a916",
-      "commit": "b26daa52b87826677c9f7eb0ca0e8aa64a3ca5bf",
+      "commit": "146f7549b294fffdcf13b1bc9e9b58b8abea3e15",
       "reviews": [
         {
           "from": "2026-11-17T18:03:50Z",
@@ -15202,7 +15208,9 @@
           "to": "2026-11-17T19:39:16Z",
           "outcome": "changes_requested"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-17T19:55:16Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e27bb7d4274",
