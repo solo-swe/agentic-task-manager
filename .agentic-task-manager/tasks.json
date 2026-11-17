@@ -1842,13 +1842,13 @@
       "description": "Write a detailed design, reviewed with Hakan (in Crit), for a **full-fledged code review tool built into atm**, recorded in the project, to replace Crit. Hakan's requirements (2026-11-17) are below; the design works them out and checks them against the use cases.\n\n## Sections the design has\nProblem, context, proposal, risks, open issues, alternatives considered; and an **appendix of customer use cases / scenarios**, walked through to show the proposal covers each.\n\n## Hakan's requirements (2026-11-17)\n\n### Storage\n- Review records are **stored locally, in the project**. The storage is abstracted like the tasks' store (the JsonGit store of atm-db), but the first implementation is files:\n  - a **`reviews/` folder under `.agentic-task-manager/`**;\n  - **one folder per review, named `CR-1`, `CR-2`, …**: the numbering is **local to the project**;\n  - each review's folder holds the **diffs of each round** and the **comments**;\n  - the **comments file** (per round? to decide) is a **concise, human-readable representation of each comment chain**, each starting with the **file and range** it is about;\n  - each review has a **header section**: a **summary of the changes**, and the review's **status** (approved, sent back for fixes, …).\n\n### Tasks and reviews\n- A task **in review** shows **clickable CR links**.\n- When a review is **approved** or **sent back**, that is reflected in the **task's review status**.\n\n### The code reviews section\n- atm has a **code reviews section, separate from tasks**, with a **search view** and **process capability** (working through reviews).\n- A **diff to review** can be a **commit range**, or **unstaged / uncommitted changes**.\n- While reviewing, options to render code and documents as **Crit** does: **source, rendered, split, unified**, **jump to the next / previous change**, **mark files viewed**, and so on.\n- A review **opens in its own tab**.\n- The **Tauri app's sidebar** has a **tab for CRs**.\n- **Several rounds** of one CR: see the **whole diff**, or the **diff between selected rounds**.\n- When comments are **submitted, agents can listen and respond**.\n- **Markdown renders with CompMD**, as the document viewer does.\n\n### Architecture\nThree components in atm, **separable when needed into separate apps** (separate crates and Svelte components) **without too much effort**:\n1. **Task manager**: what atm is today.\n2. **Document viewer**: what task-referenced documents use today.\n3. **Code review tool**: uses (2), and relates to (1).\n\n## Questions the earlier draft of this task raised (still to settle in the design)\n- **Writing from the browser:** the dashboard only reads today ([I11](docs/security-architecture.md#:~:text=Nothing%20changes%20state%20over%20HTTP)); comments need writes. In the app, Tauri commands (IPC); in the browser, a write route (loopback, the Host check, a per-session token against CSRF), or read-only there. The threat model and invariants in [`docs/security-architecture.md`](docs/security-architecture.md) change with it.\n- **Agents:** atm commands to list, add, reply to and resolve comments, and to **wait for a state change** (a round finished, approved) without polling by hand, keeping the claim alive; how the skills use them. Review comments are task text ([I1](docs/security-architecture.md#:~:text=Task%20text%20is%20data%2C%20not%20commands)): data, never instructions to run.\n- **Merging:** review records on branches, merged by atm's merge driver or kept per branch.\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md`, reviewed with Hakan in Crit; once approved, the follow-up tasks through `/atm-create-tasks`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-17T06:40:01Z",
+      "updated_at": "2026-11-17T06:46:23Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -1882,6 +1882,18 @@
           "kind": "review",
           "text": "docs/code-review-design.md, draft for review with Hakan in Crit: the three components and their checked boundaries (§3.1), the records (§3.2), the store (§3.3), rounds (§3.4), anchors (§3.5), the task link (§3.6), the CLI and atm review wait (§3.7), the app (§3.8, §3.9); risks, 8 open issues, phases, alternatives, 15 use cases.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T06:46:16Z",
+          "kind": "note",
+          "text": "Approved: Approved by Hakan Serce in Crit (five rounds), recorded at his word in the session",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T06:46:23Z",
+          "kind": "outcome",
+          "text": "docs/code-review-design.md approved by Hakan in Crit after five rounds; follow-ups ATM-561 to ATM-577 in the backlog",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -1895,7 +1907,15 @@
       "started_by": "claude:0f56a916",
       "commit": "488bdb8509ef17024c0f57e05e2f4fb488fb4138",
       "review_requested_at": "2026-11-17T03:23:23Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-17T03:23:23Z",
+          "to": "2026-11-17T06:46:16Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-17T06:46:23Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "e4835eb2-79bb-8121-8028-35dcfe3aab39",
@@ -9469,7 +9489,7 @@
       "description": "Left over from T-480 (on `dev/0.33.0-switch`). T-480 took the suite on CI's Windows runner from 40 failures and two hanging files to a handful; CI's Windows job runs `cargo test` but not the suite until this task.\n\n## Still failing (CI run 42429818032, before T-480's last push)\n- `claims.test.mjs`: `claim hold`'s watcher doesn't end with its shell on Windows (its folder can't be removed afterwards, `EPERM`). The watcher follows its shell by process ID; under Git's `sh` (MSYS) the Windows parent of `atm.exe` may not be the shell. Likely also what keeps T-481's folder busy.\n- `serve.test.mjs`: still runs into the watchdog (400 s on Windows); `start, reuse, status, stop` failed on the home ID (fixed in T-480's last push, `home_id` hashes the shown path: not yet seen on CI).\n- `claims.test.mjs` `worktrees of one clone share claims`: path spelling (fixed in T-480's last push, not yet seen on CI).\n- `dev-api.test.mjs`: the dev server's test on Windows (the API server's restart after a rebuild, and its stop when Vite is ended at once).\n- `stress.test.mjs`: T-481 (skipped on Windows until then).\n\n## Done when\nThe suite passes on CI's Windows runner, and `.github/workflows/ci.yml` runs it there again (the `if` on the suite step goes).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "9d40a6f4-f771-86d4-8e8c-ed80bcf6d10b"
       ],
@@ -9480,7 +9500,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-17T04:49:35Z",
+      "updated_at": "2026-11-17T06:46:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9512,6 +9532,18 @@
           "kind": "review",
           "text": "CI run 44018327874: the suite passes on Windows, macOS and Linux (Playwright fails only on ATM-558’s screenshots). Commits ab376f5..b22ca4e. Review in Crit: the watcher’s shell on Windows (shell_pid), the service’s port checks, git rev-parse remembered 5 s, the lock’s Queue on made-up times, the tests’ Windows guards. Open: dev-api’s 20 s wait for Vite failed once on a slow Windows runner, left as is.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T06:46:16Z",
+          "kind": "note",
+          "text": "Approved: Approved by Hakan Serce in Crit, no comments, recorded at his word in the session",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-17T06:46:24Z",
+          "kind": "outcome",
+          "text": "The suite runs and passes on Windows CI (run 44018327874); reviewed with Hakan in Crit, no changes",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -9532,7 +9564,15 @@
       "started_by": "claude:0f56a916",
       "commit": "b22ca4e1ff1b45e0b297da73b98989859f18e3f6",
       "review_requested_at": "2026-11-17T04:49:35Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-17T04:49:35Z",
+          "to": "2026-11-17T06:46:16Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-17T06:46:24Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
