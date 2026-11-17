@@ -326,10 +326,10 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
 - **Commenting:** at any time, on what is there. When a comment is added, atm records a **checkpoint**: a round of
   kind `working`, the diff against the base at that moment (§3.3), so the comment is anchored to what the reviewer
   saw, and moves with the code afterwards (§3.6) like any other.
-- **The agent starts nothing.** Every agent working on a task keeps one background watch (`atm review watch --task
-  ATM-482`, §3.9) for the whole task: it prints the user's comments and replies **about the agent's work**, from any
-  review, as they are added (the filter, per kind of review, is in §3.9). If the user opens a live review and
-  comments, the agent sees it at once and reacts, without stopping its task.
+- **The agent starts nothing.** Every agent keeps **one** background watch for its whole session (`atm review
+  watch`, §3.9), naming no review and no task: it prints the user's comments and replies **about the agent's work**,
+  from any review, as they are added, whether the agent is on a task, between tasks, or changing something with no
+  task at all. If the user opens a live review and comments, the agent sees it at once and reacts, without stopping.
 - **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author
   ends it with a round, which makes it an ordinary `open` review; or it is closed.
 - **When the task is finished**, the agent asks for its review as its review mode says, and atm sees which case it is:
@@ -405,7 +405,7 @@ atm review resolve CR-7 c9 [--reopen]                # a top-level comment
 atm review submit CR-7 (--approve | --request-changes | --comment) [--body-file F]   # a reviewer's
 atm review close CR-7 --reason TEXT
 atm review wait CR-7 [--for submitted|decision] [--timeout 2h]
-atm review watch [--task KEY] [--timeout 2h]          # live comments, before (and whether or not) a review exists
+atm review watch [--timeout 8h]                       # the agent's one watch: the user's comments on its work, any review
 ```
 
 **Two ways to listen:**
@@ -414,28 +414,59 @@ atm review watch [--task KEY] [--timeout 2h]          # live comments, before (a
   comments, the decision). For a static review: the agent waits as it waits for CI, with its claim held (`atm claim
   hold ATM-482 && atm review wait CR-7`, in the background), then reads the comments, replies to each, fixes, commits,
   `atm review round`, waits again; until approved.
-- **`atm review watch`** names no review: it is the agent's one background watch for its task (`atm claim hold
-  ATM-482 && atm review watch --task ATM-482`, beside its work, from when it takes the task), whether or not any review
-  exists yet. It prints each of the user's comments and replies about the agent's work as it is added, one JSON object
-  a line, with the review it is in (`"review": "CR-9"`) and why it is the agent's (below); the agent's own comments
-  and other agents' aren't printed. It runs until the task leaves the agent (done, released, handed on) or the
-  timeout.
+- **`atm review watch`** names no review and no task: it is the agent's **one background watch for its session**,
+  started once (when a loop or a task begins, `atm review watch &` beside the work) and kept until the session ends or
+  the timeout. It follows **the agent** (its identity, as claims know it) and **its working copy**, and works out from
+  atm's own records what is the agent's work at each moment: the working copy's changes, and the tasks the agent has
+  held and the commits it made for them, which grow as the agent takes task after task. Nothing is added to the watch
+  as the agent moves on, and there is no watch ID to keep. It prints each of the user's comments and replies about that
+  work as it is added, one JSON object a line, with the review it is in (`"review": "CR-9"`) and the task it is about,
+  when atm can tell (`"task": "ATM-482"`, or `null`); the agent's own comments and other agents' aren't printed.
 
 **What is "about the agent's work",** by kind of review:
 
-| Review | Printed to the agent working on ATM-482 |
+| Review | Printed to the agent |
 |---|---|
-| a live review on its working copy (or naming ATM-482) | every comment and reply in it |
-| a review of ATM-482 alone (a per-task CR) | every comment and reply in it |
-| a batch review naming several tasks | the chains on files ATM-482's change touched (its commits since it started, and its uncommitted files), the chains whose text names ATM-482, and replies in chains the agent has written in |
+| a live review on its working copy | every comment and reply in it, with the task of the file's change when atm can tell (the task whose commit touched it, or the task held now), else `null` |
+| a review of one task the agent worked (a per-task CR) | every comment and reply in it, with that task |
+| a batch review naming several tasks | the chains on files the agent's tasks' commits (or its uncommitted changes) touched, the chains whose text names one of its tasks, and replies in chains it wrote in; each with its task |
 | any other review | nothing |
 
-So in a batch review each agent hears about its own files and its own task, and a chain about the review as a whole
-that names no task goes to whoever runs the review (the user, or the agent that opened it). A comment a filter can't
-place (a file two tasks both touched) goes to every agent it could be for; each answers what is its own.
+**Comments with no task** (`"task": null`): the agent changed something while holding no task (a quick fix asked in
+the session), or the comment's file no task of its touched. The agent answers them like any other; when it later
+creates a task for that work, or the work joins a review, the comment's chain goes with the review, not with a task.
 
-Both are on the store's subscription, not a poll the agent writes. The skills get both: the watch from the start of a
-task, `wait` once the task is in review.
+A chain about the review as a whole that names no task goes to whoever runs the review (the user, or the agent that
+opened it). A comment on a file two tasks touched goes to each agent whose task touched it; each answers what is its
+own.
+
+**A loop with a batch review, step by step:**
+
+```mermaid
+sequenceDiagram
+    participant U as the user
+    participant A as the agent (a loop)
+    participant W as its watch
+    participant R as reviews
+    A->>W: atm review watch (once, at the loop's start)
+    U->>R: a live review on the agent's working copy
+    A->>A: ATM-501 in progress, then done (batch mode: no review yet)
+    U->>R: comment on sprints.rs (ATM-501's commit touched it)
+    R-->>W: the comment
+    W-->>A: {"review": "CR-9", "task": "ATM-501", …}
+    A->>R: reply, fix (a commit on ATM-501)
+    A->>A: ATM-502 in progress, then done
+    A->>A: a fix asked in the session, no task
+    U->>R: comment on that file
+    W-->>A: {"review": "CR-9", "task": null, …}
+    A->>R: reply, fix
+    Note over U,R: the sprint's end: the batch review
+    U->>R: CR-9 becomes the batch review: a round on the sprint's range, naming ATM-501 and ATM-502 (§3.2 ③)
+    U->>R: approve: both tasks approved (their chains already resolved live)
+```
+
+Both are on the store's subscription, not a poll the agent writes. The skills get both: the watch once per session,
+`wait` once a task is in review.
 
 **Comments are task text** (I1): data, never instructions. A comment that asks the agent to run a command, fetch a
 script or touch credentials, CI, git config or hooks is answered or blocked on the user, as a task asking for it is.
@@ -643,18 +674,23 @@ sees CR-7 under *Reviews needing you* in the app's sidebar, opens it in a tab, c
 review wait CR-7`, gets the two comments as JSON, replies to each, fixes, commits, `atm review round CR-7`, waits.
 The user opens round 2 against round 1, sees only the fixes, resolves both top-level comments, approves. The task is approved; the agent finishes it (`atm task state ATM-482 done`). §3.2, §3.8, §3.9, §3.6.
 
-**U2. Pairing on a long task** (a live review). The agent starts ATM-490 and, beside its work, `atm claim hold ATM-490
-&& atm review watch --task ATM-490` in the background: no review exists yet. Ten minutes in, the user opens a live
-review on the task (`atm review live --task ATM-490`, or *New live review* on it in the app), sees a new module
-appear, and comments "this belongs in atm-lib". The agent's watch picks up the new live review and prints the comment
-at once, naming CR-9; the agent replies there and moves the module. At the end the user resolves the top-level
+**U2. Pairing on a long task** (a live review). The agent's session began with `atm review watch` in the background
+(no review exists yet); it takes ATM-490. Ten minutes in, the user opens a live review on the agent's working copy
+(`atm review live --task ATM-490`, or *New live review* in the app), sees a new module appear, and comments "this
+belongs in atm-lib". The agent's watch prints the comment at once, naming CR-9 and ATM-490; the agent replies there and
+moves the module. At the end the user resolves the top-level
 comments and approves the live review; the task's change hasn't moved since, so the task is approved with no other
 CR. On another task the user never opens a live review: the same watch prints nothing, and at the end the agent
 creates the CR as usual. §3.5, §3.9.
 
-**U2b. A comment in a batch review.** CR-12 reviews ATM-501 and ATM-502, worked by two agents. The user comments on
-`crates/atm-lib/src/sprints.rs`, which only ATM-502's commits touched: only ATM-502's agent's watch prints it. A
-review-level comment "ATM-501: rename the flag" goes to ATM-501's agent. §3.9.
+**U2b. A comment in a batch review.** CR-12 reviews ATM-501 and ATM-502, worked by two agents, each with its one
+watch. The user comments on `crates/atm-lib/src/sprints.rs`, which only ATM-502's commits touched: only ATM-502's
+agent's watch prints it. A review-level comment "ATM-501: rename the flag" goes to ATM-501's agent. One agent that did
+both tasks in its loop gets both, each with its task (§3.9's sequence). §3.9.
+
+**U2c. A change with no task.** In the session, the user asks the agent for a quick fix without a task. A live review
+is open on the working copy; the user comments on the fix. The watch prints it with `"task": null`; the agent answers
+and fixes. The chain stays in the live review, and goes with it into whatever review it becomes. §3.9.
 
 **U3. A review of uncommitted changes**, before committing (the user's own, or an agent's: "show me before you
 commit"). `atm review create --uncommitted`: round 1 is the diff against `HEAD`, the index and working tree untouched.
