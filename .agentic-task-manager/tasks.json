@@ -1848,7 +1848,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-17T06:46:23Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -1915,7 +1915,11 @@
         }
       ],
       "completed_at": "2026-11-17T06:46:23Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     },
     {
       "id": "e4835eb2-79bb-8121-8028-35dcfe3aab39",
@@ -9443,7 +9447,7 @@
         "crates/atm-db/src/jsongit/lock.rs"
       ],
       "created_at": "2026-11-08T00:38:28Z",
-      "updated_at": "2026-11-17T02:09:05Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9474,7 +9478,11 @@
       "started_by": "claude:0f56a916",
       "commit": "c6e6c0463cc2fe9d9abf5f26f4c84f0d6b5c0079",
       "completed_at": "2026-11-17T02:09:05Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     },
     {
       "id": "9153a747-c75d-8428-b697-bb04fcd9768c",
@@ -9500,7 +9508,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-17T06:46:24Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -9572,7 +9580,11 @@
         }
       ],
       "completed_at": "2026-11-17T06:46:24Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     },
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
@@ -9875,7 +9887,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T08:09:05Z",
-      "updated_at": "2026-11-17T06:54:53Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "with": "user",
@@ -9917,7 +9929,11 @@
       "started_at": "2026-11-17T06:53:57Z",
       "started_by": "claude:0f56a916",
       "completed_at": "2026-11-17T06:54:53Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     },
     {
       "id": "2238c9b2-a361-848f-ac56-42807145ee8b",
@@ -14171,7 +14187,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T02:05:46Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14201,7 +14217,11 @@
       "started_by": "claude:0f56a916",
       "commit": "b7d24edc39a3516ba767bf9942d9cb18d6605ae0",
       "completed_at": "2026-11-17T02:05:46Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd0eec2957d",
@@ -14223,7 +14243,7 @@
         "dashboard/tests/e2e/help.spec.ts"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T02:12:12Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14247,7 +14267,11 @@
           "text": "The Help: sprints for phases, workspaces for atm projects, atm updates (not the plugin), live in the app, task state --answer, task review approve|request-changes|reject, db archive. Also the dashboard’s own hints (no projects, a missing project, a block’s answer). The Help screenshots change: regenerate in the release task.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd197353e7a",
@@ -14268,7 +14292,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T02:31:28Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14311,7 +14335,11 @@
       "started_by": "claude:0f56a916",
       "commit": "1ad28b0408d8fc49dc3bccf5804ba11bf8e83a0b",
       "completed_at": "2026-11-17T02:31:28Z",
-      "completed_by": "claude:0f56a916"
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd223764546",
@@ -14332,7 +14360,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T02:15:24Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14356,7 +14384,11 @@
           "text": "glib 0.18.5 comes only through gtk 0.18 (Tauri’s GTK 3 stack); no update moves it; no crate but glib names VariantStrIter or array_iter_str, atm doesn’t use glib: not reachable (security doc §5). Dismissing the alert as “vulnerable code not used” is Hakan’s call.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e194e41ecb3",
@@ -14912,7 +14944,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-17T07:05:35Z",
-      "updated_at": "2026-11-17T07:48:04Z",
+      "updated_at": "2026-11-17T07:48:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14940,7 +14972,11 @@
           "text": "Release 0.39.0 prepared: version, CHANGELOG and WHATS-NEW, the security checklist (§3.3), eight Linux screenshots regenerated; verify, cargo test, clippy and deny green. The release PR comes with /atm-push.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 52,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/52"
+      }
     }
   ]
 }
