@@ -354,6 +354,8 @@ pub fn change_task_status(
         let lookup = |id: &str| -> Result<Option<Task>> { Ok(archive.iter().rev().find(|t| id_of(t) == Some(id)).cloned()) };
         let view = view_task(&all[at], false, &all_refs, &lookup, &vocab)?;
         let claim = section(&mut work.claims_store, "claims").get(task_id).cloned().unwrap_or(Value::Null);
+        // The task as it is shown: its key with it (ATM-557), never stored
+        let task = atm_common::keys::with_key(&work.document, &task);
         outcome = Some(StatusChange { task, previous, claim, unblocked, hint, stranded, expired, view: Some(view) });
         Ok(())
     })?;
@@ -500,7 +502,8 @@ pub fn next_task_for(
             new = Some(record);
         }
         outcome = NextTask {
-            task,
+            // As it is shown: its key with it (ATM-557), never stored
+            task: task.map(|t| atm_common::keys::with_key(&work.document, &t)),
             claim: new,
             reason,
             expired,

@@ -60,7 +60,27 @@ pub fn width() -> Option<usize> {
 
 /// Print a line, styles and all (anstream turns them into the Windows console's own where it needs to).
 pub fn emit(line: &str) {
-    anstream::println!("{}", clean(line));
+    anstream::println!("{}", for_people(line));
+}
+
+static PROJECT_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+/// The folder atm runs in, once per process: the project whose task keys [`for_people`] shows.
+pub fn set_project_dir(dir: &std::path::Path) {
+    let _ = PROJECT_DIR.set(dir.to_path_buf());
+}
+
+/// A line as people read it, as everything atm prints for them is (the crate's print macros): a task named by its
+/// UUID shown by its key (ATM-557: `crate::commands::labelled`, which opens the project only for a line holding a
+/// UUID), and no control character of task text ([`clean`]). A table's cells get their keys before it is laid out,
+/// as the width would change here.
+#[must_use]
+pub fn for_people(text: &str) -> String {
+    let labelled = match PROJECT_DIR.get() {
+        Some(dir) => crate::commands::labelled(dir, text),
+        None => text.to_string(),
+    };
+    clean(&labelled).into_owned()
 }
 
 /// The SGR parameters atm's own styles use (bold, dim, italic, underline and their ends, the 16 colours and the

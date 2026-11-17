@@ -39,7 +39,13 @@ const REAP_WAIT: Duration = Duration::from_secs(2);
 /// When there is no task data at all.
 pub fn doctor(files: bool, ctx: Context, cwd: &Path) -> Result<u8> {
     let result = check_project(&Project::open(cwd)?, files)?;
-    let (errors, warnings) = (&result.errors, &result.warnings);
+    // Messages name tasks as people know them, by key (ATM-557), in --json too (they are text, not data); before
+    // grouping, so the lines of keys are packed by the keys' width
+    let labeller = super::Labeller::open(cwd);
+    let label = |messages: &[String]| -> Vec<String> {
+        messages.iter().map(|m| labeller.text(m)).collect()
+    };
+    let (errors, warnings) = (&label(&result.errors), &label(&result.warnings));
     if ctx.json {
         print_json(&json!({"errors": errors, "warnings": warnings}));
     } else {

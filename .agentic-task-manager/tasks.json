@@ -14030,7 +14030,7 @@
       "description": "In a keyed project (this one since `atm project key set ATM`), some of atm's output for people names tasks by their UUID instead of their key:\n- `atm doctor`: the warning \"its files match no component\" lists 29 tasks as UUIDs;\n- `atm sprint backlog`: each line starts with the task's UUID (`atm task list --backlog` shows keys).\n\n## Change\nGo through every command's human output that names a task (doctor's errors and warnings, `sprint backlog`, `sprint list` and its reports, `project status`'s lists, `release` listings, `claim list`, hints) and show the key there (a provisional one as `~ATM-12`), as `task list` does (ADR-007 §5, T-543). `--json` keeps `id` (the UUID) and adds `key` where it lists tasks.\n\n## Tests\nScenarios on a keyed project for each command fixed: keys in the text, no UUID in a line meant for people.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/maintenance.rs",
@@ -14039,7 +14039,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-17T01:47:59Z",
-      "updated_at": "2026-11-17T01:48:06Z",
+      "updated_at": "2026-11-17T01:58:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14058,7 +14058,9 @@
           "text": "Also `atm sprint move` prints each moved task as its UUID (`9d40…: backlog -> …`): show the key there too.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-17T01:58:46Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e730-852d-7469-8ae7-dbd0eec2957d",

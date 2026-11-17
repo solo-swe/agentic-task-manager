@@ -498,12 +498,16 @@ pub fn run(command: SprintCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
         }
         SprintCommand::Backlog { all } => {
-            let (tasks, vocab) = backlog_tasks(&Project::open(cwd)?, all)?;
+            let project = Project::open(cwd)?;
+            let (tasks, vocab) = backlog_tasks(&project, all)?;
+            let document = project.store().document()?;
             let rows: Vec<Value> = tasks
                 .iter()
+                // Their keys, as `atm task list` shows them (ATM-557)
+                .map(|t| atm_common::keys::with_key(document, t))
                 .map(|t| {
                     let kind = vocab.kind_of(t.get("status")).map(atm_common::Kind::as_str);
-                    view_row(&json!({"task": t, "derived": {"kind": kind, "priority": vocab.priority_of(t)}}))
+                    view_row(&json!({"task": t, "derived": {"kind": kind, "priority": vocab.priority_of(&t)}}))
                 })
                 .collect();
             if ctx.json {
