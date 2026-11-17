@@ -339,8 +339,9 @@ mod tests {
         let dir = TestDir::new();
         let path = dir.path().join(LOCK_DIR);
         plant(&path, "holder-first");
-        // Holders for about 0.9 s, each for less than the waiter's 0.3 s wait: the queue moves, so it waits on
-        let busy = churn(path, Duration::from_millis(150), 6);
+        // Holders for about 0.9 s, each for a fifth of the waiter's 0.3 s wait (a margin for a busy runner): the queue
+        // moves, so it waits on
+        let busy = churn(path, Duration::from_millis(60), 15);
         let started = Instant::now();
         let held = lock(dir.path(), Some(0.3));
         busy.join().unwrap();
@@ -359,18 +360,21 @@ mod tests {
         let dir = TestDir::new();
         let path = dir.path().join(LOCK_DIR);
         plant(&path, "holder-first");
-        // Holders for 3 s, the wait 0.1 s: given up at about 0.6 s, not held for the 3 s
-        let busy = churn(path, Duration::from_millis(50), 60);
+        // Holders for 6 s, a new one every 40 ms, the wait 0.2 s: given up at about 1.2 s (six waits), not held for the
+        // 6 s. The wait is five holders long, so a holder this busy runner keeps a little longer than 40 ms isn't
+        // taken for one that kept the lock a whole wait (which gives up then, as it should: CI run 44013270217)
+        let busy = churn(path, Duration::from_millis(40), 150);
         let started = Instant::now();
-        let error = lock(dir.path(), Some(0.1)).unwrap_err().to_string();
+        let error = lock(dir.path(), Some(0.2)).unwrap_err().to_string();
         let waited = started.elapsed();
         busy.join().unwrap();
         assert!(
             error.starts_with("timed out waiting for the lock "),
             "{error}"
         );
-        assert!(waited >= Duration::from_millis(550), "{waited:?}");
-        assert!(waited < Duration::from_millis(1500), "{waited:?}");
+        // More than one wait: the wait started again as the lock changed hands; far less than the churn: it gave up
+        assert!(waited >= Duration::from_millis(400), "{waited:?}");
+        assert!(waited < Duration::from_millis(3000), "{waited:?}");
     }
 
     #[test]

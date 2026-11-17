@@ -106,7 +106,9 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain 
   `cargo build`) drive the binary exactly as users run it, each file in its own process with a watchdog. Prefer
   data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of `scenarios.test.mjs`); use
   `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency, git merges). CI runs the
-  suite on Linux and macOS, and on Windows once T-482 is done.
+  suite on Linux, macOS and Windows (ATM-482); on Windows each process starts several times slower, so the suite's
+  watchdog allows a file 400 s there (`tests/scripts/run.mjs`), and a test that runs git or atm in a loop is the
+  first to feel it.
 - The e2e suite's fixture gets its task views and summaries from the binary too (`pnpm run test:e2e` builds it).
 
 ## Testing conventions
