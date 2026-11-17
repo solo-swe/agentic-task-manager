@@ -814,6 +814,12 @@ export class TasksServer {
           ),
         };
       }
+      case 'project_reviews':
+        return body ? { ok: this.reviewList ?? { reviews: [], you: 'Ana' } } : unknown;
+      case 'project_review': {
+        const page = this.reviewPages.get(String(args.review));
+        return page ? { ok: page } : { error: { kind: 'not_found', message: `no review ${String(args.review)}` } };
+      }
       case 'claims':
         return body ? { ok: { claims: this.claimsBody ? JSON.parse(this.claimsBody).claims : [] } } : unknown;
       case 'worktrees':

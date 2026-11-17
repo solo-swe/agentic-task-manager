@@ -13,6 +13,7 @@
   import { NO_QUERY, type ListQuery, type ReviewEntry, type ReviewPageData, type ViewFile } from '../reviews/types';
   import { reviewWindow } from '../reviews/window.svelte';
   import { withTask } from '../routes';
+  import { tabActions } from '../tab-actions';
   import { withView } from '../tabs';
   import { dashboard } from '../state.svelte';
 
@@ -104,6 +105,8 @@
     if (!at.review) return;
     const title = reviewTitle(shortName, shown?.review.reference ?? at.review, shown?.review.title ?? '');
     reviewWindow.title = title;
+    if (shown && project)
+      reviewWindow.names[`${project}:${at.review}`] = reviewTitle(null, shown.review.reference, shown.review.title);
     if (inApp) return; // the app's title bar sets it
     document.title = title;
   });
@@ -114,11 +117,12 @@
 
   const go = (address: string, replace = false) => navigate(address, { replace });
 
-  /** A review opened from the list: in place (its page has a way back); with ⌘ or Ctrl, in a browser tab of its own
-   * (in the app, where there is none, in place too) */
+  /** A review opened from the list: in the app, in a tab of its own; in the browser, in place (its page has a way
+   * back), or with ⌘ or Ctrl in a browser tab of its own */
   function open(reference: string, newTab = false) {
     const address = withReview(currentAddress(), { review: reference });
-    if (newTab && !inApp) window.open(address, '_blank', 'noopener');
+    if (inApp) tabActions().open(address);
+    else if (newTab) window.open(address, '_blank', 'noopener');
     else go(address);
   }
 

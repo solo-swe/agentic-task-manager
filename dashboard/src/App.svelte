@@ -57,10 +57,14 @@
 </script>
 
 <UpdateNotice />
-{#if reviewing}
-  <!-- A review's page (ATM-574): a window of its own, the whole window (in the app, under its title bar) -->
+{#if reviewing && inApp}
+  <!-- A review's page in the app (ATM-574): a tab of its own, under the window's sidebar and title bar as every tab -->
+  <Sidebar />
+  <AppTitleBar title={reviewWindow.title || dashboard.projectName} />
+  <main class="review-tab-main" id="app-main"><ReviewsTab /></main>
+{:else if reviewing}
+  <!-- A review's page in the browser (ATM-574): the whole window -->
   <div class="review-window" id="review-window">
-    {#if inApp}<AppTitleBar title={reviewWindow.title || dashboard.projectName} />{/if}
     <main class="review-window-main" id="app-main"><ReviewsTab /></main>
   </div>
 {:else}
@@ -103,8 +107,11 @@
     flex-direction: column;
     background: var(--bg);
   }
-  .review-window :global(.app-titlebar) {
-    margin: 0;
+  /* Under the app's title bar, out of the page's padding (body in app.css): the rest of the window */
+  .review-tab-main {
+    height: calc(100vh - 40px);
+    margin: 0 calc(-1 * var(--space-9)) calc(-1 * var(--space-9));
+    min-height: 0;
   }
   .review-window-main {
     flex: 1;
