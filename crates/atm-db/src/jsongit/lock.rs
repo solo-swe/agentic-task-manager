@@ -196,9 +196,44 @@ fn new_token() -> String {
     format!("{}-{nanos:x}-{count}", std::process::id())
 }
 
+/// How long a waiter waits for the lock: `wait` from when it started, again from each time it sees the lock change
+/// hands (a queue that moves, ATM-481), and never more than [`LOCK_QUEUE_WAITS`] waits in all. Kept apart from the
+/// lock's files so it can be tested on made-up times: on a shared CI runner a thread handing the lock around can
+/// stall longer than any wait a test can afford (CI runs 44013270217, 44014913433, 44016638568).
+struct Queue {
+    wait: Duration,
+    deadline: Instant,
+    last_deadline: Instant,
+    seen: Option<Value>,
+}
+
+impl Queue {
+    fn new(wait: Duration, start: Instant) -> Self {
+        Self {
+            wait,
+            deadline: start + wait,
+            last_deadline: start + wait * LOCK_QUEUE_WAITS,
+            seen: None,
+        }
+    }
+
+    /// The lock is taken, by `holding` as far as it could be read, at `now`: whether to wait on (false: time's up).
+    fn waits_on(&mut self, holding: Option<Value>, now: Instant) -> bool {
+        if let Some(holding) = holding
+            && self.seen.as_ref() != Some(&holding)
+        {
+            if self.seen.is_some() {
+                self.deadline = (now + self.wait).min(self.last_deadline);
+            }
+            self.seen = Some(holding);
+        }
+        now < self.deadline
+    }
+}
+
 /// Take the lock of `directory` (creating the folder if needed), waiting for it up to `timeout` seconds
 /// (`ATM_LOCK_TIMEOUT`, else 10, when None; 0 tries once). The wait starts again each time the lock changes hands
-/// (a queue that moves, ATM-481), up to [`LOCK_QUEUE_WAITS`] times the wait in all.
+/// (a queue that moves, ATM-481), up to [`LOCK_QUEUE_WAITS`] times the wait in all ([`Queue`]).
 ///
 /// # Errors
 /// When the lock stays taken by a live holder until the time is up, or the folder can't be written.
@@ -206,10 +241,7 @@ pub fn lock(directory: &Path, timeout: Option<f64>) -> Result<Lock> {
     fs::create_dir_all(directory).map_err(io_error(directory))?;
     let lock = directory.join(LOCK_DIR);
     let wait = Duration::from_secs_f64(timeout.unwrap_or_else(lock_timeout).max(0.0));
-    let start = Instant::now();
-    let mut deadline = start + wait;
-    let last_deadline = start + wait * LOCK_QUEUE_WAITS;
-    let mut seen: Option<Value> = None;
+    let mut queue = Queue::new(wait, Instant::now());
     release_on_sigterm();
     loop {
         match fs::create_dir(&lock) {
@@ -220,16 +252,7 @@ pub fn lock(directory: &Path, timeout: Option<f64>) -> Result<Lock> {
                     continue;
                 }
                 // Another holder than the last one seen: the queue moves, so the wait starts again
-                let now = Instant::now();
-                if let Some(holding) = holding(owner.as_ref())
-                    && seen.as_ref() != Some(&holding)
-                {
-                    if seen.is_some() {
-                        deadline = (now + wait).min(last_deadline);
-                    }
-                    seen = Some(holding);
-                }
-                if now >= deadline {
+                if !queue.waits_on(holding(owner.as_ref()), Instant::now()) {
                     return Err(Error::failed(format!(
                         "timed out waiting for the lock {} (held by {})",
                         lock.shown(),
@@ -243,7 +266,7 @@ pub fn lock(directory: &Path, timeout: Option<f64>) -> Result<Lock> {
             Err(e)
                 if cfg!(windows)
                     && e.kind() == io::ErrorKind::PermissionDenied
-                    && Instant::now() < deadline =>
+                    && Instant::now() < queue.deadline =>
             {
                 std::thread::sleep(LOCK_POLL);
             }
@@ -323,76 +346,79 @@ mod tests {
         .unwrap();
     }
 
-    /// Hand the lock from holder to holder every `every`, `times` times or until `stop`, then free it.
-    ///
-    /// The waits in these tests are a dozen holders long: a busy CI runner can starve this thread for a while (macOS,
-    /// CI runs 44013270217 and 44014913433, the crate's tests three times slower than here), and a holder kept for a
-    /// whole wait is one the waiter rightly gives up on.
-    fn churn(
-        lock: PathBuf,
-        every: Duration,
-        times: u32,
-        stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    ) -> std::thread::JoinHandle<()> {
-        std::thread::spawn(move || {
-            for i in 0..times {
-                if stop.load(std::sync::atomic::Ordering::Relaxed) {
-                    break;
-                }
-                plant(&lock, &format!("holder-{i}"));
-                std::thread::sleep(every);
-            }
-            let _ = fs::remove_dir_all(&lock);
-        })
+    // The queue's waits on made-up times (`Queue`): real threads handing a lock around stall on shared CI runners
+    // longer than any wait a test can afford, so these timed the runner, not the lock (CI runs 44013270217,
+    // 44014913433, 44016638568). The suite's stress test has 16 real agents queueing for the lock.
+    const WAIT: Duration = Duration::from_millis(500);
+    fn at(start: Instant, ms: u64) -> Instant {
+        start + Duration::from_millis(ms)
+    }
+    // reason: it stands for what `holding` reads, which is an Option
+    #[allow(clippy::unnecessary_wraps)]
+    fn holder(token: &str) -> Option<Value> {
+        Some(json!(token))
+    }
+
+    #[test]
+    fn a_waiter_on_one_holder_gives_up_after_one_wait() {
+        let start = Instant::now();
+        let mut queue = Queue::new(WAIT, start);
+        assert!(queue.waits_on(holder("a"), at(start, 0)));
+        assert!(queue.waits_on(holder("a"), at(start, 499)));
+        assert!(!queue.waits_on(holder("a"), at(start, 500)));
     }
 
     #[test]
     fn a_waiter_keeps_waiting_while_the_lock_changes_hands() {
-        let dir = TestDir::new();
-        let path = dir.path().join(LOCK_DIR);
-        plant(&path, "holder-first");
-        // Holders for about 1.6 s, a new one every 40 ms, more than three of the waiter's 0.5 s waits: the queue moves,
-        // so it waits on
-        let busy = churn(
-            path,
-            Duration::from_millis(40),
-            40,
-            std::sync::Arc::default(),
-        );
-        let started = Instant::now();
-        let held = lock(dir.path(), Some(0.5));
-        busy.join().unwrap();
-        assert!(held.is_ok(), "{held:?}");
-        assert!(started.elapsed() > Duration::from_millis(1000));
-        let owner = owner_of(&dir.path().join(LOCK_DIR)).unwrap();
-        assert!(
-            owner["token"]
-                .as_str()
-                .is_some_and(|t| !t.starts_with("holder"))
-        );
+        let start = Instant::now();
+        let mut queue = Queue::new(WAIT, start);
+        assert!(queue.waits_on(holder("a"), at(start, 0)));
+        // A new holder at 400 ms: the wait starts again from there, past the first wait's end
+        assert!(queue.waits_on(holder("b"), at(start, 400)));
+        assert!(queue.waits_on(holder("b"), at(start, 899)));
+        assert!(!queue.waits_on(holder("b"), at(start, 900)));
+    }
+
+    #[test]
+    fn an_owner_that_couldnt_be_read_changes_nothing() {
+        let start = Instant::now();
+        let mut queue = Queue::new(WAIT, start);
+        assert!(queue.waits_on(holder("a"), at(start, 0)));
+        // owner.json half-written, or not yet there: neither a new holder nor a reason to give up early
+        assert!(queue.waits_on(None, at(start, 300)));
+        assert!(queue.waits_on(holder("a"), at(start, 400)));
+        assert!(!queue.waits_on(None, at(start, 500)));
     }
 
     #[test]
     fn a_waiter_that_keeps_losing_gives_up_after_six_waits() {
+        let start = Instant::now();
+        let mut queue = Queue::new(WAIT, start);
+        // A new holder every 100 ms, for ever: the waiter gives up at six waits, 3 s, however the queue moves
+        let mut ms = 0;
+        while queue.waits_on(holder(&format!("h{ms}")), at(start, ms)) {
+            ms += 100;
+            assert!(ms <= 10_000, "never gave up");
+        }
+        assert_eq!(ms, 3000);
+    }
+
+    #[test]
+    fn a_waiter_takes_the_lock_when_its_holder_leaves_and_writes_its_own_token() {
         let dir = TestDir::new();
         let path = dir.path().join(LOCK_DIR);
-        plant(&path, "holder-first");
-        // Holders for up to 12 s, a new one every 40 ms, the wait 0.5 s: given up at about 3 s (six waits), not held for
-        // the 12 s; the churn is stopped then
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let busy = churn(path, Duration::from_millis(40), 300, stop.clone());
-        let started = Instant::now();
-        let error = lock(dir.path(), Some(0.5)).unwrap_err().to_string();
-        let waited = started.elapsed();
-        stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        busy.join().unwrap();
-        assert!(
-            error.starts_with("timed out waiting for the lock "),
-            "{error}"
-        );
-        // More than one wait: the wait started again as the lock changed hands; far less than the churn: it gave up
-        assert!(waited >= Duration::from_millis(1000), "{waited:?}");
-        assert!(waited < Duration::from_millis(8000), "{waited:?}");
+        plant(&path, "holder");
+        let leaving = path.clone();
+        // Gone after 0.1 s, the wait 10 s: time for any runner
+        let leaves = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            fs::remove_dir_all(leaving).unwrap();
+        });
+        let held = lock(dir.path(), Some(10.0));
+        leaves.join().unwrap();
+        assert!(held.is_ok(), "{held:?}");
+        let owner = owner_of(&path).unwrap();
+        assert!(owner["token"].as_str().is_some_and(|t| t != "holder"));
     }
 
     #[test]
