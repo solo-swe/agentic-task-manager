@@ -65,6 +65,10 @@ dirs = "7"
 serde = { version = "1", features = ["derive"] }
 tauri = "2.12.5"
 tauri-build = "2.7.4"
+# The app's build script fills Tauri's asset cache once, before the app is compiled twice at once by `cargo test` and
+# `clippy --all-targets` (ATM-559, approved by Hakan 2026-11-17): the version tauri-macros uses, exactly, so its files
+# are the ones generate_context! looks for. Already in the tree through Tauri
+tauri-codegen = "=2.7.4"
 tauri-plugin-single-instance = "2.5.5"
 # The app's own updates (T-483, approved): Tauri's updater, its signed update manifest on each GitHub release. The
 # system's TLS (native-tls: Security.framework on macOS) rather than rustls, whose root certificates come as a crate

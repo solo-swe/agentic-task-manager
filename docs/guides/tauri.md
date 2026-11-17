@@ -75,6 +75,12 @@ atm's own rules for the atm app, the desktop distribution proposed in
     refused): `dangerousDisableAssetCspModification: ["style-src"]` leaves it as written;
   - **every debug build** (`cargo run`, `cargo tauri dev`, the tests) uses `devCsp`, not `csp`: the same policy plus only
     the CLI's live-reload socket. A test keeps the two in step.
+- **The dashboard is embedded once, before the crate compiles** (ATM-559): `generate_context!` compresses its files
+  into a cache in the build folder, writing a file in place when it is missing, and `cargo test` and
+  `clippy --all-targets` compile the library twice at once, so one could embed the page half-written. `build.rs` runs
+  Tauri's code generation first (`fill_tauri_asset_cache`), so the macro finds every file whole. It needs the same
+  `tauri-codegen` as tauri-macros: when Tauri is updated, move the workspace's `tauri-codegen` pin to tauri-macros'
+  version (a test fails while there are two in `Cargo.lock`).
 - **CompMD from two schemes** ([ADR-006](../adr/ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md), CompMD 0.7.0's
   [Tauri chapter](https://compmd.dev/guides/developers/a-tauri-app/)):
   - **CompMD's bundle** (the sandbox's frames under their hash, the packs by their place) from CompMD's own plugin

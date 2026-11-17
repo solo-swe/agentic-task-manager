@@ -283,6 +283,7 @@ dependencies = [
  "specta-typescript",
  "tauri",
  "tauri-build",
+ "tauri-codegen",
  "tauri-plugin-compmd",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
