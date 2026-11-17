@@ -2,6 +2,13 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.39.0] - 2026-11-17
+
+- atm names tasks by their short keys everywhere, never by a long ID.
+- The Help describes atm as it is today: sprints, workspaces, and how to answer a blocked task.
+- Many agents working at once wait their turn instead of giving up.
+- Holding a task while a long command runs works on Windows too.
+
 ## [0.38.0] - 2026-11-17
 
 - Tasks can have short keys like ATM-123, and old task IDs still find their task. Update atm on every computer that

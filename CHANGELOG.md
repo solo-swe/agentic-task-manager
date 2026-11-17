@@ -4,6 +4,56 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [0.39.0] - 2026-11-17
+
+Keys follow-ups and housekeeping: keys in every line atm prints, a current Help, the CLI's suite passing on Windows,
+CI that runs on every push and caches its build, and the design of atm's own code reviews.
+
+### Changed
+- **Tasks named by key everywhere atm prints for people** (ATM-557): `atm doctor`'s errors and warnings, `atm sprint
+  backlog`, the task a status change or `atm loop next` returns (also in `--json`, which has `key` beside `id`), and
+  every line `output::for_people` prints: a UUID of one of the project's tasks shows as its key (a provisional one as
+  `~ATM-12`).
+- **The Help and the dashboard's hints** (ATM-558): sprints instead of phases, workspaces, how atm updates, live
+  updates in the app, `atm task state … --answer`, `atm task review`, `atm db archive`; the project card's
+  `atm workspace prune`, the landing page's `atm workspace add-project`, a blocked task's
+  `atm task state <key> todo --answer '…'`.
+- **The lock's wait follows the queue** (ATM-481): a command waiting for the task folder's lock starts its wait again
+  each time the lock changes hands, up to six waits in all (a queue that moves isn't a stuck holder), so many agents
+  at once no longer time out on a slow machine; a holder that keeps the lock a whole wait still times out, naming it.
+  `owner.json` has a `token` per holding.
+- **Fewer git processes per command** (ATM-482): where a folder is in git (`rev-parse --show-toplevel`,
+  `--git-common-dir`) is asked once and remembered for 5 seconds; a status change starts git twice instead of seven
+  times.
+- **`atm service`'s checks** (ATM-482): it asks a server who it is on `127.0.0.1` only, scans the next ports all at
+  once, checks a free port's two addresses at once, and `stop` ends a server at once where no SIGTERM can be sent
+  (Windows) instead of waiting 5 seconds first.
+
+### Fixed
+- **`atm claim hold` on Windows** (ATM-482): the watcher followed pid 0 and outlived its shell; it finds the shell
+  that ran atm (past Git Bash's forked copy of itself), and ends with it.
+- **The app's page could be embedded half-written** (ATM-559): two compiles of the app at once (`cargo test`,
+  `clippy --all-targets`) shared Tauri's asset cache; the app's `build.rs` fills it once first, with `tauri-codegen`
+  as a build dependency pinned to tauri-macros' version (a test fails while `Cargo.lock` has two).
+
+### CI and development
+- **The suite runs on Windows too** (ATM-482): the CLI's suite passes on CI's Windows runner and runs there on every
+  run; the stress test isn't skipped there. The tests' Unix assumptions (file modes, paths in a shell line, an old
+  server contacted) are guarded, and the dev-api test gives Vite 60 s to start on Windows.
+- **The CI review** (ATM-487, `docs/ci-review.md`): CI runs on every push to `main` and `dev/**` as well as pull
+  requests, a newer push cancelling the branch's run; the Rust build is cached per platform (`Swatinem/rust-cache`,
+  saved from `main` only, none in the release); `cargo-deny` is its own job and a required check; the runner images
+  are pinned (`ubuntu-24.04`, `macos-15`, `windows-2025`) and the jobs named by platform (`Rust (Linux)`, …), the
+  ruleset with them (`ci-workflow.test.ts` checks it names `ci.yml`'s jobs); Playwright's screenshots are a step of
+  their own.
+- The lock's queue is tested on made-up times (a `Queue` type in `lock.rs`), not threads racing the clock.
+
+### Docs
+- **Code reviews in atm** (ATM-337, `docs/code-review-design.md`, approved): reviews recorded in the project, live
+  reviews, rounds, the diff viewer, agents listening; its follow-ups are in the backlog.
+- Dependabot alert #5 (`glib` < 0.20, ATM-560): analysed in `docs/security-architecture.md` §5; only through Tauri's
+  GTK 3 stack, not reachable from atm.
+
 ## [0.38.0] - 2026-11-17
 
 Keys and reach: tasks keyed like ATM-123 with dependencies across projects, atm's skills in Codex, Copilot, Cursor,

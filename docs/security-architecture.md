@@ -1054,6 +1054,30 @@ checklist:
   `pnpm run check`; the CLI suite (646); the functional e2e suite (451); the Linux screenshots in Docker (84; Help's
   two regenerated).
 
+**Release 0.39.0 (the sprint Keys follow-ups and housekeeping, ATM-337, ATM-481, ATM-482, ATM-487, ATM-557 to
+ATM-560; ATM-519 back to the backlog).** The checklist:
+- **Skills and `docs/agent/`:** unchanged since 0.38.0. **atm output agents act on** changed in one way (ATM-557):
+  the lines printed for people name a project's tasks by key where they showed a UUID, and the task a status change
+  or `atm loop next` returns has its `key` in `--json` beside `id`. This written review takes the sandbox run's place
+  (no API key): the key is the task's own (resolved from the project's file, a UUID that isn't one of its tasks is
+  left as it is), the same text agents already read and act on since 0.38.0 (I1), and the output still goes through
+  `output::clean` (I30); `--json` prints exactly. Nothing new is read, run or written.
+- **Entry points, fields, CI permissions:** none new in atm. `atm service`'s port checks ask `127.0.0.1` only (atm's
+  server always listens there; the `[::1]` listener stays, so nobody else can take that address, F10). The lock's
+  `owner.json` gains a `token` (atm's own, compared, never run). CI (ATM-487): the token stays read-only (I18); a new
+  third-party action, `Swatinem/rust-cache` (pinned by SHA, saving from `main` only: I19, with its check), and runs on
+  every push to `dev/**`; the runner images pinned; `cargo-deny` a job of its own and a required check (the ruleset,
+  I21, renamed checks: applied on GitHub by the owner with the merge). New dependency, approved by Hakan:
+  `tauri-codegen` as the app's build dependency (ATM-559), pinned to tauri-macros' version; nothing at run time.
+- **What ships is what is described:** the dashboard's hints and the Help name today's commands (ATM-558; their
+  screenshots regenerated); the claim watcher ends with its shell on Windows too (ATM-482, I24 unchanged: it still
+  starts only its own binary). Dependabot alert #5 (`glib`, ATM-560) is analysed in §5 and left open: dismissing it
+  is the owner's call.
+- **Checks run:** `cargo test` (325), clippy, fmt and deny; the unit tests with coverage (1366, 95.4% of lines);
+  `pnpm run check`; the CLI suite (648); the functional e2e suite (451); the Linux screenshots in Docker (84; eight
+  regenerated for ATM-558: the Help, a blocked task's panel, the projects overview); CI's suite on Linux, macOS and
+  Windows.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
