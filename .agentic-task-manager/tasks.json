@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 583
+    "next_number": 584
   },
   "tasks": [
     {
@@ -15559,7 +15559,7 @@
         "crates/atm-db/src/jsongit/claims.rs"
       ],
       "created_at": "2026-11-17T16:33:34Z",
-      "updated_at": "2026-11-17T22:16:50Z",
+      "updated_at": "2026-11-17T22:19:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 580,
@@ -15572,7 +15572,8 @@
       ],
       "sprint": "Code reviews in the app",
       "started_at": "2026-11-17T22:16:50Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "fba5efe76bb683c32d3b3ba221b0cdaed7d895bf"
     },
     {
       "id": "01a1eb3d-88aa-723f-8bab-74e5496e739b",
@@ -15660,6 +15661,45 @@
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/55"
       },
       "merged_at": "2026-11-17T21:42:22Z"
+    },
+    {
+      "id": "01a1eb9e-fdbf-7461-aa25-5a2e52fff57f",
+      "name": "Code review: reviews of changes that touch submodules",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "code-review"
+      ],
+      "description": "atm code reviews fail for submodule commits (Hakan, 2026-11-18). A project with submodules must be reviewable like any other.\n\n## Reproduce first\nIn a test repository with a submodule, try each and note what fails and where (`atm review create`, `atm review round`, `atm review show`, the review page):\n1. **A range that moves a submodule's commit** in the superproject: git diffs a gitlink (mode `160000`) as `Subproject commit <old>` / `<new>`, with no file contents. The round's diff, its tree (`tree_after`, `diff_trees`, `file_in` in `crates/atm-vcs/src/diff.rs`) and the anchoring in `crates/atm-review/src/rounds.rs` likely don't expect it.\n2. **Commits made inside the submodule**: the range is in the submodule's repository, not the superproject's.\n3. **Uncommitted changes** with a submodule that is dirty or has new commits, and `--file` on a path inside a submodule.\n\n## Change\n- A moved submodule shows in the round as one entry: its path, the old and new commits (short SHAs, linked to the submodule's repository when it has a web address, as `submodule_of` in `crates/atm-vcs/src/lib.rs` gives the document viewer), with no lines to comment on but a comment on the entry as a whole.\n- A review of changes inside a submodule: decide with the reproduction whether `atm review create` run in the submodule (or `--range` naming it) reviews the submodule's own commits, its files shown under the submodule's path; files in a submodule read from the submodule's repository at the round's commit (as the document viewer already does).\n- Nothing fails silently: what isn't supported says so (e.g. a nested submodule's range), with the exit code and a message saying what to do.\n- The dashboard's diff viewer shows a submodule entry (`dashboard/src/lib/reviews/`).\n\n## Tests\natm-vcs unit tests on a repository with a submodule (the diff, the tree, a gitlink in the patch); atm-review tests for a round with a submodule entry and a comment on it; a CLI suite test in `tests/scripts/reviews.test.mjs` (create, round, show with a submodule moved and with commits inside it); a component or e2e test for the submodule entry in the diff viewer.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-vcs/src/diff.rs",
+        "crates/atm-vcs/src/lib.rs",
+        "crates/atm-review/src/rounds.rs",
+        "crates/atm-lib/src/reviews.rs",
+        "dashboard/src/lib/reviews/",
+        "tests/scripts/reviews.test.mjs"
+      ],
+      "created_at": "2026-11-17T22:27:07Z",
+      "updated_at": "2026-11-17T22:27:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-17T22:27:07Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "number": 583,
+      "key_final": false
     }
   ]
 }
