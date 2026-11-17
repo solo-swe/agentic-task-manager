@@ -1434,7 +1434,8 @@ describe('serve', () => {
     });
     assert.equal(atm(['workspace', 'add-project'], first).code, 0);
     assert.equal(atm(['workspace', 'add-project'], second).code, 0);
-    assert.equal(fs.statSync(atmHome).mode & 0o777, 0o700);
+    // Owner-only where files have modes (Windows has none: the folder is in the user's own profile there)
+    if (process.platform !== 'win32') assert.equal(fs.statSync(atmHome).mode & 0o777, 0o700);
     const listed = JSON.parse(atm(['workspace', 'projects', '--json'], first).stdout);
     const ids = listed.projects.map((p) => p.id);
     assert.equal(new Set(ids).size, 2, ids.join(', '));
@@ -2016,7 +2017,10 @@ describe('serve', () => {
     return { pid: child.pid, port };
   }
 
-  test("migrate stops a project's old per-project server, and only that project's", async () => {
+  // Not on Windows: there no record counts as the user's own (no file owners, migrate.rs `owned_by_user`), so an old
+  // server is never contacted, only its record removed
+  const unixOwners = process.platform === 'win32' && 'Windows has no file owners: an old server is never contacted';
+  test("migrate stops a project's old per-project server, and only that project's", { skip: unixOwners }, async () => {
     const atm = atmIn(home());
     const root = project();
     const taskDir = path.join(root, '.agentic-task-manager');

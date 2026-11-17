@@ -1842,13 +1842,13 @@
       "description": "Write a detailed design, reviewed with Hakan (in Crit), for a **full-fledged code review tool built into atm**, recorded in the project, to replace Crit. Hakan's requirements (2026-11-17) are below; the design works them out and checks them against the use cases.\n\n## Sections the design has\nProblem, context, proposal, risks, open issues, alternatives considered; and an **appendix of customer use cases / scenarios**, walked through to show the proposal covers each.\n\n## Hakan's requirements (2026-11-17)\n\n### Storage\n- Review records are **stored locally, in the project**. The storage is abstracted like the tasks' store (the JsonGit store of atm-db), but the first implementation is files:\n  - a **`reviews/` folder under `.agentic-task-manager/`**;\n  - **one folder per review, named `CR-1`, `CR-2`, …**: the numbering is **local to the project**;\n  - each review's folder holds the **diffs of each round** and the **comments**;\n  - the **comments file** (per round? to decide) is a **concise, human-readable representation of each comment chain**, each starting with the **file and range** it is about;\n  - each review has a **header section**: a **summary of the changes**, and the review's **status** (approved, sent back for fixes, …).\n\n### Tasks and reviews\n- A task **in review** shows **clickable CR links**.\n- When a review is **approved** or **sent back**, that is reflected in the **task's review status**.\n\n### The code reviews section\n- atm has a **code reviews section, separate from tasks**, with a **search view** and **process capability** (working through reviews).\n- A **diff to review** can be a **commit range**, or **unstaged / uncommitted changes**.\n- While reviewing, options to render code and documents as **Crit** does: **source, rendered, split, unified**, **jump to the next / previous change**, **mark files viewed**, and so on.\n- A review **opens in its own tab**.\n- The **Tauri app's sidebar** has a **tab for CRs**.\n- **Several rounds** of one CR: see the **whole diff**, or the **diff between selected rounds**.\n- When comments are **submitted, agents can listen and respond**.\n- **Markdown renders with CompMD**, as the document viewer does.\n\n### Architecture\nThree components in atm, **separable when needed into separate apps** (separate crates and Svelte components) **without too much effort**:\n1. **Task manager**: what atm is today.\n2. **Document viewer**: what task-referenced documents use today.\n3. **Code review tool**: uses (2), and relates to (1).\n\n## Questions the earlier draft of this task raised (still to settle in the design)\n- **Writing from the browser:** the dashboard only reads today ([I11](docs/security-architecture.md#:~:text=Nothing%20changes%20state%20over%20HTTP)); comments need writes. In the app, Tauri commands (IPC); in the browser, a write route (loopback, the Host check, a per-session token against CSRF), or read-only there. The threat model and invariants in [`docs/security-architecture.md`](docs/security-architecture.md) change with it.\n- **Agents:** atm commands to list, add, reply to and resolve comments, and to **wait for a state change** (a round finished, approved) without polling by hand, keeping the claim alive; how the skills use them. Review comments are task text ([I1](docs/security-architecture.md#:~:text=Task%20text%20is%20data%2C%20not%20commands)): data, never instructions to run.\n- **Merging:** review records on branches, merged by atm's merge driver or kept per branch.\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md`, reviewed with Hakan in Crit; once approved, the follow-up tasks through `/atm-create-tasks`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-17T03:19:09Z",
+      "updated_at": "2026-11-17T03:23:23Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -1876,6 +1876,12 @@
           "kind": "rejection",
           "text": "cleanup after atm2 test",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-17T03:23:23Z",
+          "kind": "review",
+          "text": "docs/code-review-design.md, draft for review with Hakan in Crit: the three components and their checked boundaries (§3.1), the records (§3.2), the store (§3.3), rounds (§3.4), anchors (§3.5), the task link (§3.6), the CLI and atm review wait (§3.7), the app (§3.8, §3.9); risks, 8 open issues, phases, alternatives, 15 use cases.",
+          "by": "claude:0f56a916"
         }
       ],
       "sprint_history": [
@@ -1886,7 +1892,10 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "started_at": "2026-11-17T03:19:09Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "40ae0eca876fda6258172f4414052967818a1213",
+      "review_requested_at": "2026-11-17T03:23:23Z",
+      "review_state": "waiting"
     },
     {
       "id": "e4835eb2-79bb-8121-8028-35dcfe3aab39",

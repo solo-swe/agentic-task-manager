@@ -308,7 +308,7 @@ describe('claims', () => {
       const r = spawnSync('sh', ['-c', line], {
         cwd: root,
         encoding: 'utf8',
-        env: { ...baseEnv(), ATM, ...as('alice', minutes) },
+        env: { ...baseEnv(), ATM, CLAIMS_STORE: storeOf(root), ...as('alice', minutes) },
       });
       return {
         code: r.status,
@@ -322,7 +322,8 @@ describe('claims', () => {
       try {
         runAtm(['task', 'state', 'T-001', 'in_progress'], root, as('alice'));
         // The shell forgets the renewal hold made, then waits: a renewal while it waits puts renewed_at back
-        const forgetIt = `node -e "const fs=require('fs');const f='${storeOf(root)}';const s=JSON.parse(fs.readFileSync(f,'utf8'));delete s.claims['T-001'].renewed_at;fs.writeFileSync(f,JSON.stringify(s))"`;
+        // The store's path from the environment: in the shell's line, a Windows path's backslashes would be eaten
+        const forgetIt = `node -e "const fs=require('fs');const f=process.env.CLAIMS_STORE;const s=JSON.parse(fs.readFileSync(f,'utf8'));delete s.claims['T-001'].renewed_at;fs.writeFileSync(f,JSON.stringify(s))"`;
         const r = shell(root, '--every 0.3', `${forgetIt} && sleep 1.5`, 20);
         assert.equal(r.code, 0, r.stderr);
         assert.equal(r.held.task, 'T-001');
