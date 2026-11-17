@@ -7,6 +7,7 @@ use std::sync::Arc;
 use atm_common::{Error, Result};
 use atm_lib::Project;
 use atm_lib::query::Filters;
+use atm_lib::review_pages::ReviewQuery;
 use atm_lib::review_requests::{
     self, CommentUpdate, Decision, NewComment, NewReply, ReviewClosing, ReviewOpening, ReviewTasks,
 };
@@ -85,6 +86,22 @@ pub trait ProjectSource {
     /// # Errors
     /// As [`ProjectSource::file_version`], and a file that isn't an image.
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)>;
+    /// The document at `path` as the commit or tree `revision` has it (a review round's side).
+    ///
+    /// # Errors
+    /// As [`ProjectSource::file_version`], and a revision that isn't one or doesn't have the file.
+    fn document_at(&self, path: &str, revision: &str) -> Result<Value>;
+    /// Its reviews the query keeps, read as the user (which need them).
+    ///
+    /// # Errors
+    /// A status that isn't one; reviews that can't be read.
+    fn reviews(&self, query: &ReviewQuery) -> Result<Value>;
+    /// A review's page for one view: a round (the latest when none), against an earlier one when given.
+    ///
+    /// # Errors
+    /// No such review or round; a round's tree that can't be had here.
+    fn review(&self, review: &ReviewRef, round: Option<u32>, against: Option<u32>)
+    -> Result<Value>;
     /// Its reviews, to change as the user at the machine (never an agent's identity).
     ///
     /// # Errors
@@ -249,6 +266,23 @@ impl ProjectSource for Member {
 
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {
         Member::image(self, path)
+    }
+
+    fn document_at(&self, path: &str, revision: &str) -> Result<Value> {
+        Member::document_at(self, path, revision)
+    }
+
+    fn reviews(&self, query: &ReviewQuery) -> Result<Value> {
+        Member::reviews(self, query)
+    }
+
+    fn review(
+        &self,
+        review: &ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Value> {
+        Member::review(self, review, round, against)
     }
 
     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>> {

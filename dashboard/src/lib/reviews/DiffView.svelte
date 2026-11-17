@@ -153,15 +153,25 @@
     });
   const unifiedLines = (rows: UnifiedRow[]): CodeLine[] => rows.map((r) => ({ ...r }));
 
-  // Picking lines: a click on a line number, Shift extends it, in one run of one side
-  let picked = $state<{ block: number; first: number; side: Side; from: number; to: number } | null>(null);
+  // Picking lines: a click on a line number, Shift extends it, in one run of one side; a run is a block's rows, the
+  // chains shown between them included (`from` and `to` are rows of the block)
+  let picked = $state<{ block: number; side: Side; from: number; to: number } | null>(null);
 
-  function pick(block: number, first: number, s: Side, index: number, extend: boolean) {
+  function pick(block: number, s: Side, row: number, extend: boolean) {
     const p = picked;
     picked =
-      extend && p && p.block === block && p.first === first && p.side === s
-        ? { ...p, from: Math.min(p.from, index), to: Math.max(p.to, index) }
-        : { block, first, side: s, from: index, to: index };
+      extend && p && p.block === block && p.side === s
+        ? { ...p, from: Math.min(p.from, row), to: Math.max(p.to, row) }
+        : { block, side: s, from: row, to: row };
+  }
+
+  /** The rows of a segment (its first row, how many) picked on side `s`, as the segment's own indices */
+  function pickedIn(block: number, first: number, count: number, s: Side): [number, number] | null {
+    const p = picked;
+    if (!p || p.block !== block || p.side !== s) return null;
+    const from = Math.max(p.from, first);
+    const to = Math.min(p.to, first + count - 1);
+    return from <= to ? [from - first, to - first] : null;
   }
 
   /** What is picked, as a chain's anchor takes it: the side, its first and last line, and their text */
@@ -169,7 +179,7 @@
     const p = picked;
     const block = p ? blocks[p.block] : null;
     if (!p || block?.type !== 'rows') return null;
-    const rows = (block.rows as (SplitRow | UnifiedRow)[]).slice(p.first + p.from, p.first + p.to + 1);
+    const rows = (block.rows as (SplitRow | UnifiedRow)[]).slice(p.from, p.to + 1);
     const numbered = rows
       .map((r) => {
         const n = p.side === 'old' || r.new === null ? r.old : r.new;
@@ -286,10 +296,7 @@
       {:else}
         {#each segments(block.rows as (SplitRow | UnifiedRow)[]) as segment (segment.first)}
           {@const keys = segment.rows.map((_, i) => `${b}-${segment.first + i}`)}
-          {@const isPicked = (s: Side): [number, number] | null =>
-            picked && picked.block === b && picked.first === segment.first && picked.side === s
-              ? [picked.from, picked.to]
-              : null}
+          {@const isPicked = (s: Side) => pickedIn(b, segment.first, segment.rows.length, s)}
           <div class="diff-run" data-keys={keys.join(' ')}>
             {#if mode === 'split'}
               {#each ['old', 'new'] as const as s (s)}
@@ -300,7 +307,7 @@
                     numbers={s}
                     {keys}
                     picked={isPicked(s)}
-                    onpick={(i, extend) => pick(b, segment.first, s, i, extend)}
+                    onpick={(i, extend) => pick(b, s, segment.first + i, extend)}
                   />
                 </div>
               {/each}
@@ -312,12 +319,12 @@
                   numbers="both"
                   {keys}
                   picked={isPicked('new')}
-                  onpick={(i, extend) => pick(b, segment.first, 'new', i, extend)}
+                  onpick={(i, extend) => pick(b, 'new', segment.first + i, extend)}
                 />
               </div>
             {/if}
           </div>
-          {#if picked && picked.block === b && picked.first === segment.first && pickedLines && oncomment}
+          {#if picked && picked.block === b && picked.to >= segment.first && picked.to < segment.first + segment.rows.length && pickedLines && oncomment}
             <div class="diff-picked">
               <span>
                 {pickedLines.lines[0] === pickedLines.lines[1]

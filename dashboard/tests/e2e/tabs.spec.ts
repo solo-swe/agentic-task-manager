@@ -9,7 +9,7 @@ async function expectSelected(page: Page, id: string) {
   await expect(tab(page, id)).toHaveAttribute('aria-selected', 'true');
   await expect(tab(page, id)).toHaveAttribute('tabindex', '0');
   await expect(panel(page, id)).toBeVisible();
-  for (const other of ['graph', 'kanban', 'list', 'agents', 'progress', 'project'].filter((x) => x !== id)) {
+  for (const other of ['graph', 'kanban', 'list', 'agents', 'progress', 'project', 'reviews'].filter((x) => x !== id)) {
     await expect(tab(page, other)).toHaveAttribute('aria-selected', 'false');
     await expect(tab(page, other)).toHaveAttribute('tabindex', '-1');
     await expect(panel(page, other)).toBeHidden();
@@ -30,6 +30,7 @@ test.describe('view tabs', () => {
       'Progress',
       'Agents',
       'Project',
+      'Reviews',
     ]);
     // The divider sits between the graph and Progress
     await expect(page.locator('#tab-graph + .view-tab-divider + #tab-progress')).toHaveCount(1);
@@ -64,8 +65,10 @@ test.describe('view tabs', () => {
     await expect(tab(page, 'list')).toBeFocused();
     await page.keyboard.press('ArrowLeft');
     await page.keyboard.press('ArrowLeft');
+    await expectSelected(page, 'reviews');
+    await expect(tab(page, 'reviews')).toBeFocused();
+    await page.keyboard.press('ArrowLeft');
     await expectSelected(page, 'project');
-    await expect(tab(page, 'project')).toBeFocused();
   });
 
   test('a deep link opens that view, and it survives a reload', async ({ page, tasksServer }) => {

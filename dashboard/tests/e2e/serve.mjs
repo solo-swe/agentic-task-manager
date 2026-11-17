@@ -6,12 +6,14 @@ import { createServer } from 'node:http';
 import { lstat, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { pageCsp } from './csp.mjs';
+import { E2E_SESSION } from './session.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const ASSETS = root + 'dist/assets/';
 const PAGE = root + 'dist/tasks-dashboard.html';
 // As atm serve's (atm-api's pages.rs; src/lib/address.ts PAGE_PATH), in a workspace too (/w/<w>/…)
-const PAGE_PATH = /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+)?)?|board|progress|agents)?\/?)?$/;
+const PAGE_PATH =
+  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents)?\/?)?$/;
 // As atm serve's asset route (atm-api's assets.rs): plain names, known extensions, no symlinks; every
 // asset readable cross-origin (the sandbox's frames have an opaque origin), a frame document sandboxed
 const ASSET = /^\/assets\/((?:[A-Za-z0-9_@][A-Za-z0-9._@-]*\/)*[A-Za-z0-9_@][A-Za-z0-9._@-]*\.(js|wasm|html))$/;
@@ -51,7 +53,9 @@ createServer(async (req, res) => {
     return;
   }
   try {
-    const body = await readFile(PAGE);
+    const page = await readFile(PAGE, 'utf8');
+    // The page with the session token, right after <head>, as atm serve's (atm-api's with_session)
+    const body = page.replace('<head>', `<head><meta name="atm-session" content="${E2E_SESSION}">`);
     res
       .writeHead(200, {
         'content-type': 'text/html; charset=utf-8',

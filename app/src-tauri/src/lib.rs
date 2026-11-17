@@ -24,8 +24,8 @@ use commands::{
     subscribe_workspace, unsubscribe, version, worktrees,
 };
 use commands::{
-    add_review_comment, close_review, create_review, reply_to_review_comment, set_review_tasks,
-    submit_review_decision, update_review_comment,
+    add_review_comment, close_review, create_review, project_review, project_reviews,
+    reply_to_review_comment, set_review_tasks, submit_review_decision, update_review_comment,
 };
 use external::open_url;
 use menu::{menu, menu_state, subscribe_menu};
@@ -52,6 +52,8 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         document,
         file,
         logo,
+        project_reviews,
+        project_review,
         subscribe_workspace::<tauri::Wry>,
         subscribe_project::<tauri::Wry>,
         unsubscribe::<tauri::Wry>,
@@ -227,8 +229,8 @@ fn context<R: tauri::Runtime>() -> tauri::Context<R> {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        AppError, TaskFilters, claims_of, document_of, file_of, logo_of, projects_of, search_in,
-        tasks_of, workspaces_of, worktrees_of,
+        AppError, ReviewFilters, TaskFilters, claims_of, document_of, file_of, logo_of,
+        projects_of, review_of, reviews_of, search_in, tasks_of, workspaces_of, worktrees_of,
     };
     use super::*;
     use serde_json::{Value, json};
@@ -512,8 +514,12 @@ mod tests {
         );
         assert_eq!(
             ok(rest(&home, &format!("{p}/documents"), "path=README.md")),
-            document_of(&workspaces, "work", "abcd1234", "README.md").expect("the document")
+            document_of(&workspaces, "work", "abcd1234", "README.md", None).expect("the document")
         );
+        let listed = reviews_of(&workspaces, "work", "abcd1234", ReviewFilters::default())
+            .expect("the reviews");
+        assert_eq!(listed["reviews"], json!([]), "{listed}");
+        assert_eq!(ok(rest(&home, &format!("{p}/reviews"), "")), listed);
         let (status, _, bytes) = rest(&home, &format!("{p}/files"), "path=pixel.png");
         let image = file_of(&workspaces, "work", "abcd1234", "pixel.png").expect("the image");
         assert_eq!((status, bytes), (200, image.data));
@@ -533,6 +539,24 @@ mod tests {
             rest(&home, &format!("{v2}/projects/ffff0000/tasks"), "").0,
             404
         );
+        assert!(matches!(
+            review_of(&workspaces, "work", "abcd1234", "CR-9", None, None),
+            Err(AppError::NotFound(_))
+        ));
+        assert_eq!(rest(&home, &format!("{p}/reviews/CR-9"), "").0, 404);
+        assert!(matches!(
+            reviews_of(
+                &workspaces,
+                "work",
+                "abcd1234",
+                ReviewFilters {
+                    status: vec!["merged".into()],
+                    ..ReviewFilters::default()
+                }
+            ),
+            Err(AppError::Invalid(_))
+        ));
+        assert_eq!(rest(&home, &format!("{p}/reviews"), "status=merged").0, 400);
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 
@@ -596,7 +620,13 @@ mod tests {
             (
                 "document",
                 with(json!({"path": "README.md"})),
-                document_of(workspaces, "work", "abcd1234", "README.md").expect("document"),
+                document_of(workspaces, "work", "abcd1234", "README.md", None).expect("document"),
+            ),
+            (
+                "project_reviews",
+                with(json!({"filters": {}})),
+                reviews_of(workspaces, "work", "abcd1234", ReviewFilters::default())
+                    .expect("reviews"),
             ),
             (
                 "file",
@@ -654,6 +684,8 @@ mod tests {
                 document,
                 file,
                 logo,
+                project_reviews,
+                project_review,
                 unsubscribe,
                 agents_status,
                 connect_agents,

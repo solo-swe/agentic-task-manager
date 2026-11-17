@@ -15126,7 +15126,7 @@
       "description": "The pages of [§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), in the app and the browser.\n\n## Change\n- `/projects/<id>/reviews` (and across the workspace on the overview): search (title, summary, comments), filters (status, author, reviewer, task, branch), latest activity first; *Next review needing you*.\n- `/projects/<id>/reviews/CR-7` (`?round=`, `&against=`, `&file=`): the header, the file tree with viewed ticks (kept in the page's preferences by review, round and file content), the diff viewer, the round picker (whole change, or a round against another), drifted chains with a link to where they were made, *Submit* (approve, request changes, comment).\n- A clashing reference (`CR-8`) shows both CR-8.1 and CR-8.2 to choose.\n- Routes listed in `docs/multi-project-api.md` §2.7.\n\n## Tests\nE2e specs (the fixture serves reviews); the performance budget for a large review.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e24e20342d9",
         "01a1e83f-8c1c-74d3-83f6-0e25d982e71d",
@@ -15139,7 +15139,7 @@
         "dashboard/tests/e2e/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T11:02:15Z",
+      "updated_at": "2026-11-17T16:52:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 574,
@@ -15163,7 +15163,9 @@
           "from": "2026-11-17T11:02:15Z"
         }
       ],
-      "sprint": "Code reviews: records and CLI"
+      "sprint": "Code reviews: records and CLI",
+      "started_at": "2026-11-17T16:52:31Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e27bb7d4274",

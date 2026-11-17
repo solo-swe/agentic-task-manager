@@ -21,7 +21,9 @@ export function isOverviewTab(value: unknown): value is OverviewTab {
 }
 
 /** Parameters in the path, not the query */
-const PATH_KEYS = ['workspace', 'project', 'overview', 'view'];
+const PATH_KEYS = ['workspace', 'project', 'overview', 'view', 'review'];
+/** The project tab a review's page is under: /projects/<id>/reviews/<CR> (ATM-574) */
+const REVIEWS = 'reviews';
 /** Parameters an old `#…` link may hold (the hash routes before T-429) */
 const LEGACY_KEYS = ['project', 'overview', 'view', 'sprint', 'doc', 'about', 'help'];
 const PROJECTS = 'projects';
@@ -57,6 +59,10 @@ export function addressParams(address: string): URLSearchParams {
     } else if (first === PROJECTS && rest.length === 0) {
       params.set('project', id);
       if (tab !== undefined) params.set('view', tab);
+    } else if (first === PROJECTS && tab === REVIEWS && rest.length === 1) {
+      params.set('project', id);
+      params.set('view', REVIEWS);
+      params.set('review', rest[0]);
     } else if (segments.length === 1 && isOverviewTab(first)) {
       params.set('overview', '');
       params.set('view', first);
@@ -80,8 +86,12 @@ export function formatAddress(params: URLSearchParams): string {
   const prefix = workspace && workspace !== DEFAULT_WORKSPACE ? `/w/${encodeURIComponent(workspace)}` : '';
   let path = prefix || '/';
   let pathView = false;
+  const review = view === REVIEWS ? params.get('review') : null;
   if (project) {
-    path = `${prefix}/${PROJECTS}/${encodeURIComponent(project)}` + (view ? `/${encodeURIComponent(view)}` : '');
+    path =
+      `${prefix}/${PROJECTS}/${encodeURIComponent(project)}` +
+      (view ? `/${encodeURIComponent(view)}` : '') +
+      (review ? `/${encodeURIComponent(review)}` : '');
     pathView = true;
   } else if (params.has('overview')) {
     path = `${prefix}/` + (view && isOverviewTab(view) ? view : PROJECTS);
@@ -89,7 +99,15 @@ export function formatAddress(params: URLSearchParams): string {
   }
   const parts = [...params]
     .filter(
-      ([key]) => !(key === 'workspace' || key === 'project' || key === 'overview' || (key === 'view' && pathView)),
+      ([key]) =>
+        !(
+          key === 'workspace' ||
+          key === 'project' ||
+          key === 'overview' ||
+          (key === 'view' && pathView) ||
+          // A review is a path's alone, on the reviews tab
+          key === 'review'
+        ),
     )
     .map(([key, value]) =>
       value === ''
@@ -100,9 +118,49 @@ export function formatAddress(params: URLSearchParams): string {
 }
 
 /** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (atm-api's pages.rs):
- * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/board`, `/progress`, `/agents`, each also under
- * `/w/<w>` (and `/w/<w>` itself) */
-export const PAGE_PATH = /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+)?)?|board|progress|agents)?\/?)?$/;
+ * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/projects/<id>/reviews/<CR>`, `/board`, `/progress`,
+ * `/agents`, each also under `/w/<w>` (and `/w/<w>` itself) */
+export const PAGE_PATH =
+  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents)?\/?)?$/;
+
+/** The review a review's page shows (/projects/<id>/reviews/<CR>), and the view of it its query names */
+export interface ReviewAddress {
+  review: string | null;
+  round: number | null;
+  against: number | null;
+  file: string | null;
+}
+
+const roundParam = (value: string | null) => {
+  const n = Number(value);
+  return value && Number.isInteger(n) && n > 0 ? n : null;
+};
+
+export function reviewOf(address: string): ReviewAddress {
+  const params = addressParams(address);
+  const review = params.get('view') === REVIEWS ? params.get('review') : null;
+  return {
+    review,
+    round: review ? roundParam(params.get('round')) : null,
+    against: review ? roundParam(params.get('against')) : null,
+    file: review ? params.get('file') : null,
+  };
+}
+
+/** `address` showing `at` on its project's reviews tab: a review (and its round, the round against, the file), or the
+ * list (`review` null) */
+export function withReview(address: string, at: Partial<ReviewAddress> & { review: string | null }): string {
+  const params = addressParams(address);
+  params.set('view', REVIEWS);
+  for (const key of ['review', 'round', 'against', 'file'] as const) params.delete(key);
+  if (at.review) {
+    params.set('review', at.review);
+    if (at.round) params.set('round', String(at.round));
+    if (at.against) params.set('against', String(at.against));
+    if (at.file) params.set('file', at.file);
+  }
+  return formatAddress(params);
+}
 
 /** The workspace an address is in: its `/w/<w>`, else `default` */
 export function workspaceOf(address: string): string {

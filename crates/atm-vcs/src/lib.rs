@@ -348,6 +348,20 @@ impl GitVcs {
         )
     }
 
+    /// The tree a revision names (a commit's, or a tree itself, as a review's rebuilt round is), or none.
+    #[must_use]
+    pub fn resolve_tree(&self, rev: &str) -> Option<String> {
+        ask(
+            &[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("{rev}^{{tree}}"),
+            ],
+            &self.root,
+        )
+    }
+
     /// Whether the commit is an ancestor of HEAD (on the current branch).
     #[must_use]
     pub fn in_history(&self, sha: &str) -> bool {

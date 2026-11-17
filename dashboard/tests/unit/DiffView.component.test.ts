@@ -143,6 +143,33 @@ describe('DiffView', () => {
     expect(screen.getByText('Line 3 (before)')).toBeInTheDocument();
   });
 
+  it('a pick extends across a chain shown between its lines, and Comment shows after its last line', async () => {
+    // The chain on line 3 cuts the first hunk's rows after line 3: lines 2 to 4 are still one pick
+    const { container, oncomment } = show({ chains: [chain('t1', 'new', [3, 3], 'Why upper case?')] });
+    await numbers();
+    const lineOn = (n: number) =>
+      [...container.querySelectorAll('.diff-new')]
+        .flatMap((side) => within(side as HTMLElement).queryAllByRole('button', { name: `Line ${n}` }))
+        .at(0)!;
+    await fireEvent.click(lineOn(2));
+    await fireEvent.click(lineOn(4), { shiftKey: true });
+    expect(screen.getByText('Lines 2–4')).toBeInTheDocument();
+    expect(container.querySelectorAll('.diff-new .diff-line.picked')).toHaveLength(3);
+    // The Comment button after the last line picked, past the chain
+    const picked = container.querySelector('.diff-picked')!;
+    expect(picked.previousElementSibling).toHaveClass('diff-run');
+    expect(picked.previousElementSibling?.querySelector('[aria-label="Line 4"]')).not.toBeNull();
+    await fireEvent.click(within(picked as HTMLElement).getByRole('button', { name: 'Comment' }));
+    expect(oncomment).toHaveBeenCalledWith({ side: 'new', lines: [2, 4], quote: 'two\nTHREE\nfour' });
+    // Backwards, the same
+    await fireEvent.click(lineOn(4));
+    await fireEvent.click(lineOn(2), { shiftKey: true });
+    expect(screen.getByText('Lines 2–4')).toBeInTheDocument();
+    // Another side, or another hunk, starts a new pick
+    await fireEvent.click(lineOn(9), { shiftKey: true });
+    expect(screen.getByText('Line 9')).toBeInTheDocument();
+  });
+
   it('keys: n and p go from change to change, ] and [ change file, v marks it viewed; not while typing', async () => {
     const { container, onnextfile, onprevfile, onviewed } = show({
       chains: [chain('t1', 'new', [3, 3], 'Why upper case?')],

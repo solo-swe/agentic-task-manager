@@ -1,0 +1,193 @@
+import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { addComment, replyTo, resolveComment, sessionToken, submitDecision } from '../../src/lib/api/review-changes';
+import { setApiWorkspace } from '../../src/lib/api/workspace';
+
+// A review's changes from the page (lib/api/review-changes.ts, ATM-574): the REST routes with the page's session token
+// in the browser, the app's commands in the app. The transport is stubbed: fetch, the IPC.
+const where = vi.hoisted(() => ({ app: false }));
+vi.mock('../../src/lib/api/http', async (actual) => ({
+  ...(await actual()),
+  get inApp() {
+    return where.app;
+  },
+}));
+
+const TOKEN = 'a'.repeat(64);
+const reviews = '/api/v2/workspaces/default/projects/p1/reviews';
+
+function withToken(token: string | null) {
+  document.head.querySelector('meta[name="atm-session"]')?.remove();
+  if (token === null) return;
+  const meta = document.createElement('meta');
+  meta.name = 'atm-session';
+  meta.content = token;
+  document.head.prepend(meta);
+}
+
+/** fetch answering `status` with `body`, recording what it was asked */
+function answering(status: number, body: unknown) {
+  const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
+    async () => new Response(JSON.stringify(body), { status }),
+  );
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
+
+const asked = (fetch: ReturnType<typeof answering>, call = 0) => {
+  const [url, init] = fetch.mock.calls[call] as [string, RequestInit];
+  return { url, method: init.method, headers: init.headers, body: JSON.parse(String(init.body)) };
+};
+
+beforeEach(() => {
+  where.app = false;
+  withToken(TOKEN);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  clearMocks();
+  setApiWorkspace('default');
+  withToken(null);
+});
+
+describe('in the browser', () => {
+  it('each change is its route, with the page’s token, as JSON', async () => {
+    const cases = [
+      [
+        () =>
+          addComment('p1', 'CR-7', { path: 'a.md', lines: [1, 2], side: 'new', quote: 'q', round: 2, body: 'Why?' }),
+        'POST',
+        `${reviews}/CR-7/comments`,
+        { path: 'a.md', lines: [1, 2], side: 'new', quote: 'q', round: 2, body: 'Why?' },
+      ],
+      [
+        () => replyTo('p1', 'CR-7', 'c4', 'Because.'),
+        'POST',
+        `${reviews}/CR-7/comments/c4/replies`,
+        { body: 'Because.' },
+      ],
+      [() => resolveComment('p1', 'CR-7', 'c4', true), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: true }],
+      [() => resolveComment('p1', 'CR-7', 'c4', false), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: false }],
+      [
+        () => submitDecision('p1', 'CR-7', { decision: 'request_changes', body: 'Two things.' }),
+        'POST',
+        `${reviews}/CR-7/decisions`,
+        { decision: 'request_changes', body: 'Two things.' },
+      ],
+      [
+        () => submitDecision('p1', 'CR-7', { decision: 'approve' }),
+        'POST',
+        `${reviews}/CR-7/decisions`,
+        { decision: 'approve' },
+      ],
+    ] as const;
+    for (const [change, method, url, body] of cases) {
+      const fetch = answering(201, { review: 'CR-7' });
+      expect(await change()).toEqual({ ok: true, body: { review: 'CR-7' } });
+      expect(asked(fetch)).toEqual({
+        url,
+        method,
+        headers: { 'Content-Type': 'application/json', 'X-Atm-Session': TOKEN },
+        body,
+      });
+    }
+  });
+
+  it('names the workspace, project, review and comment as the path has them, escaped', async () => {
+    setApiWorkspace('my work');
+    const fetch = answering(201, {});
+    await replyTo('p/1', 'CR 8', 'c 1', 'x');
+    expect(asked(fetch).url).toBe('/api/v2/workspaces/my%20work/projects/p%2F1/reviews/CR%208/comments/c%201/replies');
+  });
+
+  it('a refusal is its message; a body that isn’t JSON, its status; a failed request, its error', async () => {
+    answering(403, { error: "the review's author can't decide it" });
+    expect(await submitDecision('p1', 'CR-7', { decision: 'approve' })).toEqual({
+      ok: false,
+      message: "the review's author can't decide it",
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>', { status: 502 })),
+    );
+    expect(await replyTo('p1', 'CR-7', 'c1', 'x')).toEqual({ ok: false, message: 'HTTP 502' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down');
+      }),
+    );
+    expect(await replyTo('p1', 'CR-7', 'c1', 'x')).toEqual({ ok: false, message: 'network down' });
+  });
+
+  it('the token is the page’s meta tag; none, none', () => {
+    expect(sessionToken()).toBe(TOKEN);
+    withToken('');
+    expect(sessionToken()).toBeNull();
+    withToken(null);
+    expect(sessionToken()).toBeNull();
+  });
+
+  it('without a token in the page (the dev server’s page), the dev server’s copy; with none there, nothing is sent', async () => {
+    withToken(null);
+    const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
+      url === '/__dev/atm-session'
+        ? new Response(JSON.stringify({ token: 'd'.repeat(64) }))
+        : new Response(JSON.stringify({ ok: 1 }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    expect((await replyTo('p1', 'CR-7', 'c1', 'x')).ok).toBe(true);
+    expect(fetch.mock.calls[1][1]?.headers).toMatchObject({ 'X-Atm-Session': 'd'.repeat(64) });
+
+    for (const devAnswer of [() => new Response(JSON.stringify({ token: null })), () => new Response('not json')]) {
+      const none = vi.fn(async () => devAnswer());
+      vi.stubGlobal('fetch', none);
+      expect(await replyTo('p1', 'CR-7', 'c1', 'x')).toEqual({
+        ok: false,
+        message: 'This page wasn’t served by atm, so it can’t change a review.',
+      });
+      expect(none).toHaveBeenCalledTimes(1);
+    }
+  });
+});
+
+describe('in the app', () => {
+  beforeEach(() => {
+    where.app = true;
+  });
+
+  it('each change is the app’s command of the same name, with the workspace and project', async () => {
+    const calls: [string, unknown][] = [];
+    mockIPC((command, args) => {
+      calls.push([command, args]);
+      return { review: 'CR-7' };
+    });
+    setApiWorkspace('w');
+    const fetch = answering(500, {});
+    await addComment('p1', 'CR-7', { body: 'On the review.' });
+    await replyTo('p1', 'CR-7', 'c4', 'Because.');
+    await resolveComment('p1', 'CR-7', 'c4', true);
+    await submitDecision('p1', 'CR-7', { decision: 'comment', body: 'Fine.' });
+    const at = { workspace: 'w', project: 'p1', review: 'CR-7' };
+    expect(calls).toEqual([
+      ['add_review_comment', { ...at, comment: { body: 'On the review.' } }],
+      ['reply_to_review_comment', { ...at, comment: 'c4', body: 'Because.' }],
+      ['update_review_comment', { ...at, comment: 'c4', update: { resolved: true } }],
+      ['submit_review_decision', { ...at, decision: { decision: 'comment', body: 'Fine.' } }],
+    ]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('a refusal is the app’s message, and needs no token', async () => {
+    withToken(null);
+    mockIPC(() => {
+      throw { kind: 'refused', message: 'not yours to resolve' };
+    });
+    expect(await resolveComment('p1', 'CR-7', 'c1', true)).toEqual({ ok: false, message: 'not yours to resolve' });
+    mockIPC(() => {
+      throw 'plain';
+    });
+    expect(await resolveComment('p1', 'CR-7', 'c1', true)).toEqual({ ok: false, message: 'plain' });
+  });
+});

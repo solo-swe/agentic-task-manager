@@ -12,12 +12,20 @@ use crate::send;
 
 /// `GET …/projects/<p>/documents?path=`: a file as the viewer shows it (its JSON). The `ETag` is the file's size and
 /// mtime and the current commit (which it names), so the viewer's poll gets a 304 without the file being read again.
+/// With `&at=<revision>`, the file as that commit or tree has it (a review round's side), which never changes: no tag.
 pub(super) fn get_document(
     project: &dyn ProjectSource,
     query: &str,
     request: &HeaderMap,
 ) -> Response {
     let path = parameter(query, "path");
+    let at = parameter(query, "at");
+    if !at.is_empty() {
+        return match project.document_at(&path, &at) {
+            Ok(document) => ok_json(&document, None),
+            Err(e) => error_response(&e),
+        };
+    }
     let (size, modified) = match project.file_version(&path) {
         Ok(version) => version,
         Err(e) => return error_response(&e),
@@ -225,5 +233,45 @@ mod tests {
         let image = answer(get_file(project.as_ref(), QUERY, &plain()));
         assert_eq!(image.status, StatusCode::BAD_REQUEST);
         assert_eq!(image.json(), json!({"error": "not an image"}));
+    }
+
+    /// A review round's side: the file as a commit or tree has it, asked of atm-lib with the revision as given (it
+    /// checks it); never the working copy's version, never tagged
+    #[test]
+    fn a_document_at_a_revision_is_atm_libs_answer_untagged() {
+        for (query, path, revision) in [
+            ("path=docs%2Fa+b.md&at=3fa1", PATH, "3fa1"),
+            ("at=HEAD&path=a.md", "a.md", "HEAD"),
+            ("path=&at=t1", "", "t1"),
+            ("path=a.md&at=--output%3Dx", "a.md", "--output=x"),
+        ] {
+            let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), Some("aaaa")));
+            let answer = answer(get_document(project.as_ref(), query, &having("\"any\"")));
+            assert_eq!(answer.status, StatusCode::OK, "{query}");
+            assert_eq!(answer.json(), json!({"path": "a.md", "revision": "t1"}));
+            assert_eq!(answer.tag(), "", "{query}");
+            assert_eq!(
+                calls.taken(),
+                [Call::DocumentAt(path.into(), revision.into())],
+                "{query}"
+            );
+        }
+        // No revision: the working copy's
+        let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
+        let _ = get_document(project.as_ref(), "path=docs%2Fa+b.md&at=", &plain());
+        assert_eq!(calls.taken()[0], Call::FileVersion(PATH.into()));
+    }
+
+    #[test]
+    fn a_document_at_a_revision_atm_lib_refuses_is_its_status() {
+        for (error, status) in refusals() {
+            let (project, _) = bound(FakeProject {
+                at_revision: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            let answer = answer(get_document(project.as_ref(), "path=a.md&at=x", &plain()));
+            assert_eq!(answer.status, status, "{error}");
+            assert_eq!(answer.json(), json!({"error": error.to_string()}));
+        }
     }
 }

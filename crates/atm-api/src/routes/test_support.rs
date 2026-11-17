@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use atm_common::{Error, Result};
 use atm_lib::query::Filters;
+use atm_lib::review_pages::ReviewQuery;
 use atm_lib::review_requests::{
     CommentUpdate, Decision, NewComment, NewReply, ReviewClosing, ReviewOpening, ReviewTasks,
 };
@@ -34,6 +35,9 @@ pub(super) enum Call {
     Head,
     Document(String),
     Image(String),
+    DocumentAt(String, String),
+    Reviews(ReviewQuery),
+    Review(ReviewRef, Option<u32>, Option<u32>),
     AsUser,
     OpenReview(ReviewOpening),
     CloseReview(ReviewRef, ReviewClosing),
@@ -123,6 +127,12 @@ pub(super) struct FakeProject {
     pub head: Option<String>,
     /// What its reviews answer; an error refuses to open the project as the user
     pub reviews: Result<FakeReviews>,
+    /// A file at a revision: what any is
+    pub at_revision: Result<Value>,
+    /// What listing its reviews answers
+    pub listed: Result<Value>,
+    /// What a review's page answers
+    pub page: Result<Value>,
 }
 
 impl Default for FakeProject {
@@ -137,6 +147,9 @@ impl Default for FakeProject {
             files: Vec::new(),
             head: Some("aaaa".into()),
             reviews: Ok(FakeReviews::default()),
+            at_revision: Ok(json!({"path": "a.md", "revision": "t1"})),
+            listed: Ok(json!({"reviews": [], "you": "Ana"})),
+            page: Ok(json!({"review": {"reference": "CR-1"}, "view": {"files": []}})),
         }
     }
 }
@@ -331,6 +344,28 @@ impl ProjectSource for Bound<FakeProject> {
     fn document(&self, path: &str) -> Result<Value> {
         self.calls.note(Call::Document(path.into()));
         self.file(path)?.document
+    }
+
+    fn document_at(&self, path: &str, revision: &str) -> Result<Value> {
+        self.calls
+            .note(Call::DocumentAt(path.into(), revision.into()));
+        self.fake.at_revision.clone()
+    }
+
+    fn reviews(&self, query: &ReviewQuery) -> Result<Value> {
+        self.calls.note(Call::Reviews(query.clone()));
+        self.fake.listed.clone()
+    }
+
+    fn review(
+        &self,
+        review: &ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Value> {
+        self.calls
+            .note(Call::Review(review.clone(), round, against));
+        self.fake.page.clone()
     }
 
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {

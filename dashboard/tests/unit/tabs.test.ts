@@ -33,10 +33,11 @@ describe('withView', () => {
 });
 
 describe('adjacentView', () => {
-  it('moves left/right and wraps, in the tab order: Kanban, List, Graph, Progress, Agents, Project', () => {
-    expect(VIEWS).toEqual(['kanban', 'list', 'graph', 'progress', 'agents', 'project']);
+  it('moves left/right and wraps, in the tab order: Kanban, List, Graph, Progress, Agents, Project, Reviews', () => {
+    expect(VIEWS).toEqual(['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews']);
     expect(adjacentView('graph', 1)).toBe('progress');
-    expect(adjacentView('project', 1)).toBe('kanban');
-    expect(adjacentView('kanban', -1)).toBe('project');
+    expect(adjacentView('project', 1)).toBe('reviews');
+    expect(adjacentView('reviews', 1)).toBe('kanban');
+    expect(adjacentView('kanban', -1)).toBe('reviews');
   });
 });

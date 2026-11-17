@@ -318,9 +318,9 @@ pub fn read_document(vcs: Option<&GitVcs>, path: &str) -> Result<Value> {
     }))
 }
 
-/// A file of the project as a commit has it, for the viewer (a review's round, a document's history): the same
-/// fields as [`read_document`], with `revision` the commit's SHA (and `commit` too), `modified_at` and `submodule`
-/// none, `tracked` true. The same checks: the path's, a regular file (no symlink, no submodule), not one git ignores
+/// A file of the project as a commit or a tree has it, for the viewer (a review's round, a document's history): the
+/// same fields as [`read_document`], with `revision` the commit's or tree's SHA (`commit` the commit's, none for a
+/// tree), `modified_at` and `submodule` none, `tracked` true. The same checks: the path's, a regular file (no symlink, no submodule), not one git ignores
 /// (by the working copy's rules), not too large.
 ///
 /// # Errors
@@ -337,11 +337,16 @@ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Res
     if revision.is_empty() || revision.starts_with('-') || revision.contains('\0') {
         return Err(Error::Invalid(format!("{revision}: not a revision")));
     }
-    let commit = vcs
-        .resolve(revision)
-        .ok_or_else(|| Error::NotFound(format!("{revision}: no such commit")))?;
+    // A commit, or a tree (a review's round rebuilt from its diff, which no commit has)
+    let commit = vcs.resolve(revision);
+    let object = match &commit {
+        Some(commit) => commit.clone(),
+        None => vcs
+            .resolve_tree(revision)
+            .ok_or_else(|| Error::NotFound(format!("{revision}: no such commit")))?,
+    };
     let (size, blob) = vcs
-        .blob_in(&commit, path)
+        .blob_in(&object, path)
         .ok_or_else(|| Error::NotFound(format!("{path}: not a file in {revision}")))?;
     if vcs.ignored(path) {
         return Err(Error::Refused(format!(
@@ -374,7 +379,7 @@ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Res
         "modified_at": null,
         "tracked": true,
         "commit": commit,
-        "revision": commit,
+        "revision": object,
         "submodule": null,
     }))
 }
@@ -566,6 +571,30 @@ mod tests {
             (code["language"].as_str(), code["line_offset"].as_u64()),
             (Some("rust"), Some(1))
         );
+    }
+
+    /// A review's round rebuilt from its diff is a tree no commit has: read the same way, with no commit named
+    #[test]
+    fn a_file_in_a_tree_is_read_as_the_tree_has_it() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        let tree = vcs.resolve_tree("first").unwrap();
+        let then = read_document_at(Some(&vcs), &tree, "a.md").unwrap();
+        assert_eq!(then["document"], "# One\n");
+        assert_eq!(then["revision"], json!(tree));
+        assert_eq!(then["commit"], Value::Null);
+        // A commit's own answer names the commit
+        let at_commit = read_document_at(Some(&vcs), "first", "a.md").unwrap();
+        assert_eq!(at_commit["commit"], json!(vcs.resolve("first")));
+        // The tree's checks are a commit's: a file it doesn't have, a path atm doesn't show
+        assert!(matches!(
+            read_document_at(Some(&vcs), &tree, "b.md"),
+            Err(Error::NotFound(_))
+        ));
+        assert!(matches!(
+            read_document_at(Some(&vcs), &tree, ".env"),
+            Err(Error::Refused(_))
+        ));
     }
 
     #[test]

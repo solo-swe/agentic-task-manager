@@ -4,7 +4,7 @@ import { addressParams, formatAddress } from './address';
 
 // The task views first, then the views about the project (docs/project-stats-proposal.md §1.1, T-251); a divider
 // sits between the groups, after GROUP_END
-export const VIEWS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project'] as const;
+export const VIEWS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'] as const;
 export type ViewId = (typeof VIEWS)[number];
 export const DEFAULT_VIEW: ViewId = 'kanban';
 export const GROUP_END: ViewId = 'graph';
@@ -16,6 +16,7 @@ export const VIEW_LABELS: Record<ViewId, string> = {
   agents: 'Agents',
   progress: 'Progress',
   project: 'Project',
+  reviews: 'Reviews',
 };
 
 export const VIEW_ICONS = {
@@ -25,6 +26,7 @@ export const VIEW_ICONS = {
   agents: 'bot',
   progress: 'trending-up',
   project: 'folder',
+  reviews: 'message-square',
 } as const satisfies Record<ViewId, string>;
 
 function isView(value: string | null): value is ViewId {

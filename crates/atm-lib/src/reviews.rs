@@ -12,7 +12,10 @@ use serde_json::{Value, json};
 pub use atm_review::files::comments_md;
 pub use atm_review::folder::{FileStore, Found, list_everywhere};
 pub use atm_review::rounds;
-pub use atm_review::{Side, model::Round};
+pub use atm_review::{
+    Side,
+    model::{FileStatus, Round},
+};
 
 /// The project's git, for a review's rounds.
 ///

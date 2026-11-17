@@ -5,7 +5,7 @@
 // tests/unit/address.test.ts checks them against.
 import type { ParamMatcher } from '@sveltejs/kit/params';
 
-export const PROJECT_TABS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project'];
+export const PROJECT_TABS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'];
 export const OVERVIEW_PATHS = ['board', 'progress', 'agents'];
 
 function oneOf(name: string, values: readonly string[]): ParamMatcher<string> {

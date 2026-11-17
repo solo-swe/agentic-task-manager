@@ -27,6 +27,10 @@ const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
 const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
 const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
+/** A project's reviews, or one review's page (ATM-574) */
+const V1_REVIEWS = /\/api\/v1\/projects\/([^/]+)\/reviews(?:\/([^/?]+))?(?:\?.*)?$/;
+/** The review routes that change something, always v2 (ATM-572): the project, and the path past `reviews` */
+const V2_REVIEW_CHANGES = /\/api\/v2\/workspaces\/[^/]+\/projects\/([^/]+)\/reviews(\/[^?]*)?(?:\?.*)?$/;
 
 /** A file as the documents route answers it (docs/multi-project-api.md §2.6): Markdown by default, as it is */
 export function projectDocument(path: string, text: string, fields: Record<string, unknown> = {}) {
@@ -276,6 +280,49 @@ export class TasksServer {
     this.documents.set(path, { status, body: { error }, version: 0 });
   }
 
+  // The default project's reviews (ATM-574): the list, each review's page by reference (for any view: the view asked
+  // for is recorded), each round's sides' files by revision, and the changes the page sent
+  private reviewList: unknown = { reviews: [], you: 'Ana' };
+  private reviewPages = new Map<string, unknown>();
+  private revisionDocuments = new Map<string, unknown>();
+  /** The reviews list's queries and the reviews' pages asked for (`CR-7?round=2&against=1`), in order */
+  reviewRequests: string[] = [];
+  /** The changes the page sent: method, path past `reviews`, body, and its session token */
+  reviewChanges: { method: string; path: string; body: unknown; session: string | undefined }[] = [];
+  /** What the next changes are answered with: their status and body */
+  private reviewChangeAnswer: { status: number; body: unknown } = { status: 201, body: { comment: 'c9' } };
+
+  /** Serve the reviews list (`GET …/reviews`) */
+  setReviews(list: unknown) {
+    this.reviewList = list;
+    return this;
+  }
+
+  /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round */
+  setReview(reference: string, page: unknown) {
+    this.reviewPages.set(reference, page);
+    return this;
+  }
+
+  /** Refuse review `reference`'s page as atm serve does (a reference two reviews share is a 400 naming both) */
+  refuseReview(reference: string, status: number, error: string) {
+    this.reviewRefusals.set(reference, { status, error });
+    return this;
+  }
+  private reviewRefusals = new Map<string, { status: number; error: string }>();
+
+  /** Serve a file as revision `revision` has it (`documents?path=&at=`) */
+  setRevisionDocument(revision: string, doc: { path: string } & Record<string, unknown>) {
+    this.revisionDocuments.set(`${revision}:${doc.path}`, doc);
+    return this;
+  }
+
+  /** Answer the page's next review changes with `status` and `body` (a refusal, say) */
+  answerReviewChanges(status: number, body: unknown) {
+    this.reviewChangeAnswer = { status, body };
+    return this;
+  }
+
   constructor(private page: Page) {}
 
   private get meta(): Record<string, unknown> {
@@ -408,9 +455,62 @@ export class TasksServer {
       this.searches.push(q);
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(this.search(q)) });
     });
+    await this.page.route(V1_REVIEWS, (route) => {
+      const url = new URL(route.request().url());
+      const [, id, review] = V1_REVIEWS.exec(route.request().url())!;
+      if (decodeURIComponent(id) !== this.projectId)
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
+      this.reviewRequests.push(`${review ? decodeURIComponent(review) : ''}${url.search}`);
+      const refused = review ? this.reviewRefusals.get(decodeURIComponent(review)) : undefined;
+      if (refused)
+        return route.fulfill({
+          status: refused.status,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: refused.error }),
+        });
+      const found = review ? this.reviewPages.get(decodeURIComponent(review)) : this.reviewList;
+      return found
+        ? route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ generated_at: '2026-11-17T10:00:00Z', ...(found as object) }),
+          })
+        : route.fulfill({
+            status: 404,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: `no review ${decodeURIComponent(review)}` }),
+          });
+    });
+    await this.page.route(V2_REVIEW_CHANGES, (route) => {
+      const request = route.request();
+      if (!['POST', 'PATCH', 'PUT'].includes(request.method())) return route.fallback();
+      this.reviewChanges.push({
+        method: request.method(),
+        path: V2_REVIEW_CHANGES.exec(request.url())![2] ?? '',
+        body: request.postDataJSON(),
+        session: request.headers()['x-atm-session'],
+      });
+      return route.fulfill({
+        status: this.reviewChangeAnswer.status,
+        contentType: 'application/json',
+        body: JSON.stringify(this.reviewChangeAnswer.body),
+      });
+    });
     await this.page.route(V1_DOCUMENTS, (route) => {
       const url = new URL(route.request().url());
       const path = url.searchParams.get('path') ?? '';
+      const revision = url.searchParams.get('at');
+      if (revision) {
+        this.documentRequests.push(`${path}@${revision}`);
+        const doc = this.revisionDocuments.get(`${revision}:${path}`);
+        return doc
+          ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
+          : route.fulfill({
+              status: 404,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: `${path}: not a file in ${revision}` }),
+            });
+      }
       this.documentRequests.push(path);
       const found = isDefault(route.request().url(), V1_DOCUMENTS) ? this.documents.get(path) : undefined;
       if (!found) {

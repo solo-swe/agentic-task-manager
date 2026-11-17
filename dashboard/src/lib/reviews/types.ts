@@ -34,3 +34,97 @@ export interface Picked {
   lines: [number, number];
   quote: string;
 }
+
+export type ReviewStatus = 'draft' | 'open' | 'live' | 'changes_requested' | 'approved' | 'closed';
+
+/** A review's header (`review.md`'s): what lists and searches need */
+export interface ReviewHeader {
+  id: string;
+  reference: string;
+  number: number;
+  title: string;
+  status: ReviewStatus;
+  tasks: string[];
+  author: string | null;
+  reviewers: string[];
+  created: string;
+  updated: string;
+}
+
+/** One review on the reviews page (`GET …/reviews`) */
+export interface ReviewEntry {
+  review: ReviewHeader;
+  branch: string | null;
+  chains: number;
+  open: number;
+  needs_you: boolean;
+}
+
+export interface ReviewList {
+  reviews: ReviewEntry[];
+  you: string;
+}
+
+/** What a round was made from */
+export type RoundKind =
+  { kind: 'range'; base: string; head: string } | { kind: 'working'; base: string } | { kind: 'files' };
+
+export interface Round {
+  number: number;
+  kind: RoundKind;
+  files: { path: string; binary: boolean }[];
+  by: string;
+  at: string;
+}
+
+/** A file of the view shown: its patch, and the commits or trees its two sides are read from (none for a side it
+ * doesn't have) */
+export interface ViewFile {
+  path: string;
+  old_path: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  binary: boolean;
+  patch: string;
+  before: string | null;
+  after: string | null;
+}
+
+/** A chain, with where it shows in the round shown: its lines there, or drifted (made on another round, its text
+ * gone), with the round and lines it was made on */
+export interface PlacedChain extends Chain {
+  placed: [number, number] | null;
+  drifted: { round: number; lines: [number, number] | null } | null;
+}
+
+/** A review's page for one view (`GET …/reviews/<CR>?round=&against=`) */
+export interface ReviewPageData {
+  review: ReviewHeader;
+  summary: string;
+  branch: string | null;
+  rounds: Round[];
+  chains: PlacedChain[];
+  view: { round: number; against: number | null; files: ViewFile[] };
+  needs_you: boolean;
+  you: string;
+}
+
+/** What the reviews page lists by: each one given (not empty) must fit */
+export interface ListQuery {
+  q: string;
+  status: ReviewStatus[];
+  author: string;
+  reviewer: string;
+  task: string;
+  branch: string;
+}
+
+export const NO_QUERY: ListQuery = { q: '', status: [], author: '', reviewer: '', task: '', branch: '' };
+
+export const STATUS_LABELS: Record<ReviewStatus, string> = {
+  draft: 'Draft',
+  open: 'Open',
+  live: 'Live',
+  changes_requested: 'Changes requested',
+  approved: 'Approved',
+  closed: 'Closed',
+};

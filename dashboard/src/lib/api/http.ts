@@ -46,6 +46,43 @@ export function v1DocumentUrl(project: string, path: string): string {
   return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;
 }
 
+/** A file of the project as a commit or tree has it: a review round's side (ATM-574) */
+export function v1DocumentAtUrl(project: string, path: string, revision: string): string {
+  return `${v1DocumentUrl(project, path)}&at=${encodeURIComponent(revision)}`;
+}
+
+/** What the reviews page lists by (docs/multi-project-api.md §2.9): each one given must fit */
+export interface ReviewQuery {
+  q?: string;
+  status?: string[];
+  author?: string;
+  reviewer?: string;
+  task?: string;
+  branch?: string;
+}
+
+/** A project's reviews the query keeps, the latest activity first (ATM-574) */
+export function reviewsUrl(project: string, query: ReviewQuery = {}): string {
+  const params = new URLSearchParams();
+  if (query.q) params.set('q', query.q);
+  for (const status of query.status ?? []) params.append('status', status);
+  for (const key of ['author', 'reviewer', 'task', 'branch'] as const) {
+    const value = query[key];
+    if (value) params.set(key, value);
+  }
+  const search = params.toString();
+  return projectRoute(project, 'reviews') + (search ? `?${search}` : '');
+}
+
+/** A review's page for one view: round `round` (the latest when none), against round `against` (ATM-574) */
+export function reviewUrl(project: string, review: string, round?: number | null, against?: number | null): string {
+  const params = new URLSearchParams();
+  if (round) params.set('round', String(round));
+  if (against) params.set('against', String(against));
+  const search = params.toString();
+  return `${projectRoute(project, 'reviews')}/${encodeURIComponent(review)}` + (search ? `?${search}` : '');
+}
+
 /** An image file of the project, its bytes, for an <img> (T-392) */
 export function v1FileUrl(project: string, path: string): string {
   return `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}`;

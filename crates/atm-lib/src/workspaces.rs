@@ -370,6 +370,35 @@ impl Member {
         read_document(self.project()?.vcs().as_ref(), path)
     }
 
+    /// The document at `path` as the commit or tree `revision` has it (a review's round's side).
+    ///
+    /// # Errors
+    /// As [`Member::document`], and a revision that isn't one, or doesn't have the file.
+    pub fn document_at(&self, path: &str, revision: &str) -> Result<Value> {
+        crate::documents::read_document_at(self.project()?.vcs().as_ref(), revision, path)
+    }
+
+    /// Its reviews the query keeps, the latest activity first, which need the user.
+    ///
+    /// # Errors
+    /// As [`crate::review_pages::list_reviews`].
+    pub fn reviews(&self, query: &crate::review_pages::ReviewQuery) -> Result<Value> {
+        crate::review_pages::list_reviews(&self.project_as_user()?, query)
+    }
+
+    /// A review's page for one view: round `round` (the latest when none), against round `against` when given.
+    ///
+    /// # Errors
+    /// As [`crate::review_pages::review_page`].
+    pub fn review(
+        &self,
+        review: &crate::reviews::ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Value> {
+        crate::review_pages::review_page(&self.project_as_user()?, review, round, against)
+    }
+
     /// The image at `path` in its working copy, and its content type.
     ///
     /// # Errors

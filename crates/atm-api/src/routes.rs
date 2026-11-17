@@ -124,11 +124,42 @@ fn error_response(error: &atm_common::Error) -> Response {
     send_error(status, &error.to_string())
 }
 
-/// A read about one project of `workspace`: `tasks`, `documents`, `files`, `claims`, `worktrees` or `logo`.
+/// A read about one project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProjectRead<'a> {
+    Tasks,
+    Documents,
+    Files,
+    Claims,
+    Worktrees,
+    Logo,
+    Reviews,
+    Review(&'a str),
+}
+
+impl<'a> ProjectRead<'a> {
+    /// The read a project's route names past `projects/<p>/` (v2's, which v1's `api/v1/projects/<p>/` and `p/<p>/`
+    /// have a part of each).
+    fn named(rest: &[&'a str]) -> Option<Self> {
+        Some(match rest {
+            ["tasks"] => Self::Tasks,
+            ["documents"] => Self::Documents,
+            ["files"] => Self::Files,
+            ["claims"] => Self::Claims,
+            ["worktrees"] => Self::Worktrees,
+            ["logo"] => Self::Logo,
+            ["reviews"] => Self::Reviews,
+            ["reviews", review] if !review.is_empty() => Self::Review(review),
+            _ => return None,
+        })
+    }
+}
+
+/// A read about project `id` of `workspace`.
 fn serve_project_read(
     workspace: &dyn WorkspaceSource,
     id: &str,
-    route: &str,
+    read: ProjectRead<'_>,
     query: &str,
     request: &HeaderMap,
 ) -> Response {
@@ -137,13 +168,15 @@ fn serve_project_read(
         Err(e) => return error_response(&e),
     };
     let project = project.as_ref();
-    match route {
-        "tasks" => tasks::get_tasks(project, query, request),
-        "documents" => documents::get_document(project, query, request),
-        "files" => documents::get_file(project, query, request),
-        "logo" => logo::get_logo(project, request),
-        "worktrees" => claims::get_worktrees(project, request),
-        _ => claims::get_claims(project, request),
+    match read {
+        ProjectRead::Tasks => tasks::get_tasks(project, query, request),
+        ProjectRead::Documents => documents::get_document(project, query, request),
+        ProjectRead::Files => documents::get_file(project, query, request),
+        ProjectRead::Logo => logo::get_logo(project, request),
+        ProjectRead::Worktrees => claims::get_worktrees(project, request),
+        ProjectRead::Claims => claims::get_claims(project, request),
+        ProjectRead::Reviews => reviews::get_reviews(project, query),
+        ProjectRead::Review(review) => reviews::get_review(project, review, query),
     }
 }
 
@@ -171,15 +204,10 @@ fn serve_workspace_read(
             workspaces::get_projects(workspace, request)
         }
         ["search"] => workspaces::get_search(workspace, query),
-        ["projects", id, route]
-            if !id.is_empty()
-                && matches!(
-                    route,
-                    "tasks" | "documents" | "files" | "claims" | "worktrees" | "logo"
-                ) =>
-        {
-            serve_project_read(workspace, id, route, query, request)
-        }
+        ["projects", id, ref rest @ ..] if !id.is_empty() => match ProjectRead::named(rest) {
+            Some(read) => serve_project_read(workspace, id, read, query, request),
+            None => send_error(StatusCode::NOT_FOUND, "not found"),
+        },
         _ => send_error(StatusCode::NOT_FOUND, "not found"),
     }
 }
@@ -204,18 +232,31 @@ pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) 
     if path == "/api/search" {
         return workspaces::get_search(default, query);
     }
+    // `api/v1/projects/<p>/…`: its tasks, files and reviews; `p/<p>/…`: its claims, worktrees and logo
     if let Some(rest) = path.strip_prefix("/api/v1/projects/")
-        && let Some((id, route @ ("documents" | "files" | "tasks"))) = rest.split_once('/')
+        && let Some((id, route)) = rest.split_once('/')
         && !id.is_empty()
+        && let Some(
+            read @ (ProjectRead::Tasks
+            | ProjectRead::Documents
+            | ProjectRead::Files
+            | ProjectRead::Reviews
+            | ProjectRead::Review(_)),
+        ) = ProjectRead::named(&route.split('/').collect::<Vec<_>>())
     {
-        return serve_project_read(default, id, route, query, request);
+        return serve_project_read(default, id, read, query, request);
     }
     if let Some(rest) = path.strip_prefix("/p/")
         && let Some((id, name)) = rest.split_once('/')
         && !id.is_empty()
-        && matches!(name, "claims.json" | "worktrees.json" | "logo")
+        && let Some(read) = match name {
+            "claims.json" => Some(ProjectRead::Claims),
+            "worktrees.json" => Some(ProjectRead::Worktrees),
+            "logo" => Some(ProjectRead::Logo),
+            _ => None,
+        }
     {
-        return serve_project_read(default, id, name.trim_end_matches(".json"), query, request);
+        return serve_project_read(default, id, read, query, request);
     }
     send_error(StatusCode::NOT_FOUND, "not found")
 }
@@ -338,6 +379,7 @@ mod tests {
 
     /// Every read reaches its route, the same in v2 (any workspace) and v1 (`default`'s), with the query
     #[test]
+    #[allow(clippy::too_many_lines)] // reason: one table, a row per read
     fn each_path_reaches_its_read_in_its_workspace() {
         let project = |w: &str| Call::Project(w.into(), "p1".into());
         let tasks = |w: &str| {
@@ -430,6 +472,57 @@ mod tests {
                 vec![project("work"), Call::ReadLogo],
             ),
             ("/p/p1/logo", "", vec![project("default"), Call::ReadLogo]),
+            (
+                "/api/v2/workspaces/work/projects/p1/documents",
+                "path=a.md&at=t1",
+                vec![
+                    project("work"),
+                    Call::DocumentAt("a.md".into(), "t1".into()),
+                ],
+            ),
+            (
+                "/api/v1/projects/p1/documents",
+                "path=a.md&at=t1",
+                vec![
+                    project("default"),
+                    Call::DocumentAt("a.md".into(), "t1".into()),
+                ],
+            ),
+            (
+                "/api/v2/workspaces/work/projects/p1/reviews",
+                "q=x",
+                vec![
+                    project("work"),
+                    Call::Reviews(atm_lib::review_pages::ReviewQuery {
+                        q: "x".into(),
+                        ..atm_lib::review_pages::ReviewQuery::default()
+                    }),
+                ],
+            ),
+            (
+                "/api/v1/projects/p1/reviews",
+                "",
+                vec![
+                    project("default"),
+                    Call::Reviews(atm_lib::review_pages::ReviewQuery::default()),
+                ],
+            ),
+            (
+                "/api/v2/workspaces/work/projects/p1/reviews/CR-7",
+                "round=2&against=1",
+                vec![
+                    project("work"),
+                    Call::Review(atm_lib::reviews::ReviewRef("CR-7".into()), Some(2), Some(1)),
+                ],
+            ),
+            (
+                "/api/v1/projects/p1/reviews/CR-7",
+                "",
+                vec![
+                    project("default"),
+                    Call::Review(atm_lib::reviews::ReviewRef("CR-7".into()), None, None),
+                ],
+            ),
         ];
         for (path, query, expected) in cases {
             let (_, _, calls) = served(fake(), path, query);
@@ -449,8 +542,15 @@ mod tests {
             ("/api/v2/workspaces/work/other", "not found"),
             ("/api/v2/workspaces/work/projects/", "not found"),
             ("/api/v2/workspaces/work/projects/p1", "not found"),
-            ("/api/v2/workspaces/work/projects/p1/reviews", "not found"),
+            ("/api/v2/workspaces/work/projects/p1/reviews/", "not found"),
+            (
+                "/api/v2/workspaces/work/projects/p1/reviews/CR-1/comments",
+                "not found",
+            ),
             ("/api/v2/workspaces/work/projects/p1/tasks/T-1", "not found"),
+            ("/api/v1/projects/p1/reviews/", "not found"),
+            ("/api/v1/projects/p1/reviews/CR-1/x", "not found"),
+            ("/p/p1/reviews", "not found"),
             ("/api/v2/workspaces/work/projects//tasks", "not found"),
             ("/api/v1/projects/p1/claims", "not found"),
             ("/api/v1/projects/p1/logo", "not found"),

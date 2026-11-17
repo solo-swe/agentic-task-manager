@@ -19,9 +19,68 @@ use axum::http::{Method, StatusCode};
 use axum::response::Response;
 use serde_json::{Value, json};
 
-use super::source::ReviewChanges;
-use super::{Projects, error_response, stamped};
+use atm_lib::review_pages::ReviewQuery;
+
+use super::query::{parameter, parse_query};
+use super::source::{ProjectSource, ReviewChanges};
+use super::{Projects, error_response, ok_json, stamped};
 use crate::{send, send_error};
+
+/// `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews the query keeps (`status` repeats; the
+/// others are each their first value), the latest activity first, which need the user. Never cached: a review changes
+/// with each comment.
+pub(super) fn get_reviews(project: &dyn ProjectSource, query: &str) -> Response {
+    let given = parse_query(query);
+    let first = |name: &str| {
+        given
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.clone())
+    };
+    let wanted = ReviewQuery {
+        q: first("q").unwrap_or_default(),
+        status: given
+            .iter()
+            .filter(|(n, _)| n == "status")
+            .map(|(_, v)| v.clone())
+            .collect(),
+        author: first("author"),
+        reviewer: first("reviewer"),
+        task: first("task"),
+        branch: first("branch"),
+    };
+    match project.reviews(&wanted) {
+        Ok(listed) => ok_json(&stamped(listed), None),
+        Err(e) => error_response(&e),
+    }
+}
+
+/// A round's number from the query: none when it isn't given; else a whole number from 1, or why it isn't one.
+fn round_number(query: &str, name: &str) -> Result<Option<u32>, String> {
+    let given = parameter(query, name);
+    if given.is_empty() {
+        return Ok(None);
+    }
+    given
+        .parse::<u32>()
+        .ok()
+        .filter(|n| *n > 0)
+        .map(Some)
+        .ok_or_else(|| format!("{name} is a round's number, from 1"))
+}
+
+/// `GET …/reviews/<CR>?round=&against=`: the review's page for one view, the whole change of a round (the latest when
+/// none) or a round against an earlier one. Never cached, as the list.
+pub(super) fn get_review(project: &dyn ProjectSource, review: &str, query: &str) -> Response {
+    let (round, against) = match (round_number(query, "round"), round_number(query, "against")) {
+        (Ok(round), Ok(against)) => (round, against),
+        (Err(why), _) | (_, Err(why)) => return send_error(StatusCode::BAD_REQUEST, &why),
+    };
+    match project.review(&ReviewRef(review.to_string()), round, against) {
+        Ok(page) => ok_json(&stamped(page), None),
+        Err(e) => error_response(&e),
+    }
+}
 
 /// The answer to a review request: 201 with what was made, 200 with what changed, or atm-lib's refusal.
 fn review_answer(made: bool, result: atm_common::Result<Value>) -> Response {
@@ -227,11 +286,132 @@ mod tests {
     use atm_lib::reviews::{Side, Status};
 
     use super::super::test_support::{
-        Answer, Call, Fake, FakeProject, FakeReviews, answer, header, refusals,
+        Answer, Call, Fake, FakeProject, FakeReviews, answer, bound, header, refusals,
     };
     use super::*;
 
     const REVIEWS: &str = "/api/v2/workspaces/work/projects/p1/reviews";
+
+    #[test]
+    fn the_list_asks_for_the_querys_filters_status_repeated_the_others_their_first() {
+        for (query, wanted) in [
+            ("", ReviewQuery::default()),
+            ("unknown=x&&", ReviewQuery::default()),
+            (
+                "q=two+words&status=open&status=live&author=claude%3Aa&reviewer=Ana&task=ATM-1&branch=dev%2F1",
+                ReviewQuery {
+                    q: "two words".into(),
+                    status: vec!["open".into(), "live".into()],
+                    author: Some("claude:a".into()),
+                    reviewer: Some("Ana".into()),
+                    task: Some("ATM-1".into()),
+                    branch: Some("dev/1".into()),
+                },
+            ),
+            (
+                "author=a&author=b&q=first&q=second",
+                ReviewQuery {
+                    q: "first".into(),
+                    author: Some("a".into()),
+                    ..ReviewQuery::default()
+                },
+            ),
+            // A blank value is no value
+            ("author=&status=", ReviewQuery::default()),
+        ] {
+            let (project, calls) = bound(FakeProject::default());
+            assert_eq!(
+                get_reviews(project.as_ref(), query).status(),
+                StatusCode::OK
+            );
+            assert_eq!(calls.taken(), [Call::Reviews(wanted)], "{query}");
+        }
+    }
+
+    #[test]
+    fn the_list_and_a_page_are_atm_libs_answers_stamped_and_never_cached() {
+        let listed = json!({"reviews": [{"review": {"reference": "CR-2"}, "needs_you": true}], "you": "Ana"});
+        let page = json!({"review": {"reference": "CR-2"}, "view": {"round": 2, "files": [{"path": "a"}]}});
+        let (project, _) = bound(FakeProject {
+            listed: Ok(listed.clone()),
+            page: Ok(page.clone()),
+            ..FakeProject::default()
+        });
+        for (got, expected) in [
+            (answer(get_reviews(project.as_ref(), "")), listed),
+            (answer(get_review(project.as_ref(), "CR-2", "")), page),
+        ] {
+            assert_eq!(got.status, StatusCode::OK);
+            assert_eq!(got.unstamped(), expected);
+            assert!(got.json()["generated_at"].is_string());
+            assert_eq!(got.tag(), "");
+            assert_eq!(got.header("cache-control"), "no-store");
+        }
+    }
+
+    #[test]
+    fn a_page_asks_for_the_round_and_the_round_against() {
+        for (query, round, against) in [
+            ("", None, None),
+            ("round=3", Some(3), None),
+            ("round=3&against=1", Some(3), Some(1)),
+            ("against=1", None, Some(1)),
+            ("round=", None, None),
+            ("round=2&round=9", Some(2), None),
+        ] {
+            let (project, calls) = bound(FakeProject::default());
+            assert_eq!(
+                get_review(project.as_ref(), "CR-7", query).status(),
+                StatusCode::OK
+            );
+            assert_eq!(
+                calls.taken(),
+                [Call::Review(r("CR-7"), round, against)],
+                "{query}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_round_that_isnt_a_rounds_number_is_400_and_asks_nothing() {
+        for query in [
+            "round=0",
+            "round=-1",
+            "round=x",
+            "round=1.5",
+            "round=99999999999",
+            "against=0",
+            "against=y",
+        ] {
+            let (project, calls) = bound(FakeProject::default());
+            let refused = answer(get_review(project.as_ref(), "CR-7", query));
+            assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{query}");
+            assert!(
+                refused.json()["error"]
+                    .as_str()
+                    .is_some_and(|e| e.contains("a round's number"))
+            );
+            assert_eq!(calls.taken(), [], "{query}");
+        }
+    }
+
+    #[test]
+    fn a_refused_list_or_page_is_its_status() {
+        for (error, status) in refusals() {
+            let (project, _) = bound(FakeProject {
+                listed: Err(error.clone()),
+                page: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            for got in [
+                answer(get_reviews(project.as_ref(), "")),
+                answer(get_review(project.as_ref(), "CR-1", "")),
+            ] {
+                assert_eq!(got.status, status, "{error}");
+                assert_eq!(got.json(), json!({"error": error.to_string()}));
+            }
+        }
+    }
 
     fn send(fake: Fake, method: &Method, resource: &str, body: Value) -> (Answer, Vec<Call>) {
         let (projects, calls) = fake.projects();

@@ -9,6 +9,8 @@ import {
   isPagePath,
   legacyParams,
   OVERVIEW_TABS,
+  reviewOf,
+  withReview,
   withWorkspace,
   workspaceOf,
 } from '../../src/lib/address';
@@ -115,6 +117,7 @@ describe('the address (T-429)', () => {
       'projects/[id]/+page.svelte',
       'projects/[id]/[tab=view]/+page.svelte',
       '[tab=overview]/+page.svelte',
+      'projects/[id]/reviews/[review]/+page.svelte',
     ])
       expect(existsSync(join(routes, page)), page).toBe(true);
   });
@@ -163,7 +166,115 @@ describe('the workspace in the address (ADR-003 §5)', () => {
       'projects/[id]/+page.svelte',
       'projects/[id]/[tab=view]/+page.svelte',
       '[tab=overview]/+page.svelte',
+      'projects/[id]/reviews/[review]/+page.svelte',
     ])
       expect(existsSync(join(routes, page)), page).toBe(true);
+  });
+});
+
+describe('a review in the address (ATM-574)', () => {
+  it('reads a review’s page from the path, and its view from the query', () => {
+    expect(params('/projects/abc/reviews/CR-7?round=3&against=1&file=src/a.rs')).toEqual([
+      ['project', 'abc'],
+      ['view', 'reviews'],
+      ['review', 'CR-7'],
+      ['round', '3'],
+      ['against', '1'],
+      ['file', 'src/a.rs'],
+    ]);
+    expect(params('/w/work/projects/abc/reviews/CR-8.2')).toEqual([
+      ['workspace', 'work'],
+      ['project', 'abc'],
+      ['view', 'reviews'],
+      ['review', 'CR-8.2'],
+    ]);
+    // The reviews page is a tab like any other; a review under another tab, or deeper, is no page
+    expect(params('/projects/abc/reviews')).toEqual([
+      ['project', 'abc'],
+      ['view', 'reviews'],
+    ]);
+    expect(params('/projects/abc/list/CR-7')).toEqual([]);
+    expect(params('/projects/abc/reviews/CR-7/comments')).toEqual([]);
+    // The review is the path's: the query can't name one
+    expect(params('/projects/abc/reviews?review=CR-1')).toEqual([
+      ['project', 'abc'],
+      ['view', 'reviews'],
+    ]);
+  });
+
+  it('writes a review in the path, on the reviews tab only', () => {
+    const write = (entries: [string, string][]) => formatAddress(new URLSearchParams(entries));
+    expect(
+      write([
+        ['project', 'abc'],
+        ['view', 'reviews'],
+        ['review', 'CR 7/x'],
+        ['file', 'a b.md'],
+      ]),
+    ).toBe('/projects/abc/reviews/CR%207%2Fx?file=a%20b.md');
+    // On another tab a review is dropped, never a query parameter
+    expect(
+      write([
+        ['project', 'abc'],
+        ['view', 'list'],
+        ['review', 'CR-7'],
+      ]),
+    ).toBe('/projects/abc/list');
+    const address = '/w/work/projects/abc/reviews/CR-7?round=2&file=x.rs';
+    expect(formatAddress(addressParams(address))).toBe(address);
+  });
+
+  it('a review’s page is one of the dashboard’s pages, its reference letters, digits, - and .', () => {
+    for (const path of [
+      '/projects/abc/reviews',
+      '/projects/abc/reviews/CR-7',
+      '/projects/abc/reviews/CR-8.2/',
+      '/w/work/projects/abc/reviews/0193c0de-77aa',
+    ])
+      expect(isPagePath(path), path).toBe(true);
+    for (const path of [
+      '/projects/abc/reviews/CR-7/x',
+      '/projects/abc/reviews/CR_7',
+      '/projects/abc/reviews/CR%207',
+      `/projects/abc/reviews/${'x'.repeat(65)}`,
+      '/projects/abc/list/CR-7',
+    ])
+      expect(isPagePath(path), path).toBe(false);
+  });
+
+  it('reads the review, round, round against and file a page shows', () => {
+    expect(reviewOf('/projects/abc/reviews/CR-7?round=3&against=1&file=a.md')).toEqual({
+      review: 'CR-7',
+      round: 3,
+      against: 1,
+      file: 'a.md',
+    });
+    expect(reviewOf('/projects/abc/reviews/CR-7')).toEqual({ review: 'CR-7', round: null, against: null, file: null });
+    // A round that isn't a round's number is none
+    for (const round of ['0', '-1', 'x', '1.5', ''])
+      expect(reviewOf(`/projects/abc/reviews/CR-7?round=${round}`).round, round).toBeNull();
+    // No review: nothing of one, whatever the query says
+    expect(reviewOf('/projects/abc/reviews?round=3&file=a.md')).toEqual({
+      review: null,
+      round: null,
+      against: null,
+      file: null,
+    });
+    expect(reviewOf('/projects/abc/list').review).toBeNull();
+  });
+
+  it('moves to a review, a round, a file, or back to the list, keeping the rest', () => {
+    const from = '/projects/abc/list?sprint=s1&task=T-1';
+    expect(withReview(from, { review: 'CR-7' })).toBe('/projects/abc/reviews/CR-7?sprint=s1&task=T-1');
+    expect(withReview('/projects/abc/reviews/CR-7?file=a.md', { review: 'CR-7', round: 2, against: 1 })).toBe(
+      '/projects/abc/reviews/CR-7?round=2&against=1',
+    );
+    expect(withReview('/projects/abc/reviews/CR-7?round=2', { review: 'CR-7', round: 2, file: 'x/y.rs' })).toBe(
+      '/projects/abc/reviews/CR-7?round=2&file=x/y.rs',
+    );
+    // Back to the list: the review's view goes with it
+    expect(withReview('/w/work/projects/abc/reviews/CR-7?round=2&against=1&file=a.md', { review: null })).toBe(
+      '/w/work/projects/abc/reviews',
+    );
   });
 });

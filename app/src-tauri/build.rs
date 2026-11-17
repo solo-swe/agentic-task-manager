@@ -25,6 +25,8 @@ fn main() {
         "document",
         "file",
         "logo",
+        "project_reviews",
+        "project_review",
         "subscribe_workspace",
         "subscribe_project",
         "unsubscribe",
