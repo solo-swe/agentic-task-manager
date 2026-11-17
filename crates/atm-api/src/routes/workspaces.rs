@@ -31,3 +31,54 @@ pub(super) fn get_projects(workspace: &Workspace, request: &HeaderMap) -> Respon
 pub(super) fn get_search(workspace: &Workspace, query: &str) -> Response {
     ok_json(&json!(workspace.search(&parameter(query, "q"))), None)
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+
+    use super::super::test_support::{PROJECT, a_state_with_a_project, answer, having};
+    use super::*;
+
+    #[test]
+    fn the_workspaces_are_listed_with_how_many_projects_each_has() {
+        let home = a_state_with_a_project("workspaces");
+        let answer = answer(get_workspaces(&Projects::new(&home)));
+        assert_eq!(answer.status, StatusCode::OK);
+        assert_eq!(
+            answer.json(),
+            json!({"workspaces": [{"id": "default", "projects": 1}, {"id": "work", "projects": 1}],
+                   "recent": "default"})
+        );
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+
+    #[test]
+    fn a_workspaces_projects_are_listed_and_a_304_while_unchanged() {
+        let home = a_state_with_a_project("projects");
+        let projects = Projects::new(&home);
+        let work = projects.workspaces.get("work").expect("work");
+        let first = answer(get_projects(&work, &HeaderMap::new()));
+        assert_eq!(first.status, StatusCode::OK);
+        let listed = first.json();
+        assert_eq!(listed["projects"][0]["id"], json!(PROJECT));
+        assert_eq!(listed["projects"][0]["name"], json!("Routes"));
+        let tag = first.header("etag").to_string();
+        let again = answer(get_projects(&work, &having(&tag)));
+        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+        assert_eq!(again.body, b"");
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+
+    #[test]
+    fn search_finds_every_word_and_nothing_for_an_empty_query() {
+        let home = a_state_with_a_project("search");
+        let default = Projects::new(&home).workspaces.default_workspace();
+        let found = |query: &str| answer(get_search(&default, query)).json();
+        assert_eq!(found("q=NEEDLE+find"), json!({PROJECT: ["T-1"]}));
+        // The project's name counts as part of every task's text
+        assert_eq!(found("q=routes"), json!({PROJECT: ["T-1"]}));
+        assert_eq!(found("q=needle+haystack"), json!({}));
+        assert_eq!(found(""), json!({}));
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+}

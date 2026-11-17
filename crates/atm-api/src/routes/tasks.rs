@@ -77,6 +77,7 @@ pub(super) fn get_tasks(member: &Member, query: &str, request: &HeaderMap) -> Re
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::{a_state_with_a_project, answer, having, member};
     use super::*;
 
     #[test]
@@ -85,5 +86,53 @@ mod tests {
         assert_eq!(filters.sprint, ["S1"]);
         assert!(filters.ready && !filters.archived);
         assert_eq!(filters.type_.as_deref(), Some("bugfix"));
+        let filters =
+            task_filters("status=todo&status=blocked&label=a&label=b&backlog=1&with_user=no");
+        assert_eq!(filters.status, ["todo", "blocked"]);
+        assert_eq!(filters.label, ["a", "b"]);
+        assert!(filters.backlog && !filters.with_user);
+    }
+
+    #[test]
+    fn the_tasks_the_filters_keep_and_a_304_while_unchanged() {
+        let home = a_state_with_a_project("tasks");
+        let member = member(&home);
+        let ids = |query: &str| -> Vec<serde_json::Value> {
+            answer(get_tasks(&member, query, &HeaderMap::new())).json()["tasks"]
+                .as_array()
+                .expect("the tasks")
+                .iter()
+                .map(|view| view["task"]["id"].clone())
+                .collect()
+        };
+        assert_eq!(ids(""), [json!("T-1")]);
+        assert_eq!(ids("status=todo"), [json!("T-1")]);
+        assert_eq!(ids("status=done"), [] as [serde_json::Value; 0]);
+        let first = answer(get_tasks(&member, "", &HeaderMap::new()));
+        assert_eq!(first.json()["meta"]["project"], json!("Routes"));
+        let tag = first.header("etag").to_string();
+        assert_eq!(
+            answer(get_tasks(&member, "", &having(&tag))).status,
+            StatusCode::NOT_MODIFIED
+        );
+        // Another query is another answer
+        assert_eq!(
+            answer(get_tasks(&member, "status=todo", &having(&tag))).status,
+            StatusCode::OK
+        );
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+
+    #[test]
+    fn a_filter_naming_no_such_sprint_is_a_bad_request() {
+        let home = a_state_with_a_project("tasks-refused");
+        let answer = answer(get_tasks(&member(&home), "sprint=Nope", &HeaderMap::new()));
+        assert_eq!(answer.status, StatusCode::BAD_REQUEST, "{}", answer.json());
+        assert!(
+            answer.json()["error"]
+                .as_str()
+                .is_some_and(|e| e.contains("Nope"))
+        );
+        std::fs::remove_dir_all(&home).expect("cleaned up");
     }
 }

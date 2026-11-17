@@ -18,6 +18,8 @@ mod logo;
 mod query;
 mod reviews;
 mod tasks;
+#[cfg(test)]
+mod test_support;
 mod workspaces;
 
 use std::path::Path;
@@ -203,4 +205,147 @@ pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) 
         return serve_project_read(&default, id, name.trim_end_matches(".json"), query, request);
     }
     send_error(StatusCode::NOT_FOUND, "not found")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_support::{PROJECT, a_state_with_a_project, answer, having};
+    use super::*;
+
+    #[test]
+    fn an_etag_is_quoted_and_changes_with_what_it_depends_on() {
+        let tag = etag(&json!(["claims", 1]));
+        assert_eq!(tag.len(), 18);
+        assert!(tag.starts_with('"') && tag.ends_with('"'));
+        assert_eq!(tag, etag(&json!(["claims", 1])));
+        assert_ne!(tag, etag(&json!(["claims", 2])));
+    }
+
+    #[test]
+    fn a_json_answer_starts_with_when_it_was_made() {
+        let body = stamped(json!({"tasks": [], "meta": {}}));
+        let keys: Vec<&str> = body
+            .as_object()
+            .expect("an object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(keys, ["generated_at", "tasks", "meta"]);
+    }
+
+    #[test]
+    fn a_request_is_unchanged_only_with_the_same_tag() {
+        assert!(unchanged(&having("\"a\""), "\"a\""));
+        assert!(!unchanged(&having("\"b\""), "\"a\""));
+        assert!(!unchanged(&HeaderMap::new(), "\"a\""));
+        let answer = answer(not_modified("\"a\"", &IMAGE_HEADERS));
+        assert_eq!(answer.status, StatusCode::NOT_MODIFIED);
+        assert_eq!(answer.header("etag"), "\"a\"");
+        assert_eq!(answer.body, b"");
+        assert_eq!(answer.header("cache-control"), "no-cache");
+    }
+
+    #[test]
+    fn atm_libs_refusals_are_http_statuses() {
+        use atm_common::Error;
+        for (error, status) in [
+            (Error::Invalid("x".into()), StatusCode::BAD_REQUEST),
+            (Error::NotFound("x".into()), StatusCode::NOT_FOUND),
+            (Error::TooLarge("x".into()), StatusCode::PAYLOAD_TOO_LARGE),
+            (Error::Refused("x".into()), StatusCode::FORBIDDEN),
+            (Error::failed("x"), StatusCode::INTERNAL_SERVER_ERROR),
+        ] {
+            let answer = answer(error_response(&error));
+            assert_eq!(answer.status, status, "{error}");
+            assert_eq!(answer.json()["error"], json!(error.to_string()));
+        }
+    }
+
+    /// Every read reaches its route, in v2 and in v1 (the `default` workspace's); anything else is 404
+    #[test]
+    fn each_path_reaches_its_read() {
+        let home = a_state_with_a_project("dispatch");
+        let projects = Projects::new(&home);
+        let read =
+            |path: &str, query: &str| answer(serve(&projects, path, query, &HeaderMap::new()));
+        let v2 = format!("/api/v2/workspaces/work/projects/{PROJECT}");
+        let v1 = format!("/api/v1/projects/{PROJECT}");
+        let p = format!("/p/{PROJECT}");
+        for (path, query, key) in [
+            ("/api/v2/workspaces".to_string(), "", "workspaces"),
+            ("/api/v2/workspaces/work/projects".into(), "", "projects"),
+            ("/api/projects".into(), "", "projects"),
+            ("/api/v2/workspaces/work/search".into(), "q=needle", PROJECT),
+            ("/api/search".into(), "q=needle", PROJECT),
+            (format!("{v2}/tasks"), "", "tasks"),
+            (format!("{v1}/tasks"), "", "tasks"),
+            (format!("{v2}/documents"), "path=README.md", "path"),
+            (format!("{v1}/documents"), "path=README.md", "path"),
+            (format!("{v2}/claims"), "", "claims"),
+            (format!("{p}/claims.json"), "", "claims"),
+            (format!("{v2}/worktrees"), "", "worktrees"),
+            (format!("{p}/worktrees.json"), "", "worktrees"),
+        ] {
+            let answer = read(&path, query);
+            assert_eq!(answer.status, StatusCode::OK, "{path}");
+            assert!(
+                answer.json().get(key).is_some(),
+                "{path}: {}",
+                answer.json()
+            );
+        }
+        for path in [
+            format!("{v2}/files"),
+            format!("{v1}/files"),
+            format!("{v2}/logo"),
+            format!("{p}/logo"),
+        ] {
+            let answer = read(&path, "path=pixel.png");
+            assert_eq!(answer.status, StatusCode::OK, "{path}");
+            assert_eq!(answer.header("content-type"), "image/png", "{path}");
+        }
+        for (path, error) in [
+            (
+                "/api/v2/workspaces/nope/projects".to_string(),
+                "unknown workspace",
+            ),
+            ("/api/v2/workspaces//projects".into(), "unknown workspace"),
+            ("/api/v2/workspaces/work/other".into(), "not found"),
+            (format!("{v2}/reviews"), "not found"),
+            (
+                "/api/v2/workspaces/work/projects//tasks".into(),
+                "not found",
+            ),
+            (format!("{v1}/claims"), "not found"),
+            (format!("{p}/tasks.json"), "not found"),
+            ("/api/v1/projects//tasks".into(), "not found"),
+            ("/elsewhere".into(), "not found"),
+        ] {
+            let answer = read(&path, "");
+            assert_eq!(answer.status, StatusCode::NOT_FOUND, "{path}");
+            assert_eq!(answer.json()["error"], json!(error), "{path}");
+        }
+        assert_eq!(
+            read("/api/v2/workspaces/work/projects/nope/tasks", "").status,
+            StatusCode::NOT_FOUND
+        );
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+
+    /// Opening a workspace's list is what a read records: the workspace `/` goes to
+    #[test]
+    fn reading_a_workspaces_projects_opens_it() {
+        let home = a_state_with_a_project("opened");
+        let projects = Projects::new(&home);
+        assert_eq!(projects.workspaces.recent(), "default");
+        let list = "/api/v2/workspaces/work/projects";
+        assert_eq!(
+            answer(serve(&projects, list, "", &HeaderMap::new())).status,
+            StatusCode::OK
+        );
+        assert_eq!(projects.workspaces.recent(), "work");
+        let _ = serve(&projects, "/api/projects", "", &HeaderMap::new());
+        assert_eq!(projects.workspaces.recent(), "default");
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
 }

@@ -78,3 +78,75 @@ pub(super) fn get_file(member: &Member, query: &str, request: &HeaderMap) -> Res
         Err(e) => error_response(&e),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_support::{PIXEL, a_state_with_a_project, answer, having, member};
+    use super::*;
+
+    #[test]
+    fn a_document_is_its_json_and_a_304_while_unchanged() {
+        let home = a_state_with_a_project("document");
+        let member = member(&home);
+        let first = answer(get_document(&member, "path=README.md", &HeaderMap::new()));
+        assert_eq!(first.status, StatusCode::OK, "{}", first.json());
+        assert_eq!(first.json()["path"], "README.md");
+        let tag = first.header("etag").to_string();
+        assert_eq!(
+            answer(get_document(&member, "path=README.md", &having(&tag))).status,
+            StatusCode::NOT_MODIFIED
+        );
+        // A change to the file is a new version
+        std::fs::write(home.join("project/README.md"), "# Routes\n\nTwo needles.\n")
+            .expect("README.md changed");
+        assert_eq!(
+            answer(get_document(&member, "path=README.md", &having(&tag))).status,
+            StatusCode::OK
+        );
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+
+    #[test]
+    fn an_image_is_its_bytes_sandboxed() {
+        let home = a_state_with_a_project("image");
+        let member = member(&home);
+        let first = answer(get_file(&member, "path=pixel.png", &HeaderMap::new()));
+        assert_eq!(first.status, StatusCode::OK);
+        assert_eq!(first.body, PIXEL);
+        assert_eq!(first.header("content-type"), "image/png");
+        assert!(first.header("content-security-policy").ends_with("sandbox"));
+        let tag = first.header("etag").to_string();
+        let again = answer(get_file(&member, "path=pixel.png", &having(&tag)));
+        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+        assert!(again.header("content-security-policy").ends_with("sandbox"));
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+
+    /// atm-docs' checks come first: nothing outside the project, nothing missing, nothing atm doesn't show
+    #[test]
+    fn a_path_atm_docs_refuses_is_never_read() {
+        let home = a_state_with_a_project("refused");
+        std::fs::write(home.join("secret.md"), "# Not the project's\n").expect("a file outside");
+        let member = member(&home);
+        for query in [
+            "path=../secret.md",
+            "path=%2E%2E%2Fsecret.md",
+            "path=",
+            "path=missing.md",
+        ] {
+            for route in [get_document, get_file] {
+                let answer = answer(route(&member, query, &HeaderMap::new()));
+                assert!(
+                    answer.status.is_client_error(),
+                    "{query}: {}",
+                    answer.status
+                );
+                assert!(answer.header("etag").is_empty(), "{query}");
+            }
+        }
+        // A document isn't an image, whatever it is asked for as
+        let answer = answer(get_file(&member, "path=README.md", &HeaderMap::new()));
+        assert!(answer.status.is_client_error(), "{}", answer.status);
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+}

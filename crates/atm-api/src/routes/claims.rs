@@ -24,3 +24,47 @@ pub(super) fn get_worktrees(member: &Member, request: &HeaderMap) -> Response {
     let body = || to_json(&stamped(json!({"worktrees": member.worktrees()}))).into_bytes();
     send_conditional(request, &tag, body, "application/json", &[])
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+
+    use super::super::test_support::{a_state_with_a_project, answer, having, member};
+    use super::*;
+
+    #[test]
+    fn a_project_with_no_agent_at_work_has_no_claims() {
+        let home = a_state_with_a_project("claims");
+        let member = member(&home);
+        let first = answer(get_claims(&member, &HeaderMap::new()));
+        assert_eq!(first.status, StatusCode::OK);
+        assert_eq!(first.json(), json!({"claims": []}));
+        let tag = first.header("etag").to_string();
+        assert_eq!(
+            answer(get_claims(&member, &having(&tag))).status,
+            StatusCode::NOT_MODIFIED
+        );
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+
+    #[test]
+    fn the_worktrees_are_the_main_working_copy_first() {
+        let home = a_state_with_a_project("worktrees");
+        let member = member(&home);
+        let first = answer(get_worktrees(&member, &HeaderMap::new()));
+        assert_eq!(first.status, StatusCode::OK);
+        let worktrees = first.json()["worktrees"].clone();
+        assert_eq!(worktrees.as_array().map(Vec::len), Some(1), "{worktrees}");
+        let tag = first.header("etag").to_string();
+        assert_eq!(
+            answer(get_worktrees(&member, &having(&tag))).status,
+            StatusCode::NOT_MODIFIED
+        );
+        // The claims' and the worktrees' versions are tagged apart
+        assert_ne!(
+            tag,
+            answer(get_claims(&member, &HeaderMap::new())).header("etag")
+        );
+        std::fs::remove_dir_all(&home).expect("cleaned up");
+    }
+}
