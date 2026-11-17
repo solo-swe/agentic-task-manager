@@ -536,6 +536,37 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(() => tasksServer.savedTabs?.active).toBe(0);
   });
 
+  test('Reload (ATM-584) loads the window again through the app, back at its tabs and the one it showed', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    const list = `/projects/${tasksServer.projectId}/list`;
+    tasksServer.restoredTabs = { addresses: ['/board', list, '/projects/second/kanban'], active: 1 };
+    // The list's address, with the scope the page adds to it
+    const atList = new RegExp(`^${list}(\\?|$)`);
+    await page.goto('/');
+    await expect(page.locator('.title-bar-tab')).toHaveCount(3);
+    await expect.poll(() => addressOf(page)).toMatch(atList);
+    await expect.poll(() => tasksServer.savedTabs?.active).toBe(1);
+
+    // A mark on this page, which a page loaded again doesn't have
+    await page.evaluate(() => ((window as unknown as { beforeReload: boolean }).beforeReload = true));
+    await tasksServer.chooseMenu({ kind: 'reload' });
+    await expect.poll(() => tasksServer.windowCalls).toContain('reload_window');
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { beforeReload?: boolean }).beforeReload ?? false))
+      .toBe(false);
+    // Loaded again: the same tabs, the same one shown, its page drawn
+    await page.waitForLoadState('load');
+    await expect(page.locator('.title-bar-tab')).toHaveCount(3);
+    await expect.poll(() => addressOf(page)).toMatch(atList);
+    await expect(page.locator('.task-card').first()).toBeVisible();
+    await expect(page.locator('.title-bar-tab').nth(2)).toContainText('Second Project');
+  });
+
   test('a tab dragged along the strip moves there and is kept; a plain click still selects; the bar still drags the window (T-532)', async ({
     page,
     tasksServer,

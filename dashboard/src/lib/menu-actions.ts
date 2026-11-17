@@ -3,7 +3,7 @@
 // page draws (Windows, Linux, T-513).
 import { inApp } from './api/http';
 import type { MenuAction, MenuState, SystemItem } from './api/menu';
-import { openUrl } from './api/shell';
+import { openUrl, reloadWindow } from './api/shell';
 import type { TabActions } from './tab-actions';
 import { currentAddress } from './navigation';
 import { pluginInfo } from './plugin-info';
@@ -45,7 +45,8 @@ export interface PageActions {
 export const pageActions: PageActions = {
   back: () => history.back(),
   forward: () => history.forward(),
-  reload: () => location.reload(),
+  // In the app, through the app (ATM-584): the address is a route, which the app has no file for
+  reload: () => void (inApp ? reloadWindow(() => location.reload()) : location.reload()),
   // In the app, in the user's browser (T-551): the window opens no new tab itself
   open: (url) => void (inApp ? openUrl(url) : window.open(url, '_blank', 'noopener,noreferrer')),
   copy: (text) => navigator.clipboard.writeText(text),

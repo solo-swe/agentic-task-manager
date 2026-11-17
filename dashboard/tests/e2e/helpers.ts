@@ -915,6 +915,13 @@ export class TasksServer {
       case 'save_tabs':
         this.savedTabs = args.tabs as { addresses: string[]; active: number };
         return { ok: null };
+      // A Reload (ATM-584): as the app, the window's tabs come back and its page loads again from the app's page (here
+      // the test server's root, which serves the same page), never from the route it was at
+      case 'reload_window':
+        this.windowCalls.push(command);
+        this.restoredTabs = this.savedTabs;
+        setTimeout(() => void this.page.evaluate(() => location.assign('/')).catch(() => {}), 0);
+        return { ok: null };
       case 'needs_you':
         this.needsYouCalls.push(args as { workspace: string; badge: boolean; notify: boolean });
         return { ok: null };

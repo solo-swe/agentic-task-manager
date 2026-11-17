@@ -8,6 +8,7 @@ import {
   onBarMouseDown,
   openUrl,
   openWindow,
+  reloadWindow,
   resetAppShell,
   reportNeedsYou,
   restoredTabs,
@@ -60,6 +61,25 @@ describe('the app’s window (T-511)', () => {
     await saveTabs({ addresses: ['/'], active: 0 });
     await reportNeedsYou('default', true, true);
     expect(logged).toHaveBeenCalledTimes(3);
+  });
+
+  it('a Reload is the app’s (ATM-584); when the app can’t, the page reloads as it is, the failure logged', async () => {
+    const asked: string[] = [];
+    mockIPC((command) => {
+      asked.push(command);
+      return null;
+    });
+    const fallback = vi.fn();
+    await reloadWindow(fallback);
+    expect(asked).toEqual(['reload_window']);
+    expect(fallback).not.toHaveBeenCalled();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockIPC(() => {
+      throw new Error('no window');
+    });
+    await reloadWindow(fallback);
+    expect(fallback).toHaveBeenCalledOnce();
+    expect(logged).toHaveBeenCalledOnce();
   });
 
   it('draws its own shell when the app can’t say', async () => {

@@ -72,7 +72,19 @@ export interface KeptTabs {
   active: number;
 }
 
-/** The tabs the window comes back with when the app starts (once; none for a new window or a reload) */
+/** Reload the window (ATM-584): the app loads its page again from the app's own page, never the address the page is
+ * at (a route the app has no file for), and gives it back the tabs it shows now. When the app can't, the page as it
+ * is reloads (`fallback`) */
+export async function reloadWindow(fallback: () => void): Promise<void> {
+  try {
+    await invoke('reload_window');
+  } catch (e) {
+    console.error('Asking the app to reload the window failed:', e);
+    fallback();
+  }
+}
+
+/** The tabs the window comes back with when the app starts, or after a Reload (once; none for a new window) */
 export async function restoredTabs(): Promise<KeptTabs | null> {
   try {
     const kept = await invoke<KeptTabs | null>('restored_tabs');

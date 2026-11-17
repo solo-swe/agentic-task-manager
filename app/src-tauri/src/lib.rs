@@ -16,7 +16,7 @@ pub mod windows;
 use tauri::Manager;
 
 use badge::needs_you;
-use session::{restored_tabs, save_tabs};
+use session::{reload_window, restored_tabs, save_tabs};
 
 use commands::{
     AppState, agents_status, claims, connect_agents, document, file, list_projects,
@@ -82,6 +82,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         start_dragging::<tauri::Wry>,
         save_tabs::<tauri::Wry>,
         restored_tabs::<tauri::Wry>,
+        reload_window::<tauri::Wry>,
         needs_you::<tauri::Wry>,
         open_url::<tauri::Wry>,
     ])
@@ -1225,7 +1226,7 @@ mod integration_tests {
         let home = scratch("tabs");
         let (app, windows) = mock_app(
             &home,
-            tauri::generate_handler![save_tabs, restored_tabs],
+            tauri::generate_handler![save_tabs, restored_tabs, reload_window],
             &["main", "window-1"],
         );
         let (main, other) = (&windows[0], &windows[1]);
@@ -1256,6 +1257,16 @@ mod integration_tests {
         let saved = app.state::<AppState>().session().saved();
         assert_eq!(saved.len(), 1);
         assert_eq!(saved[0].tabs, tabs);
+        // ATM-584: a Reload loads the window's page again, which gets back the tabs it showed, once
+        assert_eq!(call(other, "reload_window", &json!({})), Ok(Value::Null));
+        assert_eq!(call(other, "restored_tabs", &json!({})), Ok(back));
+        assert_eq!(call(other, "restored_tabs", &json!({})), Ok(Value::Null));
+        assert_eq!(
+            call(main, "reload_window", &json!({})),
+            Ok(Value::Null),
+            "no tabs said yet"
+        );
+        assert_eq!(call(main, "restored_tabs", &json!({})), Ok(Value::Null));
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 

@@ -241,6 +241,17 @@ impl Session {
         self.inner().restored.remove(window)
     }
 
+    /// `window`'s page loads again (Reload, ATM-584): it comes back with the tabs it shows now. Whether it had any
+    /// (a page that never said what it shows comes back as a new window's does).
+    pub fn reloading(&self, window: &str) -> bool {
+        let mut inner = self.inner();
+        let Some(tabs) = inner.tabs.get(window).cloned() else {
+            return false;
+        };
+        inner.restored.insert(window.to_owned(), tabs);
+        true
+    }
+
     /// The windows to keep, in the order they opened: those whose page has said what it shows.
     #[must_use]
     pub fn saved(&self) -> Vec<SavedWindow> {
@@ -394,7 +405,7 @@ pub async fn save_tabs<R: Runtime>(
     Ok(())
 }
 
-/// The tabs the calling window comes back with (the app's start), once; none for a new window or a reload.
+/// The tabs the calling window comes back with (the app's start, or a Reload), once; none for a new window.
 ///
 /// # Errors
 /// None: a command with the app's state answers a result.
@@ -405,6 +416,36 @@ pub async fn restored_tabs<R: Runtime>(
     state: State<'_, AppState>,
 ) -> Result<Option<Tabs>, AppError> {
     Ok(state.session().restored(window.label()))
+}
+
+/// The page the app's windows load, the one file the app serves for every address of the dashboard.
+pub const PAGE: &str = "tasks-dashboard.html";
+
+/// The calling window's address for loading its page again: the app's page at its root, whatever address the page is
+/// at (a route the app has no file for, ATM-584), without its query or fragment.
+fn page_url(mut url: tauri::Url) -> tauri::Url {
+    url.set_path(&format!("/{PAGE}"));
+    url.set_query(None);
+    url.set_fragment(None);
+    url
+}
+
+/// Reload the calling window (the menu's Reload, ATM-584): its page loads again from the app's page, not from the
+/// address it is at, which names a route the app has no file for; it comes back with the tabs it shows now.
+///
+/// # Errors
+/// Tauri can't say where the window is or load its page.
+#[tauri::command]
+#[specta::specta]
+pub async fn reload_window<R: Runtime>(
+    window: WebviewWindow<R>,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
+    state.session().reloading(window.label());
+    let url = window.url().map_err(|e| AppError::Failed(e.to_string()))?;
+    window
+        .navigate(page_url(url))
+        .map_err(|e| AppError::Failed(e.to_string()))
 }
 
 #[cfg(test)]
@@ -744,9 +785,54 @@ mod tests {
         assert_eq!(
             session.restored("main"),
             None,
-            "a reload starts from its own"
+            "the page loaded again by itself starts from its own"
         );
         assert_eq!(session.restored("window-1"), None);
+    }
+
+    /// ATM-584: a Reload brings the window back with the tabs it shows now, once; another window's are its own
+    #[test]
+    fn a_reloaded_window_comes_back_with_the_tabs_it_shows_now() {
+        let session = Session::default();
+        session.show("main", tabs(&["/board", "/projects/p1/list"], 1));
+        session.show("window-1", tabs(&["/"], 0));
+        assert!(session.reloading("main"));
+        assert_eq!(
+            session.restored("main"),
+            Some(tabs(&["/board", "/projects/p1/list"], 1))
+        );
+        assert_eq!(session.restored("main"), None, "once");
+        assert_eq!(session.restored("window-1"), None, "not reloaded");
+        // A page that never said what it shows comes back as a new window's does
+        assert!(!session.reloading("window-2"));
+        assert_eq!(session.restored("window-2"), None);
+        // What it shows still goes in the file, the reload changing nothing there
+        assert_eq!(session.saved().len(), 2);
+    }
+
+    #[test]
+    fn a_reload_loads_the_apps_page_at_its_root_whatever_the_address() {
+        for (at, page) in [
+            (
+                "tauri://localhost/projects/p1/list?task=ATM-1#x",
+                "tauri://localhost/tasks-dashboard.html",
+            ),
+            (
+                "http://tauri.localhost/projects/p1/reviews/CR-7",
+                "http://tauri.localhost/tasks-dashboard.html",
+            ),
+            (
+                "tauri://localhost/tasks-dashboard.html",
+                "tauri://localhost/tasks-dashboard.html",
+            ),
+            (
+                "http://localhost:5173/board",
+                "http://localhost:5173/tasks-dashboard.html",
+            ),
+        ] {
+            let url = tauri::Url::parse(at).expect("an address");
+            assert_eq!(page_url(url).as_str(), page, "{at}");
+        }
     }
 
     #[test]

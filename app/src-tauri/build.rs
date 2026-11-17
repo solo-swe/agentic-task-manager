@@ -55,6 +55,7 @@ fn main() {
         "start_dragging",
         "save_tabs",
         "restored_tabs",
+        "reload_window",
         "needs_you",
         "open_url",
     ]);

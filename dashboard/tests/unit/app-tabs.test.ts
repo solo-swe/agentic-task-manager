@@ -86,7 +86,7 @@ describe('the app’s tabs (T-514): a tab is an address', () => {
     expect(addresses(fresh)).toEqual(['/']);
   });
 
-  it('comes back with the tabs the app kept (T-518): the active one to go to; a reload keeps its own', () => {
+  it('comes back with the tabs the app kept (T-518): the active one to go to; the app’s Reload too', () => {
     const storage = memory();
     const tabs = new AppTabs(storage);
     expect(tabs.start('/', { addresses: ['/projects/a', '/board'], active: 1 })).toBe('/board');
@@ -94,10 +94,14 @@ describe('the app’s tabs (T-514): a tab is an address', () => {
     expect(tabs.kept).toEqual({ addresses: ['/projects/a', '/board'], active: 1 });
     tabs.select(tabs.tabs[0].id);
     expect(tabs.kept.active).toBe(0);
-    // A reload: the window's own tabs, whatever the app says
+    // The page reloaded by itself (the app says nothing): its own tabs, the active one where the page is
     const reloaded = new AppTabs(storage);
-    expect(reloaded.start('/projects/a', { addresses: ['/x'], active: 0 })).toBeNull();
-    expect(addresses(reloaded)).toEqual(['/projects/a', '/board']);
+    expect(reloaded.start('/projects/a/list', null)).toBeNull();
+    expect(addresses(reloaded)).toEqual(['/projects/a/list', '/board']);
+    // The app's Reload (ATM-584) loads the page at the app's root and says what the window showed: those, to go to
+    const viaApp = new AppTabs(storage);
+    expect(viaApp.start('/', { addresses: ['/projects/a/list', '/board'], active: 1 })).toBe('/board');
+    expect(addresses(viaApp)).toEqual(['/projects/a/list', '/board']);
     // Nothing kept, or an active place out of range
     expect(new AppTabs().start('/', null)).toBeNull();
     const out = new AppTabs();
