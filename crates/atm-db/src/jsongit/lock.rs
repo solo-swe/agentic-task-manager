@@ -28,6 +28,9 @@ const LOCK_TIMEOUT: f64 = 10.0;
 /// A lock older than this is abandoned: commands hold it for milliseconds.
 const LOCK_STALE: f64 = 60.0;
 const LOCK_POLL: Duration = Duration::from_millis(50);
+/// How many times the wait a waiter waits at most while the lock keeps changing hands (ATM-481): each new holder
+/// starts the wait again, as a queue that moves isn't a stuck holder, but a waiter that keeps losing gives up in the end.
+const LOCK_QUEUE_WAITS: u32 = 6;
 
 fn lock_timeout() -> f64 {
     std::env::var("ATM_LOCK_TIMEOUT")
@@ -177,8 +180,25 @@ fn io_error(path: &Path) -> impl Fn(io::Error) -> Error + '_ {
     move |e| Error::failed(format!("{}: {e}", path.shown()))
 }
 
+/// What tells one holding of the lock from the next: the owner's `token`, unique to each holding (ATM-481), else the
+/// rest of `owner.json` (a lock written by an older atm).
+fn holding(owner: Option<&Value>) -> Option<Value> {
+    owner.map(|o| o.get("token").cloned().unwrap_or_else(|| o.clone()))
+}
+
+/// A token unique to one holding of a lock: the process, the time and a count.
+fn new_token() -> String {
+    static COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{}-{nanos:x}-{count}", std::process::id())
+}
+
 /// Take the lock of `directory` (creating the folder if needed), waiting for it up to `timeout` seconds
-/// (`ATM_LOCK_TIMEOUT`, else 10, when None; 0 tries once).
+/// (`ATM_LOCK_TIMEOUT`, else 10, when None; 0 tries once). The wait starts again each time the lock changes hands
+/// (a queue that moves, ATM-481), up to [`LOCK_QUEUE_WAITS`] times the wait in all.
 ///
 /// # Errors
 /// When the lock stays taken by a live holder until the time is up, or the folder can't be written.
@@ -186,7 +206,10 @@ pub fn lock(directory: &Path, timeout: Option<f64>) -> Result<Lock> {
     fs::create_dir_all(directory).map_err(io_error(directory))?;
     let lock = directory.join(LOCK_DIR);
     let wait = Duration::from_secs_f64(timeout.unwrap_or_else(lock_timeout).max(0.0));
-    let deadline = Instant::now() + wait;
+    let start = Instant::now();
+    let mut deadline = start + wait;
+    let last_deadline = start + wait * LOCK_QUEUE_WAITS;
+    let mut seen: Option<Value> = None;
     release_on_sigterm();
     loop {
         match fs::create_dir(&lock) {
@@ -196,7 +219,17 @@ pub fn lock(directory: &Path, timeout: Option<f64>) -> Result<Lock> {
                 if lock_is_stale(&lock, owner.as_ref()) && break_lock(&lock, owner.as_ref()) {
                     continue;
                 }
-                if Instant::now() >= deadline {
+                // Another holder than the last one seen: the queue moves, so the wait starts again
+                let now = Instant::now();
+                if let Some(holding) = holding(owner.as_ref())
+                    && seen.as_ref() != Some(&holding)
+                {
+                    if seen.is_some() {
+                        deadline = (now + wait).min(last_deadline);
+                    }
+                    seen = Some(holding);
+                }
+                if now >= deadline {
                     return Err(Error::failed(format!(
                         "timed out waiting for the lock {} (held by {})",
                         lock.shown(),
@@ -221,7 +254,7 @@ pub fn lock(directory: &Path, timeout: Option<f64>) -> Result<Lock> {
         held.push(lock.clone());
     }
     let held = Lock { path: lock };
-    let owner = json!({"host": host_name(), "pid": std::process::id(), "acquired_at": now_iso()});
+    let owner = json!({"host": host_name(), "pid": std::process::id(), "acquired_at": now_iso(), "token": new_token()});
     write_text_atomic(&held.path.join(LOCK_OWNER), &(to_json(&owner) + "\n"))
         .map_err(io_error(&held.path))?;
     Ok(held)
@@ -277,6 +310,67 @@ mod tests {
         )
         .unwrap();
         drop(lock(dir.path(), Some(0.0)).unwrap());
+    }
+
+    /// Plant a live holding of the lock (this process, now) with this token.
+    fn plant(lock: &Path, token: &str) {
+        let _ = fs::create_dir(lock);
+        fs::write(
+            lock.join(LOCK_OWNER),
+            json!({"host": host_name(), "pid": std::process::id(), "acquired_at": now_iso(), "token": token})
+                .to_string(),
+        )
+        .unwrap();
+    }
+
+    /// Hand the lock from holder to holder every `every`, `times` times, then free it.
+    fn churn(lock: PathBuf, every: Duration, times: u32) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            for i in 0..times {
+                plant(&lock, &format!("holder-{i}"));
+                std::thread::sleep(every);
+            }
+            let _ = fs::remove_dir_all(&lock);
+        })
+    }
+
+    #[test]
+    fn a_waiter_keeps_waiting_while_the_lock_changes_hands() {
+        let dir = TestDir::new();
+        let path = dir.path().join(LOCK_DIR);
+        plant(&path, "holder-first");
+        // Holders for about 0.9 s, each for less than the waiter's 0.3 s wait: the queue moves, so it waits on
+        let busy = churn(path, Duration::from_millis(150), 6);
+        let started = Instant::now();
+        let held = lock(dir.path(), Some(0.3));
+        busy.join().unwrap();
+        assert!(held.is_ok(), "{held:?}");
+        assert!(started.elapsed() > Duration::from_millis(600));
+        let owner = owner_of(&dir.path().join(LOCK_DIR)).unwrap();
+        assert!(
+            owner["token"]
+                .as_str()
+                .is_some_and(|t| !t.starts_with("holder"))
+        );
+    }
+
+    #[test]
+    fn a_waiter_that_keeps_losing_gives_up_after_six_waits() {
+        let dir = TestDir::new();
+        let path = dir.path().join(LOCK_DIR);
+        plant(&path, "holder-first");
+        // Holders for 3 s, the wait 0.1 s: given up at about 0.6 s, not held for the 3 s
+        let busy = churn(path, Duration::from_millis(50), 60);
+        let started = Instant::now();
+        let error = lock(dir.path(), Some(0.1)).unwrap_err().to_string();
+        let waited = started.elapsed();
+        busy.join().unwrap();
+        assert!(
+            error.starts_with("timed out waiting for the lock "),
+            "{error}"
+        );
+        assert!(waited >= Duration::from_millis(550), "{waited:?}");
+        assert!(waited < Duration::from_millis(1500), "{waited:?}");
     }
 
     #[test]

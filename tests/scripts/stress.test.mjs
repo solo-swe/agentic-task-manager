@@ -16,13 +16,12 @@ const tasks = {
   tasks: ids.map((id) => ({ id, name: id, phase: 0, type: 'feature', status: 'todo', dependencies: [] })),
 };
 
-// 16 agents queue for one lock; on Windows, where starting git and atm is several times slower, the queue outlasts
-// atm's 10 s wait, so there it waits longer (decided with Hakan, T-480): this test is about correctness, not speed
-const LOCK_WAIT = process.platform === 'win32' ? { ATM_LOCK_TIMEOUT: '60' } : {};
+// 16 agents queue for one lock at atm's own wait: the wait starts again each time the lock changes hands (ATM-481), so
+// a long queue that moves, as on a slow runner, doesn't time out a waiter that keeps losing
 
 function atm(args, cwd, agent) {
   return new Promise((resolve) => {
-    const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_AGENT: agent, ...LOCK_WAIT } });
+    const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_AGENT: agent } });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));
@@ -44,8 +43,9 @@ async function worker(name, cwd, log) {
   }
 }
 
-// Fails on Windows: T-481 (decided with Hakan, T-480)
-const onWindows = process.platform === 'win32' && 'T-481: fails on Windows';
+// Not on Windows until the suite runs there again (ATM-482): what kept the test's folder busy there (EPERM) is
+// ATM-482's claim watcher, and the lock's queue (ATM-481) is checked there then
+const onWindows = process.platform === 'win32' && 'ATM-482: the suite on Windows';
 
 test(
   '16 concurrent agents in two worktrees: every task done exactly once, files always valid',
