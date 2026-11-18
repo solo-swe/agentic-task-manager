@@ -6,7 +6,7 @@
   import { inApp } from '../api/http';
   import { reviewPageOf } from '../address';
   import { currentAddress, navigate } from '../navigation';
-  import { knownStatus } from '../reviews/known.svelte';
+  import { knownStatus, knownUnreadable } from '../reviews/known.svelte';
   import { STATUS_LABELS } from '../reviews/types';
   import { dashboard } from '../state.svelte';
   import { tabActions, wantsNewTab } from '../tab-actions';
@@ -23,6 +23,8 @@
   let { project, reference, prominent = false }: Props = $props();
 
   const status = $derived(knownStatus(project, reference));
+  // A review atm can't read (ATM-617) says so, wherever its link is
+  const unreadable = $derived(knownUnreadable(project, reference));
   const waiting = $derived(
     dashboard.projects
       .find((p) => p.id === project)
@@ -49,7 +51,8 @@
   onauxclick={open}
   title="Open {reference}'s page"
   ><Icon name="message-square" size={prominent ? 14 : 12} /><span class="review-link-ref">{reference}</span
-  >{#if prominent && status}<span class="review-link-status" data-status={status}>{STATUS_LABELS[status]}</span
+  >{#if unreadable}<span class="review-link-unreadable" title={unreadable}>can't be read</span
+    >{:else if prominent && status}<span class="review-link-status" data-status={status}>{STATUS_LABELS[status]}</span
     >{/if}{#if waiting}<span class="review-link-needs">needs you</span>{/if}</a
 >
 
@@ -80,6 +83,13 @@
     font-weight: 400;
   }
   .review-link-status::before {
+    content: '· ';
+  }
+  .review-link-unreadable {
+    color: var(--red);
+    font-weight: 400;
+  }
+  .review-link-unreadable::before {
     content: '· ';
   }
   .review-link-needs {

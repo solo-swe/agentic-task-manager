@@ -25,11 +25,18 @@
   } from '../review-data';
   import { keepFilter, keptFilter } from '../review-filter';
   import type { TaskLinks } from '../compmd';
-  import { learnReviews } from '../reviews/known.svelte';
+  import { learnReviews, learnUnreadable } from '../reviews/known.svelte';
   import ReviewList from '../reviews/ReviewList.svelte';
   import ReviewPage from '../reviews/ReviewPage.svelte';
   import { reviewTitle } from '../reviews/page';
-  import { NO_QUERY, type ListQuery, type ReviewEntry, type ReviewPageData, type ViewFile } from '../reviews/types';
+  import {
+    NO_QUERY,
+    type ListQuery,
+    type ReviewEntry,
+    type ReviewPageData,
+    type UnreadableReview,
+    type ViewFile,
+  } from '../reviews/types';
   import { reviewWindow } from '../reviews/window.svelte';
   import { withTask } from '../routes';
   import { tabActions } from '../tab-actions';
@@ -61,6 +68,8 @@
     if (project) keepFilter(project, next);
   }
   let entries = $state.raw<ReviewEntry[]>([]);
+  // The reviews atm can't read (ATM-617), listed after them
+  let unreadable = $state.raw<UnreadableReview[]>([]);
   // The review shown
   let shown = $state.raw<ReviewPageData | null>(null);
   let loading = $state(false);
@@ -95,10 +104,11 @@
           id,
           listed.reviews.map((e) => e.review),
         );
-        const text = JSON.stringify(listed.reviews);
+        learnUnreadable(id, listed.unreadable ?? []);
+        const text = JSON.stringify([listed.reviews, listed.unreadable]);
         if (ask === asked && text !== entriesText) {
           entriesText = text;
-          entries = listed.reviews;
+          [entries, unreadable] = [listed.reviews, listed.unreadable ?? []];
         }
       }
       if (ask === asked) problem = null;
@@ -288,6 +298,7 @@
   {:else}
     <ReviewList
       {entries}
+      {unreadable}
       {query}
       {loading}
       {problem}

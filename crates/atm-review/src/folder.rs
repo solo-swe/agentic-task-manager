@@ -47,6 +47,17 @@ struct Held {
     comments: CommentsFile,
 }
 
+/// A review's folder atm can't read (ATM-617): listed as such, never left out without a word.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Unreadable {
+    /// The folder's name (`CR-13-3b8e`).
+    pub folder: String,
+    /// The review it is, by its folder's number (`CR-13`).
+    pub reference: String,
+    /// Why it can't be read.
+    pub problem: String,
+}
+
 /// A project's reviews in its task folder.
 #[derive(Debug, Clone)]
 pub struct FileStore {
@@ -208,20 +219,23 @@ impl FileStore {
         })
     }
 
-    /// Every review, with its reference given, and what couldn't be read (a line each).
-    fn read_all(&self) -> Result<(Vec<Held>, Vec<String>)> {
+    /// Every review, with its reference given, what couldn't be read (a line each), and the reviews that couldn't.
+    fn read_all(&self) -> Result<(Vec<Held>, Vec<String>, Vec<Unreadable>)> {
         let mut held = Vec::new();
         let mut problems = Vec::new();
+        let mut unreadable = Vec::new();
         let entries = match std::fs::read_dir(&self.reviews_dir) {
             Ok(entries) => entries,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((held, problems)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok((held, problems, unreadable));
+            }
             Err(e) => return Err(io(&self.reviews_dir)(e)),
         };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if folder_number(&name).is_none() {
+            let Some(number) = folder_number(&name) else {
                 continue;
-            }
+            };
             match Self::read_review(&entry.path()) {
                 Ok(review) => {
                     problems.extend(
@@ -233,11 +247,27 @@ impl FileStore {
                     );
                     held.push(review);
                 }
-                Err(e) => problems.push(format!("{name}: {e}")),
+                Err(e) => {
+                    problems.push(format!("{name}: {e}"));
+                    unreadable.push(Unreadable {
+                        folder: name,
+                        reference: format!("CR-{number}"),
+                        problem: e.to_string(),
+                    });
+                }
             }
         }
         number_references(&mut held);
-        Ok((held, problems))
+        unreadable.sort_by(|a, b| a.folder.cmp(&b.folder));
+        Ok((held, problems, unreadable))
+    }
+
+    /// The reviews' folders atm can't read, by folder (ATM-617: `atm review list` and the Reviews tab list them).
+    ///
+    /// # Errors
+    /// The reviews' folder can't be read.
+    pub fn unreadable(&self) -> Result<Vec<Unreadable>> {
+        Ok(self.read_all()?.2)
     }
 
     /// What the reviews' files hold that atm can't read: for `atm doctor`.
@@ -291,7 +321,7 @@ impl FileStore {
 
     /// The review a reference names, as the folder holds it.
     fn find(&self, reference: &ReviewRef) -> Result<Held> {
-        let (held, _) = self.read_all()?;
+        let (held, ..) = self.read_all()?;
         if let Some(found) = held.iter().find(|h| {
             h.review.header.reference == *reference || h.review.header.id.0 == reference.0
         }) {
@@ -382,7 +412,7 @@ impl FileStore {
 
 impl ReviewStore for FileStore {
     fn list_reviews(&self, filter: &ReviewFilter) -> Result<Vec<ReviewHeader>> {
-        let (held, _) = self.read_all()?;
+        let (held, ..) = self.read_all()?;
         let mut headers: Vec<ReviewHeader> = held
             .into_iter()
             .map(|h| h.review.header)
@@ -951,6 +981,48 @@ mod tests {
         let problems = store.problems().unwrap();
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert!(problems[0].starts_with("CR-2-abcd: "), "{problems:?}");
+    }
+
+    #[test]
+    fn a_review_atm_cant_read_is_kept_with_its_folder_its_reference_and_why() {
+        let dir = TestDir::new();
+        let task_dir = dir.path().join(".agentic-task-manager");
+        plant(&task_dir, 1, "Fine", "2026-11-17T03:00:00Z");
+        // A status a newer atm wrote, and a review.md that isn't one
+        let newer = plant(&task_dir, 13, "Newer", "2026-11-17T03:00:00Z");
+        let newer_md = task_dir
+            .join("reviews")
+            .join(folder_name(13, &newer.id))
+            .join("review.md");
+        let text = std::fs::read_to_string(&newer_md).unwrap();
+        assert_eq!(text.matches("open").count(), 1, "{text}");
+        std::fs::write(&newer_md, text.replace("open", "frozen")).unwrap();
+        let broken = task_dir.join("reviews/CR-14-abcd");
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(broken.join("review.md"), "no header").unwrap();
+        let store = FileStore::open(&task_dir).unwrap();
+        let unreadable = store.unreadable().unwrap();
+        let named: Vec<(&str, &str)> = unreadable
+            .iter()
+            .map(|u| (u.folder.as_str(), u.reference.as_str()))
+            .collect();
+        assert_eq!(
+            named,
+            [
+                (folder_name(13, &newer.id).as_str(), "CR-13"),
+                ("CR-14-abcd", "CR-14")
+            ]
+        );
+        assert!(unreadable[0].problem.contains("frozen"), "{unreadable:?}");
+        assert_ne!(unreadable[1].problem, "");
+        // The readable one is still listed; a store with none unreadable has none
+        assert_eq!(
+            store.list_reviews(&ReviewFilter::default()).unwrap().len(),
+            1
+        );
+        let empty = TestDir::new();
+        let none = FileStore::open(&empty.path().join(".agentic-task-manager")).unwrap();
+        assert_eq!(none.unreadable().unwrap(), Vec::new());
     }
 
     #[test]

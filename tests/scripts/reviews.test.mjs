@@ -190,6 +190,36 @@ describe('atm review', () => {
     }
   });
 
+  test('a review atm can’t read is listed as such beside the others, never left out without a word (ATM-617)', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'Fine', '--task', 'T-1', '--uncommitted'], root, AGENT);
+      ok(['review', 'create', '--title', 'Newer', '--task', 'T-2', '--uncommitted'], root, AGENT);
+      const reviews = path.join(root, '.agentic-task-manager', 'reviews');
+      const folder = fs.readdirSync(reviews).find((name) => name.startsWith('CR-2-'));
+      const file = path.join(reviews, folder, 'review.md');
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('open', 'frozen'));
+      const listed = ok(['review', 'list'], root, HAKAN).stdout;
+      assert.match(listed, /CR-1 .*Fine/);
+      assert.match(
+        listed,
+        new RegExp(`CR-2 \\(${folder}\\): can't be read: .*frozen.*A newer atm may have written it`),
+      );
+      // With --json the list is still the array of what can be read, and stderr names the other
+      const json = ok(['review', 'list', '--json'], root, HAKAN);
+      assert.deepEqual(
+        json.json().map((f) => f.review.reference),
+        ['CR-1'],
+      );
+      assert.match(json.stderr, new RegExp(`atm: CR-2 \\(${folder}\\): can't be read`));
+      // Whatever the filter: it has no status to filter by
+      assert.match(ok(['review', 'list', '--status', 'closed'], root, HAKAN).stdout, /No reviews\.\nCR-2 /);
+    } finally {
+      removeDir(root);
+    }
+  });
+
   test('an approved live review covers its task’s done until its change moves', () => {
     const root = project();
     try {

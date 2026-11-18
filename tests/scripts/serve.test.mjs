@@ -1271,6 +1271,21 @@ describe('serve', () => {
     assert.match(served.headers.get('content-type'), /text\/html/);
     // Reading changed nothing: no new round, no comment
     assert.deepEqual(JSON.parse(atm(['review', 'comments', 'CR-1', '--json'], root).stdout).length, 1);
+    // A review atm can't read (ATM-617: a newer atm's, a broken header) is listed as such, whatever the query
+    assert.deepEqual(list.unreadable, []);
+    const broken = path.join(root, '.agentic-task-manager', 'reviews', 'CR-3-abcd');
+    fs.mkdirSync(broken);
+    fs.writeFileSync(path.join(broken, 'review.md'), 'no header\n');
+    for (const query of ['', '?status=approved']) {
+      [status, list] = await get(`${reviews}${query}`);
+      assert.equal(status, 200, JSON.stringify(list));
+      assert.deepEqual(
+        list.unreadable.map((u) => [u.folder, u.reference]),
+        [['CR-3-abcd', 'CR-3']],
+        query,
+      );
+      assert.ok(list.unreadable[0].problem, JSON.stringify(list.unreadable));
+    }
     atm(['service', 'stop'], root);
   });
 

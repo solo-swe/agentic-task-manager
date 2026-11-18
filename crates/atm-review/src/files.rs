@@ -48,7 +48,11 @@ pub mod review_md {
         Status::EVERY
             .into_iter()
             .find(|s| s.name() == name)
-            .ok_or_else(|| Error::Invalid(format!("review.md's header can't be read: no status {name}")))
+            .ok_or_else(|| {
+                Error::Invalid(format!(
+                    "review.md's header can't be read: no status {name}"
+                ))
+            })
     }
 
     fn date(text: &str, what: &str) -> Result<Datetime> {
@@ -681,7 +685,10 @@ written at the margin by hand
             let mut h = header();
             h.status = status;
             let text = review_md::write(&h, "").unwrap();
-            assert!(text.contains(&format!("status = \"{}\"\n", status.name())), "{text}");
+            assert!(
+                text.contains(&format!("status = \"{}\"\n", status.name())),
+                "{text}"
+            );
             assert_eq!(review_md::read(&text).unwrap().0.status, status);
         }
     }

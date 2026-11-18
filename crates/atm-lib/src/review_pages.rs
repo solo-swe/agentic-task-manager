@@ -180,7 +180,8 @@ fn me(project: &Project) -> Actor {
 }
 
 /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
-/// open, needs_you, waiting}], you}` (`waiting`: [`waiting_for`]'s why, or `null`).
+/// open, needs_you, waiting}], unreadable: [{folder, reference, problem}], you}` (`waiting`: [`waiting_for`]'s why,
+/// or `null`; `unreadable`: the reviews' folders atm can't read, ATM-617).
 ///
 /// # Errors
 /// A status that isn't one; the project has no folder; a review that can't be read.
@@ -226,6 +227,9 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
     listed.sort_by(|a, b| b.0.cmp(&a.0));
     Ok(json!({
         "reviews": listed.into_iter().map(|(_, e)| e).collect::<Vec<_>>(),
+        // Whatever the query (ATM-617): a review atm can't read has no status or task to filter by, and left out it
+        // would only be missing
+        "unreadable": store.unreadable()?,
         "you": me.0,
     }))
 }

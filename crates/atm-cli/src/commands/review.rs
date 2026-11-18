@@ -727,6 +727,18 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 }
                 found.push(f);
             }
+            // Whatever the filter (ATM-617): a review atm can't read is listed as such, never left out without a word.
+            // With --json, on stderr: the list stays the array older readers expect
+            let unreadable: Vec<String> = store
+                .unreadable()?
+                .iter()
+                .map(|u| {
+                    format!(
+                        "{} ({}): can't be read: {}. A newer atm may have written it.",
+                        u.reference, u.folder, u.problem
+                    )
+                })
+                .collect();
             if ctx.json {
                 print_json(&Value::Array(
                     found
@@ -734,15 +746,22 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                         .map(|f| json!({ "review": as_json!(&f.header), "branch": f.branch }))
                         .collect(),
                 ));
-            } else if found.is_empty() {
-                println!("No reviews.");
+                for line in &unreadable {
+                    eprintln!("atm: {line}");
+                }
             } else {
+                if found.is_empty() {
+                    println!("No reviews.");
+                }
                 for f in &found {
                     let branch = f
                         .branch
                         .as_deref()
                         .map_or_else(String::new, |b| format!(" · {b}"));
                     println!("{}{branch}", summary_line(&f.header));
+                }
+                for line in &unreadable {
+                    println!("{line}");
                 }
             }
         }

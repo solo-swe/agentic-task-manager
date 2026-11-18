@@ -17,7 +17,10 @@
   (`atm review list --status open`: draft, waiting, live or changes_requested).
 - **Reading it:** `atm review show CR-7` (the header, rounds and counts), `atm review comments CR-7 [--open]` (every
   chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (a round's diff, or what changed
-  since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`.
+  since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`. A review
+  atm can't read (a status a newer atm wrote, a broken header) is listed after the others as *can't be read*, with
+  why, whatever the filter (on stderr with `--json`, whose list stays the reviews it can read): don't edit its files
+  to make it readable, say so to the user (`atm doctor` reports it too).
 - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
   tasks back in review; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to

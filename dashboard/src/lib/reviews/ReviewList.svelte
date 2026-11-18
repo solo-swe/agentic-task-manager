@@ -8,6 +8,7 @@
     type ReviewEntry,
     type ReviewStatus,
     type StatusFilter,
+    type UnreadableReview,
   } from './types';
 
   // The reviews page (docs/code-review-design.md §3.11, ATM-574): a project's reviews, the latest activity first,
@@ -26,6 +27,7 @@
     onlive,
     taskHref,
     taskLinks,
+    unreadable = [],
   }: {
     entries: ReviewEntry[];
     query: Query;
@@ -41,6 +43,8 @@
      * click does: its details here, or with ⌘, Ctrl or a middle click a tab of its own); without them, keys as text */
     taskHref?: (key: string) => string;
     taskLinks?: TaskLinks;
+    /** The reviews atm can't read (ATM-617): rows of their own, with why, after the others and whatever the query */
+    unreadable?: UnreadableReview[];
   } = $props();
 
   function openTask(e: MouseEvent, key: string) {
@@ -209,7 +213,7 @@
 
   {#if problem}
     <p class="review-problem" role="alert">{problem}</p>
-  {:else if !entries.length}
+  {:else if !entries.length && !unreadable.length}
     <p class="review-empty">
       {loading
         ? 'Loading…'
@@ -254,6 +258,16 @@
               ><Icon name="message-square" size={12} />{entry.open} open of {entry.chains}</span
             >
             <span title={r.updated}><Icon name="history" size={12} />{ago(r.updated)}</span>
+          </span>
+        </li>
+      {/each}
+      {#each unreadable as u (u.folder)}
+        <li class="review-row review-unreadable" data-unreadable={u.reference}>
+          <span class="review-ref">{u.reference}</span>
+          <span class="review-status status-unreadable">Can't be read</span>
+          <span class="review-meta">
+            <span class="review-unreadable-why" title={u.folder}>{u.problem}</span>
+            <span>A newer atm may have written it.</span>
           </span>
         </li>
       {/each}
@@ -458,6 +472,13 @@
     color: var(--red);
     border-color: color-mix(in srgb, var(--red) 50%, transparent);
     background: color-mix(in srgb, var(--red) 10%, transparent);
+  }
+  .review-status.status-unreadable {
+    color: var(--red);
+    border-color: color-mix(in srgb, var(--red) 50%, transparent);
+  }
+  .review-unreadable-why {
+    color: var(--red);
   }
   .review-status.status-waiting,
   .review-status.status-live {

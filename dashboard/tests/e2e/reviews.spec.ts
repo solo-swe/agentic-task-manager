@@ -216,6 +216,23 @@ test.describe('the reviews tab', () => {
     await expect(tab).toHaveAccessibleName('Reviews');
   });
 
+  // ATM-617: CR-13 written by a newer atm, with a status this one doesn't know: a row saying so, not a missing review
+  test('a review atm can’t read is a row of its own, saying why, after the others', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    tasksServer.setReviews({
+      reviews: [{ review: header(2), branch: null, chains: 0, open: 0, needs_you: false }],
+      unreadable: [{ folder: 'CR-13-3b8e', reference: 'CR-13', problem: 'no status frozen' }],
+      you: 'Ana',
+    });
+    await page.reload();
+    const rows = page.locator('.review-row');
+    await expect(rows).toHaveCount(2);
+    const unreadable = rows.nth(1);
+    await expect(unreadable).toHaveAttribute('data-unreadable', 'CR-13');
+    await expect(unreadable).toHaveText("CR-13 Can't be read no status frozen A newer atm may have written it.");
+    await expect(unreadable.getByRole('link')).toHaveCount(0);
+  });
+
   test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({
     page,
     tasksServer,

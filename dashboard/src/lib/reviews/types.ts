@@ -70,8 +70,17 @@ export interface ReviewEntry {
   waiting?: 'review' | 'answered' | null;
 }
 
+/** A review's folder atm can't read (ATM-617): a status a newer atm wrote, a broken header */
+export interface UnreadableReview {
+  folder: string;
+  reference: string;
+  problem: string;
+}
+
 export interface ReviewList {
   reviews: ReviewEntry[];
+  /** Optional, for an older atm's lists */
+  unreadable?: UnreadableReview[];
   you: string;
 }
 

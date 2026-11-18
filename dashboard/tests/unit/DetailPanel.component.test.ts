@@ -420,6 +420,24 @@ describe('DetailPanel', () => {
       expect(latest().querySelector('.review-link-needs')).toHaveTextContent('needs you');
       dashboard.projects = [];
     });
+
+    // ATM-617: a review the list said atm can't read says so in the details, with why, until a list says otherwise
+    it('a review atm can’t read says so, with why, instead of its status; readable again, its status', async () => {
+      const { learnReviews, learnUnreadable } = await import('../../src/lib/reviews/known.svelte');
+      learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
+      const container = open({ status: 'in_review', code_reviews: reviews });
+      const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
+      learnUnreadable('p1', [{ reference: 'CR-7', problem: 'no status frozen' }]);
+      learnUnreadable('p2', [{ reference: 'CR-3', problem: 'another project’s' }]);
+      flushSync();
+      expect(latest().textContent).toBe("CR-7can't be read");
+      expect(latest().querySelector('.review-link-unreadable')).toHaveAttribute('title', 'no status frozen');
+      expect(container.querySelector('[data-review="CR-3"] .review-link-unreadable')).toBeNull();
+      learnUnreadable('p1', []);
+      flushSync();
+      expect(latest().textContent).toBe('CR-7Waiting for review');
+      learnUnreadable('p2', []);
+    });
   });
 
   it('a plain description is one paragraph, as before', async () => {

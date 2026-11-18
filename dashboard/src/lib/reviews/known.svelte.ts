@@ -18,3 +18,20 @@ export function learnReviews(project: string, reviews: readonly { reference: str
   for (const r of reviews)
     if (known[key(project, r.reference)] !== r.status) known[key(project, r.reference)] = r.status;
 }
+
+// The reviews the Reviews tab listed as unreadable (ATM-617), by project and reference, with why: a task's link to one
+// says it can't be read rather than show no status
+const unreadable = $state<Record<string, string>>({});
+
+/** Why `reference` in `project` can't be read, if the page listed it so */
+export function knownUnreadable(project: string, reference: string): string | null {
+  return unreadable[key(project, reference)] ?? null;
+}
+
+/** The reviews of `project` the list just said can't be read: every other one of the project's is readable again */
+export function learnUnreadable(project: string, reviews: readonly { reference: string; problem: string }[]): void {
+  const prefix = key(project, '');
+  const now: Record<string, string> = Object.fromEntries(reviews.map((r) => [key(project, r.reference), r.problem]));
+  for (const k of Object.keys(unreadable)) if (k.startsWith(prefix) && !(k in now)) delete unreadable[k];
+  for (const [k, problem] of Object.entries(now)) if (unreadable[k] !== problem) unreadable[k] = problem;
+}

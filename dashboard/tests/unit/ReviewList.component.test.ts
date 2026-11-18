@@ -196,6 +196,26 @@ describe('ReviewList', () => {
     expect(onquery).toHaveBeenCalledWith(NO_QUERY);
   });
 
+  // ATM-617: a review atm can't read is a row of its own, with why and no link, after the others; alone, it is no
+  // empty list
+  it('lists a review atm can’t read as a row of its own, after the others: its reference, why, no link', () => {
+    const unreadable = [{ folder: 'CR-13-3b8e', reference: 'CR-13', problem: 'no status frozen' }];
+    const { container, unmount } = show([entry(2, 'waiting')], { ...NO_QUERY }, { unreadable });
+    const rows = [...container.querySelectorAll('.review-row')];
+    expect(rows.map((r) => r.getAttribute('data-review') ?? r.getAttribute('data-unreadable'))).toEqual([
+      'CR-2',
+      'CR-13',
+    ]);
+    const row = within(rows[1] as HTMLElement);
+    expect(row.getByText("Can't be read")).toBeTruthy();
+    expect(row.getByText('no status frozen')).toHaveAttribute('title', 'CR-13-3b8e');
+    expect(row.queryByRole('link')).toBeNull();
+    unmount();
+    show([], { ...NO_QUERY, q: 'x' }, { unreadable });
+    expect(screen.queryByText('No review fits.')).toBeNull();
+    expect(screen.getByText('CR-13')).toBeTruthy();
+  });
+
   it('says why it is empty: loading, nothing fits, no reviews yet; or the problem', () => {
     const { unmount } = show([], { ...NO_QUERY }, { loading: true });
     expect(screen.getByText('Loading…')).toBeTruthy();
