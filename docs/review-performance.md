@@ -3,6 +3,27 @@
 Hakan, 2026-11-18: on a large review (CompMD's CR-1) the Diffs tab takes long to show, and scrolling its pane is
 painfully slow. This note measures where the time goes and proposes what to change, for a decision before building.
 
+## In short
+
+Opening the Diffs tab is fast (the first file in about 0.1 s, atm's answer in 46 ms); **scrolling is the slow part**,
+and it gets slower the further you scroll, because every file you pass stays drawn in the page. The steps proposed,
+each explained under _Proposals_ below:
+
+1. **Skip drawing files off screen:** the browser lays out and paints only the files near the view (CSS
+   `content-visibility`), a few lines.
+2. **Give back far files' rows:** a file a few screens away from the view drops its diff and keeps only its height;
+   it is drawn again when you come back.
+3. **Draw a long file in chunks:** a file of more than about 1,000 rows draws a few hundred at a time as you scroll.
+4. **Cache a file at a revision:** the browser keeps each side it fetched (a file at a commit never changes), so a
+   review opened again, or the next round, doesn't fetch them again.
+5. **Highlight only what is shown:** a file's syntax highlighting for the rows on screen, or after they are drawn
+   plain; only if the app is still slow after 1–4.
+6. **Page the files from atm:** atm sends the file list first and each file's diff as it is reached; not needed for
+   CR-1, a follow-up for reviews of thousands of files.
+7. **Speed up atm's own answer:** not needed now (46 ms).
+
+**Asked:** build 1–4 in this task, 5 only if needed, 6 and 7 as backlog tasks, with the budgets at the end.
+
 ## The case
 
 CompMD's CR-1, round 2: **94 files, 2,995 lines added and 304 removed**, among them the spec (`compmd-spec-v1.md`,

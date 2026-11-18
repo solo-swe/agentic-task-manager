@@ -15869,7 +15869,7 @@
       "description": "A review with a long diff takes a long time before its Diffs tab shows, and once shown, **scrolling the diffs pane is painfully slow** (Hakan, 2026-11-18; the case to measure and fix: CompMD's CR-1). Find where the time goes, propose ways to make loading and scrolling fast, decide with Hakan, then do it.\n\n## Measure first\nCompMD's CR-1, and a generated review of a few thousand changed lines (one large file, and many files), in the browser and the app:\n- **Loading:** the time to the first file drawn and to the tab settled, split into atm's answer (`review_page` in [`review_pages.rs`](crates/atm-lib/src/review_pages.rs): the round's patch, trees rebuilt with `git apply`, every chain placed with a tree diff each, `rounds::place`), the transfer, and the page (parsing every file's patch, `diff.ts`; the file cards, `ReviewFile.svelte`, `DiffView.svelte`; the sides' documents loaded per file).\n- **Scrolling:** frames dropped and long tasks while scrolling the pane from top to bottom (the browser's performance trace): how many rows and cards are in the document, what each scroll makes (the lazy cards' observers, `MARGIN`, the ResizeObserver pinning a card, highlighting, layout of very long lines, sticky headers).\n\n`tests/e2e/performance.spec.ts` has the review budget to extend (*review file far down*).\n\n## Proposals to weigh (write them up, with numbers)\n- **Paging the files:** the page asks for the round's file list first (paths, statuses, counts), and each file's patch and sides when its card nears the view (`?file=` on the review route), so a review of hundreds of files sends what is looked at.\n- **Virtualising the pane:** only the cards (and, in a long file, the rows) near the view are in the document, the rest stood in for by their estimated heights; a file's diff drawn in chunks of its hunks as it scrolls.\n- **Cheaper rows:** fewer elements per row, no per-row observers or effects, highlighting done once per file (off the main thread or in idle time), `content-visibility: auto` on cards out of view.\n- **atm's side:** trees rebuilt once per round and cached (by round and patch hash), chains placed in one tree diff per file instead of one per chain, the answer cached by the review's stamp (ETag/304 as the task routes do).\n- **The page:** patches parsed in a worker or lazily per card; the sides' documents only for the rendered view and the context folds.\n\nPut the proposals, with the measurements, in a short document (`docs/review-performance.md`) and open a review of it with Hakan (`atm review create --task <this> --file docs/review-performance.md`) before building; then the chosen ones.\n\n## Tests\nPerformance budgets for a long review in `performance.spec.ts`: the first file drawn, and a scroll from top to bottom (no long task over the budget, the last file reached in time); unit tests for any paging, virtualising or caching added.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/review-performance.md",
@@ -15878,7 +15878,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:41:33Z",
+      "updated_at": "2026-11-18T00:46:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15895,7 +15895,24 @@
       "number": 587,
       "key_final": false,
       "started_at": "2026-11-18T00:41:33Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "b56d62a497750f4e3a426d359a158789fa9d75b9",
+      "code_reviews": [
+        {
+          "id": "01a1ec1e-490c-7662-b019-c555b41cacfe",
+          "ref": "CR-1"
+        }
+      ],
+      "review_requested_at": "2026-11-18T00:46:10Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T00:46:10Z",
+          "kind": "review",
+          "text": "CR-1: Large reviews: where the Diffs tab spends its time, and what to change",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4766068f19",
@@ -16051,16 +16068,16 @@
       "description": "In the Diffs tab's **Rendered** view, a Markdown document longer than a page shows only its first page: the rest is drawn wrongly and can't be scrolled to or read (Hakan, 2026-11-18). The likely cause: the page sheet has a fixed shape, `aspect-ratio: 8.5 / 11` in [`RenderedSide.svelte`](dashboard/src/lib/reviews/RenderedSide.svelte), so the document's height is cut to one page and its blocks' positions (and the gutter's numbers placed by them) no longer match.\n\n## Change\nThe sheet keeps a page's width and look but grows with its document (at least one page tall, then as tall as the content), the gutter's numbers placed by the blocks as they are laid out, the whole document scrolling with the file's card. Check it with a long document, with images, tables and a Mermaid diagram (which lay out late), in Split and Unified.\n\n## Tests\nAn e2e test in `reviews.spec.ts` with a document of several pages: its last block is reachable by scrolling and visible, its line number beside it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T00:46:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16072,7 +16089,9 @@
         "dashboard"
       ],
       "number": 592,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T00:46:31Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebff-cd7b-7556-8dc4-7f1a2fd70d41",
