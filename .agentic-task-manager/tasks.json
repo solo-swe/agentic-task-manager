@@ -16080,7 +16080,7 @@
       "description": "The diff viewer gets a **Wrap** toggle beside Split/Unified and Source/Rendered on the Diffs tab's toolbar (an icon button, as theirs; kept like them): wrapped, long lines wrap at the column's width instead of scrolling sideways (Hakan, 2026-11-18).\n\n## Details\n- Line numbers stay right: a wrapped line has its number on its first row only, the gutter as tall as the wrapped line, and in Split the two sides' rows stay level (the taller side sets the row's height).\n- Picking lines to comment on, the `+` on a line, the highlight of a selected chain and the comment boxes under a line work the same wrapped.\n- Wrapped, the file has no horizontal scroll bar.\n\n## Tests\nComponent tests in `DiffView.component.test.ts` (the toggle, a long line wrapped with one number); an e2e test in `reviews.spec.ts` that a wrapped long line keeps the next line's number level with it, in Split and Unified.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -16088,7 +16088,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T07:25:33Z",
+      "updated_at": "2026-11-18T07:52:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16104,7 +16104,24 @@
       "number": 588,
       "key_final": false,
       "started_at": "2026-11-18T07:25:33Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "6d0d8cbab54e4fc19f55135669e54134773427c8",
+      "code_reviews": [
+        {
+          "id": "01a1eda4-b0cb-7039-ab4b-4cf4d8fc381e",
+          "ref": "CR-16"
+        }
+      ],
+      "review_requested_at": "2026-11-18T07:52:35Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T07:52:35Z",
+          "kind": "review",
+          "text": "CR-16: Wrap long lines in the diff viewer",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef482a98ae1a",
@@ -16118,7 +16135,7 @@
       "description": "At the bottom of a file's diff, the line number of the last line (an empty one, not shown otherwise) is drawn over the **Show n unchanged lines** row that ends the file (Hakan, 2026-11-18). Find where the extra row comes from (likely the file's trailing newline making an empty last line in the sides' rows, `diff.ts`, or the gutter's numbers drawn past the rows in [`DiffCode.svelte`](dashboard/src/lib/reviews/DiffCode.svelte)) and fix it: no number without its line, and nothing over the fold row.\n\n## Tests\nA unit test in `diff.test.ts` for a file ending with a newline (no empty last row); an e2e or component test that the last fold row has nothing over it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/diff.ts",
@@ -16126,9 +16143,9 @@
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T07:52:40Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16140,7 +16157,9 @@
         "dashboard"
       ],
       "number": 589,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T07:52:40Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4914dd4a4c",

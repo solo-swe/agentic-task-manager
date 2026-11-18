@@ -4,6 +4,7 @@ import {
   changedLines,
   fenced,
   foldKey,
+  linesOf,
   linesUnder,
   nextChange,
   parseHunks,
@@ -135,7 +136,56 @@ describe('changes, keys and marks', () => {
   });
 
   it('code is fenced longer than its backticks, with its language', () => {
-    expect(fenced('a ```` b', 'md')).toBe('`````md\na ```` b\n`````\n');
-    expect(fenced('x\n', null)).toBe('```\nx\n```\n');
+    expect(fenced(['a ```` b'], 'md')).toBe('`````md\na ```` b\n`````\n');
+    expect(fenced(['x'], null)).toBe('```\nx\n```\n');
+  });
+
+  // ATM-589: an empty last line is a line of the block, so the run is as tall as its rows and nothing is drawn below it
+  it('keeps every line, an empty last one too; no lines, no line; one empty line, one', () => {
+    // An empty last line: one newline more, as the block's text drops its last and a final newline draws no line
+    expect(fenced(['x', ''], null)).toBe('```\nx\n\n\n```\n');
+    expect(fenced(['', 'x', '', ''], 'rs')).toBe('```rs\n\nx\n\n\n\n```\n');
+    expect(fenced(['', 'x'], 'rs')).toBe('```rs\n\nx\n```\n');
+    expect(fenced([], null)).toBe('```\n```\n');
+    expect(fenced([''], null)).toBe('```\n\n\n```\n');
+  });
+
+  // ATM-589: a hunk whose last line is an empty context line, before the fold that ends the file
+  it('a hunk ending with an empty line: its rows are its lines, the fold the rest of the file', () => {
+    const now = Array.from({ length: 40 }, (_, i) => (i + 1 === 31 ? '' : `line ${i + 1}`)).join('\n') + '\n';
+    const patch = '@@ -28,4 +28,4 @@\n line 28\n-line 29\n+LINE 29\n line 30\n \n';
+    const unified = unifiedBlocks(parseHunks(patch), now).find((b) => b.type === 'rows');
+    expect(unified?.type === 'rows' && unified.rows.map((r) => [r.old, r.new])).toEqual([
+      [28, 28],
+      [29, null],
+      [null, 29],
+      [30, 30],
+      [31, 31],
+    ]);
+    for (const blocks of [splitBlocks(parseHunks(patch), now), unifiedBlocks(parseHunks(patch), now)]) {
+      expect(blocks.filter((b) => b.type === 'rows')).toHaveLength(1);
+      const folds = blocks.filter((b) => b.type === 'fold');
+      expect(folds.map((f) => f.type === 'fold' && [f.fold.newFrom, f.fold.count])).toEqual([
+        [1, 27],
+        [32, 9],
+      ]);
+    }
+    const split = splitBlocks(parseHunks(patch), now).find((b) => b.type === 'rows');
+    expect(split?.type === 'rows' && split.rows.map((r) => [r.old, r.new])).toEqual([
+      [28, 28],
+      [29, 29],
+      [30, 30],
+      [31, 31],
+    ]);
+  });
+
+  it('a file ending with a newline has no empty last row', () => {
+    expect(linesOf('a\nb\n')).toEqual(['a', 'b']);
+    expect(linesOf('a\r\nb\r\n')).toEqual(['a', 'b']);
+    // A file ending with an empty line: that line is the file's
+    expect(linesOf('a\n\n')).toEqual(['a', '']);
+    expect(linesOf('a')).toEqual(['a']);
+    expect(linesOf('')).toEqual([]);
+    expect(linesOf(null)).toEqual([]);
   });
 });

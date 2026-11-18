@@ -248,11 +248,15 @@ export function nextChange(starts: [number, number][], at: [number, number] | nu
   return starts.find((s) => before(at, s)) ?? starts[0];
 }
 
-/** `text` as a fenced code block of `language`, the fence longer than any run of backticks in it */
-export function fenced(text: string, language: string | null): string {
-  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+/** `lines` as a fenced code block of `language`, the fence longer than any run of backticks in them: every line, an
+ * empty last one too (ATM-589: one dropped made the run a line short, its number then drawn over the row after it).
+ * The block's text ends without the last newline, and a text ending in a newline draws no line after it: an empty
+ * last line gets one newline more, so it is drawn */
+export function fenced(lines: readonly string[], language: string | null): string {
+  const body = lines.map((l) => `${l}\n`).join('') + (lines.length && lines.at(-1) === '' ? '\n' : '');
+  const longest = Math.max(0, ...(body.match(/`+/g) ?? []).map((run) => run.length));
   const marks = '`'.repeat(Math.max(3, longest + 1));
-  return `${marks}${language ?? ''}\n${text}${text.endsWith('\n') || !text ? '' : '\n'}${marks}\n`;
+  return `${marks}${language ?? ''}\n${body}${marks}\n`;
 }
 
 /** The lines a selection spans, from the lines' boxes CompMD drew (the rendered view): those whose boxes it crosses */

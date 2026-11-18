@@ -53,7 +53,12 @@
   } = $props();
 
   const source = $derived(lines.map((l) => l.text).join('\n'));
-  const text = $derived(fenced(source, language));
+  const text = $derived(
+    fenced(
+      lines.map((l) => l.text),
+      language,
+    ),
+  );
 
   let el = $state<HTMLElement>();
   let layout = $state<{ top: number; lineHeight: number } | null>(null);
@@ -71,8 +76,14 @@
       if (state === 'failed' && layout?.lineHeight !== FALLBACK_LINE) layout = { top: 0, lineHeight: FALLBACK_LINE };
       return;
     }
+    // A line's height as drawn: the code's height over its lines (every one is drawn, an empty last one too: ATM-589),
+    // so the rows never drift from the text; else what its style says
     const style = getComputedStyle(code);
-    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
+    const drawnHeight = code.getBoundingClientRect().height;
+    const lineHeight =
+      !wrap && lines.length && drawnHeight > 0
+        ? drawnHeight / lines.length
+        : parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
     if (wrap) measureWrapped(code);

@@ -435,6 +435,72 @@ test.describe('a review’s page', () => {
     await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // ATM-589: a run that ends with an empty line, before the fold that ends the file: the empty line is drawn, its
+  // number beside it, and nothing over the fold
+  test('a run ending with an empty line before the last fold: its number on its line, nothing over the fold', async ({
+    page,
+    tasksServer,
+  }) => {
+    const old = lines(40, (i) => (i === 31 ? '' : null));
+    const now = lines(40, (i) => (i === 29 ? 'LINE 29' : i === 31 ? '' : null));
+    const patch = [
+      'diff --git a/src/e.rs b/src/e.rs',
+      '--- a/src/e.rs',
+      '+++ b/src/e.rs',
+      '@@ -28,4 +28,4 @@',
+      ' line 28',
+      '-line 29',
+      '+LINE 29',
+      ' line 30',
+      ' ',
+      '',
+    ].join('\n');
+    tasksServer
+      .setRevisionDocument(
+        'base1',
+        projectDocument('src/e.rs', old, { kind: 'code', language: 'rust', line_offset: 1 }),
+      )
+      .setRevisionDocument(
+        'head3',
+        projectDocument('src/e.rs', now, { kind: 'code', language: 'rust', line_offset: 1 }),
+      );
+    await openReviews(page, tasksServer);
+    tasksServer.setReview('CR-2', reviewPage({ view: { round: 3, against: null, files: [file('src/e.rs', patch)] } }));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    const diff = diffOf(page, 'src/e.rs');
+    for (const mode of ['Split', 'Unified']) {
+      await page.getByRole('button', { name: mode, exact: true }).click();
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      const fold = diff.locator('.diff-fold').last();
+      await expect(fold).toContainText('Show 9 unchanged lines');
+      const placed = await diff.evaluate((view) => {
+        const fold = [...view.querySelectorAll('.diff-fold')].at(-1)!.getBoundingClientRect();
+        const run = [...view.querySelectorAll('.diff-run')].at(-1)!;
+        const code = run.querySelector('.compmd-page pre')!.getBoundingClientRect();
+        const rows = [...run.querySelectorAll('.diff-code')[0].querySelectorAll('.diff-line')].map((l) =>
+          l.getBoundingClientRect(),
+        );
+        const first = rows[0];
+        return {
+          fold: fold.top,
+          last: rows.at(-1)!.bottom,
+          code: code.bottom,
+          rows: rows.length,
+          // The code's lines are as tall as the first row: the empty last line drawn, not the rows squeezed to fit
+          lineHeight: first.height,
+          text: run.querySelector('.compmd-page pre code')!.textContent,
+        };
+      });
+      // The empty line 31 is a row of its own (Unified: the changed line 29 is two), drawn in the code: the code ends
+      // with it, the last row with the code, above the fold
+      expect(placed.rows).toBe(mode === 'Split' ? 4 : 5);
+      expect(placed.text?.endsWith('line 30\n\n')).toBe(true);
+      expect(placed.last).toBeLessThanOrEqual(placed.fold + 1);
+      expect(placed.lineHeight).toBeGreaterThan(18);
+    }
+  });
+
   test('Overview: the summary, the facts, the tasks as links, the review’s own chains', async ({
     page,
     tasksServer,
