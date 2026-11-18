@@ -15362,10 +15362,11 @@
         "dashboard/src/lib/shell/Sidebar.svelte",
         "dashboard/src/lib/details/",
         "dashboard/src/lib/shell/NeedsYouMenu.svelte",
-        "app/src-tauri/src/links.rs"
+        "app/src-tauri/src/links.rs",
+        "dashboard/src/lib/details/ReviewLink.svelte"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T00:54:34Z",
+      "updated_at": "2026-11-18T07:19:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
@@ -15854,7 +15855,7 @@
       "description": "When a task is in review and has a code review (`code_reviews` on the task: `[{id, ref}]`, the latest last), its details show the review as a link, prominently where the review is (the review section of [`DetailPanel.svelte`](dashboard/src/lib/details/DetailPanel.svelte), beside the `review` note), e.g. **CR-7 · open**: a click opens the review's page (`/projects/<id>/reviews/CR-7`), in a new tab with ⌘/Ctrl (in the app, an app tab), as the Reviews list opens one (`ReviewsTab.svelte`'s `open`). Hakan, 2026-11-18.\n\n## Details\n- Show the latest review the task names; with several, the others as smaller links after it.\n- The status next to the reference when the page knows it (the project's reviews list), else the reference alone; never a request per task.\n- A task with `code_reviews` that isn't in review (done, sent back) shows its reviews too, less prominently.\n- ATM-575 puts the same links on the cards and in the list: share the link component with it.\n\n## Tests\nA component test of the details panel (in review with one review, with two, without any, not in review); an e2e test in `detail.spec.ts` that the link opens the review's page, and ⌘-click a new tab.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/details/DetailPanel.svelte",
@@ -15862,7 +15863,7 @@
         "dashboard/tests/e2e/detail.spec.ts"
       ],
       "created_at": "2026-11-17T23:58:50Z",
-      "updated_at": "2026-11-18T07:14:57Z",
+      "updated_at": "2026-11-18T07:19:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15881,7 +15882,24 @@
       "number": 585,
       "key_final": false,
       "started_at": "2026-11-18T07:14:57Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "18b5ca17238424d306dd1856e80bc9a9c9a66f20",
+      "code_reviews": [
+        {
+          "id": "01a1ed86-c83e-75b2-9f6b-cd6738b24e61",
+          "ref": "CR-14"
+        }
+      ],
+      "review_requested_at": "2026-11-18T07:19:55Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T07:19:55Z",
+          "kind": "review",
+          "text": "CR-14: A task links to its code reviews in its details",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ebf2-f535-752d-88f8-ee8ac3ce346e",
@@ -15895,7 +15913,7 @@
       "description": "A review's description (its summary, on the Overview tab) and its comments render through CompMD, but their references to the project's documents and files (`[the design](docs/x.md)`, `docs/x.md#routes`, `src/a.rs#L40-L45`, text-fragment links `#:~:text=…`) aren't opened in the document viewer, as they are in a task's description and notes (Hakan, 2026-11-18).\n\n## Change\n- Give the review page's `CompMd` (the summary in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte), the comment bodies in [`ChainBox.svelte`](dashboard/src/lib/reviews/ChainBox.svelte)) the same `onopen` the details panel gives its texts (`dashboard.openDocument`), so a relative link opens the document viewer over the review, at its heading, lines or text.\n- A link to a file under review could open that file in the Diffs tab instead: decide while doing it (a file the round changed → its diff; anything else → the viewer), and say which in the outcome note.\n- External links stay as they are (the user's browser, through `open_url` in the app).\n\n## Tests\nComponent tests that a summary's and a comment's relative link calls `onopen` with its document reference; an e2e test in `reviews.spec.ts` that a click on one opens the document viewer.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -15903,9 +15921,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-17T23:58:50Z",
-      "updated_at": "2026-11-17T23:58:50Z",
+      "updated_at": "2026-11-18T07:20:00Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -15917,7 +15935,9 @@
         "dashboard"
       ],
       "number": 586,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T07:20:00Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef463ee973d6",

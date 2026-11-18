@@ -331,6 +331,49 @@ test.describe('a review’s page', () => {
     await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
   });
 
+  // ATM-586: links in a review's texts to the project's documents: a file of the round opens its diff, anything else
+  // the document viewer
+  test('a link in the summary or a comment: a file the round changed opens its diff, another document the viewer', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const own = reviewPage();
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        summary: 'Trims the names: see [the design](docs/design.md) and [the change](src/a.rs).',
+        chains: [
+          ...own.chains,
+          {
+            id: 't4',
+            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
+            comments: [comment('c4', 'As [the plan](docs/plan.md) says.')],
+            placed: null,
+            drifted: null,
+          },
+        ],
+      }),
+    );
+    tasksServer.setDocument(projectDocument('docs/design.md', '# The design\n\nHow.\n'));
+    tasksServer.setDocument(projectDocument('docs/plan.md', '# The plan\n\nWhen.\n'));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    const summary = page.locator('.review-overview .review-main');
+    await summary.getByRole('link', { name: 'the design' }).click();
+    await expect(page.locator('#doc-title')).toHaveText('The design');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#doc-title')).toHaveCount(0);
+    // A comment's link, the same
+    await page.locator('.review-conversation [data-chain="t4"]').getByRole('link', { name: 'the plan' }).click();
+    await expect(page.locator('#doc-title')).toHaveText('The plan');
+    await page.keyboard.press('Escape');
+    // A file the round changed: its diff, on the Diffs tab
+    await summary.getByRole('link', { name: 'the change' }).click();
+    await expect(page.getByRole('tab', { name: /^Diffs/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(card(page, 'src/a.rs')).toBeInViewport();
+    await expect(page.locator('#doc-title')).toHaveCount(0);
+  });
+
   test('Overview: the summary, the facts, the tasks as links, the review’s own chains', async ({
     page,
     tasksServer,

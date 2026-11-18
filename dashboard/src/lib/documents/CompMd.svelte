@@ -60,11 +60,11 @@
   /** How long a turn waits for CompMD to say it has drawn before the next one goes anyway */
   const TURN_LIMIT_MS = 3000;
 
-  /** A project's text (a task's, or a document's): a relative link in it opens the document viewer (V1a–V1c), resolved
-   * from the project's root for task text and from the document's folder in a document. Help and What's new come with
-   * the plugin, not the project: their relative links stay text. */
+  /** A project's text (a task's, a document's, or one given `onopen`: a code review's summary and comments, ATM-586): a
+   * relative link in it opens the document viewer (V1a–V1c), resolved from the project's root, or from the document's
+   * folder in a document. Help and What's new come with the plugin, not the project: their relative links stay text. */
   const docLink = $derived(
-    task || path
+    task || path || onopen
       ? (url: string) => {
           const ref = referenceTo(url, path);
           return ref ? viewerLink(ref) : null;

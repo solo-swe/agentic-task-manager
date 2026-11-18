@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from 'svelte';
   import CompMd from '../documents/CompMd.svelte';
+  import type { DocumentRef } from '../documents';
   import type { DocumentSource } from '../documents/source';
   import { formatWhen } from '../format';
   import { readStored, writeStored } from '../prefs';
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
   import { focusOnShow } from './focus';
+  import { setDocumentLinks } from './links';
   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
   import {
     chainsOf,
@@ -51,6 +53,7 @@
     onresolve,
     onsubmit,
     onclose,
+    ondocument,
   }: {
     page: ReviewPageData;
     /** The project's short name (its key), before the reference */
@@ -80,6 +83,9 @@
     onsubmit: (decision: 'approve' | 'request_changes' | 'comment', body: string) => void;
     /** The review closed, ended without approval, the summary its reason (ATM-576: how a live review ends unapproved) */
     onclose?: (reason: string) => void;
+    /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
+     * manager opens its document viewer (ATM-586) */
+    ondocument?: (ref: DocumentRef) => void;
   } = $props();
 
   const review = $derived(page.review);
@@ -168,6 +174,14 @@
 
   let writing: (() => void) | null = null;
   onDestroy(() => writing?.());
+  /** A link in the summary or a comment to a document of the project (ATM-586): a file the round changed opens its diff
+   * here, the review being about it; anything else, or a document's heading or text, the document viewer */
+  function openLink(ref: DocumentRef) {
+    if (!ref.heading && !ref.text && files.some((f) => f.path === ref.path)) void showFile(ref.path);
+    else ondocument?.(ref);
+  }
+  setDocumentLinks(openLink);
+
   /** The file just gone to: its card is made at once, the others after it */
   let wanted = $state<string | null>(null);
   const cardOf = (path: string) =>
@@ -654,7 +668,7 @@
         <div class="review-main">
           <section class="review-card review-summary" aria-label="Description">
             <h2 class="review-card-title">Description</h2>
-            {#if page.summary.trim()}<CompMd text={page.summary} />{:else}<p class="review-empty">
+            {#if page.summary.trim()}<CompMd text={page.summary} onopen={openLink} />{:else}<p class="review-empty">
                 No description.
               </p>{/if}
           </section>

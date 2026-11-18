@@ -237,6 +237,7 @@
         onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
         onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
         onclose={(reason) => change(closeReview(project, review, reason))}
+        ondocument={(ref) => dashboard.openDocument(ref)}
       />
     {:else if problem}
       <p class="reviews-problem" role="alert">{problem}</p>

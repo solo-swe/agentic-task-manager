@@ -39,6 +39,26 @@ afterEach(() => {
 });
 
 describe('CompMd', () => {
+  // ATM-586: a code review's summary and comments are the project's text: given onopen, their relative links open the
+  // document viewer, as a task's do; without it (Help, What's new) they stay text
+  it('given onopen, a relative link opens its document; without, it stays text', async () => {
+    loadCompmd.mockImplementation(realCompmd);
+    const onopen = vi.fn();
+    const text = 'See [the design](docs/design.md#routes) and [lines](src/a.rs#L3-L4).';
+    const { container, unmount } = render(CompMd, { text, onopen });
+    await vi.waitFor(() => expect(container.querySelectorAll('a')).toHaveLength(2));
+    container.querySelectorAll('a').forEach((a) => a.click());
+    expect(onopen.mock.calls).toEqual([
+      [{ path: 'docs/design.md', heading: 'routes' }],
+      [{ path: 'src/a.rs', lines: [3, 4] }],
+    ]);
+    unmount();
+    const plain = render(CompMd, { text });
+    await vi.waitFor(() => expect(plain.container.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready'));
+    expect(plain.container.querySelector('a')).toBeNull();
+    expect(plain.container).toHaveTextContent('See the design and lines.');
+  });
+
   it('when CompMD can’t load, the text shows as written, with a note saying why', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     loadCompmd.mockRejectedValue(new Error('compmd.js: 404'));
