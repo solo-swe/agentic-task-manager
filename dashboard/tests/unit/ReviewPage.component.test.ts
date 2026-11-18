@@ -603,15 +603,6 @@ describe('ReviewPage: submit', () => {
       (p: ReviewPageData) => ({ ...p, chains: [...p.chains, { ...p.chains[0], id: 't2' }] }),
       '2 comments are still open: resolve them first',
     ],
-    [
-      'it is sent back, everything resolved',
-      (p: ReviewPageData) => ({
-        ...p,
-        chains: [chain('t1', 'src/a.rs', {}, true)],
-        review: { ...p.review, status: 'changes_requested' as const },
-      }),
-      'Sent back: it is approved after its author’s next round',
-    ],
   ])('while %s, Approve is disabled and says why', async (_, made, why) => {
     const { onsubmit } = show(made(open()));
     // No one-click Approve either
@@ -632,6 +623,26 @@ describe('ReviewPage: submit', () => {
     expect(approve).toBeEnabled();
     expect(approve).not.toHaveAttribute('aria-describedby');
     expect(screen.queryByText(/still open|Sent back/)).toBeNull();
+  });
+
+  // ATM-609: a reviewer may approve a review they sent back, its comments resolved; with one open, still not
+  it('sent back, everything resolved: Approve is one click, and sends the approval', async () => {
+    const { onsubmit } = show(
+      data({ chains: [chain('t1', 'src/a.rs', {}, true)], review: { ...open().review, status: 'changes_requested' } }),
+    );
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeEnabled();
+    expect(approve).not.toHaveAttribute('aria-describedby');
+    await fireEvent.click(approve);
+    expect(onsubmit.mock.calls).toEqual([['approve', '']]);
+  });
+
+  it('sent back with a comment open: Approve is disabled, saying so', async () => {
+    show({ ...open(), review: { ...open().review, status: 'changes_requested' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(
+      '1 comment is still open: resolve them first',
+    );
   });
 
   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {

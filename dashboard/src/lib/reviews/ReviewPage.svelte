@@ -350,9 +350,9 @@
   });
   /** Nothing left open: the decision at hand is to approve */
   const settled = $derived(chainCounts.open === 0);
-  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can */
+  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can. A review
+   * sent back can be approved too (ATM-609) */
   const approveBlocked = $derived.by(() => {
-    if (review.status === 'changes_requested') return 'Sent back: it is approved after its author’s next round';
     const open = chainCounts.open;
     if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
     return null;

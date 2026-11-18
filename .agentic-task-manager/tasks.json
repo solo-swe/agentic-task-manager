@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 609
+    "next_number": 610
   },
   "tasks": [
     {
@@ -16841,14 +16841,14 @@
       "description": "Reported by Hakan (2026-11-18): when the app has more tabs than fit in the title bar's free space, the layout breaks. Scrolling moves the tabs past the window buttons, and it scrolls the page below as well.\n\n## Change\n`dashboard/src/lib/ui/TitleBarTabs.svelte` (and `shell/AppTitleBar.svelte`):\n- The tabs go in a strip of their own, which is the only thing that scrolls. It is clipped between the window buttons and the title bar's other controls, and a wheel or trackpad scroll over it moves only the strip, never the page.\n- When the tabs overflow, left and right buttons at the strip's ends scroll it by about one tab. Each is disabled at its end.\n- The active tab is scrolled into view.\n\n## Tests\nComponent and e2e tests with more tabs than fit:\n- the strip scrolls, and the window buttons and page don't move;\n- a wheel scroll over the strip leaves the page's scroll as it was;\n- the arrows show only on overflow, scroll the strip, and are disabled at the ends;\n- a newly opened tab is in view.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/ui/TitleBarTabs.svelte",
         "dashboard/src/lib/shell/AppTitleBar.svelte"
       ],
       "created_at": "2026-11-18T06:02:13Z",
-      "updated_at": "2026-11-18T06:11:08Z",
+      "updated_at": "2026-11-18T06:19:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16870,15 +16870,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T06:11:08Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T06:11:08Z",
           "kind": "review",
           "text": "CR-9: Title bar tabs scroll in a strip of their own",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T06:19:14Z",
+          "kind": "note",
+          "text": "Approved: in CR-9 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T06:19:26Z",
+          "kind": "outcome",
+          "text": "Approved in CR-9: title bar tabs scroll in a strip of their own, with arrows when they do not fit",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T06:11:08Z",
+          "to": "2026-11-18T06:19:14Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T06:19:26Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed42-4d27-713c-9ef9-4c0927598de3",
@@ -16956,14 +16976,14 @@
       "description": "Reported by Hakan (2026-11-18): a review's tab in the app's title bar doesn't match the page under it, so it's hard to see that it's the selected one. Project tabs are fine.\n\n## Cause\nThe selected title-bar tab is drawn in the page's background (`--bg`), but the review page's top bar (`.review-top`) was in `--surface`.\n\n## Change\n`dashboard/src/lib/reviews/ReviewPage.svelte`: `.review-top` in `--bg`, as a project's header is. The review's own tabs are marked by their underline, so nothing else depends on the old colour.\n\n## Tests\nE2e (`app.spec.ts`, a review in a tab of its own): the selected tab and the review's top bar have the same background, and the title bar a different one.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-18T06:14:34Z",
-      "updated_at": "2026-11-18T06:14:39Z",
+      "updated_at": "2026-11-18T06:15:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16976,6 +16996,58 @@
       "number": 608,
       "key_final": false,
       "started_at": "2026-11-18T06:14:39Z",
+      "started_by": "claude:0f56a916",
+      "commit": "6c83bb10eecd2d50e0371e1fdd2c069701334f66",
+      "code_reviews": [
+        {
+          "id": "01a1ed4b-5f05-7317-b541-98829c4094e7",
+          "ref": "CR-10"
+        }
+      ],
+      "review_requested_at": "2026-11-18T06:15:02Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T06:15:02Z",
+          "kind": "review",
+          "text": "CR-10: A review selected tab joins its page",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1ed53-24a0-7039-bac3-2381a42376f0",
+      "name": "A review sent back can be approved",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-18): a review in *Changes requested* can't be approved; it waits for its author's next round. A reviewer should be able to approve it once its comments are resolved (they changed their mind, or settled what they asked for themselves).\n\n## Change\n- `crates/atm-review/src/rules.rs` `submit`: Approve is allowed from `changes_requested` too, with every top-level comment resolved, as from `open` or `live`.\n- `ReviewPage.svelte`: Approve is no longer disabled for a review sent back (ATM-601's *Sent back* reason is dropped); an open comment still disables it.\n- Its tasks in review are approved, as for any approval.\n\n## Tests\n- The rules' status and decision table: sent back plus Approve gives approved.\n- atm-lib: sent back, its comment resolved, approved with no round since; the review and its task approved, and refused while the comment is open.\n- Component: Approve is one click on a sent-back review with everything resolved, and disabled with a comment open.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/src/rules.rs",
+        "crates/atm-lib/src/reviews.rs",
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/tests/unit/ReviewPage.component.test.ts"
+      ],
+      "created_at": "2026-11-18T06:23:31Z",
+      "updated_at": "2026-11-18T06:23:37Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:23:31Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 609,
+      "key_final": false,
+      "started_at": "2026-11-18T06:23:37Z",
       "started_by": "claude:0f56a916"
     }
   ]

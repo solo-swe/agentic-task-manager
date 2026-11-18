@@ -772,6 +772,58 @@ mod tests {
         assert_eq!(task(&project, "T-2")["review_state"], "approved");
     }
 
+    /// ATM-609: the reviewer approves a review they sent back, with no round since: the review and its task approved
+    #[test]
+    fn a_review_sent_back_is_approved_without_a_round_since_and_so_is_its_task() {
+        let dir = dir();
+        let mut project = project(&dir.0, "claude:1");
+        let cr = super::create(
+            &mut project,
+            NewReview {
+                title: "One".into(),
+                summary: String::new(),
+                tasks: vec!["T-1".into()],
+                author: Some("claude:1".into()),
+                reviewers: vec!["Hakan".into()],
+                status: Status::Open,
+                first: round(),
+            },
+        )
+        .unwrap()
+        .reference;
+        let mut project = reopen(&dir.0, "Hakan");
+        let mut reviews = super::store(&project).unwrap();
+        let anchor = super::Anchor {
+            round: 1,
+            ..super::Anchor::default()
+        };
+        super::Reviews::new(&mut reviews)
+            .comment(&cr, anchor, "Fix it.", &"Hakan".into())
+            .unwrap();
+        super::submit(&mut project, &cr, Verdict::RequestChanges, None, None).unwrap();
+        assert_eq!(task(&project, "T-1")["review_state"], "changes_requested");
+        // With its comment open, still refused
+        assert!(super::submit(&mut project, &cr, Verdict::Approve, None, None).is_err());
+        let open = reviews
+            .get_review(&cr)
+            .unwrap()
+            .open_comments()
+            .next()
+            .unwrap()
+            .id
+            .clone();
+        super::Reviews::new(&mut reviews)
+            .resolve(&cr, &open, true, &"Hakan".into())
+            .unwrap();
+        super::submit(&mut project, &cr, Verdict::Approve, None, None).unwrap();
+        let reviews = super::store(&project).unwrap();
+        assert_eq!(
+            reviews.get_review(&cr).unwrap().header.status,
+            Status::Approved
+        );
+        assert_eq!(task(&project, "T-1")["review_state"], "approved");
+    }
+
     fn open_review(project: &mut Project, tasks: &[&str]) -> super::ReviewHeader {
         super::create(
             project,

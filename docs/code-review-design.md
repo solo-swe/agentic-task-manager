@@ -148,6 +148,7 @@ stateDiagram-v2
     changes_requested --> open: the author adds a round
     open --> approved: a reviewer approves (every top-level comment resolved)
     live --> approved: a reviewer approves (every top-level comment resolved)
+    changes_requested --> approved: a reviewer approves after all (every top-level comment resolved; ATM-609)
     live --> open: the author ends the live review with a round
     draft --> closed
     open --> closed
@@ -162,7 +163,7 @@ stateDiagram-v2
 | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
 | `open` | waiting on the reviewers | the author, with a round |
 | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
-| `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words (changes asked for again keeps it here, with what they wrote; ATM-597) | a reviewer, when submitting |
+| `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words (changes asked for again keeps it here, with what they wrote; ATM-597); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
 | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
 | `closed` | ended without approval (abandoned, replaced) | the author, or a reviewer |
 

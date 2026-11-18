@@ -309,8 +309,12 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         };
         let status = review.header.status;
         let next = match verdict {
+            // Sent back too (ATM-609): a reviewer may change their mind, or settle what they asked for themselves
             Verdict::Approve => {
-                if !matches!(status, Status::Open | Status::Live) {
+                if !matches!(
+                    status,
+                    Status::Open | Status::Live | Status::ChangesRequested
+                ) {
                     return Err(not_now(&review, "be approved"));
                 }
                 let open: Vec<String> = review.open_comments().map(|c| c.id.0.clone()).collect();
@@ -1275,12 +1279,17 @@ mod tests {
 
     /// Each status and decision: allowed or refused, the status it leaves, and whether the reviewer's words are kept
     #[test]
-    fn an_approval_is_for_an_open_or_live_review_and_a_send_back_for_an_open_one() {
+    fn an_approval_is_for_an_open_live_or_sent_back_review_and_a_send_back_for_an_open_one() {
         for (status, verdict, after) in [
             (Status::Draft, Verdict::Approve, None),
             (Status::Open, Verdict::Approve, Some(Status::Approved)),
             (Status::Live, Verdict::Approve, Some(Status::Approved)),
-            (Status::ChangesRequested, Verdict::Approve, None),
+            // Sent back, then approved after all (ATM-609)
+            (
+                Status::ChangesRequested,
+                Verdict::Approve,
+                Some(Status::Approved),
+            ),
             (Status::Draft, Verdict::RequestChanges, None),
             (
                 Status::Open,
