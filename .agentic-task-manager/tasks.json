@@ -17682,14 +17682,14 @@
       "description": "`tests/e2e/reviews.spec.ts` *a long review (94 files, ~3,000 lines)* failed twice on 2026-11-18, both times while the whole suite was running and the machine was busy. Alone it passes.\n\n- Once a budget was missed (which number isn't known: the report was replaced by a rerun).\n- Once the last file's diff was never attached. The scroll took 22 steps (358 ms) where it usually takes about 125, so the pane's height said the end was reached long before the last file. Its numbers: `{\"firstDrawn\":125,\"settled\":151,\"steps\":22,\"total\":358,\"rows\":1586,\"farRows\":0}`.\n\nDon't raise a budget or just rerun it (AGENTS.md). Find what makes the pane short under load (cards not placed yet, the file list drawn in parts, a refresh replacing it), fix it in `ReviewFile.svelte` or the page, or make the test wait for what it really needs, and say which in the test. Reproduce it with the CPU slowed (`page.emulate` CPU throttling in Chromium) or with the suite's 5 workers.\n\n## Tests\nThe spec passes 10 times in a row with the CPU slowed 4×, and in the full functional run.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/tests/e2e/reviews.spec.ts",
         "dashboard/src/lib/reviews/ReviewFile.svelte"
       ],
       "created_at": "2026-11-18T07:01:05Z",
-      "updated_at": "2026-11-18T19:02:34Z",
+      "updated_at": "2026-11-18T19:37:44Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17712,6 +17712,18 @@
           "kind": "review",
           "text": "CR-21: A long review is as long as its files: cards off screen keep their height",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T19:37:21Z",
+          "kind": "note",
+          "text": "Approved: in CR-21 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T19:37:44Z",
+          "kind": "outcome",
+          "text": "Approved in CR-21. Off-screen cards keep their height (no longer squeezed by the pane), a loading diff stands at its estimate, and a card scrolled past before the page is idle is not made later. The long-review spec passes 10 in a row at 4x CPU and checks no card collapses.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-18T19:00:45Z",
@@ -17724,7 +17736,15 @@
         }
       ],
       "review_requested_at": "2026-11-18T19:02:34Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-18T19:02:34Z",
+          "to": "2026-11-18T19:37:21Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T19:37:44Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1eda3-9ed4-71e4-8d2e-919e67b9261c",
@@ -17762,7 +17782,7 @@
       "description": "Found on 2026-11-18. A `review.md` atm can't read (a status it doesn't know, as a newer atm wrote; a broken header) is left out of `atm review list`, the Reviews tab and every count, without a word. Hakan saw 7 tasks in review and 1 open review, with no clue why (CR-13, round 2).\n\n## Change\n- `atm-review`'s folder store keeps what it couldn't read (`read_all`'s problems: the folder and why).\n- `atm review list` prints them after the reviews (`CR-13: can't be read (no status waiting); a newer atm may have written it`), and `--json` gives them as `unreadable: [{folder, reference?, problem}]`.\n- The REST list, and so the Reviews tab, shows them as rows of their own: the reference, *Can't be read*, and why, with no link.\n- A task in review whose review can't be read says so in its details instead of showing no review.\n- `atm doctor` already reports them: check it names the folder and the reason.\n\n## Tests\n- atm-review: an unreadable review is kept as a problem with its folder.\n- The CLI suite: `list` and `--json` with one unreadable review beside readable ones.\n- E2e: the Reviews tab's row for it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/folder.rs",
@@ -17771,7 +17791,7 @@
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T08:11:07Z",
-      "updated_at": "2026-11-18T19:02:38Z",
+      "updated_at": "2026-11-18T19:39:05Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17784,7 +17804,44 @@
       "number": 617,
       "key_final": false,
       "started_at": "2026-11-18T19:02:38Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "d002bfad699f4fa503adc95468b768c9fd991e83",
+      "code_reviews": [
+        {
+          "id": "01a1f027-324f-7321-ad4d-ea35a0a04524",
+          "ref": "CR-22"
+        }
+      ],
+      "review_requested_at": "2026-11-18T19:34:23Z",
+      "notes": [
+        {
+          "at": "2026-11-18T19:34:23Z",
+          "kind": "review",
+          "text": "CR-22: A review atm can not read is listed as such, saying why",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T19:38:30Z",
+          "kind": "note",
+          "text": "Approved: in CR-22 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T19:39:05Z",
+          "kind": "outcome",
+          "text": "Approved in CR-22. A review atm can not read is listed as such, with why: atm review list (stderr with --json, whose array is unchanged), the REST list (unreadable), a row in the Reviews tab, and the task details link.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T19:34:23Z",
+          "to": "2026-11-18T19:38:30Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T19:39:05Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f007-4163-7431-8f4c-be2127162a62",
@@ -17869,7 +17926,7 @@
       "description": "Asked by Hakan (2026-11-18). Measured on CompMD's CR-1 (94 files): the Diffs tab keeps 16 to 32 CompMD renderers alive, but makes about 410 in one pass to the end and back, and the heap grows to about 110 MB with 117,000 DOM nodes alive while the page has about 4,000 elements. Renderers that are gone stay in memory. What is measured so far, and how: [docs/diff-viewer-profile.md](docs/diff-viewer-profile.md).\n\n## What this task delivers, in order\n1. **The analysis** in `docs/diff-viewer-profile.md`, completed:\n   - what holds the destroyed renderers (a heap snapshot's retainers of the detached `.compmd` trees);\n   - CompMD's own share of a renderer's cost, against the diff rows';\n   - the latency of one renderer from mount to drawn;\n   - the rendered Markdown view (`RenderedSide`, the document processed once per part);\n   - the same in WebKit, the app's engine (`tests/e2e/real-review.spec.ts` measures a real review in both).\n2. **The options, agreed with Hakan.** Write them in the document with what each buys and costs, then block this task on the user (`blocked --on user`) until he chooses. Don't build before that.\n3. **The optimizations chosen,** in atm: the document viewer, `DiffView.svelte`, `RenderedSide.svelte`, `CompMd.svelte` (and `ReviewFile.svelte` where it decides what is made), each with the numbers before and after in the document.\n4. **What only CompMD can change,** as tasks in CompMD's project (`CMD-…`), with the numbers. Possibly a leak in its view, drawing one text in ranges with gaps (close to CMD-250), or a processed tree several views share. The CompMD boundary holds: atm shows, CompMD renders.\n\n## Tests\n- A check that keeps the memory bounded: the long-review spec (`reviews.spec.ts`) after passes to the end and back, the DOM nodes alive (DevTools' `Performance.getMetrics` after a forced garbage collection) within a bound set from the measurements, not every renderer ever made.\n- The long-review spec's budgets still met, and met 10 times in a row with the CPU slowed 4× (as ATM-615).\n- Each optimization's own unit or e2e tests.\n\nNo budget is raised to make a test pass (AGENTS.md).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/diff-viewer-profile.md",
@@ -17880,9 +17937,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T19:29:53Z",
-      "updated_at": "2026-11-18T19:29:53Z",
+      "updated_at": "2026-11-18T19:34:23Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17895,7 +17952,9 @@
         "docs"
       ],
       "number": 620,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T19:34:23Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
