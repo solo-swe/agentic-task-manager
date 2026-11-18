@@ -170,4 +170,41 @@ describe('ReviewList', () => {
     expect(screen.getByRole('alert').textContent).toBe('no review CR-9');
     expect(screen.queryByRole('link')).toBeNull();
   });
+
+  describe('New live review (ATM-576)', () => {
+    const form = () => within(screen.getByRole('form', { name: 'New live review' }));
+    it('opens a form: a title, a task, the commit it is against; Start sends them, trimmed; done, it closes', async () => {
+      const onlive = vi.fn(async () => null);
+      show([], { ...NO_QUERY }, { onlive });
+      const toggle = screen.getByRole('button', { name: /New live review/ });
+      await fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(form().getByLabelText('Title')).toHaveValue('Live review');
+      await fireEvent.input(form().getByLabelText('Task'), { target: { value: ' ATM-12 ' } });
+      await fireEvent.input(form().getByLabelText('Against the commit'), { target: { value: 'main' } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+      await vi.waitFor(() => expect(screen.queryByRole('form', { name: 'New live review' })).toBeNull());
+      expect(onlive).toHaveBeenCalledWith({ title: 'Live review', base: 'main', task: 'ATM-12' });
+    });
+
+    it('refused, it says why and keeps what was written; no title, nothing to start; Cancel closes it', async () => {
+      const onlive = vi.fn(async () => 'ATM-99: no such task');
+      show([], { ...NO_QUERY }, { onlive });
+      await fireEvent.click(screen.getByRole('button', { name: /New live review/ }));
+      await fireEvent.input(form().getByLabelText('Task'), { target: { value: 'ATM-99' } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('ATM-99: no such task');
+      expect(form().getByLabelText('Task')).toHaveValue('ATM-99');
+      await fireEvent.input(form().getByLabelText('Title'), { target: { value: '  ' } });
+      expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
+      await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('form', { name: 'New live review' })).toBeNull();
+      expect(onlive).toHaveBeenCalledTimes(1);
+    });
+
+    it('not offered without a way to open one', () => {
+      show([]);
+      expect(screen.queryByRole('button', { name: /New live review/ })).toBeNull();
+    });
+  });
 });

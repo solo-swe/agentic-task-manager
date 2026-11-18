@@ -10,8 +10,43 @@
 use atm_common::{Error, Result, TASK_DIR};
 use atm_vcs::{ChangedFile, Diff, GitVcs};
 
-use crate::model::{Actor, Anchor, FileChange, FileStatus, Patch, Review, Round, RoundKind};
+use crate::model::{
+    Actor, Anchor, FileChange, FileStatus, Patch, Review, ReviewId, Round, RoundKind,
+};
 use crate::store::{NewRound, ReviewStore};
+
+/// What comparing rounds reads: a round's diff. A store's rounds, or those and one not stored: a live review's
+/// working copy now, shown before it is a checkpoint (ATM-576).
+pub trait RoundDiffs {
+    /// Round `round`'s diff.
+    ///
+    /// # Errors
+    /// No such round, or the store's.
+    fn diff_of(&self, id: &ReviewId, round: u32) -> Result<Patch>;
+}
+
+impl<T: ReviewStore + ?Sized> RoundDiffs for T {
+    fn diff_of(&self, id: &ReviewId, round: u32) -> Result<Patch> {
+        self.round_diff(id, round)
+    }
+}
+
+/// A review's working copy now as round `number`, after its stored rounds: what a live review shows until a comment
+/// makes it a checkpoint (ATM-576).
+#[must_use]
+pub fn unstored(number: u32, new: NewRound, at: String) -> (Round, Patch) {
+    (
+        Round {
+            number,
+            kind: new.kind,
+            submodule: new.submodule,
+            files: new.files,
+            by: new.by,
+            at,
+        },
+        new.patch,
+    )
+}
 
 fn file_changes(files: Vec<ChangedFile>) -> Vec<FileChange> {
     files
@@ -150,17 +185,17 @@ fn round_of(review: &Review, number: u32) -> Result<&Round> {
 ///
 /// # Errors
 /// No such round, or a round's tree can't be had here (its base is gone from this clone).
-pub fn compare(
+pub fn compare<S: RoundDiffs + ?Sized>(
     vcs: &GitVcs,
-    store: &dyn ReviewStore,
+    store: &S,
     review: &Review,
     from: u32,
     to: u32,
 ) -> Result<Patch> {
     let (a, b) = (round_of(review, from)?, round_of(review, to)?);
     let repo = shared_repository(vcs, a, b)?;
-    let tree_a = tree(vcs, a, &store.round_diff(&review.header.id, from)?)?;
-    let tree_b = tree(vcs, b, &store.round_diff(&review.header.id, to)?)?;
+    let tree_a = tree(vcs, a, &store.diff_of(&review.header.id, from)?)?;
+    let tree_b = tree(vcs, b, &store.diff_of(&review.header.id, to)?)?;
     let vcs = &repo;
     let mut paths: Vec<String> = a
         .files
@@ -368,9 +403,9 @@ pub fn follow(
 ///
 /// # Errors
 /// No such round, or a round's tree can't be had here.
-pub fn place(
+pub fn place<S: RoundDiffs + ?Sized>(
     vcs: &GitVcs,
-    store: &dyn ReviewStore,
+    store: &S,
     review: &Review,
     anchor: &Anchor,
     to: u32,
@@ -383,8 +418,8 @@ pub fn place(
     }
     let (a, b) = (round_of(review, anchor.round)?, round_of(review, to)?);
     let repo = shared_repository(vcs, a, b)?;
-    let tree_a = tree(vcs, a, &store.round_diff(&review.header.id, a.number)?)?;
-    let tree_b = tree(vcs, b, &store.round_diff(&review.header.id, b.number)?)?;
+    let tree_a = tree(vcs, a, &store.diff_of(&review.header.id, a.number)?)?;
+    let tree_b = tree(vcs, b, &store.diff_of(&review.header.id, b.number)?)?;
     let vcs = &repo;
     let between = vcs.diff_trees(&tree_a, &tree_b, std::slice::from_ref(path))?;
     let new_text = vcs.file_in(&tree_b, path);

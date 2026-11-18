@@ -15409,7 +15409,7 @@
       "description": "Phase 4 ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)): reviewing a change while it is made.\n\n## Change\n- *New live review* in the app and the browser (`atm review live` exists from phase 1): the review page fed by the working copy's changes (the store's subscription and the folder's watcher), redrawn at most every second or two, ignored and generated files left out.\n- A comment records a checkpoint (a `working` round against the base) so it is anchored to what the reviewer saw.\n- Ending it: approve, a round (it becomes `open`), or close; the approval that covers the task when nothing changed since (the task link, phase 1).\n\n## Tests\nE2e: a file written while the page is open shows; a comment makes a checkpoint; approval with and without a change since.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
@@ -15419,7 +15419,7 @@
         "crates/atm-lib/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T00:55:19Z",
+      "updated_at": "2026-11-18T01:18:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
@@ -15441,7 +15441,9 @@
           "text": "Not started: paused for ATM-587 (its review asked for the code in it). Found: the REST create takes start live; the page shows a live review's last round, not the working copy as it changes, and a comment on a live review takes no checkpoint yet (reviews.rs has none outside tests).",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-18T01:18:42Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e29c7ba9fca",
@@ -15895,9 +15897,9 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T01:13:13Z",
+      "updated_at": "2026-11-18T01:32:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -15944,6 +15946,12 @@
           "kind": "review",
           "text": "CR-1: round 5",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T01:32:19Z",
+          "kind": "rejection",
+          "text": "CR-1 round 5: 2 open comments",
+          "by": "Hakan Serce"
         }
       ],
       "reviews": [
@@ -15954,7 +15962,8 @@
         }
       ],
       "review_requested_at": "2026-11-18T01:13:13Z",
-      "review_state": "waiting"
+      "review_state": "changes_requested",
+      "reviewed_at": "2026-11-18T01:32:19Z"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4766068f19",
@@ -16321,13 +16330,13 @@
       "description": "A review in **changes requested** refuses new comments and replies, in the app and from `atm review comment` / `atm review reply`. Asking for changes doesn't end a review: the reviewer and the author go on talking about the changes until the next round (reported by Hakan, 2026-11-18, on CR-1).\n\n## Change\n- `crates/atm-review/src/rules.rs`: a comment or reply is allowed on an open review, `changes_requested` included; only an ended review (approved, rejected, closed) refuses them, if it does today.\n- The dashboard's review page keeps its comment boxes and Reply buttons while changes are requested.\n\n## Tests\n- A rules table: each review status, comment and reply, allowed or refused.\n- The CLI suite: a comment and a reply on a review with changes requested.\n- A component or e2e test: the review page in changes requested still lets the reviewer comment.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rules.rs"
       ],
       "created_at": "2026-11-18T01:02:07Z",
-      "updated_at": "2026-11-18T01:13:19Z",
+      "updated_at": "2026-11-18T01:18:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16340,7 +16349,24 @@
       "number": 597,
       "key_final": false,
       "started_at": "2026-11-18T01:13:19Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "b1109f17b1ddf0dc8ab4ca88a29606b602e6373c",
+      "code_reviews": [
+        {
+          "id": "01a1ec3b-fe1f-7571-80a6-743e459f6c43",
+          "ref": "CR-2"
+        }
+      ],
+      "review_requested_at": "2026-11-18T01:18:37Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T01:18:37Z",
+          "kind": "review",
+          "text": "CR-2: A review sent back takes changes asked for again, with its message",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }

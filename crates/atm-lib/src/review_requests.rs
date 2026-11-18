@@ -239,21 +239,24 @@ pub fn add_comment(
 ) -> Result<CommentId> {
     let mut store = reviews::store(project)?;
     let found = store.get_review(review)?;
+    let body = text("the comment", &comment.body)?;
+    let last = found.rounds.last().map_or(1, |r| r.number);
+    // On a live review, a comment on what is there now (no round, or the working copy shown after the last
+    // checkpoint) makes it a checkpoint first, and is anchored to it (§3.5, ATM-576)
+    let now = comment.round.is_none_or(|r| r > last);
+    let round = if found.header.status == Status::Live && now {
+        reviews::checkpoint_now(project, &found.header.reference)?
+    } else {
+        comment.round.unwrap_or(last)
+    };
     let anchor = Anchor {
-        round: comment
-            .round
-            .unwrap_or_else(|| found.rounds.last().map_or(1, |r| r.number)),
+        round,
         path: comment.path,
         side: comment.side,
         lines: comment.lines,
         quote: comment.quote,
     };
-    Reviews::new(&mut store).comment(
-        &found.header.reference,
-        anchor,
-        text("the comment", &comment.body)?,
-        &actor_of(project),
-    )
+    Reviews::new(&mut store).comment(&found.header.reference, anchor, body, &actor_of(project))
 }
 
 /// A reply to `comment` (`atm review reply`): the reply's ID.

@@ -15,6 +15,7 @@
     href,
     onquery,
     onopen,
+    onlive,
   }: {
     entries: ReviewEntry[];
     query: Query;
@@ -24,7 +25,25 @@
     href: (reference: string) => string;
     onquery: (query: Query) => void;
     onopen: (reference: string, newTab: boolean) => void;
+    /** A live review opened (ATM-576): why it was refused, or null once it is open */
+    onlive?: (live: { title: string; base: string; task: string }) => Promise<string | null>;
   } = $props();
+
+  // New live review: a title, the task it is about, the commit it is against (HEAD when none)
+  let starting = $state(false);
+  let live = $state({ title: 'Live review', base: '', task: '' });
+  let refused = $state<string | null>(null);
+  let opening = $state(false);
+  async function startLive() {
+    if (!onlive || !live.title.trim()) return;
+    opening = true;
+    refused = await onlive({ title: live.title.trim(), base: live.base.trim(), task: live.task.trim() });
+    opening = false;
+    if (!refused) {
+      starting = false;
+      live = { title: 'Live review', base: '', task: '' };
+    }
+  }
 
   const STATUSES = Object.keys(STATUS_LABELS) as ReviewStatus[];
 
@@ -92,7 +111,51 @@
         Next review needing you <span class="review-count">{waiting.length}</span>
       </button>
     {/if}
+    {#if onlive}
+      <button
+        class="review-new-live"
+        id="review-new-live"
+        aria-expanded={starting}
+        title="Review a change while it is being made: the working copy, followed as it changes"
+        onclick={() => (starting = !starting)}><Icon name="eye" size={15} /> New live review</button
+      >
+    {/if}
   </div>
+  {#if starting}
+    <form
+      class="review-live-form"
+      aria-label="New live review"
+      onsubmit={(e) => {
+        e.preventDefault();
+        void startLive();
+      }}
+    >
+      <label
+        ><span>Title</span><input id="review-live-title" bind:value={live.title} required aria-label="Title" /></label
+      >
+      <label
+        ><span>Task</span><input
+          id="review-live-task"
+          bind:value={live.task}
+          placeholder="ATM-12 (optional)"
+          aria-label="Task"
+        /></label
+      >
+      <label
+        ><span>Against</span><input
+          id="review-live-base"
+          bind:value={live.base}
+          placeholder="HEAD"
+          aria-label="Against the commit"
+        /></label
+      >
+      <div class="review-live-actions">
+        <button type="button" class="review-clear" onclick={() => (starting = false)}>Cancel</button>
+        <button type="submit" class="review-next" disabled={opening || !live.title.trim()}>Start</button>
+      </div>
+      {#if refused}<p class="review-problem" role="alert">{refused}</p>{/if}
+    </form>
+  {/if}
   <div class="review-filters" role="group" aria-label="Filters">
     {#each STATUSES as status (status)}
       <button
@@ -212,6 +275,55 @@
   }
   .review-select {
     border-radius: var(--radius-md);
+  }
+  .review-new-live {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    height: 34px;
+    padding: 0 var(--space-6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+  .review-new-live:hover {
+    background: var(--surface2);
+  }
+  .review-live-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-5);
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+  .review-live-form label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+  .review-live-form input {
+    height: 28px;
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+  .review-live-actions {
+    display: flex;
+    gap: var(--space-3);
+    margin-left: auto;
   }
   .review-chip:hover,
   .review-clear:hover {

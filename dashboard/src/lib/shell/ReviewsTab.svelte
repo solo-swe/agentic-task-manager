@@ -4,9 +4,25 @@
   import { addressOf, reviewOf, withReview } from '../address';
   import { inApp } from '../api/http';
   import { setWindowTitle } from '../api/shell';
-  import { addComment, replyTo, resolveComment, submitDecision, type ChangeResult } from '../api/review-changes';
+  import {
+    addComment,
+    closeReview,
+    openReview,
+    replyTo,
+    resolveComment,
+    submitDecision,
+    type ChangeResult,
+  } from '../api/review-changes';
   import { currentAddress, navigate } from '../navigation';
-  import { isViewed, loadReview, loadReviews, revisionDocuments, toggleViewed, viewedKeys } from '../review-data';
+  import {
+    LIVE_MS,
+    isViewed,
+    loadReview,
+    loadReviews,
+    revisionDocuments,
+    toggleViewed,
+    viewedKeys,
+  } from '../review-data';
   import ReviewList from '../reviews/ReviewList.svelte';
   import ReviewPage from '../reviews/ReviewPage.svelte';
   import { reviewTitle } from '../reviews/page';
@@ -91,10 +107,15 @@
     });
   });
 
-  // The server pushes nothing about reviews yet: ask again now and then while the tab is in view, and on coming back
+  // The server pushes nothing about reviews yet: ask again now and then while the tab is in view, and on coming back.
+  // A live review follows its working copy (ATM-576): asked every LIVE_MS while it is shown, the rest every 10 s
+  let ticks = 0;
   const timer = setInterval(() => {
-    if (document.visibilityState === 'visible') void load();
-  }, 10_000);
+    if (document.visibilityState !== 'visible') return;
+    ticks += 1;
+    const following = !!at.review && shown?.review.status === 'live';
+    if (following || ticks % (10_000 / LIVE_MS) === 0) void load();
+  }, LIVE_MS);
   onDestroy(() => clearInterval(timer));
 
   // The window's title: the project's short name, the review's reference and title
@@ -140,6 +161,21 @@
     return null;
   }
 
+  /** A live review opened from the list (ATM-576), then shown; or why it was refused */
+  async function startLive(live: { title: string; base: string; task: string }): Promise<string | null> {
+    if (!project) return 'No project is open.';
+    const result = await openReview(project, {
+      title: live.title,
+      start: 'live',
+      change: live.base ? { base: live.base } : {},
+      ...(live.task ? { tasks: [live.task] } : {}),
+    });
+    if (!result.ok) return result.message;
+    const reference = result.body.reference;
+    if (typeof reference === 'string') open(reference);
+    return null;
+  }
+
   const review = $derived(shown?.review.reference ?? at.review ?? '');
   const listAddress = $derived(withReview(currentAddress(), { review: null }));
 </script>
@@ -179,6 +215,7 @@
         onreply={(to, body) => change(replyTo(project, review, to, body))}
         onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
         onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
+        onclose={(reason) => change(closeReview(project, review, reason))}
       />
     {:else if problem}
       <p class="reviews-problem" role="alert">{problem}</p>
@@ -211,6 +248,7 @@
       href={(reference) => withReview(currentAddress(), { review: reference })}
       onquery={(next) => (query = next)}
       onopen={(reference, newTab) => open(reference, newTab)}
+      onlive={startLive}
     />
   {/if}
 </div>

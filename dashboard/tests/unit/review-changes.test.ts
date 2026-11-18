@@ -1,6 +1,14 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addComment, replyTo, resolveComment, sessionToken, submitDecision } from '../../src/lib/api/review-changes';
+import {
+  addComment,
+  closeReview,
+  openReview,
+  replyTo,
+  resolveComment,
+  sessionToken,
+  submitDecision,
+} from '../../src/lib/api/review-changes';
 import { setApiWorkspace } from '../../src/lib/api/workspace';
 
 // A review's changes from the page (lib/api/review-changes.ts, ATM-574): the REST routes with the page's session token
@@ -80,6 +88,19 @@ describe('in the browser', () => {
         'POST',
         `${reviews}/CR-7/decisions`,
         { decision: 'approve' },
+      ],
+      // ATM-576: a live review opened, and a review closed
+      [
+        () => openReview('p1', { title: 'Live', tasks: ['ATM-1'], start: 'live', change: { base: 'main' } }),
+        'POST',
+        reviews,
+        { title: 'Live', tasks: ['ATM-1'], start: 'live', change: { base: 'main' } },
+      ],
+      [
+        () => closeReview('p1', 'CR-7', 'Wrong turn.'),
+        'PATCH',
+        `${reviews}/CR-7`,
+        { status: 'closed', reason: 'Wrong turn.' },
       ],
     ] as const;
     for (const [change, method, url, body] of cases) {
@@ -186,12 +207,16 @@ describe('in the app', () => {
     await replyTo('p1', 'CR-7', 'c4', 'Because.');
     await resolveComment('p1', 'CR-7', 'c4', true);
     await submitDecision('p1', 'CR-7', { decision: 'comment', body: 'Fine.' });
+    await openReview('p1', { title: 'Live', start: 'live', change: {} });
+    await closeReview('p1', 'CR-7', 'Done elsewhere.');
     const at = { workspace: 'w', project: 'p1', review: 'CR-7' };
     expect(calls).toEqual([
       ['add_review_comment', { ...at, comment: { body: 'On the review.' } }],
       ['reply_to_review_comment', { ...at, comment: 'c4', body: 'Because.' }],
       ['update_review_comment', { ...at, comment: 'c4', update: { resolved: true } }],
       ['submit_review_decision', { ...at, decision: { decision: 'comment', body: 'Fine.' } }],
+      ['create_review', { workspace: 'w', project: 'p1', opening: { title: 'Live', start: 'live', change: {} } }],
+      ['close_review', { ...at, closing: { status: 'closed', reason: 'Done elsewhere.' } }],
     ]);
     expect(fetch).not.toHaveBeenCalled();
   });

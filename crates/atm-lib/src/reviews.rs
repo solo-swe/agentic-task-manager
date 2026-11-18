@@ -412,6 +412,15 @@ pub fn submit(
             reference = reference.0
         ))
     })?;
+    // A live review is approved as the working copy is now (ATM-576): that is the checkpoint its task's change is
+    // compared with when it is done (unless the approval would be refused anyway, with comments open)
+    let before = reviews.get_review(reference)?;
+    if verdict == Verdict::Approve
+        && before.header.status == Status::Live
+        && before.open_comments().next().is_none()
+    {
+        checkpoint_now(project, reference)?;
+    }
     Reviews::new(&mut reviews).submit(reference, verdict, body, overriding, &by)?;
     let review = reviews.get_review(reference)?;
     let command = match verdict {
@@ -550,6 +559,45 @@ pub fn live_approval_for(project: &Project, task: &str) -> Result<Option<ReviewH
         }
     }
     Ok(None)
+}
+
+/// A live review's working copy now (§3.5, ATM-576): the working tree against its base (its last checkpoint's), as a
+/// round, when it differs from that checkpoint. None when it doesn't, or the review isn't live.
+///
+/// # Errors
+/// The project isn't in git, the base is gone from this clone, or the store's.
+pub fn working_now(project: &Project, review: &Review) -> Result<Option<NewRound>> {
+    if review.header.status != Status::Live {
+        return Ok(None);
+    }
+    let Some(last) = review.rounds.last() else {
+        return Ok(None);
+    };
+    let RoundKind::Working { base } = &last.kind else {
+        return Ok(None);
+    };
+    let vcs = rounds::repository(&vcs(project)?, last)?;
+    let now = rounds::from_working(&vcs, base, &actor_of(project))?;
+    if now.patch == store(project)?.round_diff(&review.header.id, last.number)? {
+        return Ok(None);
+    }
+    Ok(Some(now))
+}
+
+/// Before a person's comment or approval on a live review (§3.5, ATM-576): the working copy as it is now made a
+/// checkpoint, so what they saw is what it is anchored to and what is approved. The round to anchor to: the new
+/// checkpoint, else the last round (nothing changed since it, or the review isn't live).
+///
+/// # Errors
+/// No such review, the working copy can't be read, or the review's rules refuse the checkpoint.
+pub fn checkpoint_now(project: &Project, reference: &ReviewRef) -> Result<u32> {
+    let mut reviews = store(project)?;
+    let review = reviews.get_review(reference)?;
+    let last = review.rounds.last().map_or(1, |r| r.number);
+    match working_now(project, &review)? {
+        Some(now) => Reviews::new(&mut reviews).checkpoint(reference, now),
+        None => Ok(last),
+    }
 }
 
 /// A task in progress whose change an approved live review covers: put in review and approved, its note naming the
@@ -848,6 +896,121 @@ mod tests {
                 .contains("No longer reviewed in CR-1")
         );
         assert_eq!(task(&project, "T-2")["code_reviews"][0]["ref"], "CR-1");
+    }
+
+    /// A live review opened by Hakan on the agent's change to `a.txt` (one line added), committed `one`
+    fn live(dir: &Path) -> (Project, ReviewRef) {
+        git(&["init", "-q"], dir);
+        std::fs::write(dir.join("a.txt"), "one\n").unwrap();
+        let project = project(dir, "claude:1");
+        git(&["add", "-A"], dir);
+        git(&["commit", "-q", "-m", "base"], dir);
+        std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
+        let first =
+            super::rounds::from_working(&project.vcs().unwrap(), "HEAD", &"Hakan".into()).unwrap();
+        let mut hakan = reopen(dir, "Hakan");
+        let header = super::create(
+            &mut hakan,
+            NewReview {
+                title: "Live".into(),
+                summary: String::new(),
+                tasks: vec!["T-1".into()],
+                author: Some("Hakan".into()),
+                reviewers: Vec::new(),
+                status: Status::Live,
+                first,
+            },
+        )
+        .unwrap();
+        (hakan, ReviewRef(header.reference.0))
+    }
+
+    /// ATM-576: the page shows a live review's working copy as it is now, after its checkpoints, not stored; a
+    /// comment on it makes it a checkpoint first, and is anchored there; a named round is that round
+    #[test]
+    fn a_live_reviews_page_follows_the_working_copy_and_a_comment_makes_it_a_checkpoint() {
+        let dir = dir();
+        let (hakan, cr) = live(&dir.0);
+        let page = || crate::review_pages::review_page(&hakan, &cr, None, None).unwrap();
+        // Nothing changed since its first round: that round, now
+        let unchanged = page();
+        assert_eq!(
+            (
+                unchanged["view"]["round"].clone(),
+                unchanged["view"]["now"].clone()
+            ),
+            (json!(1), json!(true))
+        );
+        // Changed: the working copy as the round after the stored ones, which `rounds` doesn't list
+        std::fs::write(dir.0.join("a.txt"), "one\ntwo\nthree\n").unwrap();
+        let changed = page();
+        assert_eq!(changed["view"]["round"], 2);
+        assert_eq!(changed["rounds"].as_array().unwrap().len(), 1);
+        let patch = changed["view"]["files"][0]["patch"].as_str().unwrap();
+        assert!(patch.contains("+three"), "{patch}");
+        // Read again, nothing is stored
+        assert_eq!(
+            super::store(&hakan)
+                .unwrap()
+                .get_review(&cr)
+                .unwrap()
+                .rounds
+                .len(),
+            1
+        );
+        // A comment on what is shown: the checkpoint, round 2, then the comment on it
+        let comment = crate::review_requests::NewComment {
+            path: Some("a.txt".into()),
+            lines: Some((3, 3)),
+            side: super::Side::default(),
+            quote: Some("three".into()),
+            round: Some(2),
+            body: "Why three?".into(),
+        };
+        crate::review_requests::add_comment(&hakan, &cr, comment.clone()).unwrap();
+        let review = super::store(&hakan).unwrap().get_review(&cr).unwrap();
+        assert_eq!(review.rounds.len(), 2);
+        assert_eq!(review.chains[0].anchor.round, 2);
+        assert_eq!(page()["view"]["round"], 2);
+        // Another comment with nothing changed since: no other checkpoint
+        crate::review_requests::add_comment(&hakan, &cr, comment).unwrap();
+        assert_eq!(
+            super::store(&hakan)
+                .unwrap()
+                .get_review(&cr)
+                .unwrap()
+                .rounds
+                .len(),
+            2
+        );
+        // A round named: that round, not now
+        let first = crate::review_pages::review_page(&hakan, &cr, Some(1), None).unwrap();
+        assert_eq!(
+            (first["view"]["round"].clone(), first["view"]["now"].clone()),
+            (json!(1), json!(false))
+        );
+    }
+
+    /// ATM-576: approving a live review approves the working copy as it is then, a checkpoint, which its task's change
+    /// is compared with when it is done
+    #[test]
+    fn approving_a_live_review_approves_the_working_copy_as_it_is() {
+        let dir = dir();
+        let (mut hakan, cr) = live(&dir.0);
+        std::fs::write(dir.0.join("a.txt"), "one\ntwo\nthree\n").unwrap();
+        super::submit(&mut hakan, &cr, Verdict::Approve, None, None).unwrap();
+        let review = super::store(&hakan).unwrap().get_review(&cr).unwrap();
+        assert_eq!(
+            (review.header.status, review.rounds.len()),
+            (Status::Approved, 2)
+        );
+        let mut agent = reopen(&dir.0, "claude:1");
+        assert!(
+            super::apply_live_approval(&mut agent, "T-1")
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(task(&agent, "T-1")["review_state"], "approved");
     }
 
     #[test]

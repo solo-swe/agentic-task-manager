@@ -9,7 +9,7 @@ use atm_lib::Project;
 use atm_lib::actor::agent_identity;
 use atm_lib::reviews::comments_md::{self, CommentsFile};
 use atm_lib::reviews::{
-    self, Actor, Anchor, CommentFilter, CommentId, FileStore, NewReview, NewRound, ReviewFilter,
+    self, Actor, CommentFilter, CommentId, FileStore, NewReview, NewRound, ReviewFilter,
     ReviewHeader, ReviewRef, ReviewStore, Reviews, Round, RoundKind, Side, Status, Verdict, rounds,
     vcs as vcs_of,
 };
@@ -854,25 +854,22 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
         } => {
             let project = opened(cwd, agent.as_deref())?;
             let text = text_of(body, cwd)?;
-            let mut store = reviews::store(&project)?;
-            let found = store.get_review(&reference(&review))?;
-            let anchor = Anchor {
-                round: round.unwrap_or_else(|| found.rounds.last().map_or(1, |r| r.number)),
+            let found = reviews::store(&project)?.get_review(&reference(&review))?;
+            let comment = atm_lib::review_requests::NewComment {
                 path: file,
-                side: if old { Side::Old } else { Side::New },
                 lines: lines.as_deref().map(parse_lines).transpose()?,
+                side: if old { Side::Old } else { Side::New },
                 quote,
+                round,
+                body: text,
             };
             if ctx.dry_run {
                 println!("[dry-run] would comment on {}", found.header.reference);
                 return Ok(0);
             }
-            let id = Reviews::new(&mut store).comment(
-                &found.header.reference,
-                anchor,
-                &text,
-                &actor(&project),
-            )?;
+            // On a live review, the working copy as it is now first becomes a checkpoint (ATM-576)
+            let id =
+                atm_lib::review_requests::add_comment(&project, &found.header.reference, comment)?;
             if ctx.json {
                 print_json(&json!({ "review": found.header.reference, "comment": id }));
             } else {

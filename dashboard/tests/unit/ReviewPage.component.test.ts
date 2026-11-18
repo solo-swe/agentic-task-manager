@@ -272,6 +272,34 @@ describe('ReviewPage: Diffs', () => {
     ]);
   });
 
+  it('a live review (ATM-576): Now, its working copy, is picked first and says so; a round picked is that round', async () => {
+    const live = data({}, { round: 4, now: true });
+    live.review = { ...live.review, status: 'live' };
+    const { onround, unmount } = await diffs(live);
+    const round = screen.getByLabelText('Round') as HTMLSelectElement;
+    expect([...round.options].map((o) => o.textContent)).toEqual([
+      'Now, as it is being made',
+      '1 of 3',
+      '2 of 3',
+      '3 of 3',
+    ]);
+    expect(round.value).toBe('now');
+    expect(screen.getByText('Following the working copy')).toBeTruthy();
+    await fireEvent.change(round, { target: { value: '2' } });
+    await fireEvent.change(round, { target: { value: 'now' } });
+    expect(onround.mock.calls).toEqual([
+      [2, null],
+      [null, null],
+    ]);
+    unmount();
+    // A round named: not following
+    const named = data({}, { round: 2, now: false });
+    named.review = { ...named.review, status: 'live' };
+    await diffs(named);
+    expect((screen.getByLabelText('Round') as HTMLSelectElement).value).toBe('2');
+    expect(screen.queryByText('Following the working copy')).toBeNull();
+  });
+
   it('round 1 has nothing to compare against', async () => {
     await diffs(data({}, { round: 1 }));
     expect([...(screen.getByLabelText('Showing') as HTMLSelectElement).options].map((o) => o.value)).toEqual(['']);
@@ -595,6 +623,21 @@ describe('ReviewPage: submit', () => {
       ['request_changes', 'Still the title.'],
       ['comment', 'A note.'],
     ]);
+  });
+
+  it('a live review (ATM-576): approved, commented on or closed with why, never sent back', async () => {
+    const page = open();
+    page.review = { ...page.review, status: 'live' };
+    const onclose = vi.fn();
+    const { onsubmit } = show(page, { onclose });
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
+    const close = screen.getByRole('button', { name: 'Close review' });
+    expect(close).toBeDisabled();
+    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: ' Wrong turn. ' } });
+    await fireEvent.click(close);
+    expect(onclose).toHaveBeenCalledWith('Wrong turn.');
+    expect(onsubmit).not.toHaveBeenCalled();
   });
 
   it('an ended review takes no decision; a busy page none until it is done', async () => {

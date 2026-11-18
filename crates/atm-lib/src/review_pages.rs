@@ -10,9 +10,10 @@ use serde_json::{Value, json};
 
 use crate::project::Project;
 use crate::reviews::{
-    self, Actor, Chain, FileStore, Found, Review, ReviewFilter, ReviewHeader, ReviewRef,
-    ReviewStore, Round, RoundKind, Status, list_everywhere, rounds,
+    self, Actor, Chain, FileStore, Found, Patch, Review, ReviewFilter, ReviewHeader, ReviewId,
+    ReviewRef, ReviewStore, Round, RoundKind, Status, list_everywhere, rounds,
 };
+use atm_review::rounds::RoundDiffs;
 
 /// Which reviews a page lists (`…/reviews?q=&status=&author=&reviewer=&task=&branch=`): each one given must fit.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -277,16 +278,16 @@ fn round_of(review: &Review, number: u32) -> Result<&Round> {
 
 /// The files of one view: the whole change of round `shown` (its base to its result), or what changed in it since
 /// round `against`; each with its patch and the objects (a commit, or a tree) its two sides are read from.
-fn view(
+fn view<S: RoundDiffs + ?Sized>(
     vcs: &atm_vcs::GitVcs,
-    store: &dyn ReviewStore,
+    store: &S,
     review: &Review,
     shown: u32,
     against: Option<u32>,
 ) -> Result<Value> {
     let round = round_of(review, shown)?;
     let id = &review.header.id;
-    let diff = store.round_diff(id, shown)?;
+    let diff = store.diff_of(id, shown)?;
     let (before, after, patch, listed) = match against {
         None => {
             let before = match &round.kind {
@@ -306,7 +307,7 @@ fn view(
         }
         Some(from) => {
             let earlier = round_of(review, from)?;
-            let before = rounds::tree(vcs, earlier, &store.round_diff(id, from)?)?;
+            let before = rounds::tree(vcs, earlier, &store.diff_of(id, from)?)?;
             let after = rounds::tree(vcs, round, &diff)?;
             let between = rounds::compare(vcs, store, review, from, shown)?;
             (Some(before), after, between, None)
@@ -366,9 +367,9 @@ fn view(
 
 /// A chain, with where it shows in round `shown`: `placed` its lines there (none for the review's or a whole file's),
 /// `drifted` the round and lines it was made on when its text is gone from there.
-fn placed(
+fn placed<S: RoundDiffs + ?Sized>(
     vcs: &atm_vcs::GitVcs,
-    store: &dyn ReviewStore,
+    store: &S,
     review: &Review,
     chain: &Chain,
     shown: u32,
@@ -394,8 +395,44 @@ fn placed(
     out
 }
 
+/// A store's rounds, and the working copy now as the round after them, not stored (ATM-576)
+struct WithNow<'a> {
+    store: &'a FileStore,
+    number: u32,
+    patch: Patch,
+}
+
+impl RoundDiffs for WithNow<'_> {
+    fn diff_of(&self, id: &ReviewId, round: u32) -> Result<Patch> {
+        if round == self.number {
+            Ok(self.patch.clone())
+        } else {
+            self.store.round_diff(id, round)
+        }
+    }
+}
+
+/// A view and its chains placed in it.
+fn shown_with<S: RoundDiffs + ?Sized>(
+    vcs: &atm_vcs::GitVcs,
+    diffs: &S,
+    review: &Review,
+    shown: u32,
+    against: Option<u32>,
+) -> Result<(Value, Vec<Value>)> {
+    let view = view(vcs, diffs, review, shown, against)?;
+    let chains = review
+        .chains
+        .iter()
+        .map(|c| placed(vcs, diffs, review, c, shown))
+        .collect();
+    Ok((view, chains))
+}
+
 /// A review's page for one view (`round`, the latest when none; `against`, an earlier round): `{review, summary,
-/// branch, rounds, chains, view: {round, against, files}, needs_you, you}`.
+/// branch, rounds, chains, view: {round, against, now, files}, needs_you, you}`. A live review shown with no round
+/// is its working copy now (`now`, §3.5, ATM-576): when it changed since the last checkpoint, as the round after the
+/// stored ones (`rounds` lists only those), which a comment on it makes a checkpoint.
 ///
 /// # Errors
 /// No such review, round, or the round against itself; the project isn't in git; a round's tree can't be had here.
@@ -406,20 +443,37 @@ pub fn review_page(
     against: Option<u32>,
 ) -> Result<Value> {
     let store = reviews::store(project)?;
-    let review = store.get_review(reference)?;
+    let mut review = store.get_review(reference)?;
+    let stored = review.rounds.clone();
     let latest = review
         .rounds
         .last()
         .map(|r| r.number)
         .ok_or_else(|| Error::NotFound(format!("{} has no rounds", review.header.reference)))?;
-    let shown = round.unwrap_or(latest);
     let vcs = reviews::vcs(project)?;
-    let view = view(&vcs, &store, &review, shown, against)?;
-    let chains: Vec<Value> = review
-        .chains
-        .iter()
-        .map(|c| placed(&vcs, &store, &review, c, shown))
-        .collect();
+    let now = round.is_none() && review.header.status == Status::Live;
+    let working = if now {
+        reviews::working_now(project, &review)?
+    } else {
+        None
+    };
+    let (mut view, chains) = match working {
+        Some(new) => {
+            let number = latest + 1;
+            let (unstored, patch) = rounds::unstored(number, new, atm_common::time::now_iso());
+            review.rounds.push(unstored);
+            let diffs = WithNow {
+                store: &store,
+                number,
+                patch,
+            };
+            shown_with(&vcs, &diffs, &review, number, against)?
+        }
+        None => shown_with(&vcs, &store, &review, round.unwrap_or(latest), against)?,
+    };
+    if let Some(map) = view.as_object_mut() {
+        map.insert("now".into(), json!(now));
+    }
     let branch = project
         .root()
         .and_then(|root| list_everywhere(root, &ReviewFilter::default()).ok())
@@ -430,7 +484,7 @@ pub fn review_page(
         "review": review.header,
         "summary": review.summary,
         "branch": branch,
-        "rounds": review.rounds,
+        "rounds": stored,
         "chains": chains,
         "view": view,
         "needs_you": needs(&review.header, &me),

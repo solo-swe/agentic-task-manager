@@ -20,6 +20,10 @@ export function loadReviews(project: string, query: ListQuery, fetchFn: Fetch = 
   return getJson(reviewsUrl(project, query), fetchFn);
 }
 
+/** How often a live review's page is asked for again while it is shown, so it follows the working copy (ATM-576,
+ * §3.5: a change shows within a second or two) */
+export const LIVE_MS = 2000;
+
 /** A review's page for one view */
 export function loadReview(
   project: string,

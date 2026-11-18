@@ -108,7 +108,9 @@ export interface ReviewPageData {
   branch: string | null;
   rounds: Round[];
   chains: PlacedChain[];
-  view: { round: number; against: number | null; files: ViewFile[] };
+  /** `now`: a live review's working copy as it is now (ATM-576); its `round` is the one after `rounds` when it changed
+   * since the last checkpoint (a comment on it makes it one) */
+  view: { round: number; against: number | null; now?: boolean; files: ViewFile[] };
   needs_you: boolean;
   you: string;
 }

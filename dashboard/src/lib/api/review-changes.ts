@@ -110,6 +110,32 @@ export function resolveComment(
   });
 }
 
+/** A review opened from the page: a live one follows the working copy against `base` (HEAD by default; ATM-576) */
+export interface Opening {
+  title: string;
+  summary?: string;
+  tasks?: string[];
+  start: 'live';
+  change: { base?: string };
+}
+
+/** The review opened: its header (`reference`, CR-7, among it) */
+export function openReview(project: string, opening: Opening): Promise<ChangeResult> {
+  return send(project, { method: 'POST', resource: '', body: opening, command: 'create_review', args: { opening } });
+}
+
+/** A review closed, ended without approval, with why */
+export function closeReview(project: string, review: string, reason: string): Promise<ChangeResult> {
+  const closing = { status: 'closed', reason };
+  return send(project, {
+    method: 'PATCH',
+    resource: ref(review),
+    body: closing,
+    command: 'close_review',
+    args: { review, closing },
+  });
+}
+
 /** A reviewer's decision, with a comment on the whole review */
 export interface Decision {
   decision: 'approve' | 'request_changes' | 'comment';

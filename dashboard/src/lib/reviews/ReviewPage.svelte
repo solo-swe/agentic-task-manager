@@ -50,6 +50,7 @@
     onreply,
     onresolve,
     onsubmit,
+    onclose,
   }: {
     page: ReviewPageData;
     /** The project's short name (its key), before the reference */
@@ -69,13 +70,16 @@
     docStyle?: string | null;
     onback?: () => void;
     onfile: (path: string) => void;
-    onround: (round: number, against: number | null) => void;
+    /** `round` null: the latest (a live review's working copy now) */
+    onround: (round: number | null, against: number | null) => void;
     onviewed: (file: ViewFile) => void;
     /** A comment made; why it wasn't saved, if it wasn't (its box keeps it) */
     oncomment: (comment: { path: string | null; picked: Picked | null; body: string }) => Promise<string | null> | void;
     onreply: (to: string, body: string) => void;
     onresolve: (comment: string, resolved: boolean) => void;
     onsubmit: (decision: 'approve' | 'request_changes' | 'comment', body: string) => void;
+    /** The review closed, ended without approval, the summary its reason (ATM-576: how a live review ends unapproved) */
+    onclose?: (reason: string) => void;
   } = $props();
 
   const review = $derived(page.review);
@@ -83,6 +87,8 @@
   const files = $derived(view.files);
   const tree = $derived(fileTree(files));
   const ended = $derived(review.status === 'approved' || review.status === 'closed');
+  /** A live review: its working copy followed as it is made (ATM-576) */
+  const live = $derived(review.status === 'live');
   const rounds = $derived(page.rounds.map((r) => r.number));
   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
@@ -384,6 +390,12 @@
         >{STATUS_LABELS[review.status]}</span
       >
       {#if page.needs_you}<span class="review-needs">Needs you</span>{/if}
+      {#if live && view.now}<span
+          class="review-following"
+          id="review-following"
+          title="The change as it is being made; a comment keeps what you saw as a checkpoint"
+          >Following the working copy</span
+        >{/if}
       {#if !ended}
         <div class="review-submit-anchor">
           {#if settled}
@@ -426,12 +438,28 @@
                   disabled={busy || !summary.trim()}
                   onclick={() => submit('comment')}>Comment</button
                 >
-                <button
-                  class="review-button danger"
-                  data-decision="request_changes"
-                  disabled={busy}
-                  onclick={() => submit('request_changes')}>Request changes</button
-                >
+                {#if live}
+                  <!-- A live review isn't sent back: its author ends it with a round; a reviewer approves or closes it -->
+                  {#if onclose}
+                    <button
+                      class="review-button danger"
+                      data-decision="close"
+                      disabled={busy || !summary.trim()}
+                      title="End it without approval; the summary says why"
+                      onclick={() => {
+                        onclose(summary.trim());
+                        submitting = false;
+                      }}>Close review</button
+                    >
+                  {/if}
+                {:else}
+                  <button
+                    class="review-button danger"
+                    data-decision="request_changes"
+                    disabled={busy}
+                    onclick={() => submit('request_changes')}>Request changes</button
+                  >
+                {/if}
                 <button
                   class="review-button primary"
                   data-decision="approve"
@@ -458,8 +486,16 @@
         <div class="review-tools">
           <label class="review-select">
             <span>Round</span>
-            <select id="review-round" value={view.round} onchange={(e) => onround(Number(e.currentTarget.value), null)}>
-              {#each rounds as n (n)}<option value={n}>{n} of {rounds.length}</option>{/each}
+            <select
+              id="review-round"
+              value={view.now ? 'now' : String(view.round)}
+              onchange={(e) => {
+                const value = e.currentTarget.value;
+                onround(value === 'now' ? null : Number(value), null);
+              }}
+            >
+              {#if live}<option value="now">Now, as it is being made</option>{/if}
+              {#each rounds as n (n)}<option value={String(n)}>{n} of {rounds.length}</option>{/each}
             </select>
           </label>
           <select
@@ -871,6 +907,11 @@
     color: var(--purple);
     border-color: color-mix(in srgb, var(--purple) 50%, transparent);
     background: color-mix(in srgb, var(--purple) 10%, transparent);
+  }
+  .review-following {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    white-space: nowrap;
   }
   /* Buttons, as the dashboard's dialogs draw theirs */
   .review-button {
