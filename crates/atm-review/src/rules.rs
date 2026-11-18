@@ -323,6 +323,9 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
                 }
                 Some(Status::Approved)
             }
+            // Asked again while it is back with its author (ATM-597): the reviewer's words are kept, and it stays
+            // where it is
+            Verdict::RequestChanges if status == Status::ChangesRequested => None,
             Verdict::RequestChanges => {
                 if status != Status::Open {
                     return Err(not_now(&review, "be sent back"));
@@ -1241,24 +1244,76 @@ mod tests {
         }
     }
 
+    /// A comment and a reply in every status a review is still open in, a review sent back too (ATM-597): talking
+    /// about the changes goes on until the next round. An ended one refuses them (`an_ended_review_takes_nothing_…`)
+    #[test]
+    fn a_review_not_ended_takes_comments_and_replies_whatever_its_status() {
+        for status in [
+            Status::Draft,
+            Status::Open,
+            Status::Live,
+            Status::ChangesRequested,
+        ] {
+            let mut store = MemoryStore::new();
+            let reference = at(&mut store, status);
+            let mut reviews = Reviews::new(&mut store);
+            let anchor = Anchor {
+                round: 1,
+                ..Anchor::default()
+            };
+            let id = reviews
+                .comment(&reference, anchor, "Why this?", &hakan())
+                .unwrap_or_else(|e| panic!("{status:?}: {e}"));
+            reviews
+                .reply(&reference, &id, "Because.", &agent())
+                .unwrap_or_else(|e| panic!("{status:?}: {e}"));
+            let review = store.get_review(&reference).unwrap();
+            assert_eq!(review.header.status, status);
+            assert_eq!(review.chains[0].comments[0].replies.len(), 1, "{status:?}");
+        }
+    }
+
+    /// Each status and decision: allowed or refused, the status it leaves, and whether the reviewer's words are kept
     #[test]
     fn an_approval_is_for_an_open_or_live_review_and_a_send_back_for_an_open_one() {
-        for (status, verdict, allowed) in [
-            (Status::Draft, Verdict::Approve, false),
-            (Status::Open, Verdict::Approve, true),
-            (Status::Live, Verdict::Approve, true),
-            (Status::ChangesRequested, Verdict::Approve, false),
-            (Status::Draft, Verdict::RequestChanges, false),
-            (Status::Open, Verdict::RequestChanges, true),
-            (Status::Live, Verdict::RequestChanges, false),
-            (Status::ChangesRequested, Verdict::RequestChanges, false),
+        for (status, verdict, after) in [
+            (Status::Draft, Verdict::Approve, None),
+            (Status::Open, Verdict::Approve, Some(Status::Approved)),
+            (Status::Live, Verdict::Approve, Some(Status::Approved)),
+            (Status::ChangesRequested, Verdict::Approve, None),
+            (Status::Draft, Verdict::RequestChanges, None),
+            (
+                Status::Open,
+                Verdict::RequestChanges,
+                Some(Status::ChangesRequested),
+            ),
+            (Status::Live, Verdict::RequestChanges, None),
+            // Asked again while it is back with its author (ATM-597): kept, and it stays
+            (
+                Status::ChangesRequested,
+                Verdict::RequestChanges,
+                Some(Status::ChangesRequested),
+            ),
+            (Status::Draft, Verdict::Comment, Some(Status::Draft)),
+            (Status::Open, Verdict::Comment, Some(Status::Open)),
+            (Status::Live, Verdict::Comment, Some(Status::Live)),
+            (
+                Status::ChangesRequested,
+                Verdict::Comment,
+                Some(Status::ChangesRequested),
+            ),
         ] {
             let mut store = MemoryStore::new();
             let reference = at(&mut store, status);
             let result =
                 Reviews::new(&mut store).submit(&reference, verdict, Some("x"), None, &hakan());
-            assert_eq!(result.is_ok(), allowed, "{status:?} {verdict:?}");
-            if !allowed {
+            assert_eq!(result.is_ok(), after.is_some(), "{status:?} {verdict:?}");
+            if let Some(after) = after {
+                let review = store.get_review(&reference).unwrap();
+                assert_eq!(review.header.status, after, "{status:?} {verdict:?}");
+                assert_eq!(review.chains.len(), 1, "{status:?} {verdict:?}");
+                assert_eq!(review.chains[0].comments[0].body, "x");
+            } else {
                 assert!(is_not_now(&result), "{status:?} {verdict:?}");
                 // Refused before anything is written
                 assert_eq!(

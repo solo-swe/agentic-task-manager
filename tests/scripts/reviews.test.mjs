@@ -87,6 +87,20 @@ describe('atm review', () => {
       assert.equal(task(root, 'T-1').review_state, 'changes_requested');
       assert.match(JSON.stringify(task(root, 'T-1').notes), /CR-1 round 1: 1 open comment/);
 
+      // Sent back, the review still takes the reviewer's words (ATM-597): a comment, and changes asked for again with
+      // a message, which is kept; it stays sent back and the task isn't changed again
+      ok(['review', 'comment', 'CR-1', '--body', 'And the title too.'], root, HAKAN);
+      ok(['review', 'submit', 'CR-1', '--request-changes', '--body', 'Both, please.'], root, HAKAN);
+      const sentBack = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
+      assert.equal(sentBack.header.status, 'changes_requested');
+      assert.deepEqual(
+        sentBack.chains.map((c) => c.comments[0].body),
+        ['Lower case.', 'And the title too.', 'Both, please.'],
+      );
+      ok(['review', 'resolve', 'CR-1', 'c2'], root, HAKAN);
+      ok(['review', 'resolve', 'CR-1', 'c3'], root, HAKAN);
+      assert.equal(task(root, 'T-1').review_state, 'changes_requested');
+
       // The agent replies, takes the task back, fixes it and adds a round: in review again
       ok(['review', 'reply', 'CR-1', 'c1', '--body', 'Done in round 2.'], root, AGENT);
       ok(['task', 'state', 'T-1', 'in_progress'], root, AGENT);
@@ -115,7 +129,7 @@ describe('atm review', () => {
         comments,
         /^## a\.txt:2 · round 1 · t1\n> TWO\n\n- \[x\] \*\*Hakan Serce\*\* · .* · c1\n  Lower case\./,
       );
-      assert.match(comments, /\n  - \*\*claude:0f56a916\*\* · .* · c2\n    Done in round 2\./);
+      assert.match(comments, /\n  - \*\*claude:0f56a916\*\* · .* · c4\n    Done in round 2\./);
       const folders = fs.readdirSync(path.join(root, '.agentic-task-manager/reviews'));
       assert.ok(
         folders.some((f) => /^CR-1-[0-9a-f]{4}$/.test(f)),

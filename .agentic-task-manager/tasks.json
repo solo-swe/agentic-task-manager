@@ -15886,7 +15886,7 @@
       "description": "A review with a long diff takes a long time before its Diffs tab shows, and once shown, **scrolling the diffs pane is painfully slow** (Hakan, 2026-11-18; the case to measure and fix: CompMD's CR-1). Find where the time goes, propose ways to make loading and scrolling fast, decide with Hakan, then do it.\n\n## Measure first\nCompMD's CR-1, and a generated review of a few thousand changed lines (one large file, and many files), in the browser and the app:\n- **Loading:** the time to the first file drawn and to the tab settled, split into atm's answer (`review_page` in [`review_pages.rs`](crates/atm-lib/src/review_pages.rs): the round's patch, trees rebuilt with `git apply`, every chain placed with a tree diff each, `rounds::place`), the transfer, and the page (parsing every file's patch, `diff.ts`; the file cards, `ReviewFile.svelte`, `DiffView.svelte`; the sides' documents loaded per file).\n- **Scrolling:** frames dropped and long tasks while scrolling the pane from top to bottom (the browser's performance trace): how many rows and cards are in the document, what each scroll makes (the lazy cards' observers, `MARGIN`, the ResizeObserver pinning a card, highlighting, layout of very long lines, sticky headers).\n\n`tests/e2e/performance.spec.ts` has the review budget to extend (*review file far down*).\n\n## Proposals to weigh (write them up, with numbers)\n- **Paging the files:** the page asks for the round's file list first (paths, statuses, counts), and each file's patch and sides when its card nears the view (`?file=` on the review route), so a review of hundreds of files sends what is looked at.\n- **Virtualising the pane:** only the cards (and, in a long file, the rows) near the view are in the document, the rest stood in for by their estimated heights; a file's diff drawn in chunks of its hunks as it scrolls.\n- **Cheaper rows:** fewer elements per row, no per-row observers or effects, highlighting done once per file (off the main thread or in idle time), `content-visibility: auto` on cards out of view.\n- **atm's side:** trees rebuilt once per round and cached (by round and patch hash), chains placed in one tree diff per file instead of one per chain, the answer cached by the review's stamp (ETag/304 as the task routes do).\n- **The page:** patches parsed in a worker or lazily per card; the sides' documents only for the rendered view and the context folds.\n\nPut the proposals, with the measurements, in a short document (`docs/review-performance.md`) and open a review of it with Hakan (`atm review create --task <this> --file docs/review-performance.md`) before building; then the chosen ones.\n\n## Tests\nPerformance budgets for a long review in `performance.spec.ts`: the first file drawn, and a scroll from top to bottom (no long task over the budget, the last file reached in time); unit tests for any paging, virtualising or caching added.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/review-performance.md",
@@ -15895,7 +15895,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:55:19Z",
+      "updated_at": "2026-11-18T01:13:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15913,7 +15913,7 @@
       "key_final": false,
       "started_at": "2026-11-18T00:55:19Z",
       "started_by": "claude:0f56a916",
-      "commit": "c9c4232507bbd8b57049c3701245d7a7b26e9b52",
+      "commit": "f3853c1a6f3027163696ce2f6eb2e3279d3432df",
       "code_reviews": [
         {
           "id": "01a1ec1e-490c-7662-b019-c555b41cacfe",
@@ -15938,6 +15938,12 @@
           "kind": "rejection",
           "text": "CR-1 round 4: 1 open comment",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T01:13:13Z",
+          "kind": "review",
+          "text": "CR-1: round 5",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -15946,7 +15952,9 @@
           "to": "2026-11-18T00:54:56Z",
           "outcome": "changes_requested"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-18T01:13:13Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4766068f19",
@@ -16313,15 +16321,15 @@
       "description": "A review in **changes requested** refuses new comments and replies, in the app and from `atm review comment` / `atm review reply`. Asking for changes doesn't end a review: the reviewer and the author go on talking about the changes until the next round (reported by Hakan, 2026-11-18, on CR-1).\n\n## Change\n- `crates/atm-review/src/rules.rs`: a comment or reply is allowed on an open review, `changes_requested` included; only an ended review (approved, rejected, closed) refuses them, if it does today.\n- The dashboard's review page keeps its comment boxes and Reply buttons while changes are requested.\n\n## Tests\n- A rules table: each review status, comment and reply, allowed or refused.\n- The CLI suite: a comment and a reply on a review with changes requested.\n- A component or e2e test: the review page in changes requested still lets the reviewer comment.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rules.rs"
       ],
       "created_at": "2026-11-18T01:02:07Z",
-      "updated_at": "2026-11-18T01:02:07Z",
+      "updated_at": "2026-11-18T01:13:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16330,7 +16338,9 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 597,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T01:13:19Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
