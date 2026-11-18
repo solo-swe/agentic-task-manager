@@ -501,6 +501,69 @@ test.describe('a review’s page', () => {
     }
   });
 
+  // ATM-590: a long line's horizontal scroll bar stays below its code, above the fold row after it
+  test('a long line scrolls sideways, its scroll bar below the code: the fold row after it stays clickable', async ({
+    page,
+    tasksServer,
+  }) => {
+    const longLine = `let x = "${'word '.repeat(120)}";`;
+    const old = lines(40);
+    const now = lines(40, (i) => (i === 30 ? longLine : null));
+    const patch = [
+      'diff --git a/src/w.rs b/src/w.rs',
+      '--- a/src/w.rs',
+      '+++ b/src/w.rs',
+      '@@ -29,3 +29,3 @@',
+      ' line 29',
+      '-line 30',
+      `+${longLine}`,
+      ' line 31',
+      '',
+    ].join('\n');
+    tasksServer
+      .setRevisionDocument(
+        'base1',
+        projectDocument('src/w.rs', old, { kind: 'code', language: 'rust', line_offset: 1 }),
+      )
+      .setRevisionDocument(
+        'head3',
+        projectDocument('src/w.rs', now, { kind: 'code', language: 'rust', line_offset: 1 }),
+      );
+    await openReviews(page, tasksServer);
+    tasksServer.setReview('CR-2', reviewPage({ view: { round: 3, against: null, files: [file('src/w.rs', patch)] } }));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    const diff = diffOf(page, 'src/w.rs');
+    for (const mode of ['Split', 'Unified']) {
+      await page.getByRole('button', { name: mode, exact: true }).click();
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      const fold = diff.locator('.diff-fold').last();
+      await expect(fold).toContainText('Show 9 unchanged lines');
+      await fold.scrollIntoViewIfNeeded();
+      const hit = await fold.evaluate((button) => {
+        const box = button.getBoundingClientRect();
+        const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        // And just inside its top edge, where a scroll bar above it would reach
+        const top = document.elementFromPoint(box.left + box.width / 2, box.top + 2);
+        const scroller = [...button.closest('.diff-view')!.querySelectorAll('.compmd-page pre')].find(
+          (pre) => pre.scrollWidth > pre.clientWidth,
+        );
+        // A scroll bar laid over the content (macOS's) can't be had headless: what keeps one off the fold is that a
+        // run draws nothing past its end, and the fold row is above whatever it would
+        const run = scroller?.closest('.diff-code');
+        return {
+          centre: at === button || button.contains(at),
+          top: top === button || button.contains(top),
+          scrolls: !!scroller,
+          below: scroller ? scroller.getBoundingClientRect().bottom <= box.top + 0.5 : true,
+          clipped: run ? getComputedStyle(run).overflowY === 'clip' : false,
+          above: getComputedStyle(button).zIndex === '1',
+        };
+      });
+      expect(hit).toEqual({ centre: true, top: true, scrolls: true, below: true, clipped: true, above: true });
+    }
+  });
+
   test('Overview: the summary, the facts, the tasks as links, the review’s own chains', async ({
     page,
     tasksServer,

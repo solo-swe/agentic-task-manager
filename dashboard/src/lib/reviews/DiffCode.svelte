@@ -245,6 +245,10 @@
     --plus: var(--space-8);
     position: relative;
     padding-left: calc(var(--gutter) + var(--plus));
+    /* Nothing of a run is drawn past it (ATM-590): a scroll bar the system lays over the content (macOS's), or a row
+       of its gutter, stays inside the run, off the fold row after it */
+    overflow: clip;
+    overflow-clip-margin: 2px;
   }
   .diff-code.both {
     --gutter: calc(var(--space-10) * 2);
@@ -254,6 +258,9 @@
     white-space: pre;
     overflow-x: auto;
     background: transparent;
+    /* Room under the last line for a scroll bar laid over the content (ATM-590), so it covers neither that line nor
+       what comes after the run; a classic scroll bar takes its own room below it */
+    padding-bottom: var(--space-4);
   }
   .diff-code :global(.compmd-page pre > code) {
     display: block;

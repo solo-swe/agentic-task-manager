@@ -605,6 +605,9 @@
   }
   .diff-fold {
     display: block;
+    /* Over anything a run before it could draw past its end (ATM-590: a scroll bar laid over the content) */
+    position: relative;
+    z-index: 1;
     width: 100%;
     padding: var(--space-2) var(--space-6);
     border: none;

@@ -16135,7 +16135,7 @@
       "description": "At the bottom of a file's diff, the line number of the last line (an empty one, not shown otherwise) is drawn over the **Show n unchanged lines** row that ends the file (Hakan, 2026-11-18). Find where the extra row comes from (likely the file's trailing newline making an empty last line in the sides' rows, `diff.ts`, or the gutter's numbers drawn past the rows in [`DiffCode.svelte`](dashboard/src/lib/reviews/DiffCode.svelte)) and fix it: no number without its line, and nothing over the fold row.\n\n## Tests\nA unit test in `diff.test.ts` for a file ending with a newline (no empty last row); an e2e or component test that the last fold row has nothing over it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/diff.ts",
@@ -16143,7 +16143,7 @@
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T07:52:40Z",
+      "updated_at": "2026-11-18T07:57:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16159,7 +16159,24 @@
       "number": 589,
       "key_final": false,
       "started_at": "2026-11-18T07:52:40Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "233407e276fd0f51379c2ce9016656f8c85a7111",
+      "code_reviews": [
+        {
+          "id": "01a1eda8-d7da-756a-9fba-3959228188d3",
+          "ref": "CR-17"
+        }
+      ],
+      "review_requested_at": "2026-11-18T07:57:08Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T07:57:08Z",
+          "kind": "review",
+          "text": "CR-17: Nothing drawn over the last fold",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4914dd4a4c",
@@ -16173,16 +16190,16 @@
       "description": "In a file with long lines, the code's horizontal scroll bar (`overflow-x: auto` in [`DiffCode.svelte`](dashboard/src/lib/reviews/DiffCode.svelte)) is drawn on top of the **Show n unchanged lines** row at the bottom of the file (Hakan, 2026-11-18). The scroll bar belongs below the code it scrolls and above the fold row (or the fold row outside the scrolling block), so both stay usable, on macOS's overlay scroll bars and on classic ones.\n\n## Tests\nAn e2e test in `reviews.spec.ts` with a long line: the fold row's button is clickable (not covered: `elementFromPoint` at its centre is the button).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T07:57:12Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16194,7 +16211,9 @@
         "dashboard"
       ],
       "number": 590,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T07:57:12Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4ae483be2e",
