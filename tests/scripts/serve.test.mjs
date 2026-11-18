@@ -1255,6 +1255,9 @@ describe('serve', () => {
     assert.equal((await get(`${reviews}/CR-1?round=2&against=2`))[0], 400);
     assert.equal((await at('a.txt', '--output=x'))[0], 400);
     assert.equal((await at('a.txt', 'f'.repeat(40)))[0], 404);
+    // Hidden files are shown at a revision (ATM-598), but never atm's own folder or an environment file
+    assert.equal((await at('.agentic-task-manager%2Ftasks.json', base))[0], 403);
+    assert.equal((await at('.env', base))[0], 403);
     // The page is served at a review's address
     const served = await fetch(`${origin}/projects/abcd1234/reviews/CR-1`);
     assert.equal(served.status, 200);
