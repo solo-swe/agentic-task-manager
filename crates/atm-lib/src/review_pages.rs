@@ -290,7 +290,12 @@ fn with_links(
     patches
         .into_iter()
         .map(|mut file| {
-            if file.submodule.is_none() && !file.patch.contains("\n@@") {
+            // Only an entry with no lines can be a submodule git didn't mark: one whose commit changed has its
+            // `Subproject commit` lines, and `submodule` already. No lines is a pure rename (the moved submodule), a
+            // mode change, an empty or a binary file: only those are looked up in the trees, a git process each,
+            // never the files with lines, so a large review costs nothing more
+            let no_lines = !file.patch.contains("\n@@");
+            if file.submodule.is_none() && no_lines {
                 let (old, new) = (
                     linked(before, &file.old_path),
                     linked(Some(after), &file.path),

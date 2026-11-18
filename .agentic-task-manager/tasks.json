@@ -16479,9 +16479,9 @@
         "crates/atm-vcs/src/lib.rs"
       ],
       "created_at": "2026-11-18T03:20:37Z",
-      "updated_at": "2026-11-18T03:28:59Z",
+      "updated_at": "2026-11-18T05:52:05Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16493,7 +16493,7 @@
       "key_final": false,
       "started_at": "2026-11-18T03:28:02Z",
       "started_by": "claude:0f56a916",
-      "commit": "020ee70f414a27c7c3adc83dfcb57df202e55296",
+      "commit": "9f23c416afdea28d5a7b3b8c81a4481b214b2e6c",
       "code_reviews": [
         {
           "id": "01a1ecb3-5906-70c6-83f9-bbfc387f1a31",
@@ -16501,15 +16501,22 @@
         }
       ],
       "review_requested_at": "2026-11-18T03:28:59Z",
-      "review_state": "waiting",
+      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-18T03:28:59Z",
           "kind": "review",
           "text": "CR-4: A submodule only moved shows as the submodule, at its commit",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T05:52:05Z",
+          "kind": "rejection",
+          "text": "CR-4 round 2: 2 open comments",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-18T05:52:05Z"
     },
     {
       "id": "01a1ecae-b9ab-7494-8e89-d162f08dc826",
