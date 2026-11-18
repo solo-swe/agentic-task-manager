@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 617
+    "next_number": 618
   },
   "tasks": [
     {
@@ -15855,7 +15855,7 @@
       "description": "When a task is in review and has a code review (`code_reviews` on the task: `[{id, ref}]`, the latest last), its details show the review as a link, prominently where the review is (the review section of [`DetailPanel.svelte`](dashboard/src/lib/details/DetailPanel.svelte), beside the `review` note), e.g. **CR-7 · open**: a click opens the review's page (`/projects/<id>/reviews/CR-7`), in a new tab with ⌘/Ctrl (in the app, an app tab), as the Reviews list opens one (`ReviewsTab.svelte`'s `open`). Hakan, 2026-11-18.\n\n## Details\n- Show the latest review the task names; with several, the others as smaller links after it.\n- The status next to the reference when the page knows it (the project's reviews list), else the reference alone; never a request per task.\n- A task with `code_reviews` that isn't in review (done, sent back) shows its reviews too, less prominently.\n- ATM-575 puts the same links on the cards and in the list: share the link component with it.\n\n## Tests\nA component test of the details panel (in review with one review, with two, without any, not in review); an e2e test in `detail.spec.ts` that the link opens the review's page, and ⌘-click a new tab.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/details/DetailPanel.svelte",
@@ -15863,7 +15863,7 @@
         "dashboard/tests/e2e/detail.spec.ts"
       ],
       "created_at": "2026-11-17T23:58:50Z",
-      "updated_at": "2026-11-18T07:19:55Z",
+      "updated_at": "2026-11-18T08:11:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15891,15 +15891,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T07:19:55Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T07:19:55Z",
           "kind": "review",
           "text": "CR-14: A task links to its code reviews in its details",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T08:11:37Z",
+          "kind": "note",
+          "text": "Approved: in CR-14 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T08:11:50Z",
+          "kind": "outcome",
+          "text": "Approved in CR-14: a task links to its code reviews in its details, the latest prominently while in review",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T07:19:55Z",
+          "to": "2026-11-18T08:11:37Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T08:11:50Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf2-f535-752d-88f8-ee8ac3ce346e",
@@ -15913,7 +15933,7 @@
       "description": "A review's description (its summary, on the Overview tab) and its comments render through CompMD, but their references to the project's documents and files (`[the design](docs/x.md)`, `docs/x.md#routes`, `src/a.rs#L40-L45`, text-fragment links `#:~:text=…`) aren't opened in the document viewer, as they are in a task's description and notes (Hakan, 2026-11-18).\n\n## Change\n- Give the review page's `CompMd` (the summary in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte), the comment bodies in [`ChainBox.svelte`](dashboard/src/lib/reviews/ChainBox.svelte)) the same `onopen` the details panel gives its texts (`dashboard.openDocument`), so a relative link opens the document viewer over the review, at its heading, lines or text.\n- A link to a file under review could open that file in the Diffs tab instead: decide while doing it (a file the round changed → its diff; anything else → the viewer), and say which in the outcome note.\n- External links stay as they are (the user's browser, through `open_url` in the app).\n\n## Tests\nComponent tests that a summary's and a comment's relative link calls `onopen` with its document reference; an e2e test in `reviews.spec.ts` that a click on one opens the document viewer.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -15921,7 +15941,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-17T23:58:50Z",
-      "updated_at": "2026-11-18T07:25:29Z",
+      "updated_at": "2026-11-18T08:14:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15946,15 +15966,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T07:25:29Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T07:25:29Z",
           "kind": "review",
           "text": "CR-15: Links in a review open the project documents",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T08:14:28Z",
+          "kind": "note",
+          "text": "Approved: in CR-15 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T08:14:39Z",
+          "kind": "outcome",
+          "text": "Approved in CR-15: links in a review summary and comments open a changed file diff, or the document viewer",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T07:25:29Z",
+          "to": "2026-11-18T08:14:28Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T08:14:39Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef463ee973d6",
@@ -16080,7 +16120,7 @@
       "description": "The diff viewer gets a **Wrap** toggle beside Split/Unified and Source/Rendered on the Diffs tab's toolbar (an icon button, as theirs; kept like them): wrapped, long lines wrap at the column's width instead of scrolling sideways (Hakan, 2026-11-18).\n\n## Details\n- Line numbers stay right: a wrapped line has its number on its first row only, the gutter as tall as the wrapped line, and in Split the two sides' rows stay level (the taller side sets the row's height).\n- Picking lines to comment on, the `+` on a line, the highlight of a selected chain and the comment boxes under a line work the same wrapped.\n- Wrapped, the file has no horizontal scroll bar.\n\n## Tests\nComponent tests in `DiffView.component.test.ts` (the toggle, a long line wrapped with one number); an e2e test in `reviews.spec.ts` that a wrapped long line keeps the next line's number level with it, in Split and Unified.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -16088,7 +16128,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T07:52:35Z",
+      "updated_at": "2026-11-18T08:16:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16113,15 +16153,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T07:52:35Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T07:52:35Z",
           "kind": "review",
           "text": "CR-16: Wrap long lines in the diff viewer",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T08:16:18Z",
+          "kind": "note",
+          "text": "Approved: in CR-16 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T08:16:29Z",
+          "kind": "outcome",
+          "text": "Approved in CR-16: Wrap long lines in Unified; Split waits for CompMD line elements (CMD-250, ATM-616)",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T07:52:35Z",
+          "to": "2026-11-18T08:16:18Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T08:16:29Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef482a98ae1a",
@@ -16135,7 +16195,7 @@
       "description": "At the bottom of a file's diff, the line number of the last line (an empty one, not shown otherwise) is drawn over the **Show n unchanged lines** row that ends the file (Hakan, 2026-11-18). Find where the extra row comes from (likely the file's trailing newline making an empty last line in the sides' rows, `diff.ts`, or the gutter's numbers drawn past the rows in [`DiffCode.svelte`](dashboard/src/lib/reviews/DiffCode.svelte)) and fix it: no number without its line, and nothing over the fold row.\n\n## Tests\nA unit test in `diff.test.ts` for a file ending with a newline (no empty last row); an e2e or component test that the last fold row has nothing over it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/diff.ts",
@@ -16143,7 +16203,7 @@
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T07:57:08Z",
+      "updated_at": "2026-11-18T08:17:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16168,15 +16228,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T07:57:08Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T07:57:08Z",
           "kind": "review",
           "text": "CR-17: Nothing drawn over the last fold",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T08:17:17Z",
+          "kind": "note",
+          "text": "Approved: in CR-17 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T08:17:33Z",
+          "kind": "outcome",
+          "text": "Approved in CR-17: a run ending with an empty line draws it, so nothing lies over the last fold",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T07:57:08Z",
+          "to": "2026-11-18T08:17:17Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T08:17:33Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4914dd4a4c",
@@ -16190,14 +16270,14 @@
       "description": "In a file with long lines, the code's horizontal scroll bar (`overflow-x: auto` in [`DiffCode.svelte`](dashboard/src/lib/reviews/DiffCode.svelte)) is drawn on top of the **Show n unchanged lines** row at the bottom of the file (Hakan, 2026-11-18). The scroll bar belongs below the code it scrolls and above the fold row (or the fold row outside the scrolling block), so both stay usable, on macOS's overlay scroll bars and on classic ones.\n\n## Tests\nAn e2e test in `reviews.spec.ts` with a long line: the fold row's button is clickable (not covered: `elementFromPoint` at its centre is the button).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T07:59:26Z",
+      "updated_at": "2026-11-18T08:17:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16222,15 +16302,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T07:59:26Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T07:59:26Z",
           "kind": "review",
           "text": "CR-18: A long line scroll bar stays off the fold row",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T08:17:49Z",
+          "kind": "note",
+          "text": "Approved: in CR-18 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T08:17:59Z",
+          "kind": "outcome",
+          "text": "Approved in CR-18: a long line scroll bar stays in its run, the fold row above it",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T07:59:26Z",
+          "to": "2026-11-18T08:17:49Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T08:17:59Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4ae483be2e",
@@ -16244,14 +16344,14 @@
       "description": "In the Diffs tab's **Rendered** view, a Markdown file shows the whole document, while the Source view hides the unchanged lines before and after each change behind **Show n unchanged lines** (Hakan, 2026-11-18). The rendered view should fold the same way: the changed blocks with a little context, the unchanged parts between them folded, each fold opened by a click, the line numbers in its gutter still those of the source.\n\n## Details\nThe rendered sides come from CompMD with each block's source lines ([`RenderedSide.svelte`](dashboard/src/lib/reviews/RenderedSide.svelte)): fold whole blocks (a paragraph, a list, a table, a diagram), never in the middle of one, around the blocks the hunks touch, with the same context the source view keeps.\n\n## Tests\nComponent tests of `RenderedSide` or `DiffView` (a long document with one change: the blocks around it shown, the rest folded, a fold opens); an e2e test in `reviews.spec.ts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T08:07:29Z",
+      "updated_at": "2026-11-18T08:18:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16276,15 +16376,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T08:07:29Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T08:07:29Z",
           "kind": "review",
           "text": "CR-19: The rendered Markdown view folds as the source view does",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T08:18:44Z",
+          "kind": "note",
+          "text": "Approved: in CR-19 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T08:18:57Z",
+          "kind": "outcome",
+          "text": "Approved in CR-19: the rendered Markdown view folds whole blocks as the source view folds lines",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T08:07:29Z",
+          "to": "2026-11-18T08:18:44Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T08:18:57Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4bc05d8f15",
@@ -17088,7 +17208,7 @@
       "description": "Requested by Hakan (2026-11-18): an indication that reviews are waiting for his attention, without opening the reviews list.\n\n## What waits for you\n- A review you review that is open or live (the list's `needs_you`), or one sent back to you as its author.\n- A comment or reply by someone else, in a review you take part in, that you haven't seen yet.\n- A top-level comment of yours that is still open, now answered.\n\n## Change\n- atm-lib: a count per project of what waits for the user (`needs_you`, plus unseen comments). A comment is seen when the user's page has shown it; that is recorded per user and review in the browser or app (no write on a GET, security I11), or as an atm-lib record if the design says so: decide it first and note the choice in `docs/code-review-design.md`.\n- Dashboard: a badge with the count on the Reviews tab, and on the project in the project switcher, refreshed with the list. In the list and on a review's page, *new* marks on unseen comments; *Next review needing you* takes them into account.\n- The app: the count on the window's tab for the project (and the dock badge, if cheap).\n\n## Tests\n- Unit tests for the count: each case above, your own comments never counted, and a resolved one that isn't.\n- A component test for the badge.\n- E2e: a new reply shows the badge; opening the review clears it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_pages.rs",
@@ -17096,9 +17216,9 @@
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T06:05:07Z",
-      "updated_at": "2026-11-18T08:10:40Z",
+      "updated_at": "2026-11-18T08:11:07Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17118,7 +17238,6 @@
         }
       ],
       "review_requested_at": "2026-11-18T07:02:59Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-18T07:02:59Z",
@@ -17131,9 +17250,23 @@
           "kind": "note",
           "text": "Approved: in CR-12 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T08:11:07Z",
+          "kind": "outcome",
+          "text": "Approved in CR-12: reviews waiting for you counted in every project summary, on the Reviews tab, the project switcher and the dock badge",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-18T08:10:40Z"
+      "reviews": [
+        {
+          "from": "2026-11-18T07:02:59Z",
+          "to": "2026-11-18T08:10:40Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T08:11:07Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed47-a3c3-7749-bf96-439d862e8d64",
@@ -17420,7 +17553,7 @@
       "description": "Reported by Hakan (2026-11-18): *Open* is confusing. It should mean a review isn't approved or closed yet, but it is one particular status, waiting on its reviewers. The list's *Open* button should show every review still open.\n\n## Change\n- **The status:** `open` is renamed `waiting`, labelled *Waiting for review*. That covers the review files (`status = \"waiting\"`), atm-review's `Status`, the REST and CLI output, `--status` filters, the dashboard's `ReviewStatus` and `STATUS_LABELS`, and the docs. A review file an earlier atm wrote with `open` still reads, as `waiting`, and is written back as `waiting`. `atm doctor` stays quiet about it.\n- **Open, the group:** draft, waiting, live and changes requested (anything not approved or closed). In the list, *Open* is a filter of its own: the first button, standing for those four. The status buttons stay for narrowing further. The query's `status=open` means the group (the server expands it), so a list query and a filter kept by ATM-604 still work.\n- `atm review list --open` (or `--status open`), the same group.\n\n## Tests\n- atm-review: a review file with `open` reads as waiting and is written as `waiting`; every rule that named open works on waiting.\n- atm-lib and REST: `status=open` lists the four and not approved or closed; `status=waiting` lists that status only.\n- The CLI suite: `list --open`, and the status printed as waiting.\n- Component and e2e: *Open* shows a draft, a waiting, a live and a sent-back review and no decided one; a kept filter from before still works.\n- Update `docs/code-review-design.md` (the state diagram and table), `docs/agent/reviews.md`, `docs/multi-project-api.md`, and the skills where they say `open`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/",
@@ -17430,7 +17563,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-18T06:38:14Z",
-      "updated_at": "2026-11-18T07:14:52Z",
+      "updated_at": "2026-11-18T08:12:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17444,7 +17577,7 @@
       "key_final": false,
       "started_at": "2026-11-18T07:03:04Z",
       "started_by": "claude:0f56a916",
-      "commit": "59c494878fa630d5a1682abb48bf5dad5c381dba",
+      "commit": "a7d3dd43be715b51f6e7474d32af4b54f6d50dd7",
       "code_reviews": [
         {
           "id": "01a1ed82-267b-7074-a78a-8bb86dd23b8e",
@@ -17452,15 +17585,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T07:14:52Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T07:14:52Z",
           "kind": "review",
           "text": "CR-13: Open means not yet decided; Waiting for review is the status",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T08:12:39Z",
+          "kind": "note",
+          "text": "Approved: in CR-13 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T08:12:48Z",
+          "kind": "outcome",
+          "text": "Approved in CR-13: Waiting for review is the status (still written open in review.md for older atm), Open filters every review not decided",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T07:14:52Z",
+          "to": "2026-11-18T08:12:39Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T08:12:48Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed66-4c9a-72ce-8c9b-83d2ce6b9a14",
@@ -17548,6 +17701,39 @@
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "number": 616,
+      "key_final": false
+    },
+    {
+      "id": "01a1edb5-a7a6-723b-9782-727820cea332",
+      "name": "A review atm can't read is listed as unreadable, never left out without a word",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Found on 2026-11-18. A `review.md` atm can't read (a status it doesn't know, as a newer atm wrote; a broken header) is left out of `atm review list`, the Reviews tab and every count, without a word. Hakan saw 7 tasks in review and 1 open review, with no clue why (CR-13, round 2).\n\n## Change\n- `atm-review`'s folder store keeps what it couldn't read (`read_all`'s problems: the folder and why).\n- `atm review list` prints them after the reviews (`CR-13: can't be read (no status waiting); a newer atm may have written it`), and `--json` gives them as `unreadable: [{folder, reference?, problem}]`.\n- The REST list, and so the Reviews tab, shows them as rows of their own: the reference, *Can't be read*, and why, with no link.\n- A task in review whose review can't be read says so in its details instead of showing no review.\n- `atm doctor` already reports them: check it names the folder and the reason.\n\n## Tests\n- atm-review: an unreadable review is kept as a problem with its folder.\n- The CLI suite: `list` and `--json` with one unreadable review beside readable ones.\n- E2e: the Reviews tab's row for it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/src/folder.rs",
+        "crates/atm-lib/src/review_pages.rs",
+        "crates/atm-cli/src/commands/review.rs",
+        "dashboard/src/lib/reviews/ReviewList.svelte"
+      ],
+      "created_at": "2026-11-18T08:11:07Z",
+      "updated_at": "2026-11-18T08:11:07Z",
+      "created_by": "claude:0f56a916",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T08:11:07Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 617,
       "key_final": false
     }
   ]

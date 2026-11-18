@@ -8,7 +8,8 @@
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
   import { focusOnShow } from './focus';
-  import { setDocumentLinks } from './links';
+  import { setDocumentLinks, setTaskLinks } from './links';
+  import type { TaskLinks } from '../compmd';
   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
   import {
     chainsOf,
@@ -40,6 +41,7 @@
     side,
     isViewed,
     taskHref,
+    tasks,
     backHref,
     busy = false,
     problem = null,
@@ -65,6 +67,9 @@
     isViewed: (file: ViewFile) => boolean;
     /** A task's address, for its link */
     taskHref?: (key: string) => string;
+    /** What a task named in the review opens (ATM-593): the Tasks fact's keys, and the keys written in the description
+     * and the comments that name a task (`known`); `open`, its details over the review, or `newTab` a tab of its own */
+    tasks?: TaskLinks;
     /** The reviews page's address, for the link back */
     backHref?: string;
     busy?: boolean;
@@ -184,6 +189,18 @@
     else ondocument?.(ref);
   }
   setDocumentLinks(openLink);
+  // The keys in its texts: links to their tasks (ATM-593). Read when a text is drawn, so the latest handlers apply
+  setTaskLinks({
+    known: (key) => tasks?.known(key) ?? false,
+    open: (key, newTab) => tasks?.open(key, newTab),
+  });
+  /** A task's key clicked (the Tasks fact): its details over the review, or with ⌘, Ctrl or a middle click a tab of
+   * its own; without `tasks`, the link's own address */
+  function openTask(e: MouseEvent, key: string) {
+    if (!tasks) return;
+    e.preventDefault();
+    tasks.open(key, e.metaKey || e.ctrlKey || e.button === 1);
+  }
 
   /** The file just gone to: its card is made at once, the others after it */
   let wanted = $state<string | null>(null);
@@ -657,9 +674,13 @@
             <dt><Icon name="list-todo" size={13} /> Tasks</dt>
             <dd>
               {#each review.tasks as task (task)}
-                {#if taskHref}<a class="review-task" href={taskHref(task)}>{task}</a>{:else}<span class="review-task"
-                    >{task}</span
-                  >{/if}
+                {#if taskHref}<a
+                    class="review-task"
+                    href={taskHref(task)}
+                    data-task={task}
+                    onclick={(e) => openTask(e, task)}
+                    onauxclick={(e) => e.button === 1 && openTask(e, task)}>{task}</a
+                  >{:else}<span class="review-task">{task}</span>{/if}
               {/each}
             </dd>
           </div>
@@ -683,7 +704,9 @@
         <div class="review-main">
           <section class="review-card review-summary" aria-label="Description">
             <h2 class="review-card-title">Description</h2>
-            {#if page.summary.trim()}<CompMd text={page.summary} onopen={openLink} />{:else}<p class="review-empty">
+            {#if page.summary.trim()}<CompMd text={page.summary} onopen={openLink} {tasks} />{:else}<p
+                class="review-empty"
+              >
                 No description.
               </p>{/if}
           </section>

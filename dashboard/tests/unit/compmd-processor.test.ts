@@ -12,6 +12,7 @@ import {
   FRONTMATTER_LINES,
   packComponents,
   safeTree,
+  taskOfHref,
   topBlocks,
 } from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
@@ -64,6 +65,32 @@ describe('a document’s source lines (T-406: CompMD places each line from its o
 
   it('task text is processed without them', () => {
     expect(firstLines(run('# Title\n\nText.').expanded)).toEqual([undefined, undefined]);
+  });
+
+  // ATM-593: task keys in a project's text link to their tasks, only those that are tasks
+  it('a task key links to its task when it names one; another, inside a link or in code stays as written', () => {
+    const tree = run('See ATM-12 and ZZZ-9, `ATM-12` in code, [ATM-12 here](https://x.example) and ~ATM-13.').expanded;
+    const known = (key: string) => key === 'ATM-12' || key === '~ATM-13';
+    const links: { url: string; text: string }[] = [];
+    const walk = (node: unknown) => {
+      const n = node as { type?: string; url?: string; children?: unknown[] };
+      if (n.type === 'link') links.push({ url: n.url ?? '', text: textOf(n) });
+      n.children?.forEach(walk);
+    };
+    walk(safeTree(tree, { taskKnown: known }));
+    expect(links).toEqual([
+      { url: '#task=ATM-12', text: 'ATM-12' },
+      { url: 'https://x.example', text: 'ATM-12 here' },
+      { url: '#task=~ATM-13', text: '~ATM-13' },
+    ]);
+    // The text reads the same
+    expect(textOf(safeTree(tree, { taskKnown: known }))).toBe(textOf(tree));
+    // Without taskKnown, no key is a link
+    links.length = 0;
+    walk(safeTree(tree));
+    expect(links.map((l) => l.url)).toEqual(['https://x.example']);
+    expect(taskOfHref('#task=ATM-12')).toBe('ATM-12');
+    expect(taskOfHref('#doc=docs/x.md')).toBeNull();
   });
 
   // ATM-591: the rendered diff folds whole blocks: each one's lines, and a tree of only those reaching into a range

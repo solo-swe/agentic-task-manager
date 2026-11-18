@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { TaskLinks } from '../compmd';
   import Icon from '../ui/Icon.svelte';
   import {
     NO_QUERY,
@@ -23,6 +24,8 @@
     onquery,
     onopen,
     onlive,
+    taskHref,
+    taskLinks,
   }: {
     entries: ReviewEntry[];
     query: Query;
@@ -34,7 +37,18 @@
     onopen: (reference: string, newTab: boolean) => void;
     /** A live review opened (ATM-576): why it was refused, or null once it is open */
     onlive?: (live: { title: string; base: string; task: string }) => Promise<string | null>;
+    /** A row's tasks (ATM-593): each key that names a task a link (`taskHref` its address, `taskLinks.open` what a
+     * click does: its details here, or with ⌘, Ctrl or a middle click a tab of its own); without them, keys as text */
+    taskHref?: (key: string) => string;
+    taskLinks?: TaskLinks;
   } = $props();
+
+  function openTask(e: MouseEvent, key: string) {
+    if (!taskLinks) return;
+    e.preventDefault();
+    e.stopPropagation();
+    taskLinks.open(key, e.metaKey || e.ctrlKey || e.button === 1);
+  }
 
   // New live review: a title, the task it is about, the commit it is against (HEAD when none)
   let starting = $state(false);
@@ -223,7 +237,16 @@
               title="Someone wrote in it after you last did">New reply</span
             >{/if}
           <span class="review-meta">
-            {#if r.tasks.length}<span class="review-tasks"><Icon name="list-todo" size={12} />{r.tasks.join(', ')}</span
+            {#if r.tasks.length}<span class="review-tasks"
+                ><Icon name="list-todo" size={12} />{#each r.tasks as key, i (key)}{i
+                    ? ', '
+                    : ''}{#if taskHref && taskLinks?.known(key)}<a
+                      class="review-task-link"
+                      href={taskHref(key)}
+                      data-task={key}
+                      onclick={(e) => openTask(e, key)}
+                      onauxclick={(e) => e.button === 1 && openTask(e, key)}>{key}</a
+                    >{:else}{key}{/if}{/each}</span
               >{/if}
             {#if entry.branch}<span class="review-branch"><Icon name="git-branch" size={12} />{entry.branch}</span>{/if}
             <span><Icon name="user" size={12} />{r.author ?? 'no author yet'}</span>
@@ -446,6 +469,13 @@
     color: var(--purple);
     border-color: color-mix(in srgb, var(--purple) 50%, transparent);
     background: color-mix(in srgb, var(--purple) 10%, transparent);
+  }
+  .review-task-link {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .review-task-link:hover {
+    text-decoration: underline;
   }
   .review-meta {
     display: flex;

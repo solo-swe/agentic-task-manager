@@ -24,6 +24,7 @@
     viewedKeys,
   } from '../review-data';
   import { keepFilter, keptFilter } from '../review-filter';
+  import type { TaskLinks } from '../compmd';
   import { learnReviews } from '../reviews/known.svelte';
   import ReviewList from '../reviews/ReviewList.svelte';
   import ReviewPage from '../reviews/ReviewPage.svelte';
@@ -199,6 +200,28 @@
 
   const review = $derived(shown?.review.reference ?? at.review ?? '');
   const listAddress = $derived(withReview(currentAddress(), { review: null }));
+
+  // A task named in a review (ATM-593): this project's opens its details over the review (the review's own address,
+  // with `?task=`), closed back to the review as it was; another project's opens at its project's page. ⌘, Ctrl or a
+  // middle click: a tab of its own, at its project's page with its details. A key naming no task the page knows
+  // isn't a link
+  const foreign = (key: string) => (dashboard.findTask(key) ? null : (dashboard.refOf(key).address ?? null));
+  /** A task's own page: its project's list with its details, for a link's address and a tab of its own */
+  function taskPage(key: string): string {
+    return foreign(key) ?? withTask(withView(listAddress, 'list'), key);
+  }
+  const taskLinks: TaskLinks = {
+    known: (key) => !!dashboard.findTask(key) || !!foreign(key),
+    open(key, newTab) {
+      const elsewhere = foreign(key);
+      if (newTab || (elsewhere && inApp)) {
+        const address = taskPage(key);
+        if (inApp) tabActions().open(address);
+        else window.open(address, '_blank', 'noopener');
+      } else if (elsewhere) go(elsewhere);
+      else go(withTask(currentAddress(), key));
+    },
+  };
 </script>
 
 <svelte:window onfocus={() => void load()} />
@@ -213,7 +236,8 @@
         file={at.file}
         side={(revision) => revisionDocuments(project, revision)}
         isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
-        taskHref={(key) => withTask(withView(listAddress, 'list'), key)}
+        taskHref={taskPage}
+        tasks={taskLinks}
         backHref={listAddress}
         onback={() => go(listAddress)}
         {busy}
@@ -271,6 +295,8 @@
       onquery={chooseQuery}
       onopen={(reference, newTab) => open(reference, newTab)}
       onlive={startLive}
+      taskHref={taskPage}
+      {taskLinks}
     />
   {/if}
 </div>

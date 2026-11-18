@@ -10,7 +10,9 @@
     secureLinks,
     slug,
     taskData,
+    taskOfHref,
     type CompmdModule,
+    type TaskLinks,
     type DrawnLine,
   } from '../compmd';
   import { docOf, referenceTo, viewerLink, type DocumentRef } from '../documents';
@@ -40,6 +42,7 @@
     inline = false,
     plain,
     only,
+    tasks,
     onlines,
     onopen,
   }: {
@@ -54,6 +57,9 @@
     /** A document's top-level blocks reaching into these source lines only, the whole text processed (ATM-591: a
      * rendered diff's part, its references and data the document's) */
     only?: readonly [number, number];
+    /** Task keys written in the text (ATM-593: a review's description and comments): those `known` link to their
+     * task, which `open` opens (`newTab`: ⌘, Ctrl or a middle click); without it, keys stay text */
+    tasks?: TaskLinks;
     onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
     onopen?: (ref: DocumentRef) => void;
   } = $props();
@@ -146,7 +152,7 @@
     }
 
     function draw(compmd: CompmdModule, target: HTMLElement) {
-      const processed = processText(compmd, text, task, path, { localImage, docLink });
+      const processed = processText(compmd, text, task, path, { localImage, docLink, taskKnown: tasks?.known });
       const tree = only ? blocksIn(processed.tree, only) : processed.tree;
       const components = processed.components;
       if (!view) {
@@ -208,6 +214,13 @@
     }
     if (href.startsWith('#')) {
       e.preventDefault();
+      // A task named in the text (ATM-593): the page showing it says where it opens; ⌘-click, Ctrl-click or a middle
+      // click asks for a tab of its own
+      const key = taskOfHref(href);
+      if (key) {
+        tasks?.open(key, e.metaKey || e.ctrlKey || e.button === 1);
+        return;
+      }
       // A document of the project (a relative link, made a viewer link by safeTree): the viewer opens it
       const doc = docOf(href);
       if (doc) {
@@ -239,6 +252,11 @@
   class:compmd-inline={inline}
   data-compmd={failed ? 'failed' : drawn ? 'ready' : 'loading'}
   onclick={follow}
+  onauxclick={(e) => {
+    // A middle click on a task's key: its tab of its own (other links: the browser's own)
+    const a = (e.target as Element | null)?.closest('a[href^="#task="]');
+    if (a && e.button === 1) follow(e);
+  }}
 >
   {#if failed}
     <p class="compmd-note" role="note">Shown as written: the formatting couldn’t load ({loadError}).</p>

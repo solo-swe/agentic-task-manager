@@ -3,7 +3,7 @@
   import { formatWhen } from '../format';
   import Icon from '../ui/Icon.svelte';
   import { focusOnShow } from './focus';
-  import { documentLinks } from './links';
+  import { documentLinks, taskLinks } from './links';
   import type { Chain, ReviewComment } from './types';
 
   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
@@ -34,6 +34,8 @@
 
   /** A link in a comment to a document of the project: what the review's page does with it (ATM-586) */
   const openLink = documentLinks();
+  /** A task's key in a comment: a link to it, for a task the page knows (ATM-593) */
+  const tasks = taskLinks();
 
   let replyingTo = $state<string | null>(null);
   let draft = $state('');
@@ -102,7 +104,7 @@
       <strong class="chain-author">{c.author}</strong>
       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
     </div>
-    <div class="chain-body"><CompMd text={c.body} onopen={openLink} /></div>
+    <div class="chain-body"><CompMd text={c.body} onopen={openLink} {tasks} /></div>
     {#if onreply}
       {#if replyingTo === c.id}
         <form

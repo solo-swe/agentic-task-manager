@@ -331,6 +331,75 @@ test.describe('a review’s page', () => {
     await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
   });
 
+  // ATM-593: a task named in a review opens its details over the review, closed back to the review as it was
+  test('a task named in a review opens its details over it; closed, the review as it was; ⌘-click a tab of its own', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const own = reviewPage();
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        chains: [
+          ...own.chains,
+          {
+            id: 't4',
+            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
+            comments: [comment('c4', 'Like T-002, not ZZZ-9.')],
+            placed: null,
+            drifted: null,
+          },
+        ],
+      }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    const overlay = page.locator('#detail-overlay');
+    // The Overview's Tasks fact: T-001's details over the review, its address the review's with ?task=
+    await page.locator('.review-task[data-task="T-001"]').click();
+    await expect(overlay).toHaveClass(/open/);
+    await expect(page.locator('#detail-panel h3')).toContainText('T-001');
+    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2?task=T-001'));
+    await expect(page.locator('#review-page')).toBeVisible();
+    // Closed: the review as it was
+    await page.keyboard.press('Escape');
+    await expect(overlay).not.toHaveClass(/open/);
+    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2'));
+    await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    // A key written in a comment: a link only for a task there is
+    const chain = page.locator('.review-conversation [data-chain="t4"]');
+    await expect(chain.getByRole('link', { name: 'T-002' })).toBeVisible();
+    await expect(chain.getByRole('link', { name: 'ZZZ-9' })).toHaveCount(0);
+    await expect(chain).toContainText('ZZZ-9');
+    await chain.getByRole('link', { name: 'T-002' }).click();
+    await expect(page.locator('#detail-panel h3')).toContainText('T-002');
+    await page.keyboard.press('Escape');
+    // ⌘-click (Ctrl elsewhere): a browser tab of its own, at the task's project page with its details
+    const [tab] = await Promise.all([
+      page.context().waitForEvent('page'),
+      page
+        .locator('.review-task[data-task="T-001"]')
+        .click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] }),
+    ]);
+    await expect.poll(() => new URL(tab.url()).searchParams.get('task')).toBe('T-001');
+    expect(new URL(tab.url()).pathname).toMatch(/\/list$/);
+    await tab.close();
+    await expect(overlay).not.toHaveClass(/open/);
+  });
+
+  test('the reviews list: a row’s tasks are links to their details, the row’s own link the review', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const row = page.locator('.review-row[data-review="CR-2"]');
+    await row.locator('.review-task-link[data-task="T-001"]').click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await expect(page.locator('#detail-panel h3')).toContainText('T-001');
+    // Still the list under it
+    await expect(page.locator('.review-row')).toHaveCount(2);
+  });
+
   // ATM-586: links in a review's texts to the project's documents: a file of the round opens its diff, anything else
   // the document viewer
   test('a link in the summary or a comment: a file the round changed opens its diff, another document the viewer', async ({

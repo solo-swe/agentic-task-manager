@@ -307,6 +307,25 @@ export function resetCompmd() {
 export interface ProjectLinks {
   localImage?: (url: string) => string | null;
   docLink?: (url: string) => string | null;
+  /** A task key written in the text (ATM-593: `ATM-12`, `LFB-5`): whether it names a task the page knows, which then
+   * links to it (`#task=<key>`); a key naming nothing stays text */
+  taskKnown?: (key: string) => boolean;
+}
+
+/** What task keys in a text link to (ATM-593): which ones name a task, and what opening one does */
+export interface TaskLinks {
+  known: (key: string) => boolean;
+  open: (key: string, newTab: boolean) => void;
+}
+
+/** A task key as people write one: a project's key, a dash, a number (`ATM-12`, `~ATM-12` a provisional one; `T-7`,
+ * an ID from before task keys); whether it names a task is `taskKnown`'s to say */
+const TASK_KEY = /~?\b[A-Z][A-Z0-9]{0,9}-\d+\b/g;
+
+/** The link a task key in a text is made (ATM-593), and the key back from one */
+export const taskHref = (key: string) => `#task=${encodeURIComponent(key)}`;
+export function taskOfHref(href: string): string | null {
+  return href.startsWith('#task=') ? decodeURIComponent(href.slice('#task='.length)) || null : null;
 }
 
 /** A node of CompMD's expanded tree, as far as safeTree reads it (mdast's fields) */
@@ -372,7 +391,7 @@ const RAW_IMAGE = /<\s*img\b/i;
  * (the files route), so it loads from there (V5); `docLink` gives a relative link's viewer link (`#doc=…`), which opens the
  * document viewer (V1a–V1c), so the browser never follows a relative URL itself. Null from either: as without it.
  */
-export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {}): T {
+export function safeTree<T>(tree: T, { localImage, docLink, taskKnown }: ProjectLinks = {}): T {
   const root = tree as TreeNode;
   const definitions = new Map<string, string>();
   const collect = (node: TreeNode) => {
@@ -381,8 +400,29 @@ export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {})
   };
   collect(root);
   const asText = (value: unknown): TreeNode[] => (value ? [{ type: 'text', value: String(value) }] : []);
-  const visit = (node: TreeNode): TreeNode[] => {
+  /** A text's task keys that name a task the page knows, as links to it; the rest as it was (ATM-593) */
+  const withKeys = (node: TreeNode): TreeNode[] => {
+    const text = String(node.value ?? '');
+    if (!taskKnown || !TASK_KEY.test(text)) return [node];
+    TASK_KEY.lastIndex = 0;
+    const parts: TreeNode[] = [];
+    let at = 0;
+    for (const match of text.matchAll(TASK_KEY)) {
+      const key = match[0];
+      if (!taskKnown(key)) continue;
+      if (match.index > at) parts.push({ type: 'text', value: text.slice(at, match.index) });
+      parts.push({ type: 'link', url: taskHref(key), children: [{ type: 'text', value: key }] });
+      at = match.index + key.length;
+    }
+    if (!parts.length) return [node];
+    if (at < text.length) parts.push({ type: 'text', value: text.slice(at) });
+    return parts;
+  };
+  /** `inLink`: inside a link already, where a key stays text */
+  const visit = (node: TreeNode, inLink = false): TreeNode[] => {
     switch (node.type) {
+      case 'text':
+        return inLink ? [node] : withKeys(node);
       case 'image': {
         if (DATA_IMAGE.test(node.url ?? '')) return [node];
         const local = localImage?.(node.url ?? '');
@@ -394,20 +434,22 @@ export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {})
         const local = localImage?.(url);
         return local ? [{ type: 'image', url: local, alt: node.alt }] : asText(node.alt);
       }
-      case 'link':
+      case 'link': {
+        const inside = (node.children ?? []).flatMap((c) => visit(c, true));
         if (!safeHref(node.url ?? '')) {
           const viewer = docLink?.(node.url ?? '');
-          if (viewer) return [{ ...node, url: viewer, children: (node.children ?? []).flatMap(visit) }];
-          return (node.children ?? []).flatMap(visit);
+          if (viewer) return [{ ...node, url: viewer, children: inside }];
+          return (node.children ?? []).flatMap((c) => visit(c, inLink));
         }
-        break;
+        return [{ ...node, children: inside }];
+      }
       case 'html':
         if (RAW_IMAGE.test(String(node.value))) return asText(node.value);
         break;
     }
-    return node.children ? [{ ...node, children: node.children.flatMap(visit) }] : [node];
+    return node.children ? [{ ...node, children: node.children.flatMap((c) => visit(c, inLink)) }] : [node];
   };
-  return { ...root, children: (root.children ?? []).flatMap(visit) } as T;
+  return { ...root, children: (root.children ?? []).flatMap((c) => visit(c)) } as T;
 }
 
 /** The address of a web link to this dashboard itself (one of its pages on this server, T-429, or an old `#…` link to

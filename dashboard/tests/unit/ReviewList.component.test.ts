@@ -68,6 +68,30 @@ describe('ReviewList', () => {
     expect(within(rows[1] as HTMLElement).getByText('Approved')).toBeTruthy();
   });
 
+  // ATM-593: a row's task keys are links to their tasks, those that are tasks; a click opens the task, not the review
+  it('a row’s tasks: a known key a link that opens its task (⌘ a tab of its own), an unknown one text', async () => {
+    const open = vi.fn();
+    const { onopen, container } = show(
+      [entry(2, 'waiting', { tasks: ['ATM-1', 'ATM-2'] })],
+      { ...NO_QUERY },
+      {
+        taskHref: (key: string) => `/projects/p1/list?task=${key}`,
+        taskLinks: { known: (k: string) => k === 'ATM-1', open },
+      },
+    );
+    const link = screen.getByRole('link', { name: 'ATM-1' });
+    expect(link).toHaveAttribute('href', '/projects/p1/list?task=ATM-1');
+    expect(screen.queryByRole('link', { name: 'ATM-2' })).toBeNull();
+    expect(container.querySelector('.review-tasks')).toHaveTextContent('ATM-1, ATM-2');
+    await fireEvent.click(link);
+    await fireEvent.click(link, { metaKey: true });
+    expect(open.mock.calls).toEqual([
+      ['ATM-1', false],
+      ['ATM-1', true],
+    ]);
+    expect(onopen).not.toHaveBeenCalled();
+  });
+
   it('marks those that need you, and offers the first of them next', async () => {
     const { container, onopen } = show([
       entry(3, 'waiting'),
