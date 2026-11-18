@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 605
+    "next_number": 606
   },
   "tasks": [
     {
@@ -15409,7 +15409,7 @@
       "description": "Phase 4 ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)): reviewing a change while it is made.\n\n## Change\n- *New live review* in the app and the browser (`atm review live` exists from phase 1): the review page fed by the working copy's changes (the store's subscription and the folder's watcher), redrawn at most every second or two, ignored and generated files left out.\n- A comment records a checkpoint (a `working` round against the base) so it is anchored to what the reviewer saw.\n- Ending it: approve, a round (it becomes `open`), or close; the approval that covers the task when nothing changed since (the task link, phase 1).\n\n## Tests\nE2e: a file written while the page is open shows; a comment makes a checkpoint; approval with and without a change since.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
@@ -15419,7 +15419,7 @@
         "crates/atm-lib/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T01:35:45Z",
+      "updated_at": "2026-11-18T06:00:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
@@ -15448,7 +15448,9 @@
           "by": "claude:0f56a916"
         }
       ],
-      "commit": "79e8adee813e3341d8545826405bf61b7dc617c2"
+      "commit": "79e8adee813e3341d8545826405bf61b7dc617c2",
+      "started_at": "2026-11-18T06:00:15Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e29c7ba9fca",
@@ -16736,13 +16738,13 @@
       "description": "The reviews list forgets its filters: Hakan mostly wants the open reviews, and has to press *Open* again every time he comes back (2026-11-18).\n\n## Change\n`dashboard/src/lib/shell/ReviewsTab.svelte`: the list's query (statuses, author, reviewer, task, branch; not the search words) kept in this browser per project (`prefs`), and the list opened with it; *Clear* clears it too.\n\n## Tests\nA component test: a filter chosen is the one the list opens with next time, per project; *Clear* forgets it; the search words aren't kept.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/ReviewsTab.svelte"
       ],
       "created_at": "2026-11-18T05:56:04Z",
-      "updated_at": "2026-11-18T05:56:04Z",
+      "updated_at": "2026-11-18T06:00:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16755,7 +16757,55 @@
       "number": 604,
       "key_final": false,
       "started_at": "2026-11-18T05:56:04Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "2786d385f982fbbfb8714ebe78ad26df8c0b84b4",
+      "code_reviews": [
+        {
+          "id": "01a1ed3d-c933-709b-b21a-458563326281",
+          "ref": "CR-7"
+        }
+      ],
+      "review_requested_at": "2026-11-18T06:00:12Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T06:00:12Z",
+          "kind": "review",
+          "text": "CR-7: The reviews list keeps its last filter",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1ed3f-a483-72d0-91de-28ab82b1f2ff",
+      "name": "Title bar tabs scroll in a strip of their own, with arrows when they don't fit",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "Reported by Hakan (2026-11-18): when the app has more tabs than fit in the title bar's free space, the layout breaks. Scrolling moves the tabs past the window buttons, and it scrolls the page below as well.\n\n## Change\n`dashboard/src/lib/ui/TitleBarTabs.svelte` (and `shell/AppTitleBar.svelte`):\n- The tabs go in a strip of their own, which is the only thing that scrolls. It is clipped between the window buttons and the title bar's other controls, and a wheel or trackpad scroll over it moves only the strip, never the page.\n- When the tabs overflow, left and right buttons at the strip's ends scroll it by about one tab. Each is disabled at its end.\n- The active tab is scrolled into view.\n\n## Tests\nComponent and e2e tests with more tabs than fit:\n- the strip scrolls, and the window buttons and page don't move;\n- a wheel scroll over the strip leaves the page's scroll as it was;\n- the arrows show only on overflow, scroll the strip, and are disabled at the ends;\n- a newly opened tab is in view.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/ui/TitleBarTabs.svelte",
+        "dashboard/src/lib/shell/AppTitleBar.svelte"
+      ],
+      "created_at": "2026-11-18T06:02:13Z",
+      "updated_at": "2026-11-18T06:02:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:02:13Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 605,
+      "key_final": false
     }
   ]
 }

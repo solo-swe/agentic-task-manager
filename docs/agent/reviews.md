@@ -31,7 +31,9 @@
   in the session; it is never pre-approved, so they are asked every time.
 - **A live review a person opens** is of your work: they are its reviewer, and the change is yours (the agent
   holding a task in that working copy, or the one whose task it names; nobody's until then). Your first
-  `atm review round` names you its author.
+  `atm review round` names you its author. The reviewer sees your working copy as you write it; each comment (and an
+  approval) records what they saw as a checkpoint round, so its lines stay anchored as you go on. It ends with their
+  approval, your `atm review round` (it becomes open), or their closing it.
 - **Listening, two ways** (never a loop of your own):
   - `atm review wait CR-7 [--for decision] [--timeout 2h] --json`, in the background, once your task is in review
     (its claim is released then, so there is none to hold): it ends when the reviewer submits (or decides) with what

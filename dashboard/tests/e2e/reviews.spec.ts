@@ -792,6 +792,83 @@ test.describe('the diff viewer on a review’s page', () => {
   });
 });
 
+test.describe('a live review (ATM-576)', () => {
+  /** CR-5, live: one checkpoint, and the working copy now, after it, with `files` */
+  const livePage = (...files: ReturnType<typeof file>[]) =>
+    reviewPage({
+      review: header(5, 'live'),
+      rounds: [{ number: 1, kind: { kind: 'working' }, files: [], by: 'claude:a', at: '' }],
+      chains: [],
+      view: { round: 2, against: null, now: true, files },
+      needs_you: false,
+    });
+
+  test('follows the working copy: a file written while the page is open shows; a comment is sent as on any review', async ({
+    page,
+    tasksServer,
+  }) => {
+    await page.clock.install();
+    tasksServer.setReview('CR-5', livePage(file('src/a.rs', PATCH_A)));
+    await openReviews(page, tasksServer, 'CR-5');
+    await expect(page.locator('#review-following')).toHaveText('Following the working copy');
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    await expect(card(page, 'src/a.rs')).toBeVisible();
+    await expect(card(page, 'docs/b.md')).toHaveCount(0);
+    await expect(page.locator('#review-round')).toHaveValue('now');
+    // The agent writes another file: the next ask, a moment later, shows it
+    tasksServer.setReview('CR-5', livePage(file('src/a.rs', PATCH_A), file('docs/b.md', PATCH_B, 'added', null)));
+    await page.clock.fastForward(2000);
+    await expect(card(page, 'docs/b.md')).toBeVisible();
+    // A comment: the server keeps what was seen as a checkpoint (atm-lib's tests); the page sends it as on any review
+    await page.getByRole('tab', { name: 'Overview' }).click();
+    await page.getByRole('button', { name: 'Comment on the review' }).click();
+    await page.locator('#review-comment-body').fill('Keep going.');
+    await page.locator('.review-composer').getByRole('button', { name: 'Comment' }).click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'POST', path: '/CR-5/comments', body: { body: 'Keep going.' } });
+  });
+
+  test('ends with Approve or Close review, never sent back; Close sends why', async ({ page, tasksServer }) => {
+    tasksServer.setReview('CR-5', livePage(file('README.md', PATCH_C)));
+    await openReviews(page, tasksServer, 'CR-5');
+    await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Other decisions' }).click();
+    await expect(page.getByRole('button', { name: 'Request changes' })).toHaveCount(0);
+    const close = page.getByRole('button', { name: 'Close review' });
+    await expect(close).toBeDisabled();
+    await page.getByLabel('Summary').fill('Going another way.');
+    await close.click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'PATCH', path: '/CR-5', body: { status: 'closed', reason: 'Going another way.' } });
+  });
+
+  test('New live review on the list opens one against the commit given, about its task, and shows it', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.setReview('CR-5', livePage(file('README.md', PATCH_C)));
+    await openReviews(page, tasksServer);
+    tasksServer.answerReviewChanges(201, { reference: 'CR-5' });
+    await page.getByRole('button', { name: 'New live review' }).click();
+    const form = page.getByRole('form', { name: 'New live review' });
+    await form.getByLabel('Title').fill('Watching the port');
+    await form.getByLabel('Task').fill('T-001');
+    await form.getByLabel('Against the commit').fill('main');
+    await form.getByRole('button', { name: 'Start' }).click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({
+        method: 'POST',
+        path: '',
+        body: { title: 'Watching the port', start: 'live', change: { base: 'main' }, tasks: ['T-001'] },
+      });
+    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-5'));
+    await expect(page.locator('#review-following')).toBeVisible();
+  });
+});
+
 test.describe('performance', () => {
   // As performance.spec.ts: inside the page, from the action until two frames after it is drawn
   const BUDGET_MS = 200 * (process.env.CI ? 2 : 1);
