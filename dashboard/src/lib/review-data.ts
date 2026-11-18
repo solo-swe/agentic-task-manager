@@ -24,15 +24,30 @@ export function loadReviews(project: string, query: ListQuery, fetchFn: Fetch = 
  * §3.5: a change shows within a second or two) */
 export const LIVE_MS = 2000;
 
+/** The tagged page last read (a live review's page of its working copy now, ATM-607), by its address: asked for again
+ * with its tag, a 304 is this page, with no diff made on the server. One is kept: the page being followed */
+let tagged: { url: string; tag: string; page: ReviewPageData } | null = null;
+
 /** A review's page for one view */
-export function loadReview(
+export async function loadReview(
   project: string,
   review: string,
   round: number | null,
   against: number | null,
   fetchFn: Fetch = browserFetch,
 ): Promise<ReviewPageData> {
-  return getJson(reviewUrl(project, review, round, against), fetchFn);
+  const url = reviewUrl(project, review, round, against);
+  const kept = tagged?.url === url ? tagged : null;
+  const resp = await fetchFn(url, {
+    cache: 'no-store',
+    ...(kept ? { headers: { 'If-None-Match': kept.tag } } : {}),
+  });
+  if (resp.status === 304 && kept) return kept.page;
+  const body = (await resp.json().catch(() => ({}))) as ReviewPageData & { error?: unknown };
+  if (!resp.ok) throw new Error(typeof body.error === 'string' ? body.error : `HTTP ${resp.status}`);
+  const tag = resp.headers?.get('ETag');
+  tagged = tag ? { url, tag, page: body } : tagged?.url === url ? null : tagged;
+  return body;
 }
 
 /** The sides made, by client and `project@revision`: the same source each time, so a page asked for again (its

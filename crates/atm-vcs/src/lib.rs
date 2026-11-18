@@ -20,12 +20,28 @@ const LITERAL: &str = "--literal-pathspecs";
 
 /// Run git in `cwd`; none when it can't be started.
 fn run(args: &[&str], cwd: &Path) -> Option<Output> {
-    Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .output()
-        .ok()
+    run_fed(args, cwd, None)
+}
+
+/// Run git in `cwd`, with `input` on its stdin when given (paths for `--stdin`, never as arguments); none when it
+/// can't be started or fed. The one place this crate starts git (I24).
+fn run_fed(args: &[&str], cwd: &Path, input: Option<&[u8]>) -> Option<Output> {
+    use std::io::Write as _;
+    let mut command = Command::new("git");
+    command.args(args).current_dir(cwd);
+    let Some(input) = input else {
+        return command.stdin(Stdio::null()).output().ok();
+    };
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let mut stdin = child.stdin.take()?;
+    stdin.write_all(input).ok()?;
+    drop(stdin);
+    child.wait_with_output().ok()
 }
 
 /// A question for git: its output, stripped, or none when it fails.
@@ -560,6 +576,71 @@ impl GitVcs {
             .is_none_or(|o| o.status.code() != Some(1))
     }
 
+    /// The working copy's state as a live review shows it (ATM-607), cheap to make: the commit checked out, and each
+    /// changed file outside atm's task folder (`git status`, untracked files too, ignored ones never) with its status,
+    /// size and modification time. The same text while nothing changes; a page's `ETag` is made from it. None outside
+    /// a repository, or when git can't say.
+    #[must_use]
+    pub fn working_state(&self) -> Option<String> {
+        let head = ask(&["rev-parse", "--verify", "-q", "HEAD"], &self.root).unwrap_or_default();
+        let status = run(
+            &["status", "--porcelain", "-z", "--untracked-files=all"],
+            &self.root,
+        )
+        .filter(|o| o.status.success())?;
+        let status = String::from_utf8_lossy(&status.stdout).into_owned();
+        let task_folder = format!("{}/", atm_common::TASK_DIR);
+        let mut state = vec![head];
+        for entry in status.split('\0').filter(|e| e.len() >= 4) {
+            let path = &entry[3..];
+            if path.starts_with(&task_folder) {
+                continue;
+            }
+            let version = std::fs::metadata(self.root.join(path)).ok().map(|m| {
+                let modified = m
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_nanos());
+                format!("{}:{modified}", m.len())
+            });
+            state.push(format!("{entry}\t{}", version.unwrap_or_default()));
+        }
+        Some(state.join("\n"))
+    }
+
+    /// Whether any of `relative` is a file git doesn't ignore, in one git run for them all (`check-ignore --stdin`): a
+    /// burst of changes in a working copy, which a build or an install makes of thousands of ignored files (ATM-607).
+    /// Files in a submodule are judged by the project's rules here. Outside a repository every file counts; when git
+    /// can't answer, the burst counts too (a page asks again; it never misses a change).
+    #[must_use]
+    pub fn any_not_ignored(&self, relative: &[String]) -> bool {
+        if relative.is_empty() {
+            return false;
+        }
+        if !self.in_repository() {
+            return true;
+        }
+        let input: Vec<u8> = relative
+            .iter()
+            .flat_map(|p| p.bytes().chain(std::iter::once(0)))
+            .collect();
+        let Some(output) = run_fed(&["check-ignore", "--stdin", "-z"], &self.root, Some(&input))
+        else {
+            return true;
+        };
+        // Exit 0: some are ignored, listed; 1, none is; anything else, git couldn't say (both of those count)
+        if output.status.code() != Some(0) {
+            return true;
+        }
+        let ignored: std::collections::HashSet<&[u8]> = output
+            .stdout
+            .split(|b| *b == 0)
+            .filter(|p| !p.is_empty())
+            .collect();
+        relative.iter().any(|p| !ignored.contains(p.as_bytes()))
+    }
+
     /// Whether git tracks the file; none outside a repository.
     #[must_use]
     pub fn tracked(&self, relative: &str) -> Option<bool> {
@@ -1010,6 +1091,67 @@ mod tests {
             assert_eq!(vcs.ignored(file), ignored, "{file}");
             assert_eq!(vcs.tracked(file), Some(tracked), "{file}");
         }
+    }
+
+    /// ATM-607: a burst of changes counts when any file in it is one git doesn't ignore, in one git run
+    /// ATM-607: the working copy's state changes with a file of the work written, and only then
+    #[test]
+    fn the_working_state_changes_with_the_work_only() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, ".gitignore", "*.log\n");
+        write(&vcs, "a.txt", "one\n");
+        git(&dir.0, &["add", "."]);
+        git(&dir.0, &["commit", "-q", "-m", "first"]);
+        let clean = vcs.working_state().unwrap();
+        assert_eq!(vcs.working_state().unwrap(), clean, "nothing changed");
+        write(&vcs, "build.log", "ignored");
+        write(&vcs, ".agentic-task-manager/tasks.json", "{}");
+        assert_eq!(
+            vcs.working_state().unwrap(),
+            clean,
+            "an ignored file, or atm's folder"
+        );
+        write(&vcs, "a.txt", "two\n");
+        let edited = vcs.working_state().unwrap();
+        assert_ne!(edited, clean, "a file of the work edited");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        write(&vcs, "a.txt", "three\n");
+        assert_ne!(vcs.working_state().unwrap(), edited, "edited again");
+        write(&vcs, "new.txt", "n");
+        assert!(
+            vcs.working_state().unwrap().contains("new.txt"),
+            "a new file"
+        );
+        assert_eq!(GitVcs::new(&dir.0.join("not-a-repo")).working_state(), None);
+    }
+
+    #[test]
+    fn a_burst_counts_when_any_of_its_files_isnt_ignored() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, ".gitignore", "*.log\ntarget/\n");
+        write(&vcs, "kept.log", "tracked");
+        git(&dir.0, &["add", "-f", "kept.log", ".gitignore"]);
+        git(&dir.0, &["commit", "-q", "-m", "first"]);
+        let burst = |paths: &[&str]| {
+            vcs.any_not_ignored(&paths.iter().map(|p| (*p).to_string()).collect::<Vec<_>>())
+        };
+        assert!(!burst(&[]), "nothing changed");
+        assert!(
+            !burst(&["a.log", "target/debug/atm", "target/x"]),
+            "all ignored"
+        );
+        assert!(burst(&["a.log", "src/main.rs"]), "one that isn't");
+        assert!(
+            burst(&["kept.log"]),
+            "a tracked file, though its name is ignored"
+        );
+        assert!(burst(&["new.txt"]), "a new file, not ignored");
+        assert!(
+            GitVcs::new(&dir.0.join("not-a-repo")).any_not_ignored(&["a.log".into()]),
+            "outside a repository every file counts"
+        );
     }
 
     #[test]

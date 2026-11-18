@@ -102,6 +102,17 @@ pub trait ProjectSource {
     /// No such review or round; a round's tree that can't be had here.
     fn review(&self, review: &ReviewRef, round: Option<u32>, against: Option<u32>)
     -> Result<Value>;
+    /// What a live review's page of its working copy now is made from, cheap to read (ATM-607): its `ETag`'s parts.
+    /// None for any other page, which isn't tagged.
+    ///
+    /// # Errors
+    /// No such review; the project isn't in git.
+    fn live_review_stamp(
+        &self,
+        review: &ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Option<Value>>;
     /// Its reviews, to change as the user at the machine (never an agent's identity).
     ///
     /// # Errors
@@ -283,6 +294,15 @@ impl ProjectSource for Member {
         against: Option<u32>,
     ) -> Result<Value> {
         Member::review(self, review, round, against)
+    }
+
+    fn live_review_stamp(
+        &self,
+        review: &ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Option<Value>> {
+        Member::live_review_stamp(self, review, round, against)
     }
 
     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>> {

@@ -744,7 +744,13 @@ can call. T-461 reviews the finished app; until then the skeleton keeps to the T
 
 **The app's commands and the v2 routes (T-456, ADR-003 §5).** New entry points: the v2 routes (I11) and the app's
 commands, which mirror them: `list_workspaces`, `list_projects`, `search`, `project_tasks`, `claims`, `worktrees`,
-`document`, `file`, `logo`, and `subscribe_workspace`, `subscribe_project`, `unsubscribe`.
+`document`, `file`, `logo`, and `subscribe_workspace`, `subscribe_project`, `unsubscribe`. ATM-607 adds
+`subscribe_working_copy`, for a live review's page: a recursive watch on a registered project's folder (the same
+`member` lookup as `subscribe_project`, so only projects the user registered), which says only *that* the work
+changed (the workspace and project, no path, no content), for a change outside `.git/` and the task folder in a
+file git doesn't ignore (one `git check-ignore --stdin` per settled burst, the paths fed on stdin, never as
+arguments). It reads nothing it sends, and ends with `unsubscribe` or the window's page; in the main window's
+capability.
 
 - **Each command is a read through the same atm-lib call as its route** (`Workspace`, `Member`), so it has the same
   checks: the task folder's symlink checks, the size limit, the document viewer's path rules. A test per read checks

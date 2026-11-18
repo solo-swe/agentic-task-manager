@@ -2,6 +2,7 @@
   import { page as router } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
   import { addressOf, reviewOf, withReview } from '../address';
+  import { watchWorkingCopy } from '../api/changes';
   import { inApp } from '../api/http';
   import { setWindowTitle } from '../api/shell';
   import {
@@ -140,13 +141,19 @@
   });
 
   // The server pushes nothing about reviews yet: ask again now and then while the tab is in view, and on coming back.
-  // A live review follows its working copy (ATM-576): asked every LIVE_MS while it is shown, the rest every 10 s
+  // A live review follows its working copy (ATM-576): in the app, asked again when the app says a file of the work
+  // changed (ATM-607); in the browser, every LIVE_MS while it is shown, a 304 while nothing changed. The rest every 10 s
+  const followingLive = $derived(!!at.review && shown?.review.status === 'live');
+  $effect(() => {
+    const id = project;
+    if (!inApp || !followingLive || !id) return;
+    return watchWorkingCopy(dashboard.workspace, id, () => void load());
+  });
   let ticks = 0;
   const timer = setInterval(() => {
     if (document.visibilityState !== 'visible') return;
     ticks += 1;
-    const following = !!at.review && shown?.review.status === 'live';
-    if (following || ticks % (10_000 / LIVE_MS) === 0) void load();
+    if ((followingLive && !inApp) || ticks % (10_000 / LIVE_MS) === 0) void load();
   }, LIVE_MS);
   onDestroy(() => clearInterval(timer));
 

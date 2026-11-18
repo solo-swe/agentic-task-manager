@@ -244,7 +244,8 @@ old parameters from its hash and moves to the new address.
 - The app's commands answer the same (without `generated_at`): `list_workspaces`, `list_projects`, `search`,
   `project_tasks`, `claims`, `worktrees`, `document` (with `at`), `file`, `logo`, `project_reviews` and
   `project_review`, and `subscribe_workspace`, `subscribe_project` and `unsubscribe` for live changes
-  (docs/guides/tauri.md).
+  (docs/guides/tauri.md); `subscribe_working_copy` (ATM-607) for a live review's page: told when a file of the work
+  changes (not in `.git/` or the task folder, not one git ignores), so the page asks again then, not every 2 s.
 
 ### 2.9 A project's code reviews (ATM-572, ATM-574)
 
@@ -273,7 +274,10 @@ old parameters from its hash and moves to the new address.
   A live review with no `round` asked for is shown as its working copy is now (ATM-576): `view.now: true`, its
   `round` the one after its checkpoints (`rounds` lists only those) when the copy changed since the last checkpoint,
   that checkpoint when it didn't. Nothing is written: the page asks again every 2 s while it shows
-  one; a comment, or an approval, keeps what was seen as a checkpoint (a `working` round) first.
+  one (in the app, when `subscribe_working_copy` says the work changed); a comment, or an approval, keeps what was
+  seen as a checkpoint (a `working` round) first. That page alone is tagged (ATM-607): its `ETag` is made from the
+  reviews' stamp, the working copy's state (the commit checked out, `git status` and the changed files' sizes and
+  times) and who asks, so the browser's poll with `If-None-Match` gets a `304` with no diff made while nothing changed.
 
 **The changes**: the only routes that change anything (docs/code-review-design.md §3.12), under
 `/api/v2/workspaces/<w>/projects/<id>/reviews`. Each is the same atm-lib call as its `atm review …` command, acting as

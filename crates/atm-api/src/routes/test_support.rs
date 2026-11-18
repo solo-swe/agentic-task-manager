@@ -133,6 +133,8 @@ pub(super) struct FakeProject {
     pub listed: Result<Value>,
     /// What a review's page answers
     pub page: Result<Value>,
+    /// What a live review's page is made from (ATM-607): none, a page that isn't tagged
+    pub live_stamp: Result<Option<Value>>,
 }
 
 impl Default for FakeProject {
@@ -150,6 +152,7 @@ impl Default for FakeProject {
             at_revision: Ok(json!({"path": "a.md", "revision": "t1"})),
             listed: Ok(json!({"reviews": [], "you": "Ana"})),
             page: Ok(json!({"review": {"reference": "CR-1"}, "view": {"files": []}})),
+            live_stamp: Ok(None),
         }
     }
 }
@@ -366,6 +369,15 @@ impl ProjectSource for Bound<FakeProject> {
         self.calls
             .note(Call::Review(review.clone(), round, against));
         self.fake.page.clone()
+    }
+
+    fn live_review_stamp(
+        &self,
+        _review: &ReviewRef,
+        _round: Option<u32>,
+        _against: Option<u32>,
+    ) -> Result<Option<Value>> {
+        self.fake.live_stamp.clone()
     }
 
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {

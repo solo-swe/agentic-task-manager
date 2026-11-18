@@ -21,7 +21,7 @@ use session::{reload_window, restored_tabs, save_tabs};
 use commands::{
     AppState, agents_status, claims, connect_agents, document, file, list_projects,
     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
-    subscribe_workspace, unsubscribe, version, worktrees,
+    subscribe_working_copy, subscribe_workspace, unsubscribe, version, worktrees,
 };
 use commands::{
     add_review_comment, close_review, create_review, project_review, project_reviews,
@@ -56,6 +56,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         project_review,
         subscribe_workspace::<tauri::Wry>,
         subscribe_project::<tauri::Wry>,
+        subscribe_working_copy::<tauri::Wry>,
         unsubscribe::<tauri::Wry>,
         agents_status,
         connect_agents,

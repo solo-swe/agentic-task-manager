@@ -29,6 +29,41 @@ pub fn watch_tree(folders: &[PathBuf], on_change: OnChange) -> Result<Subscripti
     watch_with(folders, RecursiveMode::Recursive, on_change)
 }
 
+/// Which changed paths count, for [`watch_tree_where`]: called with every path a settled burst touched.
+pub type Keep = std::sync::Arc<dyn Fn(&[PathBuf]) -> bool + Send + Sync>;
+
+/// [`watch_tree`], told only of a burst `keep` says counts (given its paths): a working copy, whose `.git/` and ignored
+/// files change all the time without changing the work (ATM-607).
+///
+/// # Errors
+/// The watcher can't be started, or a folder can't be watched.
+pub fn watch_tree_where(
+    folders: &[PathBuf],
+    keep: Keep,
+    on_change: OnChange,
+) -> Result<Subscription> {
+    let failed = |e: notify::Error| Error::failed(format!("watching for changes: {e}"));
+    let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
+        let Ok(events) = result else {
+            return;
+        };
+        let paths: Vec<PathBuf> = events
+            .iter()
+            .flat_map(|e| e.paths.iter().cloned())
+            .collect();
+        if !paths.is_empty() && keep(&paths) {
+            on_change();
+        }
+    })
+    .map_err(failed)?;
+    for folder in folders.iter().filter(|f| f.is_dir()) {
+        watcher
+            .watch(folder, RecursiveMode::Recursive)
+            .map_err(failed)?;
+    }
+    Ok(Subscription::new(watcher))
+}
+
 fn watch_with(
     folders: &[PathBuf],
     mode: RecursiveMode,
@@ -93,6 +128,30 @@ mod tests {
             received.recv_timeout(SETTLE * 3).is_err(),
             "nothing once dropped"
         );
+    }
+
+    #[test]
+    fn a_filtered_tree_watch_tells_only_the_changes_it_keeps() {
+        let dir = crate::test_dir::TestDir::new();
+        std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+        let (on_change, received) = told();
+        let keep: Keep = Arc::new(|paths: &[PathBuf]| {
+            paths
+                .iter()
+                .any(|p| !p.components().any(|c| c.as_os_str() == ".git"))
+        });
+        let subscription = watch_tree_where(&[dir.path().to_path_buf()], keep, on_change).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(dir.path().join(".git/index"), "i").unwrap();
+        assert!(
+            received.recv_timeout(SETTLE * 4).is_err(),
+            "a change in .git/ only is left out"
+        );
+        std::fs::write(dir.path().join("a.txt"), "a").unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of a change it keeps");
+        drop(subscription);
     }
 
     #[test]

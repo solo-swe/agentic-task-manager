@@ -399,6 +399,19 @@ impl Member {
         crate::review_pages::review_page(&self.project_as_user()?, review, round, against)
     }
 
+    /// What a live review's page of its working copy now is made from (ATM-607); none for any other page.
+    ///
+    /// # Errors
+    /// As [`crate::review_pages::live_page_stamp`].
+    pub fn live_review_stamp(
+        &self,
+        review: &crate::reviews::ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Option<Value>> {
+        crate::review_pages::live_page_stamp(&self.project_as_user()?, review, round, against)
+    }
+
     /// The image at `path` in its working copy, and its content type.
     ///
     /// # Errors
@@ -414,6 +427,14 @@ impl Member {
     /// As [`Project::open`]; a store that can't be watched.
     pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
         self.project()?.store().subscribe(on_change)
+    }
+
+    /// Be told when its working copy changes as a live review shows it (ATM-607), until the subscription is dropped.
+    ///
+    /// # Errors
+    /// As [`crate::reviews::subscribe_working_copy`].
+    pub fn subscribe_working_copy(&self, on_change: OnChange) -> Result<Subscription> {
+        crate::reviews::subscribe_working_copy(&self.project()?, on_change)
     }
 }
 

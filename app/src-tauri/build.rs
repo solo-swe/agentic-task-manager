@@ -29,6 +29,7 @@ fn main() {
         "project_review",
         "subscribe_workspace",
         "subscribe_project",
+        "subscribe_working_copy",
         "unsubscribe",
         "agents_status",
         "connect_agents",

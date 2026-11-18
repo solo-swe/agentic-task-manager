@@ -15,7 +15,7 @@
 use atm_common::py::to_json;
 use atm_lib::review_requests::request_from;
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewRef};
-use axum::http::{Method, StatusCode};
+use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::Response;
 use serde_json::{Value, json};
 
@@ -23,7 +23,7 @@ use atm_lib::review_pages::ReviewQuery;
 
 use super::query::{parameter, parse_query};
 use super::source::{ProjectSource, ReviewChanges};
-use super::{Projects, error_response, ok_json, stamped};
+use super::{Projects, error_response, etag, not_modified, ok_json, stamped, unchanged};
 use crate::{send, send_error};
 
 /// `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews the query keeps (`status` repeats; the
@@ -70,14 +70,31 @@ fn round_number(query: &str, name: &str) -> Result<Option<u32>, String> {
 }
 
 /// `GET …/reviews/<CR>?round=&against=`: the review's page for one view, the whole change of a round (the latest when
-/// none) or a round against an earlier one. Never cached, as the list.
-pub(super) fn get_review(project: &dyn ProjectSource, review: &str, query: &str) -> Response {
+/// none) or a round against an earlier one. Never cached, as the list, except a live review's page of its working copy
+/// now (ATM-607): tagged from what it is made of (the reviews, the working copy's state, who asks), so the page's poll
+/// gets a 304 without a diff being made while nothing changed.
+pub(super) fn get_review(
+    project: &dyn ProjectSource,
+    review: &str,
+    query: &str,
+    request: &HeaderMap,
+) -> Response {
     let (round, against) = match (round_number(query, "round"), round_number(query, "against")) {
         (Ok(round), Ok(against)) => (round, against),
         (Err(why), _) | (_, Err(why)) => return send_error(StatusCode::BAD_REQUEST, &why),
     };
-    match project.review(&ReviewRef(review.to_string()), round, against) {
-        Ok(page) => ok_json(&stamped(page), None),
+    let reference = ReviewRef(review.to_string());
+    let tag = match project.live_review_stamp(&reference, round, against) {
+        Ok(stamp) => stamp.map(|s| etag(&s)),
+        Err(e) => return error_response(&e),
+    };
+    if let Some(tag) = &tag
+        && unchanged(request, tag)
+    {
+        return not_modified(tag, &[]);
+    }
+    match project.review(&reference, round, against) {
+        Ok(page) => ok_json(&stamped(page), tag.as_deref()),
         Err(e) => error_response(&e),
     }
 }
@@ -286,7 +303,8 @@ mod tests {
     use atm_lib::reviews::{Side, Status};
 
     use super::super::test_support::{
-        Answer, Call, Fake, FakeProject, FakeReviews, answer, bound, header, refusals,
+        Answer, Call, Fake, FakeProject, FakeReviews, answer, bound, having, header, plain,
+        refusals,
     };
     use super::*;
 
@@ -339,7 +357,10 @@ mod tests {
         });
         for (got, expected) in [
             (answer(get_reviews(project.as_ref(), "")), listed),
-            (answer(get_review(project.as_ref(), "CR-2", "")), page),
+            (
+                answer(get_review(project.as_ref(), "CR-2", "", &plain())),
+                page,
+            ),
         ] {
             assert_eq!(got.status, StatusCode::OK);
             assert_eq!(got.unstamped(), expected);
@@ -361,7 +382,7 @@ mod tests {
         ] {
             let (project, calls) = bound(FakeProject::default());
             assert_eq!(
-                get_review(project.as_ref(), "CR-7", query).status(),
+                get_review(project.as_ref(), "CR-7", query, &plain()).status(),
                 StatusCode::OK
             );
             assert_eq!(
@@ -384,7 +405,7 @@ mod tests {
             "against=y",
         ] {
             let (project, calls) = bound(FakeProject::default());
-            let refused = answer(get_review(project.as_ref(), "CR-7", query));
+            let refused = answer(get_review(project.as_ref(), "CR-7", query, &plain()));
             assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{query}");
             assert!(
                 refused.json()["error"]
@@ -405,11 +426,50 @@ mod tests {
             });
             for got in [
                 answer(get_reviews(project.as_ref(), "")),
-                answer(get_review(project.as_ref(), "CR-1", "")),
+                answer(get_review(project.as_ref(), "CR-1", "", &plain())),
             ] {
                 assert_eq!(got.status, status, "{error}");
                 assert_eq!(got.json(), json!({"error": error.to_string()}));
             }
+        }
+    }
+
+    /// ATM-607: a live review's page of its working copy now is tagged from what it is made of; asked again with the
+    /// tag while that is the same, a 304 with no page made; once it changes, the page and a new tag
+    #[test]
+    fn a_live_pages_poll_gets_a_304_while_its_working_copy_is_the_same() {
+        let live = |state: &str| FakeProject {
+            live_stamp: Ok(Some(json!(["live", "r1", null, [1, 1], state, "Ana"]))),
+            ..FakeProject::default()
+        };
+        let (project, calls) = bound(live("a.txt 3:1"));
+        let first = answer(get_review(project.as_ref(), "CR-1", "", &plain()));
+        assert_eq!(first.status, StatusCode::OK);
+        let tag = first.tag();
+        assert!(!tag.is_empty(), "tagged");
+        assert_eq!(calls.taken(), [Call::Review(r("CR-1"), None, None)]);
+        let again = answer(get_review(project.as_ref(), "CR-1", "", &having(&tag)));
+        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+        assert_eq!(again.tag(), tag);
+        assert_eq!(calls.taken(), [], "no page made for a 304");
+        // A file written: another tag, and the page made again
+        let (project, calls) = bound(live("a.txt 4:2"));
+        let changed = answer(get_review(project.as_ref(), "CR-1", "", &having(&tag)));
+        assert_eq!(changed.status, StatusCode::OK);
+        assert_ne!(changed.tag(), tag);
+        assert_eq!(calls.taken(), [Call::Review(r("CR-1"), None, None)]);
+    }
+
+    #[test]
+    fn a_live_pages_stamp_refused_is_its_status() {
+        for (error, status) in refusals() {
+            let (project, calls) = bound(FakeProject {
+                live_stamp: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            let got = answer(get_review(project.as_ref(), "CR-1", "", &plain()));
+            assert_eq!(got.status, status, "{error}");
+            assert_eq!(calls.taken(), [], "{error}: no page made");
         }
     }
 

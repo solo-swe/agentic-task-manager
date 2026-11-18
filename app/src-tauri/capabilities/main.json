@@ -18,6 +18,7 @@
     "allow-project-review",
     "allow-subscribe-workspace",
     "allow-subscribe-project",
+    "allow-subscribe-working-copy",
     "allow-unsubscribe",
     "allow-agents-status",
     "allow-connect-agents",

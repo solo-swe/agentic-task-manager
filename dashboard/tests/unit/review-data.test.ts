@@ -63,6 +63,51 @@ describe('the reads', () => {
   });
 });
 
+// ATM-607: a live review's page, followed by polling in the browser, is asked for with its tag: a 304 is the page kept
+describe('a tagged page asked for again', () => {
+  /** A server answering in turn: each answer a status, a body and an ETag (or none); what each request sent */
+  function server(...answers: [number, string, string | null][]) {
+    const sent: (string | null)[] = [];
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      sent.push(new Headers(init?.headers).get('If-None-Match'));
+      const [status, body, tag] = answers.shift()!;
+      return new Response(status === 304 ? null : body, { status, headers: tag ? { ETag: tag } : {} });
+    }) as unknown as Fetch;
+    return { fetch, sent };
+  }
+  const page = (round: number) => JSON.stringify({ review: { reference: 'CR-7' }, view: { round } });
+
+  it('sends its tag; a 304 is the page it had; a new page and tag replace them', async () => {
+    const { fetch, sent } = server(
+      [200, page(1), '"t1"'],
+      [304, '', '"t1"'],
+      [200, page(2), '"t2"'],
+      [304, '', '"t2"'],
+    );
+    const first = await loadReview('p1', 'CR-7', null, null, fetch);
+    expect(await loadReview('p1', 'CR-7', null, null, fetch)).toBe(first);
+    expect((await loadReview('p1', 'CR-7', null, null, fetch)).view).toEqual({ round: 2 });
+    expect((await loadReview('p1', 'CR-7', null, null, fetch)).view).toEqual({ round: 2 });
+    expect(sent).toEqual([null, '"t1"', '"t1"', '"t2"']);
+  });
+
+  it('another address (a round named) is sent no tag; a page answered untagged forgets its address’s', async () => {
+    const { fetch, sent } = server(
+      [200, page(1), '"t1"'],
+      [200, page(1), null],
+      [200, page(1), null],
+      [200, page(1), null],
+    );
+    await loadReview('p1', 'CR-8', null, null, fetch);
+    await loadReview('p1', 'CR-8', 1, null, fetch);
+    expect(sent).toEqual([null, null]);
+    // The live page again: its tag; answered untagged (the review no longer live), its tag is forgotten
+    await loadReview('p1', 'CR-8', null, null, fetch);
+    await loadReview('p1', 'CR-8', null, null, fetch);
+    expect(sent).toEqual([null, null, '"t1"', null]);
+  });
+});
+
 describe('a round’s side', () => {
   it('reads each file at its revision, never changing, with no images and no repository link', async () => {
     const doc = { path: 'a.md', kind: 'markdown', text: '# A' };

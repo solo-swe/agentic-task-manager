@@ -558,6 +558,39 @@ fn shown_with<S: RoundDiffs + ?Sized>(
     Ok((view, chains))
 }
 
+/// What a live review's page of its working copy now (`round` none) is made from, cheap to read (ATM-607): the
+/// reviews' stamp, the working copy's state (`git status`, the changed files' sizes and times) and who asks. The same
+/// while the page would be; a browser's poll gets a 304 from it without a diff being made. None for any other page,
+/// which isn't tagged.
+///
+/// # Errors
+/// No such review; the project isn't in git.
+pub fn live_page_stamp(
+    project: &Project,
+    reference: &ReviewRef,
+    round: Option<u32>,
+    against: Option<u32>,
+) -> Result<Option<Value>> {
+    if round.is_some() {
+        return Ok(None);
+    }
+    let review = reviews::store(project)?.get_review(reference)?;
+    if review.header.status != Status::Live {
+        return Ok(None);
+    }
+    let Some(state) = reviews::vcs(project)?.working_state() else {
+        return Ok(None);
+    };
+    Ok(Some(json!([
+        "live",
+        review.header.id.0,
+        against,
+        reviews_stamp(project),
+        state,
+        project.actor(),
+    ])))
+}
+
 /// A review's page for one view (`round`, the latest when none; `against`, an earlier round): `{review, summary,
 /// branch, rounds, chains, view: {round, against, now, files}, needs_you, you}`. A live review shown with no round
 /// is its working copy now (`now`, §3.5, ATM-576): when it changed since the last checkpoint, as the round after the

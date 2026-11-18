@@ -747,6 +747,38 @@ pub fn checkpoint_now(project: &Project, reference: &ReviewRef) -> Result<u32> {
     }
 }
 
+/// Be told when the project's working copy changes in a way a live review shows (ATM-607), until the subscription is
+/// dropped: a settled burst of changes in its folder that touches a file git doesn't ignore, outside `.git/` and atm's
+/// task folder (never part of a review). `on_change` runs on the watcher's thread.
+///
+/// # Errors
+/// The project isn't in git (reviews are of changes in git), or its folder can't be watched.
+pub fn subscribe_working_copy(
+    project: &Project,
+    on_change: atm_db::subscription::OnChange,
+) -> Result<atm_db::subscription::Subscription> {
+    let vcs = vcs(project)?;
+    let root = project
+        .root()
+        .ok_or_else(|| Error::failed("this project has no folder to watch"))?;
+    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let inside = root.clone();
+    let keep: atm_db::subscription::Keep =
+        std::sync::Arc::new(move |paths: &[std::path::PathBuf]| {
+            let relative: Vec<String> = paths
+                .iter()
+                .filter_map(|path| {
+                    let rel = path.strip_prefix(&inside).ok()?;
+                    let first = rel.components().next()?.as_os_str();
+                    (first != ".git" && first != TASK_DIR)
+                        .then(|| rel.to_string_lossy().replace('\\', "/"))
+                })
+                .collect();
+            vcs.any_not_ignored(&relative)
+        });
+    atm_db::subscription::watch_tree_where(&[root], keep, on_change)
+}
+
 /// A task in progress whose change an approved live review covers: put in review and approved, its note naming the
 /// review, so it can be done with no other review (§3.5). None when no live review covers it as it is now.
 ///
@@ -1091,6 +1123,47 @@ mod tests {
         assert_eq!(task_of(&project, "T-1")["status"], "todo");
     }
 
+    /// ATM-607: a live review's page is told of the working copy's changes it shows, not of `.git/`, atm's task folder
+    /// or the files git ignores
+    #[test]
+    fn the_working_copy_is_watched_for_changes_a_live_review_shows() {
+        use std::time::Duration;
+        let dir = dir();
+        git(&["init", "-q"], &dir.0);
+        std::fs::write(dir.0.join(".gitignore"), "target/\n").unwrap();
+        std::fs::create_dir_all(dir.0.join("target")).unwrap();
+        let project = project(&dir.0, "claude:1");
+        let (sent, received) = std::sync::mpsc::channel();
+        let sent = std::sync::Mutex::new(sent);
+        let subscription = super::subscribe_working_copy(
+            &project,
+            std::sync::Arc::new(move || {
+                if let Ok(sent) = sent.lock() {
+                    let _ = sent.send(());
+                }
+            }),
+        )
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        let quiet = |what: &str| {
+            assert!(
+                received.recv_timeout(Duration::from_millis(1200)).is_err(),
+                "{what}: nothing told"
+            );
+        };
+        std::fs::write(dir.0.join("target/build.o"), "o").unwrap();
+        quiet("an ignored file");
+        std::fs::write(dir.0.join(".git/scratch"), "g").unwrap();
+        quiet("a file in .git/");
+        std::fs::write(dir.0.join(".agentic-task-manager/notes.txt"), "n").unwrap();
+        quiet("atm's task folder");
+        std::fs::write(dir.0.join("a.txt"), "a").unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("a file of the work: told");
+        drop(subscription);
+    }
+
     /// A person's review of files for a task an agent hasn't started (the sandbox's red-team review): linked, as it is
     #[test]
     fn a_persons_review_of_a_task_not_started_links_it_as_it_is() {
@@ -1422,6 +1495,15 @@ mod tests {
         let dir = dir();
         let (hakan, cr) = live(&dir.0);
         let page = || crate::review_pages::review_page(&hakan, &cr, None, None).unwrap();
+        // ATM-607: what its page now is made from: the same while nothing changes, another once a file is written; a
+        // round named isn't the page now, and isn't tagged
+        let stamp = || crate::review_pages::live_page_stamp(&hakan, &cr, None, None).unwrap();
+        let before = stamp().expect("a live review's page now is tagged");
+        assert_eq!(stamp(), Some(before.clone()));
+        assert_eq!(
+            crate::review_pages::live_page_stamp(&hakan, &cr, Some(1), None).unwrap(),
+            None
+        );
         // Nothing changed since its first round: that round, now
         let unchanged = page();
         assert_eq!(
@@ -1433,6 +1515,7 @@ mod tests {
         );
         // Changed: the working copy as the round after the stored ones, which `rounds` doesn't list
         std::fs::write(dir.0.join("a.txt"), "one\ntwo\nthree\n").unwrap();
+        assert_ne!(stamp(), Some(before), "a file written: another tag");
         let changed = page();
         assert_eq!(changed["view"]["round"], 2);
         assert_eq!(changed["rounds"].as_array().unwrap().len(), 1);

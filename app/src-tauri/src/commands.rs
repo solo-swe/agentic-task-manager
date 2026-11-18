@@ -905,6 +905,33 @@ pub async fn subscribe_project<R: Runtime>(
     state.watch(window.label(), |c| found.subscribe(c), channel, message)
 }
 
+/// Be told on `channel` when a project's working copy changes as a live review shows it (ATM-607): a live review's
+/// page asks again on each, instead of every 2 s. The subscription's ID.
+///
+/// # Errors
+/// No such workspace or project; a project not in git, or a folder that can't be watched.
+#[tauri::command]
+#[specta::specta]
+pub async fn subscribe_working_copy<R: Runtime>(
+    window: WebviewWindow<R>,
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    channel: Channel<Changed>,
+) -> Result<u32, AppError> {
+    let found = member(&state.workspaces, &workspace, &project)?;
+    let message = Changed {
+        workspace,
+        project: Some(project),
+    };
+    state.watch(
+        window.label(),
+        |c| found.subscribe_working_copy(c),
+        channel,
+        message,
+    )
+}
+
 /// `atm agents status`: per harness atm knows, whether it is installed here, and each of atm's skills' state in the
 /// user's own folder for it (linked, copied, missing, stale, not atm's).
 ///

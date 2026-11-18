@@ -17374,7 +17374,7 @@
       "description": "Asked by Hakan on CR-8 (c1, 2026-11-18): a live review's page asks for the working copy every 2 s. Watch for changes instead where we can.\n\n## Change\n- **The app:** while a live review's page is shown, a watcher on the project folder, recursive (`atm_fs::watch::watch_tree`), leaving out `.git/` and anything git ignores. A settled burst (`SETTLE`, 300 ms) is pushed to the page the way the task and review stores' changes are (T-506), and the page asks for `view.now` once. No 2 s poll in the app.\n- **The browser:** `atm serve` has no push channel, so it keeps polling, but cheaply. `GET …/reviews/<CR>` for a live review's now view answers with an `ETag` from the working tree's state (the `git status` porcelain and the changed files' mtimes), and `If-None-Match` gets a `304` with no diff made. The page sends it.\n\n## Tests\n- atm-api: the ETag changes with a file written, stays the same otherwise, and gives a `304`.\n- The app: a write in the folder pushes a change; one in `.git/` or an ignored path doesn't.\n- E2e: in the app, a page following a live review asks again on the push and not on a timer.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/commands.rs",
@@ -17382,9 +17382,9 @@
         "dashboard/src/lib/shell/ReviewsTab.svelte"
       ],
       "created_at": "2026-11-18T06:10:57Z",
-      "updated_at": "2026-11-18T06:10:57Z",
+      "updated_at": "2026-11-18T22:48:00Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17393,7 +17393,9 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 607,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T22:48:00Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed4a-f344-72a8-bd26-cda2b43df547",
@@ -18614,7 +18616,7 @@
       "description": "Reported by Hakan (2026-11-19), from an agent in CompMD: its claim lapsed while the checks ran, so the task went back to to do. `atm review create --task` then opened CR-6 without complaint, but the task stayed in to do. The review and the task disagreed, and the agent had to take the task to in progress, then into review by hand.\n\n## Change\nWhat `atm review create --task <key>` does for each state of the task:\n- **in progress, claimed by the author:** into review, as now;\n- **to do, after the author's own claim lapsed, and no one claimed it since:** into review too, with a note that the claim had lapsed;\n- **claimed by another agent, done, skipped, already in review with another open review, or blocked:** refuse and write nothing, saying why and what to run. No review is created.\n\nThe whole command succeeds or changes nothing: never a review on disk beside a task that didn't move. Update `atm docs reviews` with the rule.\n\n## Tests\nCLI scenarios for each row above, each checking both the review folder and the task's status.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/review.rs",
@@ -18622,7 +18624,7 @@
         "tests/scripts/scenarios"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-18T22:35:03Z",
+      "updated_at": "2026-11-18T22:47:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18639,7 +18641,24 @@
         "docs"
       ],
       "started_at": "2026-11-18T22:35:03Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "6a8c2be2cdf81114730e839b831b68ffeeb47921",
+      "code_reviews": [
+        {
+          "id": "01a1f0d7-b39d-7562-8d26-4c747f9de9ee",
+          "ref": "CR-32"
+        }
+      ],
+      "review_requested_at": "2026-11-18T22:47:10Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T22:47:10Z",
+          "kind": "review",
+          "text": "CR-32: Opening a review moves its task into review, or refuses",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542d0d2f9a0d",
@@ -18652,7 +18671,7 @@
       "description": "Reported by Hakan (2026-11-19), from an agent in CompMD: its claim lapsed (19:44) while the task's checks ran, before it opened the review. The task went back to to do (see the task about opening a review on such a task).\n\nThe report doesn't say whether the checks ran under `atm claim hold <key> && <command>`.\n\n## Investigate\n- Reproduce a hold over a command that runs past the lease, with a short lease (the tests' way of setting one). Does the watcher renew the lease until the shell exits? Does it also hold when the command is a long chain, when the agent's harness runs it in the background, or when the shell is replaced (`exec`)?\n- Read the skills' wording on long commands (`/atm-do-task` and `/atm-loop-tasks`, rule 3) and what `atm` prints when a claim is about to lapse.\n\n## Fix\n- If the hold failed: fix it in atm, with a CLI test that a held claim outlives the lease.\n- If the checks weren't held: make the skills say it where agents run checks (verify step, before a review), and consider atm warning when a command finds its own claim lapsed and the task back in to do (with how to take it back).\n\nWrite in the task's outcome which case it was.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "skills/atm-do-task/SKILL.md",
@@ -18660,9 +18679,9 @@
         "tests/scripts"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-18T21:55:02Z",
+      "updated_at": "2026-11-18T22:47:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -18671,7 +18690,15 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 632,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T22:47:12Z",
+      "started_by": "claude:0f56a916",
+      "waiting_on": "user",
+      "questions": [
+        "claim hold works (the CLI suite tests it renewing past a short lease), and the skills already say to use it for long checks in four places. A lapse with the 2-hour lease means about two hours with no atm command and no hold. May I read CMD-250 in CompMD (its claim times and the lease-expired note) to tell which case it was?",
+        "Either way: should atm agents install add atm claim heartbeat --auto as a Claude Code hook after every tool call, so a working agent never loses its claim? T-439 moved to no hook (every atm command renews); the hook would add to that for harnesses that have hooks. Or leave it, since ATM-631 now recovers a lapse when the review opens?"
+      ],
+      "blocked_at": "2026-11-18T22:47:58Z"
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542effbd4355",

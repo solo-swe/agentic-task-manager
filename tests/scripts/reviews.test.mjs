@@ -607,8 +607,15 @@ describe('atm review', () => {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
       // The usual lease again, for the claim taken back (a lease is fixed when it is taken)
       delete data.meta.lease_minutes;
-      fs.writeFileSync(tasksFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(tasksFile, 'utf8')), meta: data.meta }));
-      const opened = ok(['review', 'create', '--title', 'Mine', '--task', 'T-1', '--uncommitted', '--json'], root, AGENT);
+      fs.writeFileSync(
+        tasksFile,
+        JSON.stringify({ ...JSON.parse(fs.readFileSync(tasksFile, 'utf8')), meta: data.meta }),
+      );
+      const opened = ok(
+        ['review', 'create', '--title', 'Mine', '--task', 'T-1', '--uncommitted', '--json'],
+        root,
+        AGENT,
+      );
       assert.equal(opened.json().reference, 'CR-1');
       const t1 = task(root, 'T-1');
       assert.equal(t1.status, 'in_review');

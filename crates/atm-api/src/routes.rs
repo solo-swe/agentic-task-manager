@@ -176,7 +176,7 @@ fn serve_project_read(
         ProjectRead::Worktrees => claims::get_worktrees(project, request),
         ProjectRead::Claims => claims::get_claims(project, request),
         ProjectRead::Reviews => reviews::get_reviews(project, query),
-        ProjectRead::Review(review) => reviews::get_review(project, review, query),
+        ProjectRead::Review(review) => reviews::get_review(project, review, query, request),
     }
 }
 
