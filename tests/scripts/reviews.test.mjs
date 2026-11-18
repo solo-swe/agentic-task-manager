@@ -565,6 +565,59 @@ describe('atm review', () => {
     }
   });
 
+  // ATM-631: never a review on disk beside a task that didn't move
+  test('opening a review puts its task in review or refuses and writes nothing; a task whose own claim lapsed is taken back', () => {
+    const root = makeProject({
+      commit: true,
+      files: {
+        '.agentic-task-manager/tasks.json': {
+          meta: { project: 'Reviews', review: 'blocker' },
+          tasks: [
+            { id: 'T-1', name: 'Mine', type: 'feature', status: 'todo' },
+            { id: 'T-2', name: 'Theirs', type: 'feature', status: 'todo' },
+            { id: 'T-3', name: 'Finished', type: 'feature', status: 'done' },
+            { id: 'T-4', name: 'Not started', type: 'feature', status: 'todo' },
+          ],
+        },
+        'a.txt': 'one\n',
+      },
+    });
+    const OTHER = { ATM_AGENT: 'claude:other' };
+    const refused = (taskId, env, pattern, code = 1) => {
+      const r = atm(['review', 'create', '--title', 'x', '--task', taskId, '--uncommitted'], root, env);
+      assert.equal(r.code, code, `${taskId}: ${r.stderr}`);
+      assert.match(r.stderr, pattern);
+      assert.equal(ok(['review', 'list', '--json'], root, HAKAN).json().length, 0, `${taskId}: a review was kept`);
+    };
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['task', 'state', 'T-2', 'in_progress'], root, OTHER);
+      refused('T-2', AGENT, /claimed by claude:other, who opens its review/, 4);
+      assert.equal(task(root, 'T-2').status, 'in_progress');
+      refused('T-3', AGENT, /it is done\. Reopen it \(atm task state T-3 todo\)/);
+      refused('T-4', AGENT, /it is to do, and you didn't start it\. Start it first \(atm task state T-4 in_progress\)/);
+      assert.equal(task(root, 'T-4').status, 'todo');
+
+      // T-1 started with a lease of under a second; it lapses while the checks run, then its review is opened
+      const tasksFile = path.join(root, '.agentic-task-manager/tasks.json');
+      const data = JSON.parse(fs.readFileSync(tasksFile, 'utf8'));
+      data.meta.lease_minutes = 0.01;
+      fs.writeFileSync(tasksFile, JSON.stringify(data));
+      ok(['task', 'state', 'T-1', 'in_progress'], root, AGENT);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+      // The usual lease again, for the claim taken back (a lease is fixed when it is taken)
+      delete data.meta.lease_minutes;
+      fs.writeFileSync(tasksFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(tasksFile, 'utf8')), meta: data.meta }));
+      const opened = ok(['review', 'create', '--title', 'Mine', '--task', 'T-1', '--uncommitted', '--json'], root, AGENT);
+      assert.equal(opened.json().reference, 'CR-1');
+      const t1 = task(root, 'T-1');
+      assert.equal(t1.status, 'in_review');
+      assert.match(JSON.stringify(t1.notes), /CR-1: Mine \(its claim had lapsed: taken back to open this review\)/);
+    } finally {
+      removeDir(root);
+    }
+  });
+
   test('tasks --remove takes a task out; list by --task and --mine', () => {
     const root = project();
     try {

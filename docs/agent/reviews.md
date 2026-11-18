@@ -5,8 +5,12 @@
   against `HEAD` or `--base`), or files as they are (`--file PATH`, repeatable). atm's own task folder is never part of
   it.
 - **Opening one for your task:** `atm review create --title '<one line>' --task <key> --range <base>..HEAD
-[--summary-file <file>]`. An open review puts its tasks that are in progress in review, with the review's link in
-  their note; you don't also run `atm task state <key> in_review`. `--draft` keeps it a draft (nothing in review yet).
+[--summary-file <file>]`. It puts its tasks in review, with the review's link in their note; you don't also run
+  `atm task state <key> in_review`. `--draft` keeps it a draft (nothing in review yet). Opened by an agent, it either
+  opens the review with every task in review or refuses and writes nothing, naming what to do instead: a task you hold, or no one
+  does, goes in review; one whose claim of yours lapsed (back in to do while your checks ran) is taken back and goes in
+  review, its note saying so; one already in review is linked, unless another review already waits on it (add a round
+  to that one); one claimed by another agent (exit code 4), not started by you, blocked, done or skipped is refused.
 - **Submodules:** work in a submodule is the project's: atm run in a submodule's folder finds the project it is a
   submodule of (unless the submodule has a task folder of its own). A round made there (`--range`, `--uncommitted`)
   is of the submodule's commits, its files named as the project has them (`lib/b.txt`); `--file` paths in one

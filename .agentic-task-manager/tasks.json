@@ -16669,7 +16669,7 @@
       "description": "On a review's Diffs tab the file tree (left) and the diffs (right) list the files in different orders (Hakan, 2026-11-18: in CompMD's CR-1, `pnpm-lock.yaml` is at the end of the tree but in the middle of the diffs). The tree sorts as a tree (folders, then their files), the diffs come in git's order (the patch's, by path).\n\n## Change\n- One order for both, the tree's (as you read it top to bottom, folders before the files beside them, each level by name): the diffs, the next and previous file, change and comment (`n p c C`), the round's file select and the Viewed count's order all follow it ([`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte), the view's `files`).\n- Folding a folder in the tree (ATM-595) folds nothing on the right; the order stays the same.\n\n## Tests\nA unit test of the order (a root file, nested folders, a lock file at the root: tree order and diff order equal); an e2e test in `reviews.spec.ts` that the cards' order is the tree's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -16677,7 +16677,7 @@
         "dashboard/tests/unit/page.test.ts"
       ],
       "created_at": "2026-11-18T00:33:32Z",
-      "updated_at": "2026-11-18T21:47:40Z",
+      "updated_at": "2026-11-18T22:34:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16696,7 +16696,24 @@
       "number": 596,
       "key_final": false,
       "started_at": "2026-11-18T21:47:40Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "07f51ff90f6b77887b60814446352053bb51af7a",
+      "code_reviews": [
+        {
+          "id": "01a1f0cc-8d44-701e-b161-07a5ad7efcfc",
+          "ref": "CR-31"
+        }
+      ],
+      "review_requested_at": "2026-11-18T22:34:59Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T22:34:59Z",
+          "kind": "review",
+          "text": "CR-31: The diffs follow the file tree's order",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ec2c-e2f8-7691-a51b-917d14a06947",
@@ -18597,7 +18614,7 @@
       "description": "Reported by Hakan (2026-11-19), from an agent in CompMD: its claim lapsed while the checks ran, so the task went back to to do. `atm review create --task` then opened CR-6 without complaint, but the task stayed in to do. The review and the task disagreed, and the agent had to take the task to in progress, then into review by hand.\n\n## Change\nWhat `atm review create --task <key>` does for each state of the task:\n- **in progress, claimed by the author:** into review, as now;\n- **to do, after the author's own claim lapsed, and no one claimed it since:** into review too, with a note that the claim had lapsed;\n- **claimed by another agent, done, skipped, already in review with another open review, or blocked:** refuse and write nothing, saying why and what to run. No review is created.\n\nThe whole command succeeds or changes nothing: never a review on disk beside a task that didn't move. Update `atm docs reviews` with the rule.\n\n## Tests\nCLI scenarios for each row above, each checking both the review folder and the task's status.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/review.rs",
@@ -18605,7 +18622,7 @@
         "tests/scripts/scenarios"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-18T21:57:01Z",
+      "updated_at": "2026-11-18T22:35:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18620,7 +18637,9 @@
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-18T22:35:03Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542d0d2f9a0d",
