@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 595
+    "next_number": 596
   },
   "tasks": [
     {
@@ -15353,7 +15353,7 @@
       "description": "Where reviews show outside their pages ([§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), [§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The app's sidebar: a Reviews section under the projects (the reviews needing you, with a count; All reviews).\n- Cards and the details panel show a task's reviews as links (`CR-7 · changes requested`), a new tab with ⌘-click; *Add to review* on a task.\n- The needs-you menu counts reviews with tasks; deep links `atm://…/reviews/CR-7` (checked as I28).\n\n## Tests\nE2e (`app.spec.ts` for the sidebar, `detail.spec.ts` for the links); unit tests for the deep links.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "todo",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -15365,7 +15365,7 @@
         "app/src-tauri/src/links.rs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T23:22:47Z",
+      "updated_at": "2026-11-18T00:28:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
@@ -15380,8 +15380,14 @@
         }
       ],
       "sprint": "Code reviews in the app",
-      "started_at": "2026-11-17T23:22:47Z",
-      "started_by": "claude:0f56a916"
+      "notes": [
+        {
+          "at": "2026-11-18T00:28:20Z",
+          "kind": "handoff",
+          "text": "Not started. Waiting on the reviews tab design with Hakan: a workspace reviews list with search, a project picker and Needs you/Open/All chips; where it lives (overview tab or sidebar entry), whether the project Reviews tab stays as its preset, and reviews in the needs-you chip. Deep links to reviews already pass links.rs.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
@@ -16116,7 +16122,7 @@
       "description": "Two reports from Hakan (2026-11-18), one cause.\n\n1. **An approved review leaves its task waiting.** In CompMD, CR-2 and CR-3 are approved, but their task CMD-36 is still in review with `review_state: waiting`: the decision never reached it.\n2. **Agents reuse a key with its `~` and fail.** `atm review` commands print a task's key as `~CMD-36`, agents pass that to the next command (`atm task state ~CMD-36 done`, `--task ~CMD-36`), and atm refuses it.\n\n## Cause\nA provisional key reads to people with a `~` before it (ADR-007 §3: `task_label` in [`project.rs`](crates/atm-lib/src/project.rs#L169-L187), `label_of` in [`keys.rs`](crates/atm-common/src/keys.rs#L65-L76)). The reviews use that **label** as the task's name where they need its **reference**: [`reviews.rs`](crates/atm-lib/src/reviews.rs) names the review's tasks with `project.task_label(t)` (lines 295, 418 and 467), so `review.md` stores `tasks: [~CMD-36]`; a decision, applied to each named task, finds no task `~CMD-36` and skips it without saying so. [`review_listen.rs`](crates/atm-lib/src/review_listen.rs#L182) prints the same label in `atm review watch`'s JSON.\n\n## Change\n- What a review stores and what atm prints for programs (`--json`, the watch's lines, the review's `tasks`) is the task's **key without `~`** (the key stays the reference while it is provisional; it follows the task when it becomes final, as `code_reviews` follows the review's UUID); the `~` only where people read it (plain output, the dashboard, which marks it itself).\n- **Every command takes a key with a leading `~`** as the key itself (`resolve_task`), as `maintenance.rs` already strips it for one: what atm printed always works as input.\n- **A decision that can't reach a named task says so** (an error or a warning in the command's output, naming the task), never a silent skip.\n- **Reviews already written** with `~KEY` (CompMD's CR-1 to CR-3) read as `KEY`; and their decisions, approved before the fix, reach their tasks: `atm doctor` names a review whose decision its task doesn't have, and offers to apply it (or the next command that reads it does), so CMD-36 comes out of review as approved without anyone deciding again.\n- The skills and `docs/agent/` say nothing of `~`; check that no example shows a key with it.\n\n## Tests\natm-lib tests: a review of a provisional task stores and prints its key without `~`; its approval reaches the task; a `~KEY` resolves; a decision on a review naming a missing task is reported. CLI suite (`tests/scripts/reviews.test.mjs`): create a review of a provisional task, approve it, the task is approved; `atm task state ~KEY …` works; `review watch` prints the plain key. A test that a review stored with `~KEY` has its decision applied.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -16126,9 +16132,9 @@
         "tests/scripts/reviews.test.mjs"
       ],
       "created_at": "2026-11-18T00:26:10Z",
-      "updated_at": "2026-11-18T00:26:10Z",
+      "updated_at": "2026-11-18T00:28:21Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16140,6 +16146,44 @@
         "cli"
       ],
       "number": 594,
+      "key_final": false,
+      "started_at": "2026-11-18T00:28:21Z",
+      "started_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1ec10-21dd-74ec-85fb-c2da5d38f9c1",
+      "name": "Code review: the Diffs tab's file tree folds its folders, and all at once",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "The file tree beside the diffs on a review's Diffs tab (in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte)) shows its folders always open: a folder can't be collapsed or expanded, and a review of many files is a long list (Hakan, 2026-11-18).\n\n## Change\n- Each folder row has a chevron (Lucide's, as the file cards' folds): a click, or ← and → on the focused row, collapses or expands it; its files and subfolders hide with it. A collapsed folder shows how many files it holds and, when any, how many of them have comments or aren't viewed yet.\n- **Collapse all** and **Expand all** at the top of the tree (icon buttons, with titles).\n- What is folded is kept per review while the page is open (and across a reload, in the session's storage), not written anywhere else.\n- Going to a file (a click in the diffs, the next or previous change or comment, the address's `&file=`) opens the folders on its way, so the file it shows is always in view in the tree.\n- The tree stays a tree for keyboards and screen readers (`role=\"tree\"`, `aria-expanded` on folders).\n\n## Tests\nComponent tests (a folder collapses and expands, by click and keys; Collapse all and Expand all; a jump to a file in a collapsed folder opens it); an e2e test in `reviews.spec.ts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/tests/unit/ReviewPage.component.test.ts",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-18T00:30:42Z",
+      "updated_at": "2026-11-18T00:30:42Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:30:42Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 595,
       "key_final": false
     }
   ]
