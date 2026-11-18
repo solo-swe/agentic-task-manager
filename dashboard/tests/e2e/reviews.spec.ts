@@ -760,9 +760,14 @@ test.describe('the diff viewer on a review’s page', () => {
       });
     tasksServer.answerReviewChanges(403, { error: "the review's author can't decide it" });
     await page.getByRole('button', { name: 'Submit review' }).click();
-    await page.getByRole('button', { name: 'Approve' }).click();
+    // Its comments open, Approve can't be pressed, and says why (ATM-601)
+    const approve = page.getByRole('button', { name: 'Approve' });
+    await expect(approve).toBeDisabled();
+    await expect(approve).toHaveAccessibleDescription(/still open: resolve them first/);
+    await page.getByLabel('Summary').fill('One more.');
+    await page.getByRole('button', { name: 'Comment', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveText("the review's author can't decide it");
-    expect(tasksServer.reviewChanges.at(-1)).toMatchObject({ body: { decision: 'approve' } });
+    expect(tasksServer.reviewChanges.at(-1)).toMatchObject({ body: { decision: 'comment' } });
   });
 });
 

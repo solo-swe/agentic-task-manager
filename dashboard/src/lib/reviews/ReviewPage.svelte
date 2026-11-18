@@ -328,6 +328,7 @@
   let submitting = $state(false);
   let summary = $state('');
   function submit(decision: 'approve' | 'request_changes' | 'comment') {
+    if (decision === 'approve' && approveBlocked) return;
     onsubmit(decision, summary.trim());
     submitting = false;
   }
@@ -349,6 +350,13 @@
   });
   /** Nothing left open: the decision at hand is to approve */
   const settled = $derived(chainCounts.open === 0);
+  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can */
+  const approveBlocked = $derived.by(() => {
+    if (review.status === 'changes_requested') return 'Sent back: it is approved after its author’s next round';
+    const open = chainCounts.open;
+    if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
+    return null;
+  });
   const listed = $derived(filterChains(page.chains, filter));
   /** A chain as the Comments tab shows it: where it was made (a drifted one at its own lines) */
   const asMade = (c: PlacedChain) => ({
@@ -398,7 +406,7 @@
         >{/if}
       {#if !ended}
         <div class="review-submit-anchor">
-          {#if settled}
+          {#if settled && !approveBlocked}
             <div class="review-split-button">
               <button
                 class="review-button primary approve"
@@ -460,13 +468,24 @@
                     onclick={() => submit('request_changes')}>Request changes</button
                   >
                 {/if}
-                <button
-                  class="review-button primary"
-                  data-decision="approve"
-                  disabled={busy}
-                  onclick={() => submit('approve')}><Icon name="check" size={14} /> Approve</button
-                >
+                <!-- Disabled, saying why, while the rules would refuse it (ATM-601): the reason on the wrapper, as a
+                     disabled button shows no tooltip in every engine, and as its description for screen readers -->
+                <span class="review-approve-wrap" title={approveBlocked ?? undefined}>
+                  <button
+                    class="review-button primary"
+                    data-decision="approve"
+                    disabled={busy || !!approveBlocked}
+                    aria-describedby={approveBlocked ? 'review-approve-why' : undefined}
+                    onclick={() => submit('approve')}><Icon name="check" size={14} /> Approve</button
+                  >
+                </span>
               </div>
+              {#if approveBlocked}
+                <p class="review-approve-why" id="review-approve-why">
+                  <Icon name="info" size={13} />
+                  {approveBlocked}
+                </p>
+              {/if}
             </section>
           {/if}
         </div>
@@ -1445,6 +1464,21 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--space-4);
+  }
+  .review-approve-wrap {
+    display: inline-flex;
+  }
+  .review-approve-wrap:has(button:disabled) {
+    cursor: not-allowed;
+  }
+  .review-approve-why {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
   }
   .review-empty {
     margin: 0;

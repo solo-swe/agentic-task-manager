@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 601
+    "next_number": 602
   },
   "tasks": [
     {
@@ -16485,14 +16485,14 @@
       "description": "`atm review watch` (an agent's one background watch, `docs/agent/reviews.md`) prints each comment and reply a person adds about the agent's work, but not a decision: an approval, a request for changes, a close (reported by Hakan, 2026-11-18). So an agent that relies on the watch doesn't learn that its review was approved or sent back until it asks with `atm review wait` or `atm loop next`.\n\n## Change\n- `crates/atm-lib/src/review_listen.rs` (`watch`): also print a line when a review about the agent's work changes status by a person's decision (approved, changes requested, closed), with the review, its task, who decided and the decision's words when it has some; one line per decision, never repeated on a restart of the watch (as comments aren't).\n- `docs/agent/reviews.md` and the skills that start the watch (`/atm-loop-tasks` step 7, `/atm-do-task`): what a decision line is, and what to do on one (approved: finish the task as its review mode says; changes requested: take it back; closed: as the user says).\n\n## Tests\n- atm-lib: a decision on a watched review is printed once, with its fields; a decision on another agent's review isn't; a round (the author's) isn't a decision.\n- The CLI suite: `atm review watch --json` prints an approval made with `atm review submit`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_listen.rs",
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T03:23:56Z",
-      "updated_at": "2026-11-18T03:32:00Z",
+      "updated_at": "2026-11-18T03:32:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16506,7 +16506,55 @@
       "key_final": false,
       "started_at": "2026-11-18T03:29:11Z",
       "started_by": "claude:0f56a916",
-      "commit": "67b7f52ad6de9665f548d6f6eab56dec1414d5c7"
+      "commit": "4317186dc50392e6d67ef058bc1f1a11833681bc",
+      "code_reviews": [
+        {
+          "id": "01a1ecb6-c873-7054-ae57-2f565047b847",
+          "ref": "CR-5"
+        }
+      ],
+      "review_requested_at": "2026-11-18T03:32:44Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T03:32:44Z",
+          "kind": "review",
+          "text": "CR-5: The review watch tells decisions too",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1ecb7-fd84-74cf-9114-5d2431cb53f0",
+      "name": "Approve is disabled, saying why, while a review can't be approved",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "On a review with comments still open, *Submit review*'s **Approve** is enabled, and pressing it fails with atm's refusal (reported by Hakan, 2026-11-18). It should be disabled, and say why on hover (its tooltip) and to a screen reader.\n\n## Change\n`dashboard/src/lib/reviews/ReviewPage.svelte`: Approve disabled with its reason while the rules would refuse it:\n- comments are open: *N comments are still open: resolve them first*;\n- the review is sent back (changes requested): *Sent back: it is approved after its author's next round*.\nThe reason is the button's title and, for assistive technology, its description (`aria-describedby`), as a disabled button gets no focus.\n\n## Tests\nA component test per reason, and that Approve is enabled when nothing stands in the way.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte"
+      ],
+      "created_at": "2026-11-18T03:34:03Z",
+      "updated_at": "2026-11-18T03:34:03Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T03:34:03Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 601,
+      "key_final": false,
+      "started_at": "2026-11-18T03:34:03Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
