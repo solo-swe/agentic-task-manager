@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 610
+    "next_number": 613
   },
   "tasks": [
     {
@@ -16394,15 +16394,15 @@
       "description": "A review in **changes requested** refuses new comments and replies, in the app and from `atm review comment` / `atm review reply`. Asking for changes doesn't end a review: the reviewer and the author go on talking about the changes until the next round (reported by Hakan, 2026-11-18, on CR-1).\n\n## Change\n- `crates/atm-review/src/rules.rs`: a comment or reply is allowed on an open review, `changes_requested` included; only an ended review (approved, rejected, closed) refuses them, if it does today.\n- The dashboard's review page keeps its comment boxes and Reply buttons while changes are requested.\n\n## Tests\n- A rules table: each review status, comment and reply, allowed or refused.\n- The CLI suite: a comment and a reply on a review with changes requested.\n- A component or e2e test: the review page in changes requested still lets the reviewer comment.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rules.rs"
       ],
       "created_at": "2026-11-18T01:02:07Z",
-      "updated_at": "2026-11-18T05:41:16Z",
+      "updated_at": "2026-11-18T06:35:40Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16412,7 +16412,7 @@
       "sprint": "Code reviews in the app",
       "number": 597,
       "key_final": false,
-      "started_at": "2026-11-18T01:13:19Z",
+      "started_at": "2026-11-18T06:35:40Z",
       "started_by": "claude:0f56a916",
       "commit": "b1109f17b1ddf0dc8ab4ca88a29606b602e6373c",
       "code_reviews": [
@@ -16421,8 +16421,6 @@
           "ref": "CR-2"
         }
       ],
-      "review_requested_at": "2026-11-18T01:18:37Z",
-      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-18T01:18:37Z",
@@ -16437,7 +16435,13 @@
           "by": "Hakan Serce"
         }
       ],
-      "reviewed_at": "2026-11-18T05:41:16Z"
+      "reviews": [
+        {
+          "from": "2026-11-18T01:18:37Z",
+          "to": "2026-11-18T05:41:16Z",
+          "outcome": "changes_requested"
+        }
+      ]
     },
     {
       "id": "01a1eca5-ba9f-721a-8221-49457ac24938",
@@ -16976,14 +16980,14 @@
       "description": "Reported by Hakan (2026-11-18): a review's tab in the app's title bar doesn't match the page under it, so it's hard to see that it's the selected one. Project tabs are fine.\n\n## Cause\nThe selected title-bar tab is drawn in the page's background (`--bg`), but the review page's top bar (`.review-top`) was in `--surface`.\n\n## Change\n`dashboard/src/lib/reviews/ReviewPage.svelte`: `.review-top` in `--bg`, as a project's header is. The review's own tabs are marked by their underline, so nothing else depends on the old colour.\n\n## Tests\nE2e (`app.spec.ts`, a review in a tab of its own): the selected tab and the review's top bar have the same background, and the title bar a different one.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-18T06:14:34Z",
-      "updated_at": "2026-11-18T06:15:02Z",
+      "updated_at": "2026-11-18T06:30:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17005,15 +17009,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T06:15:02Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T06:15:02Z",
           "kind": "review",
           "text": "CR-10: A review selected tab joins its page",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T06:30:40Z",
+          "kind": "note",
+          "text": "Approved: in CR-10 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T06:30:56Z",
+          "kind": "outcome",
+          "text": "Approved in CR-10: a review page top bar in the page background, so its selected app tab joins it",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T06:15:02Z",
+          "to": "2026-11-18T06:30:40Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T06:30:56Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed53-24a0-7039-bac3-2381a42376f0",
@@ -17026,7 +17050,7 @@
       "description": "Reported by Hakan (2026-11-18): a review in *Changes requested* can't be approved; it waits for its author's next round. A reviewer should be able to approve it once its comments are resolved (they changed their mind, or settled what they asked for themselves).\n\n## Change\n- `crates/atm-review/src/rules.rs` `submit`: Approve is allowed from `changes_requested` too, with every top-level comment resolved, as from `open` or `live`.\n- `ReviewPage.svelte`: Approve is no longer disabled for a review sent back (ATM-601's *Sent back* reason is dropped); an open comment still disables it.\n- Its tasks in review are approved, as for any approval.\n\n## Tests\n- The rules' status and decision table: sent back plus Approve gives approved.\n- atm-lib: sent back, its comment resolved, approved with no round since; the review and its task approved, and refused while the comment is open.\n- Component: Approve is one click on a sent-back review with everything resolved, and disabled with a comment open.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rules.rs",
@@ -17035,7 +17059,7 @@
         "dashboard/tests/unit/ReviewPage.component.test.ts"
       ],
       "created_at": "2026-11-18T06:23:31Z",
-      "updated_at": "2026-11-18T06:23:37Z",
+      "updated_at": "2026-11-18T06:32:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17048,7 +17072,143 @@
       "number": 609,
       "key_final": false,
       "started_at": "2026-11-18T06:23:37Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "5bb053f195b6e5e664d1155318d4c2a76d4d1ca8",
+      "code_reviews": [
+        {
+          "id": "01a1ed55-1201-727f-ab0f-371b976bf1c4",
+          "ref": "CR-11"
+        }
+      ],
+      "review_requested_at": "2026-11-18T06:25:37Z",
+      "notes": [
+        {
+          "at": "2026-11-18T06:25:37Z",
+          "kind": "review",
+          "text": "CR-11: A review sent back can be approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T06:31:52Z",
+          "kind": "note",
+          "text": "Approved: in CR-11 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T06:32:02Z",
+          "kind": "outcome",
+          "text": "Approved in CR-11: a review sent back can be approved, its comments resolved",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T06:25:37Z",
+          "to": "2026-11-18T06:31:52Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T06:32:02Z",
+      "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1ed57-2074-7093-9f65-0a8442d6009c",
+      "name": "The reviews list, unfiltered, in groups: waiting for you first, oldest on top",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Asked by Hakan (2026-11-18): with no filter or search, the reviews list is grouped, each group under its heading with its count. Within a group the order is as listed:\n\n1. **Waiting for your review:** open or live, you a reviewer (`needs_you`). The longest waiting on top, each showing how long it has waited (\"3 days\"), counted from its latest round, when it began waiting on you.\n2. **With open comments:** the rest that still have open comments, the latest activity first.\n3. **Sent back by you:** `changes_requested`, waiting on their author, the latest first.\n4. **Recently decided:** approved or closed in the last 5 days, the latest first.\n5. **Older:** approved or closed before that, folded by default (the fold remembered in the browser), the latest first.\n\nAny filter or search shows the plain list, as now. A review is in one group only, the first it fits. The 5 days are a constant (`RECENT_DAYS`).\n\n## Change\n- `atm-lib` `review_pages.rs` (the list): each entry also gets `waiting_since`, its latest round's time (and `decided_at` for an approved or closed one, if `updated` doesn't serve).\n- `dashboard/src/lib/reviews/`: a `groupReviews(entries, you, now)` function in `page.ts`, and the groups' headings, ages and fold in `ReviewList.svelte`.\n\n## Tests\n- Unit tests of `groupReviews`: each group, a review fitting two going to the first, the order within each, the 5-day edge, empty groups left out, and an age's wording.\n- Component: the headings and counts, *Older* folded and opened, and a filter showing the plain list.\n- E2e: the list's groups with the fixture's reviews.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/page.ts",
+        "dashboard/src/lib/reviews/ReviewList.svelte",
+        "crates/atm-lib/src/review_pages.rs"
+      ],
+      "created_at": "2026-11-18T06:27:52Z",
+      "updated_at": "2026-11-18T06:27:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:27:52Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 610,
+      "key_final": false
+    },
+    {
+      "id": "01a1ed5d-a3c2-727b-8133-da0a14731104",
+      "name": "Poke a review: a nudge its agent hears and answers",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Asked by Hakan (2026-11-18): a *Poke* button on a review, on its row in the list and on its page. A poke adds a comment about the whole review (on no line), so it reaches the review's agent through its review watch, and the agent answers.\n\n## Change\n- `atm-review`: a comment can be a poke (`kind: poke`), on the review as a whole, with an optional message. A poke never counts as an open comment, so it never stands in the way of an approval.\n- `atm-lib`, REST and CLI: `POST reviews/<CR>/pokes` `{body?}` (the same atm-lib call as `atm review poke CR-7 [--body '…']`). Only a person may poke, as for other changes from the page. Update `docs/multi-project-api.md` and `docs/security-architecture.md` for the new route.\n- `atm review watch`: a poke is reported like a comment, with `kind: \"poke\"`, about the work of the review's author (or the agent whose task it names).\n- `docs/agent/reviews.md` and the loop and do-task skills: on a poke, the agent looks at where the review stands (open comments it hasn't answered, a round it owes, a question for the user) and replies to the poke saying what it did or what it is waiting for.\n- Dashboard: *Poke* on a review's row (`ReviewList.svelte`) and in its page's top bar (`ReviewPage.svelte`), with an optional message. Pokes show in the review's conversation, marked as pokes.\n\n## Tests\n- Rules: a poke is a review-level comment, never open, and doesn't block an approval.\n- atm-lib, the CLI suite and REST: a poke is added and refused on a closed or approved review.\n- The watch test: a poke is reported with its kind.\n- Component and e2e: *Poke* from the list and from the page sends it, and the poke shows marked.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/src/rules.rs",
+        "crates/atm-lib/src/review_requests.rs",
+        "crates/atm-lib/src/review_listen.rs",
+        "dashboard/src/lib/reviews/ReviewList.svelte",
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "docs/agent/reviews.md"
+      ],
+      "created_at": "2026-11-18T06:34:59Z",
+      "updated_at": "2026-11-18T06:34:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:34:59Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 611,
+      "key_final": false
+    },
+    {
+      "id": "01a1ed60-0e8c-7024-980b-34c02d4b6ad4",
+      "name": "Draft comments, sent together with the review's decision",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews"
+      ],
+      "description": "From CR-2 (Hakan, 2026-11-18, c1 and the step 2 agreed there): a reviewer writes comments and replies as drafts, and sends them together, as GitHub's *start a review*.\n\n## Change\n- **Writing a comment or a reply** offers **Add to my review** (a draft only you see), **Comment now** (sent at once, as today) and **Cancel**.\n- **The top button** counts your drafts and sends them with the summary: on an open review, *Comment*, *Request changes* or *Approve*; on a review sent back, *Publish comments*.\n- **Agents** (`atm review watch`, `wait`) hear nothing until the drafts are sent, so an agent never acts on half a review.\n- **Where drafts live:** in the user's own atm state (`ATM_STATE_DIR`), never in the review's folder, which is committed to git. Drafts are anchored like any comment and move with the code across rounds. Replies are drafts too.\n- Pending drafts show on the page, editable and removable; leaving the page keeps them.\n\n## Tests\n- atm-lib: a draft stored outside the review, sent with a decision (each kind), anchored after a new round, and never seen by the watch until it is sent.\n- REST and CLI: the drafts routes and commands; one user's drafts never shown to another.\n- Component and e2e: *Add to my review*, the count on the button, sending, and *Comment now* unchanged.\n- Update `docs/code-review-design.md`, `docs/multi-project-api.md` and `docs/security-architecture.md` (the new routes, and drafts kept out of the repository).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/src/",
+        "crates/atm-lib/src/reviews.rs",
+        "dashboard/src/lib/reviews/ReviewPage.svelte"
+      ],
+      "created_at": "2026-11-18T06:37:37Z",
+      "updated_at": "2026-11-18T06:37:37Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:37:37Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 612,
+      "key_final": false
     }
   ]
 }

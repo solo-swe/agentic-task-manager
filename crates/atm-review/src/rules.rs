@@ -327,9 +327,8 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
                 }
                 Some(Status::Approved)
             }
-            // Asked again while it is back with its author (ATM-597): the reviewer's words are kept, and it stays
-            // where it is
-            Verdict::RequestChanges if status == Status::ChangesRequested => None,
+            // Sent back already, it isn't sent back again (CR-2): a reviewer's further words are a comment, which
+            // the page calls *Publish comments*
             Verdict::RequestChanges => {
                 if status != Status::Open {
                     return Err(not_now(&review, "be sent back"));
@@ -1297,12 +1296,8 @@ mod tests {
                 Some(Status::ChangesRequested),
             ),
             (Status::Live, Verdict::RequestChanges, None),
-            // Asked again while it is back with its author (ATM-597): kept, and it stays
-            (
-                Status::ChangesRequested,
-                Verdict::RequestChanges,
-                Some(Status::ChangesRequested),
-            ),
+            // Sent back already: not again (CR-2); further words are a comment, below
+            (Status::ChangesRequested, Verdict::RequestChanges, None),
             (Status::Draft, Verdict::Comment, Some(Status::Draft)),
             (Status::Open, Verdict::Comment, Some(Status::Open)),
             (Status::Live, Verdict::Comment, Some(Status::Live)),

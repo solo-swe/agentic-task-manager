@@ -89,6 +89,8 @@
   const ended = $derived(review.status === 'approved' || review.status === 'closed');
   /** A live review: its working copy followed as it is made (ATM-576) */
   const live = $derived(review.status === 'live');
+  /** Sent back to its author: more words are *Publish comments*, never a second send-back (ATM-597, CR-2) */
+  const sentBack = $derived(review.status === 'changes_requested');
   const rounds = $derived(page.rounds.map((r) => r.number));
   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
@@ -444,7 +446,7 @@
                   class="review-button"
                   data-decision="comment"
                   disabled={busy || !summary.trim()}
-                  onclick={() => submit('comment')}>Comment</button
+                  onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
                 >
                 {#if live}
                   <!-- A live review isn't sent back: its author ends it with a round; a reviewer approves or closes it -->
@@ -460,7 +462,8 @@
                       }}>Close review</button
                     >
                   {/if}
-                {:else}
+                {:else if !sentBack}
+                  <!-- Sent back already, it isn't sent back again (CR-2): more words are published as comments -->
                   <button
                     class="review-button danger"
                     data-decision="request_changes"

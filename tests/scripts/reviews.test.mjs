@@ -87,10 +87,13 @@ describe('atm review', () => {
       assert.equal(task(root, 'T-1').review_state, 'changes_requested');
       assert.match(JSON.stringify(task(root, 'T-1').notes), /CR-1 round 1: 1 open comment/);
 
-      // Sent back, the review still takes the reviewer's words (ATM-597): a comment, and changes asked for again with
-      // a message, which is kept; it stays sent back and the task isn't changed again
+      // Sent back, the review still takes the reviewer's words (ATM-597): a comment, and a decision's comment with a
+      // message, which is kept; sent back already, it isn't sent back again (CR-2), and the task isn't changed again
       ok(['review', 'comment', 'CR-1', '--body', 'And the title too.'], root, HAKAN);
-      ok(['review', 'submit', 'CR-1', '--request-changes', '--body', 'Both, please.'], root, HAKAN);
+      const again = atm(['review', 'submit', 'CR-1', '--request-changes', '--body', 'Both, please.'], root, HAKAN);
+      assert.equal(again.code, 1);
+      assert.match(again.stderr, /sent back/);
+      ok(['review', 'submit', 'CR-1', '--comment', '--body', 'Both, please.'], root, HAKAN);
       const sentBack = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
       assert.equal(sentBack.header.status, 'changes_requested');
       assert.deepEqual(

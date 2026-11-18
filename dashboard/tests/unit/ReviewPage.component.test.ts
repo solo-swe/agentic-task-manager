@@ -658,21 +658,19 @@ describe('ReviewPage: submit', () => {
     expect(screen.getByLabelText('Summary')).toHaveValue('');
   });
 
-  it('a review sent back still takes the reviewer’s words: a comment, and changes asked for again (ATM-597)', async () => {
+  it('a review sent back still takes the reviewer’s words, as Publish comments; it isn’t sent back again (ATM-597, CR-2)', async () => {
     const page = open();
     page.review = { ...page.review, status: 'changes_requested' };
     const { onsubmit } = show(page);
     expect(screen.getByRole('button', { name: 'Comment on the review' })).toBeEnabled();
     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull();
+    const publish = screen.getByRole('button', { name: 'Publish comments' });
+    expect(publish).toBeDisabled();
     await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Still the title.' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
-    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'A note.' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
-    expect(onsubmit.mock.calls).toEqual([
-      ['request_changes', 'Still the title.'],
-      ['comment', 'A note.'],
-    ]);
+    await fireEvent.click(publish);
+    expect(onsubmit.mock.calls).toEqual([['comment', 'Still the title.']]);
   });
 
   it('a live review (ATM-576): approved, commented on or closed with why, never sent back', async () => {
