@@ -59,7 +59,8 @@ describe('atm review', () => {
         AGENT,
       ).json();
       assert.equal(opened.reference, 'CR-1');
-      // Waiting on its reviewers (ATM-613: `open` until 0.41.0); a file an earlier atm wrote with `open` reads the same
+      // Waiting on its reviewers (ATM-613), shown so; the file keeps writing `open`, as an older atm reads it (an app
+      // or a clone on 0.40.0 sees the review), and reads `waiting` too
       assert.equal(opened.status, 'waiting');
       const reviewFile = path.join(
         root,
@@ -67,12 +68,16 @@ describe('atm review', () => {
         fs.readdirSync(path.join(root, '.agentic-task-manager/reviews')).find((f) => f.startsWith('CR-1-')),
         'review.md',
       );
-      assert.match(fs.readFileSync(reviewFile, 'utf8'), /status = "waiting"/);
+      assert.match(fs.readFileSync(reviewFile, 'utf8'), /status = "open"/);
+      fs.writeFileSync(
+        reviewFile,
+        fs.readFileSync(reviewFile, 'utf8').replace('status = "open"', 'status = "waiting"'),
+      );
+      assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.status, 'waiting');
       fs.writeFileSync(
         reviewFile,
         fs.readFileSync(reviewFile, 'utf8').replace('status = "waiting"', 'status = "open"'),
       );
-      assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.status, 'waiting');
       // Open, in a filter, is every review not decided yet; waiting is its own status
       assert.equal(ok(['review', 'list', '--status', 'open', '--json'], root, HAKAN).json().length, 1);
       assert.equal(ok(['review', 'list', '--status', 'waiting', '--json'], root, HAKAN).json().length, 1);
@@ -619,7 +624,7 @@ describe('a provisional task key in reviews (ATM-594)', () => {
         fs
           .readFileSync(file, 'utf8')
           .replace('tasks = ["ATM-12"]', 'tasks = ["~ATM-12"]')
-          .replace('status = "waiting"', 'status = "approved"'),
+          .replace('status = "open"', 'status = "approved"'),
       );
       assert.deepEqual(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.tasks, ['ATM-12']);
       const doctor = atm(['doctor'], root, HAKAN);

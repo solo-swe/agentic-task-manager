@@ -16244,14 +16244,14 @@
       "description": "In the Diffs tab's **Rendered** view, a Markdown file shows the whole document, while the Source view hides the unchanged lines before and after each change behind **Show n unchanged lines** (Hakan, 2026-11-18). The rendered view should fold the same way: the changed blocks with a little context, the unchanged parts between them folded, each fold opened by a click, the line numbers in its gutter still those of the source.\n\n## Details\nThe rendered sides come from CompMD with each block's source lines ([`RenderedSide.svelte`](dashboard/src/lib/reviews/RenderedSide.svelte)): fold whole blocks (a paragraph, a list, a table, a diagram), never in the middle of one, around the blocks the hunks touch, with the same context the source view keeps.\n\n## Tests\nComponent tests of `RenderedSide` or `DiffView` (a long document with one change: the blocks around it shown, the rest folded, a fold opens); an e2e test in `reviews.spec.ts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T07:59:31Z",
+      "updated_at": "2026-11-18T08:07:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16267,7 +16267,24 @@
       "number": 591,
       "key_final": false,
       "started_at": "2026-11-18T07:59:31Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "3c2b8d8a4966bc9cc6d44547909ea4d017816f7c",
+      "code_reviews": [
+        {
+          "id": "01a1edb2-5371-76ed-af56-f995bc6bed56",
+          "ref": "CR-19"
+        }
+      ],
+      "review_requested_at": "2026-11-18T08:07:29Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T08:07:29Z",
+          "kind": "review",
+          "text": "CR-19: The rendered Markdown view folds as the source view does",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4bc05d8f15",
@@ -16329,7 +16346,7 @@
       "description": "A task named in a review opens its **details**, over the review, instead of taking you to the project's task list (Hakan, 2026-11-18: today the Overview's Tasks fact links to `/projects/<id>/list?task=ATM-12`, which leaves the review for the whole list, the details panel open over it; \"you are lost in the full list of tasks\").\n\n## Change\n- A click on a task's key in a review opens that task's details panel on the review's page (`?task=ATM-12` on the review's own address, `/projects/<id>/reviews/CR-7?task=ATM-12`, as the other pages take it); closing it (×, Escape, Back) leaves you where you were in the review: the same tab, round, file and scroll. From the details, the task's own links work as they do anywhere.\n- ⌘/Ctrl-click opens the task in a new tab (in the app, an app tab), at its project's page with its details.\n- The same everywhere a review names a task:\n  - the Overview's Tasks fact (`taskHref` in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte));\n  - the Reviews list's rows ([`ReviewList.svelte`](dashboard/src/lib/reviews/ReviewList.svelte), today `r.tasks.join(', ')` as text: a click on a key opens the task, not the review);\n  - the review page's top bar, if it names its tasks;\n  - keys written in the description and the comments (`ATM-12`, an earlier prefix, another project's `LFB-5`), linked only for tasks that exist, never a link to nothing; with ATM-586 (document links in the same texts), through the same `CompMd` options.\n\n## Tests\nComponent tests for the list row and a comment's key (known, unknown, another project's); an e2e test in `reviews.spec.ts`: a click opens the details over the review, closing them leaves the review as it was (tab, file), the address back to the review's; ⌘-click opens a new tab.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewList.svelte",
@@ -16337,7 +16354,7 @@
         "dashboard/src/lib/reviews/ChainBox.svelte"
       ],
       "created_at": "2026-11-18T00:12:52Z",
-      "updated_at": "2026-11-18T00:14:32Z",
+      "updated_at": "2026-11-18T08:07:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16354,7 +16371,9 @@
         "01a1ebf2-f535-752d-88f8-ee8ac3ce346e"
       ],
       "number": 593,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T08:07:34Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ec0b-fc5f-716f-b40a-2517314b85d8",
@@ -17077,9 +17096,9 @@
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T06:05:07Z",
-      "updated_at": "2026-11-18T07:02:59Z",
+      "updated_at": "2026-11-18T08:10:40Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17099,15 +17118,22 @@
         }
       ],
       "review_requested_at": "2026-11-18T07:02:59Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-18T07:02:59Z",
           "kind": "review",
           "text": "CR-12: Reviews waiting for you, wherever you are",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T08:10:40Z",
+          "kind": "note",
+          "text": "Approved: in CR-12 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-18T08:10:40Z"
     },
     {
       "id": "01a1ed47-a3c3-7749-bf96-439d862e8d64",

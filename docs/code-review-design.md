@@ -161,7 +161,7 @@ stateDiagram-v2
 | Status | Means | Who moves it there |
 |---|---|---|
 | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
-| `waiting` | *Waiting for review*: waiting on the reviewers (ATM-613: `open` until 0.41.0, still read as this) | the author, with a round |
+| `waiting` | *Waiting for review*: waiting on the reviewers (ATM-613: `open` until 0.41.0). `review.md` still writes it `open`, so an app or a clone on an older atm sees the review (reading `waiting` too) | the author, with a round |
 | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
 | `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words, as a comment (the page's *Publish comments*; ATM-597): it isn't sent back again (CR-2); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
 | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |

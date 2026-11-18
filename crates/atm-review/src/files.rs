@@ -17,7 +17,8 @@ pub mod review_md {
         id: String,
         number: u32,
         title: String,
-        status: Status,
+        /// As the file writes it ([`stored`]): an older atm reads the review too
+        status: String,
         #[serde(default)]
         tasks: Vec<String>,
         /// None (left out) while whose change it is isn't known
@@ -27,6 +28,27 @@ pub mod review_md {
         reviewers: Vec<String>,
         created: Datetime,
         updated: Datetime,
+    }
+
+    /// A status as `review.md` writes it: its name, but waiting on the reviewers, which the file keeps writing as
+    /// `open`, as atm before 0.41.0 did and reads (ATM-613 renamed the status, not the file's word for it: a clone or
+    /// an app on an older atm would otherwise not see the review at all)
+    fn stored(status: Status) -> &'static str {
+        match status {
+            Status::Waiting => "open",
+            other => other.name(),
+        }
+    }
+
+    /// A status from `review.md`: `open` (as written) or `waiting` (as a 0.41.0 build wrote it a while) is waiting
+    fn status_of(name: &str) -> Result<Status> {
+        if name == "open" || name == "waiting" {
+            return Ok(Status::Waiting);
+        }
+        Status::EVERY
+            .into_iter()
+            .find(|s| s.name() == name)
+            .ok_or_else(|| Error::Invalid(format!("review.md's header can't be read: no status {name}")))
     }
 
     fn date(text: &str, what: &str) -> Result<Datetime> {
@@ -43,7 +65,7 @@ pub mod review_md {
             id: header.id.0.clone(),
             number: header.number,
             title: header.title.clone(),
-            status: header.status,
+            status: stored(header.status).to_string(),
             tasks: header.tasks.clone(),
             author: header.author.as_ref().map(|a| a.0.clone()),
             reviewers: header.reviewers.iter().map(|r| r.0.clone()).collect(),
@@ -91,7 +113,7 @@ pub mod review_md {
                 reference: ReviewRef::numbered(header.number),
                 number: header.number,
                 title: header.title,
-                status: header.status,
+                status: status_of(&header.status)?,
                 // A task by its key; one an earlier atm wrote as people read a provisional key (`~CMD-36`, ATM-594)
                 // is the same key
                 tasks: header
@@ -641,6 +663,27 @@ written at the margin by hand
         // A summary that starts without the blank line still reads
         let tight = format!("{bare}Summary.\n");
         assert_eq!(review_md::read(&tight).unwrap().1, "Summary.");
+    }
+
+    /// ATM-613: waiting on the reviewers is written `open`, as atm before 0.41.0 wrote and reads it, so an app or a
+    /// clone on an older atm still sees the review; `waiting`, as a 0.41.0 build wrote it a while, reads the same
+    #[test]
+    fn waiting_is_written_open_for_an_older_atm_and_both_read_as_waiting() {
+        let mut waiting = header();
+        waiting.status = Status::Waiting;
+        let text = review_md::write(&waiting, "").unwrap();
+        assert!(text.contains("status = \"open\"\n"), "{text}");
+        assert_eq!(review_md::read(&text).unwrap().0.status, Status::Waiting);
+        let newer = text.replace("status = \"open\"", "status = \"waiting\"");
+        assert_eq!(review_md::read(&newer).unwrap().0.status, Status::Waiting);
+        // Every other status by its own name, both ways
+        for status in Status::EVERY.into_iter().filter(|s| *s != Status::Waiting) {
+            let mut h = header();
+            h.status = status;
+            let text = review_md::write(&h, "").unwrap();
+            assert!(text.contains(&format!("status = \"{}\"\n", status.name())), "{text}");
+            assert_eq!(review_md::read(&text).unwrap().0.status, status);
+        }
     }
 
     #[test]
