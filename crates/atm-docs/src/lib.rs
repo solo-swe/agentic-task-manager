@@ -122,31 +122,16 @@ fn key_file(name: &str) -> bool {
     by_extension || ssh
 }
 
-/// The path a request names, checked (§4b): relative to the project's root, `/`-separated, normalized (no `..`, `.`
-/// or empty segment), no hidden segment (`.git`, `.env`, `.agentic-task-manager`), no NUL or backslash, at most 512
-/// characters.
+/// The path a request names, checked (§4b), in the working copy and at a revision alike: relative to the project's
+/// root, `/`-separated, normalized (no `..`, `.` or empty segment), no NUL or backslash, at most 512 characters.
+/// Hidden files are shown (ATM-598: a review's `.github/workflows/ci.yml` or `.gitignore`, then the viewer's too,
+/// CR-3); refused: git's own folder and atm's (`.git`, `.agentic-task-manager`), environment files (`.env`,
+/// `.env.local`, … but not `.env.example`, `.env.sample` or `.env.template`) and key files. What git ignores is
+/// refused by the reads themselves.
 ///
 /// # Errors
-/// `Invalid` for a path that isn't one; `Refused` for a hidden or key file.
+/// `Invalid` for a path that isn't one; `Refused` for one of git's or atm's, an environment file or a key file.
 pub fn document_path(path: &str) -> Result<&str> {
-    let path = path_shape(path)?;
-    if path.split('/').any(|s| s.starts_with('.')) {
-        return Err(Error::Refused(format!(
-            "{path}: hidden files and folders aren't shown"
-        )));
-    }
-    Ok(path)
-}
-
-/// A file a review's round names, at its revision (ATM-598: a review's `.github/workflows/ci.yml` or `.gitignore`
-/// showed no diff): checked as [`document_path`], but hidden files are shown: the review's own diff shows their
-/// change, and the file is read from a commit or tree, never the working copy. Still refused: git's own folder and
-/// atm's (`.git`, `.agentic-task-manager`), environment files (`.env`, `.env.local`, … but not `.env.example`,
-/// `.env.sample` or `.env.template`) and key files.
-///
-/// # Errors
-/// As [`document_path`].
-pub fn revision_path(path: &str) -> Result<&str> {
     let path = path_shape(path)?;
     let refused = |what: &str| Err(Error::Refused(format!("{path}: {what} aren't shown")));
     let segments: Vec<&str> = path.split('/').collect();
@@ -363,7 +348,7 @@ pub fn read_document(vcs: Option<&GitVcs>, path: &str) -> Result<Value> {
 /// `TooLarge` as [`read_document`].
 pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Result<Value> {
     // A file a review names, at its revision: hidden ones too (ATM-598)
-    let path = revision_path(path)?;
+    let path = document_path(path)?;
     let Some(vcs) = vcs else {
         return Err(Error::NotFound(
             "this project has no repository to read files from".into(),
@@ -557,25 +542,10 @@ mod tests {
         }
     }
 
+    /// ATM-598, CR-3: hidden files shown, in the working copy and at a revision, but not git's or atm's folders,
+    /// environment files or key files; its shape checked as any path's
     #[test]
-    fn a_hidden_segment_anywhere_in_the_path_is_refused() {
-        for hidden in [
-            ".agentic-task-manager/tasks.json",
-            "docs/.hidden/x.md",
-            "src/.env.local",
-            ".github/workflows/ci.yml",
-        ] {
-            assert!(
-                matches!(document_path(hidden), Err(Error::Refused(_))),
-                "{hidden}"
-            );
-        }
-    }
-
-    /// ATM-598: a file a review names, at its revision: hidden ones shown, but not git's or atm's folders, environment
-    /// files or key files; its shape checked as any path's
-    #[test]
-    fn a_hidden_file_at_a_revision_is_shown_but_not_gits_atms_environments_or_keys() {
+    fn a_hidden_file_is_shown_but_not_gits_atms_environments_or_keys() {
         for shown in [
             ".github/workflows/ci.yml",
             ".gitignore",
@@ -587,7 +557,7 @@ mod tests {
             ".prettierrc",
             "src/.environment.ts",
         ] {
-            assert_eq!(revision_path(shown).ok(), Some(shown), "{shown}");
+            assert_eq!(document_path(shown).ok(), Some(shown), "{shown}");
         }
         for refused in [
             ".git/config",
@@ -600,13 +570,13 @@ mod tests {
             "certs/.server.pem",
         ] {
             assert!(
-                matches!(revision_path(refused), Err(Error::Refused(_))),
+                matches!(document_path(refused), Err(Error::Refused(_))),
                 "{refused}"
             );
         }
         for bad in ["", "/etc/passwd", "a/../b", "a\\b", "./a"] {
             assert!(
-                matches!(revision_path(bad), Err(Error::Invalid(_))),
+                matches!(document_path(bad), Err(Error::Invalid(_))),
                 "{bad:?}"
             );
         }
@@ -973,17 +943,23 @@ mod tests {
         ));
     }
 
-    /// ATM-598: a hidden file a commit has is read at it (a review's side); the working copy's never is
+    /// ATM-598, CR-3: a hidden file is read at a revision (a review's side) and from the working copy (the viewer)
     #[test]
-    fn a_hidden_file_is_read_at_a_revision_but_not_from_the_working_copy() {
+    fn a_hidden_file_is_read_at_a_revision_and_from_the_working_copy() {
         let repo = Repo::new();
         let vcs = repo.vcs();
         std::fs::create_dir_all(repo.0.join(".github/workflows")).unwrap();
         repo.commit(".github/workflows/ci.yml", "on: push\n");
         let side = read_document_at(Some(&vcs), "HEAD", ".github/workflows/ci.yml").unwrap();
         assert_eq!(side["text"], "on: push\n");
+        let now = read_document(Some(&vcs), ".github/workflows/ci.yml").unwrap();
+        assert_eq!(now["text"], "on: push\n");
+        // A hidden file git ignores stays refused in the working copy
+        repo.commit(".gitignore", ".cache/\n");
+        std::fs::create_dir_all(repo.0.join(".cache")).unwrap();
+        std::fs::write(repo.0.join(".cache/x.md"), "x\n").unwrap();
         assert!(matches!(
-            read_document(Some(&vcs), ".github/workflows/ci.yml"),
+            read_document(Some(&vcs), ".cache/x.md"),
             Err(Error::Refused(_))
         ));
         // An environment file committed by mistake stays refused at a revision too
@@ -1214,8 +1190,9 @@ mod tests {
             read_image(Some(&vcs), "none.png"),
             Err(Error::NotFound(_))
         ));
+        // Inside git's own folder, refused before anything is read (a hidden image elsewhere is shown, CR-3)
         assert!(matches!(
-            read_image(Some(&vcs), ".hidden.png"),
+            read_image(Some(&vcs), ".git/x.png"),
             Err(Error::Refused(_))
         ));
     }

@@ -183,7 +183,7 @@ test.describe('the document viewer', () => {
   });
 
   test('says when a file is not in the project, or not shown', async ({ page, tasksServer }) => {
-    tasksServer.refuseDocument('.env', 403, ".env: hidden files and folders aren't shown");
+    tasksServer.refuseDocument('.env', 403, ".env: environment files aren't shown");
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
     await follow(page, '/projects/fixture/list?doc=docs/gone.md');
     await expect(page.locator('#doc-fallback')).toHaveAttribute('data-error', 'missing');
@@ -192,7 +192,7 @@ test.describe('the document viewer', () => {
     await follow(page, '/projects/fixture/list?doc=.env');
     await expect(page.locator('#doc-fallback')).toHaveAttribute('data-error', 'refused');
     await expect(page.locator('#doc-fallback')).toContainText("Can't be shown here");
-    await expect(page.locator('#doc-fallback')).toContainText('hidden files');
+    await expect(page.locator('#doc-fallback')).toContainText('environment files');
   });
 
   test('a link that would leave the project opens nothing', async ({ page, tasksServer }) => {

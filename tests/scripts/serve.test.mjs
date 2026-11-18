@@ -757,6 +757,11 @@ describe('serve', () => {
       ['code', 'ts', '```ts\nexport const a = `x`;\n```\n', 1, false],
     );
 
+    // A hidden file is shown (CR-3), but not git's or atm's own, an environment file or one git ignores (below)
+    const hidden = await get('documents', '.gitignore');
+    assert.equal(hidden.status, 200);
+    assert.match((await hidden.json()).document, /secrets\//);
+
     // An image: a Markdown image in documents, its bytes from files, sandboxed and never sniffed
     assert.equal((await (await get('documents', 'img/a.png')).json()).document, '![a.png](a.png)\n');
     const image = await get('files', 'img/a.png');

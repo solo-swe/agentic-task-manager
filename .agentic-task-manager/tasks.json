@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 613
+    "next_number": 614
   },
   "tasks": [
     {
@@ -16394,13 +16394,13 @@
       "description": "A review in **changes requested** refuses new comments and replies, in the app and from `atm review comment` / `atm review reply`. Asking for changes doesn't end a review: the reviewer and the author go on talking about the changes until the next round (reported by Hakan, 2026-11-18, on CR-1).\n\n## Change\n- `crates/atm-review/src/rules.rs`: a comment or reply is allowed on an open review, `changes_requested` included; only an ended review (approved, rejected, closed) refuses them, if it does today.\n- The dashboard's review page keeps its comment boxes and Reply buttons while changes are requested.\n\n## Tests\n- A rules table: each review status, comment and reply, allowed or refused.\n- The CLI suite: a comment and a reply on a review with changes requested.\n- A component or e2e test: the review page in changes requested still lets the reviewer comment.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rules.rs"
       ],
       "created_at": "2026-11-18T01:02:07Z",
-      "updated_at": "2026-11-18T06:35:40Z",
+      "updated_at": "2026-11-18T06:38:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16414,7 +16414,7 @@
       "key_final": false,
       "started_at": "2026-11-18T06:35:40Z",
       "started_by": "claude:0f56a916",
-      "commit": "b1109f17b1ddf0dc8ab4ca88a29606b602e6373c",
+      "commit": "73925a5c8c850ed503849a94763bc4901447095f",
       "code_reviews": [
         {
           "id": "01a1ec3b-fe1f-7571-80a6-743e459f6c43",
@@ -16433,6 +16433,24 @@
           "kind": "rejection",
           "text": "CR-2 round 1: 1 open comment",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T06:37:57Z",
+          "kind": "review",
+          "text": "CR-2: round 2",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T06:38:29Z",
+          "kind": "note",
+          "text": "Approved: in CR-2 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T06:38:45Z",
+          "kind": "outcome",
+          "text": "Approved in CR-2: a review sent back takes comments, replies and Publish comments, and is not sent back again; drafts are ATM-612",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -16440,8 +16458,16 @@
           "from": "2026-11-18T01:18:37Z",
           "to": "2026-11-18T05:41:16Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-18T06:37:57Z",
+          "to": "2026-11-18T06:38:29Z",
+          "outcome": "approved"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-18T06:37:57Z",
+      "completed_at": "2026-11-18T06:38:45Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1eca5-ba9f-721a-8221-49457ac24938",
@@ -16454,16 +16480,16 @@
       "description": "A review's hidden files (`.github/workflows/ci.yml`, `.gitignore`, `.env.example`, …) don't show in its Diffs tab (reported by Hakan, 2026-11-18).\n\n## Likely cause\nThe documents route reads a review's sides through atm-docs, which refuses paths with a hidden segment (security invariant I11 in `docs/security-architecture.md`, written for the document viewer's working-copy reads). A side at a revision (`documents?path=&at=`) is a file the review's own diff names, so it should be readable when the round lists it, while key files and what git ignores stay refused.\n\n## Change\n- `crates/atm-docs/src/lib.rs` `read_document_at`: allow a hidden segment for a file at a revision; keep the other checks (key files, size, no symlinks, git's ignore rules). Find out first whether the refusal is there, in the page's file list, or in the round itself.\n- `docs/security-architecture.md` I11: say what a revision's side may read.\n\n## Tests\n- atm-docs: a hidden file at a revision is read; a key file (`.env`, an SSH key) is still refused; the working-copy route still refuses hidden files.\n- An e2e test: a review with a `.github/` file shows its diff.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-docs/src/lib.rs",
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-18T03:14:06Z",
-      "updated_at": "2026-11-18T05:45:54Z",
+      "updated_at": "2026-11-18T06:38:25Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16473,7 +16499,7 @@
       "sprint": "Code reviews in the app",
       "number": 598,
       "key_final": false,
-      "started_at": "2026-11-18T03:14:54Z",
+      "started_at": "2026-11-18T06:38:25Z",
       "started_by": "claude:0f56a916",
       "commit": "05980ba6b2cf839ece0291c78a589f5f59768df9",
       "code_reviews": [
@@ -16482,8 +16508,6 @@
           "ref": "CR-3"
         }
       ],
-      "review_requested_at": "2026-11-18T03:18:00Z",
-      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-18T03:18:00Z",
@@ -16498,7 +16522,13 @@
           "by": "Hakan Serce"
         }
       ],
-      "reviewed_at": "2026-11-18T05:45:54Z"
+      "reviews": [
+        {
+          "from": "2026-11-18T03:18:00Z",
+          "to": "2026-11-18T05:45:54Z",
+          "outcome": "changes_requested"
+        }
+      ]
     },
     {
       "id": "01a1ecab-b2d5-7526-834f-2f0a18326fa8",
@@ -17208,6 +17238,40 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 612,
+      "key_final": false
+    },
+    {
+      "id": "01a1ed60-9f24-779f-97fd-ef0f481b8965",
+      "name": "Open means not yet decided: the status waiting on reviewers renamed, and the Open filter shows every open review",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-18): *Open* is confusing. It should mean a review isn't approved or closed yet, but it is one particular status, waiting on its reviewers. The list's *Open* button should show every review still open.\n\n## Change\n- **The status:** `open` is renamed `waiting`, labelled *Waiting for review*. That covers the review files (`status = \"waiting\"`), atm-review's `Status`, the REST and CLI output, `--status` filters, the dashboard's `ReviewStatus` and `STATUS_LABELS`, and the docs. A review file an earlier atm wrote with `open` still reads, as `waiting`, and is written back as `waiting`. `atm doctor` stays quiet about it.\n- **Open, the group:** draft, waiting, live and changes requested (anything not approved or closed). In the list, *Open* is a filter of its own: the first button, standing for those four. The status buttons stay for narrowing further. The query's `status=open` means the group (the server expands it), so a list query and a filter kept by ATM-604 still work.\n- `atm review list --open` (or `--status open`), the same group.\n\n## Tests\n- atm-review: a review file with `open` reads as waiting and is written as `waiting`; every rule that named open works on waiting.\n- atm-lib and REST: `status=open` lists the four and not approved or closed; `status=waiting` lists that status only.\n- The CLI suite: `list --open`, and the status printed as waiting.\n- Component and e2e: *Open* shows a draft, a waiting, a live and a sent-back review and no decided one; a kept filter from before still works.\n- Update `docs/code-review-design.md` (the state diagram and table), `docs/agent/reviews.md`, `docs/multi-project-api.md`, and the skills where they say `open`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/src/",
+        "crates/atm-lib/src/review_pages.rs",
+        "dashboard/src/lib/reviews/types.ts",
+        "dashboard/src/lib/reviews/ReviewList.svelte",
+        "docs/code-review-design.md"
+      ],
+      "created_at": "2026-11-18T06:38:14Z",
+      "updated_at": "2026-11-18T06:38:14Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:38:14Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 613,
       "key_final": false
     }
   ]

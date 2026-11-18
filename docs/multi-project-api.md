@@ -200,8 +200,9 @@ reads the working copy through the version control. `path` is relative to the pr
   `no-store`.
 - `files?path=` answers an image's bytes (PNG, JPEG, GIF, WebP, SVG whose bytes match its name) with its type,
   `Cache-Control: no-cache`, `nosniff` and a sandboxing CSP; any other file `403`. The ETag is the size and mtime.
-- Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; a hidden file or
-  folder, a key file (`*.pem`, `id_rsa*`, …) or one git ignores `403`; a missing file, or one reached through a
+- Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; git's or atm's own
+  folder (`.git`, `.agentic-task-manager`), an environment file (`.env`, `.env.local`; not `.env.example`), a key file
+  (`*.pem`, `id_rsa*`, …) or one git ignores `403` (other hidden files, `.github/` or `.gitignore`, are shown: CR-3); a missing file, or one reached through a
   symlink, `404`; over 1 MB (5 MB for an image) `413`. Each with `{"error": …}`.
 
 ### 2.7 The dashboard's pages
