@@ -162,6 +162,18 @@ export function withReview(address: string, at: Partial<ReviewAddress> & { revie
   return formatAddress(params);
 }
 
+/** The page of review `review` of `project`, in the workspace `address` is in, with nothing else open over it (a task's
+ * details or a document: ATM-585, a task linking to its review) */
+export function reviewPageOf(address: string, project: string, review: string): string {
+  const params = new URLSearchParams();
+  const workspace = addressParams(address).get('workspace');
+  if (workspace) params.set('workspace', workspace);
+  params.set('project', project);
+  params.set('view', REVIEWS);
+  params.set('review', review);
+  return formatAddress(params);
+}
+
 /** The workspace an address is in: its `/w/<w>`, else `default` */
 export function workspaceOf(address: string): string {
   return addressParams(address).get('workspace') || DEFAULT_WORKSPACE;

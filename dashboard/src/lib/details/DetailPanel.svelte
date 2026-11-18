@@ -14,6 +14,7 @@
   import { referenceTo, type DocumentRef } from '../documents';
   import { cutOff, scrollBehavior } from '../scroll';
   import RepoRef from '../ui/RepoRef.svelte';
+  import ReviewLink from './ReviewLink.svelte';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
   import LabelChips from '../ui/LabelChips.svelte';
@@ -73,6 +74,12 @@
   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
   const carried = $derived(task && sprint ? carriedCount(task, sprint) : 0);
   const reviewMode = $derived(task ? effectiveReview(task) : 'none');
+  // Its code reviews (ATM-585: `code_reviews`, oldest first): the latest to open, the others after it, in the project
+  // shown
+  const codeReviews = $derived(task?.code_reviews ?? []);
+  const latestReview = $derived(codeReviews.at(-1) ?? null);
+  const earlierReviews = $derived(codeReviews.slice(0, -1).reverse());
+  const reviewProject = $derived(dashboard.projectId);
   const actors = $derived(task ? actorsLine(task) : '');
   const attempts = $derived(task ? earlierAttempts(task) : []);
   const requiredBy = $derived(task ? dashboard.tasks.filter((t) => (t.dependencies ?? []).includes(task.id)) : []);
@@ -483,10 +490,28 @@
       <div class="label">In review</div>
       <div class="value" style="font-size:13px">
         <div><strong>{reviewSummary(review)}</strong></div>
+        {#if latestReview && reviewProject}
+          <!-- Its code review, the latest it names, to open (ATM-585); the earlier ones after it -->
+          <div class="detail-review-links">
+            <ReviewLink project={reviewProject} reference={latestReview.ref} prominent />
+            {#each earlierReviews as r (r.id)}<ReviewLink project={reviewProject} reference={r.ref} />{/each}
+          </div>
+        {/if}
         <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
         {#if review.note}<div class="review-note">
             <CompMd text={review.note.text} {task} onopen={openDocument} />
           </div>{/if}
+      </div>
+    </div>
+  {:else if latestReview && reviewProject}
+    <!-- Not in review (done, sent back, …): its code reviews still, less prominently (ATM-585) -->
+    <div class="detail-section" id="detail-code-reviews">
+      <div class="label">Code reviews</div>
+      <div class="value detail-review-links">
+        {#each [...earlierReviews, latestReview] as r (r.id)}<ReviewLink
+            project={reviewProject}
+            reference={r.ref}
+          />{/each}
       </div>
     </div>
   {/if}

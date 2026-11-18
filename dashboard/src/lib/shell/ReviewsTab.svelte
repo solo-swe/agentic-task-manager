@@ -24,6 +24,7 @@
     viewedKeys,
   } from '../review-data';
   import { keepFilter, keptFilter } from '../review-filter';
+  import { learnReviews } from '../reviews/known.svelte';
   import ReviewList from '../reviews/ReviewList.svelte';
   import ReviewPage from '../reviews/ReviewPage.svelte';
   import { reviewTitle } from '../reviews/page';
@@ -81,6 +82,7 @@
     try {
       if (at.review) {
         const page = await loadReview(id, at.review, at.round, at.against);
+        learnReviews(id, [page.review]);
         const text = JSON.stringify(page);
         if (ask === asked && text !== shownText) {
           shownText = text;
@@ -88,6 +90,10 @@
         }
       } else {
         const listed = await loadReviews(id, query);
+        learnReviews(
+          id,
+          listed.reviews.map((e) => e.review),
+        );
         const text = JSON.stringify(listed.reviews);
         if (ask === asked && text !== entriesText) {
           entriesText = text;

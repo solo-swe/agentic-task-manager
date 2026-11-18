@@ -3993,6 +3993,14 @@ svg.graph-minimap.hidden {
 .review-note {
   margin-top: var(--space-2);
 }
+/* A task's code reviews (ATM-585): the latest first, larger, the earlier ones after it */
+.detail-review-links {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
 /* Blocked on a decision (D-3.2): waiting on you stands out; waiting on an agent stays quiet */
 .block-wait {
   color: var(--text-muted);
