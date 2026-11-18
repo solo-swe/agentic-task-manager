@@ -128,6 +128,36 @@ describe('CompMd', () => {
       expect(container.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready');
     });
 
+    // ATM-625: a run cut in two by a comment kept its old drawing (all its old lines) until its next turn, so the box
+    // under its first half was far below, and focusing it scrolled the pane
+    it('drawn, then given a new text: the new text as written at once, the old drawing hidden, until its turn', async () => {
+      const idle: (() => void)[] = [];
+      vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));
+      const { raise } = await compmdWithView();
+      const { container, rerender } = render(CompMd, { text: 'one\ntwo\nthree', plain: 'one\ntwo\nthree' });
+      await vi.waitFor(() => expect(idle).toHaveLength(1));
+      idle.shift()!();
+      raise('rendered', {} as never);
+      const outer = () => container.querySelector('.compmd')!;
+      const page = () => container.querySelector('.compmd-page:not(.compmd-waiting)') as HTMLElement;
+      const waiting = () => container.querySelector('.compmd-waiting');
+      await vi.waitFor(() => expect(outer()).toHaveAttribute('data-compmd', 'ready'));
+      page().textContent = 'one two three'; // what CompMD drew
+      await rerender({ text: 'one', plain: 'one' });
+      expect(outer()).toHaveAttribute('data-compmd', 'loading');
+      expect(outer()).toHaveClass('compmd-stale');
+      expect(page().hidden).toBe(true);
+      expect(waiting()).toHaveTextContent(/^one$/);
+      // Its turn: drawn, and the plain text gives way
+      await vi.waitFor(() => expect(idle).toHaveLength(1));
+      idle.shift()!();
+      raise('rendered', {} as never);
+      await vi.waitFor(() => expect(outer()).toHaveAttribute('data-compmd', 'ready'));
+      expect(outer()).not.toHaveClass('compmd-stale');
+      expect(page().hidden).toBe(false);
+      expect(waiting()).toBeNull();
+    });
+
     it('gone before its turn, it never renders', async () => {
       const idle: (() => void)[] = [];
       vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));

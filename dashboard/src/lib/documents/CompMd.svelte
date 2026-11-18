@@ -95,6 +95,8 @@
   let undrawn = $state<string[]>([]);
   /** Whether CompMD has drawn this text yet: `data-compmd` says so, for what measures the panel once it has */
   let drawn = $state(false);
+  /** Drawn, but for an earlier text: hidden, the new text as written shown in its place until its turn (ATM-625) */
+  let stale = $state(false);
   let view: View | null = null;
   let schemes: MutationObserver | null = null;
   /** What was last rendered: the text and the task's data, so an unchanged text is never processed again (R8) */
@@ -114,9 +116,28 @@
     if (asked === measuring && shown === view) onlines(lines, target);
   }
 
+  /** What is drawn, as one text: an unchanged one is never processed again (R8) */
+  const key = $derived(
+    text +
+      '\u0000' +
+      JSON.stringify(task ? taskData(task) : null) +
+      '\u0000' +
+      (path ?? '') +
+      '\u0000' +
+      (only?.join('-') ?? ''),
+  );
+  // A drawn text that changed waits for its turn as the new text, as written (ATM-625): the old drawing, kept until
+  // then, had the old lines, so a run cut in two by a comment stood as tall as before it was cut, and the comment box
+  // under its first half was far below, where focusing it scrolled the pane. Before the page is updated, so nothing
+  // measures or focuses against the old drawing
+  $effect.pre(() => {
+    if (plain !== undefined && view && key !== rendered) {
+      stale = true;
+      drawn = false;
+    }
+  });
+
   $effect(() => {
-    const data = task ? taskData(task) : null;
-    const key = text + '\u0000' + JSON.stringify(data) + '\u0000' + (path ?? '') + '\u0000' + (only?.join('-') ?? '');
     const target = host;
     if (!target || key === rendered) return;
     rendered = key;
@@ -163,6 +184,7 @@
         view.on('rendered', () => {
           secureLinks(target);
           drawn = true;
+          stale = false;
           turnDone?.();
           turnDone = null;
         });
@@ -250,6 +272,7 @@
 <div
   class="compmd"
   class:compmd-inline={inline}
+  class:compmd-stale={stale}
   data-compmd={failed ? 'failed' : drawn ? 'ready' : 'loading'}
   onclick={follow}
   onauxclick={(e) => {
@@ -261,7 +284,7 @@
   {#if failed}
     <p class="compmd-note" role="note">Shown as written: the formatting couldn’t load ({loadError}).</p>
   {/if}
-  <div class="compmd-page" hidden={failed} bind:this={host}></div>
+  <div class="compmd-page" hidden={failed || stale} bind:this={host}></div>
   {#if plain !== undefined && !drawn && !failed}
     <!-- Its turn not come yet: the code as written, where CompMD will draw it (ATM-587). Hidden by the style below as
          soon as CompMD has drawn anything, before it says so: both at once made the run twice as tall for a moment -->
@@ -274,8 +297,9 @@
 </div>
 
 <style>
-  /* The code as written gives way the moment CompMD has drawn the text (ATM-587) */
-  .compmd-page:not(:empty) + .compmd-waiting {
+  /* The code as written gives way the moment CompMD has drawn the text (ATM-587); not to a drawing of an earlier text
+     (ATM-625) */
+  .compmd:not(.compmd-stale) > .compmd-page:not(:empty) + .compmd-waiting {
     display: none;
   }
 </style>

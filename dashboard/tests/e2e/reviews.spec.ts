@@ -521,6 +521,68 @@ test.describe('a review’s page', () => {
     await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // ATM-625 (Hakan, the app): + on a wrapped long line of a Markdown file sent the pane to near the end of the review
+  for (const wrapped of [true, false])
+    test(`+ on a line ${wrapped ? 'wrapped' : 'not wrapped'} opens the comment box where it is; the pane stays`, async ({
+      page,
+      tasksServer,
+    }) => {
+      const long = (n: number) => `Line ${n}: ${'a long sentence of the plan, '.repeat(12)}`;
+      const texts = ['docs/a.md', 'docs/b.md', 'docs/c.md'].map(
+        (path, k) => [path, Array.from({ length: 40 }, (_, n) => long(k * 100 + n)).join('\n') + '\n'] as const,
+      );
+      const patchOf = (path: string, text: string) =>
+        `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1,40 @@\n` +
+        text
+          .trimEnd()
+          .split('\n')
+          .map((l) => `+${l}`)
+          .join('\n') +
+        '\n';
+      for (const [path, text] of texts)
+        tasksServer.setRevisionDocument('head3', projectDocument(path, text, { kind: 'markdown', line_offset: 1 }));
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({
+          view: {
+            round: 3,
+            against: null,
+            files: texts.map(([path, text]) => file(path, patchOf(path, text), 'added', null)),
+          },
+        }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await page.getByRole('button', { name: 'Unified' }).click();
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
+      const diff = diffOf(page, 'docs/a.md');
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      // A line in the middle of the first file, in the middle of the pane
+      const line = diff.locator('.diff-line').nth(20);
+      await line.evaluate((l) => l.scrollIntoView({ block: 'center' }));
+      const pane = page.locator('.review-diffs');
+      const before = await pane.evaluate((p) => p.scrollTop);
+      // Over the line's text (CompMD's code lies over the rows; the run finds the line from the pointer's height)
+      await line.hover({ force: true });
+      await diff.locator('.diff-plus').click();
+      const box = page.getByRole('textbox', { name: /Comment/ }).first();
+      await expect(box).toBeFocused();
+      // The comment box opens under the line, in view; the pane stays (it moved 444 px, 1,564 wrapped: the run's old
+      // drawing, still all 40 lines while the box under its first half took the focus)
+      await page.waitForTimeout(300);
+      const after = await pane.evaluate((p) => p.scrollTop);
+      expect(Math.abs(after - before), `the pane moved from ${before} to ${after}`).toBeLessThan(40);
+      await expect(box).toBeInViewport();
+      const below = await box.evaluate(
+        (b, l) => b.getBoundingClientRect().top - (l as HTMLElement).getBoundingClientRect().bottom,
+        await line.elementHandle(),
+      );
+      expect(below).toBeGreaterThanOrEqual(-1);
+      expect(below).toBeLessThan(120);
+    });
+
   // ATM-589: a run that ends with an empty line, before the fold that ends the file: the empty line is drawn, its
   // number beside it, and nothing over the fold
   test('a run ending with an empty line before the last fold: its number on its line, nothing over the fold', async ({

@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 629
+    "next_number": 630
   },
   "tasks": [
     {
@@ -18233,7 +18233,7 @@
       "description": "Hakan, 2026-11-18: approvals waited unseen in review (CR-20, CR-23) because the agent's watch had lapsed. `atm review watch` runs for 8 hours by default, but a harness may stop it sooner: Claude Code's Monitor ends every watch after 5 minutes. Between one watch and the next, events are lost: nothing tells the agent what happened while it wasn't watching.\n\n## Change\n- **Catch up.** atm keeps, per agent (the watch's `--agent`, else the session's identity), the last event it delivered: a cursor in atm's state folder, not in the project. A new `atm review watch` first prints every event since then (comments, replies, decisions about the agent's work), in order, then follows live. The first watch ever starts from now. `--since <time>` overrides the cursor.\n- **`--once`.** The watch exits after delivering at least one event (the caught-up ones count), exit code 0; at the time up with none, exit code 3, as `atm review wait`. So an agent can run it as an ordinary background command, notified when it exits, and start it again.\n- Each event's JSON carries its time (and the cursor), so an agent can say what it saw.\n- **The loop skill** (`skills/atm-loop-tasks/SKILL.md`) and `atm docs reviews`: the watch may end (its time up, or the harness stops it); start it again whenever it does, and it catches up. With `--once`, start it again after each event.\n\n## Tests\n- The CLI suite (`tests/scripts/reviews.test.mjs`, *agents listening*): a decision and a comment made while no watch runs are printed by the next watch, once; a second watch prints nothing old; `--since`; `--once` exits after the first event, and with exit code 3 at the time up.\n- Two agents: each has its own cursor.\n- atm-lib: the cursor's file, written atomically, and a missing or broken one (start from now, say so).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_listen.rs",
@@ -18243,7 +18243,7 @@
         "tests/scripts/reviews.test.mjs"
       ],
       "created_at": "2026-11-18T20:52:12Z",
-      "updated_at": "2026-11-18T21:18:48Z",
+      "updated_at": "2026-11-18T21:25:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18260,7 +18260,24 @@
       "number": 624,
       "key_final": false,
       "started_at": "2026-11-18T21:18:48Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "99e1cab654764c3c24acef15e5e33c50bd1f5630",
+      "code_reviews": [
+        {
+          "id": "01a1f08d-3a61-74cc-bc80-4624b622a0f3",
+          "ref": "CR-27"
+        }
+      ],
+      "review_requested_at": "2026-11-18T21:25:49Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T21:25:49Z",
+          "kind": "review",
+          "text": "CR-27: The review watch catches up on what it missed",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f07e-b5ea-7451-b1fb-a032eba1e31e",
@@ -18273,7 +18290,7 @@
       "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): in a Markdown file shown as source (not rendered), with **Wrap** on (ATM-588), clicking **+** to comment on a long wrapped line makes the diffs pane jump to somewhere near the end of the review.\n\n## Leads\n- Wrapped rows are measured by `DiffCode`'s `measureWrapped` (a DOM range at each line's start). The composer opening under the row changes the run's height; if the rows are measured again from a stale layout, or the measuring itself scrolls (a range's `getClientRects` on a skipped or unlaid-out element), the pane can move.\n- The page pins the file gone to (`ReviewPage.svelte`'s `chosen`/`pinned` and its ResizeObserver): opening the composer may count as a jump, or pin a file other than the one written in.\n- The composer's textarea is focused on show (`focusOnShow`): a `focus()` without `preventScroll` scrolls it into view, and a wrong position for it (measured before layout) sends the pane far.\n\nReproduce first: an e2e in `reviews.spec.ts` with a long Markdown line, Wrap on, `+` clicked; the pane's `scrollTop` must stay within a few pixels, and the composer be in view.\n\n## Tests\nThat e2e, in Unified with Wrap (Split disables Wrap), and the same without Wrap.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -18282,9 +18299,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T21:09:58Z",
-      "updated_at": "2026-11-18T21:09:58Z",
+      "updated_at": "2026-11-18T21:25:50Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -18296,7 +18313,9 @@
         "dashboard"
       ],
       "number": 625,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T21:25:50Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f07e-b5ea-7451-b1fb-a03375d418fc",
@@ -18406,6 +18425,40 @@
       ],
       "with": "user",
       "number": 628,
+      "key_final": false
+    },
+    {
+      "id": "01a1f094-5995-7023-ab74-23dd50446bed",
+      "name": "Switching to the Graph tab with 500 tasks goes over budget under load",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "performance"
+      ],
+      "description": "Found on 2026-11-19 (ATM-625's full functional run): `performance.spec.ts` › *performance with 500 tasks* › *switching tabs* failed once, the Graph tab at **247 ms** against the 200 ms budget, while the whole suite ran on its workers. Alone, three runs in a row: Graph 111, 142 and 124 ms; the other tabs 27 to 111 ms. The change being tested (ATM-625, `CompMd.svelte`) doesn't touch the Graph tab.\n\nDon't raise the budget or just rerun it (AGENTS.md). As ATM-615 did for the long review:\n- Reproduce it with the CPU slowed (`Emulation.setCPUThrottlingRate`, 2× and 4×) or with the suite's workers.\n- Find what the Graph switch spends its time on with 500 tasks (layout, the minimap, drawing the edges, the auto-fit), with a trace or long animation frames.\n- Fix the cause, and say in the test what it now measures.\n\n## Tests\nThe spec passes 10 times in a row with the CPU slowed 2×, and in the full functional run.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/graph/DepGraph.svelte",
+        "dashboard/tests/e2e/performance.spec.ts"
+      ],
+      "created_at": "2026-11-18T21:33:36Z",
+      "updated_at": "2026-11-18T21:33:36Z",
+      "created_by": "claude:0f56a916",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:33:36Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 629,
       "key_final": false
     }
   ]
