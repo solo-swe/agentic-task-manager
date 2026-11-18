@@ -784,4 +784,91 @@ test.describe('performance', () => {
     console.log('review file far down (ms):', JSON.stringify({ ...phases, total: Math.round(phases.total) }));
     expect(phases.total).toBeLessThan(BUDGET_MS);
   });
+
+  // ATM-587: a review shaped as CompMD's CR-1 (94 files, ~3,000 lines added: a few long files, most short, some long
+  // lines), measured: the Diffs tab opened, then its pane scrolled from top to bottom
+  test('a long review (94 files, ~3,000 lines): the Diffs tab opens and its pane scrolls, measured', async ({
+    page,
+    tasksServer,
+  }) => {
+    const sizes = Array.from({ length: 94 }, (_, i) => (i % 31 === 0 ? 600 : i % 7 === 0 ? 120 : 12));
+    const files = sizes.map((added, i) => {
+      const path = `src/d${String(Math.floor(i / 10)).padStart(2, '0')}/f${String(i).padStart(3, '0')}.rs`;
+      const longLine = (n: number) => `let value_${n} = "${'x'.repeat(n % 5 === 0 ? 240 : 30)}";`;
+      const body = Array.from({ length: added }, (_, n) => `+${longLine(n)}`).join('\n');
+      return {
+        path,
+        old_path: path,
+        status: 'modified',
+        binary: false,
+        patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,${added + 3} @@\n line 1\n line 2\n line 3\n${body}\n`,
+        before: `b${i}`,
+        after: `a${i}`,
+      };
+    });
+    await openReviews(page, tasksServer);
+    files.forEach((f, i) => {
+      const head = ['line 1', 'line 2', 'line 3'];
+      const added = f.patch
+        .split('\n')
+        .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+        .map((l) => l.slice(1));
+      const doc = (text: string) => projectDocument(f.path, text, { kind: 'code', language: 'rust', line_offset: 1 });
+      tasksServer
+        .setRevisionDocument(`b${i}`, doc(head.join('\n') + '\n'))
+        .setRevisionDocument(`a${i}`, doc([...head, ...added].join('\n') + '\n'));
+    });
+    tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files } }));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await expect(page.locator('#review-tab-diffs')).toBeVisible();
+    const opened = await page.evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(r));
+      const start = performance.now();
+      (document.querySelector('#review-tab-diffs') as HTMLElement).click();
+      while (!document.querySelector('.diff-view .diff-line')) await frame();
+      const firstDrawn = performance.now() - start;
+      await frame();
+      await frame();
+      return { firstDrawn: Math.round(firstDrawn), settled: Math.round(performance.now() - start) };
+    });
+    await expect(page.locator('.review-file-card')).toHaveCount(94);
+    // Scrolled in steps of a screen, as a reader does, each step waiting for its frame: the slowest frames, long
+    // tasks and the whole time
+    const scrolled = await page.evaluate(async () => {
+      const pane = document.querySelector('.review-diffs') as HTMLElement;
+      const long: number[] = [];
+      const observer = new PerformanceObserver((list) => list.getEntries().forEach((e) => long.push(e.duration)));
+      try {
+        observer.observe({ type: 'longtask', buffered: false });
+      } catch {
+        // no long-task timing in this browser
+      }
+      const frame = () => new Promise((r) => requestAnimationFrame(r));
+      const frames: number[] = [];
+      const start = performance.now();
+      let last = start;
+      for (let steps = 0; steps < 2000 && pane.scrollTop + pane.clientHeight < pane.scrollHeight - 2; steps++) {
+        pane.scrollTop += pane.clientHeight;
+        await frame();
+        const now = performance.now();
+        frames.push(now - last);
+        last = now;
+      }
+      observer.disconnect();
+      frames.sort((a, b) => b - a);
+      return {
+        steps: frames.length,
+        total: Math.round(performance.now() - start),
+        slowest: frames.slice(0, 3).map(Math.round),
+        median: Math.round(frames[Math.floor(frames.length / 2)] ?? 0),
+        longTasks: long.length,
+        longest: Math.round(Math.max(0, ...long)),
+        rows: document.querySelectorAll('.diff-line').length,
+        nodes: document.querySelectorAll('*').length,
+      };
+    });
+    console.log('long review (ms):', JSON.stringify({ ...opened, ...scrolled }));
+    // The end is reached; budgets follow from the measurements (docs/review-performance.md)
+    await expect(diffOf(page, files.at(-1)!.path)).toBeAttached();
+  });
 });
