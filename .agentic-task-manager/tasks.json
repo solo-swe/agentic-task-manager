@@ -15878,7 +15878,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:46:10Z",
+      "updated_at": "2026-11-18T00:48:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15896,7 +15896,7 @@
       "key_final": false,
       "started_at": "2026-11-18T00:41:33Z",
       "started_by": "claude:0f56a916",
-      "commit": "b56d62a497750f4e3a426d359a158789fa9d75b9",
+      "commit": "d5c7cd7ccda906a7827da7336dbefaf7d7c6252e",
       "code_reviews": [
         {
           "id": "01a1ec1e-490c-7662-b019-c555b41cacfe",

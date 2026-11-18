@@ -366,9 +366,15 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
 /// What the review's rules refuse, or a store error.
 pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) -> Result<u32> {
     let mut reviews = store(project)?;
+    // Its tasks found first (ATM-594): a round is never kept without its tasks going back in review
+    let ids = named(project, &reviews.get_review(reference)?.header).map_err(|e| {
+        Error::failed(format!(
+            "{}'s round can't reach its tasks, so it isn't added: {e}",
+            reference.0
+        ))
+    })?;
     let number = Reviews::new(&mut reviews).add_round(reference, round)?;
     let header = reviews.get_review(reference)?.header;
-    let ids = named(project, &header)?;
     ask_review(project, &ids, &header, &format!("round {number}"))?;
     Ok(number)
 }
@@ -978,6 +984,20 @@ mod tests {
         assert_eq!(
             reviews.get_review(&header.reference).unwrap().header.status,
             Status::Open
+        );
+        // A round neither: refused before anything is written
+        let mut agent = reopen(&dir.0, "claude:1");
+        let error = super::add_round(&mut agent, &header.reference, round()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("CR-1's round can't reach its tasks, so it isn't added: "),
+            "{error}"
+        );
+        let reviews = super::store(&agent).unwrap();
+        assert_eq!(
+            reviews.get_review(&header.reference).unwrap().rounds.len(),
+            1
         );
     }
 
