@@ -319,12 +319,13 @@ describe('ReviewPage: Diffs', () => {
     expect(screen.getByText('1 of 3 viewed')).toBeTruthy();
   });
 
-  it('every file a card, in the view’s order; a file viewed is folded, its diff not made, its sides not read', async () => {
+  it('every file a card, in the tree’s order; a file viewed is folded, its diff not made, its sides not read', async () => {
     const { container, sides } = await diffs();
+    // The view lists src/b.rs, README.md, src/a.rs; the cards follow the tree (ATM-596): the folder first, by name
     expect([...container.querySelectorAll('.review-file-card')].map((c) => (c as HTMLElement).dataset.file)).toEqual([
+      'src/a.rs',
       'src/b.rs',
       'README.md',
-      'src/a.rs',
     ]);
     await vi.waitFor(() => expect(container.querySelectorAll('.diff-view')).toHaveLength(2));
     expect(card(container, 'README.md')).toHaveClass('folded');
@@ -386,14 +387,14 @@ describe('ReviewPage: Diffs', () => {
       grow();
       expect(scroll.mock.contexts).not.toContain(card(container, 'src/a.rs'));
       // Another file gone to is pinned in its turn; Next unpins it
-      await fireEvent.keyDown(window, { key: '[' });
+      await fireEvent.keyDown(window, { key: ']' });
       scroll.mockClear();
       grow();
-      expect(scroll.mock.contexts).toContain(card(container, 'README.md'));
+      expect(scroll.mock.contexts).toContain(card(container, 'src/b.rs'));
       await fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
       scroll.mockClear();
       grow();
-      expect(scroll.mock.contexts).not.toContain(card(container, 'README.md'));
+      expect(scroll.mock.contexts).not.toContain(card(container, 'src/b.rs'));
     } finally {
       vi.unstubAllGlobals();
     }
@@ -504,19 +505,20 @@ describe('ReviewPage: Diffs', () => {
     const current = () => container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file');
     await fireEvent.keyDown(window, { key: '[' });
     expect(current()).toBeUndefined();
+    // In the tree's order (ATM-596): src/a.rs, src/b.rs, README.md
+    await fireEvent.keyDown(window, { key: ']' });
+    expect(current()).toBe('src/b.rs');
+    await fireEvent.keyDown(window, { key: ']' });
     await fireEvent.keyDown(window, { key: ']' });
     expect(current()).toBe('README.md');
-    await fireEvent.keyDown(window, { key: ']' });
-    await fireEvent.keyDown(window, { key: ']' });
-    expect(current()).toBe('src/a.rs');
     // Two jumps before the page is idle: the address is written once, with the last
     await vi.waitFor(() => expect(onfile).toHaveBeenCalled());
-    expect(onfile.mock.calls).toEqual([['src/a.rs']]);
+    expect(onfile.mock.calls).toEqual([['README.md']]);
     await fireEvent.keyDown(window, { key: 'v' });
-    expect(onviewed).toHaveBeenCalledWith(expect.objectContaining({ path: 'src/a.rs' }));
+    expect(onviewed).toHaveBeenCalledWith(expect.objectContaining({ path: 'README.md' }));
     await fireEvent.keyDown(window, { key: '[' });
-    expect(current()).toBe('README.md');
-    await vi.waitFor(() => expect(onfile.mock.calls.at(-1)).toEqual(['README.md']));
+    expect(current()).toBe('src/b.rs');
+    await vi.waitFor(() => expect(onfile.mock.calls.at(-1)).toEqual(['src/b.rs']));
   });
 
   it('keys are the Diffs tab’s: not on another tab, not while typing', async () => {

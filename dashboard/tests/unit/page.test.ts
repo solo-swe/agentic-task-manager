@@ -14,6 +14,7 @@ import {
   reviewTitle,
   shownRows,
   treeFolders,
+  treeOrder,
   treeWidth,
   viewedKey,
   type ChainFilter,
@@ -86,6 +87,46 @@ describe('the file tree', () => {
       file('README.md'),
     ]).map((r) => `${'  '.repeat(r.depth)}${r.kind === 'folder' ? `${r.name}/` : r.name}`);
     expect(rows).toEqual(['lib', '  a.txt', '  b.txt', 'src/', '  x.rs', 'README.md']);
+  });
+});
+
+// ATM-596: the diffs follow the tree, not the patch's order by path
+describe('the files in the tree’s order', () => {
+  const paths = (files: ViewFile[]) => files.map((f) => f.path);
+  it('none, and one', () => {
+    expect(treeOrder([])).toEqual([]);
+    expect(paths(treeOrder([file('README.md')]))).toEqual(['README.md']);
+  });
+  it('folders before the files beside them, each level by name; a lock file at the root last', () => {
+    // As git lists them: by path, so the root's files sit between its folders
+    const git = [
+      'Cargo.toml',
+      'crates/a/src/lib.rs',
+      'crates/a/Cargo.toml',
+      'docs/plan.md',
+      'pnpm-lock.yaml',
+      'src/main.rs',
+    ].map((p) => file(p));
+    const ordered = treeOrder(git);
+    expect(paths(ordered)).toEqual([
+      'crates/a/src/lib.rs',
+      'crates/a/Cargo.toml',
+      'docs/plan.md',
+      'src/main.rs',
+      'Cargo.toml',
+      'pnpm-lock.yaml',
+    ]);
+    // The tree reads the same, top to bottom
+    const inTree = fileTree(git).flatMap((row) => (row.kind === 'file' ? [row.file.path] : []));
+    expect(paths(ordered)).toEqual(inTree);
+  });
+  it('a submodule stands where its folder is', () => {
+    const ordered = treeOrder([
+      file('z.txt'),
+      file('vendor/lib', '', { submodule: { from: 'a1', to: 'b2', repository: null } }),
+      file('a/b.txt'),
+    ]);
+    expect(paths(ordered)).toEqual(['a/b.txt', 'vendor/lib', 'z.txt']);
   });
 });
 

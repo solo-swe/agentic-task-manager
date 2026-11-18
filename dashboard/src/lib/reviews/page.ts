@@ -38,6 +38,12 @@ export function fileTree(files: ViewFile[]): TreeRow[] {
   return rows;
 }
 
+/** The files in the tree's order, top to bottom (ATM-596): the order of the diffs, of moving between files and of
+ * everything else the page lists files in, so the right side reads as the tree does */
+export function treeOrder(files: ViewFile[]): ViewFile[] {
+  return fileTree(files).flatMap((row) => (row.kind === 'file' ? [row.file] : []));
+}
+
 /** A row's path: a folder's own, a file's */
 const rowPath = (row: TreeRow) => (row.kind === 'folder' ? row.path : row.file.path);
 

@@ -18707,14 +18707,14 @@
       "description": "Hakan (2026-11-19): no draft (provisional) keys any more. \"T- era but better\": keep what ADR-007 got right, drop the provisional marker that every new task carried.\n\n## The decision to record\n- **Kept from ADR-007:** the UUID is the stored identity (§1), the project key and its history (§2), merges match tasks by UUID (§4), and every place that takes a task accepts a key, an alias or a UUID (§5).\n- **Gone:** `key_final`, `finalize_keys`, the `~` in the CLI and the draft mark in the dashboard (§3). A key is shown plain from the moment its task is created.\n- **A clash at merge:** when the incoming side has a task with a number the other side already uses, the incoming task takes the next free number (above both sides' numbers and `meta.next_number`), whichever side its task was made on. It keeps its old key as an alias (`aliases`), so a commit, a note or a review written on its branch still finds it, and atm says it moved (\"ATM-538 is now ATM-641\"). Two tasks never share a number in a merged file; the merge never stops on a clash.\n- **Why:** the provisional marker never prevented a renumber; it only labelled every new task as one that *might* move, and its bookkeeping caused the bugs (ATM-623: keys left draft after a direct push; CMD-250: a review's approval lost under `~CMD-250`; the `~` read as a home folder by zsh). Clashes are rare; the alias covers them.\n- **Options considered** (from the discussion with Hakan): a minor number on a clash (`ATM-630.2`), a counter per machine, reserving numbers on the remote with git refs, hash keys (as beads moved to), duplicate numbers told apart at lookup (git-bug's stance), number ranges per agent. Say in a line each why they were not taken.\n- **Migration:** today's provisional keys become plain as they are; `key_final` is dropped from `tasks.json` and the archive by `atm db migrate`.\n\n## Change\n- `docs/adr/ADR-009-task-keys-plain-from-creation.md` (status, context, decision, consequences), and ADR-007's status line: §3 and §4's provisional rules replaced by ADR-009.\n- Opened as a review for Hakan (`atm review create --task … --file docs/adr/ADR-009-…`); the code tasks start once it is approved.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/adr/ADR-009-task-keys-plain-from-creation.md",
         "docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-18T22:32:35Z",
+      "updated_at": "2026-11-18T22:33:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18730,7 +18730,24 @@
         "docs"
       ],
       "started_at": "2026-11-18T22:32:35Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "76ff4ea141e157451bed99e24d9eae0e42d59439",
+      "code_reviews": [
+        {
+          "id": "01a1f0cb-3a42-77ae-9d1b-658360037f99",
+          "ref": "CR-30"
+        }
+      ],
+      "review_requested_at": "2026-11-18T22:33:33Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T22:33:33Z",
+          "kind": "review",
+          "text": "CR-30: ADR-009: task keys plain from creation",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f0b9-f451-744a-956a-239abe8c0ea5",

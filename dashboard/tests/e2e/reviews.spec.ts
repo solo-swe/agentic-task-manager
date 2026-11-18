@@ -797,6 +797,41 @@ test.describe('a review’s page', () => {
       .toEqual(['docs/b.md@head3']);
   });
 
+  // ATM-596 (Hakan: CompMD's CR-1 had pnpm-lock.yaml last in the tree, mid-way in the diffs)
+  test('the diffs come in the tree’s order, not git’s; the next file is the tree’s next', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    // As git lists them, by path: README.md between nothing and the folders
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        view: {
+          round: 3,
+          against: null,
+          files: [file('README.md', PATCH_C), file('docs/b.md', PATCH_B, 'added', null), file('src/a.rs', PATCH_A)],
+        },
+      }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    const tree = ['docs/b.md', 'src/a.rs', 'README.md'];
+    await expect
+      .poll(() => page.locator('.review-file-name').evaluateAll((els) => els.map((e) => e.getAttribute('data-file'))))
+      .toEqual(tree);
+    await expect
+      .poll(() => page.locator('.review-file-card').evaluateAll((els) => els.map((e) => e.getAttribute('data-file'))))
+      .toEqual(tree);
+    // Moving from the first file goes down the tree
+    await page.locator('.review-file-name[data-file="docs/b.md"]').click();
+    await page.locator('.review-diffs').focus();
+    await page.keyboard.press(']');
+    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'src/a.rs');
+    await page.keyboard.press(']');
+    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'README.md');
+  });
+
   // ATM-595: a folder folds, all of them at once, kept across a reload; going to a file in a folded folder opens it
   test('the tree’s folders fold: one, or all at once, kept across a reload; going to a file opens its folder', async ({
     page,
@@ -1253,29 +1288,31 @@ test.describe('the diff viewer on a review’s page', () => {
   }) => {
     await page.setViewportSize({ width: 1200, height: 420 });
     await openDiffs(page, tasksServer);
+    // The files in the tree's order (ATM-596): docs/b.md (one change), src/a.rs (two), README.md (one)
     const current = page.locator('.review-current-change');
     const next = page.locator('#review-next-change');
     await next.click();
-    await expect(current).toHaveAttribute('data-row', /.+/);
-    await expect(current).toBeInViewport();
+    await expect(card(page, 'docs/b.md').locator('.review-current-change')).toBeInViewport();
+    await next.click();
+    await expect(card(page, 'src/a.rs').locator('.review-current-change')).toBeInViewport();
     const first = await current.getAttribute('data-row');
     await next.click();
     await expect(current).not.toHaveAttribute('data-row', first!);
-    await expect(current).toBeInViewport();
+    await expect(card(page, 'src/a.rs').locator('.review-current-change')).toBeInViewport();
     // Past src/a.rs's two changes, into the next file's
     await next.click();
-    await expect(card(page, 'docs/b.md').locator('.review-current-change')).toBeInViewport();
+    await expect(card(page, 'README.md').locator('.review-current-change')).toBeInViewport();
     await page.locator('#review-prev-change').click();
     await expect(card(page, 'src/a.rs').locator('.review-current-change')).toBeInViewport();
     // The keys do the same
     await page.keyboard.press('n');
-    await expect(card(page, 'docs/b.md').locator('.review-current-change')).toBeInViewport();
+    await expect(card(page, 'README.md').locator('.review-current-change')).toBeInViewport();
     await page.keyboard.press('p');
     await expect(card(page, 'src/a.rs').locator('.review-current-change')).toBeInViewport();
     await page.keyboard.press(']');
-    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'docs/b.md');
+    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'README.md');
     await page.keyboard.press('v');
-    await expect(page.locator('.review-files').getByLabel('Viewed docs/b.md')).toBeChecked();
+    await expect(page.locator('.review-files').getByLabel('Viewed README.md')).toBeChecked();
     await page.keyboard.press('[');
     await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'src/a.rs');
     // Not while typing

@@ -23,6 +23,7 @@
     reviewChains,
     shownRows,
     treeFolders,
+    treeOrder,
     treeWidth,
     TREE_WIDTH,
     type ChainFilter,
@@ -99,7 +100,8 @@
 
   const review = $derived(page.review);
   const view = $derived(page.view);
-  const files = $derived(view.files);
+  // In the tree's order (ATM-596): the diffs, moving between files, the round's select and the Viewed count follow it
+  const files = $derived(treeOrder(view.files));
   const tree = $derived(fileTree(files));
   const ended = $derived(review.status === 'approved' || review.status === 'closed');
   /** A live review: its working copy followed as it is made (ATM-576) */
