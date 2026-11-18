@@ -81,8 +81,9 @@ reviews (`atm review comments <CR> --open` lists what is still open in one).
 **Listen for the user's comments on your work** (`atm docs reviews`): once per session, if no watch of yours runs yet,
 start `atm review watch --json` in the background and keep it. It prints, one JSON object a line, each comment a
 person adds about your work in any review (a live review of your working copy, a review of your task), with the
-review and the task it is about (or `null`). Look at what it printed between steps, and answer each comment as Step 7b
-says.
+review and the task it is about (or `null`), and each decision on such a review (a line with `decision`: `approved`,
+`changes_requested` or `closed`). Look at what it printed between steps; answer each comment as Step 7b says, and act
+on a decision as it says for the review's outcome.
 
 If it exits with code 3, no task is available; its `"reason"` says why (the sprint is finished, the rest is waiting,
 or no sprint is active). Run `atm project status` and report clearly:

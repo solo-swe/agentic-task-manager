@@ -829,14 +829,18 @@ describe('agents listening (ATM-567)', () => {
       ok(['review', 'comment', 'CR-2', '--file', 'c.txt', '--lines', '1', '--body', 'Live, no task.'], root, HAKAN);
 
       await until(() => watching.lines.length >= 2, 'two comments heard');
+      // A decision on a review of A's work is heard too, once (ATM-600)
+      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
+      await until(() => watching.lines.length >= 3, 'the decision heard');
       await new Promise((resolve) => setTimeout(resolve, 1500)); // nothing else comes
       // (in the order written within what is heard at once; a slow machine may hear them in two batches)
       const heard = watching.lines
         .map((l) => JSON.parse(l))
-        .map((h) => [h.review, h.task, h.body])
+        .map((h) => [h.review, h.task, h.body ?? h.decision])
         .sort();
       assert.deepEqual(heard, [
         ['CR-1', 'T-1', 'For A.'],
+        ['CR-1', 'T-1', 'changes_requested'],
         ['CR-2', null, 'Live, no task.'],
       ]);
     } finally {

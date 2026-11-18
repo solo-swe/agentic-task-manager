@@ -300,12 +300,16 @@ pub fn watch(
             .map(|h| store.get_review(&ReviewRef(h.id.0)))
             .collect()
     };
+    // Each review's status as last seen: a decision is a change to a decided one (ATM-600), never told again on a
+    // restart, as a comment isn't
+    let mut statuses: std::collections::HashMap<String, Status> = std::collections::HashMap::new();
     for review in all(&store)? {
         seen.extend(
             review
                 .comments()
                 .map(|c| format!("{}/{}", review.header.id.0, c.id.0)),
         );
+        statuses.insert(review.header.id.0.clone(), review.header.status);
     }
     let (_subscription, told) = listen(&store)?;
     ready();
@@ -351,7 +355,43 @@ pub fn watch(
         for (_, _, heard) in news {
             emit(heard);
         }
+        // Then the decisions on reviews of its work, after the words that came with them
+        for review in all(&store)? {
+            let status = review.header.status;
+            let before = statuses.insert(review.header.id.0.clone(), status);
+            if before == Some(status) || !decided(status) {
+                continue;
+            }
+            if let Some(task) = decision_about_my_work(&work, me, &review.header) {
+                emit(decision(&review.header, task.as_deref()));
+            }
+        }
     }
+}
+
+/// Whether a decided review is of the agent's work, and the task it decides: its own review, or one naming a task it
+/// has held (ATM-600).
+fn decision_about_my_work(work: &Work, me: &str, review: &ReviewHeader) -> Option<Option<String>> {
+    let task = work
+        .tasks
+        .iter()
+        .map(|(key, _)| key)
+        .find(|key| review.tasks.contains(key))
+        .cloned();
+    let own = review.author.as_ref().is_some_and(|a| a.0 == me);
+    (task.is_some() || own).then_some(task)
+}
+
+/// A decision heard, as the watch prints it: `decision` the review's new status (`approved`, `changes_requested`,
+/// `closed`); its words, if it had some, came as a comment just before.
+fn decision(review: &ReviewHeader, task: Option<&str>) -> Value {
+    json!({
+        "review": review.reference.0,
+        "task": task,
+        "decision": review.status.name(),
+        "at": review.updated,
+        "title": review.title,
+    })
 }
 
 #[cfg(test)]
@@ -437,6 +477,55 @@ mod tests {
 
     fn by_hakan(path: Option<&str>, body: &str) -> Chain {
         chain(path, vec![comment("c1", "Hakan", body, Vec::new())])
+    }
+
+    /// ATM-600: a decision is the agent's when the review is its own or names a task it has held: the task it decides
+    /// (the first of its own the review names), or none for its own review of no task of its
+    #[test]
+    fn a_decision_is_about_the_agents_work_when_the_review_is_its_own_or_names_its_task() {
+        let mut theirs = review(Status::Approved, &["ATM-3"]).header;
+        theirs.author = Some(Actor::from("claude:other"));
+        for (header, expected) in [
+            (
+                review(Status::Approved, &["ATM-2"]).header,
+                Some(Some("ATM-2")),
+            ),
+            (
+                review(Status::Approved, &["ATM-3", "ATM-1"]).header,
+                Some(Some("ATM-1")),
+            ),
+            (review(Status::Closed, &[]).header, Some(None)),
+            (theirs.clone(), None),
+            (
+                ReviewHeader {
+                    tasks: vec!["ATM-1".into()],
+                    ..theirs
+                },
+                Some(Some("ATM-1")),
+            ),
+        ] {
+            assert_eq!(
+                decision_about_my_work(&work(), "claude:me", &header),
+                expected.map(|t| t.map(String::from)),
+                "{header:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_decision_is_told_by_the_review_its_task_and_the_status_it_has_now() {
+        let mut header = review(Status::ChangesRequested, &["ATM-1"]).header;
+        header.updated = "2026-11-18T10:00:00Z".into();
+        assert_eq!(
+            decision(&header, Some("ATM-1")),
+            json!({
+                "review": "CR-1",
+                "task": "ATM-1",
+                "decision": "changes_requested",
+                "at": "2026-11-18T10:00:00Z",
+                "title": "T",
+            })
+        );
     }
 
     #[test]
