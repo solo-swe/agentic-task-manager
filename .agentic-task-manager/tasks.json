@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 599
+    "next_number": 601
   },
   "tasks": [
     {
@@ -16384,14 +16384,14 @@
       "description": "A review's hidden files (`.github/workflows/ci.yml`, `.gitignore`, `.env.example`, …) don't show in its Diffs tab (reported by Hakan, 2026-11-18).\n\n## Likely cause\nThe documents route reads a review's sides through atm-docs, which refuses paths with a hidden segment (security invariant I11 in `docs/security-architecture.md`, written for the document viewer's working-copy reads). A side at a revision (`documents?path=&at=`) is a file the review's own diff names, so it should be readable when the round lists it, while key files and what git ignores stay refused.\n\n## Change\n- `crates/atm-docs/src/lib.rs` `read_document_at`: allow a hidden segment for a file at a revision; keep the other checks (key files, size, no symlinks, git's ignore rules). Find out first whether the refusal is there, in the page's file list, or in the round itself.\n- `docs/security-architecture.md` I11: say what a revision's side may read.\n\n## Tests\n- atm-docs: a hidden file at a revision is read; a key file (`.env`, an SSH key) is still refused; the working-copy route still refuses hidden files.\n- An e2e test: a review with a `.github/` file shows its diff.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-docs/src/lib.rs",
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-18T03:14:06Z",
-      "updated_at": "2026-11-18T03:14:54Z",
+      "updated_at": "2026-11-18T03:18:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16404,7 +16404,89 @@
       "number": 598,
       "key_final": false,
       "started_at": "2026-11-18T03:14:54Z",
+      "started_by": "claude:0f56a916",
+      "commit": "05980ba6b2cf839ece0291c78a589f5f59768df9",
+      "code_reviews": [
+        {
+          "id": "01a1eca9-4bfc-7663-8d69-71405e87a6d4",
+          "ref": "CR-3"
+        }
+      ],
+      "review_requested_at": "2026-11-18T03:18:00Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T03:18:00Z",
+          "kind": "review",
+          "text": "CR-3: Hidden files show in a review s diffs",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1ecab-b2d5-7526-834f-2f0a18326fa8",
+      "name": "A review shows the files changed inside a submodule, not only its moved commit",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "A review hid a submodule's change (reported by Hakan, 2026-11-18, on CompMD's CR-4): the file tree listed `crates/markdown-rs`, but its diff said it wasn't a file of the commit.\n\n## Cause\nCR-4 moves the `markdown-rs` submodule into `crates/`, its commit unchanged. git writes that as a rename with no `Subproject commit` lines, so the page took it for an ordinary file and asked for its sides, which are a submodule's link, not a file.\n\n## Fix\n- `atm-vcs`: `gitlink_in(object, path)`, the commit a submodule is at in a commit or a tree.\n- `review_pages.rs`: an entry whose patch has no hunks is checked against its sides' trees; a submodule's link there makes it the submodule's entry, at its commits.\n- `ReviewFile.svelte`: a submodule whose commit stays the same says that its folder moved, and where from.\n\n## Tests\n- atm-vcs: a link in a commit and in a tree names its commit; a file, a folder or nothing there, none.\n- atm-lib: a commit that only moves a submodule shows it as the submodule at its one commit.\n- The card: *its folder moved*, said with its commit.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/review_pages.rs",
+        "dashboard/src/lib/reviews/ReviewFile.svelte",
+        "crates/atm-vcs/src/lib.rs"
+      ],
+      "created_at": "2026-11-18T03:20:37Z",
+      "updated_at": "2026-11-18T03:28:02Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T03:20:37Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 599,
+      "key_final": false,
+      "started_at": "2026-11-18T03:28:02Z",
       "started_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1ecae-b9ab-7494-8e89-d162f08dc826",
+      "name": "The review watch reports decisions, not only comments",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "`atm review watch` (an agent's one background watch, `docs/agent/reviews.md`) prints each comment and reply a person adds about the agent's work, but not a decision: an approval, a request for changes, a close (reported by Hakan, 2026-11-18). So an agent that relies on the watch doesn't learn that its review was approved or sent back until it asks with `atm review wait` or `atm loop next`.\n\n## Change\n- `crates/atm-lib/src/review_listen.rs` (`watch`): also print a line when a review about the agent's work changes status by a person's decision (approved, changes requested, closed), with the review, its task, who decided and the decision's words when it has some; one line per decision, never repeated on a restart of the watch (as comments aren't).\n- `docs/agent/reviews.md` and the skills that start the watch (`/atm-loop-tasks` step 7, `/atm-do-task`): what a decision line is, and what to do on one (approved: finish the task as its review mode says; changes requested: take it back; closed: as the user says).\n\n## Tests\n- atm-lib: a decision on a watched review is printed once, with its fields; a decision on another agent's review isn't; a round (the author's) isn't a decision.\n- The CLI suite: `atm review watch --json` prints an approval made with `atm review submit`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/review_listen.rs",
+        "docs/agent/reviews.md"
+      ],
+      "created_at": "2026-11-18T03:23:56Z",
+      "updated_at": "2026-11-18T03:23:56Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T03:23:56Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 600,
+      "key_final": false
     }
   ]
 }

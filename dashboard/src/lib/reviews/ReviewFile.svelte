@@ -233,7 +233,11 @@
                   >{short(sha)}</code
                 >{/if}
             {/snippet}
-            {#if moved.from && moved.to}
+            {#if moved.from && moved.to && moved.from === moved.to}
+              <!-- Only its folder moved (ATM-599: CompMD's markdown-rs into crates/) -->
+              The submodule {file.old_path !== file.path ? `moved from ${file.old_path}` : 'is unchanged'}; it stays at
+              {@render commit(moved.to)}.
+            {:else if moved.from && moved.to}
               The submodule moved from {@render commit(moved.from)} to {@render commit(moved.to)}.
             {:else if moved.to}
               The submodule was added, at {@render commit(moved.to)}.

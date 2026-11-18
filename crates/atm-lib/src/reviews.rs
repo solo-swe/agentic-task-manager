@@ -991,6 +991,69 @@ mod tests {
         );
     }
 
+    /// ATM-599 (`markdown-rs` moved into `crates/`, in CompMD): a commit that only moves a submodule's folder shows it as
+    /// the submodule, at its one commit, not as a file whose sides are read
+    #[test]
+    fn a_submodule_only_moved_shows_as_the_submodule_at_its_commit() {
+        let dir = dir();
+        let sub = dir.0.join("sub-origin");
+        std::fs::create_dir_all(&sub).unwrap();
+        git(&["init", "-q"], &sub);
+        std::fs::write(sub.join("a.txt"), "a\n").unwrap();
+        git(&["add", "-A"], &sub);
+        git(&["commit", "-q", "-m", "sub"], &sub);
+        let root = dir.0.join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        git(&["init", "-q"], &root);
+        let project = project(&root, "claude:1");
+        let add = [
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "--quiet",
+            "add",
+            "../sub-origin",
+            "lib",
+        ];
+        git(&add, &root);
+        git(&["add", "-A"], &root);
+        git(&["commit", "-q", "-m", "base"], &root);
+        std::fs::create_dir_all(root.join("crates")).unwrap();
+        git(&["mv", "lib", "crates/lib"], &root);
+        git(&["commit", "-q", "-m", "moved"], &root);
+        let vcs = project.vcs().unwrap();
+        let first = super::rounds::from_range(&vcs, "HEAD~1", "HEAD", &"claude:1".into()).unwrap();
+        let mut agent = reopen(&root, "claude:1");
+        let header = super::create(
+            &mut agent,
+            NewReview {
+                title: "Moved".into(),
+                summary: String::new(),
+                tasks: vec!["T-1".into()],
+                author: None,
+                reviewers: Vec::new(),
+                status: Status::Open,
+                first,
+            },
+        )
+        .unwrap();
+        let page =
+            crate::review_pages::review_page(&agent, &ReviewRef(header.reference.0), None, None)
+                .unwrap();
+        let files = page["view"]["files"].as_array().unwrap();
+        let moved = files.iter().find(|f| f["path"] == "crates/lib").unwrap();
+        assert_eq!(moved["old_path"], "lib");
+        let (from, to) = (&moved["submodule"]["from"], &moved["submodule"]["to"]);
+        assert!(from.is_string() && from == to, "{moved}");
+        // The other entries are files, as before
+        assert!(
+            files
+                .iter()
+                .filter(|f| f["path"] != "crates/lib")
+                .all(|f| f["submodule"].is_null())
+        );
+    }
+
     /// ATM-576: approving a live review approves the working copy as it is then, a checkpoint, which its task's change
     /// is compared with when it is done
     #[test]

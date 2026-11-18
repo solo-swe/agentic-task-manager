@@ -313,7 +313,26 @@ fn view<S: RoundDiffs + ?Sized>(
             (Some(before), after, between, None)
         }
     };
-    let patches = file_patches(&patch.0);
+    // A submodule only moved (renamed, its commit the same) has no `Subproject commit` lines: its sides' trees say it
+    // is one (ATM-599: CompMD's `markdown-rs`, moved into `crates/`, showed as a file not in its commit)
+    let repo = rounds::repository(vcs, round).unwrap_or_else(|_| vcs.clone());
+    let linked =
+        |object: Option<&String>, path: &str| object.and_then(|o| repo.gitlink_in(o, path));
+    let patches: Vec<FilePatch> = file_patches(&patch.0)
+        .into_iter()
+        .map(|mut file| {
+            if file.submodule.is_none() && !file.patch.contains("\n@@") {
+                let (old, new) = (
+                    linked(before.as_ref(), &file.old_path),
+                    linked(Some(&after), &file.path),
+                );
+                if old.is_some() || new.is_some() {
+                    file.submodule = Some((old, new));
+                }
+            }
+            file
+        })
+        .collect();
     // A moved submodule's entry: its two commits and its repository's web address, when it has one, for links
     let submodule = |file: &FilePatch| {
         file.submodule.as_ref().map(|(from, to)| {

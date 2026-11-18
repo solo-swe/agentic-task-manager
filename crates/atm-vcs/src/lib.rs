@@ -483,6 +483,26 @@ impl GitVcs {
         Some((size.parse().ok()?, (*blob).to_string()))
     }
 
+    /// The commit a submodule is at in `object` (a commit or a tree): its entry at `relative` is a link (mode
+    /// 160000); none for anything else there, or nothing (ATM-599: a submodule only moved has no other trace in a
+    /// diff).
+    #[must_use]
+    pub fn gitlink_in(&self, object: &str, relative: &str) -> Option<String> {
+        // Named as the project has it; read as this repository has it (a submodule's round, ATM-583)
+        let relative = self.inside_path(relative)?;
+        let output = run(&["ls-tree", "-z", object, "--", relative], &self.root)?;
+        if !output.status.success() {
+            return None;
+        }
+        let listing = String::from_utf8_lossy(&output.stdout);
+        let (meta, path) = listing.split('\0').next()?.split_once('\t')?;
+        let parts: Vec<&str> = meta.split_whitespace().collect();
+        match parts.as_slice() {
+            ["160000", "commit", sha] if path == relative => Some((*sha).to_string()),
+            _ => None,
+        }
+    }
+
     /// A blob's bytes (from [`GitVcs::blob_in`]).
     ///
     /// # Errors
@@ -1038,6 +1058,42 @@ mod tests {
                 None,
                 "{branch} {path}"
             );
+        }
+    }
+
+    /// ATM-599: a submodule's link in a commit or a tree gives its commit; a file, a folder or nothing there, none
+    #[test]
+    fn a_submodules_link_in_a_commit_or_tree_names_its_commit() {
+        let dir = scratch();
+        let sub = init(&dir.0.join("sub-origin"));
+        write(&sub, "a.txt", "a");
+        let sub_head = commit_all(&sub, "sub");
+        let vcs = init(&dir.0.join("repo"));
+        write(&vcs, "lib/top.txt", "t");
+        commit_all(&vcs, "first");
+        git(
+            &vcs.root,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "--quiet",
+                "add",
+                "../sub-origin",
+                "lib/sub",
+            ],
+        );
+        let head = commit_all(&vcs, "the submodule");
+        let tree = vcs.resolve_tree(&head).unwrap();
+        for object in [head.as_str(), tree.as_str()] {
+            assert_eq!(
+                vcs.gitlink_in(object, "lib/sub"),
+                Some(sub_head.clone()),
+                "{object}"
+            );
+            for other in ["lib/top.txt", "lib", "lib/none", "lib/sub/a.txt", "-p"] {
+                assert_eq!(vcs.gitlink_in(object, other), None, "{object} {other}");
+            }
         }
     }
 

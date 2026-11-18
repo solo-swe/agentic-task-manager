@@ -197,6 +197,12 @@ describe('ReviewFile: a submodule’s move (ATM-583)', () => {
     ['moved', moved('1111111aaaa', '2222222bbbb'), 'The submodule moved from 1111111 to 2222222.'],
     ['added', moved(null, '3333333cccc'), 'The submodule was added, at 3333333.'],
     ['removed', moved('4444444dddd', null), 'The submodule was removed; it was at 4444444.'],
+    // ATM-599: only its folder moved, its commit the same
+    [
+      'its folder moved',
+      { ...moved('5555555eeee', '5555555eeee'), path: 'crates/lib', status: 'renamed' as const, patch: '' },
+      'The submodule moved from lib; it stays at 5555555.',
+    ],
   ])('%s: says so with its commits, no diff and no lines loaded', (_, entry, says) => {
     const load = vi.fn();
     const { container } = show({ file: entry, before: { ...side(''), load }, after: { ...side(''), load } });
