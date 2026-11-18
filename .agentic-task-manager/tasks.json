@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 622
+    "next_number": 625
   },
   "tasks": [
     {
@@ -16466,7 +16466,7 @@
       "description": "A task named in a review opens its **details**, over the review, instead of taking you to the project's task list (Hakan, 2026-11-18: today the Overview's Tasks fact links to `/projects/<id>/list?task=ATM-12`, which leaves the review for the whole list, the details panel open over it; \"you are lost in the full list of tasks\").\n\n## Change\n- A click on a task's key in a review opens that task's details panel on the review's page (`?task=ATM-12` on the review's own address, `/projects/<id>/reviews/CR-7?task=ATM-12`, as the other pages take it); closing it (×, Escape, Back) leaves you where you were in the review: the same tab, round, file and scroll. From the details, the task's own links work as they do anywhere.\n- ⌘/Ctrl-click opens the task in a new tab (in the app, an app tab), at its project's page with its details.\n- The same everywhere a review names a task:\n  - the Overview's Tasks fact (`taskHref` in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte));\n  - the Reviews list's rows ([`ReviewList.svelte`](dashboard/src/lib/reviews/ReviewList.svelte), today `r.tasks.join(', ')` as text: a click on a key opens the task, not the review);\n  - the review page's top bar, if it names its tasks;\n  - keys written in the description and the comments (`ATM-12`, an earlier prefix, another project's `LFB-5`), linked only for tasks that exist, never a link to nothing; with ATM-586 (document links in the same texts), through the same `CompMd` options.\n\n## Tests\nComponent tests for the list row and a comment's key (known, unknown, another project's); an e2e test in `reviews.spec.ts`: a click opens the details over the review, closing them leaves the review as it was (tab, file), the address back to the review's; ⌘-click opens a new tab.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewList.svelte",
@@ -16474,9 +16474,9 @@
         "dashboard/src/lib/reviews/ChainBox.svelte"
       ],
       "created_at": "2026-11-18T00:12:52Z",
-      "updated_at": "2026-11-18T18:06:43Z",
+      "updated_at": "2026-11-18T20:50:55Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16502,7 +16502,6 @@
         }
       ],
       "review_requested_at": "2026-11-18T08:28:32Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-18T08:28:32Z",
@@ -16515,9 +16514,23 @@
           "kind": "note",
           "text": "Approved: in CR-20 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T20:50:55Z",
+          "kind": "outcome",
+          "text": "Approved in CR-20. A task named in a review (the Tasks fact, list rows, keys in the description and comments) opens its details over the review; another project s task its project s page; a new tab with Cmd, Ctrl or a middle click.",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-18T18:06:43Z"
+      "reviews": [
+        {
+          "from": "2026-11-18T08:28:32Z",
+          "to": "2026-11-18T18:06:43Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T20:50:55Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ec0b-fc5f-716f-b40a-2517314b85d8",
@@ -16581,7 +16594,7 @@
       "description": "The file tree beside the diffs on a review's Diffs tab (in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte)) shows its folders always open: a folder can't be collapsed or expanded, and a review of many files is a long list (Hakan, 2026-11-18).\n\n## Change\n- Each folder row has a chevron (Lucide's, as the file cards' folds): a click, or ← and → on the focused row, collapses or expands it; its files and subfolders hide with it. A collapsed folder shows how many files it holds and, when any, how many of them have comments or aren't viewed yet.\n- **Collapse all** and **Expand all** at the top of the tree (icon buttons, with titles).\n- What is folded is kept per review while the page is open (and across a reload, in the session's storage), not written anywhere else.\n- Going to a file (a click in the diffs, the next or previous change or comment, the address's `&file=`) opens the folders on its way, so the file it shows is always in view in the tree.\n- The tree stays a tree for keyboards and screen readers (`role=\"tree\"`, `aria-expanded` on folders).\n\n## Tests\nComponent tests (a folder collapses and expands, by click and keys; Collapse all and Expand all; a jump to a file in a collapsed folder opens it); an e2e test in `reviews.spec.ts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -16589,7 +16602,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T00:30:42Z",
-      "updated_at": "2026-11-18T19:39:59Z",
+      "updated_at": "2026-11-18T20:50:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16605,7 +16618,44 @@
       "number": 595,
       "key_final": false,
       "started_at": "2026-11-18T19:39:59Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "10ccc4b798efe6bae880f0c2b1634c3fcbb02277",
+      "code_reviews": [
+        {
+          "id": "01a1f034-c6de-725d-9935-10f562d182b7",
+          "ref": "CR-23"
+        }
+      ],
+      "review_requested_at": "2026-11-18T19:49:13Z",
+      "notes": [
+        {
+          "at": "2026-11-18T19:49:13Z",
+          "kind": "review",
+          "text": "CR-23: The Diffs tab file tree folds its folders, and all at once",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T20:48:52Z",
+          "kind": "note",
+          "text": "Approved: in CR-23 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T20:50:56Z",
+          "kind": "outcome",
+          "text": "Approved in CR-23. The Diffs tab file tree folds its folders (click, or the arrow keys), all at once too; a folded folder sums its files; kept for the session per review; going to a file opens its folders.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T19:49:13Z",
+          "to": "2026-11-18T20:48:52Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T20:50:56Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ec12-b99f-75a9-9668-ba268b704f56",
@@ -17928,7 +17978,7 @@
       "description": "Asked by Hakan (2026-11-18). Measured on CompMD's CR-1 (94 files): the Diffs tab keeps 16 to 32 CompMD renderers alive, but makes about 410 in one pass to the end and back, and the heap grows to about 110 MB with 117,000 DOM nodes alive while the page has about 4,000 elements. Renderers that are gone stay in memory. What is measured so far, and how: [docs/diff-viewer-profile.md](docs/diff-viewer-profile.md).\n\n## What this task delivers, in order\n1. **The analysis** in `docs/diff-viewer-profile.md`, completed:\n   - what holds the destroyed renderers (a heap snapshot's retainers of the detached `.compmd` trees);\n   - CompMD's own share of a renderer's cost, against the diff rows';\n   - the latency of one renderer from mount to drawn;\n   - the rendered Markdown view (`RenderedSide`, the document processed once per part);\n   - the same in WebKit, the app's engine (`tests/e2e/real-review.spec.ts` measures a real review in both).\n2. **The options, agreed with Hakan.** Write them in the document with what each buys and costs, then block this task on the user (`blocked --on user`) until he chooses. Don't build before that.\n3. **The optimizations chosen,** in atm: the document viewer, `DiffView.svelte`, `RenderedSide.svelte`, `CompMd.svelte` (and `ReviewFile.svelte` where it decides what is made), each with the numbers before and after in the document.\n4. **What only CompMD can change,** as tasks in CompMD's project (`CMD-…`), with the numbers. Possibly a leak in its view, drawing one text in ranges with gaps (close to CMD-250), or a processed tree several views share. The CompMD boundary holds: atm shows, CompMD renders.\n\n## Tests\n- A check that keeps the memory bounded: the long-review spec (`reviews.spec.ts`) after passes to the end and back, the DOM nodes alive (DevTools' `Performance.getMetrics` after a forced garbage collection) within a bound set from the measurements, not every renderer ever made.\n- The long-review spec's budgets still met, and met 10 times in a row with the CPU slowed 4× (as ATM-615).\n- Each optimization's own unit or e2e tests.\n\nNo budget is raised to make a test pass (AGENTS.md).",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/diff-viewer-profile.md",
@@ -17939,7 +17989,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T19:29:53Z",
-      "updated_at": "2026-11-18T19:39:54Z",
+      "updated_at": "2026-11-18T19:49:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17955,15 +18005,24 @@
       ],
       "number": 620,
       "key_final": false,
-      "started_at": "2026-11-18T19:34:23Z",
-      "started_by": "claude:0f56a916",
       "commit": "02e336e8b85e66c4c442080fb4dbe4aa8eaecf6c",
-      "waiting_on": "user",
-      "questions": [
-        "The analysis so far is in docs/diff-viewer-profile.md. Which options to build? Recommended first: fix the render after destroy (measured 110 to 75 MB after two passes on CMD CR-1, a few lines, a patch is ready). Then: free a skipped card s old layout (about 50 MB more, costs layout while scrolling), fewer renderers per file (needs CompMD, close to CMD-250), reuse renderers instead of remaking them, make fewer while scrolling fast, and process a rendered document once a side.",
-        "Should I finish the rest of the analysis (CompMD s own share of a renderer, the latency from mount to drawn, the rendered view, and WebKit) before building, or build the leak fix first and measure the rest after it?"
+      "blocks": [
+        {
+          "from": "2026-11-18T19:39:54Z",
+          "to": "2026-11-18T19:49:13Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-18T19:39:54Z"
+      "notes": [
+        {
+          "at": "2026-11-18T19:49:13Z",
+          "kind": "answer",
+          "text": "The analysis so far is in docs/diff-viewer-profile.md. Which options to build? Recommended first: fix the render after destroy (measured 110 to 75 MB after two passes on CMD CR-1, a few lines, a patch is ready). Then: free a skipped card s old layout (about 50 MB more, costs layout while scrolling), fewer renderers per file (needs CompMD, close to CMD-250), reuse renderers instead of remaking them, make fewer while scrolling fast, and process a rendered document once a side. → Hakan, 2026-11-18: no shortcut from the first findings. Do a proper, diligent profiling of memory and speed, all written down in docs/diff-viewer-profile.md. Compare every optimization option on speed and memory gained, the complexity it adds and its other side effects. Then an executive summary with recommendations in the doc. He reads it and decides.; Should I finish the rest of the analysis (CompMD s own share of a renderer, the latency from mount to drawn, the rendered view, and WebKit) before building, or build the leak fix first and measure the rest after it? → Finish the whole analysis first (the first answer), then he decides.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-18T19:49:14Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f02d-58a8-71cb-88c1-a94acbdbc50a",
@@ -18004,6 +18063,118 @@
         "dashboard"
       ],
       "number": 621,
+      "key_final": false
+    },
+    {
+      "id": "01a1f04e-91ae-724a-82c2-0301f423f175",
+      "name": "A review's later rounds show what changed: a round's whole change and since an earlier round are wrong",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-18), in a review he was reading: a single line changed in round 2, yet\n- **round 2's whole change** shows the whole file as added;\n- **since round 1** shows every other file of the review as deleted.\n\nBoth views should show what a reader expects: the whole change is everything the review is about, as of that round, with that one line in it; since round 1 is that one line, and nothing else.\n\n## Leads (not yet confirmed)\nThis repo's own reviews have rounds of this shape. CR-13's round 1 is the range `a6864c0..59c4948` (28 files), and its round 2 is `3c2b8d8..a7d3dd4`, the fix commit alone (3 files): the agent gave the round its own range, from the commit before the fix, not from the review's base.\n- **A round's whole change** may be taken from the round's own range, or from a base its files don't have, so a file reads as added. Find how `atm-review`'s `rounds.rs` (and `atm-lib`'s `review_pages.rs`, the view) builds a round's change. Decide what a range round means, with Hakan if unclear: the review's change as of the round (from the review's first base to the round's head) is what a reader expects.\n- **Since an earlier round** may compare the two rounds' file lists, or their patches, rather than the trees at the two rounds' heads. A file the later round's range doesn't touch then looks deleted. It should be the difference between the two rounds' after sides, file by file, for the files either round changed.\n- Uncommitted (`files`) rounds and live rounds may have the same problems: check each round kind (`range`, `files`, `uncommitted`, live) against each other.\n\nReproduce first with a test on a small repository: two rounds, the second a one-line fix made as a new commit; the round given both ways (the review's whole range, and the fix commit's alone). The CLI suite (`tests/scripts/reviews.test.mjs`) and `rounds.rs`'s own tests.\n\nAlso check what the agents' docs tell them to give `atm review round` (`atm docs reviews`), so that what they do gives the right rounds.\n\n## Tests\n- atm-review: a round's whole change, and since an earlier round, for each round kind and for a round given its own commit's range, as above.\n- The CLI suite: `atm review show CR-1 --round 2` and `--round 2 --against 1` on such a review.\n- The REST view (`review_pages`): the files and patches for both.\n- An e2e test with the fixture: since round 1 lists only the changed file.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/src/rounds.rs",
+        "crates/atm-lib/src/review_pages.rs",
+        "tests/scripts/reviews.test.mjs",
+        "docs/agent/reviews.md"
+      ],
+      "created_at": "2026-11-18T20:17:23Z",
+      "updated_at": "2026-11-18T20:17:23Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T20:17:23Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "number": 622,
+      "key_final": false
+    },
+    {
+      "id": "01a1f05c-1dcc-74a9-82ca-2bb060c5e75f",
+      "name": "Task keys become final on the base branch itself: a project working on main, pushed, keeps provisional keys",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "keys"
+      ],
+      "description": "Reported by Hakan (2026-11-18): in a project where he works on `main` (the base branch), new tasks get provisional keys (`~KEY-12`), and they stay provisional even after the commits are pushed.\n\n## How keys become final today\n`atm-lib`'s `code::finalize_keys` (ADR-007 §3): a provisional task becomes final when its UUID, with the same number, is in the task file (or its archive) on `origin/<base>` (`meta.workflow.base`, else the remote's default branch), read from git. It runs from two commands only:\n- `atm db migrate` (the skills run it first);\n- `atm vcs pushed --pr <n>` (a merged PR recorded, so the `pull-request` workflow only).\n\n## Leads, to check in that order\n1. **Nothing runs it after a push in the `direct` workflow.** `/atm-push` in a `direct` project never calls `atm vcs pushed --pr`, so the keys wait for the next `atm db migrate`, which may be a long time away when nobody starts a skill.\n2. **`origin/<base>` may not resolve** for that project: no `meta.workflow.base` and a remote default branch atm can't find (`default_base()`), a remote not named `origin`, or a local-only project (no remote: keys can never become final). Check `file_on_remote_branch` for each.\n3. **Created on the base branch itself.** A task added on `main` in a `direct` project is on the base branch as soon as it is committed and pushed; decide (ADR-007) whether it can even be final at once when the local branch is the base and no other clone can take its number, or only once pushed.\n4. **The dashboard** may show a stale `key_final` until its summary's cache moves (the summary stamp).\n\nAsk Hakan which project, and reproduce it there first (`atm task details <key> --json` shows `key_final`, `atm project workflow` the workflow and base).\n\n## Change\n- Keys become final after a push in every workflow: `/atm-push` (the skill) or atm itself calls the finalizing step after a push in a `direct` project (for example `atm vcs pushed` without `--pr` when the workflow is `direct`, or finalizing on any command that reads the task file, cheaply, at most once a while).\n- A project with no remote: say so (`atm doctor` and `atm project status`), since its keys can't become final; or treat the local base branch as the base when there is no remote. Decide with ADR-007's reasoning and write it into the ADR (a new ADR if it changes the decision).\n- Update the skills (`skills/atm-push/SKILL.md`) and `atm docs` if what agents run changes.\n\n## Decided with Hakan (2026-11-18)\n- **Agents keep using keys, not UUIDs**, in commands and text: aliases keep a renumbered key working, keys are what people read in notes, commits and permission prompts, and a model copies a short key more reliably than a UUID. The `~` is about a number that may still be renumbered, not about how agents name tasks.\n- **Check that what atm stores links by UUID**: dependencies, related tasks, a review's tasks, whatever atm writes and no person reads raw. Say in the outcome what was found, and fix any that store a key.\n- **A question for Hakan, in ADR-007's terms:** don't show the `~` where a collision can't happen (one clone, working on its base branch)? Ask before changing it.\n\n## Tests\n- The CLI suite: a `direct` project with a remote: a task added on `main`, committed and pushed, is final after the push step; one not pushed stays provisional.\n- The base from `meta.workflow.base`, from the remote's default branch, and none (no remote).\n- A `pull-request` project: unchanged (final once merged).\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/code.rs",
+        "crates/atm-cli/src/commands/vcs.rs",
+        "skills/atm-push/SKILL.md",
+        "tests/scripts/keys.test.mjs"
+      ],
+      "created_at": "2026-11-18T20:32:11Z",
+      "updated_at": "2026-11-18T20:36:54Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T20:32:11Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "cli"
+      ],
+      "number": 623,
+      "key_final": false
+    },
+    {
+      "id": "01a1f06e-7332-719f-81eb-ac835d5d4538",
+      "name": "The review watch catches up on what it missed, and can stop at the first event",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "agents"
+      ],
+      "description": "Hakan, 2026-11-18: approvals waited unseen in review (CR-20, CR-23) because the agent's watch had lapsed. `atm review watch` runs for 8 hours by default, but a harness may stop it sooner: Claude Code's Monitor ends every watch after 5 minutes. Between one watch and the next, events are lost: nothing tells the agent what happened while it wasn't watching.\n\n## Change\n- **Catch up.** atm keeps, per agent (the watch's `--agent`, else the session's identity), the last event it delivered: a cursor in atm's state folder, not in the project. A new `atm review watch` first prints every event since then (comments, replies, decisions about the agent's work), in order, then follows live. The first watch ever starts from now. `--since <time>` overrides the cursor.\n- **`--once`.** The watch exits after delivering at least one event (the caught-up ones count), exit code 0; at the time up with none, exit code 3, as `atm review wait`. So an agent can run it as an ordinary background command, notified when it exits, and start it again.\n- Each event's JSON carries its time (and the cursor), so an agent can say what it saw.\n- **The loop skill** (`skills/atm-loop-tasks/SKILL.md`) and `atm docs reviews`: the watch may end (its time up, or the harness stops it); start it again whenever it does, and it catches up. With `--once`, start it again after each event.\n\n## Tests\n- The CLI suite (`tests/scripts/reviews.test.mjs`, *agents listening*): a decision and a comment made while no watch runs are printed by the next watch, once; a second watch prints nothing old; `--since`; `--once` exits after the first event, and with exit code 3 at the time up.\n- Two agents: each has its own cursor.\n- atm-lib: the cursor's file, written atomically, and a missing or broken one (start from now, say so).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/review_listen.rs",
+        "crates/atm-cli/src/commands/review.rs",
+        "skills/atm-loop-tasks/SKILL.md",
+        "docs/agent/reviews.md",
+        "tests/scripts/reviews.test.mjs"
+      ],
+      "created_at": "2026-11-18T20:52:12Z",
+      "updated_at": "2026-11-18T20:52:12Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T20:52:12Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "number": 624,
       "key_final": false
     }
   ]
