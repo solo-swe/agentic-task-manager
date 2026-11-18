@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 597
+    "next_number": 598
   },
   "tasks": [
     {
@@ -15353,7 +15353,7 @@
       "description": "Where reviews show outside their pages ([§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), [§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The app's sidebar: a Reviews section under the projects (the reviews needing you, with a count; All reviews).\n- Cards and the details panel show a task's reviews as links (`CR-7 · changes requested`), a new tab with ⌘-click; *Add to review* on a task.\n- The needs-you menu counts reviews with tasks; deep links `atm://…/reviews/CR-7` (checked as I28).\n\n## Tests\nE2e (`app.spec.ts` for the sidebar, `detail.spec.ts` for the links); unit tests for the deep links.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -15365,7 +15365,7 @@
         "app/src-tauri/src/links.rs"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T00:28:20Z",
+      "updated_at": "2026-11-18T00:54:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
@@ -15387,7 +15387,16 @@
           "text": "Not started. Waiting on the reviews tab design with Hakan: a workspace reviews list with search, a project picker and Needs you/Open/All chips; where it lives (overview tab or sidebar entry), whether the project Reviews tab stays as its preset, and reviews in the needs-you chip. Deep links to reviews already pass links.rs.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-18T00:54:18Z",
+      "started_by": "claude:0f56a916",
+      "waiting_on": "user",
+      "questions": [
+        "The workspace reviews list (search, project picker, Needs you/Open/All): a fourth tab on the overview, or its own tab opened from a sidebar entry?",
+        "The project's own Reviews tab: keep it as that list with the picker set to the project, or drop it?",
+        "Reviews needing you: counted in the existing \"N need you\" chip, or a chip of their own?"
+      ],
+      "blocked_at": "2026-11-18T00:54:34Z"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
@@ -15410,7 +15419,7 @@
         "crates/atm-lib/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T22:15:54Z",
+      "updated_at": "2026-11-18T00:55:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
@@ -15424,7 +15433,15 @@
           "from": "2026-11-17T22:15:54Z"
         }
       ],
-      "sprint": "Code reviews in the app"
+      "sprint": "Code reviews in the app",
+      "notes": [
+        {
+          "at": "2026-11-18T00:55:19Z",
+          "kind": "handoff",
+          "text": "Not started: paused for ATM-587 (its review asked for the code in it). Found: the REST create takes start live; the page shows a live review's last round, not the working copy as it changes, and a comment on a live review takes no checkpoint yet (reviews.rs has none outside tests).",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e29c7ba9fca",
@@ -15869,7 +15886,7 @@
       "description": "A review with a long diff takes a long time before its Diffs tab shows, and once shown, **scrolling the diffs pane is painfully slow** (Hakan, 2026-11-18; the case to measure and fix: CompMD's CR-1). Find where the time goes, propose ways to make loading and scrolling fast, decide with Hakan, then do it.\n\n## Measure first\nCompMD's CR-1, and a generated review of a few thousand changed lines (one large file, and many files), in the browser and the app:\n- **Loading:** the time to the first file drawn and to the tab settled, split into atm's answer (`review_page` in [`review_pages.rs`](crates/atm-lib/src/review_pages.rs): the round's patch, trees rebuilt with `git apply`, every chain placed with a tree diff each, `rounds::place`), the transfer, and the page (parsing every file's patch, `diff.ts`; the file cards, `ReviewFile.svelte`, `DiffView.svelte`; the sides' documents loaded per file).\n- **Scrolling:** frames dropped and long tasks while scrolling the pane from top to bottom (the browser's performance trace): how many rows and cards are in the document, what each scroll makes (the lazy cards' observers, `MARGIN`, the ResizeObserver pinning a card, highlighting, layout of very long lines, sticky headers).\n\n`tests/e2e/performance.spec.ts` has the review budget to extend (*review file far down*).\n\n## Proposals to weigh (write them up, with numbers)\n- **Paging the files:** the page asks for the round's file list first (paths, statuses, counts), and each file's patch and sides when its card nears the view (`?file=` on the review route), so a review of hundreds of files sends what is looked at.\n- **Virtualising the pane:** only the cards (and, in a long file, the rows) near the view are in the document, the rest stood in for by their estimated heights; a file's diff drawn in chunks of its hunks as it scrolls.\n- **Cheaper rows:** fewer elements per row, no per-row observers or effects, highlighting done once per file (off the main thread or in idle time), `content-visibility: auto` on cards out of view.\n- **atm's side:** trees rebuilt once per round and cached (by round and patch hash), chains placed in one tree diff per file instead of one per chain, the answer cached by the review's stamp (ETag/304 as the task routes do).\n- **The page:** patches parsed in a worker or lazily per card; the sides' documents only for the rendered view and the context folds.\n\nPut the proposals, with the measurements, in a short document (`docs/review-performance.md`) and open a review of it with Hakan (`atm review create --task <this> --file docs/review-performance.md`) before building; then the chosen ones.\n\n## Tests\nPerformance budgets for a long review in `performance.spec.ts`: the first file drawn, and a scroll from top to bottom (no long task over the budget, the last file reached in time); unit tests for any paging, virtualising or caching added.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/review-performance.md",
@@ -15878,7 +15895,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:52:58Z",
+      "updated_at": "2026-11-18T00:55:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15894,7 +15911,7 @@
       ],
       "number": 587,
       "key_final": false,
-      "started_at": "2026-11-18T00:41:33Z",
+      "started_at": "2026-11-18T00:55:19Z",
       "started_by": "claude:0f56a916",
       "commit": "c9c4232507bbd8b57049c3701245d7a7b26e9b52",
       "code_reviews": [
@@ -15903,8 +15920,6 @@
           "ref": "CR-1"
         }
       ],
-      "review_requested_at": "2026-11-18T00:46:10Z",
-      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-18T00:46:10Z",
@@ -15917,9 +15932,21 @@
           "kind": "rejection",
           "text": "CR-1 round 3: 1 open comment",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T00:54:56Z",
+          "kind": "rejection",
+          "text": "CR-1 round 4: 1 open comment",
+          "by": "Hakan Serce"
         }
       ],
-      "reviewed_at": "2026-11-18T00:49:36Z"
+      "reviews": [
+        {
+          "from": "2026-11-18T00:46:10Z",
+          "to": "2026-11-18T00:54:56Z",
+          "outcome": "changes_requested"
+        }
+      ]
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4766068f19",
@@ -16075,14 +16102,14 @@
       "description": "In the Diffs tab's **Rendered** view, a Markdown document longer than a page shows only its first page: the rest is drawn wrongly and can't be scrolled to or read (Hakan, 2026-11-18). The likely cause: the page sheet has a fixed shape, `aspect-ratio: 8.5 / 11` in [`RenderedSide.svelte`](dashboard/src/lib/reviews/RenderedSide.svelte), so the document's height is cut to one page and its blocks' positions (and the gutter's numbers placed by them) no longer match.\n\n## Change\nThe sheet keeps a page's width and look but grows with its document (at least one page tall, then as tall as the content), the gutter's numbers placed by the blocks as they are laid out, the whole document scrolling with the file's card. Check it with a long document, with images, tables and a Mermaid diagram (which lay out late), in Split and Unified.\n\n## Tests\nAn e2e test in `reviews.spec.ts` with a document of several pages: its last block is reachable by scrolling and visible, its line number beside it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:46:31Z",
+      "updated_at": "2026-11-18T00:52:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16098,7 +16125,18 @@
       "number": 592,
       "key_final": false,
       "started_at": "2026-11-18T00:46:31Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "eed542548e9cdcd88c50fb0f7633865692a34ce1",
+      "completed_at": "2026-11-18T00:52:59Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-18T00:52:59Z",
+          "kind": "outcome",
+          "text": "The rendered page grows with its document (min-height: auto with the letter aspect ratio as its minimum). e2e: a 120-paragraph document, its last paragraph inside the page and numbered beside it. Not checked: Mermaid and images that lay out late.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ebff-cd7b-7556-8dc4-7f1a2fd70d41",
@@ -16262,6 +16300,36 @@
         "01a1ec10-21dd-74ec-85fb-c2da5d38f9c1"
       ],
       "number": 596,
+      "key_final": false
+    },
+    {
+      "id": "01a1ec2c-e2f8-7691-a51b-917d14a06947",
+      "name": "Comments and replies on a review whose changes were requested",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "A review in **changes requested** refuses new comments and replies, in the app and from `atm review comment` / `atm review reply`. Asking for changes doesn't end a review: the reviewer and the author go on talking about the changes until the next round (reported by Hakan, 2026-11-18, on CR-1).\n\n## Change\n- `crates/atm-review/src/rules.rs`: a comment or reply is allowed on an open review, `changes_requested` included; only an ended review (approved, rejected, closed) refuses them, if it does today.\n- The dashboard's review page keeps its comment boxes and Reply buttons while changes are requested.\n\n## Tests\n- A rules table: each review status, comment and reply, allowed or refused.\n- The CLI suite: a comment and a reply on a review with changes requested.\n- A component or e2e test: the review page in changes requested still lets the reviewer comment.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/src/rules.rs"
+      ],
+      "created_at": "2026-11-18T01:02:07Z",
+      "updated_at": "2026-11-18T01:02:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T01:02:07Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 597,
       "key_final": false
     }
   ]

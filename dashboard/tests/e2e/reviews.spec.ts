@@ -898,10 +898,16 @@ test.describe('performance', () => {
         last = now;
       }
       observer.disconnect();
+      // The first steps run into the page settling (the cards near the first screen made once it is idle, in one
+      // frame of about 100 ms); each step's frame after them
+      const settling = Math.round(Math.max(0, ...frames.slice(0, 3)));
+      const afterSettled = Math.round(Math.max(0, ...frames.slice(3)));
       frames.sort((a, b) => b - a);
       return {
         steps: frames.length,
         total: Math.round(performance.now() - start),
+        settling,
+        afterSettled,
         slowest: frames.slice(0, 3).map(Math.round),
         median: Math.round(frames[Math.floor(frames.length / 2)] ?? 0),
         longTasks: long.length,
@@ -911,7 +917,14 @@ test.describe('performance', () => {
       };
     });
     console.log('long review (ms):', JSON.stringify({ ...opened, ...scrolled }));
-    // The end is reached; budgets follow from the measurements (docs/review-performance.md)
+    // The end is reached; budgets follow from the measurements (docs/review-performance.md): the first file drawn
+    // and the page settled within the interaction budget (measured: about 65 and 110 ms), no step after that a frame
+    // of more than half of it (measured: about 30 ms), and the page holding the rows near the view, not every file's
+    // (measured: 30 to 200 at the end; 7,788 before ATM-587)
     await expect(diffOf(page, files.at(-1)!.path)).toBeAttached();
+    expect(opened.firstDrawn).toBeLessThan(BUDGET_MS);
+    expect(scrolled.settling).toBeLessThan(BUDGET_MS);
+    expect(scrolled.afterSettled).toBeLessThan(BUDGET_MS / 2);
+    expect(scrolled.rows).toBeLessThan(1500);
   });
 });

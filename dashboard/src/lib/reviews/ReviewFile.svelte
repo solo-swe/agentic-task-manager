@@ -1,6 +1,9 @@
 <script lang="ts" module>
   /** How far past the view a card is made ahead of being scrolled to, in pixels */
   export const MARGIN = 800;
+  /** How far past the view a made card keeps its diff before giving it back (ATM-587), in pixels: well past MARGIN, so
+   * a card near the edge isn't made and given back as the view moves a little */
+  export const FAR = 3200;
 
   /** Whether an entry of an observer with MARGIN is in the view itself (its root's box without the margin) */
   export function inView(entry: IntersectionObserverEntry): boolean {
@@ -150,8 +153,30 @@
       later?.();
     };
   });
-  /** How tall a diff not made yet stands: about its lines, so the list's scroll bar is about right */
-  const estimate = $derived(Math.min(4000, (counts.added + counts.removed + 8) * 20));
+  // A card made and then far from the view gives back its diff (ATM-587: the page holds the rows near the view, not
+  // every file's), standing in at the height it had, and is made again when it comes near; not while a comment is
+  // being written in it, nor the file gone to
+  let body = $state<HTMLElement>();
+  /** The height its diff had, when made: what it stands at once given back */
+  let measured = $state(0);
+  $effect(() => {
+    const target = el;
+    if (!target || !near || wanted || typeof IntersectionObserver === 'undefined') return;
+    const far = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) return;
+        const writingHere = target.querySelector('textarea, [contenteditable="true"]') !== null;
+        if (writingHere || target.contains(document.activeElement)) return;
+        measured = body?.offsetHeight ?? measured;
+        near = false;
+      },
+      { root, rootMargin: `${FAR}px 0px` },
+    );
+    far.observe(target);
+    return () => far.disconnect();
+  });
+  /** How tall a diff not made yet stands: the height it had, else about its lines, so the scroll bar is about right */
+  const estimate = $derived(measured || Math.min(4000, (counts.added + counts.removed + 8) * 20));
 </script>
 
 <section
@@ -185,7 +210,7 @@
     </label>
   </header>
   {#if !folded}
-    <div class="review-file-body">
+    <div class="review-file-body" bind:this={body}>
       {#each drifted as chain (chain.id)}
         <p class="review-drifted" data-chain={chain.id}>
           A comment's text is gone from this round:
@@ -274,6 +299,9 @@
     border-radius: var(--radius-md);
     background: var(--bg);
     scroll-margin-top: var(--space-4);
+    /* Off screen, the browser skips its layout and painting (ATM-587), standing in at the size it last had */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 400px;
   }
   .review-file-head {
     position: sticky;

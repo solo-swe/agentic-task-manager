@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentResult } from '../../src/lib/documents';
 import type { DocumentSource } from '../../src/lib/documents/source';
-import ReviewFile, { MARGIN, holdNearCards, inView, whenIdle } from '../../src/lib/reviews/ReviewFile.svelte';
+import ReviewFile, { FAR, MARGIN, holdNearCards, inView, whenIdle } from '../../src/lib/reviews/ReviewFile.svelte';
 import type { PlacedChain, ViewFile } from '../../src/lib/reviews/types';
 
 // A file's card on a review's Diffs tab (lib/reviews/ReviewFile.svelte, ATM-574): its header, its fold, and its diff,
@@ -316,13 +316,66 @@ describe('ReviewFile: its diff, made when near the view', () => {
     expect(container.querySelector('.diff-view')).toBeNull();
     idle!();
     await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
-    // Another card: near, then in view before the page is idle
+    // Another card: near, then in view before the page is idle (its observer is the second making one: a made card
+    // has one of its own for when it is far, FAR)
     const other = show();
     const view = { ...near, boundingClientRect: rect(900, 1000) };
-    io.watched[1].callback([near as unknown as IntersectionObserverEntry], {} as never);
-    io.watched[1].callback([view as unknown as IntersectionObserverEntry], {} as never);
+    const making = io.watched.filter((w) => w.options?.rootMargin === `${MARGIN}px 0px`);
+    making[1].callback([near as unknown as IntersectionObserverEntry], {} as never);
+    making[1].callback([view as unknown as IntersectionObserverEntry], {} as never);
     expect(cancelIdleCallback).toHaveBeenCalledWith(7);
     await vi.waitFor(() => expect(other.container.querySelector('.diff-view')).not.toBeNull());
+  });
+
+  describe('a made card far from the view (ATM-587)', () => {
+    const far = (io: ReturnType<typeof observer>) => io.watched.filter((w) => w.options?.rootMargin === `${FAR}px 0px`);
+    const leave = (io: ReturnType<typeof observer>) =>
+      far(io).forEach((w) => w.callback([{ isIntersecting: false } as IntersectionObserverEntry], {} as never));
+
+    it('gives back its diff, stands at the height it had, and is made again when it comes near', async () => {
+      const io = observer();
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(1234);
+      const { container } = show();
+      io.seen();
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+      expect(far(io)).toHaveLength(1);
+      // Still within FAR: kept
+      far(io)[0].callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as never);
+      expect(container.querySelector('.diff-view')).not.toBeNull();
+      leave(io);
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).toBeNull());
+      expect(container.querySelector('.review-file-later')).toHaveStyle({ height: '1234px' });
+      expect(container.querySelector('.review-file-card')).toHaveAttribute('data-pending');
+      io.seen();
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+    });
+
+    it.each([
+      ['a comment is being written in it', (card: Element) => card.append(document.createElement('textarea'))],
+      [
+        'the focus is in it',
+        (card: Element) => {
+          const button = card.querySelector('button')!;
+          button.focus();
+        },
+      ],
+    ])('is kept while %s', async (_, act) => {
+      const io = observer();
+      const { container } = show();
+      io.seen();
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+      act(container.querySelector('.review-file-card')!);
+      leave(io);
+      await Promise.resolve();
+      expect(container.querySelector('.diff-view')).not.toBeNull();
+    });
+
+    it('the file gone to (wanted) is never given back', async () => {
+      const io = observer();
+      const { container } = show({ wanted: true });
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+      expect(far(io)).toHaveLength(0);
+    });
   });
 
   it('right after a jump, a card in view waits too; the file gone to (wanted) is made at once', async () => {

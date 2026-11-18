@@ -1,6 +1,7 @@
 //! A project's files for the document viewer (docs/multi-project-api.md §2.6): through atm-lib (atm-docs), which
 //! checks the path and reads the file from the working copy.
 
+use atm_common::py::to_json;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use serde_json::json;
@@ -12,7 +13,10 @@ use crate::send;
 
 /// `GET …/projects/<p>/documents?path=`: a file as the viewer shows it (its JSON). The `ETag` is the file's size and
 /// mtime and the current commit (which it names), so the viewer's poll gets a 304 without the file being read again.
-/// With `&at=<revision>`, the file as that commit or tree has it (a review round's side), which never changes: no tag.
+/// With `&at=<revision>`, the file as that commit or tree has it (a review round's side). Named by its full object
+/// ID, it never changes, so the browser keeps it (ATM-587: a round's sides aren't asked for again when a far file is
+/// made again, or the review is opened again): tagged by the revision and the path, a 304 without reading anything.
+/// Any other revision (`HEAD`, a branch, a short ID) can move: neither tagged nor kept.
 pub(super) fn get_document(
     project: &dyn ProjectSource,
     query: &str,
@@ -21,8 +25,24 @@ pub(super) fn get_document(
     let path = parameter(query, "path");
     let at = parameter(query, "at");
     if !at.is_empty() {
+        if !is_object_id(&at) {
+            return match project.document_at(&path, &at) {
+                Ok(document) => ok_json(&document, None),
+                Err(e) => error_response(&e),
+            };
+        }
+        let tag = etag(&json!(["document-at", at, path]));
+        if unchanged(request, &tag) {
+            return not_modified(&tag, &[KEPT]);
+        }
         return match project.document_at(&path, &at) {
-            Ok(document) => ok_json(&document, None),
+            Ok(document) => send(
+                StatusCode::OK,
+                to_json(&document).into_bytes(),
+                "application/json",
+                Some(&tag),
+                &[KEPT],
+            ),
             Err(e) => error_response(&e),
         };
     }
@@ -42,6 +62,18 @@ pub(super) fn get_document(
         Ok(document) => ok_json(&document, Some(&tag)),
         Err(e) => error_response(&e),
     }
+}
+
+/// What a file at a full object ID is sent with: this browser only, for a year, never asked again
+const KEPT: (&str, &str) = ("Cache-Control", "private, max-age=31536000, immutable");
+
+/// A full git object ID: 40 hex digits (SHA-1) or 64 (SHA-256), in lower case as git writes them. Anything shorter
+/// could name another object later; a name (`HEAD`, a branch) moves.
+fn is_object_id(revision: &str) -> bool {
+    matches!(revision.len(), 40 | 64)
+        && revision
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 /// `GET …/projects/<p>/files?path=`: an image's bytes (whose bytes match its type), sandboxed. The `ETag` is the
@@ -260,6 +292,91 @@ mod tests {
         let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
         let _ = get_document(project.as_ref(), "path=docs%2Fa+b.md&at=", &plain());
         assert_eq!(calls.taken()[0], Call::FileVersion(PATH.into()));
+    }
+
+    const SHA1: &str = "3fa1c0de3fa1c0de3fa1c0de3fa1c0de3fa1c0de";
+
+    /// A side named by a full object ID never changes: tagged by the revision and the path, kept by the browser, a 304
+    /// without reading it again (ATM-587)
+    #[test]
+    fn a_document_at_a_full_object_id_is_kept_and_a_304_once_seen() {
+        let sha256 = "ab".repeat(32);
+        for revision in [SHA1, sha256.as_str()] {
+            let query = format!("path=a.md&at={revision}");
+            let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), Some("aaaa")));
+            let first = answer(get_document(project.as_ref(), &query, &plain()));
+            assert_eq!(first.status, StatusCode::OK, "{revision}");
+            assert_eq!(first.json(), json!({"path": "a.md", "revision": "t1"}));
+            assert_eq!(
+                first.header("cache-control"),
+                "private, max-age=31536000, immutable"
+            );
+            let tag = first.tag();
+            assert_ne!(tag, "");
+            assert_eq!(
+                calls.taken(),
+                [Call::DocumentAt("a.md".into(), revision.into())]
+            );
+            let again = answer(get_document(project.as_ref(), &query, &having(&tag)));
+            assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+            assert_eq!(
+                again.header("cache-control"),
+                "private, max-age=31536000, immutable"
+            );
+            assert_eq!(calls.taken(), []);
+            // Another path at the same revision, or another revision: another tag
+            for other in [
+                format!("path=b.md&at={revision}"),
+                format!("path=a.md&at={}", "cd".repeat(20)),
+            ] {
+                let answer = answer(get_document(project.as_ref(), &other, &having(&tag)));
+                assert_eq!(answer.status, StatusCode::OK, "{other}");
+                assert_ne!(answer.tag(), tag, "{other}");
+            }
+        }
+    }
+
+    /// Only a full object ID in git's lower case is kept: a short one, a name, upper case or another length can move
+    #[test]
+    fn a_revision_that_could_move_is_never_kept() {
+        let short = &SHA1[..39];
+        let upper = SHA1.to_uppercase();
+        let long = format!("{SHA1}0");
+        let not_hex = format!("{}g", &SHA1[..39]);
+        for revision in [
+            short,
+            upper.as_str(),
+            long.as_str(),
+            not_hex.as_str(),
+            "HEAD",
+            "main",
+        ] {
+            assert!(!is_object_id(revision), "{revision}");
+            let (project, _) = bound(fake(PATH, Ok(file((1, 1))), None));
+            let query = format!("path=a.md&at={revision}");
+            let answer = answer(get_document(project.as_ref(), &query, &plain()));
+            assert_eq!(answer.header("cache-control"), "no-store", "{revision}");
+            assert_eq!(answer.tag(), "", "{revision}");
+        }
+    }
+
+    /// A refusal is never kept: the file may be readable later (a submodule checked out, a fetch)
+    #[test]
+    fn a_refusal_at_a_full_object_id_is_not_kept() {
+        for (error, status) in refusals() {
+            let (project, _) = bound(FakeProject {
+                at_revision: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            let answer = answer(get_document(
+                project.as_ref(),
+                &format!("path=a.md&at={SHA1}"),
+                &plain(),
+            ));
+            assert_eq!(answer.status, status, "{error}");
+            assert_eq!(answer.header("cache-control"), "no-store");
+            assert_eq!(answer.tag(), "");
+        }
     }
 
     #[test]

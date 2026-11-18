@@ -2,12 +2,12 @@
 id = "01a1ec1e-490c-7662-b019-c555b41cacfe"
 number = 1
 title = "Large reviews: where the Diffs tab spends its time, and what to change"
-status = "open"
+status = "changes_requested"
 tasks = ["ATM-587"]
 author = "claude:0f56a916"
 reviewers = ["Hakan Serce"]
 created = 2026-11-18T00:46:10Z
-updated = 2026-11-18T00:52:18Z
+updated = 2026-11-18T01:00:14Z
 +++
 
 Where a large review's Diffs tab spends its time, measured on CompMD's CR-1 (94 files, ~3,300 changed lines) and a test shaped like it, and what to change.

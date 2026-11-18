@@ -191,6 +191,15 @@ describe('loading a file', () => {
     const again = answer(304, null);
     expect(await loadDocument('p 1', 'docs/x.md', again, { etag: '"e1"' })).toEqual({ unchanged: true });
     expect((again.mock.calls[0] as unknown[])[1]).toMatchObject({ headers: { 'If-None-Match': '"e1"' } });
+    // The working copy's file never comes from the browser's cache
+    expect((fetchFn.mock.calls[0] as unknown[])[1]).toMatchObject({ cache: 'no-store' });
+  });
+
+  it('a side at a revision is asked for at it, and may come from the browser’s cache (ATM-587)', async () => {
+    const fetchFn = answer(200, doc);
+    await loadDocument('p', 'docs/x.md', fetchFn, undefined, 'a'.repeat(40));
+    expect(fetchFn.mock.calls[0][0]).toBe(`/api/v1/projects/p/documents?path=docs%2Fx.md&at=${'a'.repeat(40)}`);
+    expect((fetchFn.mock.calls[0] as unknown[])[1]).toMatchObject({ cache: 'default' });
   });
 
   it('says why a file can’t be shown: missing, refused, or a failure', async () => {

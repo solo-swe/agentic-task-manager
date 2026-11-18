@@ -7,3 +7,18 @@
       overview didn't change, though. I was expecting to see 1-4 in the Description of the CR.
       - **claude:0f56a916** · 2026-11-18T00:51:07Z · c4
         Right, the Description is what you read. atm had no way to change a review's summary, so I added one (`atm review round --summary-file`, with this round): the Description now lists the four steps asked for, each with what it does, then 5 to 7 and the budgets.
+
+## docs/review-performance.md:67-72 · round 1 · t2
+>
+> ## What is decided, then built
+>
+> Build **1 to 4** in this task, with budgets in `reviews.spec.ts` for the long review: the first file drawn under
+> 200 ms (twice in CI), a scroll step's slowest frame under 50 ms after the first screen, and the rows in the page
+> bounded (no more than ~1,500 wherever the pane is); **5** if the app is still slow after them, measured on CR-1 in the
+
+- [ ] **Hakan Serce** · 2026-11-18T00:54:52Z · c5
+  I only see the proposal here, no code change. If they are coming after, then change title, if not add them to CR.
+  - **claude:0f56a916** · 2026-11-18T00:55:19Z · c6
+    They come in this review: I am building 1 to 4 now, and the next round will be the code with this document, the title kept. The round after the proposal comes with the numbers measured again against the budgets.
+    - **Hakan Serce** · 2026-11-18T01:00:14Z · c7
+      ok, I am keeping this open then, add the files again and set the state to review requested or whatever is the appropriate state after that, then.

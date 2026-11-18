@@ -29,7 +29,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /p/<id>/worktrees.json` | that project's git worktrees and their changed tasks (§2.2) | yes |
 | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
 | `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
-| `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6); `&at=<rev>` as a commit or tree has it | yes (no with `at`) |
+| `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6); `&at=<rev>` as a commit or tree has it | yes (with `at`, only at a full object ID, kept by the browser) |
 | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
 | `GET /api/v1/projects/<id>/reviews?q=&status=&…` | that project's code reviews (§2.9) | no |
 | `GET /api/v1/projects/<id>/reviews/<CR>?round=&against=` | a review's page for one view of it (§2.9) | no |
@@ -194,7 +194,10 @@ reads the working copy through the version control. `path` is relative to the pr
   its diff). `revision` is the object's SHA, `commit` the commit's (`null` for a tree), `modified_at` and `submodule`
   `null`, `tracked` true. The path's checks are the same, and git's ignore rules are the working copy's; a revision is
   resolved before git sees it, so one that starts with `-` or isn't an object is `400`, one the clone doesn't have, or
-  a file it doesn't hold, `404`. It never changes: no ETag.
+  a file it doesn't hold, `404`. At a full object ID (40 or 64 lower-case hex digits) it never changes: the ETag is the
+  revision and the path, a 304 needs nothing read, and it is sent with `Cache-Control: private, max-age=31536000,
+  immutable`, so the browser keeps it (ATM-587); at any other revision (a name, a short ID), or refused, no ETag and
+  `no-store`.
 - `files?path=` answers an image's bytes (PNG, JPEG, GIF, WebP, SVG whose bytes match its name) with its type,
   `Cache-Control: no-cache`, `nosniff` and a sandboxing CSP; any other file `403`. The ETag is the size and mtime.
 - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; a hidden file or

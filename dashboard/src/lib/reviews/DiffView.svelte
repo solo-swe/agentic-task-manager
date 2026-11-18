@@ -20,6 +20,10 @@
   } from './diff';
   import type { Chain, Picked, Side } from './types';
 
+  /** How many rows of a file are drawn at a time (ATM-587): 300 made a frame of about 120 ms when scrolled into a
+   * long file, 100 about 30 */
+  const CHUNK = 100;
+
   // The diff viewer (docs/code-review-design.md §3.7, ATM-573): one file of a round, its two sides read from document
   // sources (the round's base and head; none for a side the file doesn't have) and its hunks from the round's patch.
   // Split or unified; source (each run of lines a code block CompMD renders) or rendered (a Markdown file rendered on
@@ -159,13 +163,50 @@
     let first = 0;
     rows.forEach((row, i) => {
       const here = chainsAfter(row).sort((x, y) => (y.anchor.lines?.[0] ?? 0) - (x.anchor.lines?.[0] ?? 0));
-      if (here.length || i === cut || i === rows.length - 1) {
+      // A long run is cut every CHUNK rows too, so it can be drawn a chunk at a time (ATM-587)
+      if (here.length || i === cut || i === rows.length - 1 || i - first + 1 >= CHUNK) {
         out.push({ rows: rows.slice(first, i + 1), first, chains: here });
         first = i + 1;
       }
     });
     return out;
   }
+
+  // A long file drawn a chunk at a time (ATM-587): its first CHUNK rows at once, the rest a chunk a frame once the
+  // page is idle, so making a file of thousands of rows is never one long task; another file starts again
+  type Item =
+    | { kind: 'fold'; b: number; fold: Extract<Block<SplitRow | UnifiedRow>, { type: 'fold' }>['fold']; start: number }
+    | { kind: 'rows'; b: number; segment: ReturnType<typeof segments<SplitRow | UnifiedRow>>[number]; start: number };
+  const items = $derived.by(() => {
+    const out: Item[] = [];
+    let start = 0;
+    blocks.forEach((block, b) => {
+      if (block.type === 'fold') out.push({ kind: 'fold', b, fold: block.fold, start });
+      else
+        for (const segment of segments(block.rows as (SplitRow | UnifiedRow)[], b)) {
+          out.push({ kind: 'rows', b, segment, start });
+          start += segment.rows.length;
+        }
+    });
+    return { out, total: start };
+  });
+  let limit = $state(CHUNK);
+  $effect(() => {
+    void path;
+    untrack(() => (limit = CHUNK));
+  });
+  $effect(() => {
+    const total = items.total;
+    if (limit >= total) return;
+    const more = () => (limit += CHUNK);
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(more, { timeout: 200 });
+      return () => cancelIdleCallback(id);
+    }
+    const id = setTimeout(more, 16);
+    return () => clearTimeout(id);
+  });
+  const drawnItems = $derived(items.out.filter((item) => item.start < limit));
 
   const splitSide = (rows: SplitRow[], s: Side): CodeLine[] =>
     rows.map((r) => {
@@ -397,60 +438,64 @@
   {:else if !loaded}
     <p class="diff-loading">Loading…</p>
   {:else if shownView === 'source'}
-    {#each blocks as block, b (b)}
-      {#if block.type === 'fold'}
+    {#each drawnItems as item (`${item.b}-${item.kind === 'fold' ? 'fold' : item.segment.first}`)}
+      {@const b = item.b}
+      {#if item.kind === 'fold'}
+        {@const fold = item.fold}
         <button
           class="diff-fold"
-          onclick={() => (expanded = new Set([...expanded, foldKey(block.fold)]))}
-          data-fold={block.fold.newFrom}
+          onclick={() => (expanded = new Set([...expanded, foldKey(fold)]))}
+          data-fold={fold.newFrom}
         >
-          Show {block.fold.count} unchanged {block.fold.count === 1 ? 'line' : 'lines'}
+          Show {fold.count} unchanged {fold.count === 1 ? 'line' : 'lines'}
         </button>
       {:else}
-        {#each segments(block.rows as (SplitRow | UnifiedRow)[], b) as segment (segment.first)}
-          {@const keys = segment.rows.map((_, i) => `${b}-${segment.first + i}`)}
-          {@const isPicked = (s: Side) => pickedIn(b, segment.first, segment.rows.length, s)}
-          {@const changes = changesIn(b, segment.first, segment.rows.length)}
-          <div class="diff-run" data-keys={keys.join(' ')}>
-            {#if mode === 'split'}
-              {#each ['old', 'new'] as const as s (s)}
-                <div class="diff-column diff-{s}">
-                  <DiffCode
-                    lines={splitSide(segment.rows as SplitRow[], s)}
-                    {language}
-                    numbers={s}
-                    {keys}
-                    changes={s === 'new' ? changes : []}
-                    picked={isPicked(s)}
-                    marked={markedIn(segment.rows, s)}
-                    onpick={oncomment ? (i, extend) => pick(b, s, segment.first + i, extend) : undefined}
-                    onover={(i) => over(b, s, segment.first + i)}
-                  />
-                </div>
-              {/each}
-            {:else}
-              <div class="diff-column">
+        {@const segment = item.segment}
+        {@const keys = segment.rows.map((_, i) => `${b}-${segment.first + i}`)}
+        {@const isPicked = (s: Side) => pickedIn(b, segment.first, segment.rows.length, s)}
+        {@const changes = changesIn(b, segment.first, segment.rows.length)}
+        <div class="diff-run" data-keys={keys.join(' ')}>
+          {#if mode === 'split'}
+            {#each ['old', 'new'] as const as s (s)}
+              <div class="diff-column diff-{s}">
                 <DiffCode
-                  lines={unifiedLines(segment.rows as UnifiedRow[])}
+                  lines={splitSide(segment.rows as SplitRow[], s)}
                   {language}
-                  numbers="both"
+                  numbers={s}
                   {keys}
-                  {changes}
-                  picked={isPicked('new')}
-                  marked={markedIn(segment.rows, 'both')}
-                  onpick={oncomment ? (i, extend) => pick(b, 'new', segment.first + i, extend) : undefined}
-                  onover={(i) => over(b, 'new', segment.first + i)}
+                  changes={s === 'new' ? changes : []}
+                  picked={isPicked(s)}
+                  marked={markedIn(segment.rows, s)}
+                  onpick={oncomment ? (i, extend) => pick(b, s, segment.first + i, extend) : undefined}
+                  onover={(i) => over(b, s, segment.first + i)}
                 />
               </div>
-            {/if}
-          </div>
-          {#if composing && picked && picked.block === b && picked.to >= segment.first && picked.to < segment.first + segment.rows.length && oncomment}
-            {@render composer(composing)}
+            {/each}
+          {:else}
+            <div class="diff-column">
+              <DiffCode
+                lines={unifiedLines(segment.rows as UnifiedRow[])}
+                {language}
+                numbers="both"
+                {keys}
+                {changes}
+                picked={isPicked('new')}
+                marked={markedIn(segment.rows, 'both')}
+                onpick={oncomment ? (i, extend) => pick(b, 'new', segment.first + i, extend) : undefined}
+                onover={(i) => over(b, 'new', segment.first + i)}
+              />
+            </div>
           {/if}
-          {#each segment.chains as chain (chain.id)}{@render chainBox(chain)}{/each}
-        {/each}
+        </div>
+        {#if composing && picked && picked.block === b && picked.to >= segment.first && picked.to < segment.first + segment.rows.length && oncomment}
+          {@render composer(composing)}
+        {/if}
+        {#each segment.chains as chain (chain.id)}{@render chainBox(chain)}{/each}
       {/if}
     {/each}
+    {#if limit < items.total}
+      <div class="diff-more" style:height="{(items.total - limit) * 20}px" aria-hidden="true"></div>
+    {/if}
   {:else}
     <div class="diff-rendered" class:single={sides.length < 2}>
       {#each sides as s (s)}
