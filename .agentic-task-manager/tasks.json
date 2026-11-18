@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 593
+    "next_number": 594
   },
   "tasks": [
     {
@@ -16064,6 +16064,45 @@
         "dashboard"
       ],
       "number": 592,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebff-cd7b-7556-8dc4-7f1a2fd70d41",
+      "name": "Code review: task keys in reviews are links to their tasks",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "Wherever a review names a task by its key, the key is a link that opens the task's details (`/projects/<id>/list?task=ATM-12`, in the app in this tab, a new tab with ⌘/Ctrl), as the Overview's Tasks fact already does (`taskHref` in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte)). Hakan, 2026-11-18.\n\n## Where\n- The Reviews list's rows ([`ReviewList.svelte`](dashboard/src/lib/reviews/ReviewList.svelte), today `r.tasks.join(', ')` as text); a click on a key opens the task, not the review.\n- The review page's top bar, where it names its tasks, if it does.\n- Keys written in the review's description and in comments (`ATM-12`, an earlier prefix, another project's `LFB-5`): linked as the task text's keys are, only for tasks that exist (the project's own, or another project's atm knows), never a link to nothing. With ATM-586 (document links in the same texts), through the same `CompMd` options.\n\n## Tests\nComponent tests for the list row and a comment's key (known, unknown, another project's); an e2e test in `reviews.spec.ts` that a click opens the task's details.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewList.svelte",
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/reviews/ChainBox.svelte"
+      ],
+      "created_at": "2026-11-18T00:12:52Z",
+      "updated_at": "2026-11-18T00:12:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:12:52Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "01a1ebf2-f535-752d-88f8-ee8ac3ce346e"
+      ],
+      "number": 593,
       "key_final": false
     }
   ]
