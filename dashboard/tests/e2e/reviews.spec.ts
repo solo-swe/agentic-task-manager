@@ -1425,6 +1425,13 @@ test.describe('performance', () => {
           }).length;
         })(),
         nodes: document.querySelectorAll('*').length,
+        // Cards standing shorter than a header (ATM-615: the pane's column squeezed every skipped card to its border)
+        collapsed: (() => {
+          const head = (document.querySelector('.review-file-head') as HTMLElement).offsetHeight;
+          return [...document.querySelectorAll('.review-file-card')].filter(
+            (card) => card.getBoundingClientRect().height < head,
+          ).length;
+        })(),
       };
     });
     console.log('long review (ms):', JSON.stringify({ ...opened, ...scrolled }));
@@ -1438,5 +1445,6 @@ test.describe('performance', () => {
     expect(scrolled.afterSettled).toBeLessThan(BUDGET_MS / 2);
     // Rows bounded by where the view is, not by a count: a 600-line file in view is 1,200 rows in split
     expect(scrolled.farRows).toBe(0);
+    expect(scrolled.collapsed).toBe(0);
   });
 });

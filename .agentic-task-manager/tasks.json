@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 618
+    "next_number": 620
   },
   "tasks": [
     {
@@ -16466,7 +16466,7 @@
       "description": "A task named in a review opens its **details**, over the review, instead of taking you to the project's task list (Hakan, 2026-11-18: today the Overview's Tasks fact links to `/projects/<id>/list?task=ATM-12`, which leaves the review for the whole list, the details panel open over it; \"you are lost in the full list of tasks\").\n\n## Change\n- A click on a task's key in a review opens that task's details panel on the review's page (`?task=ATM-12` on the review's own address, `/projects/<id>/reviews/CR-7?task=ATM-12`, as the other pages take it); closing it (×, Escape, Back) leaves you where you were in the review: the same tab, round, file and scroll. From the details, the task's own links work as they do anywhere.\n- ⌘/Ctrl-click opens the task in a new tab (in the app, an app tab), at its project's page with its details.\n- The same everywhere a review names a task:\n  - the Overview's Tasks fact (`taskHref` in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte));\n  - the Reviews list's rows ([`ReviewList.svelte`](dashboard/src/lib/reviews/ReviewList.svelte), today `r.tasks.join(', ')` as text: a click on a key opens the task, not the review);\n  - the review page's top bar, if it names its tasks;\n  - keys written in the description and the comments (`ATM-12`, an earlier prefix, another project's `LFB-5`), linked only for tasks that exist, never a link to nothing; with ATM-586 (document links in the same texts), through the same `CompMd` options.\n\n## Tests\nComponent tests for the list row and a comment's key (known, unknown, another project's); an e2e test in `reviews.spec.ts`: a click opens the details over the review, closing them leaves the review as it was (tab, file), the address back to the review's; ⌘-click opens a new tab.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewList.svelte",
@@ -16474,9 +16474,9 @@
         "dashboard/src/lib/reviews/ChainBox.svelte"
       ],
       "created_at": "2026-11-18T00:12:52Z",
-      "updated_at": "2026-11-18T08:07:34Z",
+      "updated_at": "2026-11-18T18:06:43Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16493,7 +16493,31 @@
       "number": 593,
       "key_final": false,
       "started_at": "2026-11-18T08:07:34Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "dbda00eb6ab9801a2b40930e4f9bb1d8e09a7b48",
+      "code_reviews": [
+        {
+          "id": "01a1edc5-977a-7058-a293-2d2663c63bb4",
+          "ref": "CR-20"
+        }
+      ],
+      "review_requested_at": "2026-11-18T08:28:32Z",
+      "review_state": "approved",
+      "notes": [
+        {
+          "at": "2026-11-18T08:28:32Z",
+          "kind": "review",
+          "text": "CR-20: A task named in a review opens its details over it",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T18:06:43Z",
+          "kind": "note",
+          "text": "Approved: in CR-20 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviewed_at": "2026-11-18T18:06:43Z"
     },
     {
       "id": "01a1ec0b-fc5f-716f-b40a-2517314b85d8",
@@ -17658,14 +17682,14 @@
       "description": "`tests/e2e/reviews.spec.ts` *a long review (94 files, ~3,000 lines)* failed twice on 2026-11-18, both times while the whole suite was running and the machine was busy. Alone it passes.\n\n- Once a budget was missed (which number isn't known: the report was replaced by a rerun).\n- Once the last file's diff was never attached. The scroll took 22 steps (358 ms) where it usually takes about 125, so the pane's height said the end was reached long before the last file. Its numbers: `{\"firstDrawn\":125,\"settled\":151,\"steps\":22,\"total\":358,\"rows\":1586,\"farRows\":0}`.\n\nDon't raise a budget or just rerun it (AGENTS.md). Find what makes the pane short under load (cards not placed yet, the file list drawn in parts, a refresh replacing it), fix it in `ReviewFile.svelte` or the page, or make the test wait for what it really needs, and say which in the test. Reproduce it with the CPU slowed (`page.emulate` CPU throttling in Chromium) or with the suite's 5 workers.\n\n## Tests\nThe spec passes 10 times in a row with the CPU slowed 4×, and in the full functional run.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/tests/e2e/reviews.spec.ts",
         "dashboard/src/lib/reviews/ReviewFile.svelte"
       ],
       "created_at": "2026-11-18T07:01:05Z",
-      "updated_at": "2026-11-18T07:01:05Z",
+      "updated_at": "2026-11-18T19:00:45Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17676,7 +17700,16 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 615,
-      "key_final": false
+      "key_final": false,
+      "notes": [
+        {
+          "at": "2026-11-18T18:06:43Z",
+          "kind": "failure",
+          "text": "lease expired (claude:0f56a916)"
+        }
+      ],
+      "started_at": "2026-11-18T19:00:45Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1eda3-9ed4-71e4-8d2e-919e67b9261c",
@@ -17735,6 +17768,77 @@
       "sprint": "Code reviews in the app",
       "number": 617,
       "key_final": false
+    },
+    {
+      "id": "01a1f007-4163-7431-8f4c-be2127162a62",
+      "name": "Document viewer: table columns get sensible widths, not squeezed to a letter while others take the space",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "ux"
+      ],
+      "description": "Reported by Hakan (2026-11-18): in the document viewer, some table columns get so narrow that their text is squished, practically one letter a line, while other columns take most of the width.\n\n## Likely cause\n`.compmd` sets `overflow-wrap: anywhere` ([app.css](dashboard/src/app.css#L184)). With `anywhere`, a word may break between any two letters, so a cell's least width (its min-content) is one character. The browser's automatic table layout then gives a column with long text plenty of room, and shrinks the others to that least width. `.compmd-page table` is also `display: block` with `overflow-x: auto`, so the table never has to fit the width the way a table would. Check this first, in the browser, on a table that shows it.\n\n## Change\n- In tables, words don't break mid-word: `overflow-wrap: normal` (or `break-word`, which doesn't lower min-content) on `th` and `td`, so a column is at least as wide as its longest word. A long unbreakable value (a URL, a path, a hash) may still break, rather than widen the table without end.\n- **Widths from all the column's values, not the heading alone.** Start from even widths, and let a column with more text take more, in proportion to its content (the browser's auto layout does this once the least widths are right). If CSS alone can't give it, measure the cells' text once after rendering and set `col` widths. Keep it simple: CSS first.\n- A table wider than the viewer still scrolls sideways within it, it doesn't widen the panel.\n- The same in every document style (GitHub, Docs, Magazine, `src/themes/doc-styles.css`) and in task text, which shares `.compmd`.\n\nThe page styles are atm's, not CompMD's: the fix is in atm's CSS.\n\n## Tests\n- An e2e in the document viewer spec: a table of three columns (a short one, a word-per-cell one, a long sentence) at the viewer's width. No column is narrower than its longest word, and the long column wraps at word boundaries.\n- The same table in a narrow viewer: it scrolls sideways rather than squeezing columns to a letter.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/app.css",
+        "dashboard/src/themes/doc-styles.css",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-18T18:59:29Z",
+      "updated_at": "2026-11-18T19:01:02Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T18:59:29Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 618,
+      "key_final": false,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a1f008-9a9f-714f-8e7b-93ac77245ac5",
+      "name": "A task card in review shows its code review as a button that opens it",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Asked by Hakan (2026-11-18): on a task in review, the card itself gets its code review as a clickable badge (`CR-7`), so the review opens straight from the board or the list, without opening the task first and clicking the link in its details.\n\n## Change\n- `tasks/TaskCard.svelte`: a task with a review (its latest, as the details panel's `#detail-review` shows since ATM-585) shows a CR badge, its review's key and status (*Waiting for review*, *Changes requested*, …), in the card's badges or beside the review wait line (`.review-wait`).\n- Reuse `details/ReviewLink.svelte` and `reviews/known.svelte.ts` (`knownStatus`) rather than a second way of naming a review; the link's `href` is the review's page (`address.ts` `reviewPageOf`), so hovering or copying shows where it goes.\n- A click opens the review and does **not** open the task's details (stop the card's own click). ⌘-click, Ctrl-click or a middle click opens it in a tab of its own, as other links do (`new-tab-clicks.ts`).\n- Keyboard: the badge is a link in the card's tab order, Enter opens it.\n- Only tasks with a review show it; a task in review with no CR (a review without a change) shows nothing new.\n\n## Tests\n- `TaskCard.component.test.ts`: a task with a review shows its badge with the review's address; a click opens the review and not the task; a task without one shows none.\n- An e2e in the kanban spec: the badge on a card in review opens `CR-N`, and ⌘-click opens a new tab.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/tasks/TaskCard.svelte",
+        "dashboard/tests/unit/TaskCard.component.test.ts",
+        "dashboard/tests/e2e/kanban.spec.ts"
+      ],
+      "created_at": "2026-11-18T19:00:58Z",
+      "updated_at": "2026-11-18T19:01:01Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T19:00:58Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 619,
+      "key_final": false,
+      "components": [
+        "dashboard"
+      ]
     }
   ]
 }

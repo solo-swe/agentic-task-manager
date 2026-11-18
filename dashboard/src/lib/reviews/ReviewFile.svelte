@@ -142,7 +142,12 @@
     const seen = new IntersectionObserver(
       (entries) => {
         const entry = entries.find((e) => e.isIntersecting);
-        if (!entry) return;
+        if (!entry) {
+          // Scrolled past before the page was idle (ATM-615): not made once it is, far from the view by then
+          later?.();
+          later = null;
+          return;
+        }
         if (inView(entry) && !holding()) {
           later?.();
           near = true;
@@ -170,7 +175,8 @@
         if (entries.some((e) => e.isIntersecting)) return;
         const writingHere = target.querySelector('textarea, [contenteditable="true"]') !== null;
         if (writingHere || target.contains(document.activeElement)) return;
-        measured = body?.offsetHeight ?? measured;
+        // Only a drawn diff's height (ATM-615): one still loading is a line high, and the card stood at that
+        if (body && !body.querySelector('.diff-loading')) measured = body.offsetHeight;
         near = false;
       },
       { root, rootMargin: `${FAR}px 0px` },
@@ -192,6 +198,7 @@
   data-pending={!folded && !near && !file.binary && !moved ? '' : undefined}
   data-comments={chains.length ? '' : undefined}
   aria-label={file.path}
+  style:--card-estimate="{folded ? 0 : estimate}px"
 >
   <header class="review-file-head">
     <button
@@ -309,9 +316,17 @@
     border-radius: var(--radius-md);
     background: var(--bg);
     scroll-margin-top: var(--space-4);
-    /* Off screen, the browser skips its layout and painting (ATM-587), standing in at the size it last had */
+    /* Off screen, the browser skips its layout and painting (ATM-587), standing in at the size it last had, else at
+       its estimate and its header. Never shrunk (ATM-615): a skipped card's least height is 0, so the pane's column
+       squeezed every card off screen to its border, and the pane was a few screens long */
+    flex: none;
     content-visibility: auto;
-    contain-intrinsic-size: auto 400px;
+    contain-intrinsic-size: auto calc(var(--card-estimate, 400px) + 48px);
+  }
+  /* A diff still loading stands at its estimate (ATM-615): a card that leaves the view while loading is remembered at
+     the size it had, and at a line high the pane shrank under the reader */
+  .review-file-body:has(:global(.diff-loading)) {
+    min-height: var(--card-estimate);
   }
   .review-file-head {
     position: sticky;
