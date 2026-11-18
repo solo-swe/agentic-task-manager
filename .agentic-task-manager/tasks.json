@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 596
+    "next_number": 597
   },
   "tasks": [
     {
@@ -16184,6 +16184,45 @@
         "dashboard"
       ],
       "number": 595,
+      "key_final": false
+    },
+    {
+      "id": "01a1ec12-b99f-75a9-9668-ba268b704f56",
+      "name": "Code review: the diffs follow the file tree's order",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "On a review's Diffs tab the file tree (left) and the diffs (right) list the files in different orders (Hakan, 2026-11-18: in CompMD's CR-1, `pnpm-lock.yaml` is at the end of the tree but in the middle of the diffs). The tree sorts as a tree (folders, then their files), the diffs come in git's order (the patch's, by path).\n\n## Change\n- One order for both, the tree's (as you read it top to bottom, folders before the files beside them, each level by name): the diffs, the next and previous file, change and comment (`n p c C`), the round's file select and the Viewed count's order all follow it ([`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte), the view's `files`).\n- Folding a folder in the tree (ATM-595) folds nothing on the right; the order stays the same.\n\n## Tests\nA unit test of the order (a root file, nested folders, a lock file at the root: tree order and diff order equal); an e2e test in `reviews.spec.ts` that the cards' order is the tree's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/reviews/page.ts",
+        "dashboard/tests/unit/page.test.ts"
+      ],
+      "created_at": "2026-11-18T00:33:32Z",
+      "updated_at": "2026-11-18T00:33:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:33:32Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "01a1ec10-21dd-74ec-85fb-c2da5d38f9c1"
+      ],
+      "number": 596,
       "key_final": false
     }
   ]
