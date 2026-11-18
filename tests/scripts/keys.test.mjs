@@ -279,6 +279,53 @@ test('a key becomes final once its task is on origin’s base branch, read from 
   }
 });
 
+// ATM-623 (Hakan): a project working on its base branch, pushing straight to it, kept provisional keys: nothing made
+// them final after a push but the next `atm db migrate`
+test('a direct push makes the keys of the tasks it pushed final: atm vcs pushed without --pr', () => {
+  const remote = tempDir('atm-remote-');
+  const root = makeProject({
+    files: { [FILE]: { meta: { id: '3f2a9c1e', project: 'Fig' }, tasks: [] } },
+    git: true,
+    commit: true,
+  });
+  const add = (name) => {
+    const dir = tempDir();
+    try {
+      fs.writeFileSync(path.join(dir, 'new.json'), JSON.stringify([{ name, type: 'feature' }]));
+      assert.equal(runAtm(['task', 'add', '--json-file', path.join(dir, 'new.json')], root).code, 0);
+    } finally {
+      removeDir(dir);
+    }
+  };
+  const task = (name) => read(root, FILE).tasks.find((t) => t.name === name);
+  try {
+    git(['init', '-q', '--bare', remote], root);
+    git(['branch', '-M', 'main'], root);
+    git(['remote', 'add', 'origin', remote], root);
+    assert.equal(runAtm(['project', 'key', 'set', 'FIG'], root).code, 0);
+    git(['commit', '-q', '-am', 'keys'], root);
+    git(['push', '-q', '-u', 'origin', 'main'], root);
+    // Not pushed yet: nothing to make final
+    add('pushed');
+    git(['commit', '-q', '-am', 'one'], root);
+    assert.equal(runAtm(['vcs', 'pushed'], root).stdout, 'No provisional key is on the base branch yet.\n');
+    assert.equal(task('pushed').key_final, false);
+    // Pushed on main: final; a task added since, not pushed, stays provisional
+    git(['push', '-q', 'origin', 'main'], root);
+    add('not pushed');
+    const r = runAtm(['vcs', 'pushed', '--json'], root);
+    assert.equal(r.code, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), { keys_final: ['FIG-1'] });
+    assert.equal(task('pushed').key_final, true);
+    assert.equal(task('not pushed').key_final, false);
+    // Again: nothing more
+    assert.deepEqual(JSON.parse(runAtm(['vcs', 'pushed', '--json'], root).stdout), { keys_final: [] });
+  } finally {
+    removeDir(root);
+    removeDir(remote);
+  }
+});
+
 test('a dependency on another registered project’s task, by its key: waits until it is done there (T-544)', () => {
   const home = tempDir('atm-home-');
   const env = { ATM_HOME: home };

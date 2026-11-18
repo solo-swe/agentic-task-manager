@@ -48,7 +48,8 @@ const CASES = [
   // sprint, vcs: required options
   [['sprint', 'move', 'T-1'], 2, "atm: Missing option '--to'."],
   [['sprint', 'move', '--to', 'S1'], 2, 'required'],
-  [['vcs', 'pushed'], 2, "atm: Missing option '--pr'."],
+  // Without --pr it records a direct push (ATM-623); --at is a PR's merge time
+  [['vcs', 'pushed', '--at', '2026-05-01T00:00:00Z'], 2, 'atm: --at is when a PR was merged: give --pr too'],
   [['vcs', 'pr', 'T-1', '--url', 'https://e.com/1'], 2, "atm: Missing option '--number'."],
   [['vcs', 'pr', '--number', '1', '--url', 'https://e.com/1'], 2, 'required'],
   [['vcs', 'pr', 'T-1', '--number', 'one', '--url', 'u'], 2, "invalid value 'one' for '--number"],

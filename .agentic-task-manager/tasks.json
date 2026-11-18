@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 628
+    "next_number": 629
   },
   "tasks": [
     {
@@ -18081,7 +18081,7 @@
       "description": "Reported by Hakan (2026-11-18), in a review he was reading: a single line changed in round 2, yet\n- **round 2's whole change** shows the whole file as added;\n- **since round 1** shows every other file of the review as deleted.\n\nBoth views should show what a reader expects: the whole change is everything the review is about, as of that round, with that one line in it; since round 1 is that one line, and nothing else.\n\n## Leads (not yet confirmed)\nThis repo's own reviews have rounds of this shape. CR-13's round 1 is the range `a6864c0..59c4948` (28 files), and its round 2 is `3c2b8d8..a7d3dd4`, the fix commit alone (3 files): the agent gave the round its own range, from the commit before the fix, not from the review's base.\n- **A round's whole change** may be taken from the round's own range, or from a base its files don't have, so a file reads as added. Find how `atm-review`'s `rounds.rs` (and `atm-lib`'s `review_pages.rs`, the view) builds a round's change. Decide what a range round means, with Hakan if unclear: the review's change as of the round (from the review's first base to the round's head) is what a reader expects.\n- **Since an earlier round** may compare the two rounds' file lists, or their patches, rather than the trees at the two rounds' heads. A file the later round's range doesn't touch then looks deleted. It should be the difference between the two rounds' after sides, file by file, for the files either round changed.\n- Uncommitted (`files`) rounds and live rounds may have the same problems: check each round kind (`range`, `files`, `uncommitted`, live) against each other.\n\nReproduce first with a test on a small repository: two rounds, the second a one-line fix made as a new commit; the round given both ways (the review's whole range, and the fix commit's alone). The CLI suite (`tests/scripts/reviews.test.mjs`) and `rounds.rs`'s own tests.\n\nAlso check what the agents' docs tell them to give `atm review round` (`atm docs reviews`), so that what they do gives the right rounds.\n\n## Tests\n- atm-review: a round's whole change, and since an earlier round, for each round kind and for a round given its own commit's range, as above.\n- The CLI suite: `atm review show CR-1 --round 2` and `--round 2 --against 1` on such a review.\n- The REST view (`review_pages`): the files and patches for both.\n- An e2e test with the fixture: since round 1 lists only the changed file.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rounds.rs",
@@ -18090,7 +18090,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T20:17:23Z",
-      "updated_at": "2026-11-18T20:56:25Z",
+      "updated_at": "2026-11-18T21:13:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18107,7 +18107,24 @@
       "number": 622,
       "key_final": false,
       "started_at": "2026-11-18T20:56:25Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "ef6ab1b53608813cd05fcf9a33c96131d185c9aa",
+      "code_reviews": [
+        {
+          "id": "01a1f082-322d-7048-81f4-86386bbe2d7d",
+          "ref": "CR-25"
+        }
+      ],
+      "review_requested_at": "2026-11-18T21:13:47Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T21:13:47Z",
+          "kind": "review",
+          "text": "CR-25: A later round shows what changed, not files deleted or wholly added",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f05c-1dcc-74a9-82ca-2bb060c5e75f",
@@ -18120,7 +18137,7 @@
       "description": "Reported by Hakan (2026-11-18): in a project where he works on `main` (the base branch), new tasks get provisional keys (`~KEY-12`), and they stay provisional even after the commits are pushed.\n\n## How keys become final today\n`atm-lib`'s `code::finalize_keys` (ADR-007 §3): a provisional task becomes final when its UUID, with the same number, is in the task file (or its archive) on `origin/<base>` (`meta.workflow.base`, else the remote's default branch), read from git. It runs from two commands only:\n- `atm db migrate` (the skills run it first);\n- `atm vcs pushed --pr <n>` (a merged PR recorded, so the `pull-request` workflow only).\n\n## Leads, to check in that order\n1. **Nothing runs it after a push in the `direct` workflow.** `/atm-push` in a `direct` project never calls `atm vcs pushed --pr`, so the keys wait for the next `atm db migrate`, which may be a long time away when nobody starts a skill.\n2. **`origin/<base>` may not resolve** for that project: no `meta.workflow.base` and a remote default branch atm can't find (`default_base()`), a remote not named `origin`, or a local-only project (no remote: keys can never become final). Check `file_on_remote_branch` for each.\n3. **Created on the base branch itself.** A task added on `main` in a `direct` project is on the base branch as soon as it is committed and pushed; decide (ADR-007) whether it can even be final at once when the local branch is the base and no other clone can take its number, or only once pushed.\n4. **The dashboard** may show a stale `key_final` until its summary's cache moves (the summary stamp).\n\nAsk Hakan which project, and reproduce it there first (`atm task details <key> --json` shows `key_final`, `atm project workflow` the workflow and base).\n\n## Change\n- Keys become final after a push in every workflow: `/atm-push` (the skill) or atm itself calls the finalizing step after a push in a `direct` project (for example `atm vcs pushed` without `--pr` when the workflow is `direct`, or finalizing on any command that reads the task file, cheaply, at most once a while).\n- A project with no remote: say so (`atm doctor` and `atm project status`), since its keys can't become final; or treat the local base branch as the base when there is no remote. Decide with ADR-007's reasoning and write it into the ADR (a new ADR if it changes the decision).\n- Update the skills (`skills/atm-push/SKILL.md`) and `atm docs` if what agents run changes.\n\n## Decided with Hakan (2026-11-18)\n- **Agents keep using keys, not UUIDs**, in commands and text: aliases keep a renumbered key working, keys are what people read in notes, commits and permission prompts, and a model copies a short key more reliably than a UUID. The `~` is about a number that may still be renumbered, not about how agents name tasks.\n- **Check that what atm stores links by UUID**: dependencies, related tasks, a review's tasks, whatever atm writes and no person reads raw. Say in the outcome what was found, and fix any that store a key.\n- **A question for Hakan, in ADR-007's terms:** don't show the `~` where a collision can't happen (one clone, working on its base branch)? Ask before changing it.\n\n## Tests\n- The CLI suite: a `direct` project with a remote: a task added on `main`, committed and pushed, is final after the push step; one not pushed stays provisional.\n- The base from `meta.workflow.base`, from the remote's default branch, and none (no remote).\n- A `pull-request` project: unchanged (final once merged).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/code.rs",
@@ -18129,7 +18146,7 @@
         "tests/scripts/keys.test.mjs"
       ],
       "created_at": "2026-11-18T20:32:11Z",
-      "updated_at": "2026-11-18T20:36:54Z",
+      "updated_at": "2026-11-18T21:13:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18143,7 +18160,9 @@
         "cli"
       ],
       "number": 623,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T21:13:47Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f06e-7332-719f-81eb-ac835d5d4538",
@@ -18289,6 +18308,45 @@
         "dashboard"
       ],
       "number": 627,
+      "key_final": false
+    },
+    {
+      "id": "01a1f085-5db5-7457-84cd-64c4ee4ab844",
+      "name": "Live review flow, designed together: saved once commented on, then tied to a task or discarded, approved only with a task",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan, 2026-11-19: a live review (ATM-576, following a working copy as it is made) offers **Approve** right away, which means nothing: there is nothing yet to approve, and no task the approval would reach. Work out the flow with him, in a session, then build it.\n\n## Hakan's proposal (the starting point)\n1. **Not a review until commented on.** Opening a live view saves nothing: no CR number, no folder. The first comment saves it as a review.\n2. **Then: tie it to a task, or discard it.** A saved live review offers both. Discarding removes it (its comments with it, after a confirmation).\n3. **Approve only once tied to a task.** The approval is the task's (as for any review), so without a task there is no Approve.\n\n## Questions to settle together\n- What a live view is before it is saved: a page of its own (an address, `/projects/<id>/live`?), and where it is opened from (the Reviews tab's *New live review*).\n- Which task: picked from the in-progress ones, any task, or a new one made from it; can it be tied to several (as reviews can)?\n- What *discard* keeps: nothing, or the comments somewhere; and whether an agent's live review (one the agent opened) follows the same rules.\n- The decisions of a live review tied to a task: Approve, Request changes, Close, as now (ATM-576, ATM-597, ATM-609)? And what happens to it when the working copy is committed (it becomes a range round?).\n- What the review watch tells the agent at each step (ATM-624).\n\n## Then\nWrite the agreed flow into `docs/code-review-design.md` (the live review's section), build it in atm (`atm-review`'s rules, the REST routes) and the dashboard (`ReviewList`, `ReviewPage`), with tests for each step: unsaved, saved by a comment, tied, discarded, approved.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/code-review-design.md",
+        "crates/atm-review/src/rules.rs",
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/reviews/ReviewList.svelte"
+      ],
+      "created_at": "2026-11-18T21:17:14Z",
+      "updated_at": "2026-11-18T21:17:14Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:17:14Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "with": "user",
+      "number": 628,
       "key_final": false
     }
   ]

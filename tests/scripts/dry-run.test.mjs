@@ -49,6 +49,7 @@ const CASES = [
     ['vcs', 'pushed', '--pr', '7', '--at', '2026-05-01T00:00:00Z'],
     '[dry-run] would run: atm vcs pushed --pr 7 --at 2026-05-01T00:00:00Z\n',
   ],
+  [['vcs', 'pushed'], '[dry-run] would run: atm vcs pushed\n'],
   [['vcs', 'repository', 'https://github.com/o/r'], '[dry-run] would run: atm vcs repository https://github.com/o/r\n'],
   // sprint
   [['sprint', 'add', 'S3'], '[dry-run] would add the sprint S3\n'],

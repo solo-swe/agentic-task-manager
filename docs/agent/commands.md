@@ -36,6 +36,8 @@ is only how it reads: commands take the key with or without it, and `--json` giv
 
 - `atm vcs pr <id>… --number N --url U`: record the pull request that contains the tasks
 - `atm vcs pushed --pr N [--at TIME]`: record that it merged
+- `atm vcs pushed`: after a direct push to the base branch; the keys of the tasks now on it become final (either form
+  makes keys final, read from git)
 
 ## Defining work
 
