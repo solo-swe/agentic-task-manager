@@ -374,6 +374,67 @@ test.describe('a review’s page', () => {
     await expect(page.locator('#doc-title')).toHaveCount(0);
   });
 
+  // ATM-588: Wrap, in Unified: a long line wraps at the column's width, its row as tall as it, its number on its first
+  // visual line, the next line's row right under it; no sideways scroll. In Split it waits, saying why
+  test('Wrap: a long line wraps in Unified, the next line level with its text; in Split the button says why it waits', async ({
+    page,
+    tasksServer,
+  }) => {
+    const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+    const text = `fn a() {}\n${long}\nfn b() {}\n`;
+    const patch =
+      'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,3 @@\n' +
+      text
+        .trimEnd()
+        .split('\n')
+        .map((l) => `+${l}`)
+        .join('\n') +
+      '\n';
+    tasksServer.setRevisionDocument(
+      'head3',
+      projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
+    );
+    await openReviews(page, tasksServer);
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    const wrap = page.getByRole('button', { name: 'Wrap' });
+    // Split: Wrap waits, saying why
+    await page.getByRole('button', { name: 'Split' }).click();
+    await expect(wrap).toBeDisabled();
+    await expect(wrap).toHaveAttribute('title', /Unified for now/);
+    // Unified, wrapped
+    await page.getByRole('button', { name: 'Unified' }).click();
+    await wrap.click();
+    await expect(wrap).toHaveAttribute('aria-pressed', 'true');
+    const diff = diffOf(page, 'src/long.rs');
+    await expect(diff.locator('.diff-code.wrap')).toBeVisible();
+    await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+    const rows = () =>
+      diff.locator('.diff-code.wrap').evaluate((code) => {
+        const lines = [...code.querySelectorAll<HTMLElement>('.diff-line')].map((l) => ({
+          top: parseFloat(l.style.top),
+          height: parseFloat(l.style.height),
+        }));
+        const pre = code.querySelector('.compmd-page pre') as HTMLElement | null;
+        return { lines, sideways: pre ? pre.scrollWidth > pre.clientWidth + 1 : true };
+      });
+    await expect.poll(async () => (await rows()).lines[1]?.height ?? 0).toBeGreaterThan(40);
+    const { lines, sideways } = await rows();
+    expect(lines).toHaveLength(3);
+    // The long line is several of the others tall; the next line's row starts where it ends
+    expect(lines[1].height).toBeGreaterThan(lines[0].height * 2);
+    expect(Math.abs(lines[2].top - (lines[1].top + lines[1].height))).toBeLessThan(2);
+    expect(sideways).toBe(false);
+    // Kept for the next page
+    await page.reload();
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('Overview: the summary, the facts, the tasks as links, the review’s own chains', async ({
     page,
     tasksServer,

@@ -68,6 +68,7 @@
     folded,
     mode,
     view,
+    wrap = false,
     busy = false,
     docStyle = null,
     root = null,
@@ -88,6 +89,8 @@
     folded: boolean;
     mode: 'split' | 'unified';
     view: 'source' | 'rendered';
+    /** Long lines wrap, in Unified (ATM-588) */
+    wrap?: boolean;
     busy?: boolean;
     /** The document style picked in Settings, for a Markdown file's rendered view */
     docStyle?: string | null;
@@ -282,6 +285,7 @@
           {chains}
           {mode}
           {view}
+          {wrap}
           {viewed}
           {busy}
           header={false}

@@ -469,6 +469,32 @@ describe('ReviewPage: Diffs', () => {
     expect(onfile).not.toHaveBeenCalled();
   });
 
+  // ATM-588: Wrap, in Unified; in Split it waits, saying why (its sides kept level line by line)
+  it('Wrap: in Unified it wraps every file’s lines, kept for the next page; in Split it is disabled, saying why', async () => {
+    localStorage.removeItem('atm-review-layout');
+    const { container, unmount } = await diffs(data({}, { files: [file('src/a.rs')] }));
+    await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+    const wrap = () => screen.getByRole('button', { name: 'Wrap' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
+    expect(wrap()).toBeDisabled();
+    expect(wrap()).toHaveAttribute('title', expect.stringMatching(/Unified for now/));
+    expect(wrap().closest('[title]')).toHaveAttribute('title', expect.stringMatching(/level line by line/));
+    await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
+    expect(wrap()).toBeEnabled();
+    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
+    await fireEvent.click(wrap());
+    expect(wrap()).toHaveAttribute('aria-pressed', 'true');
+    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).not.toBeNull());
+    // Back to Split: not wrapped there, and pressed again only in Unified
+    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
+    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).toBeNull());
+    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
+    await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
+    unmount();
+    await diffs(data({}, { files: [file('src/a.rs')] }));
+    expect(screen.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('Split or Unified for every file, kept for the next review page; Source or Rendered only with a Markdown file', async () => {
     const { container, unmount } = await diffs(data({}, { files: [file('src/b.rs'), file('src/a.rs')] }));
     await vi.waitFor(() => expect(container.querySelectorAll('.diff-view')).toHaveLength(2));

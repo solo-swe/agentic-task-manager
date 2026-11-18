@@ -52,6 +52,7 @@
     Sun,
     TrendingUp,
     User,
+    WrapText,
     X,
     type IconNode,
   } from 'lucide';
@@ -104,6 +105,7 @@
     sun: Sun,
     'trending-up': TrendingUp,
     user: User,
+    'wrap-text': WrapText,
     x: X,
   } satisfies Record<string, IconNode>;
 

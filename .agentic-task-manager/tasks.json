@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 616
+    "next_number": 617
   },
   "tasks": [
     {
@@ -15913,7 +15913,7 @@
       "description": "A review's description (its summary, on the Overview tab) and its comments render through CompMD, but their references to the project's documents and files (`[the design](docs/x.md)`, `docs/x.md#routes`, `src/a.rs#L40-L45`, text-fragment links `#:~:text=…`) aren't opened in the document viewer, as they are in a task's description and notes (Hakan, 2026-11-18).\n\n## Change\n- Give the review page's `CompMd` (the summary in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte), the comment bodies in [`ChainBox.svelte`](dashboard/src/lib/reviews/ChainBox.svelte)) the same `onopen` the details panel gives its texts (`dashboard.openDocument`), so a relative link opens the document viewer over the review, at its heading, lines or text.\n- A link to a file under review could open that file in the Diffs tab instead: decide while doing it (a file the round changed → its diff; anything else → the viewer), and say which in the outcome note.\n- External links stay as they are (the user's browser, through `open_url` in the app).\n\n## Tests\nComponent tests that a summary's and a comment's relative link calls `onopen` with its document reference; an e2e test in `reviews.spec.ts` that a click on one opens the document viewer.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -15921,7 +15921,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-17T23:58:50Z",
-      "updated_at": "2026-11-18T07:20:00Z",
+      "updated_at": "2026-11-18T07:25:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15937,7 +15937,24 @@
       "number": 586,
       "key_final": false,
       "started_at": "2026-11-18T07:20:00Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "0b57dd68730ec7f38ad52d7381e9875a5096c6e7",
+      "code_reviews": [
+        {
+          "id": "01a1ed8b-e034-76ab-8b2b-164569f95f17",
+          "ref": "CR-15"
+        }
+      ],
+      "review_requested_at": "2026-11-18T07:25:29Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T07:25:29Z",
+          "kind": "review",
+          "text": "CR-15: Links in a review open the project documents",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef463ee973d6",
@@ -16063,7 +16080,7 @@
       "description": "The diff viewer gets a **Wrap** toggle beside Split/Unified and Source/Rendered on the Diffs tab's toolbar (an icon button, as theirs; kept like them): wrapped, long lines wrap at the column's width instead of scrolling sideways (Hakan, 2026-11-18).\n\n## Details\n- Line numbers stay right: a wrapped line has its number on its first row only, the gutter as tall as the wrapped line, and in Split the two sides' rows stay level (the taller side sets the row's height).\n- Picking lines to comment on, the `+` on a line, the highlight of a selected chain and the comment boxes under a line work the same wrapped.\n- Wrapped, the file has no horizontal scroll bar.\n\n## Tests\nComponent tests in `DiffView.component.test.ts` (the toggle, a long line wrapped with one number); an e2e test in `reviews.spec.ts` that a wrapped long line keeps the next line's number level with it, in Split and Unified.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -16071,9 +16088,9 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T07:25:33Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16085,7 +16102,9 @@
         "dashboard"
       ],
       "number": 588,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T07:25:33Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef482a98ae1a",
@@ -17421,6 +17440,31 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 615,
+      "key_final": false
+    },
+    {
+      "id": "01a1eda3-9ed4-71e4-8d2e-919e67b9261c",
+      "name": "Wrap in Split too, its two sides kept level",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews"
+      ],
+      "description": "ATM-588 made Wrap work in Unified. In Split the button waits, saying why: a wrapped line on one side has to make its counterpart on the other as tall, and a code block CompMD draws has no element per line to give that height to. That's CMD-250 in CompMD's backlog.\n\n## Change\nOnce CompMD draws each code line as an element (CMD-250):\n- `DiffCode.svelte` reports each line's measured height (or reads it from the view's `lines()`).\n- `DiffView.svelte` takes the taller of each pair of a Split run's two sides, and gives both lines that `min-height`.\n- The Wrap button is enabled in Split too.\n- Replace `DiffCode`'s own measuring (a collapsed range at each line's start) with CompMD's boxes if they serve.\n\n## Tests\n- E2e: in Split, a long line wrapped on one side keeps the other side's next line level with it, and the line numbers stay on each line's first visual line.\n- The pick, the `+`, a chain's highlight and the comment box work wrapped.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/DiffCode.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/src/lib/reviews/ReviewPage.svelte"
+      ],
+      "created_at": "2026-11-18T07:51:25Z",
+      "updated_at": "2026-11-18T07:51:25Z",
+      "created_by": "claude:0f56a916",
+      "updated_by": "claude:0f56a916",
+      "number": 616,
       "key_final": false
     }
   ]

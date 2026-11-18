@@ -126,7 +126,10 @@
   let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
   let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
   let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
-  $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width }));
+  /** Long lines wrap (ATM-588): in Unified, until Split can keep its sides level with a wrapped line */
+  let wrap = $state(stored.wrap === true);
+  $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width, wrap }));
+  const WRAP_IN_SPLIT = 'Wrap works in Unified for now: Split keeps its two sides level line by line';
   const hasMarkdown = $derived(files.some((f) => /\.(md|markdown|mdx)$/i.test(f.path)));
 
   // A file folds once viewed; its fold button opens or folds it again whatever its tick
@@ -597,6 +600,18 @@
               onclick={() => (mode = 'unified')}><Icon name="rows-2" size={15} /></button
             >
           </div>
+          <div class="review-segmented" role="group" aria-label="Lines">
+            <span class="review-wrap-hint" title={mode === 'split' ? WRAP_IN_SPLIT : undefined}>
+              <button
+                id="review-wrap"
+                aria-pressed={wrap && mode === 'unified'}
+                aria-label="Wrap"
+                title={mode === 'split' ? WRAP_IN_SPLIT : 'Wrap long lines'}
+                disabled={mode === 'split'}
+                onclick={() => (wrap = !wrap)}><Icon name="wrap-text" size={15} /></button
+              >
+            </span>
+          </div>
           {#if hasMarkdown}
             <div class="review-segmented" role="group" aria-label="View">
               <button
@@ -802,6 +817,7 @@
             folded={folded(f)}
             {mode}
             view={rendered}
+            wrap={wrap && mode === 'unified'}
             {busy}
             {docStyle}
             root={list}

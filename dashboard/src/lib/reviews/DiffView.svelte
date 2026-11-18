@@ -42,6 +42,7 @@
     chains = [],
     mode = $bindable('split'),
     view = $bindable('source'),
+    wrap = false,
     viewed = false,
     header = true,
     keyboard = true,
@@ -62,6 +63,9 @@
     chains?: Chain[];
     mode?: 'split' | 'unified';
     view?: 'source' | 'rendered';
+    /** Long lines wrap (ATM-588), in Unified: Split keeps its two sides' lines level, which a wrapped line can't do
+     * until CompMD draws each line as an element of its own */
+    wrap?: boolean;
     viewed?: boolean;
     /** Its own header (the path, the layout and view switches, Viewed); the review's page has its own */
     header?: boolean;
@@ -476,6 +480,7 @@
               <DiffCode
                 lines={unifiedLines(segment.rows as UnifiedRow[])}
                 {language}
+                {wrap}
                 numbers="both"
                 {keys}
                 {changes}

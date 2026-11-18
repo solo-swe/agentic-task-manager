@@ -27,9 +27,13 @@
     changes = [],
     picked = null,
     marked = null,
+    wrap = false,
     onpick,
     onover,
   }: {
+    /** Long lines wrap at the column's width (ATM-588): each line's row as tall as CompMD drew it, its number on its
+     * first visual line */
+    wrap?: boolean;
     /** The lines of the chain selected, by their index in `lines`: marked */
     marked?: [number, number] | null;
     lines: CodeLine[];
@@ -71,7 +75,13 @@
     const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
+    if (wrap) measureWrapped(code);
   }
+  // Wrapped or not: measured again (the code's lines take their new heights)
+  $effect(() => {
+    void wrap;
+    requestAnimationFrame(() => measure());
+  });
 
   $effect(() => {
     const target = el;
@@ -87,11 +97,66 @@
     };
   });
 
+  /** Wrapped (ATM-588): each line's row in the run's pixels, from its first visual line to the next line's. Lines aren't
+   * one height then, so the gutter follows the text. CompMD draws a code block's lines as text between newlines (and
+   * says where only a Markdown document's lines are), so each line's top is read here, from a collapsed range at its
+   * start: read only, nothing of CompMD's page is changed */
+  let wrapped = $state.raw<{ top: number; height: number }[] | null>(null);
+  function measureWrapped(code: HTMLElement) {
+    if (!el) return;
+    const origin = el.getBoundingClientRect().top;
+    const starts: { node: Text; offset: number }[] = [];
+    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+    let atStart = true;
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      const text = node.data;
+      for (let at = 0; at <= text.length; at++) {
+        if (atStart && at < text.length) {
+          starts.push({ node, offset: at });
+          atStart = false;
+        }
+        if (text[at] === '\n') atStart = true;
+      }
+    }
+    const range = document.createRange();
+    // Where nothing is laid out (a test's page), there is nothing to measure: the lines keep one height
+    if (typeof range.getClientRects !== 'function') return;
+    const tops = starts.map(({ node, offset }) => {
+      range.setStart(node, offset);
+      range.collapse(true);
+      const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
+      return rect.top - origin;
+    });
+    const bottom = code.getBoundingClientRect().bottom - origin;
+    // Empty lines at the end have no character to measure: one line height each, up from the code's end
+    const lineHeight = layout?.lineHeight ?? FALLBACK_LINE;
+    const missing = lines.length - tops.length;
+    for (let k = missing; k > 0; k--) tops.push(bottom - k * lineHeight);
+    const rows = lines.map((_, i) => {
+      const top = tops[i];
+      const next = i + 1 < lines.length ? tops[i + 1] : bottom;
+      return { top, height: Math.max(next - top, layout?.lineHeight ?? FALLBACK_LINE) };
+    });
+    if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
+  }
+  $effect(() => {
+    if (!wrap) wrapped = null;
+  });
+  /** Each line's row: measured when wrapped, else the code's one line height */
+  const rowOf = (i: number) =>
+    wrap && wrapped?.[i]
+      ? wrapped[i]
+      : layout
+        ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
+        : null;
+
   /** The line at a pointer's height in the run, if there is one there */
   function lineAt(e: MouseEvent): number | null {
     if (!el || !layout) return null;
-    const y = e.clientY - el.getBoundingClientRect().top - layout.top;
-    const i = Math.floor(y / layout.lineHeight);
+    const y = e.clientY - el.getBoundingClientRect().top;
+    let i: number;
+    if (wrap && wrapped) i = wrapped.findIndex((r) => y >= r.top && y < r.top + r.height);
+    else i = Math.floor((y - layout.top) / layout.lineHeight);
     return i >= 0 && i < lines.length && lines[i].kind !== 'pad' ? i : null;
   }
 
@@ -117,6 +182,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions (the pointer over a line shows its +; the + is the button) -->
 <div
   class="diff-code"
+  class:wrap
   class:both={numbers === 'both'}
   class:pickable={!!onpick}
   bind:this={el}
@@ -126,14 +192,16 @@
 >
   {#if layout}
     {#each lines as line, i (i)}
+      {@const row = rowOf(i)!}
       <div
         class="diff-line diff-{line.kind}"
         class:picked={isPicked(i)}
         class:commented={!!marked && i >= marked[0] && i <= marked[1]}
         data-row={keys[i]}
         data-change={starts.has(i) ? '' : undefined}
-        style:top="{layout.top + i * layout.lineHeight}px"
-        style:height="{layout.lineHeight}px"
+        style:top="{row.top}px"
+        style:height="{row.height}px"
+        style:--line-height="{layout.lineHeight}px"
       >
         {#if line.kind !== 'pad'}
           <button
@@ -178,6 +246,21 @@
   }
   .diff-code :global(.compmd-page pre > code) {
     display: block;
+  }
+  /* Wrapped (ATM-588): long lines break at the column's width, anywhere if they must; no sideways scroll */
+  .diff-code.wrap :global(.compmd-page pre),
+  .diff-code.wrap :global(.compmd-plain) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow-x: hidden;
+  }
+  /* A wrapped line's number stays on its first visual line, the gutter as tall as all of them */
+  .diff-code.wrap .diff-number {
+    align-items: flex-start;
+    line-height: var(--line-height);
+  }
+  .diff-code.wrap .diff-plus {
+    top: calc(var(--line-height) / 2);
   }
   .diff-line {
     position: absolute;
