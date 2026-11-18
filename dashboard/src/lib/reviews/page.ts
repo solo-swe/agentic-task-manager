@@ -1,6 +1,73 @@
 // A review's page's own logic (docs/code-review-design.md §3.11, ATM-574): the files as a tree, what each file's patch
 // adds and removes, where its chains go in the round shown, and the key a file's *viewed* tick is kept under.
-import type { Chain, PlacedChain, ViewFile } from './types';
+import type { Chain, PlacedChain, ReviewEntry, ViewFile } from './types';
+
+/** How many days a decided review stays among the recent ones, before *Older* (ATM-610) */
+export const RECENT_DAYS = 5;
+
+/** A group of the unfiltered reviews list (ATM-610), in the order the list shows them */
+export interface ReviewGroup {
+  id: 'waiting' | 'commented' | 'sent-back' | 'others' | 'recent' | 'older';
+  title: string;
+  entries: ReviewEntry[];
+}
+
+const DAY_MS = 86_400_000;
+const time = (at: string | null | undefined) => (at ? Date.parse(at) : NaN);
+/** Latest first, by the review's last activity */
+const latestFirst = (a: ReviewEntry, b: ReviewEntry) => b.review.updated.localeCompare(a.review.updated);
+
+/**
+ * The unfiltered list in groups (ATM-610), each review in the first it fits, empty groups left out:
+ * 1. *Waiting for your review*: waiting or live, needing you; the longest waiting first (since its latest round);
+ * 2. *With open comments*: the rest with open comments, the latest activity first;
+ * 3. *Sent back*: changes requested, waiting on their author, the latest first;
+ * 4. *Waiting on others*: the rest not decided yet (a draft, or waiting on someone else), the latest first, so no
+ *    review is left out;
+ * 5. *Recently decided*: approved or closed in the last [`RECENT_DAYS`], the latest first;
+ * 6. *Older*: decided before that, the latest first (folded by the list).
+ */
+export function groupReviews(entries: ReviewEntry[], now: number): ReviewGroup[] {
+  const groups: ReviewGroup[] = [
+    { id: 'waiting', title: 'Waiting for your review', entries: [] },
+    { id: 'commented', title: 'With open comments', entries: [] },
+    { id: 'sent-back', title: 'Sent back', entries: [] },
+    { id: 'others', title: 'Waiting on others', entries: [] },
+    { id: 'recent', title: 'Recently decided', entries: [] },
+    { id: 'older', title: 'Older', entries: [] },
+  ];
+  const into = (id: ReviewGroup['id'], entry: ReviewEntry) => groups.find((g) => g.id === id)!.entries.push(entry);
+  for (const entry of entries) {
+    const status = entry.review.status;
+    const decided = status === 'approved' || status === 'closed';
+    if (entry.needs_you && (status === 'waiting' || status === 'live')) into('waiting', entry);
+    else if (entry.open > 0) into('commented', entry);
+    else if (status === 'changes_requested') into('sent-back', entry);
+    else if (!decided) into('others', entry);
+    else if (now - time(entry.review.updated) <= RECENT_DAYS * DAY_MS) into('recent', entry);
+    else into('older', entry);
+  }
+  for (const group of groups) {
+    if (group.id === 'waiting') {
+      // The longest waiting first; one with no time (an older atm's list) after them
+      const since = (e: ReviewEntry) => time(e.waiting_since ?? e.review.updated);
+      group.entries.sort((a, b) => (since(a) || Infinity) - (since(b) || Infinity));
+    } else group.entries.sort(latestFirst);
+  }
+  return groups.filter((g) => g.entries.length);
+}
+
+/** How long a review has waited, in words: "under an hour", "5 hours", "1 day", "3 days" (ATM-610) */
+export function waitedFor(since: string, now: number): string {
+  const ms = now - Date.parse(since);
+  if (!Number.isFinite(ms) || ms < 3_600_000) return 'under an hour';
+  if (ms < DAY_MS) {
+    const hours = Math.floor(ms / 3_600_000);
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  }
+  const days = Math.floor(ms / DAY_MS);
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
 
 /** A row of the file tree: a folder (its path, how deep) or a file of the view */
 export type TreeRow =

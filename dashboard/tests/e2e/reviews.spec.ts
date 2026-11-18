@@ -216,6 +216,51 @@ test.describe('the reviews tab', () => {
     await expect(tab).toHaveAccessibleName('Reviews');
   });
 
+  // ATM-610: unfiltered, the reviews in groups, what waits for you first; a filter shows the plain list
+  test('the list in groups: waiting for your review first, how long it has waited; a filter lists them plainly', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+    tasksServer.setReviews({
+      reviews: [
+        {
+          review: { ...header(4, 'approved'), updated: daysAgo(1) },
+          branch: null,
+          chains: 1,
+          open: 0,
+          needs_you: false,
+        },
+        {
+          review: header(2),
+          branch: 'dev/1',
+          chains: 3,
+          open: 2,
+          needs_you: true,
+          waiting: 'review',
+          waiting_since: daysAgo(3),
+        },
+        { review: header(3, 'changes_requested'), branch: null, chains: 1, open: 1, needs_you: false },
+      ],
+      you: 'Ana',
+    });
+    await page.reload();
+    const groups = page.locator('.review-group');
+    await expect(groups).toHaveCount(3);
+    await expect(groups.locator('.review-group-title')).toHaveText([
+      'Waiting for your review 1',
+      'With open comments 1',
+      'Recently decided 1',
+    ]);
+    await expect(groups.first().locator('.review-row')).toHaveAttribute('data-review', 'CR-2');
+    await expect(groups.first().locator('.review-waited')).toHaveText('Waited 3 days');
+    // A filter: the plain list, in the server's order
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(groups).toHaveCount(0);
+    await expect(page.locator('.review-row')).toHaveCount(3);
+  });
+
   // ATM-617: CR-13 written by a newer atm, with a status this one doesn't know: a row saying so, not a missing review
   test('a review atm can’t read is a row of its own, saying why, after the others', async ({ page, tasksServer }) => {
     await openReviews(page, tasksServer);

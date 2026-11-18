@@ -1164,6 +1164,45 @@ mod tests {
         drop(subscription);
     }
 
+    /// ATM-610: the list says since when each review waits on its reviewers, its latest round's time
+    #[test]
+    fn the_list_says_since_when_each_review_waits() {
+        let dir = dir();
+        let mut project = project(&dir.0, "claude:1");
+        waiting(&mut project, &["T-1"]).unwrap();
+        let cr = ReviewRef("CR-1".into());
+        let listed = crate::review_pages::list_reviews(
+            &project,
+            &crate::review_pages::ReviewQuery::default(),
+        )
+        .unwrap();
+        let first = super::store(&project).unwrap().get_review(&cr).unwrap();
+        assert_eq!(
+            listed["reviews"][0]["waiting_since"],
+            json!(first.rounds[0].at)
+        );
+        let mut reviews = super::store(&project).unwrap();
+        let mut later = round();
+        later.kind = RoundKind::Range {
+            base: "a".into(),
+            head: "c".into(),
+        };
+        super::Reviews::new(&mut reviews)
+            .add_round(&cr, later)
+            .unwrap();
+        let again = crate::review_pages::list_reviews(
+            &project,
+            &crate::review_pages::ReviewQuery::default(),
+        )
+        .unwrap();
+        let second = super::store(&project).unwrap().get_review(&cr).unwrap();
+        assert_eq!(
+            again["reviews"][0]["waiting_since"],
+            json!(second.rounds[1].at),
+            "its latest round"
+        );
+    }
+
     /// A person's review of files for a task an agent hasn't started (the sandbox's red-team review): linked, as it is
     #[test]
     fn a_persons_review_of_a_task_not_started_links_it_as_it_is() {

@@ -180,8 +180,9 @@ fn me(project: &Project) -> Actor {
 }
 
 /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
-/// open, needs_you, waiting}], unreadable: [{folder, reference, problem}], you}` (`waiting`: [`waiting_for`]'s why,
-/// or `null`; `unreadable`: the reviews' folders atm can't read, ATM-617).
+/// open, needs_you, waiting, waiting_since}], unreadable: [{folder, reference, problem}], you}` (`waiting`:
+/// [`waiting_for`]'s why, or `null`; `waiting_since`: its latest round's time, ATM-610; `unreadable`: the reviews'
+/// folders atm can't read, ATM-617).
 ///
 /// # Errors
 /// A status that isn't one; the project has no folder; a review that can't be read.
@@ -221,6 +222,8 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
             "open": review.open_comments().count(),
             "needs_you": needs(&review.header, &me),
             "waiting": waiting_for(&review, &me),
+            // When it began waiting on its reviewers: its latest round (ATM-610, the list's "waited 3 days")
+            "waiting_since": review.rounds.last().map(|r| r.at.clone()),
         });
         listed.push((review.header.updated.clone(), entry));
     }

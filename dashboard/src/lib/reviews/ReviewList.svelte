@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { TaskLinks } from '../compmd';
+  import { readStored, writeStored } from '../prefs';
   import Icon from '../ui/Icon.svelte';
+  import { groupReviews, waitedFor } from './page';
   import {
     NO_QUERY,
     STATUS_LABELS,
@@ -82,8 +84,21 @@
   const tasks = $derived(choices((e) => e.review.tasks, query.task));
   const branches = $derived(choices((e) => [e.branch], query.branch));
 
-  // Its decision or round, or an answer since you last wrote (ATM-606): *Next review needing you* takes both
-  const waiting = $derived(entries.filter((e) => e.needs_you || e.waiting === 'answered'));
+  const filtering = $derived(
+    !!(query.q || query.status.length || query.author || query.reviewer || query.task || query.branch),
+  );
+
+  // Unfiltered, the list in groups (ATM-610): what waits for you first, the longest waiting on top; any filter or
+  // search, the plain list. *Older* is folded unless opened, which this browser remembers
+  const GROUPS_KEY = 'atm-review-groups';
+  const groups = $derived(filtering ? null : groupReviews(entries, Date.now()));
+  let olderOpen = $state(readStored(GROUPS_KEY).olderOpen === true);
+
+  // Its decision or round, or an answer since you last wrote (ATM-606): *Next review needing you* takes both, in the
+  // order shown (in groups, the longest waiting for your review first, ATM-610)
+  const waiting = $derived(
+    (groups ? groups.flatMap((g) => g.entries) : entries).filter((e) => e.needs_you || e.waiting === 'answered'),
+  );
 
   // What is typed, until the query takes it (a moment later), then the query's
   let search = $derived(query.q);
@@ -100,10 +115,6 @@
       : [...query.status, status];
     onquery({ ...query, status: status_ });
   }
-
-  const filtering = $derived(
-    !!(query.q || query.status.length || query.author || query.reviewer || query.task || query.branch),
-  );
 
   function open(e: MouseEvent, reference: string) {
     if (e.button !== 0 || e.shiftKey || e.altKey) return;
@@ -222,58 +233,95 @@
           : 'No reviews yet. Agents open them with atm review create.'}
     </p>
   {:else}
-    <ul class="review-rows" aria-busy={loading}>
-      {#each entries as entry (entry.review.id)}
-        {@const r = entry.review}
-        <li
-          class="review-row"
-          class:needs-you={entry.needs_you || entry.waiting === 'answered'}
-          data-review={r.reference}
-        >
-          <a class="review-link" href={href(r.reference)} onclick={(e) => open(e, r.reference)}>
-            <span class="review-ref">{r.reference}</span>
-            <span class="review-title">{r.title}</span>
-          </a>
-          <span class="review-status status-{r.status}">{STATUS_LABELS[r.status]}</span>
-          {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>
-          {:else if entry.waiting === 'answered'}<span
-              class="review-needs answered"
-              title="Someone wrote in it after you last did">New reply</span
-            >{/if}
-          <span class="review-meta">
-            {#if r.tasks.length}<span class="review-tasks"
-                ><Icon name="list-todo" size={12} />{#each r.tasks as key, i (key)}{i
-                    ? ', '
-                    : ''}{#if taskHref && taskLinks?.known(key)}<a
-                      class="review-task-link"
-                      href={taskHref(key)}
-                      data-task={key}
-                      onclick={(e) => openTask(e, key)}
-                      onauxclick={(e) => e.button === 1 && openTask(e, key)}>{key}</a
-                    >{:else}{key}{/if}{/each}</span
-              >{/if}
-            {#if entry.branch}<span class="review-branch"><Icon name="git-branch" size={12} />{entry.branch}</span>{/if}
-            <span><Icon name="user" size={12} />{r.author ?? 'no author yet'}</span>
-            <span title="Open chains of comments"
-              ><Icon name="message-square" size={12} />{entry.open} open of {entry.chains}</span
-            >
-            <span title={r.updated}><Icon name="history" size={12} />{ago(r.updated)}</span>
-          </span>
-        </li>
+    {#if groups}
+      {#each groups as group (group.id)}
+        {@const folded = group.id === 'older' && !olderOpen}
+        <section class="review-group" data-group={group.id} aria-label={group.title}>
+          <h3 class="review-group-title">
+            {#if group.id === 'older'}
+              <button
+                class="review-group-fold"
+                aria-expanded={!folded}
+                onclick={() => {
+                  olderOpen = !olderOpen;
+                  writeStored(GROUPS_KEY, { olderOpen });
+                }}
+                ><Icon name={folded ? 'chevron-right' : 'chevron-down'} size={14} />{group.title}
+                <span class="review-group-count">{group.entries.length}</span></button
+              >
+            {:else}
+              {group.title} <span class="review-group-count">{group.entries.length}</span>
+            {/if}
+          </h3>
+          {#if !folded}
+            <ul class="review-rows" aria-busy={loading}>
+              {#each group.entries as entry (entry.review.id)}{@render row(entry, group.id === 'waiting')}{/each}
+            </ul>
+          {/if}
+        </section>
       {/each}
-      {#each unreadable as u (u.folder)}
-        <li class="review-row review-unreadable" data-unreadable={u.reference}>
-          <span class="review-ref">{u.reference}</span>
-          <span class="review-status status-unreadable">Can't be read</span>
-          <span class="review-meta">
-            <span class="review-unreadable-why" title={u.folder}>{u.problem}</span>
-            <span>A newer atm may have written it.</span>
-          </span>
-        </li>
-      {/each}
-    </ul>
+      {#if unreadable.length}
+        <ul class="review-rows">
+          {#each unreadable as u (u.folder)}{@render unreadableRow(u)}{/each}
+        </ul>
+      {/if}
+    {:else}
+      <ul class="review-rows" aria-busy={loading}>
+        {#each entries as entry (entry.review.id)}{@render row(entry, false)}{/each}
+        {#each unreadable as u (u.folder)}{@render unreadableRow(u)}{/each}
+      </ul>
+    {/if}
   {/if}
 </div>
+
+{#snippet row(entry: ReviewEntry, waited: boolean)}
+  {@const r = entry.review}
+  <li class="review-row" class:needs-you={entry.needs_you || entry.waiting === 'answered'} data-review={r.reference}>
+    <a class="review-link" href={href(r.reference)} onclick={(e) => open(e, r.reference)}>
+      <span class="review-ref">{r.reference}</span>
+      <span class="review-title">{r.title}</span>
+    </a>
+    <span class="review-status status-{r.status}">{STATUS_LABELS[r.status]}</span>
+    {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>
+    {:else if entry.waiting === 'answered'}<span
+        class="review-needs answered"
+        title="Someone wrote in it after you last did">New reply</span
+      >{/if}
+    {#if waited && entry.waiting_since}<span class="review-waited" title="Waiting since {entry.waiting_since}"
+        >Waited {waitedFor(entry.waiting_since, Date.now())}</span
+      >{/if}
+    <span class="review-meta">
+      {#if r.tasks.length}<span class="review-tasks"
+          ><Icon name="list-todo" size={12} />{#each r.tasks as key, i (key)}{i
+              ? ', '
+              : ''}{#if taskHref && taskLinks?.known(key)}<a
+                class="review-task-link"
+                href={taskHref(key)}
+                data-task={key}
+                onclick={(e) => openTask(e, key)}
+                onauxclick={(e) => e.button === 1 && openTask(e, key)}>{key}</a
+              >{:else}{key}{/if}{/each}</span
+        >{/if}
+      {#if entry.branch}<span class="review-branch"><Icon name="git-branch" size={12} />{entry.branch}</span>{/if}
+      <span><Icon name="user" size={12} />{r.author ?? 'no author yet'}</span>
+      <span title="Open chains of comments"
+        ><Icon name="message-square" size={12} />{entry.open} open of {entry.chains}</span
+      >
+      <span title={r.updated}><Icon name="history" size={12} />{ago(r.updated)}</span>
+    </span>
+  </li>
+{/snippet}
+
+{#snippet unreadableRow(u: UnreadableReview)}
+  <li class="review-row review-unreadable" data-unreadable={u.reference}>
+    <span class="review-ref">{u.reference}</span>
+    <span class="review-status status-unreadable">Can't be read</span>
+    <span class="review-meta">
+      <span class="review-unreadable-why" title={u.folder}>{u.problem}</span>
+      <span>A newer atm may have written it.</span>
+    </span>
+  </li>
+{/snippet}
 
 <style>
   .review-list {
@@ -517,5 +565,41 @@
   .review-empty,
   .review-problem {
     color: var(--text-muted);
+  }
+  .review-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+  .review-group-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  .review-group-fold {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .review-group-count {
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-pill);
+    background: var(--surface2);
+    font-weight: 600;
+  }
+  .review-waited {
+    color: var(--purple);
+    font-size: var(--text-xs);
+    font-weight: 600;
   }
 </style>

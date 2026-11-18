@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RECENT_DAYS,
   TREE_WIDTH,
   chainsOf,
   driftedOf,
   fileTree,
   filesIn,
   filterChains,
+  groupReviews,
   hashOf,
   isResolved,
   lineCounts,
@@ -17,9 +19,110 @@ import {
   treeOrder,
   treeWidth,
   viewedKey,
+  waitedFor,
   type ChainFilter,
 } from '../../src/lib/reviews/page';
-import type { PlacedChain, ViewFile } from '../../src/lib/reviews/types';
+import type { PlacedChain, ReviewEntry, ReviewStatus, ViewFile } from '../../src/lib/reviews/types';
+
+// ATM-610: the unfiltered reviews list in groups, what waits for you first
+describe('the reviews list in groups', () => {
+  const NOW = Date.parse('2026-11-19T12:00:00Z');
+  const daysAgo = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
+  const entry = (
+    ref: string,
+    status: ReviewStatus,
+    more: { needs_you?: boolean; open?: number; updated?: string; since?: string | null } = {},
+  ): ReviewEntry => ({
+    review: {
+      id: ref,
+      reference: ref,
+      number: 1,
+      title: ref,
+      status,
+      tasks: [],
+      author: 'claude:a',
+      reviewers: ['Hakan'],
+      created: daysAgo(30),
+      updated: more.updated ?? daysAgo(1),
+    },
+    branch: null,
+    chains: more.open ?? 0,
+    open: more.open ?? 0,
+    needs_you: more.needs_you ?? false,
+    waiting_since: more.since === undefined ? daysAgo(1) : more.since,
+  });
+  const shape = (entries: ReviewEntry[]) =>
+    groupReviews(entries, NOW).map((g) => [g.id, g.entries.map((e) => e.review.reference)]);
+
+  it('each review in the first group it fits, empty groups left out', () => {
+    expect(
+      shape([
+        entry('CR-1', 'waiting', { needs_you: true, open: 2 }), // waits on you: first, though it has open comments
+        entry('CR-2', 'waiting', { open: 1 }),
+        entry('CR-3', 'changes_requested', { open: 1 }), // open comments come before sent back
+        entry('CR-4', 'changes_requested'),
+        entry('CR-5', 'draft'),
+        entry('CR-6', 'approved', { updated: daysAgo(2) }),
+        entry('CR-7', 'closed', { updated: daysAgo(20) }),
+        entry('CR-8', 'live', { needs_you: true }),
+        entry('CR-9', 'changes_requested', { needs_you: true }), // its author's to answer: not waiting for review
+      ]),
+    ).toEqual([
+      ['waiting', ['CR-1', 'CR-8']],
+      ['commented', ['CR-2', 'CR-3']],
+      ['sent-back', ['CR-4', 'CR-9']],
+      ['others', ['CR-5']],
+      ['recent', ['CR-6']],
+      ['older', ['CR-7']],
+    ]);
+    expect(shape([entry('CR-1', 'draft')])).toEqual([['others', ['CR-1']]]);
+    expect(shape([])).toEqual([]);
+  });
+
+  it('waiting for you: the longest waiting on top, by its latest round; one without a time after them', () => {
+    expect(
+      shape([
+        entry('CR-1', 'waiting', { needs_you: true, since: daysAgo(1) }),
+        entry('CR-2', 'waiting', { needs_you: true, since: null, updated: daysAgo(9) }),
+        entry('CR-3', 'waiting', { needs_you: true, since: daysAgo(4) }),
+      ]),
+    ).toEqual([['waiting', ['CR-2', 'CR-3', 'CR-1']]]);
+    const noTime = entry('CR-4', 'waiting', { needs_you: true, since: null, updated: 'never' });
+    expect(shape([noTime, entry('CR-1', 'waiting', { needs_you: true })])).toEqual([['waiting', ['CR-1', 'CR-4']]]);
+  });
+
+  it('the other groups: the latest activity first', () => {
+    expect(
+      shape([
+        entry('CR-1', 'approved', { updated: daysAgo(3) }),
+        entry('CR-2', 'approved', { updated: daysAgo(1) }),
+        entry('CR-3', 'closed', { updated: daysAgo(2) }),
+      ]),
+    ).toEqual([['recent', ['CR-2', 'CR-3', 'CR-1']]]);
+  });
+
+  it(`decided within ${RECENT_DAYS} days is recent; past that, older`, () => {
+    expect(
+      shape([
+        entry('CR-1', 'approved', { updated: daysAgo(RECENT_DAYS) }),
+        entry('CR-2', 'approved', { updated: daysAgo(RECENT_DAYS + 0.01) }),
+      ]),
+    ).toEqual([
+      ['recent', ['CR-1']],
+      ['older', ['CR-2']],
+    ]);
+  });
+
+  it('how long a review has waited, in words', () => {
+    const at = (ms: number) => new Date(NOW - ms).toISOString();
+    expect(waitedFor(at(10 * 60_000), NOW)).toBe('under an hour');
+    expect(waitedFor(at(3_600_000), NOW)).toBe('1 hour');
+    expect(waitedFor(at(5 * 3_600_000), NOW)).toBe('5 hours');
+    expect(waitedFor(at(86_400_000), NOW)).toBe('1 day');
+    expect(waitedFor(at(3.5 * 86_400_000), NOW)).toBe('3 days');
+    expect(waitedFor('not a time', NOW)).toBe('under an hour');
+  });
+});
 
 // A review's page's own logic (lib/reviews/page.ts, ATM-574)
 

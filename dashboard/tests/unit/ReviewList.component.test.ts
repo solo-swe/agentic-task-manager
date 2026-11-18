@@ -92,20 +92,75 @@ describe('ReviewList', () => {
     expect(onopen).not.toHaveBeenCalled();
   });
 
-  it('marks those that need you, and offers the first of them next', async () => {
+  it('marks those that need you, and offers the first of them shown next', async () => {
     const { container, onopen } = show([
       entry(3, 'waiting'),
       entry(2, 'changes_requested', {}, { needs_you: true }),
       entry(1, 'live', {}, { needs_you: true }),
     ]);
+    // In groups (ATM-610): CR-1 waits for your review, so it is shown first; CR-2, sent back with open comments, after
     expect([...container.querySelectorAll('.needs-you')].map((r) => r.getAttribute('data-review'))).toEqual([
-      'CR-2',
       'CR-1',
+      'CR-2',
     ]);
     const next = screen.getByRole('button', { name: /Next review needing you/ });
     expect(next.textContent).toContain('2');
     await fireEvent.click(next);
-    expect(onopen).toHaveBeenCalledWith('CR-2', false);
+    expect(onopen).toHaveBeenCalledWith('CR-1', false);
+  });
+
+  // ATM-610: unfiltered, the list in groups, each under its heading with its count; any filter, the plain list
+  describe('in groups', () => {
+    const now = Date.now();
+    const ago = (days: number) => new Date(now - days * 86_400_000).toISOString();
+    const groupsOf = (container: HTMLElement) =>
+      [...container.querySelectorAll('.review-group')].map((g) => [
+        g.getAttribute('data-group'),
+        g.querySelector('.review-group-count')?.textContent,
+        [...g.querySelectorAll('.review-row')].map((r) => r.getAttribute('data-review')),
+      ]);
+
+    beforeEach(() => localStorage.clear());
+
+    it('each group under its heading and count; waiting for you says how long; Older folded until opened', async () => {
+      const { container } = show([
+        entry(1, 'waiting', {}, { needs_you: true, open: 0, waiting_since: ago(3) }),
+        entry(2, 'approved', { updated: ago(1) }, { open: 0 }),
+        entry(3, 'closed', { updated: ago(30) }, { open: 0 }),
+      ]);
+      expect(groupsOf(container)).toEqual([
+        ['waiting', '1', ['CR-1']],
+        ['recent', '1', ['CR-2']],
+        ['older', '1', []],
+      ]);
+      expect(screen.getByText('Waiting for your review')).toBeTruthy();
+      expect(screen.getByText('Waited 3 days')).toBeTruthy();
+      const fold = screen.getByRole('button', { name: /Older/ });
+      expect(fold).toHaveAttribute('aria-expanded', 'false');
+      await fireEvent.click(fold);
+      expect(groupsOf(container).at(-1)).toEqual(['older', '1', ['CR-3']]);
+      expect(JSON.parse(localStorage.getItem('atm-review-groups') ?? '{}')).toEqual({ olderOpen: true });
+    });
+
+    it('Older opened before stays open', () => {
+      localStorage.setItem('atm-review-groups', JSON.stringify({ olderOpen: true }));
+      const { container } = show([entry(3, 'closed', { updated: ago(30) }, { open: 0 })]);
+      expect(groupsOf(container)).toEqual([['older', '1', ['CR-3']]]);
+    });
+
+    it('a filter or a search shows the plain list, no groups', () => {
+      const entries = [
+        entry(2, 'approved', { updated: ago(1) }, { open: 0 }),
+        entry(1, 'waiting', {}, { needs_you: true, open: 0 }),
+      ];
+      const { container } = show(entries, { ...NO_QUERY, q: 'x' });
+      expect(container.querySelector('.review-group')).toBeNull();
+      expect([...container.querySelectorAll('.review-row')].map((r) => r.getAttribute('data-review'))).toEqual([
+        'CR-2',
+        'CR-1',
+      ]);
+      expect(screen.queryByText(/Waited/)).toBeNull();
+    });
   });
 
   it('offers no next review when none needs you', () => {

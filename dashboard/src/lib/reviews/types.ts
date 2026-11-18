@@ -68,6 +68,8 @@ export interface ReviewEntry {
   /** What it waits on you for (ATM-606): its decision or round, or an answer since you last wrote; none, `null`.
    * Optional, for an older atm's lists */
   waiting?: 'review' | 'answered' | null;
+  /** When it began waiting on its reviewers, its latest round's time (ATM-610). Optional, for an older atm's lists */
+  waiting_since?: string | null;
 }
 
 /** A review's folder atm can't read (ATM-617): a status a newer atm wrote, a broken header */
