@@ -38,6 +38,39 @@ export function fileTree(files: ViewFile[]): TreeRow[] {
   return rows;
 }
 
+/** A row's path: a folder's own, a file's */
+const rowPath = (row: TreeRow) => (row.kind === 'folder' ? row.path : row.file.path);
+
+/** Whether `path` is inside the folder `folder` */
+const inside = (path: string, folder: string) => path.startsWith(folder + '/');
+
+/** The rows shown with some folders collapsed (ATM-595): a collapsed folder's row stays, what is inside it hides */
+export function shownRows(rows: TreeRow[], collapsed: ReadonlySet<string>): TreeRow[] {
+  if (!collapsed.size) return rows;
+  return rows.filter((row) => {
+    const path = rowPath(row);
+    for (const folder of collapsed) if (inside(path, folder)) return false;
+    return true;
+  });
+}
+
+/** Every folder of the tree, by path */
+export function treeFolders(rows: TreeRow[]): string[] {
+  return rows.flatMap((row) => (row.kind === 'folder' ? [row.path] : []));
+}
+
+/** The folders collapsed, with those on the way to `path` opened, so its row is shown; the same set if none was */
+export function openedTo(collapsed: ReadonlySet<string>, path: string): ReadonlySet<string> {
+  const on = [...collapsed].filter((folder) => inside(path, folder));
+  if (!on.length) return collapsed;
+  return new Set([...collapsed].filter((folder) => !on.includes(folder)));
+}
+
+/** The files under a folder, at any depth */
+export function filesIn(rows: TreeRow[], folder: string): ViewFile[] {
+  return rows.flatMap((row) => (row.kind === 'file' && inside(row.file.path, folder) ? [row.file] : []));
+}
+
 /** How many lines a file's patch adds and removes (its hunks' lines, not its headers) */
 export function lineCounts(patch: string): { added: number; removed: number } {
   let added = 0;

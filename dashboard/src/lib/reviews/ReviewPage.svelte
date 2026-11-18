@@ -15,10 +15,14 @@
     chainsOf,
     driftedOf,
     fileTree,
+    filesIn,
     filterChains,
     isResolved,
     lineCounts,
+    openedTo,
     reviewChains,
+    shownRows,
+    treeFolders,
     treeWidth,
     TREE_WIDTH,
     type ChainFilter,
@@ -147,6 +151,62 @@
     onviewed(f);
   }
   const viewedCount = $derived(files.filter((f) => isViewed(f)).length);
+
+  // The tree's folders fold (ATM-595): what is folded is kept per review for the session (a reload keeps it, nothing
+  // else does), and going to a file opens the folders on its way, so the file shown is always in the tree
+  const TREE_KEY = 'atm-review-tree:';
+  let collapsed = $state.raw<ReadonlySet<string>>(new Set());
+  let collapsedFor = '';
+  $effect.pre(() => {
+    const id = review.id;
+    if (id === collapsedFor) return;
+    collapsedFor = id;
+    let kept: unknown = null;
+    try {
+      kept = JSON.parse(sessionStorage.getItem(TREE_KEY + id) ?? 'null');
+    } catch {
+      // no storage (a private window), or not ours: nothing folded
+    }
+    collapsed = new Set(Array.isArray(kept) ? kept.filter((p): p is string => typeof p === 'string') : []);
+  });
+  function fold(next: ReadonlySet<string>) {
+    collapsed = next;
+    try {
+      sessionStorage.setItem(TREE_KEY + review.id, JSON.stringify([...next]));
+    } catch {
+      // kept for the page only
+    }
+  }
+  function toggleFolder(path: string, open = collapsed.has(path)) {
+    const rest = [...collapsed].filter((p) => p !== path);
+    fold(new Set(open ? rest : [...rest, path]));
+  }
+  function folderKeys(e: KeyboardEvent, path: string) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    toggleFolder(path, e.key === 'ArrowRight');
+  }
+  const shownTree = $derived(shownRows(tree, collapsed));
+  $effect(() => {
+    const path = atFile;
+    if (!path) return;
+    untrack(() => {
+      const next = openedTo(collapsed, path);
+      if (next !== collapsed) fold(next);
+    });
+  });
+  /** A folded folder's sum: its files, those with comments, those not viewed yet */
+  function folderSum(path: string) {
+    const inIt = filesIn(tree, path);
+    const commented = inIt.filter((f) => chainsOf(page.chains, f).length).length;
+    const unviewed = inIt.filter((f) => !isViewed(f)).length;
+    return [
+      `${inIt.length} ${inIt.length === 1 ? 'file' : 'files'}`,
+      ...(commented ? [`${commented} with comments`] : []),
+      ...(unviewed && unviewed < inIt.length ? [`${unviewed} not viewed`] : []),
+      ...(unviewed && unviewed === inIt.length && viewedCount ? ['none viewed'] : []),
+    ].join(' · ');
+  }
 
   // The list of diffs, and the file at its top (the tree marks it; ] [ and v act on it)
   let list = $state<HTMLElement | null>(null);
@@ -780,18 +840,58 @@
           <span class="review-files-total"
             ><span class="added">+{totals.added}</span> <span class="removed">−{totals.removed}</span></span
           >
+          {#if treeFolders(tree).length}
+            <span class="review-files-folds">
+              <button
+                class="review-files-fold"
+                id="review-collapse-all"
+                title="Collapse all folders"
+                aria-label="Collapse all folders"
+                onclick={() => fold(new Set(treeFolders(tree)))}><Icon name="chevrons-down-up" size={13} /></button
+              >
+              <button
+                class="review-files-fold"
+                id="review-expand-all"
+                title="Expand all folders"
+                aria-label="Expand all folders"
+                onclick={() => fold(new Set())}><Icon name="chevrons-up-down" size={13} /></button
+              >
+            </span>
+          {/if}
         </div>
         {#if !files.length}<p class="review-empty">No files changed here.</p>{/if}
-        <ul>
-          {#each tree as row (row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`)}
+        <ul role="tree" aria-label="Files changed">
+          {#each shownTree as row (row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`)}
             {#if row.kind === 'folder'}
-              <li class="review-folder" style:--depth={row.depth}>
-                <Icon name="folder" size={13} />{row.name}
+              {@const shut = collapsed.has(row.path)}
+              <li
+                class="review-folder"
+                role="treeitem"
+                aria-expanded={!shut}
+                aria-selected="false"
+                aria-level={row.depth + 1}
+                data-folder={row.path}
+                style:--depth={row.depth}
+              >
+                <button
+                  class="review-folder-toggle"
+                  aria-label="{shut ? 'Expand' : 'Collapse'} {row.path}"
+                  onclick={() => toggleFolder(row.path)}
+                  onkeydown={(e) => folderKeys(e, row.path)}
+                  ><Icon name={shut ? 'chevron-right' : 'chevron-down'} size={13} /><Icon
+                    name="folder"
+                    size={13}
+                  />{row.name}</button
+                >
+                {#if shut}<span class="review-folder-sum">{folderSum(row.path)}</span>{/if}
               </li>
             {:else}
               {@const counts = lineCounts(row.file.patch)}
               <li
                 class="review-file"
+                role="treeitem"
+                aria-selected={row.file.path === atFile}
+                aria-level={row.depth + 1}
                 class:current={row.file.path === atFile}
                 class:viewed={isViewed(row.file)}
                 style:--depth={row.depth}
@@ -1404,6 +1504,42 @@
   }
   .review-folder {
     color: var(--text-muted);
+    flex-wrap: wrap;
+  }
+  .review-folder-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .review-folder-toggle:hover {
+    color: var(--text);
+  }
+  .review-folder-sum {
+    font-size: var(--text-xs);
+  }
+  .review-files-folds {
+    display: inline-flex;
+    gap: var(--space-1);
+    margin-left: var(--space-4);
+  }
+  .review-files-fold {
+    display: inline-flex;
+    padding: var(--space-1);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .review-files-fold:hover {
+    background: var(--surface2);
+    color: var(--text);
   }
   .review-file:hover {
     background: var(--surface2);

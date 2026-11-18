@@ -408,6 +408,65 @@ describe('ReviewPage: Diffs', () => {
     expect(onfile).not.toHaveBeenCalled();
   });
 
+  // ATM-595: the tree's folders fold, by click and keys, all at once, kept for the session; a jump opens them
+  describe('the tree’s folders fold', () => {
+    const treeRows = (container: HTMLElement) =>
+      [...container.querySelectorAll('.review-files li')].map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
+    beforeEach(() => sessionStorage.clear());
+
+    it('a folder collapses and expands by a click, or ← and →; folded, it sums its files', async () => {
+      const { container } = await diffs(data({ chains: [chain('k1', 'src/a.rs')] }));
+      const folder = () => container.querySelector('.review-folder[data-folder="src"]') as HTMLElement;
+      expect(container.querySelector('[role="tree"]')).not.toBeNull();
+      expect(folder()).toHaveAttribute('aria-expanded', 'true');
+      await fireEvent.click(screen.getByRole('button', { name: 'Collapse src' }));
+      expect(folder()).toHaveAttribute('aria-expanded', 'false');
+      // Its two files hidden; the sum says how many, how many have comments, and that none of them is viewed yet
+      expect(treeRows(container)).toEqual(['src 2 files · 1 with comments · none viewed', 'M README.md +1 −1']);
+      await fireEvent.keyDown(screen.getByRole('button', { name: 'Expand src' }), { key: 'ArrowRight' });
+      expect(folder()).toHaveAttribute('aria-expanded', 'true');
+      expect(treeRows(container)).toHaveLength(4);
+      await fireEvent.keyDown(screen.getByRole('button', { name: 'Collapse src' }), { key: 'ArrowLeft' });
+      expect(folder()).toHaveAttribute('aria-expanded', 'false');
+      // Other keys are left alone
+      await fireEvent.keyDown(screen.getByRole('button', { name: 'Expand src' }), { key: 'ArrowUp' });
+      expect(folder()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('Collapse all and Expand all; a tree without folders offers neither', async () => {
+      const { container, unmount } = await diffs();
+      await fireEvent.click(screen.getByRole('button', { name: 'Collapse all folders' }));
+      expect(treeRows(container)).toEqual(['src 2 files · none viewed', 'M README.md +1 −1']);
+      await fireEvent.click(screen.getByRole('button', { name: 'Expand all folders' }));
+      expect(treeRows(container)).toHaveLength(4);
+      unmount();
+      await diffs(data({}, { files: [file('README.md')] }));
+      expect(screen.queryByRole('button', { name: 'Collapse all folders' })).toBeNull();
+    });
+
+    it('what is folded is kept for the session, per review; going to a file in a folded folder opens it', async () => {
+      const first = await diffs();
+      await fireEvent.click(screen.getByRole('button', { name: 'Collapse src' }));
+      first.unmount();
+      // Opened again: still folded
+      const again = await diffs();
+      expect(screen.getByRole('button', { name: 'Expand src' })).toBeTruthy();
+      again.unmount();
+      // Another review: nothing folded
+      const other = data();
+      other.review = { ...other.review, id: 'another' };
+      const elsewhere = await diffs(other);
+      expect(screen.getByRole('button', { name: 'Collapse src' })).toBeTruthy();
+      elsewhere.unmount();
+      // The address names a file in the folded folder: the folder opens, the file marked
+      const { container } = show(data(), { file: 'src/a.rs' });
+      await vi.waitFor(() =>
+        expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs'),
+      );
+      expect(container.querySelector('.review-folder[data-folder="src"]')).toHaveAttribute('aria-expanded', 'true');
+    });
+  });
+
   it('a binary file is listed, not shown; a view with no files says so', async () => {
     const binary = await diffs(data({}, { files: [file('logo.png', { binary: true, patch: '' })] }));
     expect(screen.getByText('A binary file: listed, not shown.')).toBeTruthy();

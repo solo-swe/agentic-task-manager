@@ -4,12 +4,16 @@ import {
   chainsOf,
   driftedOf,
   fileTree,
+  filesIn,
   filterChains,
   hashOf,
   isResolved,
   lineCounts,
+  openedTo,
   reviewChains,
   reviewTitle,
+  shownRows,
+  treeFolders,
   treeWidth,
   viewedKey,
   type ChainFilter,
@@ -82,6 +86,35 @@ describe('the file tree', () => {
       file('README.md'),
     ]).map((r) => `${'  '.repeat(r.depth)}${r.kind === 'folder' ? `${r.name}/` : r.name}`);
     expect(rows).toEqual(['lib', '  a.txt', '  b.txt', 'src/', '  x.rs', 'README.md']);
+  });
+});
+
+// ATM-595: the tree's folders fold
+describe('the file tree folded', () => {
+  const tree = fileTree([file('a/b/c.txt'), file('a/d.txt'), file('ab/e.txt'), file('f.txt')]);
+  const names = (rows: ReturnType<typeof fileTree>) =>
+    rows.map((r) => (r.kind === 'folder' ? `${r.path}/` : r.file.path));
+
+  it('shows everything with nothing folded, and a folded folder’s row without what is inside it, at any depth', () => {
+    expect(shownRows(tree, new Set())).toBe(tree);
+    expect(names(shownRows(tree, new Set(['a'])))).toEqual(['a/', 'ab/', 'ab/e.txt', 'f.txt']);
+    expect(names(shownRows(tree, new Set(['a/b'])))).toEqual(['a/', 'a/b/', 'a/d.txt', 'ab/', 'ab/e.txt', 'f.txt']);
+    // A folder named like the start of another isn't its parent
+    expect(names(shownRows(tree, new Set(['a', 'a/b'])))).toEqual(['a/', 'ab/', 'ab/e.txt', 'f.txt']);
+  });
+
+  it('lists every folder, and the files under one at any depth', () => {
+    expect(treeFolders(tree)).toEqual(['a', 'a/b', 'ab']);
+    expect(filesIn(tree, 'a').map((f) => f.path)).toEqual(['a/b/c.txt', 'a/d.txt']);
+    expect(filesIn(tree, 'a/b').map((f) => f.path)).toEqual(['a/b/c.txt']);
+    expect(filesIn(tree, 'nowhere')).toEqual([]);
+  });
+
+  it('opens the folders on the way to a file, and leaves the same set when none was folded on its way', () => {
+    const folded = new Set(['a', 'a/b', 'ab']);
+    expect([...openedTo(folded, 'a/b/c.txt')]).toEqual(['ab']);
+    expect([...openedTo(folded, 'a/d.txt')]).toEqual(['a/b', 'ab']);
+    expect(openedTo(folded, 'f.txt')).toBe(folded);
   });
 });
 

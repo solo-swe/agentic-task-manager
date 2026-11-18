@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 621
+    "next_number": 622
   },
   "tasks": [
     {
@@ -16581,7 +16581,7 @@
       "description": "The file tree beside the diffs on a review's Diffs tab (in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte)) shows its folders always open: a folder can't be collapsed or expanded, and a review of many files is a long list (Hakan, 2026-11-18).\n\n## Change\n- Each folder row has a chevron (Lucide's, as the file cards' folds): a click, or ← and → on the focused row, collapses or expands it; its files and subfolders hide with it. A collapsed folder shows how many files it holds and, when any, how many of them have comments or aren't viewed yet.\n- **Collapse all** and **Expand all** at the top of the tree (icon buttons, with titles).\n- What is folded is kept per review while the page is open (and across a reload, in the session's storage), not written anywhere else.\n- Going to a file (a click in the diffs, the next or previous change or comment, the address's `&file=`) opens the folders on its way, so the file it shows is always in view in the tree.\n- The tree stays a tree for keyboards and screen readers (`role=\"tree\"`, `aria-expanded` on folders).\n\n## Tests\nComponent tests (a folder collapses and expands, by click and keys; Collapse all and Expand all; a jump to a file in a collapsed folder opens it); an e2e test in `reviews.spec.ts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -16589,9 +16589,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T00:30:42Z",
-      "updated_at": "2026-11-18T00:30:42Z",
+      "updated_at": "2026-11-18T19:39:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16603,7 +16603,9 @@
         "dashboard"
       ],
       "number": 595,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T19:39:59Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ec12-b99f-75a9-9668-ba268b704f56",
@@ -17926,7 +17928,7 @@
       "description": "Asked by Hakan (2026-11-18). Measured on CompMD's CR-1 (94 files): the Diffs tab keeps 16 to 32 CompMD renderers alive, but makes about 410 in one pass to the end and back, and the heap grows to about 110 MB with 117,000 DOM nodes alive while the page has about 4,000 elements. Renderers that are gone stay in memory. What is measured so far, and how: [docs/diff-viewer-profile.md](docs/diff-viewer-profile.md).\n\n## What this task delivers, in order\n1. **The analysis** in `docs/diff-viewer-profile.md`, completed:\n   - what holds the destroyed renderers (a heap snapshot's retainers of the detached `.compmd` trees);\n   - CompMD's own share of a renderer's cost, against the diff rows';\n   - the latency of one renderer from mount to drawn;\n   - the rendered Markdown view (`RenderedSide`, the document processed once per part);\n   - the same in WebKit, the app's engine (`tests/e2e/real-review.spec.ts` measures a real review in both).\n2. **The options, agreed with Hakan.** Write them in the document with what each buys and costs, then block this task on the user (`blocked --on user`) until he chooses. Don't build before that.\n3. **The optimizations chosen,** in atm: the document viewer, `DiffView.svelte`, `RenderedSide.svelte`, `CompMd.svelte` (and `ReviewFile.svelte` where it decides what is made), each with the numbers before and after in the document.\n4. **What only CompMD can change,** as tasks in CompMD's project (`CMD-…`), with the numbers. Possibly a leak in its view, drawing one text in ranges with gaps (close to CMD-250), or a processed tree several views share. The CompMD boundary holds: atm shows, CompMD renders.\n\n## Tests\n- A check that keeps the memory bounded: the long-review spec (`reviews.spec.ts`) after passes to the end and back, the DOM nodes alive (DevTools' `Performance.getMetrics` after a forced garbage collection) within a bound set from the measurements, not every renderer ever made.\n- The long-review spec's budgets still met, and met 10 times in a row with the CPU slowed 4× (as ATM-615).\n- Each optimization's own unit or e2e tests.\n\nNo budget is raised to make a test pass (AGENTS.md).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "docs/diff-viewer-profile.md",
@@ -17937,7 +17939,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T19:29:53Z",
-      "updated_at": "2026-11-18T19:34:23Z",
+      "updated_at": "2026-11-18T19:39:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17954,7 +17956,55 @@
       "number": 620,
       "key_final": false,
       "started_at": "2026-11-18T19:34:23Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "02e336e8b85e66c4c442080fb4dbe4aa8eaecf6c",
+      "waiting_on": "user",
+      "questions": [
+        "The analysis so far is in docs/diff-viewer-profile.md. Which options to build? Recommended first: fix the render after destroy (measured 110 to 75 MB after two passes on CMD CR-1, a few lines, a patch is ready). Then: free a skipped card s old layout (about 50 MB more, costs layout while scrolling), fewer renderers per file (needs CompMD, close to CMD-250), reuse renderers instead of remaking them, make fewer while scrolling fast, and process a rendered document once a side.",
+        "Should I finish the rest of the analysis (CompMD s own share of a renderer, the latency from mount to drawn, the rendered view, and WebKit) before building, or build the leak fix first and measure the rest after it?"
+      ],
+      "blocked_at": "2026-11-18T19:39:54Z"
+    },
+    {
+      "id": "01a1f02d-58a8-71cb-88c1-a94acbdbc50a",
+      "name": "A task's CR badge shows the review's status, on its card and in its details",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Asked by Hakan (2026-11-18): the CR badge of a task (`CR-7`) also says the review's status (*Waiting for review*, *Changes requested*, *Approved*, *Closed*, …), on the task's card (ATM-619's badge) and in its details. So it is clear at a glance whether the review is approved.\n\n## Today\n`details/ReviewLink.svelte` shows a status only for the prominent link, and only when the page already knows it: `reviews/known.svelte.ts` learns statuses when the Reviews tab lists or shows reviews. A board opened without visiting the Reviews tab shows no status at all.\n\n## Change\n- **The status comes with the task, from atm.** The task views atm serves (the task's `code_reviews` entries) carry each review's status, read from the project's reviews in the same pass that builds the views. The page never asks once per task, and the status is right from the first load. Cache it with the task views' stamp, which already includes the reviews' files (ATM-606), so a decision shows on the next refresh. A review atm can't read says so (ATM-617's *can't be read*).\n- `ReviewLink.svelte` shows the status on every link, prominent or not, coloured as the Reviews list colours it: approved green, changes requested red, waiting and live the accent, closed and draft muted. On a card it stays compact: a short label or a coloured dot with the status as its title and accessible name.\n- `known.svelte.ts` stays for what the page learns between refreshes; the task's own status is the default.\n- The schema (`crates/atm-common/schema/`) and the generated TypeScript get the field; an older atm's views without it show the badge as today.\n\n## Tests\n- atm-lib: a task's view carries each review's status, and `can't be read` for one atm can't read.\n- Units: `ReviewLink` shows each status with its label and colour class, prominent or not; without one, the badge as today.\n- E2e: a card in review shows *Approved* on its badge once its review is approved, and the details show it too.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f008-9a9f-714f-8e7b-93ac77245ac5"
+      ],
+      "files": [
+        "crates/atm-lib/src/review_pages.rs",
+        "crates/atm-common/schema",
+        "dashboard/src/lib/details/ReviewLink.svelte",
+        "dashboard/src/lib/tasks/TaskCard.svelte",
+        "dashboard/tests/unit/DetailPanel.component.test.ts",
+        "dashboard/tests/e2e/kanban.spec.ts"
+      ],
+      "created_at": "2026-11-18T19:41:06Z",
+      "updated_at": "2026-11-18T19:41:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T19:41:06Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 621,
+      "key_final": false
     }
   ]
 }

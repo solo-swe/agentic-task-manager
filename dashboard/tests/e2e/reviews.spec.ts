@@ -685,6 +685,32 @@ test.describe('a review’s page', () => {
       .toEqual(['docs/b.md@head3']);
   });
 
+  // ATM-595: a folder folds, all of them at once, kept across a reload; going to a file in a folded folder opens it
+  test('the tree’s folders fold: one, or all at once, kept across a reload; going to a file opens its folder', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDiffs(page, tasksServer);
+    const rows = page.locator('.review-files li');
+    await page.getByRole('button', { name: 'Collapse src' }).click();
+    await expect(rows).toHaveText(['docs', /A\s*b\.md/, /src\s*1 file/, /M\s*README\.md/]);
+    await expect(page.locator('.review-folder[data-folder="src"]')).toHaveAttribute('aria-expanded', 'false');
+    await page.reload();
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    await expect(rows).toHaveText(['docs', /A\s*b\.md/, /src\s*1 file/, /M\s*README\.md/]);
+    await page.getByRole('button', { name: 'Collapse all folders' }).click();
+    await expect(rows).toHaveText([/docs\s*1 file/, /src\s*1 file/, /M\s*README\.md/]);
+    // The next file, from the keyboard: src/a.rs, in a folded folder, opens it
+    await page.locator('.review-diffs').focus();
+    await page.keyboard.press(']');
+    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', /./);
+    const current = await page.locator('.review-file.current .review-file-name').getAttribute('data-file');
+    const folder = current!.split('/')[0];
+    await expect(page.locator(`.review-folder[data-folder="${folder}"]`)).toHaveAttribute('aria-expanded', 'true');
+    await page.getByRole('button', { name: 'Expand all folders' }).click();
+    await expect(rows).toHaveCount(5);
+  });
+
   test('the file gone to, the round and the round against are the address’s, and are asked of the server', async ({
     page,
     tasksServer,
