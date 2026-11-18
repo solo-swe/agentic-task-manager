@@ -16479,9 +16479,9 @@
         "crates/atm-vcs/src/lib.rs"
       ],
       "created_at": "2026-11-18T03:20:37Z",
-      "updated_at": "2026-11-18T05:52:05Z",
+      "updated_at": "2026-11-18T05:52:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16493,7 +16493,7 @@
       "key_final": false,
       "started_at": "2026-11-18T03:28:02Z",
       "started_by": "claude:0f56a916",
-      "commit": "9f23c416afdea28d5a7b3b8c81a4481b214b2e6c",
+      "commit": "5305a61699f4af401fe1f774b6d7e3588e592abf",
       "code_reviews": [
         {
           "id": "01a1ecb3-5906-70c6-83f9-bbfc387f1a31",
@@ -16536,9 +16536,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T03:23:56Z",
-      "updated_at": "2026-11-18T03:32:44Z",
+      "updated_at": "2026-11-18T05:54:37Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16558,15 +16558,22 @@
         }
       ],
       "review_requested_at": "2026-11-18T03:32:44Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-18T03:32:44Z",
           "kind": "review",
           "text": "CR-5: The review watch tells decisions too",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T05:54:37Z",
+          "kind": "note",
+          "text": "Approved: in CR-5 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-18T05:54:37Z"
     },
     {
       "id": "01a1ecb7-fd84-74cf-9114-5d2431cb53f0",
