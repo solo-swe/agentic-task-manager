@@ -11,11 +11,13 @@ export type TreeRow =
 export function fileTree(files: ViewFile[]): TreeRow[] {
   const rows: TreeRow[] = [];
   const shown = new Set<string>();
+  // A submodule's entry stands where its folder is, the files changed inside it under it (ATM-599): sorted as a
+  // folder, and its row is the folder's
   const sorted = [...files].sort((a, b) => {
     const [da, db] = [a.path.split('/'), b.path.split('/')];
     for (let i = 0; i < Math.min(da.length, db.length); i++) {
-      const lastA = i === da.length - 1;
-      const lastB = i === db.length - 1;
+      const lastA = i === da.length - 1 && !a.submodule;
+      const lastB = i === db.length - 1 && !b.submodule;
       // A folder before a file at the same level
       if (lastA !== lastB) return lastA ? 1 : -1;
       if (da[i] !== db[i]) return da[i] < db[i] ? -1 : 1;
@@ -31,6 +33,7 @@ export function fileTree(files: ViewFile[]): TreeRow[] {
       rows.push({ kind: 'folder', path, name: parts[depth], depth });
     }
     rows.push({ kind: 'file', file, name: parts.at(-1) ?? file.path, depth: parts.length - 1 });
+    if (file.submodule) shown.add(file.path);
   }
   return rows;
 }

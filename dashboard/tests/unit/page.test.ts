@@ -70,6 +70,19 @@ describe('the file tree', () => {
       'a/b/c',
     ]);
   });
+
+  // ATM-599: a submodule moved to another commit, and the files changed inside it
+  it('a submodule’s entry stands where its folder is, among the folders, its files under it', () => {
+    const sub = { from: 'a1', to: 'b2', repository: null };
+    const rows = fileTree([
+      file('src/x.rs'),
+      file('lib/b.txt'),
+      file('lib', '', { submodule: sub }),
+      file('lib/a.txt'),
+      file('README.md'),
+    ]).map((r) => `${'  '.repeat(r.depth)}${r.kind === 'folder' ? `${r.name}/` : r.name}`);
+    expect(rows).toEqual(['lib', '  a.txt', '  b.txt', 'src/', '  x.rs', 'README.md']);
+  });
 });
 
 describe('a file’s line counts', () => {

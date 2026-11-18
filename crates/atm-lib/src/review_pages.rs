@@ -276,6 +276,34 @@ fn round_of(review: &Review, number: u32) -> Result<&Round> {
         })
 }
 
+/// A patch's files, a submodule only moved among them known by its sides' trees: renamed with its commit the same, it
+/// has no `Subproject commit` lines (ATM-599: `markdown-rs`, moved into `crates/`, showed as a file not in its
+/// commit).
+fn with_links(
+    repo: &atm_vcs::GitVcs,
+    patches: Vec<FilePatch>,
+    before: Option<&String>,
+    after: &String,
+) -> Vec<FilePatch> {
+    let linked =
+        |object: Option<&String>, path: &str| object.and_then(|o| repo.gitlink_in(o, path));
+    patches
+        .into_iter()
+        .map(|mut file| {
+            if file.submodule.is_none() && !file.patch.contains("\n@@") {
+                let (old, new) = (
+                    linked(before, &file.old_path),
+                    linked(Some(after), &file.path),
+                );
+                if old.is_some() || new.is_some() {
+                    file.submodule = Some((old, new));
+                }
+            }
+            file
+        })
+        .collect()
+}
+
 /// The files of one view: the whole change of round `shown` (its base to its result), or what changed in it since
 /// round `against`; each with its patch and the objects (a commit, or a tree) its two sides are read from.
 fn view<S: RoundDiffs + ?Sized>(
@@ -313,26 +341,8 @@ fn view<S: RoundDiffs + ?Sized>(
             (Some(before), after, between, None)
         }
     };
-    // A submodule only moved (renamed, its commit the same) has no `Subproject commit` lines: its sides' trees say it
-    // is one (ATM-599: CompMD's `markdown-rs`, moved into `crates/`, showed as a file not in its commit)
     let repo = rounds::repository(vcs, round).unwrap_or_else(|_| vcs.clone());
-    let linked =
-        |object: Option<&String>, path: &str| object.and_then(|o| repo.gitlink_in(o, path));
-    let patches: Vec<FilePatch> = file_patches(&patch.0)
-        .into_iter()
-        .map(|mut file| {
-            if file.submodule.is_none() && !file.patch.contains("\n@@") {
-                let (old, new) = (
-                    linked(before.as_ref(), &file.old_path),
-                    linked(Some(&after), &file.path),
-                );
-                if old.is_some() || new.is_some() {
-                    file.submodule = Some((old, new));
-                }
-            }
-            file
-        })
-        .collect();
+    let patches = with_links(&repo, file_patches(&patch.0), before.as_ref(), &after);
     // A moved submodule's entry: its two commits and its repository's web address, when it has one, for links
     let submodule = |file: &FilePatch| {
         file.submodule.as_ref().map(|(from, to)| {
@@ -343,7 +353,7 @@ fn view<S: RoundDiffs + ?Sized>(
             json!({ "from": from, "to": to, "repository": repository })
         })
     };
-    let side = |file: &FilePatch| {
+    let entry = |file: &FilePatch, before: Option<&String>, after: &String| {
         json!({
             "path": file.path,
             "old_path": file.old_path,
@@ -351,15 +361,33 @@ fn view<S: RoundDiffs + ?Sized>(
             "binary": file.binary,
             "submodule": submodule(file),
             "patch": file.patch,
-            "before": if file.status == "added" { None } else { before.clone() },
+            "before": if file.status == "added" { None } else { before.cloned() },
             "after": if file.status == "deleted" { None } else { Some(after.clone()) },
         })
+    };
+    // A submodule moved from one commit to another: its entry, then the files its own repository changed between
+    // them, named as the project has them, their sides the submodule's commits (ATM-599, Hakan on CR-4); none when it
+    // isn't checked out here, or a commit is gone from it
+    let side = |file: &FilePatch| {
+        let mut out = vec![entry(file, before.as_ref(), &after)];
+        if let Some((Some(from), Some(to))) = &file.submodule
+            && from != to
+            && let Some(sub) = vcs.submodule_at(&file.path)
+            && let Ok(diff) = sub.diff_range(from, to, &[])
+        {
+            out.extend(
+                file_patches(&diff.patch)
+                    .iter()
+                    .map(|inner| entry(inner, Some(from), to)),
+            );
+        }
+        out
     };
     // The whole change lists the round's files (a binary one has no patch); between rounds, what the diff has
     let files: Vec<Value> = match listed {
         Some(files) => files
             .iter()
-            .map(|f| {
+            .flat_map(|f| {
                 let found = patches.iter().find(|p| p.path == f.path).cloned();
                 side(&found.unwrap_or_else(|| FilePatch {
                     path: f.path.clone(),
@@ -379,7 +407,7 @@ fn view<S: RoundDiffs + ?Sized>(
                 }))
             })
             .collect(),
-        None => patches.iter().map(side).collect(),
+        None => patches.iter().flat_map(side).collect(),
     };
     Ok(json!({ "round": shown, "against": against, "files": files }))
 }
