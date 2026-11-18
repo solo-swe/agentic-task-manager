@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 602
+    "next_number": 604
   },
   "tasks": [
     {
@@ -15893,7 +15893,7 @@
       "description": "A review with a long diff takes a long time before its Diffs tab shows, and once shown, **scrolling the diffs pane is painfully slow** (Hakan, 2026-11-18; the case to measure and fix: CompMD's CR-1). Find where the time goes, propose ways to make loading and scrolling fast, decide with Hakan, then do it.\n\n## Measure first\nCompMD's CR-1, and a generated review of a few thousand changed lines (one large file, and many files), in the browser and the app:\n- **Loading:** the time to the first file drawn and to the tab settled, split into atm's answer (`review_page` in [`review_pages.rs`](crates/atm-lib/src/review_pages.rs): the round's patch, trees rebuilt with `git apply`, every chain placed with a tree diff each, `rounds::place`), the transfer, and the page (parsing every file's patch, `diff.ts`; the file cards, `ReviewFile.svelte`, `DiffView.svelte`; the sides' documents loaded per file).\n- **Scrolling:** frames dropped and long tasks while scrolling the pane from top to bottom (the browser's performance trace): how many rows and cards are in the document, what each scroll makes (the lazy cards' observers, `MARGIN`, the ResizeObserver pinning a card, highlighting, layout of very long lines, sticky headers).\n\n`tests/e2e/performance.spec.ts` has the review budget to extend (*review file far down*).\n\n## Proposals to weigh (write them up, with numbers)\n- **Paging the files:** the page asks for the round's file list first (paths, statuses, counts), and each file's patch and sides when its card nears the view (`?file=` on the review route), so a review of hundreds of files sends what is looked at.\n- **Virtualising the pane:** only the cards (and, in a long file, the rows) near the view are in the document, the rest stood in for by their estimated heights; a file's diff drawn in chunks of its hunks as it scrolls.\n- **Cheaper rows:** fewer elements per row, no per-row observers or effects, highlighting done once per file (off the main thread or in idle time), `content-visibility: auto` on cards out of view.\n- **atm's side:** trees rebuilt once per round and cached (by round and patch hash), chains placed in one tree diff per file instead of one per chain, the answer cached by the review's stamp (ETag/304 as the task routes do).\n- **The page:** patches parsed in a worker or lazily per card; the sides' documents only for the rendered view and the context folds.\n\nPut the proposals, with the measurements, in a short document (`docs/review-performance.md`) and open a review of it with Hakan (`atm review create --task <this> --file docs/review-performance.md`) before building; then the chosen ones.\n\n## Tests\nPerformance budgets for a long review in `performance.spec.ts`: the first file drawn, and a scroll from top to bottom (no long task over the budget, the last file reached in time); unit tests for any paging, virtualising or caching added.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/review-performance.md",
@@ -15902,7 +15902,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T03:14:14Z",
+      "updated_at": "2026-11-18T05:31:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15957,6 +15957,24 @@
           "kind": "rejection",
           "text": "CR-1 round 5: 2 open comments",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T03:37:51Z",
+          "kind": "rejection",
+          "text": "CR-1 round 6: 1 open comment",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T05:30:44Z",
+          "kind": "note",
+          "text": "Approved: in CR-1 (round 7)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T05:31:33Z",
+          "kind": "outcome",
+          "text": "Approved in CR-1 (round 7). Real CR-1 in WebKit: opening blocked 2-3.6 s, now 1.4 s (one frame, CompMD s: CMD-249); last file drawn at 4.9 s, now 1.4-3.0 s. Follow-ups ATM-602 (atm s cost per side) and ATM-603 (paging, past a threshold).",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -15964,11 +15982,16 @@
           "from": "2026-11-18T00:46:10Z",
           "to": "2026-11-18T00:54:56Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-18T01:13:13Z",
+          "to": "2026-11-18T05:30:44Z",
+          "outcome": "approved"
         }
       ],
       "review_requested_at": "2026-11-18T01:13:13Z",
-      "review_state": "changes_requested",
-      "reviewed_at": "2026-11-18T01:32:19Z"
+      "completed_at": "2026-11-18T05:31:33Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4766068f19",
@@ -16535,13 +16558,13 @@
       "description": "On a review with comments still open, *Submit review*'s **Approve** is enabled, and pressing it fails with atm's refusal (reported by Hakan, 2026-11-18). It should be disabled, and say why on hover (its tooltip) and to a screen reader.\n\n## Change\n`dashboard/src/lib/reviews/ReviewPage.svelte`: Approve disabled with its reason while the rules would refuse it:\n- comments are open: *N comments are still open: resolve them first*;\n- the review is sent back (changes requested): *Sent back: it is approved after its author's next round*.\nThe reason is the button's title and, for assistive technology, its description (`aria-describedby`), as a disabled button gets no focus.\n\n## Tests\nA component test per reason, and that Approve is enabled when nothing stands in the way.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T03:34:03Z",
-      "updated_at": "2026-11-18T03:34:03Z",
+      "updated_at": "2026-11-18T03:37:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16554,7 +16577,73 @@
       "number": 601,
       "key_final": false,
       "started_at": "2026-11-18T03:34:03Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "b056a992a443850e5f4a1ce3981c2cb27c5204ee",
+      "code_reviews": [
+        {
+          "id": "01a1ecbb-725d-725e-b2f5-dc36a09d6526",
+          "ref": "CR-6"
+        }
+      ],
+      "review_requested_at": "2026-11-18T03:37:50Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T03:37:50Z",
+          "kind": "review",
+          "text": "CR-6: Approve is disabled, saying why, while it would be refused",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1ed23-6191-76ce-bb12-1632b6d23986",
+      "name": "A review's sides cost atm less to answer",
+      "type": "refactor",
+      "priority": "P3",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Each side of a review's file (`documents?path=&at=`) costs atm about 75 ms even for a small file, measured on CompMD's CR-1 (`docs/review-performance.md`, *CR-1 itself*): the project is opened again and git is started about five times (resolve the revision, find the blob, check the ignore rules, read it). A review of 160 sides is 12 s of atm's work.\n\n## Change\n- `crates/atm-docs/src/lib.rs` `read_document_at`: one `git cat-file --batch` for the revision's type and the blob (in atm-vcs, the only crate that starts git, I24).\n- `crates/atm-lib/src/workspaces.rs` `Member::document_at`: the project as opened once per request, not again for its repository.\n- Measure again with `dashboard/tests/e2e/real-review.spec.ts`.\n\nDone when a side of a small file takes under 20 ms.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-docs/src/lib.rs",
+        "crates/atm-vcs/src/lib.rs",
+        "crates/atm-lib/src/workspaces.rs"
+      ],
+      "created_at": "2026-11-18T05:31:21Z",
+      "updated_at": "2026-11-18T05:31:21Z",
+      "created_by": "claude:0f56a916",
+      "updated_by": "claude:0f56a916",
+      "number": 602,
+      "key_final": false
+    },
+    {
+      "id": "01a1ed23-6191-76ce-bb12-16332b9f42b6",
+      "name": "A review of thousands of files lists them first, each file's diff as it is reached",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Proposal 6 of `docs/review-performance.md`: the review's page sends every file's patch at once (CompMD's CR-1: 324 KB in 46 ms, so not needed for it). A review of thousands of files (a lock file, generated code) would be megabytes. Past a threshold (say 2 MB or 500 files), the page gets the file list first and each file's patch as its card nears the view.\n\n## Change\n- `crates/atm-lib/src/review_pages.rs` and the reviews route: the list without patches past the threshold, and a file's patch on its own.\n- The dashboard asks for a file's patch when its card is made.\n\n## Tests\nA review past the threshold: the list first, a patch per file asked; under it, as now.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/review_pages.rs",
+        "dashboard/src/lib/review-data.ts"
+      ],
+      "created_at": "2026-11-18T05:31:21Z",
+      "updated_at": "2026-11-18T05:31:21Z",
+      "created_by": "claude:0f56a916",
+      "updated_by": "claude:0f56a916",
+      "number": 603,
+      "key_final": false
     }
   ]
 }

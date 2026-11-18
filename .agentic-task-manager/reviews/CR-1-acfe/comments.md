@@ -16,7 +16,7 @@
 > 200 ms (twice in CI), a scroll step's slowest frame under 50 ms after the first screen, and the rows in the page
 > bounded (no more than ~1,500 wherever the pane is); **5** if the app is still slow after them, measured on CR-1 in the
 
-- [ ] **Hakan Serce** · 2026-11-18T00:54:52Z · c5
+- [x] **Hakan Serce** · 2026-11-18T00:54:52Z · c5
   I only see the proposal here, no code change. If they are coming after, then change title, if not add them to CR.
   - **claude:0f56a916** · 2026-11-18T00:55:19Z · c6
     They come in this review: I am building 1 to 4 now, and the next round will be the code with this document, the title kept. The round after the proposal comes with the numbers measured again against the budgets.
@@ -34,3 +34,25 @@
     Agreed: the test misses what makes the app heavy. It draws plain text in Chromium from a mocked server. The app draws CompMD-highlighted sides (and renders the 394 KB spec), each fetched from atm, in WebKit (the app is a WKWebView, not Chromium). I am measuring CMD CR-1 itself next: the real review served by atm, in WebKit and Chromium, opening the Diffs tab and scrolling to the bottom, with where the time goes (highlighting, layout, requests). Then I fix what that shows and put the real numbers in this document, replacing the test-only ones.
     - **Hakan Serce** · 2026-11-18T01:33:41Z · c11
       that sounds better.
+  - **claude:0f56a916** · 2026-11-18T03:14:48Z · c12
+    Round 6 is that measurement and its fixes. The real CR-1 in WebKit blocked for 2 to 3.6 s on opening and drew its last file at 4.9 s. Now it blocks for 1.4 s (one frame, the first TypeScript highlight, which is CompMD s) and draws the last file at 1.4 to 3.0 s. Details in the Description and in the document under CR-1 itself.
+
+## (the review) · round 6 · t4
+- [x] **Hakan Serce** · 2026-11-18T03:30:57Z · c13
+  what is the suggestion for creating the task for Shiki? What are we going to do?
+  - **claude:0f56a916** · 2026-11-18T03:31:28Z · c14
+    The proposal: a task in **CompMD's own project (CMD)**, since the highlighter is CompMD's (atm only shows what it draws). It would say:
+
+    - **What:** in WebKit (Safari, and the atm app's WKWebView), the first block of a language on a page takes about **1.3 to 1.5 s** to highlight, blocking the page; Chromium takes a few ms. Measured on CMD CR-1 in the atm app's review page: the first TypeScript run, 662 characters, took 2.2 s; the rest a few ms each.
+    - **Likely cause:** Shiki readying the TypeScript grammar's regular expressions with the Oniguruma (WASM) engine, which WebKit compiles slowly the first time. To confirm first, timing a page with only one TypeScript block in Safari.
+    - **What CompMD could do**, in order of preference:
+      1. Highlight in a **Web Worker**, so a slow grammar never blocks the page: the block shows plain and is coloured when ready (what atm now does per run, but inside CompMD, for every host).
+      2. Use Shiki's **JavaScript regex engine** for the grammars it supports, which starts without compiling WASM; measure whether it is faster in WebKit.
+      3. Ready the grammars a page needs **in idle time**, before the first block needs them.
+    - **Done when:** the first TypeScript block in WebKit blocks the page for under 100 ms, measured the same way.
+
+    On atm's side nothing changes: the turns already keep this to one frame. If you agree, I will add that task to CMD (with `/atm-create-tasks` there), the numbers and the way to reproduce it (`real-review.spec.ts`) in it.
+    - **Hakan Serce** · 2026-11-18T03:36:10Z · c15
+      makes sense, create the task and share task link here.
+      - **claude:0f56a916** · 2026-11-18T03:42:48Z · c16
+        Created: [CMD-249](/projects/0bd2033e/list?task=CMD-249), in CompMD s backlog (no sprint), P2: The first block of a language highlights without blocking the page in WebKit. It has the numbers, the likely cause, the three options in order, done when under 100 ms, and how to reproduce it. Its key is still provisional (~CMD-249) until it is committed in CompMD, which I left to you: compmd s tasks.json is changed, not committed.
