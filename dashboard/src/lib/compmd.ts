@@ -133,12 +133,13 @@ export interface GutterRow {
 export function gutterRows(
   drawn: readonly DrawnLine[],
   total: number,
-  { top = 0, bottom }: { top?: number; bottom: number },
+  { top = 0, bottom, first: start = 1 }: { top?: number; bottom: number; first?: number },
 ): GutterRow[] {
+  // `first`: the lines numbered start there (a rendered diff's part, ATM-591), the document's first by default
   const placed = new Map<number, readonly LineRect[]>();
   for (const d of drawn) {
     const rects = d.rects.filter((r) => r.height > 0);
-    if (d.line >= 1 && d.line <= total && rects.length && !placed.has(d.line)) placed.set(d.line, rects);
+    if (d.line >= start && d.line <= total && rects.length && !placed.has(d.line)) placed.set(d.line, rects);
   }
   const heights = [...placed.values()].map((r) => r[0].height).sort((a, b) => a - b);
   const typical = heights.length ? heights[Math.floor(heights.length / 2)] : 20;
@@ -152,7 +153,7 @@ export function gutterRows(
     gap = [];
   };
   let last: GutterRow | null = null;
-  for (let line = 1; line <= total; line++) {
+  for (let line = start; line <= total; line++) {
     const rects = placed.get(line);
     if (!rects) {
       gap.push(line);
@@ -316,6 +317,47 @@ interface TreeNode {
   identifier?: string;
   value?: unknown;
   children?: TreeNode[];
+  /** Where it is in the source: a document's tree has it (T-406), task text's hasn't */
+  origin?: { start?: { line?: number }; end?: { line?: number; column?: number } };
+}
+
+/** A top-level block of a document (a paragraph, a list, a table, a diagram): the source lines it spans */
+export interface Block {
+  from: number;
+  to: number;
+}
+
+/** What a block's lines are, if the tree says (its `origin`; a block ending with a newline ends on the line before) */
+const spanOf = (node: TreeNode): Block | null => {
+  const from = node.origin?.start?.line;
+  if (typeof from !== 'number') return null;
+  const end = node.origin?.end;
+  let to = typeof end?.line === 'number' && end.line >= from ? end.line : from;
+  // An end at the very start of a line (a list takes its last newline) is the end of the line before
+  if (to > from && (end?.column === 0 || end?.column === 1)) to -= 1;
+  return { from, to };
+};
+
+/** A document's top-level blocks, in order, from its expanded tree (ATM-591: the rendered diff folds whole blocks).
+ * Definitions render nothing, so they aren't blocks */
+export function topBlocks<T>(tree: T): Block[] {
+  const root = tree as TreeNode;
+  return (root.children ?? [])
+    .filter((n) => n.type !== 'definition' && n.type !== 'footnoteDefinition' && n.type !== 'yaml')
+    .map(spanOf)
+    .filter((b): b is Block => b !== null);
+}
+
+/** The tree with only the top-level blocks that reach into `from`–`to` (ATM-591: a rendered diff's segment), and every
+ * definition, so a reference, an image's or a footnote's, still finds what it names wherever it is in the document */
+export function blocksIn<T>(tree: T, [from, to]: readonly [number, number]): T {
+  const root = tree as TreeNode;
+  const kept = (root.children ?? []).filter((n) => {
+    if (n.type === 'definition' || n.type === 'footnoteDefinition' || n.type === 'yaml') return true;
+    const span = spanOf(n);
+    return !!span && span.to >= from && span.from <= to;
+  });
+  return { ...root, children: kept } as T;
 }
 
 const DATA_IMAGE = /^\s*data:image\//i;

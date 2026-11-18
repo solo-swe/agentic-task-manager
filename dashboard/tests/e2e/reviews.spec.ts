@@ -702,11 +702,15 @@ test.describe('the diff viewer on a review’s page', () => {
     // Each side's lines numbered beside their text, as the document viewer numbers them; the changed line marked
     const newSide = view.locator('.diff-pane.diff-new');
     await expect(newSide.locator('.doc-gutter-lines [data-line="5"]')).toHaveClass(/marked/);
-    await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
     await expect(newSide.locator('.diff-block-mark.diff-added')).not.toHaveCount(0);
-    // A page on a desk, as the document viewer's: at least a letter page's height for its width; the numbers in its
-    // margin, clear of the text
+    // The heading is more than three lines from the change: folded, as the source view folds it (ATM-591); opened
+    await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toHaveCount(0);
+    await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+    // A page on a desk, as the document viewer's: at least a letter page's height for its width, all shown; the
+    // numbers in its margin, clear of the text
     await expect(newSide).toHaveClass(/doc-sheet/);
+    await expect(newSide.locator('.rendered-fold')).toHaveCount(0);
     const sheet = (await newSide.locator('.doc-page').boundingBox())!;
     expect(sheet.height).toBeGreaterThanOrEqual(Math.floor((sheet.width * 11) / 8.5) - 1);
     const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
@@ -746,6 +750,11 @@ test.describe('the diff viewer on a review’s page', () => {
     await page.getByRole('button', { name: 'Rendered' }).click();
     const newSide = view.locator('.diff-pane.diff-new');
     const ending = newSide.locator('.compmd-page p', { hasText: 'The new ending.' });
+    // Folded (ATM-591): the change and what is near it, the rest behind one fold; opened, the whole document
+    await expect(ending).toBeVisible();
+    await expect(newSide.locator('.compmd-page p', { hasText: 'Paragraph 1 of' })).toHaveCount(0);
+    await newSide.getByRole('button', { name: /^Show \d+ unchanged lines$/ }).click();
+    await expect(newSide.locator('.compmd-page p', { hasText: 'Paragraph 1 of' })).toBeVisible();
     await ending.scrollIntoViewIfNeeded();
     await expect(ending).toBeVisible();
     // Inside its page, which is as tall as its document (more than one letter page)
@@ -758,6 +767,51 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(number).toHaveClass(/marked/);
     const numberBox = (await number.boundingBox())!;
     expect(Math.abs(numberBox.y - text.y)).toBeLessThan(text.height);
+  });
+
+  // ATM-591: the rendered view folds as the source view does: whole blocks near the change, the rest folded
+  test('Rendered folds: the blocks near a change, with their own line numbers; the rest folded, each fold opened by a click', async ({
+    page,
+    tasksServer,
+  }) => {
+    // 40 paragraphs, each on its line with a blank line after: paragraph k on line 2k-1; paragraph 20 (line 39) changed
+    const doc = (twenty: string) =>
+      Array.from({ length: 40 }, (_, i) => (i === 19 ? twenty : `Paragraph ${i + 1}.`)).join('\n\n') + '\n';
+    const patch =
+      'diff --git a/docs/mid.md b/docs/mid.md\n--- a/docs/mid.md\n+++ b/docs/mid.md\n' +
+      '@@ -36,7 +36,7 @@\n \n Paragraph 19.\n \n-The old twentieth.\n+The new twentieth.\n \n Paragraph 21.\n \n';
+    await openReviews(page, tasksServer);
+    tasksServer
+      .setRevisionDocument('base1', projectDocument('docs/mid.md', doc('The old twentieth.')))
+      .setRevisionDocument('head3', projectDocument('docs/mid.md', doc('The new twentieth.')));
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [file('docs/mid.md', patch)] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/mid.md'));
+    const view = diffOf(page, 'docs/mid.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    const paragraphs = newSide.locator('.compmd-page p');
+    // The change and the blocks within three lines of it, whole: paragraphs 19 (line 37), 20 (39) and 21 (41)
+    await expect(paragraphs).toHaveText(['Paragraph 19.', 'The new twentieth.', 'Paragraph 21.']);
+    // Their line numbers are the source's
+    await expect(newSide.locator('.doc-gutter-lines [data-line="39"]')).toHaveClass(/marked/);
+    await expect(newSide.locator('.doc-gutter-lines [data-line="37"]')).toBeVisible();
+    await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toHaveCount(0);
+    // A fold before and one after, each saying how many lines it holds
+    const folds = newSide.locator('.rendered-fold');
+    // (the document's 79 lines: lines 1–36 before, 43–79 after)
+    await expect(folds).toHaveText(['Show 36 unchanged lines', 'Show 37 unchanged lines']);
+    // Opened, the fold's blocks join the change's, numbered from line 1
+    await folds.first().click();
+    await expect(paragraphs.first()).toHaveText('Paragraph 1.');
+    await expect(paragraphs).toHaveCount(21);
+    await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+    await expect(newSide.locator('.rendered-fold')).toHaveText(['Show 37 unchanged lines']);
+    // The other side folds the same way, on its own
+    await expect(view.locator('.diff-pane.diff-old .rendered-fold')).toHaveCount(2);
   });
 
   test('the + on a line, dragged over three lines, opens the comment under them; sent as the user with the page’s token', async ({

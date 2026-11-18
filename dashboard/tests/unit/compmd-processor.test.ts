@@ -5,7 +5,15 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { initSync, OpenDocument, process } from '@compmd/processor';
 import { request as base } from 'virtual:compmd';
-import { compmdRequest, documentRequest, FRONTMATTER_LINES, packComponents, safeTree } from '../../src/lib/compmd';
+import {
+  blocksIn,
+  compmdRequest,
+  documentRequest,
+  FRONTMATTER_LINES,
+  packComponents,
+  safeTree,
+  topBlocks,
+} from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
 import compmdConfig from '../../compmd.config.json';
 
@@ -56,6 +64,30 @@ describe('a document’s source lines (T-406: CompMD places each line from its o
 
   it('task text is processed without them', () => {
     expect(firstLines(run('# Title\n\nText.').expanded)).toEqual([undefined, undefined]);
+  });
+
+  // ATM-591: the rendered diff folds whole blocks: each one's lines, and a tree of only those reaching into a range
+  it('its top-level blocks are their lines; a range keeps the blocks reaching into it, and every definition', () => {
+    const text =
+      '---\ntitle: X\n---\n# Title\n\nA paragraph\nover two lines, [a link][d].\n\n- one\n- two\n\n```ts\nconst a = 1;\n```\n\n[d]: https://example.com\n';
+    const tree = new OpenDocument(documentRequest(base, 'docs/x.md', text, NOW, 'UTC')).expanded;
+    expect(topBlocks(tree)).toEqual([
+      { from: 4, to: 4 },
+      { from: 6, to: 7 },
+      { from: 9, to: 10 },
+      { from: 12, to: 14 },
+    ]);
+    // Line 7 is in the paragraph: it whole, never part of it; and the definition it needs
+    const kept = blocksIn(tree, [7, 7]) as { children: { type: string }[] };
+    expect(kept.children.map((n) => n.type).filter((t) => t !== 'definition')).toEqual(['paragraph']);
+    expect(kept.children.some((n) => n.type === 'definition')).toBe(true);
+    expect(topBlocks(blocksIn(tree, [10, 12]))).toEqual([
+      { from: 9, to: 10 },
+      { from: 12, to: 14 },
+    ]);
+    expect(topBlocks(blocksIn(tree, [20, 30]))).toEqual([]);
+    // Task text has no lines: no blocks
+    expect(topBlocks(run('# Title\n\nText.').expanded)).toEqual([]);
   });
 });
 

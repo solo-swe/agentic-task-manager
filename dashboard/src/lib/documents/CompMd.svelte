@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import {
+    blocksIn,
     dashboardAddress,
     loadCompmd,
     processText,
@@ -38,6 +39,7 @@
     localImage,
     inline = false,
     plain,
+    only,
     onlines,
     onopen,
   }: {
@@ -49,6 +51,9 @@
     /** Code shown as written until CompMD has drawn the text, which then waits its turn among the page's other such
      * renders, the one nearest the view first (ATM-587: a review's runs of code, `render-turns.ts`) */
     plain?: string;
+    /** A document's top-level blocks reaching into these source lines only, the whole text processed (ATM-591: a
+     * rendered diff's part, its references and data the document's) */
+    only?: readonly [number, number];
     onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
     onopen?: (ref: DocumentRef) => void;
   } = $props();
@@ -105,7 +110,7 @@
 
   $effect(() => {
     const data = task ? taskData(task) : null;
-    const key = text + '\u0000' + JSON.stringify(data) + '\u0000' + (path ?? '');
+    const key = text + '\u0000' + JSON.stringify(data) + '\u0000' + (path ?? '') + '\u0000' + (only?.join('-') ?? '');
     const target = host;
     if (!target || key === rendered) return;
     rendered = key;
@@ -141,7 +146,9 @@
     }
 
     function draw(compmd: CompmdModule, target: HTMLElement) {
-      const { tree, components } = processText(compmd, text, task, path, { localImage, docLink });
+      const processed = processText(compmd, text, task, path, { localImage, docLink });
+      const tree = only ? blocksIn(processed.tree, only) : processed.tree;
+      const components = processed.components;
       if (!view) {
         // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
         // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the

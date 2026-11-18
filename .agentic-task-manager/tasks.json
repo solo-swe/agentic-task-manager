@@ -16190,14 +16190,14 @@
       "description": "In a file with long lines, the code's horizontal scroll bar (`overflow-x: auto` in [`DiffCode.svelte`](dashboard/src/lib/reviews/DiffCode.svelte)) is drawn on top of the **Show n unchanged lines** row at the bottom of the file (Hakan, 2026-11-18). The scroll bar belongs below the code it scrolls and above the fold row (or the fold row outside the scrolling block), so both stay usable, on macOS's overlay scroll bars and on classic ones.\n\n## Tests\nAn e2e test in `reviews.spec.ts` with a long line: the fold row's button is clickable (not covered: `elementFromPoint` at its centre is the button).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T07:57:12Z",
+      "updated_at": "2026-11-18T07:59:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16213,7 +16213,24 @@
       "number": 590,
       "key_final": false,
       "started_at": "2026-11-18T07:57:12Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f948bc7715ebe73976bb4c4891cf70ffe4a43f72",
+      "code_reviews": [
+        {
+          "id": "01a1edaa-f5bd-7353-b4f4-ef9e6525cff8",
+          "ref": "CR-18"
+        }
+      ],
+      "review_requested_at": "2026-11-18T07:59:26Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T07:59:26Z",
+          "kind": "review",
+          "text": "CR-18: A long line scroll bar stays off the fold row",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4ae483be2e",
@@ -16227,16 +16244,16 @@
       "description": "In the Diffs tab's **Rendered** view, a Markdown file shows the whole document, while the Source view hides the unchanged lines before and after each change behind **Show n unchanged lines** (Hakan, 2026-11-18). The rendered view should fold the same way: the changed blocks with a little context, the unchanged parts between them folded, each fold opened by a click, the line numbers in its gutter still those of the source.\n\n## Details\nThe rendered sides come from CompMD with each block's source lines ([`RenderedSide.svelte`](dashboard/src/lib/reviews/RenderedSide.svelte)): fold whole blocks (a paragraph, a list, a table, a diagram), never in the middle of one, around the blocks the hunks touch, with the same context the source view keeps.\n\n## Tests\nComponent tests of `RenderedSide` or `DiffView` (a long document with one change: the blocks around it shown, the rest folded, a fold opens); an e2e test in `reviews.spec.ts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
         "dashboard/src/lib/reviews/DiffView.svelte"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T07:59:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16248,7 +16265,9 @@
         "dashboard"
       ],
       "number": 591,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T07:59:31Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4bc05d8f15",

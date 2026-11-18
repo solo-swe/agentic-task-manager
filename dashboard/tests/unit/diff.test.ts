@@ -8,6 +8,7 @@ import {
   linesUnder,
   nextChange,
   parseHunks,
+  renderedParts,
   splitBlocks,
   unifiedBlocks,
 } from '../../src/lib/reviews/diff';
@@ -177,6 +178,75 @@ describe('changes, keys and marks', () => {
       [30, 30],
       [31, 31],
     ]);
+  });
+
+  // ATM-591: a rendered Markdown side folds whole blocks, as the source view folds lines
+  describe('a rendered side’s folds', () => {
+    // Ten blocks of two lines each, a blank line between: block k on lines 3k-2 and 3k-1 (1–2, 4–5, …, 28–29)
+    const blocks = Array.from({ length: 10 }, (_, k) => ({ from: 3 * k + 1, to: 3 * k + 2 }));
+    const total = 30;
+
+    it('shows the blocks near a change, whole, and folds the rest, from the first line to the last', () => {
+      // Line 14 is in block 5 (13–14); its context reaches 11–17: blocks 4 (10–11), 5, 6 (16–17)
+      expect(renderedParts(blocks, new Set([14]), total)).toEqual([
+        { type: 'fold', from: 1, to: 9 },
+        { type: 'shown', from: 10, to: 18 },
+        { type: 'fold', from: 19, to: 30 },
+      ]);
+    });
+
+    it('a change at the start or the end: no fold before or after it', () => {
+      expect(renderedParts(blocks, new Set([1]), total)).toEqual([
+        { type: 'shown', from: 1, to: 6 },
+        { type: 'fold', from: 7, to: 30 },
+      ]);
+      expect(renderedParts(blocks, new Set([29]), total)).toEqual([
+        { type: 'fold', from: 1, to: 24 },
+        { type: 'shown', from: 25, to: 30 },
+      ]);
+    });
+
+    it('two changes far apart: two shown parts, the blocks between folded; close together, one', () => {
+      expect(renderedParts(blocks, new Set([2, 29]), total).map((p) => p.type)).toEqual(['shown', 'fold', 'shown']);
+      expect(renderedParts(blocks, new Set([13, 20]), total)).toEqual([
+        { type: 'fold', from: 1, to: 9 },
+        { type: 'shown', from: 10, to: 24 },
+        { type: 'fold', from: 25, to: 30 },
+      ]);
+    });
+
+    it('a fold opened by its first line is shown, joined with what is shown around it', () => {
+      expect(renderedParts(blocks, new Set([14]), total, new Set([1]))).toEqual([
+        { type: 'shown', from: 1, to: 18 },
+        { type: 'fold', from: 19, to: 30 },
+      ]);
+      expect(renderedParts(blocks, new Set([14]), total, new Set([1, 19]))).toEqual([
+        { type: 'shown', from: 1, to: 30 },
+      ]);
+    });
+
+    it('no change on this side: one fold; no blocks known: the whole document shown', () => {
+      expect(renderedParts(blocks, new Set(), total)).toEqual([{ type: 'fold', from: 1, to: 30 }]);
+      expect(renderedParts([], new Set([3]), 12)).toEqual([{ type: 'shown', from: 1, to: 12 }]);
+    });
+
+    it('a block reaching into the context is shown whole, never cut', () => {
+      // A long block (lines 5–40) whose last line is near a change at 42: all of it
+      expect(
+        renderedParts(
+          [
+            { from: 1, to: 2 },
+            { from: 5, to: 40 },
+            { from: 42, to: 42 },
+          ],
+          new Set([42]),
+          42,
+        ),
+      ).toEqual([
+        { type: 'fold', from: 1, to: 4 },
+        { type: 'shown', from: 5, to: 42 },
+      ]);
+    });
   });
 
   it('a file ending with a newline has no empty last row', () => {
