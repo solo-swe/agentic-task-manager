@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 594
+    "next_number": 595
   },
   "tasks": [
     {
@@ -16103,6 +16103,43 @@
         "01a1ebf2-f535-752d-88f8-ee8ac3ce346e"
       ],
       "number": 593,
+      "key_final": false
+    },
+    {
+      "id": "01a1ec0b-fc5f-716f-b40a-2517314b85d8",
+      "name": "Code review: a provisional task key's ~ gets into reviews: decisions don't reach the task, agents reuse ~KEY and fail",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Two reports from Hakan (2026-11-18), one cause.\n\n1. **An approved review leaves its task waiting.** In CompMD, CR-2 and CR-3 are approved, but their task CMD-36 is still in review with `review_state: waiting`: the decision never reached it.\n2. **Agents reuse a key with its `~` and fail.** `atm review` commands print a task's key as `~CMD-36`, agents pass that to the next command (`atm task state ~CMD-36 done`, `--task ~CMD-36`), and atm refuses it.\n\n## Cause\nA provisional key reads to people with a `~` before it (ADR-007 §3: `task_label` in [`project.rs`](crates/atm-lib/src/project.rs#L169-L187), `label_of` in [`keys.rs`](crates/atm-common/src/keys.rs#L65-L76)). The reviews use that **label** as the task's name where they need its **reference**: [`reviews.rs`](crates/atm-lib/src/reviews.rs) names the review's tasks with `project.task_label(t)` (lines 295, 418 and 467), so `review.md` stores `tasks: [~CMD-36]`; a decision, applied to each named task, finds no task `~CMD-36` and skips it without saying so. [`review_listen.rs`](crates/atm-lib/src/review_listen.rs#L182) prints the same label in `atm review watch`'s JSON.\n\n## Change\n- What a review stores and what atm prints for programs (`--json`, the watch's lines, the review's `tasks`) is the task's **key without `~`** (the key stays the reference while it is provisional; it follows the task when it becomes final, as `code_reviews` follows the review's UUID); the `~` only where people read it (plain output, the dashboard, which marks it itself).\n- **Every command takes a key with a leading `~`** as the key itself (`resolve_task`), as `maintenance.rs` already strips it for one: what atm printed always works as input.\n- **A decision that can't reach a named task says so** (an error or a warning in the command's output, naming the task), never a silent skip.\n- **Reviews already written** with `~KEY` (CompMD's CR-1 to CR-3) read as `KEY`; and their decisions, approved before the fix, reach their tasks: `atm doctor` names a review whose decision its task doesn't have, and offers to apply it (or the next command that reads it does), so CMD-36 comes out of review as approved without anyone deciding again.\n- The skills and `docs/agent/` say nothing of `~`; check that no example shows a key with it.\n\n## Tests\natm-lib tests: a review of a provisional task stores and prints its key without `~`; its approval reaches the task; a `~KEY` resolves; a decision on a review naming a missing task is reported. CLI suite (`tests/scripts/reviews.test.mjs`): create a review of a provisional task, approve it, the task is approved; `atm task state ~KEY …` works; `review watch` prints the plain key. A test that a review stored with `~KEY` has its decision applied.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/reviews.rs",
+        "crates/atm-lib/src/review_listen.rs",
+        "crates/atm-lib/src/project.rs",
+        "crates/atm-lib/src/check.rs",
+        "tests/scripts/reviews.test.mjs"
+      ],
+      "created_at": "2026-11-18T00:26:10Z",
+      "updated_at": "2026-11-18T00:26:10Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:26:10Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "cli"
+      ],
+      "number": 594,
       "key_final": false
     }
   ]
