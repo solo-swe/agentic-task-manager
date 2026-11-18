@@ -14,6 +14,7 @@
   } from '../compmd';
   import { docOf, referenceTo, viewerLink, type DocumentRef } from '../documents';
   import { navigate } from '../navigation';
+  import { takeTurn } from '../render-turns';
   import { scrollBehavior } from '../scroll';
 
   /** The data a task text is rendered with, as CompMD's processing takes it (the viewer knows no task model) */
@@ -36,6 +37,7 @@
     path,
     localImage,
     inline = false,
+    plain,
     onlines,
     onopen,
   }: {
@@ -44,9 +46,19 @@
     path?: string;
     localImage?: (url: string) => string | null;
     inline?: boolean;
+    /** Code shown as written until CompMD has drawn the text, which then waits its turn among the page's other such
+     * renders, the one nearest the view first (ATM-587: a review's runs of code, `render-turns.ts`) */
+    plain?: string;
     onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
     onopen?: (ref: DocumentRef) => void;
   } = $props();
+
+  /** The turn this render waits for, cancelled when the text changes or it is gone */
+  let cancelTurn: (() => void) | null = null;
+  /** The turn's render, done once CompMD has drawn */
+  let turnDone: (() => void) | null = null;
+  /** How long a turn waits for CompMD to say it has drawn before the next one goes anyway */
+  const TURN_LIMIT_MS = 3000;
 
   /** A project's text (a task's, or a document's): a relative link in it opens the document viewer (V1a–V1c), resolved
    * from the project's root for task text and from the document's folder in a document. Help and What's new come with
@@ -97,53 +109,81 @@
     const target = host;
     if (!target || key === rendered) return;
     rendered = key;
+    cancelTurn?.();
+    cancelTurn = null;
+    const paced = plain !== undefined;
     loadCompmd()
       .then(async (compmd) => {
         if (key !== rendered) return; // a newer text came in while CompMD loaded
-        const { tree, components } = processText(compmd, text, task, path, { localImage, docLink });
-        if (!view) {
-          // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
-          // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
-          // app, under the origin CompMD's plugin gives the page, ADR-006)
-          view = compmd.createSandbox(sandboxOptions(compmd)).open(target, { components });
-          view.on('rendered', () => {
-            secureLinks(target);
-            drawn = true;
-          });
-          // A component that shows its fallback says why. One that threw shows its code in its frame; one whose frame
-          // never answered, or whose module is missing, shows nothing at all, so the text says so (T-503)
-          view.on('error', ({ component, reason, message }) => {
-            const nothing = reason === 'failed' || reason === 'missing';
-            const log = nothing ? console.error : console.warn;
-            log(
-              `CompMD: ${component} shows ${nothing ? 'nothing' : 'its fallback'} (${reason}): ${message}` +
-                (reason === 'failed'
-                  ? '. A frame that never answers is almost always refused by a policy: are the frames’ origin ' +
-                    'and folder allowed in the page’s script-src, frame-src and connect-src, and the frames served ' +
-                    'with no policy but their own?'
-                  : ''),
-            );
-            if (nothing && !undrawn.includes(component)) undrawn = [...undrawn, component];
-          });
-          const shown = view;
-          // After a render is painted, when the page or a block in it changes size, when fonts load
-          view.on('layout', () => void measureLines(shown, target));
-          // The dashboard switches theme and mode by attributes on <html> (its color-scheme follows): the frames,
-          // and a diagram's light or dark theme, follow when told
-          schemes = new MutationObserver(() => view?.scheme());
-          schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
-        }
-        view.render(tree);
-        failed = false;
+        if (!paced) return draw(compmd, target);
+        cancelTurn = takeTurn(
+          () => target,
+          () =>
+            new Promise<void>((done) => {
+              if (key !== rendered) return done();
+              turnDone = done;
+              setTimeout(done, TURN_LIMIT_MS);
+              try {
+                draw(compmd, target);
+              } catch (e) {
+                fail(e);
+                done();
+              }
+            }),
+        );
       })
-      .catch((e: unknown) => {
-        console.error('CompMD could not render a text:', e);
-        loadError = e instanceof Error ? e.message : String(e);
-        failed = true;
-      });
+      .catch(fail);
+
+    function fail(e: unknown) {
+      console.error('CompMD could not render a text:', e);
+      loadError = e instanceof Error ? e.message : String(e);
+      failed = true;
+    }
+
+    function draw(compmd: CompmdModule, target: HTMLElement) {
+      const { tree, components } = processText(compmd, text, task, path, { localImage, docLink });
+      if (!view) {
+        // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
+        // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
+        // app, under the origin CompMD's plugin gives the page, ADR-006)
+        view = compmd.createSandbox(sandboxOptions(compmd)).open(target, { components });
+        view.on('rendered', () => {
+          secureLinks(target);
+          drawn = true;
+          turnDone?.();
+          turnDone = null;
+        });
+        // A component that shows its fallback says why. One that threw shows its code in its frame; one whose frame
+        // never answered, or whose module is missing, shows nothing at all, so the text says so (T-503)
+        view.on('error', ({ component, reason, message }) => {
+          const nothing = reason === 'failed' || reason === 'missing';
+          const log = nothing ? console.error : console.warn;
+          log(
+            `CompMD: ${component} shows ${nothing ? 'nothing' : 'its fallback'} (${reason}): ${message}` +
+              (reason === 'failed'
+                ? '. A frame that never answers is almost always refused by a policy: are the frames’ origin ' +
+                  'and folder allowed in the page’s script-src, frame-src and connect-src, and the frames served ' +
+                  'with no policy but their own?'
+                : ''),
+          );
+          if (nothing && !undrawn.includes(component)) undrawn = [...undrawn, component];
+        });
+        const shown = view;
+        // After a render is painted, when the page or a block in it changes size, when fonts load
+        view.on('layout', () => void measureLines(shown, target));
+        // The dashboard switches theme and mode by attributes on <html> (its color-scheme follows): the frames,
+        // and a diagram's light or dark theme, follow when told
+        schemes = new MutationObserver(() => view?.scheme());
+        schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
+      }
+      view.render(tree);
+      failed = false;
+    }
   });
 
   onDestroy(() => {
+    cancelTurn?.();
+    turnDone?.();
     schemes?.disconnect();
     view?.destroy();
   });
@@ -197,8 +237,20 @@
     <p class="compmd-note" role="note">Shown as written: the formatting couldn’t load ({loadError}).</p>
   {/if}
   <div class="compmd-page" hidden={failed} bind:this={host}></div>
+  {#if plain !== undefined && !drawn && !failed}
+    <!-- Its turn not come yet: the code as written, where CompMD will draw it (ATM-587). Hidden by the style below as
+         soon as CompMD has drawn anything, before it says so: both at once made the run twice as tall for a moment -->
+    <div class="compmd-page compmd-waiting"><pre><code>{plain}</code></pre></div>
+  {/if}
   {#if failed}<div class="compmd-plain">{text}</div>{/if}
   {#each undrawn as component (component)}
     <p class="compmd-note" role="note">A {component} here couldn’t be drawn; the console says why.</p>
   {/each}
 </div>
+
+<style>
+  /* The code as written gives way the moment CompMD has drawn the text (ATM-587) */
+  .compmd-page:not(:empty) + .compmd-waiting {
+    display: none;
+  }
+</style>

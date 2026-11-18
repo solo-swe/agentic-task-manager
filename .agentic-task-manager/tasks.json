@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 598
+    "next_number": 599
   },
   "tasks": [
     {
@@ -15409,7 +15409,7 @@
       "description": "Phase 4 ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)): reviewing a change while it is made.\n\n## Change\n- *New live review* in the app and the browser (`atm review live` exists from phase 1): the review page fed by the working copy's changes (the store's subscription and the folder's watcher), redrawn at most every second or two, ignored and generated files left out.\n- A comment records a checkpoint (a `working` round against the base) so it is anchored to what the reviewer saw.\n- Ending it: approve, a round (it becomes `open`), or close; the approval that covers the task when nothing changed since (the task link, phase 1).\n\n## Tests\nE2e: a file written while the page is open shows; a comment makes a checkpoint; approval with and without a change since.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "todo",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
@@ -15419,7 +15419,7 @@
         "crates/atm-lib/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T01:18:42Z",
+      "updated_at": "2026-11-18T01:35:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
@@ -15440,10 +15440,15 @@
           "kind": "handoff",
           "text": "Not started: paused for ATM-587 (its review asked for the code in it). Found: the REST create takes start live; the page shows a live review's last round, not the working copy as it changes, and a comment on a live review takes no checkpoint yet (reviews.rs has none outside tests).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T01:35:45Z",
+          "kind": "handoff",
+          "text": "Paused for CR-1 (real measurements asked). Done in 79e8ade: the page follows a live review s working copy (view.now, an unstored round after the checkpoints, polled every 2 s); a comment or an approval makes it a checkpoint (CLI, REST, app); New live review on the list; Close review for a live one. Left: an e2e spec, docs (multi-project-api view.now, docs/agent/reviews.md).",
+          "by": "claude:0f56a916"
         }
       ],
-      "started_at": "2026-11-18T01:18:42Z",
-      "started_by": "claude:0f56a916"
+      "commit": "79e8adee813e3341d8545826405bf61b7dc617c2"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e29c7ba9fca",
@@ -16367,6 +16372,37 @@
           "by": "claude:0f56a916"
         }
       ]
+    },
+    {
+      "id": "01a1eca5-ba9f-721a-8221-49457ac24938",
+      "name": "Hidden files are shown in a review's diffs",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "A review's hidden files (`.github/workflows/ci.yml`, `.gitignore`, `.env.example`, …) don't show in its Diffs tab (reported by Hakan, 2026-11-18).\n\n## Likely cause\nThe documents route reads a review's sides through atm-docs, which refuses paths with a hidden segment (security invariant I11 in `docs/security-architecture.md`, written for the document viewer's working-copy reads). A side at a revision (`documents?path=&at=`) is a file the review's own diff names, so it should be readable when the round lists it, while key files and what git ignores stay refused.\n\n## Change\n- `crates/atm-docs/src/lib.rs` `read_document_at`: allow a hidden segment for a file at a revision; keep the other checks (key files, size, no symlinks, git's ignore rules). Find out first whether the refusal is there, in the page's file list, or in the round itself.\n- `docs/security-architecture.md` I11: say what a revision's side may read.\n\n## Tests\n- atm-docs: a hidden file at a revision is read; a key file (`.env`, an SSH key) is still refused; the working-copy route still refuses hidden files.\n- An e2e test: a review with a `.github/` file shows its diff.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-docs/src/lib.rs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-18T03:14:06Z",
+      "updated_at": "2026-11-18T03:14:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T03:14:06Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 598,
+      "key_final": false
     }
   ]
 }

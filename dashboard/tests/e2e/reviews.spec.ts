@@ -913,6 +913,16 @@ test.describe('performance', () => {
         longTasks: long.length,
         longest: Math.round(Math.max(0, ...long)),
         rows: document.querySelectorAll('.diff-line').length,
+        // Rows drawn more than FAR (3,200 px) and a screen away from the view: the page keeps none
+        farRows: (() => {
+          const view = pane.getBoundingClientRect();
+          const reach = 3200 + view.height;
+          return [...document.querySelectorAll('.review-file-card')].filter((card) => {
+            const box = card.getBoundingClientRect();
+            const far = box.bottom < view.top - reach || box.top > view.bottom + reach;
+            return far && card.querySelector('.diff-line');
+          }).length;
+        })(),
         nodes: document.querySelectorAll('*').length,
       };
     });
@@ -925,6 +935,7 @@ test.describe('performance', () => {
     expect(opened.firstDrawn).toBeLessThan(BUDGET_MS);
     expect(scrolled.settling).toBeLessThan(BUDGET_MS);
     expect(scrolled.afterSettled).toBeLessThan(BUDGET_MS / 2);
-    expect(scrolled.rows).toBeLessThan(1500);
+    // Rows bounded by where the view is, not by a count: a 600-line file in view is 1,200 rows in split
+    expect(scrolled.farRows).toBe(0);
   });
 });

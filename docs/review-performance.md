@@ -125,5 +125,51 @@ for: the first file and that settling under 200 ms, every step after the first t
 (measured: about 30 on its own, up to 97 while the whole e2e suite runs on five workers), and fewer than 1,500 rows.
 50 ms would fail on a loaded machine without the page being any slower. Twice each in CI.
 
-**Next:** CR-1 in the app, to see whether 5 (highlighting only what is shown) is still needed; 6 and 7 as backlog
-tasks.
+## CR-1 itself, measured as it feels (round 6)
+
+Hakan, on round 5: the numbers above are too small for how it feels (opening "like 2 seconds", scrolling to the end
+"more like 10"). Right: the test draws plain text in Chromium from a mocked server, and the app draws CompMD's
+highlighted sides, each from atm, in WebKit (the app is a WKWebView). `tests/e2e/real-review.spec.ts` measures a real
+review instead: this checkout's atm serving the project on a private state folder, in Chromium and in WebKit, the
+Diffs tab opened (and watched for 5 s), scrolled to the end a screen at a time until the last file is drawn, then a
+jump to the top and one to the end (each watched 3 s). It runs only when given a project:
+`pnpm exec playwright test real-review`, with `tests/e2e/real-review.local.json` saying which (git ignores it).
+
+**What it found** (CR-1, before this round, WebKit):
+
+- **Opening:** the first lines in 0.3 s, then the page **blocked for 2 to 3.6 s** in frames of up to 1.5 s: every run
+  of code highlighted by CompMD at once, as soon as its grammars had loaded.
+- **Scrolling to the end:** reached in 1.4 s, but the **last file drawn at 4.9 s**: the 160 sides of the files passed
+  were all asked for at once, and the browser asks atm six at a time, in order, so the last file's waited behind all
+  of them (each about 75 ms at atm; up to 1.8 s in the queue).
+- **Jumps** (Chromium): a jump to the top or the end blocked the page for 3 s.
+
+**What this round changes:**
+
+5. **Highlighting takes turns** (`render-turns.ts`, `CompMd.svelte`'s `plain`): a run of code shows as written at
+   once and is highlighted by CompMD when its turn comes, one at a time, the one nearest the view first, each when the
+   page is idle after the one before has drawn. The plain lines give way the moment CompMD has drawn (both at once
+   made the run twice as tall for a frame, which moved the lines under a drag), and no turn starts while a mouse
+   button is held.
+8. **Sides asked for four at a time, the latest first** (`review-data.ts`, `LOADS_AT_ONCE`): what the reader is
+   looking at now goes before the files already passed.
+9. **A long file waits as tall as its lines** (`ReviewFile.svelte`, the estimate no longer capped at 4,000 px):
+   measuring showed the end of the review moving away from a reader who had just scrolled to it, by up to 3,400 px,
+   as a 600-line file near the end grew from 4,000 px to 12,000 once drawn; the last file was then far again, and in 3
+   runs of 4 not drawn until the reader scrolled on.
+
+**Measured again** (the same review, 3 to 4 runs; Chromium / WebKit):
+
+| | Before | After |
+|---|---|---|
+| Opening: blocked in its first 5 s | 0.1 s / 2–3.6 s | 0 s / 1.4 s (one frame, below) |
+| Scrolled to the end: the last file drawn | 2.9 s / 4.9 s | 1.0–1.8 s / 1.4–3.0 s |
+| A jump to the top, then the end: blocked | 3.0 s / 1.0 s | under 0.1 s / 0.1–0.3 s |
+| The slowest side, in the queue | 1.3 s / 1.8 s | 0.16 s / 0.09–0.11 s |
+
+**What is left: one frame of 1.5 s in WebKit**, the first TypeScript run highlighted on the page. Timed alone, it is
+CompMD's highlighter (Shiki) readying the TypeScript grammar, once per page, in WebKit (Chromium: a few ms). That is
+CompMD's to fix, not atm's (it draws the code; atm shows it): proposed as a CompMD task, with these numbers.
+
+**Next:** that CompMD task; atm's own cost per side (about 75 ms, five git processes and the project opened per
+request; 6 and 7 above, as backlog tasks).

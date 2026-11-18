@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Fetch } from '../../src/lib/api/http';
 import { writeStored } from '../../src/lib/prefs';
 import {
+  LOADS_AT_ONCE,
   SOURCES_CAP,
+  sideLoads,
   VIEWED_CAP,
   VIEWED_KEY,
   isViewed,
@@ -135,6 +137,34 @@ describe('a round’s side', () => {
       expect(
         (await revisionDocuments('p1', 't', fetching(status, '{"error":"no"}')).load('a.md')) as object,
       ).toMatchObject({ error: 'refused' });
+  });
+
+  it(`asks for ${LOADS_AT_ONCE} files at a time; the rest wait, the one asked for last first (ATM-587)`, async () => {
+    // Each answer held until let go, to see what is asked for when
+    const held: { url: string; answer: () => void }[] = [];
+    const fetch = vi.fn(
+      (url: string) =>
+        new Promise<Response>((resolve) => held.push({ url, answer: () => resolve(new Response('{}')) })),
+    ) as unknown as Fetch;
+    const side = revisionDocuments('p1', 'queue', fetch);
+    const names = Array.from({ length: LOADS_AT_ONCE + 3 }, (_, i) => `f${i}.md`);
+    const loads = names.map((name) => side.load(name));
+    const asked = () => held.map((h) => new URL(h.url, 'http://x').searchParams.get('path'));
+    expect(asked()).toEqual(names.slice(0, LOADS_AT_ONCE));
+    expect(sideLoads()).toEqual({ loading: LOADS_AT_ONCE, waiting: 3 });
+    // One answered: the last asked for goes next, then the one before it
+    held[0].answer();
+    await vi.waitFor(() => expect(asked()).toHaveLength(LOADS_AT_ONCE + 1));
+    expect(asked().at(-1)).toBe(names.at(-1));
+    held[1].answer();
+    await vi.waitFor(() => expect(asked()).toHaveLength(LOADS_AT_ONCE + 2));
+    expect(asked().at(-1)).toBe(names.at(-2));
+    for (let i = 2; i < names.length; i++) {
+      await vi.waitFor(() => expect(held.length).toBeGreaterThan(i));
+      held[i].answer();
+    }
+    await Promise.all(loads);
+    expect(sideLoads()).toEqual({ loading: 0, waiting: 0 });
   });
 });
 

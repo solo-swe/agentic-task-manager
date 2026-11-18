@@ -303,6 +303,14 @@ describe('ReviewFile: its diff, made when near the view', () => {
     expect(io.disconnect).toHaveBeenCalled();
   });
 
+  // CompMD's CR-1: a long file stood shorter than its lines, so the end moved away once it was drawn (ATM-587)
+  it('a long file waits as tall as all its lines, however many', () => {
+    observer();
+    const lines = Array.from({ length: 600 }, (_, i) => `+line ${i}`).join('\n');
+    const { container } = show({ file: file({ patch: `@@ -0,0 +1,600 @@\n${lines}\n` }) });
+    expect(container.querySelector('.review-file-later')).toHaveStyle({ height: `${(600 + 8) * 20}px` });
+  });
+
   it('a card only near the view waits for the page to be idle; one that comes into view meanwhile is made at once', async () => {
     const io = observer();
     let idle: (() => void) | null = null;

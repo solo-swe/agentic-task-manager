@@ -48,7 +48,8 @@
     onover?: (index: number) => void;
   } = $props();
 
-  const text = $derived(fenced(lines.map((l) => l.text).join('\n'), language));
+  const source = $derived(lines.map((l) => l.text).join('\n'));
+  const text = $derived(fenced(source, language));
 
   let el = $state<HTMLElement>();
   let layout = $state<{ top: number; lineHeight: number } | null>(null);
@@ -155,7 +156,8 @@
       </div>
     {/each}
   {/if}
-  <CompMd {text} />
+  <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
+  <CompMd {text} plain={source} />
 </div>
 
 <style>

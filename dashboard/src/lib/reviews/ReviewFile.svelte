@@ -176,7 +176,9 @@
     return () => far.disconnect();
   });
   /** How tall a diff not made yet stands: the height it had, else about its lines, so the scroll bar is about right */
-  const estimate = $derived(measured || Math.min(4000, (counts.added + counts.removed + 8) * 20));
+  // No cap (ATM-587, CompMD's CR-1): a 600-line file stood at 4,000 px and grew to 12,000 once drawn, so the end of the
+  // review moved away from a reader who had just scrolled to it
+  const estimate = $derived(measured || (counts.added + counts.removed + 8) * 20);
 </script>
 
 <section

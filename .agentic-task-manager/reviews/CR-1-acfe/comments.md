@@ -22,3 +22,15 @@
     They come in this review: I am building 1 to 4 now, and the next round will be the code with this document, the title kept. The round after the proposal comes with the numbers measured again against the budgets.
     - **Hakan Serce** · 2026-11-18T01:00:14Z · c7
       ok, I am keeping this open then, add the files again and set the state to review requested or whatever is the appropriate state after that, then.
+  - **claude:0f56a916** · 2026-11-18T01:13:13Z · c8
+    The code is in this review now: round 5 is the commit with steps 1 to 4 (the cards, the far files, the chunks, the cache), their tests, and this document with the numbers after them (*Built, and measured again*). The title stays. The Description says what changed and one budget that differs from what was asked: 100 ms a step, not 50.
+
+## (the review) · round 5 · t3
+- [x] **Hakan Serce** · 2026-11-18T01:32:15Z · c9
+  the values you are showing in the measurements are small (83 ms) or didn't change too much from a user perspective (2.7 to 1.4 s). So, I am not sure if we are measuring the actual user experience correctly. Because 83ms seems fast enough to me, but reality definitely feels heavier, like 2 seconds or so.
+
+  And scrolling to the bottom is a totally different story, because it actually cannot render for a while, I would say it is more like around 10 seconds mark than 2 in terms of how it feels, maybe during scrolling renderings keep queueing up or something.
+  - **claude:0f56a916** · 2026-11-18T01:32:48Z · c10
+    Agreed: the test misses what makes the app heavy. It draws plain text in Chromium from a mocked server. The app draws CompMD-highlighted sides (and renders the 394 KB spec), each fetched from atm, in WebKit (the app is a WKWebView, not Chromium). I am measuring CMD CR-1 itself next: the real review served by atm, in WebKit and Chromium, opening the Diffs tab and scrolling to the bottom, with where the time goes (highlighting, layout, requests). Then I fix what that shows and put the real numbers in this document, replacing the test-only ones.
+    - **Hakan Serce** · 2026-11-18T01:33:41Z · c11
+      that sounds better.

@@ -41,8 +41,37 @@ const sources = new WeakMap<Fetch, Map<string, DocumentSource>>();
 /** At most this many sides are kept per client; the oldest go first */
 export const SOURCES_CAP = 64;
 
+/** How many sides are asked for at once (ATM-587, measured on CompMD's CR-1: scrolled to its end, the 160 sides of the
+ * files passed were asked for at once, so the last file's waited behind all of them, in the browser's queue, almost
+ * 2 s). The rest wait, the one asked for last first: the one nearest where the reader is now. */
+export const LOADS_AT_ONCE = 4;
+const queued: (() => void)[] = [];
+let loading = 0;
+
+/** `load` when fewer than LOADS_AT_ONCE are being asked for; else after them, the latest asked first */
+function inTurn<T>(load: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const go = () => {
+      loading += 1;
+      load()
+        .then(resolve, reject)
+        .finally(() => {
+          loading -= 1;
+          queued.pop()?.();
+        });
+    };
+    if (loading < LOADS_AT_ONCE) go();
+    else queued.push(go);
+  });
+}
+
+/** For tests: how many sides are being asked for, and how many wait */
+export function sideLoads(): { loading: number; waiting: number } {
+  return { loading, waiting: queued.length };
+}
+
 /** A round's side: the project's files as commit or tree `revision` has them; never changing, so each file is loaded
- * once (a failed load is asked again next time) */
+ * once (a failed load is asked again next time), LOADS_AT_ONCE at a time */
 export function revisionDocuments(project: string, revision: string, fetchFn: Fetch = browserFetch): DocumentSource {
   const id = `${project}@${revision}`;
   let made = sources.get(fetchFn);
@@ -55,7 +84,7 @@ export function revisionDocuments(project: string, revision: string, fetchFn: Fe
     load: (path) => {
       let loading = files.get(path);
       if (!loading) {
-        loading = loadDocument(project, path, fetchFn, undefined, revision);
+        loading = inTurn(() => loadDocument(project, path, fetchFn, undefined, revision));
         files.set(path, loading);
         loading.then(
           (result) => 'error' in result && files.delete(path),
