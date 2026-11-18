@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 630
+    "next_number": 638
   },
   "tasks": [
     {
@@ -16669,7 +16669,7 @@
       "description": "On a review's Diffs tab the file tree (left) and the diffs (right) list the files in different orders (Hakan, 2026-11-18: in CompMD's CR-1, `pnpm-lock.yaml` is at the end of the tree but in the middle of the diffs). The tree sorts as a tree (folders, then their files), the diffs come in git's order (the patch's, by path).\n\n## Change\n- One order for both, the tree's (as you read it top to bottom, folders before the files beside them, each level by name): the diffs, the next and previous file, change and comment (`n p c C`), the round's file select and the Viewed count's order all follow it ([`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte), the view's `files`).\n- Folding a folder in the tree (ATM-595) folds nothing on the right; the order stays the same.\n\n## Tests\nA unit test of the order (a root file, nested folders, a lock file at the root: tree order and diff order equal); an e2e test in `reviews.spec.ts` that the cards' order is the tree's.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -16677,9 +16677,9 @@
         "dashboard/tests/unit/page.test.ts"
       ],
       "created_at": "2026-11-18T00:33:32Z",
-      "updated_at": "2026-11-18T00:33:32Z",
+      "updated_at": "2026-11-18T21:47:40Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16694,7 +16694,9 @@
         "01a1ec10-21dd-74ec-85fb-c2da5d38f9c1"
       ],
       "number": 596,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T21:47:40Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ec2c-e2f8-7691-a51b-917d14a06947",
@@ -18430,7 +18432,7 @@
       "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): writing a comment on the **Rendered** view of a Markdown file, the comment box and the rendered document mix up: the document is drawn over the box.\n\n## Leads\n- Stacking: the rendered side's marks (`.diff-block-mark`, absolutely placed), the `doc-sheet`'s own stacking context, CompMD's page (`.compmd-page`, possibly positioned, or a frame for a component), the sticky card header (`z-index: 2`) and the fold rows (`z-index: 1`, ATM-590). The composer needs to sit above the document it comments on.\n- Where the composer is placed in the rendered view: inside the part, between parts, or absolutely at the picked block; a box placed in the flow of a part CompMD owns would be redrawn or overlapped by it.\n\nReproduce first: an e2e in `reviews.spec.ts` that picks a block in the Rendered view and checks that the composer is the topmost element at its centre (`document.elementFromPoint`).\n\n## Tests\nThat e2e, in a split and a single-side rendered view, light and dark.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
@@ -18438,7 +18440,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T21:09:58Z",
-      "updated_at": "2026-11-18T21:42:11Z",
+      "updated_at": "2026-11-18T21:47:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18454,7 +18456,24 @@
       "number": 627,
       "key_final": false,
       "started_at": "2026-11-18T21:42:11Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "aefdbc036344fdffb19ce701576e652f2ce2040b",
+      "code_reviews": [
+        {
+          "id": "01a1f0a1-30cc-7667-8d0b-4a204e3280a4",
+          "ref": "CR-29"
+        }
+      ],
+      "review_requested_at": "2026-11-18T21:47:38Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T21:47:38Z",
+          "kind": "review",
+          "text": "CR-29: Rendered view: the comment box opens under the text selected",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f085-5db5-7457-84cd-64c4ee4ab844",
@@ -18528,6 +18547,324 @@
       ],
       "number": 629,
       "key_final": false
+    },
+    {
+      "id": "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
+      "name": "A review finds its task by an alias or an old key, so its approval counts after the task's number moved",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-19), from an agent closing a task in CompMD: CR-6 was opened while the task's key was provisional (`~CMD-250`); once the key was final (`CMD-250`), atm no longer matched CR-6's approval to the task, and the agent recorded the approval by hand.\n\nADR-009 (ATM-634) removes provisional keys (ATM-635), so the `~` mismatch goes with them. What remains is the same class of bug for a task whose number **moves at a merge** (ATM-636): its reviews name it by the key it had.\n\n## Change\nWherever atm goes from a review to its task, or from a task to its reviews, it resolves the review's key the way every command does (ADR-007 §5): a current key, an alias, an earlier prefix, or a leading `~` from an old review file. This covers the approval check in `atm task state … done`, `atm task review approve`, `atm loop next` handing tasks back from review, the review list and pages, and `atm review watch`'s `task`. Reviews keep storing keys (as decided: no UUIDs in `review.md`).\n\n## Tests\n- Unit: a review naming `X-5` finds the task now `X-9` with alias `X-5`; a review naming `~X-5` (an old file) finds `X-5`.\n- CLI scenario: a review is opened on a task, the task's number moves at a merge, the review is approved, and `atm task state <new key> done` is accepted with no manual approval.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f0b9-f451-744a-956a-239abe8c0ea5",
+        "01a1f0b9-f451-744a-956a-239bff26047e"
+      ],
+      "files": [
+        "crates/atm-review/src/folder.rs",
+        "crates/atm-cli/src/commands/review.rs",
+        "tests/scripts/scenarios"
+      ],
+      "created_at": "2026-11-18T21:55:02Z",
+      "updated_at": "2026-11-18T22:15:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:55:02Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 630,
+      "key_final": false,
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
+      "name": "Opening a review moves its task into review, or refuses: never a review beside a task that didn't move",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-19), from an agent in CompMD: its claim lapsed while the checks ran, so the task went back to to do. `atm review create --task` then opened CR-6 without complaint, but the task stayed in to do. The review and the task disagreed, and the agent had to take the task to in progress, then into review by hand.\n\n## Change\nWhat `atm review create --task <key>` does for each state of the task:\n- **in progress, claimed by the author:** into review, as now;\n- **to do, after the author's own claim lapsed, and no one claimed it since:** into review too, with a note that the claim had lapsed;\n- **claimed by another agent, done, skipped, already in review with another open review, or blocked:** refuse and write nothing, saying why and what to run. No review is created.\n\nThe whole command succeeds or changes nothing: never a review on disk beside a task that didn't move. Update `atm docs reviews` with the rule.\n\n## Tests\nCLI scenarios for each row above, each checking both the review folder and the task's status.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-cli/src/commands/review.rs",
+        "docs/agent/reviews.md",
+        "tests/scripts/scenarios"
+      ],
+      "created_at": "2026-11-18T21:55:02Z",
+      "updated_at": "2026-11-18T21:57:01Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:55:02Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 631,
+      "key_final": false,
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "01a1f0a7-f9d3-77df-81fe-542d0d2f9a0d",
+      "name": "A claim lapsed while the checks ran: find why, and fix atm or the skills",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-19), from an agent in CompMD: its claim lapsed (19:44) while the task's checks ran, before it opened the review. The task went back to to do (see the task about opening a review on such a task).\n\nThe report doesn't say whether the checks ran under `atm claim hold <key> && <command>`.\n\n## Investigate\n- Reproduce a hold over a command that runs past the lease, with a short lease (the tests' way of setting one). Does the watcher renew the lease until the shell exits? Does it also hold when the command is a long chain, when the agent's harness runs it in the background, or when the shell is replaced (`exec`)?\n- Read the skills' wording on long commands (`/atm-do-task` and `/atm-loop-tasks`, rule 3) and what `atm` prints when a claim is about to lapse.\n\n## Fix\n- If the hold failed: fix it in atm, with a CLI test that a held claim outlives the lease.\n- If the checks weren't held: make the skills say it where agents run checks (verify step, before a review), and consider atm warning when a command finds its own claim lapsed and the task back in to do (with how to take it back).\n\nWrite in the task's outcome which case it was.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "skills/atm-do-task/SKILL.md",
+        "skills/atm-loop-tasks/SKILL.md",
+        "tests/scripts"
+      ],
+      "created_at": "2026-11-18T21:55:02Z",
+      "updated_at": "2026-11-18T21:55:02Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:55:02Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 632,
+      "key_final": false
+    },
+    {
+      "id": "01a1f0a7-f9d3-77df-81fe-542effbd4355",
+      "name": "One state machine for tasks and their reviews",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Hakan (2026-11-19): the rules for how a task's status and its reviews change together are spread across commands and keep breaking. Today's three bugs: a review's approval lost when the task's key changed (ATM-630), a review opened beside a task that didn't move (ATM-631), and a lapsed claim leaving a task half in review (ATM-632). They should be one explicit state machine.\n\nDesigned **with Hakan**: propose it, agree on it, then build it.\n\n## Design (a document in `docs/`, reviewed with Hakan as a CR)\n- **States:** a task's status kinds (`todo`, `active`, `review`, `blocked`, `done`, `skipped`), each with its claim (none, held, lapsed) and its reviews (none, open, rounds, changes requested, approved, closed, live).\n- **Events:** claim, a claim lapsing, release, commit, review created, a round added, a comment, request changes, approve, reject, close, push or merge, the task's number moved at a merge (ADR-009: its old key an alias), and a user's answer.\n- **The table:** for each state and event, the next state or a refusal with its message. No event leaves a task and its review disagreeing.\n- A diagram of it (Mermaid), and where it lives in the layers: one module in `atm-lib` that every command and the dashboard's API go through.\n- Today's rules mapped onto it: what changes, and what an existing project's tasks and reviews look like after the move (a migration if any).\n\n## Build (after the design is agreed)\n- One module holds the transitions; the CLI commands, the REST routes and the app call it, and none sets a status on its own.\n- Unit tests: a table of every state × event, each with its expected next state or refusal, including the three bugs above as cases.\n- The agent docs (`atm docs states`, `atm docs reviews`) are written from the same table.\n\nMay be split into design and build tasks once the design is agreed.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
+        "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
+        "01a1f0a7-f9d3-77df-81fe-542d0d2f9a0d",
+        "01a1f0b9-f451-744a-956a-23995623df35"
+      ],
+      "files": [
+        "docs/task-review-state-machine.md",
+        "crates/atm-lib/src",
+        "docs/agent/states.md",
+        "docs/agent/reviews.md"
+      ],
+      "created_at": "2026-11-18T21:55:02Z",
+      "updated_at": "2026-11-18T22:15:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:55:02Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "with": "user",
+      "number": 633,
+      "key_final": false,
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "01a1f0b9-f451-744a-956a-23995623df35",
+      "name": "ADR-009: task keys are plain from creation; a clash at merge moves the incoming task to the next free number",
+      "type": "docs",
+      "priority": "P0",
+      "labels": [
+        "keys"
+      ],
+      "description": "Hakan (2026-11-19): no draft (provisional) keys any more. \"T- era but better\": keep what ADR-007 got right, drop the provisional marker that every new task carried.\n\n## The decision to record\n- **Kept from ADR-007:** the UUID is the stored identity (§1), the project key and its history (§2), merges match tasks by UUID (§4), and every place that takes a task accepts a key, an alias or a UUID (§5).\n- **Gone:** `key_final`, `finalize_keys`, the `~` in the CLI and the draft mark in the dashboard (§3). A key is shown plain from the moment its task is created.\n- **A clash at merge:** when the incoming side has a task with a number the other side already uses, the incoming task takes the next free number (above both sides' numbers and `meta.next_number`), whichever side its task was made on. It keeps its old key as an alias (`aliases`), so a commit, a note or a review written on its branch still finds it, and atm says it moved (\"ATM-538 is now ATM-641\"). Two tasks never share a number in a merged file; the merge never stops on a clash.\n- **Why:** the provisional marker never prevented a renumber; it only labelled every new task as one that *might* move, and its bookkeeping caused the bugs (ATM-623: keys left draft after a direct push; CMD-250: a review's approval lost under `~CMD-250`; the `~` read as a home folder by zsh). Clashes are rare; the alias covers them.\n- **Options considered** (from the discussion with Hakan): a minor number on a clash (`ATM-630.2`), a counter per machine, reserving numbers on the remote with git refs, hash keys (as beads moved to), duplicate numbers told apart at lookup (git-bug's stance), number ranges per agent. Say in a line each why they were not taken.\n- **Migration:** today's provisional keys become plain as they are; `key_final` is dropped from `tasks.json` and the archive by `atm db migrate`.\n\n## Change\n- `docs/adr/ADR-009-task-keys-plain-from-creation.md` (status, context, decision, consequences), and ADR-007's status line: §3 and §4's provisional rules replaced by ADR-009.\n- Opened as a review for Hakan (`atm review create --task … --file docs/adr/ADR-009-…`); the code tasks start once it is approved.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "docs/adr/ADR-009-task-keys-plain-from-creation.md",
+        "docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md"
+      ],
+      "created_at": "2026-11-18T22:14:40Z",
+      "updated_at": "2026-11-18T22:32:35Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T22:14:40Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 634,
+      "key_final": false,
+      "components": [
+        "docs"
+      ],
+      "started_at": "2026-11-18T22:32:35Z",
+      "started_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f0b9-f451-744a-956a-239abe8c0ea5",
+      "name": "atm: no provisional keys: drop key_final, finalize_keys and the ~; migrate existing files",
+      "type": "refactor",
+      "priority": "P0",
+      "labels": [
+        "keys"
+      ],
+      "description": "ADR-009 (the task before this): keys are plain from creation.\n\n## Change\n- **Model and schema:** `key_final` leaves `task.schema.json`, `api.schema.json` and the Rust model; `--json` no longer carries it.\n- **Gone:** `finalize_keys` and every caller: `atm vcs pushed` (with and without `--pr`: it still records merges and releases, it no longer touches keys), `atm db migrate`'s key check, `atm task add`'s output. The direct-push step ATM-623 added to `/atm-push` (`atm vcs pushed` after a direct push) stays only if it still records something; otherwise it goes from the skill.\n- **The `~`:** never printed (`atm-common`'s `keys.rs`, the CLI's task, review and summary output, review files written by `atm-review`, commit messages). Input still accepts a leading `~` (old notes, old commits, old review files) and ignores it, so nothing written before breaks.\n- **Migration:** `atm db migrate` drops `key_final` from `tasks.json` and `tasks-archive.json`, once, and says so.\n- **Docs and skills:** `atm docs tasks`, `atm docs commands`, `atm docs reviews` and the skills say nothing of provisional keys; agents write keys plain.\n\n## Tests\n- Unit: keys print plain; `~ATM-5` and `ATM-5` find the same task.\n- Migration: a file with `key_final` true and false loads, migrates once, and is stable after.\n- CLI scenarios: `atm task add` prints the plain key; `atm vcs pushed` without `--pr` changes no task; the commands that took `~KEY` still do.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f0b9-f451-744a-956a-23995623df35"
+      ],
+      "files": [
+        "crates/atm-common/src/keys.rs",
+        "crates/atm-common/schema/task.schema.json",
+        "crates/atm-common/schema/api.schema.json",
+        "crates/atm-lib/src/edit.rs",
+        "crates/atm-lib/src/summary.rs",
+        "crates/atm-lib/src/reviews.rs",
+        "crates/atm-lib/src/foreign.rs",
+        "crates/atm-lib/src/project.rs",
+        "crates/atm-lib/src/code.rs",
+        "crates/atm-db/src/jsongit/migrate/keys.rs",
+        "crates/atm-db/src/jsongit/files.rs",
+        "crates/atm-review/src/files.rs",
+        "crates/atm-cli/src/commands.rs",
+        "crates/atm-cli/src/commands/task.rs",
+        "crates/atm-cli/src/commands/vcs.rs",
+        "crates/atm-cli/src/commands/db.rs",
+        "docs/agent/tasks.md",
+        "docs/agent/commands.md",
+        "skills/atm-push/SKILL.md"
+      ],
+      "created_at": "2026-11-18T22:14:40Z",
+      "updated_at": "2026-11-18T22:14:53Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T22:14:40Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 635,
+      "key_final": false,
+      "components": [
+        "docs",
+        "cli"
+      ]
+    },
+    {
+      "id": "01a1f0b9-f451-744a-956a-239bff26047e",
+      "name": "Merge driver: a number clash always moves the incoming task to the next free number, with an alias",
+      "type": "refactor",
+      "priority": "P0",
+      "labels": [
+        "keys"
+      ],
+      "description": "ADR-009: without provisional keys, the merge driver can't tell a final number from a provisional one, and it no longer needs to.\n\n## Change (`crates/atm-db/src/jsongit/merge.rs`)\n- Two different tasks (different UUIDs) with the same number: the **incoming** side's task takes the next free number (above both sides' numbers and `meta.next_number`) and keeps its old key in `aliases`. The case that stops the merge today (\"two final numbers\") goes: a clash never stops a merge.\n- `meta.next_number` merges as the larger of the two, past the moved number.\n- What moved is reported once: the merge leaves a record that the next atm command prints (\"ATM-538 is now ATM-641 (both branches made ATM-538)\"), or `atm db migrate` does; decide which in the task and write it in `atm docs tasks`.\n- References are UUIDs, so nothing else is rewritten; text written outside the file (commits, notes, reviews) finds the task by its alias.\n\n## Tests (`merge/tests.rs`, and a CLI test with two branches)\n- Each side adds one task with the same number: both kept, the incoming one moved, its alias set, `next_number` past both.\n- Several clashes in one merge; a clash with an archived task's number; the same task (same UUID) changed on both sides (not a clash).\n- After the merge, `atm task details ATM-538` finds the moved task by its alias and says it moved.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f0b9-f451-744a-956a-23995623df35"
+      ],
+      "files": [
+        "crates/atm-db/src/jsongit/merge.rs",
+        "crates/atm-db/src/jsongit/merge/tests.rs",
+        "tests/scripts",
+        "docs/agent/tasks.md"
+      ],
+      "created_at": "2026-11-18T22:14:40Z",
+      "updated_at": "2026-11-18T22:14:54Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T22:14:40Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 636,
+      "key_final": false,
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "01a1f0b9-f451-744a-956a-239c2914aed8",
+      "name": "Dashboard: keys shown plain, no draft mark; a moved task shows the key it had",
+      "type": "refactor",
+      "priority": "P0",
+      "labels": [
+        "keys"
+      ],
+      "description": "ADR-009: the dashboard and the app show every key plain.\n\n## Change\n- The draft mark, its tooltip and its lighter style go (`ui/TaskKey.svelte`, `keys.ts`, and where they are used: `TaskCard`, `DetailPanel`, `DepGraph`, `ProjectCard`, `waiting.ts`, `compmd.ts`'s task data).\n- A task whose number moved at a merge says so in its details (\"was ATM-538\"), from its `aliases`; an address or link with the old key (`?task=ATM-538`) opens it.\n- The generated types follow the schema (no `key_final`).\n\n## Tests\nUnit tests of `keys.ts` and `TaskKey`; an e2e that a task's key shows plain on its card and in its details, and that `?task=<alias>` opens the moved task. Screenshots that showed a draft mark are regenerated in the release task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f0b9-f451-744a-956a-239abe8c0ea5"
+      ],
+      "files": [
+        "dashboard/src/lib/ui/TaskKey.svelte",
+        "dashboard/src/lib/keys.ts",
+        "dashboard/src/lib/tasks/TaskCard.svelte",
+        "dashboard/src/lib/details/DetailPanel.svelte",
+        "dashboard/src/lib/graph/DepGraph.svelte",
+        "dashboard/src/lib/overview/ProjectCard.svelte",
+        "dashboard/src/lib/waiting.ts",
+        "dashboard/src/lib/compmd.ts"
+      ],
+      "created_at": "2026-11-18T22:14:40Z",
+      "updated_at": "2026-11-18T22:14:54Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T22:14:40Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 637,
+      "key_final": false,
+      "components": [
+        "dashboard"
+      ]
     }
   ]
 }
