@@ -143,7 +143,10 @@ Before the first task, start the session's one **review watch** (`atm docs revie
 runs: `atm review watch --json` in the background, kept until the loop ends. It prints, one JSON object a line, each
 comment a person adds about your work in any review (a live review of your working copy, a review of a task you
 worked), with the review and the task (or `null`), and each decision on such a review (a line with `decision`:
-`approved`, `changes_requested` or `closed`). Step 7 answers what it printed.
+`approved`, `changes_requested` or `closed`). Step 7 answers what it printed. **Whenever the watch ends** (its time is
+up, or your harness stopped it), start it again at once: it first prints what came while none ran, so nothing is
+missed. Where a background command reports only when it ends, run `atm review watch --json --once` instead, and start
+it again after each time it reports.
 
 ```
 completed_count = 0

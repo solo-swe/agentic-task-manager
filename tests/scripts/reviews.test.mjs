@@ -925,4 +925,71 @@ describe('agents listening (ATM-567)', () => {
       removeDir(root);
     }
   });
+
+  // ATM-624 (Hakan): approvals waited unseen because the agent's watch had lapsed (a harness ends it); a new watch
+  // tells what came meanwhile, once
+  test('a watch catches up on what came while none was watching, once; --once stops after it; --since', () => {
+    // T-1 is the agent's (a.txt): what is said about it is the agent's to hear
+    const root = makeProject({
+      commit: true,
+      files: {
+        '.agentic-task-manager/tasks.json': {
+          meta: { project: 'Catch up' },
+          tasks: [
+            {
+              id: 'T-1',
+              name: 'One',
+              type: 'feature',
+              status: 'in_progress',
+              started_by: AGENT.ATM_AGENT,
+              files: ['a.txt'],
+            },
+          ],
+        },
+        'a.txt': 'a\n',
+      },
+    });
+    const OTHER = { ATM_AGENT: 'claude:other' };
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'Catch up', '--task', 'T-1', '--uncommitted'], root, AGENT);
+      // The first watch ever starts from now: nothing to tell, so --once waits out its time, exit code 3
+      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, AGENT).code, 3);
+      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, OTHER).code, 3);
+      const before = new Date(Date.now() - 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+      // While no watch runs: a comment and a decision
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why changed?'], root, HAKAN);
+      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
+      const told = (r) =>
+        r.stdout
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+          .map((l) => JSON.parse(l));
+      // The next watch tells both at once, in order, and --once stops there
+      const caught = atm(['review', 'watch', '--once', '--json', '--timeout', '10s'], root, AGENT);
+      assert.equal(caught.code, 0, caught.stderr);
+      assert.deepEqual(
+        told(caught).map((h) => h.body ?? h.decision),
+        ['Why changed?', 'changes_requested'],
+      );
+      // Told once: the watch after it has nothing old
+      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, AGENT).code, 3);
+      // Each agent has its own cursor: the other agent's watch (not its work) tells nothing
+      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, OTHER).code, 3);
+      // --since tells from that time, whatever was told
+      const since = atm(['review', 'watch', '--once', '--json', '--since', before, '--timeout', '10s'], root, AGENT);
+      assert.equal(since.code, 0, since.stderr);
+      assert.deepEqual(
+        told(since).map((h) => h.body ?? h.decision),
+        ['Why changed?', 'changes_requested'],
+      );
+      assert.match(
+        atm(['review', 'watch', '--since', 'yesterday', '--timeout', '1s'], root, AGENT).stderr,
+        /--since needs a time like/,
+      );
+    } finally {
+      removeDir(root);
+    }
+  });
 });

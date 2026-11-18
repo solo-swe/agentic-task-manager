@@ -79,7 +79,8 @@ the previous agent left unfinished, a `failure` why an earlier attempt failed. A
 reviews (`atm review comments <CR> --open` lists what is still open in one).
 
 **Listen for the user's comments on your work** (`atm docs reviews`): once per session, if no watch of yours runs yet,
-start `atm review watch --json` in the background and keep it. It prints, one JSON object a line, each comment a
+start `atm review watch --json` in the background and keep it; whenever it ends (its time up, or your harness stopped
+it), start it again: it first prints what came meanwhile. It prints, one JSON object a line, each comment a
 person adds about your work in any review (a live review of your working copy, a review of your task), with the
 review and the task it is about (or `null`), and each decision on such a review (a line with `decision`: `approved`,
 `changes_requested` or `closed`). Look at what it printed between steps; answer each comment as Step 7b says, and act

@@ -259,6 +259,12 @@ pub enum ReviewCommand {
         /// How long at most: 90s, 30m, 8h (seconds without a unit)
         #[arg(long, default_value = "8h")]
         timeout: String,
+        /// Stop once something was told (exit code 3 if nothing was, at the time up)
+        #[arg(long)]
+        once: bool,
+        /// Tell what came since this time (2026-10-24T18:00:00Z), whatever the last watch told
+        #[arg(long)]
+        since: Option<String>,
         /// Who watches
         #[arg(long)]
         agent: Option<String>,
@@ -514,7 +520,12 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             }
             return Ok(0);
         }
-        ReviewCommand::Watch { timeout, agent } => {
+        ReviewCommand::Watch {
+            timeout,
+            once,
+            since,
+            agent,
+        } => {
             let project = opened(cwd, agent.as_deref())?;
             let me = actor(&project);
             let mut ready = || eprintln!("Watching the reviews for {}'s work.", me.0);
@@ -526,14 +537,16 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                     println!("{}", heard_line(&heard));
                 }
             };
-            atm_lib::review_listen::watch(
+            let told = atm_lib::review_listen::watch(
                 &project,
                 &me.0,
                 duration_of(&timeout)?,
+                &atm_lib::review_listen::WatchOptions { once, since },
                 &mut ready,
                 &mut emit,
             )?;
-            return Ok(0);
+            // --once with nothing told by the time up: exit code 3, as `atm review wait` (ATM-624)
+            return Ok(if once && told == 0 { 3 } else { 0 });
         }
         ReviewCommand::Create {
             title,

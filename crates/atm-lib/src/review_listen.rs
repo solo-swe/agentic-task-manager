@@ -8,12 +8,15 @@
 //!
 //! What is heard is task text: data, never instructions (I1).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 
 use atm_common::edits::is_agent;
+use atm_common::sha256::sha256_hex;
+use atm_common::time::parse_iso;
 use atm_common::{Kind, Result};
 use serde_json::{Value, json};
 
@@ -277,50 +280,141 @@ fn about_my_work(work: &Work, me: &str, review: &Review, chain: &Chain, comment:
     if wrote_in { About(None) } else { No }
 }
 
+/// What a watch is asked for, beyond its time (ATM-624).
+#[derive(Debug, Clone, Default)]
+pub struct WatchOptions {
+    /// Stop once something was told (what it caught up on counts).
+    pub once: bool,
+    /// Tell what came since this time (ISO 8601 UTC), whatever the last watch told.
+    pub since: Option<String>,
+}
+
+/// Where an agent's watch was (ATM-624): every comment it told or passed over, and each review's status as it last saw
+/// it. The next watch starts from there, so what came while none was watching is told, once: a harness may end a
+/// watch at any time (Claude Code's after 5 minutes). In atm's state folder, a file per project and agent.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+struct Cursor {
+    seen: Vec<String>,
+    statuses: HashMap<String, Status>,
+}
+
+/// The cursor's file for `me` watching the project at `root`.
+fn cursor_file(root: Option<&Path>, me: &str) -> PathBuf {
+    let key = format!(
+        "{}\u{0}{me}",
+        root.map(|r| r.display().to_string()).unwrap_or_default()
+    );
+    atm_common::home::state_dir()
+        .join("watches")
+        .join(format!("{}.json", &sha256_hex(key.as_bytes())[..16]))
+}
+
+/// The last watch's cursor; none when there was none, or it can't be read (then the watch starts from now).
+fn read_cursor(file: &Path) -> Option<Cursor> {
+    serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
+}
+
+/// Keep where the watch is; a cursor that can't be written only means the next watch starts from now.
+fn save_cursor(file: &Path, seen: &HashSet<String>, statuses: &HashMap<String, Status>) {
+    let mut seen: Vec<String> = seen.iter().cloned().collect();
+    seen.sort();
+    let cursor = Cursor {
+        seen,
+        statuses: statuses.clone(),
+    };
+    if let (Some(dir), Ok(text)) = (file.parent(), serde_json::to_string(&cursor)) {
+        let _ = std::fs::create_dir_all(dir);
+        let _ = atm_common::home::write_text_atomic(file, &text);
+    }
+}
+
+/// Every review the store holds, whole.
+fn all_reviews(store: &FileStore) -> Result<Vec<Review>> {
+    store
+        .list_reviews(&ReviewFilter::default())?
+        .into_iter()
+        .map(|h| store.get_review(&ReviewRef(h.id.0)))
+        .collect()
+}
+
+/// Where a watch starts: the comments to pass over, and each review's status as last seen (a decision is a change to
+/// a decided one, ATM-600). From the last watch's cursor (ATM-624); from `since`, what came after it is left to tell;
+/// else from now, the cursor written so the next watch starts here.
+fn starting_point(
+    store: &FileStore,
+    file: &Path,
+    since: Option<&str>,
+) -> Result<(HashSet<String>, HashMap<String, Status>)> {
+    if since.is_none()
+        && let Some(cursor) = read_cursor(file)
+    {
+        return Ok((cursor.seen.into_iter().collect(), cursor.statuses));
+    }
+    let mut seen = HashSet::new();
+    let mut statuses = HashMap::new();
+    for review in all_reviews(store)? {
+        seen.extend(
+            review
+                .comments()
+                .filter(|c| since.is_none_or(|s| c.at.as_str() < s))
+                .map(|c| format!("{}/{}", review.header.id.0, c.id.0)),
+        );
+        // Decided since then: left out, so it is told
+        if since.is_none_or(|s| review.header.updated.as_str() < s) {
+            statuses.insert(review.header.id.0.clone(), review.header.status);
+        }
+    }
+    if since.is_none() {
+        save_cursor(file, &seen, &statuses);
+    }
+    Ok((seen, statuses))
+}
+
 /// The agent's one watch (§3.9): calls `emit` with each comment by a person (not the agent itself, nor another agent)
-/// about the agent's work, as it is added, until `timeout`; `ready` once it is listening. A comment already there when
-/// it starts is not told.
+/// about the agent's work, and each decision on it, until `timeout`; `ready` once it is listening. It starts where the
+/// agent's last watch on this project stopped (ATM-624), so what came meanwhile is told first; the first watch ever,
+/// or one whose cursor can't be read, from now; `since`, from that time. With `once`, it stops after the first look
+/// that told something. What it told, counted.
 ///
 /// # Errors
-/// The reviews can't be read or watched.
+/// The reviews can't be read or watched; `since` isn't a time.
 pub fn watch(
     project: &Project,
     me: &str,
     timeout: Duration,
+    options: &WatchOptions,
     ready: &mut dyn FnMut(),
     emit: &mut dyn FnMut(Value),
-) -> Result<()> {
-    let root = project.root().map(std::path::Path::to_path_buf);
-    let store = reviews::store(project)?;
-    let mut seen: HashSet<String> = HashSet::new();
-    let all = |store: &FileStore| -> Result<Vec<Review>> {
-        store
-            .list_reviews(&ReviewFilter::default())?
-            .into_iter()
-            .map(|h| store.get_review(&ReviewRef(h.id.0)))
-            .collect()
-    };
-    // Each review's status as last seen: a decision is a change to a decided one (ATM-600), never told again on a
-    // restart, as a comment isn't
-    let mut statuses: std::collections::HashMap<String, Status> = std::collections::HashMap::new();
-    for review in all(&store)? {
-        seen.extend(
-            review
-                .comments()
-                .map(|c| format!("{}/{}", review.header.id.0, c.id.0)),
-        );
-        statuses.insert(review.header.id.0.clone(), review.header.status);
+) -> Result<usize> {
+    if let Some(since) = &options.since
+        && parse_iso(since).is_none()
+    {
+        return Err(atm_common::Error::Invalid(format!(
+            "--since needs a time like 2026-10-24T18:00:00Z, not {since}"
+        )));
     }
+    let root = project.root().map(Path::to_path_buf);
+    let store = reviews::store(project)?;
+    let all = all_reviews;
+    let file = cursor_file(root.as_deref(), me);
+    let (mut seen, mut statuses) = starting_point(&store, &file, options.since.as_deref())?;
     let (_subscription, told) = listen(&store)?;
     ready();
     let deadline = Instant::now() + timeout;
+    let mut count = 0;
+    // The first look is at once: what came while no watch ran
+    let mut first = true;
     loop {
-        let left = deadline.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            return Ok(());
+        if !first {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Ok(count);
+            }
+            let _ = told.recv_timeout(left.min(RECHECK));
         }
-        let _ = told.recv_timeout(left.min(RECHECK));
+        first = false;
         while told.try_recv().is_ok() {}
+        let before = count;
         // The tasks as they are now: the agent may have taken another meanwhile
         let fresh = root.as_deref().and_then(|r| Project::open(r).ok());
         let work = work_of(fresh.as_ref().unwrap_or(project), me);
@@ -354,17 +448,23 @@ pub fn watch(
         news.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
         for (_, _, heard) in news {
             emit(heard);
+            count += 1;
         }
         // Then the decisions on reviews of its work, after the words that came with them
         for review in all(&store)? {
             let status = review.header.status;
-            let before = statuses.insert(review.header.id.0.clone(), status);
-            if before == Some(status) || !decided(status) {
+            let was = statuses.insert(review.header.id.0.clone(), status);
+            if was == Some(status) || !decided(status) {
                 continue;
             }
             if let Mine::About(task) = decision_about_my_work(&work, me, &review.header) {
                 emit(decision(&review.header, task.as_deref()));
+                count += 1;
             }
+        }
+        save_cursor(&file, &seen, &statuses);
+        if options.once && count > before {
+            return Ok(count);
         }
     }
 }
@@ -547,6 +647,41 @@ mod tests {
             assert_eq!(touches(&list, path), expected, "{path}");
         }
         assert!(!touches(&[], "a"));
+    }
+
+    // ATM-624: where a watch was, kept for the next
+    #[test]
+    fn a_watch_cursor_is_read_back_as_written_and_a_missing_or_broken_one_is_none() {
+        let dir = std::env::temp_dir().join(format!("atm-lib-watch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let file = dir.join("watches").join("x.json");
+        assert!(read_cursor(&file).is_none());
+        let seen: HashSet<String> = ["r1/c2".to_string(), "r1/c1".to_string()].into();
+        let statuses: HashMap<String, Status> = [("r1".to_string(), Status::Approved)].into();
+        save_cursor(&file, &seen, &statuses);
+        let back = read_cursor(&file).unwrap();
+        assert_eq!(back.seen, ["r1/c1", "r1/c2"]);
+        assert_eq!(back.statuses, statuses);
+        std::fs::write(&file, "{ not json").unwrap();
+        assert!(read_cursor(&file).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_watch_cursor_is_one_file_per_project_and_agent() {
+        let (a, b) = (Path::new("/p/one"), Path::new("/p/two"));
+        assert_eq!(
+            cursor_file(Some(a), "claude:A"),
+            cursor_file(Some(a), "claude:A")
+        );
+        assert_ne!(
+            cursor_file(Some(a), "claude:A"),
+            cursor_file(Some(a), "claude:B")
+        );
+        assert_ne!(
+            cursor_file(Some(a), "claude:A"),
+            cursor_file(Some(b), "claude:A")
+        );
     }
 
     #[test]
