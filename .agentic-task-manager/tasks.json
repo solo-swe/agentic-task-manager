@@ -16068,14 +16068,14 @@
     },
     {
       "id": "01a1ebff-cd7b-7556-8dc4-7f1a2fd70d41",
-      "name": "Code review: task keys in reviews are links to their tasks",
+      "name": "Code review: a task named in a review opens its details over the review",
       "type": "feature",
       "priority": "P2",
       "labels": [
         "code-review",
         "ux"
       ],
-      "description": "Wherever a review names a task by its key, the key is a link that opens the task's details (`/projects/<id>/list?task=ATM-12`, in the app in this tab, a new tab with ⌘/Ctrl), as the Overview's Tasks fact already does (`taskHref` in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte)). Hakan, 2026-11-18.\n\n## Where\n- The Reviews list's rows ([`ReviewList.svelte`](dashboard/src/lib/reviews/ReviewList.svelte), today `r.tasks.join(', ')` as text); a click on a key opens the task, not the review.\n- The review page's top bar, where it names its tasks, if it does.\n- Keys written in the review's description and in comments (`ATM-12`, an earlier prefix, another project's `LFB-5`): linked as the task text's keys are, only for tasks that exist (the project's own, or another project's atm knows), never a link to nothing. With ATM-586 (document links in the same texts), through the same `CompMd` options.\n\n## Tests\nComponent tests for the list row and a comment's key (known, unknown, another project's); an e2e test in `reviews.spec.ts` that a click opens the task's details.",
+      "description": "A task named in a review opens its **details**, over the review, instead of taking you to the project's task list (Hakan, 2026-11-18: today the Overview's Tasks fact links to `/projects/<id>/list?task=ATM-12`, which leaves the review for the whole list, the details panel open over it; \"you are lost in the full list of tasks\").\n\n## Change\n- A click on a task's key in a review opens that task's details panel on the review's page (`?task=ATM-12` on the review's own address, `/projects/<id>/reviews/CR-7?task=ATM-12`, as the other pages take it); closing it (×, Escape, Back) leaves you where you were in the review: the same tab, round, file and scroll. From the details, the task's own links work as they do anywhere.\n- ⌘/Ctrl-click opens the task in a new tab (in the app, an app tab), at its project's page with its details.\n- The same everywhere a review names a task:\n  - the Overview's Tasks fact (`taskHref` in [`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte));\n  - the Reviews list's rows ([`ReviewList.svelte`](dashboard/src/lib/reviews/ReviewList.svelte), today `r.tasks.join(', ')` as text: a click on a key opens the task, not the review);\n  - the review page's top bar, if it names its tasks;\n  - keys written in the description and the comments (`ATM-12`, an earlier prefix, another project's `LFB-5`), linked only for tasks that exist, never a link to nothing; with ATM-586 (document links in the same texts), through the same `CompMd` options.\n\n## Tests\nComponent tests for the list row and a comment's key (known, unknown, another project's); an e2e test in `reviews.spec.ts`: a click opens the details over the review, closing them leaves the review as it was (tab, file), the address back to the review's; ⌘-click opens a new tab.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -16086,9 +16086,9 @@
         "dashboard/src/lib/reviews/ChainBox.svelte"
       ],
       "created_at": "2026-11-18T00:12:52Z",
-      "updated_at": "2026-11-18T00:12:52Z",
+      "updated_at": "2026-11-18T00:14:32Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
