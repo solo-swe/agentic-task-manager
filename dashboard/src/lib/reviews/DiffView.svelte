@@ -284,6 +284,20 @@
 
   // The rendered view's pick: the lines under the text selected
   let renderedPick = $state<Picked | null>(null);
+  // Where its comment box goes (ATM-627): right under the text selected, over the side it was selected on, in the
+  // rendered view's coordinates. Not after the document: a comment on its first lines was written a document away
+  let renderedEl = $state<HTMLElement>();
+  let pickAt = $state<{ top: number; left: number; width: number } | null>(null);
+  function placePick() {
+    const selection = window.getSelection();
+    const within = renderedEl?.getBoundingClientRect();
+    if (!within || !selection || !selection.rangeCount) return (pickAt = null);
+    const text = selection.getRangeAt(0).getBoundingClientRect();
+    const start = selection.anchorNode;
+    const pane = (start instanceof Element ? start : start?.parentElement)?.closest('.diff-pane');
+    const side = pane?.getBoundingClientRect() ?? within;
+    pickAt = { top: text.bottom - within.top, left: side.left - within.left, width: side.width };
+  }
   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
 
   function cancel() {
@@ -502,7 +516,7 @@
       <div class="diff-more" style:height="{(items.total - limit) * 20}px" aria-hidden="true"></div>
     {/if}
   {:else}
-    <div class="diff-rendered" class:single={sides.length < 2}>
+    <div class="diff-rendered" class:single={sides.length < 2} bind:this={renderedEl}>
       {#each sides as s (s)}
         {@const doc = s === 'old' ? oldDoc : newDoc}
         {#if doc}
@@ -521,6 +535,7 @@
                 : 'After'}
             onpick={oncomment
               ? (p) => {
+                  placePick();
                   renderedPick = p;
                   draft = '';
                 }
@@ -528,8 +543,17 @@
           />
         {/if}
       {/each}
+      {#if composing && oncomment}
+        <div
+          class="diff-rendered-composer"
+          style:top="{pickAt?.top ?? 0}px"
+          style:left="{pickAt?.left ?? 0}px"
+          style:width={pickAt ? `${pickAt.width}px` : '100%'}
+        >
+          {@render composer(composing)}
+        </div>
+      {/if}
     </div>
-    {#if composing && oncomment}{@render composer(composing)}{/if}
   {/if}
 
   {#if loaded && !problem && elsewhere.length}
@@ -704,9 +728,18 @@
     opacity: 0.5;
     cursor: default;
   }
+  /* Its own stacking context: the comment box is above the pages, their marks and folds, and under the card's
+     sticky header */
   .diff-rendered {
+    position: relative;
+    isolation: isolate;
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+  /* The comment box, under the text selected, over the document below it (ATM-627) */
+  .diff-rendered-composer {
+    position: absolute;
+    z-index: 2;
   }
   .diff-rendered.single {
     grid-template-columns: 1fr;

@@ -18233,7 +18233,7 @@
       "description": "Hakan, 2026-11-18: approvals waited unseen in review (CR-20, CR-23) because the agent's watch had lapsed. `atm review watch` runs for 8 hours by default, but a harness may stop it sooner: Claude Code's Monitor ends every watch after 5 minutes. Between one watch and the next, events are lost: nothing tells the agent what happened while it wasn't watching.\n\n## Change\n- **Catch up.** atm keeps, per agent (the watch's `--agent`, else the session's identity), the last event it delivered: a cursor in atm's state folder, not in the project. A new `atm review watch` first prints every event since then (comments, replies, decisions about the agent's work), in order, then follows live. The first watch ever starts from now. `--since <time>` overrides the cursor.\n- **`--once`.** The watch exits after delivering at least one event (the caught-up ones count), exit code 0; at the time up with none, exit code 3, as `atm review wait`. So an agent can run it as an ordinary background command, notified when it exits, and start it again.\n- Each event's JSON carries its time (and the cursor), so an agent can say what it saw.\n- **The loop skill** (`skills/atm-loop-tasks/SKILL.md`) and `atm docs reviews`: the watch may end (its time up, or the harness stops it); start it again whenever it does, and it catches up. With `--once`, start it again after each event.\n\n## Tests\n- The CLI suite (`tests/scripts/reviews.test.mjs`, *agents listening*): a decision and a comment made while no watch runs are printed by the next watch, once; a second watch prints nothing old; `--since`; `--once` exits after the first event, and with exit code 3 at the time up.\n- Two agents: each has its own cursor.\n- atm-lib: the cursor's file, written atomically, and a missing or broken one (start from now, say so).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_listen.rs",
@@ -18243,7 +18243,7 @@
         "tests/scripts/reviews.test.mjs"
       ],
       "created_at": "2026-11-18T20:52:12Z",
-      "updated_at": "2026-11-18T21:25:49Z",
+      "updated_at": "2026-11-18T21:43:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18269,15 +18269,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T21:25:49Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T21:25:49Z",
           "kind": "review",
           "text": "CR-27: The review watch catches up on what it missed",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T21:43:14Z",
+          "kind": "note",
+          "text": "Approved: in CR-27 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T21:43:24Z",
+          "kind": "outcome",
+          "text": "Approved on CR-27: the review watch keeps a cursor per project and agent, catches up on what came while none ran, --once and --since; the skills restart it when it ends.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T21:25:49Z",
+          "to": "2026-11-18T21:43:14Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T21:43:24Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f07e-b5ea-7451-b1fb-a032eba1e31e",
@@ -18290,7 +18310,7 @@
       "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): in a Markdown file shown as source (not rendered), with **Wrap** on (ATM-588), clicking **+** to comment on a long wrapped line makes the diffs pane jump to somewhere near the end of the review.\n\n## Leads\n- Wrapped rows are measured by `DiffCode`'s `measureWrapped` (a DOM range at each line's start). The composer opening under the row changes the run's height; if the rows are measured again from a stale layout, or the measuring itself scrolls (a range's `getClientRects` on a skipped or unlaid-out element), the pane can move.\n- The page pins the file gone to (`ReviewPage.svelte`'s `chosen`/`pinned` and its ResizeObserver): opening the composer may count as a jump, or pin a file other than the one written in.\n- The composer's textarea is focused on show (`focusOnShow`): a `focus()` without `preventScroll` scrolls it into view, and a wrong position for it (measured before layout) sends the pane far.\n\nReproduce first: an e2e in `reviews.spec.ts` with a long Markdown line, Wrap on, `+` clicked; the pane's `scrollTop` must stay within a few pixels, and the composer be in view.\n\n## Tests\nThat e2e, in Unified with Wrap (Split disables Wrap), and the same without Wrap.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -18299,7 +18319,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T21:09:58Z",
-      "updated_at": "2026-11-18T21:33:48Z",
+      "updated_at": "2026-11-18T21:44:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18324,15 +18344,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T21:33:48Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T21:33:48Z",
           "kind": "review",
           "text": "CR-28: + on a line opens the comment box where it is",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T21:43:58Z",
+          "kind": "note",
+          "text": "Approved: in CR-28 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T21:44:13Z",
+          "kind": "outcome",
+          "text": "Approved on CR-28: + on a wrapped long line opens the comment box where it is; a drawn run whose text changed shows the new text until its turn.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T21:33:48Z",
+          "to": "2026-11-18T21:43:58Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T21:44:13Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f07e-b5ea-7451-b1fb-a03375d418fc",
@@ -18345,7 +18385,7 @@
       "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): the **Rendered** view of a Markdown file still shows only about its first page; tried with a new document (added in the round). Not yet known whether a changed existing document does the same.\n\n## Leads\n- A new file is all one change: `RenderedSide`'s parts (`renderedParts`, ATM-591) should be one part, the whole document. Check what parts it gets, and whether `CompMd`'s `only` cuts the tree at the first block range.\n- The card's height: `ReviewFile`'s estimate (`.review-file-later`, the loading body's `min-height: var(--card-estimate)` from ATM-615, `contain-intrinsic-size`) may cap or clip the rendered side, or the side's `doc-sheet` may have a fixed height from a measurement taken before CompMD drew.\n- Long files are drawn in chunks (`DiffView`'s `CHUNK`, ATM-587): if the rendered view goes through the chunking meant for source rows, only the first chunk would show.\n\nReproduce first, both cases (a new document and a changed one, each longer than a few screens): an e2e in `reviews.spec.ts` (the fixture serves both sides) asserting the last heading of the document is drawn.\n\n## Tests\nThat e2e for a new and a changed document; a unit test of `renderedParts` for an added file.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
@@ -18354,7 +18394,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T21:09:58Z",
-      "updated_at": "2026-11-18T21:33:48Z",
+      "updated_at": "2026-11-18T21:42:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18370,7 +18410,14 @@
       "number": 626,
       "key_final": false,
       "started_at": "2026-11-18T21:33:48Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "96f74134bdd6f32aa27f1d1e5388333f34938cd6",
+      "waiting_on": "user",
+      "questions": [
+        "Not reproduced: a new and a changed long document in the e2e fixture, CR-1 round 1 (docs/review-performance.md added) and a live review of a new uncommitted file all draw to their last heading, in WebKit and Chromium, and scroll there (screenshots). Which review and document showed only the first page, and is it a committed review or a live one?",
+        "What does the rest look like: blank space the height of the document, the card ending after a page, or does it stay so after scrolling or switching Source and back to Rendered? A screenshot would help."
+      ],
+      "blocked_at": "2026-11-18T21:42:08Z"
     },
     {
       "id": "01a1f07e-b5ea-7451-b1fb-a034b5e64291",
@@ -18383,7 +18430,7 @@
       "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): writing a comment on the **Rendered** view of a Markdown file, the comment box and the rendered document mix up: the document is drawn over the box.\n\n## Leads\n- Stacking: the rendered side's marks (`.diff-block-mark`, absolutely placed), the `doc-sheet`'s own stacking context, CompMD's page (`.compmd-page`, possibly positioned, or a frame for a component), the sticky card header (`z-index: 2`) and the fold rows (`z-index: 1`, ATM-590). The composer needs to sit above the document it comments on.\n- Where the composer is placed in the rendered view: inside the part, between parts, or absolutely at the picked block; a box placed in the flow of a part CompMD owns would be redrawn or overlapped by it.\n\nReproduce first: an e2e in `reviews.spec.ts` that picks a block in the Rendered view and checks that the composer is the topmost element at its centre (`document.elementFromPoint`).\n\n## Tests\nThat e2e, in a split and a single-side rendered view, light and dark.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
@@ -18391,9 +18438,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T21:09:58Z",
-      "updated_at": "2026-11-18T21:09:58Z",
+      "updated_at": "2026-11-18T21:42:11Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -18405,7 +18452,9 @@
         "dashboard"
       ],
       "number": 627,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T21:42:11Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f085-5db5-7457-84cd-64c4ee4ab844",

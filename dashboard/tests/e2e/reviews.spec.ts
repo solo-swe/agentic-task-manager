@@ -993,6 +993,63 @@ test.describe('the diff viewer on a review’s page', () => {
     expect(Math.abs(numberBox.y - text.y)).toBeLessThan(text.height);
   });
 
+  // ATM-627 (Hakan, the app): writing a comment on the rendered view, the document was drawn over the comment box
+  for (const unified of [false, true])
+    test(`Rendered${unified ? ', unified' : ''}: text selected opens its comment box, on top and near it`, async ({
+      page,
+      tasksServer,
+    }) => {
+      const paragraphs = (last: string) =>
+        Array.from({ length: 120 }, (_, i) => (i === 119 ? last : `Paragraph ${i + 1} of a long plan.`)).join('\n\n') +
+        '\n';
+      const patch =
+        'diff --git a/docs/long.md b/docs/long.md\n--- a/docs/long.md\n+++ b/docs/long.md\n' +
+        '@@ -237,3 +237,3 @@\n Paragraph 119 of a long plan.\n \n-The old ending.\n+The new ending.\n';
+      await openReviews(page, tasksServer);
+      tasksServer
+        .setRevisionDocument('base1', projectDocument('docs/long.md', paragraphs('The old ending.')))
+        .setRevisionDocument('head3', projectDocument('docs/long.md', paragraphs('The new ending.')));
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({
+          view: { round: 3, against: null, files: [{ ...file('docs/long.md', patch), after: 'head3' }] },
+        }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/long.md'));
+      const view = diffOf(page, 'docs/long.md');
+      await expect(view.locator('.diff-line').first()).toBeVisible();
+      if (unified) await page.getByRole('button', { name: 'Unified' }).click();
+      await page.getByRole('button', { name: 'Rendered' }).click();
+      const newSide = view.locator('.diff-pane.diff-new');
+      // The whole document, so the text picked is far from its end
+      await newSide.getByRole('button', { name: /^Show \d+ unchanged lines$/ }).click();
+      const picked = newSide.locator('.compmd-page p', { hasText: /^Paragraph 3 of/ });
+      await picked.scrollIntoViewIfNeeded();
+      // Its text selected, as a drag over it selects it
+      await picked.evaluate((p) => {
+        const range = document.createRange();
+        range.selectNodeContents(p);
+        window.getSelection()!.removeAllRanges();
+        window.getSelection()!.addRange(range);
+        p.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      });
+      const box = page.getByRole('textbox', { name: /^Comment on/ });
+      await expect(box).toBeFocused();
+      await expect(box).toBeInViewport();
+      // The box is what is drawn at its centre, not the document
+      const composer = view.locator('.diff-composer');
+      const centre = (await composer.boundingBox())!;
+      const top = await page.evaluate(
+        ([x, y]) => document.elementFromPoint(x, y)?.closest('.diff-composer') !== null,
+        [centre.x + centre.width / 2, centre.y + centre.height / 2],
+      );
+      expect(top).toBe(true);
+      // Under the text it comments on, not at the end of the document
+      const text = (await picked.boundingBox())!;
+      expect(centre.y).toBeGreaterThanOrEqual(text.y + text.height - 1);
+      expect(centre.y - (text.y + text.height)).toBeLessThan(200);
+    });
+
   // ATM-591: the rendered view folds as the source view does: whole blocks near the change, the rest folded
   test('Rendered folds: the blocks near a change, with their own line numbers; the rest folded, each fold opened by a click', async ({
     page,
