@@ -326,6 +326,13 @@ test.describe('the dashboard in the atm app', () => {
     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
     // The window's own bar and sidebar toggle are there, as on every tab
     await expect(page.locator('#app-titlebar')).toBeVisible();
+    // The selected tab joins the review's top bar under it, in one colour, as a project's tab joins its page (ATM-608)
+    const colours = await page.evaluate(() => {
+      const of = (selector: string) => getComputedStyle(document.querySelector(selector)!).backgroundColor;
+      return { tab: of('.title-bar-tab.selected'), top: of('.review-top'), bar: of('#app-titlebar') };
+    });
+    expect(colours.top).toBe(colours.tab);
+    expect(colours.bar).not.toBe(colours.tab);
     // The first tab still shows the reviews
     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
     await tabs.nth(0).click();

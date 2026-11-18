@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 607
+    "next_number": 609
   },
   "tasks": [
     {
@@ -15409,7 +15409,7 @@
       "description": "Phase 4 ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)): reviewing a change while it is made.\n\n## Change\n- *New live review* in the app and the browser (`atm review live` exists from phase 1): the review page fed by the working copy's changes (the store's subscription and the folder's watcher), redrawn at most every second or two, ignored and generated files left out.\n- A comment records a checkpoint (a `working` round against the base) so it is anchored to what the reviewer saw.\n- Ending it: approve, a round (it becomes `open`), or close; the approval that covers the task when nothing changed since (the task link, phase 1).\n\n## Tests\nE2e: a file written while the page is open shows; a comment makes a checkpoint; approval with and without a change since.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
@@ -15419,7 +15419,7 @@
         "crates/atm-lib/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T06:04:47Z",
+      "updated_at": "2026-11-18T06:11:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
@@ -15452,6 +15452,18 @@
           "kind": "review",
           "text": "CR-8: Live reviews: follow a change as it is made",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T06:11:48Z",
+          "kind": "note",
+          "text": "Approved: in CR-8 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T06:11:58Z",
+          "kind": "outcome",
+          "text": "Approved in CR-8: live reviews follow the working copy; a comment or approval keeps a checkpoint; New live review and Close review. Follow-up ATM-607 (watch instead of poll).",
+          "by": "claude:0f56a916"
         }
       ],
       "commit": "ea6822b4fb5dc884cf68ded61709e1c6b87b51e4",
@@ -15464,7 +15476,15 @@
         }
       ],
       "review_requested_at": "2026-11-18T06:04:47Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-18T06:04:47Z",
+          "to": "2026-11-18T06:11:48Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T06:11:58Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e29c7ba9fca",
@@ -16821,14 +16841,14 @@
       "description": "Reported by Hakan (2026-11-18): when the app has more tabs than fit in the title bar's free space, the layout breaks. Scrolling moves the tabs past the window buttons, and it scrolls the page below as well.\n\n## Change\n`dashboard/src/lib/ui/TitleBarTabs.svelte` (and `shell/AppTitleBar.svelte`):\n- The tabs go in a strip of their own, which is the only thing that scrolls. It is clipped between the window buttons and the title bar's other controls, and a wheel or trackpad scroll over it moves only the strip, never the page.\n- When the tabs overflow, left and right buttons at the strip's ends scroll it by about one tab. Each is disabled at its end.\n- The active tab is scrolled into view.\n\n## Tests\nComponent and e2e tests with more tabs than fit:\n- the strip scrolls, and the window buttons and page don't move;\n- a wheel scroll over the strip leaves the page's scroll as it was;\n- the arrows show only on overflow, scroll the strip, and are disabled at the ends;\n- a newly opened tab is in view.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/ui/TitleBarTabs.svelte",
         "dashboard/src/lib/shell/AppTitleBar.svelte"
       ],
       "created_at": "2026-11-18T06:02:13Z",
-      "updated_at": "2026-11-18T06:04:55Z",
+      "updated_at": "2026-11-18T06:11:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16841,7 +16861,24 @@
       "number": 605,
       "key_final": false,
       "started_at": "2026-11-18T06:04:55Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "733f391dd56299547a370c616855c8e47b2af018",
+      "code_reviews": [
+        {
+          "id": "01a1ed47-ccda-7311-b75b-261f5d01fde3",
+          "ref": "CR-9"
+        }
+      ],
+      "review_requested_at": "2026-11-18T06:11:08Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T06:11:08Z",
+          "kind": "review",
+          "text": "CR-9: Title bar tabs scroll in a strip of their own",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ed42-4d27-713c-9ef9-4c0927598de3",
@@ -16874,6 +16911,72 @@
       "sprint": "Code reviews in the app",
       "number": 606,
       "key_final": false
+    },
+    {
+      "id": "01a1ed47-a3c3-7749-bf96-439d862e8d64",
+      "name": "Live reviews follow the working copy by watching it in the app, and by cheap polls in the browser",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Asked by Hakan on CR-8 (c1, 2026-11-18): a live review's page asks for the working copy every 2 s. Watch for changes instead where we can.\n\n## Change\n- **The app:** while a live review's page is shown, a watcher on the project folder, recursive (`atm_fs::watch::watch_tree`), leaving out `.git/` and anything git ignores. A settled burst (`SETTLE`, 300 ms) is pushed to the page the way the task and review stores' changes are (T-506), and the page asks for `view.now` once. No 2 s poll in the app.\n- **The browser:** `atm serve` has no push channel, so it keeps polling, but cheaply. `GET …/reviews/<CR>` for a live review's now view answers with an `ETag` from the working tree's state (the `git status` porcelain and the changed files' mtimes), and `If-None-Match` gets a `304` with no diff made. The page sends it.\n\n## Tests\n- atm-api: the ETag changes with a file written, stays the same otherwise, and gives a `304`.\n- The app: a write in the folder pushes a change; one in `.git/` or an ignored path doesn't.\n- E2e: in the app, a page following a live review asks again on the push and not on a timer.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/src/commands.rs",
+        "crates/atm-api/src/routes/reviews.rs",
+        "dashboard/src/lib/shell/ReviewsTab.svelte"
+      ],
+      "created_at": "2026-11-18T06:10:57Z",
+      "updated_at": "2026-11-18T06:10:57Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:10:57Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 607,
+      "key_final": false
+    },
+    {
+      "id": "01a1ed4a-f344-72a8-bd26-cda2b43df547",
+      "name": "A review's selected tab joins its page, in one colour",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "reviews",
+        "app"
+      ],
+      "description": "Reported by Hakan (2026-11-18): a review's tab in the app's title bar doesn't match the page under it, so it's hard to see that it's the selected one. Project tabs are fine.\n\n## Cause\nThe selected title-bar tab is drawn in the page's background (`--bg`), but the review page's top bar (`.review-top`) was in `--surface`.\n\n## Change\n`dashboard/src/lib/reviews/ReviewPage.svelte`: `.review-top` in `--bg`, as a project's header is. The review's own tabs are marked by their underline, so nothing else depends on the old colour.\n\n## Tests\nE2e (`app.spec.ts`, a review in a tab of its own): the selected tab and the review's top bar have the same background, and the title bar a different one.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-18T06:14:34Z",
+      "updated_at": "2026-11-18T06:14:39Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:14:34Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 608,
+      "key_final": false,
+      "started_at": "2026-11-18T06:14:39Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

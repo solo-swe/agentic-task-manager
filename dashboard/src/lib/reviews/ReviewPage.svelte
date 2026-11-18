@@ -837,10 +837,11 @@
     font-size: var(--text-md);
   }
   /* The top bar: the title and the decision, then the tabs and the Diffs tab's tools */
+  /* In the page's background, as a project's header: the app's selected tab, in it too, joins it (ATM-608) */
   .review-top {
     flex: none;
     border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--bg);
   }
   .review-top-row {
     display: flex;
