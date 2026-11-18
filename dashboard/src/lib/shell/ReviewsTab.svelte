@@ -23,6 +23,7 @@
     toggleViewed,
     viewedKeys,
   } from '../review-data';
+  import { keepFilter, keptFilter } from '../review-filter';
   import ReviewList from '../reviews/ReviewList.svelte';
   import ReviewPage from '../reviews/ReviewPage.svelte';
   import { reviewTitle } from '../reviews/page';
@@ -43,6 +44,20 @@
 
   // The list
   let query = $state<ListQuery>({ ...NO_QUERY });
+  // Opened with the project's last filter, kept in this browser (ATM-604), and again on going to another project
+  let queryOf: string | null = null;
+  $effect.pre(() => {
+    const id = project;
+    untrack(() => {
+      if (!id || id === queryOf) return;
+      queryOf = id;
+      query = keptFilter(id);
+    });
+  });
+  function chooseQuery(next: ListQuery) {
+    query = next;
+    if (project) keepFilter(project, next);
+  }
   let entries = $state.raw<ReviewEntry[]>([]);
   // The review shown
   let shown = $state.raw<ReviewPageData | null>(null);
@@ -246,7 +261,7 @@
       {loading}
       {problem}
       href={(reference) => withReview(currentAddress(), { review: reference })}
-      onquery={(next) => (query = next)}
+      onquery={chooseQuery}
       onopen={(reference, newTab) => open(reference, newTab)}
       onlive={startLive}
     />

@@ -177,6 +177,27 @@ test.describe('the reviews tab', () => {
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
   });
 
+  test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const open = page.getByRole('button', { name: 'Open', exact: true });
+    await page.getByRole('searchbox', { name: 'Search reviews' }).fill('names');
+    await open.click();
+    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
+    await page.reload();
+    await expect(open).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('');
+    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?status=open');
+    await page.getByRole('button', { name: 'Clear' }).click();
+    await expect(open).toHaveAttribute('aria-pressed', 'false');
+    await page.reload();
+    await expect(page.locator('.review-row')).toHaveCount(2);
+    await expect(open).toHaveAttribute('aria-pressed', 'false');
+    expect(tasksServer.reviewRequests.at(-1)).toBe('');
+  });
+
   test('opens a review in place, and back; the one needing you next too', async ({ page, tasksServer }) => {
     await openReviews(page, tasksServer);
     await page.locator('.review-row[data-review="CR-2"] .review-link').click();
