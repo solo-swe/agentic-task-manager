@@ -55,7 +55,8 @@
   const tasks = $derived(choices((e) => e.review.tasks, query.task));
   const branches = $derived(choices((e) => [e.branch], query.branch));
 
-  const waiting = $derived(entries.filter((e) => e.needs_you));
+  // Its decision or round, or an answer since you last wrote (ATM-606): *Next review needing you* takes both
+  const waiting = $derived(entries.filter((e) => e.needs_you || e.waiting === 'answered'));
 
   // What is typed, until the query takes it (a moment later), then the query's
   let search = $derived(query.q);
@@ -196,13 +197,21 @@
     <ul class="review-rows" aria-busy={loading}>
       {#each entries as entry (entry.review.id)}
         {@const r = entry.review}
-        <li class="review-row" class:needs-you={entry.needs_you} data-review={r.reference}>
+        <li
+          class="review-row"
+          class:needs-you={entry.needs_you || entry.waiting === 'answered'}
+          data-review={r.reference}
+        >
           <a class="review-link" href={href(r.reference)} onclick={(e) => open(e, r.reference)}>
             <span class="review-ref">{r.reference}</span>
             <span class="review-title">{r.title}</span>
           </a>
           <span class="review-status status-{r.status}">{STATUS_LABELS[r.status]}</span>
-          {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>{/if}
+          {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>
+          {:else if entry.waiting === 'answered'}<span
+              class="review-needs answered"
+              title="Someone wrote in it after you last did">New reply</span
+            >{/if}
           <span class="review-meta">
             {#if r.tasks.length}<span class="review-tasks"><Icon name="list-todo" size={12} />{r.tasks.join(', ')}</span
               >{/if}

@@ -29,8 +29,9 @@ pub struct Waiting {
     pub count: u32,
 }
 
-/// How many tasks need the user in each project of a listing (`list_projects`'s): in review, blocked on the user, and
-/// work done together, as the dashboard counts them (`needsYou`); a missing project has none.
+/// How many things need the user in each project of a listing (`list_projects`'s): tasks in review, blocked on the
+/// user, and work done together, and code reviews waiting on them (ATM-606: a task in review through one of those is
+/// counted once, by atm-lib), as the dashboard counts them (`needsYou`); a missing project has none.
 #[must_use]
 pub fn waiting_of(projects: &[Value]) -> Vec<Waiting> {
     let count = |n: &Value, key: &str| n.get(key).and_then(Value::as_u64).unwrap_or(0);
@@ -38,7 +39,10 @@ pub fn waiting_of(projects: &[Value]) -> Vec<Waiting> {
         .iter()
         .filter_map(|p| {
             let n = p.get("summary")?.get("needs_you")?;
-            let total = count(n, "review") + count(n, "blocked_on_user") + count(n, "together");
+            let total = count(n, "review")
+                + count(n, "blocked_on_user")
+                + count(n, "together")
+                + count(n, "code_reviews");
             Some(Waiting {
                 id: p.get("id")?.as_str()?.to_owned(),
                 name: p
@@ -60,10 +64,11 @@ pub fn notice(name: &str, count: u32) -> String {
         .filter(|c| !c.is_control())
         .take(MAX_NAME)
         .collect();
+    // Tasks and code reviews alike (ATM-606)
     if count == 1 {
-        format!("{name}: 1 task needs you")
+        format!("{name}: 1 thing needs you")
     } else {
-        format!("{name}: {count} tasks need you")
+        format!("{name}: {count} things need you")
     }
 }
 
@@ -228,7 +233,10 @@ mod tests {
             listed(
                 "a",
                 "Alpha",
-                Some(serde_json::json!({"review": 2, "blocked_on_user": 1, "together": 1})),
+                // Code reviews waiting on the user count too (ATM-606)
+                Some(
+                    serde_json::json!({"review": 2, "blocked_on_user": 1, "together": 1, "code_reviews": 2}),
+                ),
             ),
             listed(
                 "b",
@@ -244,7 +252,7 @@ mod tests {
                 Waiting {
                     id: "a".into(),
                     name: "Alpha".into(),
-                    count: 4
+                    count: 6
                 },
                 Waiting {
                     id: "b".into(),
@@ -305,7 +313,7 @@ mod tests {
         );
         assert_eq!(
             seen.update("default", &[waiting("a", 3), waiting("b", 1)]),
-            ["A: 3 tasks need you", "B: 1 task needs you"]
+            ["A: 3 things need you", "B: 1 thing needs you"]
         );
         assert_eq!(
             seen.update("default", &[waiting("a", 1)]),
@@ -331,7 +339,7 @@ mod tests {
         );
         assert_eq!(
             seen.update("default", &[waiting("a", 2), waiting("b", 0)]),
-            ["A: 2 tasks need you"]
+            ["A: 2 things need you"]
         );
     }
 
@@ -341,13 +349,13 @@ mod tests {
         let at_limit = "é".repeat(MAX_NAME);
         assert_eq!(
             notice(&at_limit, 1),
-            format!("{at_limit}: 1 task needs you")
+            format!("{at_limit}: 1 thing needs you")
         );
-        assert_eq!(notice("", 3), ": 3 tasks need you");
-        assert_eq!(notice("App\n\u{7}", 2), "App: 2 tasks need you");
+        assert_eq!(notice("", 3), ": 3 things need you");
+        assert_eq!(notice("App\n\u{7}", 2), "App: 2 things need you");
         assert_eq!(
             notice(&"x".repeat(200), 1).chars().count(),
-            MAX_NAME + ": 1 task needs you".len()
+            MAX_NAME + ": 1 thing needs you".len()
         );
     }
 

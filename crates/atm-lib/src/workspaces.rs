@@ -429,7 +429,8 @@ fn summary_stamp(stamp: &Value) -> Value {
         stamp["tasks"],
         stamp["claims"],
         &format_iso(now())[..10],
-        stamp["head"]
+        stamp["head"],
+        stamp["reviews"]
     ])
 }
 
@@ -516,12 +517,22 @@ impl Workspace {
         Project::open_tolerant(&folder(entry))
     }
 
-    /// The project's store stamp (`{tasks, archive, claims, head, copies}`), or none when it is missing or refused.
+    /// The project's store stamp (`{tasks, archive, claims, head, copies}`) and its reviews' (`reviews`, ATM-606: what
+    /// waits on the user is in its summary), or none when it is missing or refused.
     #[must_use]
     pub fn data_stamp(entry: &Value) -> Option<Value> {
         let project = Self::project(entry).ok()?;
-        let stamp = project_stamp(&project);
-        (!stamp["tasks"].is_null()).then_some(stamp)
+        let mut stamp = project_stamp(&project);
+        if stamp["tasks"].is_null() {
+            return None;
+        }
+        if let Some(map) = stamp.as_object_mut() {
+            map.insert(
+                "reviews".into(),
+                crate::review_pages::reviews_stamp(&project),
+            );
+        }
+        Some(stamp)
     }
 
     /// The file and content type of a project's logo (`meta.logo`, or one found), if it has one.
@@ -556,6 +567,15 @@ impl Workspace {
         for entry in self.entries() {
             if let Ok(project) = Self::project(&entry) {
                 parts.push(project.store().subscribe(Arc::clone(&on_change))?);
+                // Its reviews too, when it has some (ATM-606: what waits on the user is in its summary); a project
+                // without a reviews folder isn't given one
+                let has_reviews = project
+                    .root()
+                    .is_some_and(|r| r.join(atm_common::TASK_DIR).join("reviews").is_dir());
+                if has_reviews && let Ok(store) = crate::reviews::store(&project) {
+                    use crate::reviews::ReviewStore as _;
+                    parts.push(store.subscribe(Arc::clone(&on_change))?);
+                }
             }
         }
         parts.push(self.registry.subscribe(on_change)?);

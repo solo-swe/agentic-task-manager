@@ -1308,7 +1308,7 @@ mod integration_tests {
         }];
         assert_eq!(
             app.state::<AppState>().needs_you().update("work", &more),
-            ["App: 1 task needs you"]
+            ["App: 1 thing needs you"]
         );
         std::fs::remove_dir_all(&home).expect("clean up");
     }

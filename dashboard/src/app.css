@@ -3116,6 +3116,18 @@ a.detail-dep-item {
 .view-tab .icon {
   opacity: 0.8;
 }
+/* The Reviews tab's count of reviews waiting on the user (ATM-606), as the project switcher's */
+.view-tab-badge {
+  min-width: 16px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--yellow);
+  color: var(--bg);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
 .view-tab:hover {
   color: var(--text);
   background: color-mix(in srgb, var(--surface) 60%, transparent);

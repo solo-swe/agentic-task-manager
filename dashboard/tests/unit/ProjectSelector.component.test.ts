@@ -6,7 +6,12 @@ import { dashboard } from '../../src/lib/state.svelte';
 import { summary as fullSummary } from './summary.helpers';
 
 const summary = (percent: number, review = 0, blocked = 0): ProjectSummary =>
-  fullSummary({ total: 10, done: percent / 10, percent, needs_you: { review, blocked_on_user: blocked, together: 0 } });
+  fullSummary({
+    total: 10,
+    done: percent / 10,
+    percent,
+    needs_you: { review, blocked_on_user: blocked, together: 0, code_reviews: 0 },
+  });
 const project = (id: string, name: string, s: ProjectSummary | null, missing = false): ProjectEntry => ({
   id,
   name,

@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { addressOf, expect, openDashboard, projectDocument, test, type TasksServer } from './helpers';
+import { addressOf, expect, openDashboard, projectDocument, summary, test, type TasksServer } from './helpers';
 import { E2E_SESSION } from './session.mjs';
 
 // The reviews tab and a review's page (docs/code-review-design.md §3.11, ATM-574), and the diff viewer in it (§3.7,
@@ -175,6 +175,38 @@ test.describe('the reviews tab', () => {
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names');
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
+  });
+
+  test('what waits for you (ATM-606): a count on the Reviews tab, and a review answered since you wrote marked', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.withOwnSummary(
+      summary({ needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 2 }, needs_you_reviews: [] }),
+    );
+    await openReviews(page, tasksServer);
+    const tab = page.locator('#tab-reviews');
+    await expect(page.locator('#reviews-waiting')).toHaveText('2');
+    await expect(tab).toHaveAccessibleName('Reviews, 2 waiting for you');
+    // CR-1, decided by nobody yet: answered since you last wrote
+    tasksServer.setReviews({
+      reviews: [
+        { review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true, waiting: 'review' },
+        { review: header(3, 'changes_requested'), branch: null, chains: 1, open: 1, needs_you: false, waiting: 'answered' },
+      ],
+      you: 'Ana',
+    });
+    await page.reload();
+    const answered = page.locator('.review-row[data-review="CR-3"]');
+    await expect(answered).toHaveClass(/needs-you/);
+    await expect(answered.locator('.review-needs')).toHaveText('New reply');
+    await expect(page.locator('.review-row[data-review="CR-2"] .review-needs')).toHaveText('Needs you');
+    // Nothing waiting: no count
+    tasksServer.withOwnSummary(summary({ needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 0 } }));
+    await page.reload();
+    await expect(page.locator('.review-row')).toHaveCount(2);
+    await expect(page.locator('#reviews-waiting')).toHaveCount(0);
+    await expect(tab).toHaveAccessibleName('Reviews');
   });
 
   test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({

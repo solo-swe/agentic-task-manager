@@ -687,6 +687,68 @@ mod tests {
         Value::Object(project.store().get_task(id).unwrap().unwrap().clone())
     }
 
+    /// ATM-606: a project's summary counts the reviews waiting on the user at the machine (their git name), and a task
+    /// in review isn't counted again through them; the summary's stamp moves with a comment
+    #[test]
+    fn a_projects_summary_counts_the_reviews_waiting_on_the_user_once() {
+        let dir = dir();
+        git(&["init", "-q"], &dir.0);
+        git(&["config", "user.name", "Hakan"], &dir.0);
+        let mut project = project(&dir.0, "claude:1");
+        let summary = |p: &Project| crate::summary::project_summary(p).unwrap();
+        assert_eq!(summary(&project)["needs_you"]["code_reviews"], 0);
+        let stamp = crate::review_pages::reviews_stamp(&project);
+        let cr = super::create(
+            &mut project,
+            NewReview {
+                title: "One".into(),
+                summary: String::new(),
+                tasks: vec!["T-1".into()],
+                author: Some("claude:1".into()),
+                reviewers: vec!["Hakan".into()],
+                status: Status::Open,
+                first: round(),
+            },
+        )
+        .unwrap()
+        .reference;
+        assert_ne!(crate::review_pages::reviews_stamp(&project), stamp);
+        // Made by the agent, read as anyone: the user at the machine is the one it waits on
+        let s = summary(&reopen(&dir.0, "claude:1"));
+        assert_eq!(s["needs_you"]["code_reviews"], 1);
+        // T-1 is in review, through CR-1: not counted again
+        assert_eq!(task(&project, "T-1")["status"], "in_review");
+        assert_eq!(s["needs_you"]["review"], 0);
+        assert_eq!(
+            s["needs_you_reviews"],
+            json!([{ "reference": "CR-1", "title": "One", "why": "review" }])
+        );
+        // Sent back by the user: off their list until the agent answers
+        let mut hakan = reopen(&dir.0, "Hakan");
+        let mut reviews = super::store(&hakan).unwrap();
+        let anchor = super::Anchor {
+            round: 1,
+            ..super::Anchor::default()
+        };
+        super::Reviews::new(&mut reviews)
+            .comment(&cr, anchor, "Fix it.", &"Hakan".into())
+            .unwrap();
+        super::submit(&mut hakan, &cr, Verdict::RequestChanges, None, None).unwrap();
+        assert_eq!(summary(&hakan)["needs_you"]["code_reviews"], 0);
+        let open = reviews
+            .get_review(&cr)
+            .unwrap()
+            .open_comments()
+            .next()
+            .unwrap()
+            .id
+            .clone();
+        super::Reviews::new(&mut reviews)
+            .reply(&cr, &open, "Fixing.", &"claude:1".into())
+            .unwrap();
+        assert_eq!(summary(&hakan)["needs_you_reviews"][0]["why"], "answered");
+    }
+
     #[test]
     fn a_review_of_two_tasks_puts_both_in_review_and_its_decisions_are_theirs() {
         let dir = dir();

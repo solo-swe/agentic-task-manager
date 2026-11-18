@@ -65,6 +65,75 @@ pub fn needs(header: &ReviewHeader, me: &Actor) -> bool {
     }
 }
 
+/// What a review waits on `me` for (ATM-606), if anything: `"review"`, its decision or round is theirs ([`needs`]);
+/// `"answered"`, someone else wrote in it after `me` last did, in a review `me` takes part in (its author, a reviewer
+/// it names, or one who wrote in it) that isn't decided yet. Nothing is stored of what `me` has seen: a GET writes
+/// nothing (security I11), and an answer is cleared by answering, or by the review being decided.
+#[must_use]
+pub fn waiting_for(review: &Review, me: &Actor) -> Option<&'static str> {
+    let header = &review.header;
+    if needs(header, me) {
+        return Some("review");
+    }
+    // Decided, or a draft its author is still putting together (§3.1: waiting on no one)
+    if matches!(
+        header.status,
+        Status::Approved | Status::Closed | Status::Draft
+    ) {
+        return None;
+    }
+    // Which came last, by the comments' numbers (c1, c2, … in the order they were written; two in one second have the
+    // same time)
+    let number = |id: &str| id.trim_start_matches('c').parse::<u64>().unwrap_or(0);
+    let (mut mine, mut others): (Option<u64>, Option<u64>) = (None, None);
+    for comment in review.comments() {
+        let latest = if &comment.author == me {
+            &mut mine
+        } else {
+            &mut others
+        };
+        *latest = (*latest).max(Some(number(&comment.id.0)));
+    }
+    let takes_part =
+        mine.is_some() || header.author.as_ref() == Some(me) || header.reviewers.contains(me);
+    match (others, mine) {
+        (Some(_), None) if takes_part => Some("answered"),
+        (Some(theirs), Some(own)) if theirs > own => Some("answered"),
+        _ => None,
+    }
+}
+
+/// The reviews of the project's own store that wait on `me` (ATM-606), as [`waiting_for`] says: `(header, why)`.
+/// Its working copies' reviews aren't read: this is for every project's summary, on each refresh. A store that can't
+/// be read has none.
+#[must_use]
+pub fn waiting_reviews(project: &Project) -> Vec<(ReviewHeader, &'static str)> {
+    let (Some(root), Ok(store)) = (project.root(), reviews::store(project)) else {
+        return Vec::new();
+    };
+    // The user at the machine, whatever environment the summary is made in (an agent's shell started the server, say)
+    let me = Actor(crate::actor::user_identity(root));
+    let mut waiting: Vec<(ReviewHeader, &'static str)> = store
+        .reviews()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|r| waiting_for(&r, &me).map(|why| (r.header, why)))
+        .collect();
+    // The longest waiting first
+    waiting.sort_by(|a, b| a.0.updated.cmp(&b.0.updated));
+    waiting
+}
+
+/// What changes when any of the project's reviews does ([`FileStore::stamp`]), for a summary's cache: `null` without
+/// a review folder.
+#[must_use]
+pub fn reviews_stamp(project: &Project) -> Value {
+    reviews::store(project).map_or(Value::Null, |s| {
+        let (files, latest) = s.stamp();
+        json!([files, latest.to_string()])
+    })
+}
+
 /// Whether a review found on `branch` fits the query's author, reviewer and branch (the store has done its statuses
 /// and task).
 fn fits(header: &ReviewHeader, branch: Option<&str>, query: &ReviewQuery) -> bool {
@@ -109,7 +178,7 @@ fn me(project: &Project) -> Actor {
 }
 
 /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
-/// open, needs_you}], you}`.
+/// open, needs_you, waiting}], you}` (`waiting`: [`waiting_for`]'s why, or `null`).
 ///
 /// # Errors
 /// A status that isn't one; the project has no folder; a review that can't be read.
@@ -147,6 +216,7 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
             "chains": review.chains.len(),
             "open": review.open_comments().count(),
             "needs_you": needs(&review.header, &me),
+            "waiting": waiting_for(&review, &me),
         });
         listed.push((review.header.updated.clone(), entry));
     }
@@ -561,6 +631,120 @@ mod tests {
             reviewers: reviewers.iter().map(|r| Actor::from(*r)).collect(),
             created: "2026-11-17T10:00:00Z".into(),
             updated: "2026-11-17T10:00:00Z".into(),
+        }
+    }
+
+    /// A review of `header` with one chain: a top-level comment by `top` at minute 0, and replies by `replies` at the
+    /// minutes after
+    fn talked(header: ReviewHeader, top: &str, replies: &[&str]) -> Review {
+        let comment = |id: usize, by: &str| atm_review::model::Comment {
+            id: atm_review::model::CommentId(format!("c{id}")),
+            author: Actor::from(by),
+            at: format!("2026-11-18T10:{id:02}:00Z"),
+            body: "x".into(),
+            resolved: None,
+            replies: Vec::new(),
+        };
+        let mut first = comment(0, top);
+        first.resolved = Some(false);
+        first.replies = replies
+            .iter()
+            .enumerate()
+            .map(|(i, by)| comment(i + 1, by))
+            .collect();
+        Review {
+            header,
+            summary: String::new(),
+            chains: vec![Chain {
+                id: atm_review::model::ChainId("t1".into()),
+                anchor: atm_review::model::Anchor::default(),
+                comments: vec![first],
+            }],
+            rounds: Vec::new(),
+        }
+    }
+
+    /// ATM-606: what a review waits on the user for: its decision or round, or an answer they haven't answered yet
+    #[test]
+    fn a_review_waits_on_you_for_its_decision_or_for_an_answer_since_you_last_wrote() {
+        let ana = Actor::from("Ana");
+        let agent = Some("claude:a");
+        for (case, review, expected) in [
+            // Its decision is yours: whatever was written
+            (
+                "open, you its reviewer",
+                talked(header(Status::Open, agent, &["Ana"]), "Ana", &[]),
+                Some("review"),
+            ),
+            // Sent back, the agent answered you after your comment
+            (
+                "sent back, answered",
+                talked(
+                    header(Status::ChangesRequested, agent, &["Ana"]),
+                    "Ana",
+                    &["claude:a"],
+                ),
+                Some("answered"),
+            ),
+            // ...and you answered back: nothing new
+            (
+                "sent back, you wrote last",
+                talked(
+                    header(Status::ChangesRequested, agent, &["Ana"]),
+                    "Ana",
+                    &["claude:a", "Ana"],
+                ),
+                None,
+            ),
+            // Someone else's review: you never wrote in it and aren't named
+            (
+                "not yours",
+                talked(
+                    header(Status::ChangesRequested, agent, &["Bo"]),
+                    "Bo",
+                    &["claude:a"],
+                ),
+                None,
+            ),
+            // A draft waits on no one, even one naming you
+            (
+                "a draft naming you",
+                talked(header(Status::Draft, agent, &["Ana"]), "claude:a", &[]),
+                None,
+            ),
+            // A live review you wrote in, answered by its agent: its decision is yours anyway
+            (
+                "live, answered",
+                talked(header(Status::Live, agent, &["Ana"]), "Ana", &["claude:a"]),
+                Some("review"),
+            ),
+            // Your own review: the comments of others on it
+            (
+                "your own, commented on",
+                talked(header(Status::Open, Some("Ana"), &["Bo"]), "Bo", &[]),
+                Some("answered"),
+            ),
+            // Decided: nothing waits, answered or not
+            (
+                "approved",
+                talked(
+                    header(Status::Approved, agent, &["Ana"]),
+                    "Ana",
+                    &["claude:a"],
+                ),
+                None,
+            ),
+            (
+                "closed",
+                talked(
+                    header(Status::Closed, agent, &["Ana"]),
+                    "Ana",
+                    &["claude:a"],
+                ),
+                None,
+            ),
+        ] {
+            assert_eq!(waiting_for(&review, &ana), expected, "{case}");
         }
     }
 

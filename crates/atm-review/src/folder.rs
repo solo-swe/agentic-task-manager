@@ -248,6 +248,47 @@ impl FileStore {
         Ok(self.read_all()?.1)
     }
 
+    /// Every review the folder can read, whole, with its comments (ATM-606: what waits on the user, in one read
+    /// rather than a read per review).
+    ///
+    /// # Errors
+    /// The reviews' folder can't be read.
+    pub fn reviews(&self) -> Result<Vec<Review>> {
+        Ok(self.read_all()?.0.into_iter().map(|h| h.review).collect())
+    }
+
+    /// What changes when any review does, without reading one (ATM-606, for a summary's cache and its `ETag`): how
+    /// many files the reviews' folders hold, and the latest modification among them in nanoseconds. Every change to a
+    /// review writes one of its files (`review.md`, `comments.md`, a round's), so a change moves one or the other.
+    #[must_use]
+    pub fn stamp(&self) -> (u64, u128) {
+        let (mut files, mut latest) = (0u64, 0u128);
+        let mut look = |dir: &Path| {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let Ok(meta) = entry.metadata() else { continue };
+                files += 1;
+                let at = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_nanos());
+                latest = latest.max(at);
+            }
+        };
+        for entry in std::fs::read_dir(&self.reviews_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                look(&path);
+                look(&path.join("rounds"));
+            }
+        }
+        (files, latest)
+    }
+
     /// The review a reference names, as the folder holds it.
     fn find(&self, reference: &ReviewRef) -> Result<Held> {
         let (held, _) = self.read_all()?;

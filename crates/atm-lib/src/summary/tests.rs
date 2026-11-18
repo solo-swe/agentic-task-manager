@@ -341,7 +341,8 @@ fn what_needs_the_user_is_a_review_waiting_a_block_on_them_or_ready_work_togethe
     );
     assert_eq!(
         s["needs_you"],
-        json!({"review": 2, "blocked_on_user": 1, "together": 1})
+        // No code reviews in a project without a folder (ATM-606: reviews.rs's tests count them)
+        json!({"review": 2, "blocked_on_user": 1, "together": 1, "code_reviews": 0})
     );
 }
 

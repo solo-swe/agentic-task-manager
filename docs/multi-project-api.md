@@ -254,8 +254,10 @@ old parameters from its hash and moves to the new address.
 - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
-  needs_you}], you}`. A review needs the user when it is open or live with them a reviewer (anyone but its author when
-  it names none), or sent back with them its author. A status that isn't one is `400`.
+  needs_you, waiting}], you}`. A review needs the user when it is open or live with them a reviewer (anyone but its
+  author when it names none), or sent back with them its author. `waiting` (ATM-606): `"review"` when it needs them,
+  `"answered"` when someone else wrote in it after they last did (as the summary's `code_reviews`), else `null`. A
+  status that isn't one is `400`.
 - `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
   when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
   against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you}`. Each file's `patch` is
@@ -386,7 +388,9 @@ and `key_final` too, as the task views give them; a project before task keys has
 | `description` | `meta.description` (an optional line about the project), trimmed and capped at 200 characters; `null` without one. The card shows it only as the name's tooltip |
 | `git.branch` | the main worktree's checked-out branch (from `.git/HEAD`; a detached HEAD's short SHA), or `null` outside git |
 | `git.pr` | the latest PR recorded on the tasks (`atm vcs pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm vcs pushed`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
-| `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent) |
+| `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent), and those waiting through a code review counted in `code_reviews` (ATM-606: counted once) |
+| `needs_you.code_reviews` | the project's code reviews (its own folder's, not its other working copies') waiting on the user at the machine (their git name, whatever environment the server runs in): their decision or round is the user's (the list's `needs_you`), or, in one they take part in and not decided or a draft, someone else wrote after the user last did (`answered`, by the comments' order; nothing is stored of what they have read). The summary's stamp includes the reviews' files, so its cache and `ETag` move with a comment |
+| `needs_you_reviews` | those reviews, the longest waiting first: `{ reference, title, why }`, `why` being `"review"` or `"answered"`. The Reviews tab counts them |
 | `needs_you.blocked_on_user` | blocked-kind tasks with `waiting_on: "user"` |
 | `needs_you.together` | to-do tasks with `with: "user"` the user can take up now (T-347): in the active sprint (in any sprint or the backlog without an active sprint), their dependencies done (an archived one counts as done) |
 | `needs_you_tasks` | those same tasks, in file order: `{ id, name, reason }`, `reason` being `"review"`, `"blocked"` (on a question for the user) or `"together"`. The card's "needs you" chip opens them |

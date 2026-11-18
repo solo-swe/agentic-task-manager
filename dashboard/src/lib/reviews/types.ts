@@ -58,6 +58,9 @@ export interface ReviewEntry {
   chains: number;
   open: number;
   needs_you: boolean;
+  /** What it waits on you for (ATM-606): its decision or round, or an answer since you last wrote; none, `null`.
+   * Optional, for an older atm's lists */
+  waiting?: 'review' | 'answered' | null;
 }
 
 export interface ReviewList {

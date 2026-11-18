@@ -139,7 +139,7 @@ test('needs you: with-you tasks only in the active sprint and ready; reviews and
     (root) => {
       const s = summary(root);
       assert.deepEqual(ids(s), ['W-1:together', 'W-5:together', 'R-1:review', 'B-1:blocked']);
-      assert.deepEqual(s.needs_you, { review: 1, blocked_on_user: 1, together: 2 });
+      assert.deepEqual(s.needs_you, { review: 1, blocked_on_user: 1, together: 2, code_reviews: 0 });
     },
   );
   // No active sprint: any sprint's, still only when ready

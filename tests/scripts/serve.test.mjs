@@ -259,11 +259,13 @@ describe('serve', () => {
         name: 'T-1',
         completed_at: '2026-03-15T10:00:00Z',
       },
-      needs_you: { review: 1, blocked_on_user: 1, together: 0 },
+      // No code reviews in this project (ATM-606: reviews.rs's tests count them)
+      needs_you: { review: 1, blocked_on_user: 1, together: 0, code_reviews: 0 },
       needs_you_tasks: [
         { id: 'T-5', name: 'T-5', reason: 'review' },
         { id: 'T-6', name: 'T-6', reason: 'blocked' },
       ],
+      needs_you_reviews: [],
       git: { branch: 'main', pr: null },
       description: null,
       last_activity: '2026-03-15T11:00:00Z',

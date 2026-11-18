@@ -748,10 +748,26 @@ pub fn project_summary(project: &Project) -> Result<Value> {
     // The tasks that need the user, as the dashboard's needsYouReason decides it: in review and waiting for the
     // reviewer, blocked on the user, or to do together with the user now: in the active sprint (any, without one) and
     // ready, its dependencies done (T-347)
+    // The code reviews waiting on the user (ATM-606): a task in review whose review is one of them is waited on through
+    // it, so it isn't counted again
+    let waiting_reviews = crate::review_pages::waiting_reviews(project);
+    let waiting_ids: std::collections::HashSet<&str> = waiting_reviews
+        .iter()
+        .map(|(h, _)| h.id.0.as_str())
+        .collect();
+    let through_review = |t: &Task| {
+        t.get("code_reviews")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|l| l.get("id").and_then(Value::as_str))
+            .any(|id| waiting_ids.contains(id))
+    };
     let active = active_sprint(vocab);
     let mut needs_you_tasks = Vec::new();
     for (t, k) in tasks.iter().zip(&kinds) {
         let reason = match k {
+            Some(Kind::Review) if through_review(t) => None,
             Some(Kind::Review) => {
                 let state = t.get("review_state").and_then(Value::as_str);
                 (!state.is_some_and(|s| REWORK_STATES.contains(&s))).then_some("review")
@@ -806,8 +822,13 @@ pub fn project_summary(project: &Project) -> Result<Value> {
             "review": reasons("review"),
             "blocked_on_user": reasons("blocked"),
             "together": reasons("together"),
+            "code_reviews": waiting_reviews.len(),
         },
         "needs_you_tasks": needs_you_tasks,
+        "needs_you_reviews": waiting_reviews
+            .iter()
+            .map(|(h, why)| json!({"reference": h.reference, "title": capped(Some(&json!(h.title))), "why": why}))
+            .collect::<Vec<_>>(),
         "git": git_summary(project, &tasks),
         "description": description(document.get("meta")),
         "last_activity": last.map(format_iso),

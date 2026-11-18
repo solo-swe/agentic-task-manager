@@ -334,6 +334,13 @@ export class TasksServer {
     return typeof this.meta.id === 'string' && this.meta.id ? this.meta.id : FIXTURE_PROJECT;
   }
 
+  /** A summary of the default project chosen by the test (summary() makes one), over atm's own or none */
+  private ownSummary: Record<string, unknown> | null = null;
+  withOwnSummary(summary: Record<string, unknown>) {
+    this.ownSummary = summary;
+    return this;
+  }
+
   /** The project list api/projects answers with (summaries are null until a test needs them) */
   projectList() {
     if (!this.listed) return [];
@@ -345,7 +352,8 @@ export class TasksServer {
       summary,
       logo: this.logos.has(id) ? `p/${id}/logo` : null,
     });
-    const own = this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null;
+    const own =
+      this.ownSummary ?? (this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null);
     return [
       project(this.projectId, typeof this.meta.project === 'string' ? this.meta.project : this.projectId, own),
       ...[...this.others].map(([id, p]) => project(id, p.name, p.summary)),
