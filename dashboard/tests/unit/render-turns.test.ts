@@ -111,6 +111,24 @@ describe('takeTurn', () => {
     expect(log).toEqual(['failing', 'next']);
   });
 
+  // ATM-620: a turn picked to go next waits for the page to be idle; cancelled meanwhile (its CompMd destroyed), it
+  // never renders, and the next one goes. Rendered, it made a view nothing would destroy, holding its card in memory
+  it('a turn cancelled after it was picked, before the page was idle, never runs; the next one goes', async () => {
+    const log: string[] = [];
+    const picked = render('picked', log);
+    const next = render('next', log);
+    const cancel = takeTurn(() => at(0), picked.fn);
+    takeTurn(() => at(50), next.fn);
+    // `picked` was picked at once and waits for the page to be idle
+    expect(turnsWaiting()).toEqual({ waiting: 1, running: true });
+    cancel();
+    await runIdle();
+    await vi.waitFor(() => expect(idle).toHaveLength(1));
+    await runIdle();
+    expect(log).toEqual(['next']);
+    expect(picked.fn).not.toHaveBeenCalled();
+  });
+
   it('while a mouse button is held (a drag picking lines), no turn starts; let go, they go on', async () => {
     const log: string[] = [];
     window.dispatchEvent(new MouseEvent('mousedown'));

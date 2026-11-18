@@ -17572,7 +17572,7 @@
       "description": "Asked by Hakan (2026-11-18): with no filter or search, the reviews list is grouped, each group under its heading with its count. Within a group the order is as listed:\n\n1. **Waiting for your review:** open or live, you a reviewer (`needs_you`). The longest waiting on top, each showing how long it has waited (\"3 days\"), counted from its latest round, when it began waiting on you.\n2. **With open comments:** the rest that still have open comments, the latest activity first.\n3. **Sent back by you:** `changes_requested`, waiting on their author, the latest first.\n4. **Recently decided:** approved or closed in the last 5 days, the latest first.\n5. **Older:** approved or closed before that, folded by default (the fold remembered in the browser), the latest first.\n\nAny filter or search shows the plain list, as now. A review is in one group only, the first it fits. The 5 days are a constant (`RECENT_DAYS`).\n\n## Change\n- `atm-lib` `review_pages.rs` (the list): each entry also gets `waiting_since`, its latest round's time (and `decided_at` for an approved or closed one, if `updated` doesn't serve).\n- `dashboard/src/lib/reviews/`: a `groupReviews(entries, you, now)` function in `page.ts`, and the groups' headings, ages and fold in `ReviewList.svelte`.\n\n## Tests\n- Unit tests of `groupReviews`: each group, a review fitting two going to the first, the order within each, the 5-day edge, empty groups left out, and an age's wording.\n- Component: the headings and counts, *Older* folded and opened, and a filter showing the plain list.\n- E2e: the list's groups with the fixture's reviews.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/page.ts",
@@ -17580,7 +17580,7 @@
         "crates/atm-lib/src/review_pages.rs"
       ],
       "created_at": "2026-11-18T06:27:52Z",
-      "updated_at": "2026-11-18T23:00:35Z",
+      "updated_at": "2026-11-18T23:28:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17593,7 +17593,24 @@
       "number": 610,
       "key_final": false,
       "started_at": "2026-11-18T23:00:35Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "2807887a69d7a80db2e8a653acf6b4c338f3303d",
+      "code_reviews": [
+        {
+          "id": "01a1f0fd-53ca-77ab-b6c9-8c24316943f8",
+          "ref": "CR-34"
+        }
+      ],
+      "review_requested_at": "2026-11-18T23:28:16Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T23:28:16Z",
+          "kind": "review",
+          "text": "CR-34: The reviews list in groups: waiting for you first",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ed5d-a3c2-727b-8133-da0a14731104",
@@ -18022,7 +18039,7 @@
       "description": "Asked by Hakan (2026-11-18). Measured on CompMD's CR-1 (94 files): the Diffs tab keeps 16 to 32 CompMD renderers alive, but makes about 410 in one pass to the end and back, and the heap grows to about 110 MB with 117,000 DOM nodes alive while the page has about 4,000 elements. Renderers that are gone stay in memory. What is measured so far, and how: [docs/diff-viewer-profile.md](docs/diff-viewer-profile.md).\n\n## What this task delivers, in order\n1. **The analysis** in `docs/diff-viewer-profile.md`, completed:\n   - what holds the destroyed renderers (a heap snapshot's retainers of the detached `.compmd` trees);\n   - CompMD's own share of a renderer's cost, against the diff rows';\n   - the latency of one renderer from mount to drawn;\n   - the rendered Markdown view (`RenderedSide`, the document processed once per part);\n   - the same in WebKit, the app's engine (`tests/e2e/real-review.spec.ts` measures a real review in both).\n2. **The options, agreed with Hakan.** Write them in the document with what each buys and costs, then block this task on the user (`blocked --on user`) until he chooses. Don't build before that.\n3. **The optimizations chosen,** in atm: the document viewer, `DiffView.svelte`, `RenderedSide.svelte`, `CompMd.svelte` (and `ReviewFile.svelte` where it decides what is made), each with the numbers before and after in the document.\n4. **What only CompMD can change,** as tasks in CompMD's project (`CMD-…`), with the numbers. Possibly a leak in its view, drawing one text in ranges with gaps (close to CMD-250), or a processed tree several views share. The CompMD boundary holds: atm shows, CompMD renders.\n\n## Tests\n- A check that keeps the memory bounded: the long-review spec (`reviews.spec.ts`) after passes to the end and back, the DOM nodes alive (DevTools' `Performance.getMetrics` after a forced garbage collection) within a bound set from the measurements, not every renderer ever made.\n- The long-review spec's budgets still met, and met 10 times in a row with the CPU slowed 4× (as ATM-615).\n- Each optimization's own unit or e2e tests.\n\nNo budget is raised to make a test pass (AGENTS.md).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/diff-viewer-profile.md",
@@ -18033,7 +18050,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T19:29:53Z",
-      "updated_at": "2026-11-18T23:11:50Z",
+      "updated_at": "2026-11-18T23:28:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18075,7 +18092,9 @@
           "text": "The analysis is in docs/diff-viewer-profile.md (executive summary and recommendations at the top). Which options should I build? Recommended: 1 (fix the render after destroy), 2 (drop content-visibility from the cards) and 3 (a memory bound in the long-review spec) now; 4 and 5 (faster highlighting in WebKit, a highlight cache) as CompMD tasks; 6 (the rendered view processed once a side) measured after 1 to 3. → Build 1 (fix the render after destroy), 2 (drop content-visibility from the cards) and 3 (a memory bound in the long-review spec) now; file 4 and 5 (WebKit highlighting speed, a highlight cache) as CompMD tasks; measure 6 (the rendered view processed once per side) after 1-3.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-18T23:28:19Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f02d-58a8-71cb-88c1-a94acbdbc50a",
@@ -18595,7 +18614,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T21:33:36Z",
-      "updated_at": "2026-11-18T23:27:59Z",
+      "updated_at": "2026-11-18T23:33:25Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18615,6 +18634,12 @@
           "at": "2026-11-18T23:27:59Z",
           "kind": "note",
           "text": "A second case under the full suite (2026-11-19, ATM-610 run): reviews.spec.ts long review, afterSettled 115 ms against BUDGET_MS / 2 = 100 (31 ms when the review specs ran alone an hour before). Same treatment: measure under load, find the cause, never raise the budget.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T23:33:25Z",
+          "kind": "note",
+          "text": "And with the CPU slowed 4x (ATM-620, 2026-11-19): the long review s first diff line on opening 222-270 ms before ATM-620 s fixes, 146-211 ms after them (one run of 10 over the 200 ms budget). Opening under load is the part to look at; ATM-615 had met it 10 times at 4x.",
           "by": "claude:0f56a916"
         }
       ]

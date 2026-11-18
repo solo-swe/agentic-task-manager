@@ -316,15 +316,13 @@
     border-radius: var(--radius-md);
     background: var(--bg);
     scroll-margin-top: var(--space-4);
-    /* Off screen, the browser skips its layout and painting (ATM-587), standing in at the size it last had, else at
-       its estimate and its header. Never shrunk (ATM-615): a skipped card's least height is 0, so the pane's column
-       squeezed every card off screen to its border, and the pane was a few screens long */
+    /* Laid out as any element, not skipped off screen (ATM-620: `content-visibility: auto` kept every card's old
+       layout, rows long given back, alive: up to 175 MB on CMD CR-1; the rows made are bounded by FAR and CHUNK, so
+       laying out those near the view costs nothing measurable). Never shrunk (ATM-615) */
     flex: none;
-    content-visibility: auto;
-    contain-intrinsic-size: auto calc(var(--card-estimate, 400px) + 48px);
   }
-  /* A diff still loading stands at its estimate (ATM-615): a card that leaves the view while loading is remembered at
-     the size it had, and at a line high the pane shrank under the reader */
+  /* A diff still loading stands at its estimate (ATM-615), so the pane doesn't shrink under the reader while it
+     loads */
   .review-file-body:has(:global(.diff-loading)) {
     min-height: var(--card-estimate);
   }

@@ -1740,5 +1740,27 @@ test.describe('performance', () => {
     // Rows bounded by where the view is, not by a count: a 600-line file in view is 1,200 rows in split
     expect(scrolled.farRows).toBe(0);
     expect(scrolled.collapsed).toBe(0);
+
+    // ATM-620: memory stays bounded by where the view is, not by every card ever made. Back to the top in steps of a
+    // screen, the page settled, a garbage collection forced: the DOM nodes still alive (DevTools' count, detached ones
+    // too) within a bound set from the measurements
+    await page.evaluate(async () => {
+      const pane = document.querySelector('.review-diffs') as HTMLElement;
+      const frame = () => new Promise((r) => requestAnimationFrame(r));
+      for (let steps = 0; steps < 2000 && pane.scrollTop > 0; steps++) {
+        pane.scrollTop -= pane.clientHeight;
+        await frame();
+      }
+    });
+    await page.waitForTimeout(1000);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Performance.enable');
+    await cdp.send('HeapProfiler.collectGarbage');
+    const { metrics } = await cdp.send('Performance.getMetrics');
+    const alive = metrics.find((m) => m.name === 'Nodes')!.value;
+    console.log('long review, DOM nodes alive after down and back:', alive, 'on the page:', scrolled.nodes);
+    // Measured (docs/diff-viewer-profile.md): 93,240 before the fixes (a render after its text was gone kept its
+    // card; content-visibility kept every card's old layout), 21,840 after them; the page itself about 5,400
+    expect(alive).toBeLessThan(30_000);
   });
 });

@@ -99,6 +99,9 @@
   let stale = $state(false);
   let view: View | null = null;
   let schemes: MutationObserver | null = null;
+  /** Destroyed (ATM-620): nothing is drawn any more. A draw after it made a view nothing would destroy, whose listeners
+   * held the text's element and the card around it */
+  let destroyed = false;
   /** What was last rendered: the text and the task's data, so an unchanged text is never processed again (R8) */
   let rendered = '';
   /** The last measurement of the lines asked for: an older one that ends after it is dropped */
@@ -173,6 +176,11 @@
     }
 
     function draw(compmd: CompmdModule, target: HTMLElement) {
+      if (destroyed) {
+        turnDone?.();
+        turnDone = null;
+        return;
+      }
       const processed = processText(compmd, text, task, path, { localImage, docLink, taskKnown: tasks?.known });
       const tree = only ? blocksIn(processed.tree, only) : processed.tree;
       const components = processed.components;
@@ -217,6 +225,7 @@
   });
 
   onDestroy(() => {
+    destroyed = true;
     cancelTurn?.();
     turnDone?.();
     schemes?.disconnect();

@@ -2,8 +2,12 @@
 
 Hakan, 2026-11-18: before choosing how to make the Diffs tab lighter, understand what it costs: how many CompMD
 renderers it makes, what each holds, what that adds up to on a large review, and where the time goes. This document
-is that analysis. The options at the end are for Hakan to decide; nothing is built yet. The earlier work on the same
-tab, what it built and its numbers, is in [review-performance.md](review-performance.md) (ATM-587).
+is that analysis. The earlier work on the same tab, what it built and its numbers, is in
+[review-performance.md](review-performance.md) (ATM-587).
+
+> [!NOTE]
+> **Decided and built** (Hakan, 2026-11-19): 1, 2 and 3 are built (see *Built* at the end, with the numbers before and
+> after); 4 and 5 go to CompMD as tasks, which Hakan files; 6 is measured next.
 
 ## Executive summary
 
@@ -262,3 +266,27 @@ for turns) WebKit draws it in 1.09 s with no frame over 180 ms. Each part proces
   instrumentation; the estimates above say so where they are used.
 - **Spread in WebKit** is large between runs (a skim: 8.9 to 12.5 s blocked); the comparisons above are of medians,
   with the spread given where it decides a conclusion.
+
+## Built (ATM-620, 2026-11-19): 1, 2 and 3
+
+- **1, the render after destroy:** `render-turns.ts` marks a cancelled turn, and one picked to go next but cancelled
+  before the page was idle never renders (the next one goes); `CompMd.svelte` never draws once destroyed (a text whose
+  CompMD loaded after it was gone). Unit and component tests for both paths.
+- **2, `content-visibility` dropped** from `ReviewFile.svelte`'s cards (with `contain-intrinsic-size`); a loading card's
+  `min-height` at its estimate stays (ATM-615).
+- **3, the memory bound:** the long-review spec (`reviews.spec.ts`, its synthetic 94-file review) goes back to the top
+  after reaching the end, forces a garbage collection and reads the DOM nodes alive (`Performance.getMetrics`); it
+  must stay under 30,000.
+
+Measured on that spec's review, in Chromium (the nodes alive after down and back; the page itself holds about 5,400):
+
+| | Nodes alive | First line on opening | Slowest step after settling |
+| --- | --- | --- | --- |
+| before 1 + 2 | 93,240 | 62 ms | 30 ms |
+| after 1 + 2 | 21,840 | 45–48 ms | 23–31 ms |
+| before, CPU slowed 4× (10 runs) | 71,449 (one run reached it) | 222–270 ms | 62–66 ms |
+| after, CPU slowed 4× (10 runs) | 20,407–21,840 | 146–211 ms | 54–82 ms |
+
+The bound catches the leak (from 71,000 to 93,000 nodes) with room over the fixed count. With the CPU slowed 4×, opening
+was over the 200 ms budget before (in most runs) and is under it after in 9 of 10 runs; that budget under load is
+ATM-629's to look into, and it is not raised.

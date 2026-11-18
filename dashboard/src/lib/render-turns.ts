@@ -7,6 +7,8 @@
 interface Turn {
   where: () => Element | undefined;
   render: () => Promise<void>;
+  /** Cancelled: not rendered, even once picked to go next (ATM-620) */
+  cancelled?: boolean;
 }
 
 const waiting = new Set<Turn>();
@@ -57,6 +59,13 @@ function next() {
   waiting.delete(turn);
   running = true;
   whenIdle(() => {
+    // Cancelled while it waited for the page to be idle (ATM-620): its render gone with it, the next one's turn. A
+    // render of a text whose CompMd was destroyed made a view nothing would destroy, holding the card it was in
+    if (turn.cancelled) {
+      running = false;
+      next();
+      return;
+    }
     // Pressed meanwhile: back in the line, to go once it is let go
     if (pressed) {
       running = false;
@@ -77,10 +86,13 @@ function next() {
  * its text changed, or it is gone) with what this returns; one that started finishes. */
 export function takeTurn(where: () => Element | undefined, render: () => Promise<void>): () => void {
   listen();
-  const turn = { where, render };
+  const turn: Turn = { where, render };
   waiting.add(turn);
   next();
-  return () => waiting.delete(turn);
+  return () => {
+    turn.cancelled = true;
+    waiting.delete(turn);
+  };
 }
 
 /** For tests: the turns waiting, and whether one is running */

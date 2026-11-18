@@ -171,5 +171,31 @@ describe('CompMd', () => {
       expect(createSandbox).toHaveBeenCalledTimes(1);
       first.unmount();
     });
+
+    // ATM-620: a view made after its text was gone was never destroyed, and held its card in memory
+    it('gone after its turn was given, before the page was idle, it never renders, and the next one goes', async () => {
+      const idle: (() => void)[] = [];
+      vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));
+      const { createSandbox } = await compmdWithView();
+      const first = render(CompMd, { text: 'one', plain: 'one' });
+      await vi.waitFor(() => expect(idle).toHaveLength(1));
+      expect(turnsWaiting().running).toBe(true);
+      first.unmount();
+      idle.shift()!();
+      expect(createSandbox).not.toHaveBeenCalled();
+      expect(turnsWaiting()).toEqual({ waiting: 0, running: false });
+    });
+  });
+
+  it('gone before CompMD has loaded, it never renders', async () => {
+    const { createSandbox } = await compmdWithView();
+    let loaded: (m: CompmdModule) => void = () => {};
+    const module = (await loadCompmd()) as CompmdModule;
+    loadCompmd.mockReturnValue(new Promise<CompmdModule>((resolve) => (loaded = resolve)));
+    const shown = render(CompMd, { text: '# Gone' });
+    shown.unmount();
+    loaded(module);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(createSandbox).not.toHaveBeenCalled();
   });
 });
