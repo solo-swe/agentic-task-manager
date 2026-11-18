@@ -11,6 +11,7 @@ import {
   hashOf,
   isResolved,
   lineCounts,
+  mergeProjectReviews,
   openedTo,
   reviewChains,
   reviewTitle,
@@ -111,6 +112,23 @@ describe('the reviews list in groups', () => {
       ['recent', ['CR-1']],
       ['older', ['CR-2']],
     ]);
+  });
+
+  // ATM-575: the overview's list of every project's reviews
+  it('several projects’ reviews as one list: each with its project, the latest activity first', () => {
+    const a = { id: 'p1', name: 'atm' };
+    const b = { id: 'p2', name: 'CompMD' };
+    const merged = mergeProjectReviews([
+      { project: a, entries: [entry('CR-1', 'waiting', { updated: daysAgo(3) })] },
+      { project: b, entries: [entry('CR-1', 'waiting', { updated: daysAgo(1) }), entry('CR-2', 'draft')] },
+      { project: { id: 'p3', name: 'Empty' }, entries: [] },
+    ]);
+    expect(merged.map((e) => [e.project?.name, e.review.reference])).toEqual([
+      ['CompMD', 'CR-1'],
+      ['CompMD', 'CR-2'],
+      ['atm', 'CR-1'],
+    ]);
+    expect(mergeProjectReviews([])).toEqual([]);
   });
 
   it('how long a review has waited, in words', () => {

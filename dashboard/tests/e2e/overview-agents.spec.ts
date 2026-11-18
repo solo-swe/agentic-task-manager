@@ -24,15 +24,20 @@ test.describe('Projects Overview: the Agents tab', () => {
     await expect(page.locator('#detail-overlay.open')).toContainText('T-001');
   });
 
-  test('the tab is remembered, and the arrow keys move between the three tabs', async ({ page }) => {
+  test('the tab is remembered, and the arrow keys move between the tabs, round from the last to the first', async ({
+    page,
+  }) => {
     await page.locator('#overview-tab-agents').click();
     await expect(page.locator('#overview-agents .agent-info').first()).toBeVisible();
     await page.reload();
     await expect(page.locator('#overview-tab-agents')).toHaveAttribute('aria-selected', 'true');
+    // Reviews (ATM-575) after Agents, the last; then round to Projects, and back
     await page.locator('#overview-tab-agents').press('ArrowRight');
+    await expect(page.locator('#overview-tab-reviews')).toHaveAttribute('aria-selected', 'true');
+    await page.locator('#overview-tab-reviews').press('ArrowRight');
     await expect(page.locator('#overview-tab-projects')).toHaveAttribute('aria-selected', 'true');
     await page.locator('#overview-tab-projects').press('ArrowLeft');
-    await expect(page.locator('#overview-tab-agents')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#overview-tab-reviews')).toHaveAttribute('aria-selected', 'true');
   });
 
   test('a project’s own Agents tab does not change the overview’s tab', async ({ page }) => {

@@ -2,10 +2,14 @@
 //! one its path names. Nothing else is served under them: a project's ID or tab is only text the page reads.
 
 /// A page's path without its leading `/` and an optional trailing `/`: the root, `board`, `progress`, `agents`,
-/// `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase letters) or a review's page,
-/// `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as `CR-8.2`).
+/// `reviews` (every project's, ATM-575), `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase
+/// letters) or a review's page, `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as
+/// `CR-8.2`).
 fn is_form(rest: &str) -> bool {
-    if matches!(rest, "" | "board" | "progress" | "agents" | "projects") {
+    if matches!(
+        rest,
+        "" | "board" | "progress" | "agents" | "reviews" | "projects"
+    ) {
         return true;
     }
     let Some(after) = rest.strip_prefix("projects/") else {
@@ -59,6 +63,8 @@ mod tests {
             "/board",
             "/progress/",
             "/agents",
+            "/reviews",
+            "/w/work/reviews/",
             "/w/work",
             "/w/work/",
             "/w/work/board",
@@ -78,6 +84,7 @@ mod tests {
             "/projects//",
             "/boards",
             "/board/x",
+            "/reviews/CR-7",
             "/tasks.json",
             "/w",
             "/w/",

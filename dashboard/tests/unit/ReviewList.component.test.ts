@@ -106,7 +106,18 @@ describe('ReviewList', () => {
     const next = screen.getByRole('button', { name: /Next review needing you/ });
     expect(next.textContent).toContain('2');
     await fireEvent.click(next);
-    expect(onopen).toHaveBeenCalledWith('CR-1', false);
+    expect(onopen).toHaveBeenCalledWith('CR-1', false, expect.objectContaining({ needs_you: true }));
+  });
+
+  // ATM-575: on the overview's list of every project's reviews, each row says its project, and its link is its own
+  it('a row of another project’s list says its project, and its link and opening carry the row', async () => {
+    const theirs = { ...entry(1, 'waiting'), project: { id: 'p2', name: 'CompMD' } };
+    const href = vi.fn((reference: string, e?: ReviewEntry) => `/projects/${e?.project?.id}/reviews/${reference}`);
+    const { container, onopen } = show([theirs], { ...NO_QUERY }, { href });
+    expect(container.querySelector('.review-project')).toHaveTextContent('CompMD');
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/projects/p2/reviews/CR-1');
+    await fireEvent.click(screen.getByRole('link'));
+    expect(onopen).toHaveBeenCalledWith('CR-1', false, theirs);
   });
 
   // ATM-610: unfiltered, the list in groups, each under its heading with its count; any filter, the plain list
@@ -169,15 +180,17 @@ describe('ReviewList', () => {
   });
 
   it('opens a review on a click, in a new tab with ⌘ or Ctrl; leaves Shift, Alt and other buttons to the browser', async () => {
-    const { onopen } = show([entry(1, 'waiting')]);
+    const one = entry(1, 'waiting');
+    const { onopen } = show([one]);
     const link = screen.getByRole('link');
     await fireEvent.click(link);
     await fireEvent.click(link, { metaKey: true });
     await fireEvent.click(link, { ctrlKey: true });
+    // With its row (ATM-575: on a list of several projects' reviews, a reference names one in each)
     expect(onopen.mock.calls).toEqual([
-      ['CR-1', false],
-      ['CR-1', true],
-      ['CR-1', true],
+      ['CR-1', false, one],
+      ['CR-1', true, one],
+      ['CR-1', true, one],
     ]);
     onopen.mockClear();
     await fireEvent.click(link, { shiftKey: true });

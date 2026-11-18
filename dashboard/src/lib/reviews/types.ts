@@ -70,6 +70,8 @@ export interface ReviewEntry {
   waiting?: 'review' | 'answered' | null;
   /** When it began waiting on its reviewers, its latest round's time (ATM-610). Optional, for an older atm's lists */
   waiting_since?: string | null;
+  /** The project it is in, on a list of several projects' reviews (ATM-575, the overview's Reviews); the page's own */
+  project?: { id: string; name: string };
 }
 
 /** A review's folder atm can't read (ATM-617): a status a newer atm wrote, a broken header */

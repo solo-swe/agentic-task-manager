@@ -57,6 +57,14 @@ export function groupReviews(entries: ReviewEntry[], now: number): ReviewGroup[]
   return groups.filter((g) => g.entries.length);
 }
 
+/** Several projects' reviews as one list (ATM-575, the overview's Reviews): each tagged with its project, the latest
+ * activity first, as one project's list is */
+export function mergeProjectReviews(
+  lists: { project: { id: string; name: string }; entries: ReviewEntry[] }[],
+): ReviewEntry[] {
+  return lists.flatMap(({ project, entries }) => entries.map((e) => ({ ...e, project }))).sort(latestFirst);
+}
+
 /** How long a review has waited, in words: "under an hour", "5 hours", "1 day", "3 days" (ATM-610) */
 export function waitedFor(since: string, now: number): string {
   const ms = now - Date.parse(since);

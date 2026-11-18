@@ -9,6 +9,7 @@
   import { safeUrl } from '../url';
   import Icon from '../ui/Icon.svelte';
   import NeedsYouMenu from '../shell/NeedsYouMenu.svelte';
+  import { openReviewPage } from '../reviews/open';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
   import Ring from '../ui/Ring.svelte';
   import TaskKey from '../ui/TaskKey.svelte';
@@ -19,6 +20,8 @@
   const s = $derived(project.summary);
   const need = $derived(needsYou(project));
   const needItems = $derived(project.missing ? [] : (s?.needs_you_tasks ?? []));
+  // Its reviews waiting on the user (ATM-575), in the same chip after the tasks
+  const needReviews = $derived(project.missing ? [] : (s?.needs_you_reviews ?? []));
   const counted = $derived(s ? s.total - s.skipped : 0);
   // A project with sprints (SR-7.7): rings for its recent sprints, and the active sprint's line
   const sprints = $derived(s?.recent_sprints ?? null);
@@ -90,12 +93,14 @@
   </div>
 
   <!-- What needs you: a badge on the card's top right corner, half outside it (T-335) -->
-  {#if needItems.length || need}<div class="project-card-badge">
-      {#if needItems.length}
-        <!-- The tasks, from the server's summary: one opens the project on it, several are listed under the chip -->
+  {#if needItems.length || needReviews.length || need}<div class="project-card-badge">
+      {#if needItems.length || needReviews.length}
+        <!-- The tasks and reviews, from the server's summary: one opens it, several are listed under the chip -->
         <NeedsYouMenu
           items={needItems}
           onopen={(task) => dashboard.openProject(project.id, { task })}
+          reviews={needReviews}
+          onreview={(reference) => openReviewPage(project.id, reference)}
           chipClass="project-card-need"
           align="right"
         />

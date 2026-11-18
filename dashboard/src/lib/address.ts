@@ -13,7 +13,7 @@
 
 /** The All projects page's tabs (T-259): the project cards, the board of every project's tasks, every project's
  * progress (T-329) or agents (T-333) */
-export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents'] as const;
+export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents', 'reviews'] as const;
 export type OverviewTab = (typeof OVERVIEW_TABS)[number];
 
 export function isOverviewTab(value: unknown): value is OverviewTab {
@@ -119,9 +119,9 @@ export function formatAddress(params: URLSearchParams): string {
 
 /** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (atm-api's pages.rs):
  * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/projects/<id>/reviews/<CR>`, `/board`, `/progress`,
- * `/agents`, each also under `/w/<w>` (and `/w/<w>` itself) */
+ * `/agents`, `/reviews` (ATM-575), each also under `/w/<w>` (and `/w/<w>` itself) */
 export const PAGE_PATH =
-  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents)?\/?)?$/;
+  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents|reviews)?\/?)?$/;
 
 /** The review a review's page shows (/projects/<id>/reviews/<CR>), and the view of it its query names */
 export interface ReviewAddress {

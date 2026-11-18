@@ -298,6 +298,13 @@ export class TasksServer {
     return this;
   }
 
+  /** Another project's reviews list (ATM-575, the overview's Reviews over every project); one without is a 404 */
+  private projectReviewLists = new Map<string, unknown>();
+  setProjectReviews(project: string, list: unknown) {
+    this.projectReviewLists.set(project, list);
+    return this;
+  }
+
   /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round */
   setReview(reference: string, page: unknown) {
     this.reviewPages.set(reference, page);
@@ -465,6 +472,11 @@ export class TasksServer {
     await this.page.route(V1_REVIEWS, (route) => {
       const url = new URL(route.request().url());
       const [, id, review] = V1_REVIEWS.exec(route.request().url())!;
+      const other = this.projectReviewLists.get(decodeURIComponent(id));
+      if (decodeURIComponent(id) !== this.projectId && other && !review) {
+        this.reviewRequests.push(`${decodeURIComponent(id)}:${url.search}`);
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(other) });
+      }
       if (decodeURIComponent(id) !== this.projectId)
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
       this.reviewRequests.push(`${review ? decodeURIComponent(review) : ''}${url.search}`);

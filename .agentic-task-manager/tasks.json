@@ -15353,7 +15353,7 @@
       "description": "Where reviews show outside their pages ([§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), [§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The app's sidebar: a Reviews section under the projects (the reviews needing you, with a count; All reviews).\n- Cards and the details panel show a task's reviews as links (`CR-7 · changes requested`), a new tab with ⌘-click; *Add to review* on a task.\n- The needs-you menu counts reviews with tasks; deep links `atm://…/reviews/CR-7` (checked as I28).\n\n## Tests\nE2e (`app.spec.ts` for the sidebar, `detail.spec.ts` for the links); unit tests for the deep links.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -15366,7 +15366,7 @@
         "dashboard/src/lib/details/ReviewLink.svelte"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T23:14:15Z",
+      "updated_at": "2026-11-18T23:36:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
@@ -15401,7 +15401,9 @@
           "to": "2026-11-18T23:14:15Z",
           "on": "user"
         }
-      ]
+      ],
+      "started_at": "2026-11-18T23:36:41Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
@@ -18039,7 +18041,7 @@
       "description": "Asked by Hakan (2026-11-18). Measured on CompMD's CR-1 (94 files): the Diffs tab keeps 16 to 32 CompMD renderers alive, but makes about 410 in one pass to the end and back, and the heap grows to about 110 MB with 117,000 DOM nodes alive while the page has about 4,000 elements. Renderers that are gone stay in memory. What is measured so far, and how: [docs/diff-viewer-profile.md](docs/diff-viewer-profile.md).\n\n## What this task delivers, in order\n1. **The analysis** in `docs/diff-viewer-profile.md`, completed:\n   - what holds the destroyed renderers (a heap snapshot's retainers of the detached `.compmd` trees);\n   - CompMD's own share of a renderer's cost, against the diff rows';\n   - the latency of one renderer from mount to drawn;\n   - the rendered Markdown view (`RenderedSide`, the document processed once per part);\n   - the same in WebKit, the app's engine (`tests/e2e/real-review.spec.ts` measures a real review in both).\n2. **The options, agreed with Hakan.** Write them in the document with what each buys and costs, then block this task on the user (`blocked --on user`) until he chooses. Don't build before that.\n3. **The optimizations chosen,** in atm: the document viewer, `DiffView.svelte`, `RenderedSide.svelte`, `CompMd.svelte` (and `ReviewFile.svelte` where it decides what is made), each with the numbers before and after in the document.\n4. **What only CompMD can change,** as tasks in CompMD's project (`CMD-…`), with the numbers. Possibly a leak in its view, drawing one text in ranges with gaps (close to CMD-250), or a processed tree several views share. The CompMD boundary holds: atm shows, CompMD renders.\n\n## Tests\n- A check that keeps the memory bounded: the long-review spec (`reviews.spec.ts`) after passes to the end and back, the DOM nodes alive (DevTools' `Performance.getMetrics` after a forced garbage collection) within a bound set from the measurements, not every renderer ever made.\n- The long-review spec's budgets still met, and met 10 times in a row with the CPU slowed 4× (as ATM-615).\n- Each optimization's own unit or e2e tests.\n\nNo budget is raised to make a test pass (AGENTS.md).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/diff-viewer-profile.md",
@@ -18050,7 +18052,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T19:29:53Z",
-      "updated_at": "2026-11-18T23:28:19Z",
+      "updated_at": "2026-11-18T23:36:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18066,7 +18068,7 @@
       ],
       "number": 620,
       "key_final": false,
-      "commit": "bf57dd8b81814240ded3917657dcad2731e73fca",
+      "commit": "2cf655f24b24b591301b8515d7b1f85dc16f58ca",
       "blocks": [
         {
           "from": "2026-11-18T19:39:54Z",
@@ -18091,10 +18093,24 @@
           "kind": "answer",
           "text": "The analysis is in docs/diff-viewer-profile.md (executive summary and recommendations at the top). Which options should I build? Recommended: 1 (fix the render after destroy), 2 (drop content-visibility from the cards) and 3 (a memory bound in the long-review spec) now; 4 and 5 (faster highlighting in WebKit, a highlight cache) as CompMD tasks; 6 (the rendered view processed once a side) measured after 1 to 3. → Build 1 (fix the render after destroy), 2 (drop content-visibility from the cards) and 3 (a memory bound in the long-review spec) now; file 4 and 5 (WebKit highlighting speed, a highlight cache) as CompMD tasks; measure 6 (the rendered view processed once per side) after 1-3.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T23:36:39Z",
+          "kind": "review",
+          "text": "CR-35: Diffs tab memory bounded: the leak fixed, content-visibility dropped, a bound in the spec",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-18T23:28:19Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "code_reviews": [
+        {
+          "id": "01a1f104-fed5-7338-a32f-0cfdf7863aaa",
+          "ref": "CR-35"
+        }
+      ],
+      "review_requested_at": "2026-11-18T23:36:39Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f02d-58a8-71cb-88c1-a94acbdbc50a",
@@ -18614,7 +18630,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T21:33:36Z",
-      "updated_at": "2026-11-18T23:33:25Z",
+      "updated_at": "2026-11-18T23:48:16Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18640,6 +18656,12 @@
           "at": "2026-11-18T23:33:25Z",
           "kind": "note",
           "text": "And with the CPU slowed 4x (ATM-620, 2026-11-19): the long review s first diff line on opening 222-270 ms before ATM-620 s fixes, 146-211 ms after them (one run of 10 over the 200 ms budget). Opening under load is the part to look at; ATM-615 had met it 10 times at 4x.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T23:48:16Z",
+          "kind": "note",
+          "text": "More under the full suite (2026-11-19, ATM-575 run, 3 of 512 failed on time): switching tabs graph 217 ms; reviews large review 220.9 ms (69 alone); long review afterSettled 118 ms (34 alone). The suite took 1.5 min against 1.1 earlier: the machine is loaded while the five workers run, and these budgets fail more often as the suite grows.",
           "by": "claude:0f56a916"
         }
       ]

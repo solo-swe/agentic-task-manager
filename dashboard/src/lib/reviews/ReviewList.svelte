@@ -36,9 +36,10 @@
     loading?: boolean;
     problem?: string | null;
     /** A review's address, for its link */
-    href: (reference: string) => string;
+    href: (reference: string, entry?: ReviewEntry) => string;
     onquery: (query: Query) => void;
-    onopen: (reference: string, newTab: boolean) => void;
+    /** `entry`: the row's, for a list of several projects' reviews (ATM-575), where a reference names one in each */
+    onopen: (reference: string, newTab: boolean, entry?: ReviewEntry) => void;
     /** A live review opened (ATM-576): why it was refused, or null once it is open */
     onlive?: (live: { title: string; base: string; task: string }) => Promise<string | null>;
     /** A row's tasks (ATM-593): each key that names a task a link (`taskHref` its address, `taskLinks.open` what a
@@ -116,10 +117,10 @@
     onquery({ ...query, status: status_ });
   }
 
-  function open(e: MouseEvent, reference: string) {
+  function open(e: MouseEvent, entry: ReviewEntry) {
     if (e.button !== 0 || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    onopen(reference, e.metaKey || e.ctrlKey);
+    onopen(entry.review.reference, e.metaKey || e.ctrlKey, entry);
   }
 
   function ago(at: string): string {
@@ -146,7 +147,7 @@
       />
     </label>
     {#if waiting.length}
-      <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false)}>
+      <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false, waiting[0])}>
         Next review needing you <span class="review-count">{waiting.length}</span>
       </button>
     {/if}
@@ -277,7 +278,7 @@
 {#snippet row(entry: ReviewEntry, waited: boolean)}
   {@const r = entry.review}
   <li class="review-row" class:needs-you={entry.needs_you || entry.waiting === 'answered'} data-review={r.reference}>
-    <a class="review-link" href={href(r.reference)} onclick={(e) => open(e, r.reference)}>
+    <a class="review-link" href={href(r.reference, entry)} onclick={(e) => open(e, entry)}>
       <span class="review-ref">{r.reference}</span>
       <span class="review-title">{r.title}</span>
     </a>
@@ -291,6 +292,9 @@
         >Waited {waitedFor(entry.waiting_since, Date.now())}</span
       >{/if}
     <span class="review-meta">
+      {#if entry.project}<span class="review-project" data-project={entry.project.id}
+          ><Icon name="folder" size={12} />{entry.project.name}</span
+        >{/if}
       {#if r.tasks.length}<span class="review-tasks"
           ><Icon name="list-todo" size={12} />{#each r.tasks as key, i (key)}{i
               ? ', '
