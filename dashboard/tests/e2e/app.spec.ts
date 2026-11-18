@@ -227,6 +227,60 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.windowTitles.slice(titles)).not.toContain('Task Dashboard');
   });
 
+  test('more tabs than fit scroll in their own strip, with ‹ ›; the window buttons and the page stay put (ATM-605)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.windowShell = { system_menu_bar: true, system_window_buttons: false };
+    tasksServer.use('standard');
+    const board = `/projects/${tasksServer.projectId}/kanban`;
+    tasksServer.restoredTabs = { addresses: Array.from({ length: 12 }, () => board), active: 11 };
+    await page.setViewportSize({ width: 1000, height: 700 });
+    await page.goto('/');
+    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(12);
+    const scroller = page.locator('.title-bar-tabs-scroller');
+    const left = page.getByRole('button', { name: 'Tabs to the left' });
+    const right = page.getByRole('button', { name: 'Tabs to the right' });
+    const state = () =>
+      page.evaluate(() => {
+        const bar = document.querySelector('#app-titlebar')!;
+        const strip = document.querySelector('.title-bar-tabs-scroller')!;
+        const buttons = document.querySelector('#window-buttons')!.getBoundingClientRect();
+        return {
+          barFits: bar.scrollWidth <= bar.clientWidth,
+          buttonsIn: buttons.right <= window.innerWidth && buttons.left > 0,
+          pageX: document.scrollingElement!.scrollLeft,
+          pageY: document.scrollingElement!.scrollTop,
+          strip: strip.scrollLeft,
+        };
+      });
+    // The last tab, active, is in view: the strip at its end, only ‹ to press; the bar fits the window
+    await expect(left).toBeEnabled();
+    await expect(right).toBeDisabled();
+    const atEnd = await state();
+    expect(atEnd).toMatchObject({ barFits: true, buttonsIn: true, pageX: 0 });
+    expect(atEnd.strip).toBeGreaterThan(0);
+    // The wheel over the strip scrolls it, and only it
+    await scroller.hover();
+    await page.mouse.wheel(0, -400);
+    await expect.poll(async () => (await state()).strip).toBeLessThan(atEnd.strip);
+    expect(await state()).toMatchObject({ pageX: 0, pageY: atEnd.pageY, buttonsIn: true });
+    // ‹ to the start, then › away from it
+    await page.mouse.wheel(0, -10_000);
+    await expect(left).toBeDisabled();
+    await expect.poll(async () => (await state()).strip).toBe(0);
+    await right.click();
+    await expect.poll(async () => (await state()).strip).toBeGreaterThan(0);
+    await expect(left).toBeEnabled();
+    // Fewer tabs, all fitting: no arrows
+    tasksServer.restoredTabs = { addresses: [board, board], active: 0 };
+    await page.reload();
+    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(2);
+    await expect(left).toHaveCount(0);
+    await expect(right).toHaveCount(0);
+  });
+
   test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
     page,
     tasksServer,

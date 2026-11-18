@@ -120,4 +120,35 @@ describe('TitleBarTabs (a reusable title-bar tab strip)', () => {
       '180px',
     );
   });
+
+  // ATM-605: more tabs than fit scroll in their own strip (measured for real in e2e's app.spec.ts)
+  it('scrolls only its own strip: a wheel over it scrolls it sideways, the page never; ‹ › only when they overflow', async () => {
+    const { container } = render(TitleBarTabs<Tab>, { tabs: TABS, active: 'a', label, onselect: vi.fn() });
+    const strip = container.querySelector<HTMLElement>('.title-bar-tabs-scroller')!;
+    expect(strip.getAttribute('role')).toBe('tablist');
+    // All fitting: no arrows, and the wheel still goes nowhere else
+    expect(container.querySelector('.title-bar-tabs-arrow')).toBeNull();
+    const still = new WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true });
+    strip.dispatchEvent(still);
+    expect(still.defaultPrevented).toBe(true);
+    expect(strip.scrollLeft).toBe(0);
+    // Wider than its room: up and down turns into sideways, as does sideways; a pinch (Ctrl) is the page's zoom
+    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 1000 });
+    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
+    strip.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true }));
+    expect(strip.scrollLeft).toBe(40);
+    strip.dispatchEvent(new WheelEvent('wheel', { deltaX: 25, deltaY: 5, bubbles: true, cancelable: true }));
+    expect(strip.scrollLeft).toBe(65);
+    const pinch = new WheelEvent('wheel', { deltaY: 40, ctrlKey: true, bubbles: true, cancelable: true });
+    strip.dispatchEvent(pinch);
+    expect(pinch.defaultPrevented).toBe(false);
+    expect(strip.scrollLeft).toBe(65);
+    // A scroll measures it again: both arrows, neither end reached
+    await fireEvent.scroll(strip);
+    const arrows = [...container.querySelectorAll<HTMLButtonElement>('.title-bar-tabs-arrow')];
+    expect(arrows.map((a) => [a.getAttribute('aria-label'), a.disabled])).toEqual([
+      ['Tabs to the left', false],
+      ['Tabs to the right', false],
+    ]);
+  });
 });

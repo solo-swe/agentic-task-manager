@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 606
+    "next_number": 607
   },
   "tasks": [
     {
@@ -15409,7 +15409,7 @@
       "description": "Phase 4 ([§3.5](docs/code-review-design.md#:~:text=3.5%20Live%20reviews)): reviewing a change while it is made.\n\n## Change\n- *New live review* in the app and the browser (`atm review live` exists from phase 1): the review page fed by the working copy's changes (the store's subscription and the folder's watcher), redrawn at most every second or two, ignored and generated files left out.\n- A comment records a checkpoint (a `working` round against the base) so it is anchored to what the reviewer saw.\n- Ending it: approve, a round (it becomes `open`), or close; the approval that covers the task when nothing changed since (the task link, phase 1).\n\n## Tests\nE2e: a file written while the page is open shows; a comment makes a checkpoint; approval with and without a change since.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1f42362bf4"
@@ -15419,7 +15419,7 @@
         "crates/atm-lib/src/"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T06:00:15Z",
+      "updated_at": "2026-11-18T06:04:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
@@ -15446,11 +15446,25 @@
           "kind": "handoff",
           "text": "Paused for CR-1 (real measurements asked). Done in 79e8ade: the page follows a live review s working copy (view.now, an unstored round after the checkpoints, polled every 2 s); a comment or an approval makes it a checkpoint (CLI, REST, app); New live review on the list; Close review for a live one. Left: an e2e spec, docs (multi-project-api view.now, docs/agent/reviews.md).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T06:04:47Z",
+          "kind": "review",
+          "text": "CR-8: Live reviews: follow a change as it is made",
+          "by": "claude:0f56a916"
         }
       ],
-      "commit": "79e8adee813e3341d8545826405bf61b7dc617c2",
+      "commit": "ea6822b4fb5dc884cf68ded61709e1c6b87b51e4",
       "started_at": "2026-11-18T06:00:15Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "code_reviews": [
+        {
+          "id": "01a1ed41-fea6-7414-a731-9357b2db1dc9",
+          "ref": "CR-8"
+        }
+      ],
+      "review_requested_at": "2026-11-18T06:04:47Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e29c7ba9fca",
@@ -16738,13 +16752,13 @@
       "description": "The reviews list forgets its filters: Hakan mostly wants the open reviews, and has to press *Open* again every time he comes back (2026-11-18).\n\n## Change\n`dashboard/src/lib/shell/ReviewsTab.svelte`: the list's query (statuses, author, reviewer, task, branch; not the search words) kept in this browser per project (`prefs`), and the list opened with it; *Clear* clears it too.\n\n## Tests\nA component test: a filter chosen is the one the list opens with next time, per project; *Clear* forgets it; the search words aren't kept.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/ReviewsTab.svelte"
       ],
       "created_at": "2026-11-18T05:56:04Z",
-      "updated_at": "2026-11-18T06:00:12Z",
+      "updated_at": "2026-11-18T06:06:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16766,15 +16780,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T06:00:12Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T06:00:12Z",
           "kind": "review",
           "text": "CR-7: The reviews list keeps its last filter",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T06:06:13Z",
+          "kind": "note",
+          "text": "Approved: in CR-7 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-18T06:06:36Z",
+          "kind": "outcome",
+          "text": "Approved in CR-7: the reviews list opens with its last filter, kept per project in the browser",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T06:00:12Z",
+          "to": "2026-11-18T06:06:13Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-18T06:06:36Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed3f-a483-72d0-91de-28ab82b1f2ff",
@@ -16787,16 +16821,16 @@
       "description": "Reported by Hakan (2026-11-18): when the app has more tabs than fit in the title bar's free space, the layout breaks. Scrolling moves the tabs past the window buttons, and it scrolls the page below as well.\n\n## Change\n`dashboard/src/lib/ui/TitleBarTabs.svelte` (and `shell/AppTitleBar.svelte`):\n- The tabs go in a strip of their own, which is the only thing that scrolls. It is clipped between the window buttons and the title bar's other controls, and a wheel or trackpad scroll over it moves only the strip, never the page.\n- When the tabs overflow, left and right buttons at the strip's ends scroll it by about one tab. Each is disabled at its end.\n- The active tab is scrolled into view.\n\n## Tests\nComponent and e2e tests with more tabs than fit:\n- the strip scrolls, and the window buttons and page don't move;\n- a wheel scroll over the strip leaves the page's scroll as it was;\n- the arrows show only on overflow, scroll the strip, and are disabled at the ends;\n- a newly opened tab is in view.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/ui/TitleBarTabs.svelte",
         "dashboard/src/lib/shell/AppTitleBar.svelte"
       ],
       "created_at": "2026-11-18T06:02:13Z",
-      "updated_at": "2026-11-18T06:02:13Z",
+      "updated_at": "2026-11-18T06:04:55Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16805,6 +16839,40 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 605,
+      "key_final": false,
+      "started_at": "2026-11-18T06:04:55Z",
+      "started_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1ed42-4d27-713c-9ef9-4c0927598de3",
+      "name": "Show which reviews wait for you, wherever you are in the app",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Requested by Hakan (2026-11-18): an indication that reviews are waiting for his attention, without opening the reviews list.\n\n## What waits for you\n- A review you review that is open or live (the list's `needs_you`), or one sent back to you as its author.\n- A comment or reply by someone else, in a review you take part in, that you haven't seen yet.\n- A top-level comment of yours that is still open, now answered.\n\n## Change\n- atm-lib: a count per project of what waits for the user (`needs_you`, plus unseen comments). A comment is seen when the user's page has shown it; that is recorded per user and review in the browser or app (no write on a GET, security I11), or as an atm-lib record if the design says so: decide it first and note the choice in `docs/code-review-design.md`.\n- Dashboard: a badge with the count on the Reviews tab, and on the project in the project switcher, refreshed with the list. In the list and on a review's page, *new* marks on unseen comments; *Next review needing you* takes them into account.\n- The app: the count on the window's tab for the project (and the dock badge, if cheap).\n\n## Tests\n- Unit tests for the count: each case above, your own comments never counted, and a resolved one that isn't.\n- A component test for the badge.\n- E2e: a new reply shows the badge; opening the review clears it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/review_pages.rs",
+        "dashboard/src/lib/shell/ReviewsTab.svelte",
+        "dashboard/src/lib/reviews/ReviewList.svelte"
+      ],
+      "created_at": "2026-11-18T06:05:07Z",
+      "updated_at": "2026-11-18T06:05:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T06:05:07Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 606,
       "key_final": false
     }
   ]
