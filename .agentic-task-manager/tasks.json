@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 587
+    "next_number": 593
   },
   "tasks": [
     {
@@ -15849,6 +15849,221 @@
         "dashboard"
       ],
       "number": 586,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebf9-5ab0-7489-8d25-ef463ee973d6",
+      "name": "Code review: the Diffs tab loads slowly for long diffs (proposals, then the fix)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "code-review",
+        "performance"
+      ],
+      "description": "A review with a long diff takes a long time before its Diffs tab shows (Hakan, 2026-11-18). Find where the time goes, propose ways to make it fast, decide with Hakan, then do it.\n\n## Measure first\nA review of a few thousand changed lines (one large file, and many files) in the browser and the app: the time to the first file drawn and to the tab settled, split into atm's answer (`review_page` in [`review_pages.rs`](crates/atm-lib/src/review_pages.rs): the round's patch, trees rebuilt with `git apply`, every chain placed with a tree diff each, `rounds::place`), the transfer, and the page (parsing every file's patch, `diff.ts`; the file cards, `ReviewFile.svelte`, `DiffView.svelte`, the sides' documents loaded per file). `tests/e2e/performance.spec.ts` has the review budget to extend (*review file far down*).\n\n## Proposals to weigh (write them up, with numbers)\n- **Paging the files:** the page asks for the round's file list first (paths, statuses, counts), and each file's patch and sides when its card nears the view (`?file=` on the review route), so a review of hundreds of files sends what is looked at.\n- **Paging inside a file:** a very long file's diff drawn in chunks (its hunks, a few hundred rows at a time) as it scrolls, its rows virtualised.\n- **atm's side:** trees rebuilt once per round and cached (by round and patch hash), chains placed in one tree diff per file instead of one per chain, the answer cached by the review's stamp (ETag/304 as the task routes do).\n- **The page:** patches parsed in a worker or lazily per card; the sides' documents only for the rendered view and the context folds.\n\nPut the proposals, with the measurements, in a short document (`docs/review-performance.md`) and open a review of it with Hakan (`atm review create --task <this> --file docs/review-performance.md`) before building; then the chosen ones.\n\n## Tests\nThe performance budget for a long review (first file drawn, a scroll to the end) in `performance.spec.ts`; unit tests for any paging or caching added.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/review-performance.md",
+        "crates/atm-lib/src/review_pages.rs",
+        "dashboard/src/lib/reviews/",
+        "dashboard/tests/e2e/performance.spec.ts"
+      ],
+      "created_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T00:05:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:05:49Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "number": 587,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebf9-5ab0-7489-8d25-ef4766068f19",
+      "name": "Code review: a wrap option for long lines in the diff viewer",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "The diff viewer gets a **Wrap** toggle beside Split/Unified and Source/Rendered on the Diffs tab's toolbar (an icon button, as theirs; kept like them): wrapped, long lines wrap at the column's width instead of scrolling sideways (Hakan, 2026-11-18).\n\n## Details\n- Line numbers stay right: a wrapped line has its number on its first row only, the gutter as tall as the wrapped line, and in Split the two sides' rows stay level (the taller side sets the row's height).\n- Picking lines to comment on, the `+` on a line, the highlight of a selected chain and the comment boxes under a line work the same wrapped.\n- Wrapped, the file has no horizontal scroll bar.\n\n## Tests\nComponent tests in `DiffView.component.test.ts` (the toggle, a long line wrapped with one number); an e2e test in `reviews.spec.ts` that a wrapped long line keeps the next line's number level with it, in Split and Unified.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/DiffCode.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/src/lib/reviews/ReviewPage.svelte"
+      ],
+      "created_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T00:05:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:05:49Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 588,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebf9-5ab0-7489-8d25-ef482a98ae1a",
+      "name": "Code review: the last line's number overlaps the closing \"Show n unchanged lines\"",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "At the bottom of a file's diff, the line number of the last line (an empty one, not shown otherwise) is drawn over the **Show n unchanged lines** row that ends the file (Hakan, 2026-11-18). Find where the extra row comes from (likely the file's trailing newline making an empty last line in the sides' rows, `diff.ts`, or the gutter's numbers drawn past the rows in [`DiffCode.svelte`](dashboard/src/lib/reviews/DiffCode.svelte)) and fix it: no number without its line, and nothing over the fold row.\n\n## Tests\nA unit test in `diff.test.ts` for a file ending with a newline (no empty last row); an e2e or component test that the last fold row has nothing over it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/diff.ts",
+        "dashboard/src/lib/reviews/DiffCode.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte"
+      ],
+      "created_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T00:05:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:05:49Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 589,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebf9-5ab0-7489-8d25-ef4914dd4a4c",
+      "name": "Code review: a long line's horizontal scroll bar covers \"Show n unchanged lines\" at the bottom",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "In a file with long lines, the code's horizontal scroll bar (`overflow-x: auto` in [`DiffCode.svelte`](dashboard/src/lib/reviews/DiffCode.svelte)) is drawn on top of the **Show n unchanged lines** row at the bottom of the file (Hakan, 2026-11-18). The scroll bar belongs below the code it scrolls and above the fold row (or the fold row outside the scrolling block), so both stay usable, on macOS's overlay scroll bars and on classic ones.\n\n## Tests\nAn e2e test in `reviews.spec.ts` with a long line: the fold row's button is clickable (not covered: `elementFromPoint` at its centre is the button).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/DiffCode.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte"
+      ],
+      "created_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T00:05:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:05:49Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 590,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebf9-5ab0-7489-8d25-ef4ae483be2e",
+      "name": "Code review: the rendered Markdown view folds unchanged parts as the source view does",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "In the Diffs tab's **Rendered** view, a Markdown file shows the whole document, while the Source view hides the unchanged lines before and after each change behind **Show n unchanged lines** (Hakan, 2026-11-18). The rendered view should fold the same way: the changed blocks with a little context, the unchanged parts between them folded, each fold opened by a click, the line numbers in its gutter still those of the source.\n\n## Details\nThe rendered sides come from CompMD with each block's source lines ([`RenderedSide.svelte`](dashboard/src/lib/reviews/RenderedSide.svelte)): fold whole blocks (a paragraph, a list, a table, a diagram), never in the middle of one, around the blocks the hunks touch, with the same context the source view keeps.\n\n## Tests\nComponent tests of `RenderedSide` or `DiffView` (a long document with one change: the blocks around it shown, the rest folded, a fold opens); an e2e test in `reviews.spec.ts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/RenderedSide.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte"
+      ],
+      "created_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T00:05:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:05:49Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 591,
+      "key_final": false
+    },
+    {
+      "id": "01a1ebf9-5ab0-7489-8d25-ef4bc05d8f15",
+      "name": "Code review: the rendered Markdown view shows one page and cuts off the rest of the document",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "code-review",
+        "ux"
+      ],
+      "description": "In the Diffs tab's **Rendered** view, a Markdown document longer than a page shows only its first page: the rest is drawn wrongly and can't be scrolled to or read (Hakan, 2026-11-18). The likely cause: the page sheet has a fixed shape, `aspect-ratio: 8.5 / 11` in [`RenderedSide.svelte`](dashboard/src/lib/reviews/RenderedSide.svelte), so the document's height is cut to one page and its blocks' positions (and the gutter's numbers placed by them) no longer match.\n\n## Change\nThe sheet keeps a page's width and look but grows with its document (at least one page tall, then as tall as the content), the gutter's numbers placed by the blocks as they are laid out, the whole document scrolling with the file's card. Check it with a long document, with images, tables and a Mermaid diagram (which lay out late), in Split and Unified.\n\n## Tests\nAn e2e test in `reviews.spec.ts` with a document of several pages: its last block is reachable by scrolling and visible, its line number beside it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/RenderedSide.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-18T00:05:49Z",
+      "updated_at": "2026-11-18T00:05:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T00:05:49Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 592,
       "key_final": false
     }
   ]
