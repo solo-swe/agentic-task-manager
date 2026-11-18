@@ -145,10 +145,12 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
-  /* A page: at the least as tall as a letter page is for its width; its gutter in its left margin */
+  /* A page: at the least as tall as a letter page is for its width, and as tall as its document past that (ATM-592:
+     `min-height: auto` makes the ratio a minimum, its content's height the rest; the viewer's `min-height` is a
+     share of its own scroller, which a card hasn't); its gutter in its left margin */
   .diff-pane .doc-page {
     aspect-ratio: 8.5 / 11;
-    min-height: 0;
+    min-height: auto;
     padding-left: max(52px, var(--space-10));
   }
   .diff-pane :global(.doc-gutter-lines) {

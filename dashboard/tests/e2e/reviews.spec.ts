@@ -421,6 +421,49 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(view.locator('.diff-pane')).toHaveClass(/diff-new/);
   });
 
+  test('Rendered (ATM-592): a document of several pages grows its page; its last paragraph is there, numbered beside it', async ({
+    page,
+    tasksServer,
+  }) => {
+    // 120 paragraphs (240 lines), the last one changed
+    const paragraphs = (last: string) =>
+      Array.from({ length: 120 }, (_, i) => (i === 119 ? last : `Paragraph ${i + 1} of a long plan.`)).join('\n\n') +
+      '\n';
+    const before = paragraphs('The old ending.');
+    const after = paragraphs('The new ending.');
+    const patch =
+      'diff --git a/docs/long.md b/docs/long.md\n--- a/docs/long.md\n+++ b/docs/long.md\n' +
+      '@@ -237,3 +237,3 @@\n Paragraph 119 of a long plan.\n \n-The old ending.\n+The new ending.\n';
+    await openReviews(page, tasksServer);
+    tasksServer
+      .setRevisionDocument('base1', projectDocument('docs/long.md', before))
+      .setRevisionDocument('head3', projectDocument('docs/long.md', after));
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        view: { round: 3, against: null, files: [{ ...file('docs/long.md', patch), after: 'head3' }] },
+      }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/long.md'));
+    const view = diffOf(page, 'docs/long.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    const ending = newSide.locator('.compmd-page p', { hasText: 'The new ending.' });
+    await ending.scrollIntoViewIfNeeded();
+    await expect(ending).toBeVisible();
+    // Inside its page, which is as tall as its document (more than one letter page)
+    const sheet = (await newSide.locator('.doc-page').boundingBox())!;
+    const text = (await ending.boundingBox())!;
+    expect(text.y + text.height).toBeLessThanOrEqual(sheet.y + sheet.height);
+    expect(sheet.height).toBeGreaterThan((sheet.width * 11) / 8.5 + 100);
+    // Its line number beside it, marked as changed
+    const number = newSide.locator('.doc-gutter-lines [data-line="239"]');
+    await expect(number).toHaveClass(/marked/);
+    const numberBox = (await number.boundingBox())!;
+    expect(Math.abs(numberBox.y - text.y)).toBeLessThan(text.height);
+  });
+
   test('the + on a line, dragged over three lines, opens the comment under them; sent as the user with the page’s token', async ({
     page,
     tasksServer,

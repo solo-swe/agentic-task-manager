@@ -15878,9 +15878,9 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:49:36Z",
+      "updated_at": "2026-11-18T00:52:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -15896,7 +15896,7 @@
       "key_final": false,
       "started_at": "2026-11-18T00:41:33Z",
       "started_by": "claude:0f56a916",
-      "commit": "d5c7cd7ccda906a7827da7336dbefaf7d7c6252e",
+      "commit": "c9c4232507bbd8b57049c3701245d7a7b26e9b52",
       "code_reviews": [
         {
           "id": "01a1ec1e-490c-7662-b019-c555b41cacfe",
