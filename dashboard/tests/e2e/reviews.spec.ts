@@ -521,6 +521,56 @@ test.describe('a review’s page', () => {
     await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // ATM-626 (Hakan, the app): the Rendered view of a new Markdown document showed only about its first page
+  for (const added of [true, false])
+    test(`Rendered: a long ${added ? 'new' : 'changed'} document is drawn to its end`, async ({
+      page,
+      tasksServer,
+    }) => {
+      const section = (n: number) =>
+        `## Section ${n}\n\n${'A paragraph of the plan, long enough to wrap. '.repeat(8)}\n`;
+      const after = ['# Plan', ...Array.from({ length: 30 }, (_, n) => section(n + 1))].join('\n') + '\n';
+      const before = added ? null : after.replace('## Section 30', '## Section thirty');
+      const lines = (t: string) => t.trimEnd().split('\n');
+      const doc = 'docs/long-plan.md';
+      const patch = added
+        ? `diff --git a/${doc} b/${doc}\nnew file mode 100644\n--- /dev/null\n+++ b/${doc}\n@@ -0,0 +1,${lines(after).length} @@\n` +
+          lines(after)
+            .map((l) => `+${l}`)
+            .join('\n') +
+          '\n'
+        : (() => {
+            const at = lines(after).indexOf('## Section 30') + 1;
+            return `diff --git a/${doc} b/${doc}\n--- a/${doc}\n+++ b/${doc}\n@@ -${at},1 +${at},1 @@\n-## Section thirty\n+## Section 30\n`;
+          })();
+      tasksServer.setRevisionDocument('head3', projectDocument(doc, after, { kind: 'markdown', line_offset: 1 }));
+      if (before)
+        tasksServer.setRevisionDocument('base1', projectDocument(doc, before, { kind: 'markdown', line_offset: 1 }));
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({
+          view: {
+            round: 3,
+            against: null,
+            files: [added ? file(doc, patch, 'added', null) : file(doc, patch)],
+          },
+        }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await page.getByRole('button', { name: 'Rendered', exact: true }).click();
+      const side = diffOf(page, doc).locator('.doc-sheet').last();
+      // A new document is all one change, drawn whole; a changed one shows its blocks near the change (ATM-591)
+      if (added) await expect(side.getByRole('heading', { name: 'Plan', exact: true })).toBeAttached();
+      // The last section is drawn, and in view once scrolled to
+      const last = side.getByRole('heading', { name: 'Section 30' });
+      await expect(last).toBeAttached();
+      await last.scrollIntoViewIfNeeded();
+      await expect(last).toBeInViewport();
+      if (added) await expect(side.getByRole('heading', { name: /^Section \d+$/ })).toHaveCount(30);
+    });
+
   // ATM-625 (Hakan, the app): + on a wrapped long line of a Markdown file sent the pane to near the end of the review
   for (const wrapped of [true, false])
     test(`+ on a line ${wrapped ? 'wrapped' : 'not wrapped'} opens the comment box where it is; the pane stays`, async ({

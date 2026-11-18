@@ -18290,7 +18290,7 @@
       "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): in a Markdown file shown as source (not rendered), with **Wrap** on (ATM-588), clicking **+** to comment on a long wrapped line makes the diffs pane jump to somewhere near the end of the review.\n\n## Leads\n- Wrapped rows are measured by `DiffCode`'s `measureWrapped` (a DOM range at each line's start). The composer opening under the row changes the run's height; if the rows are measured again from a stale layout, or the measuring itself scrolls (a range's `getClientRects` on a skipped or unlaid-out element), the pane can move.\n- The page pins the file gone to (`ReviewPage.svelte`'s `chosen`/`pinned` and its ResizeObserver): opening the composer may count as a jump, or pin a file other than the one written in.\n- The composer's textarea is focused on show (`focusOnShow`): a `focus()` without `preventScroll` scrolls it into view, and a wrong position for it (measured before layout) sends the pane far.\n\nReproduce first: an e2e in `reviews.spec.ts` with a long Markdown line, Wrap on, `+` clicked; the pane's `scrollTop` must stay within a few pixels, and the composer be in view.\n\n## Tests\nThat e2e, in Unified with Wrap (Split disables Wrap), and the same without Wrap.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -18299,7 +18299,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T21:09:58Z",
-      "updated_at": "2026-11-18T21:25:50Z",
+      "updated_at": "2026-11-18T21:33:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18315,7 +18315,24 @@
       "number": 625,
       "key_final": false,
       "started_at": "2026-11-18T21:25:50Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "95fdad8d6a0a4848c91100b45491e9d05f51c89f",
+      "code_reviews": [
+        {
+          "id": "01a1f094-86b7-74a1-b992-9c278f0ee608",
+          "ref": "CR-28"
+        }
+      ],
+      "review_requested_at": "2026-11-18T21:33:48Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T21:33:48Z",
+          "kind": "review",
+          "text": "CR-28: + on a line opens the comment box where it is",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f07e-b5ea-7451-b1fb-a03375d418fc",
@@ -18328,7 +18345,7 @@
       "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): the **Rendered** view of a Markdown file still shows only about its first page; tried with a new document (added in the round). Not yet known whether a changed existing document does the same.\n\n## Leads\n- A new file is all one change: `RenderedSide`'s parts (`renderedParts`, ATM-591) should be one part, the whole document. Check what parts it gets, and whether `CompMd`'s `only` cuts the tree at the first block range.\n- The card's height: `ReviewFile`'s estimate (`.review-file-later`, the loading body's `min-height: var(--card-estimate)` from ATM-615, `contain-intrinsic-size`) may cap or clip the rendered side, or the side's `doc-sheet` may have a fixed height from a measurement taken before CompMD drew.\n- Long files are drawn in chunks (`DiffView`'s `CHUNK`, ATM-587): if the rendered view goes through the chunking meant for source rows, only the first chunk would show.\n\nReproduce first, both cases (a new document and a changed one, each longer than a few screens): an e2e in `reviews.spec.ts` (the fixture serves both sides) asserting the last heading of the document is drawn.\n\n## Tests\nThat e2e for a new and a changed document; a unit test of `renderedParts` for an added file.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
@@ -18337,9 +18354,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T21:09:58Z",
-      "updated_at": "2026-11-18T21:09:58Z",
+      "updated_at": "2026-11-18T21:33:48Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -18351,7 +18368,9 @@
         "dashboard"
       ],
       "number": 626,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T21:33:48Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f07e-b5ea-7451-b1fb-a034b5e64291",
