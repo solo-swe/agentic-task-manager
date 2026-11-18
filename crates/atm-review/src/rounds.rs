@@ -536,7 +536,7 @@ mod tests {
                 tasks: Vec::new(),
                 author: Some(agent.clone()),
                 reviewers: Vec::new(),
-                status: Status::Open,
+                status: Status::Waiting,
                 first: from_working(&vcs, "HEAD", &agent).unwrap(),
             })
             .unwrap();
@@ -755,7 +755,7 @@ mod tests {
                 tasks: Vec::new(),
                 author: Some(by.clone()),
                 reviewers: Vec::new(),
-                status: Status::Open,
+                status: Status::Waiting,
                 first: NewRound {
                     kind: RoundKind::Files,
                     submodule: None,
@@ -1004,7 +1004,7 @@ mod tests {
                 tasks: Vec::new(),
                 author: Some(by.clone()),
                 reviewers: Vec::new(),
-                status: Status::Open,
+                status: Status::Waiting,
                 first,
             })
             .unwrap();

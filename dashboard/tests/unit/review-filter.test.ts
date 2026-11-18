@@ -43,6 +43,12 @@ describe('the reviews list’s kept filter', () => {
     expect(stored()).toBeNull();
   });
 
+  // ATM-613: open is every review not decided yet, and waiting its own status
+  it('keeps open, every review not decided yet, beside a status', () => {
+    keepFilter('p1', query({ status: ['open', 'waiting'] }));
+    expect(keptFilter('p1').status).toEqual(['open', 'waiting']);
+  });
+
   it('leaves out what was stored that isn’t a filter: unknown statuses, wrong types, a broken value', () => {
     localStorage.setItem(
       REVIEW_FILTER_KEY,

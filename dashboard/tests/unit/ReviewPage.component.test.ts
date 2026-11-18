@@ -42,7 +42,7 @@ function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['
       reference: 'CR-7',
       number: 7,
       title: 'Trim the names',
-      status: 'open',
+      status: 'waiting',
       tasks: ['ATM-1'],
       author: 'claude:a',
       reviewers: ['Ana'],
@@ -134,7 +134,7 @@ describe('ReviewPage: the top bar', () => {
     const { container } = show(data(), { backHref: '/projects/p1/reviews', onback });
     const top = within(container.querySelector('.review-top') as HTMLElement);
     expect(top.getByRole('heading').textContent?.replace(/\s+/g, ' ').trim()).toBe('ATM CR-7 Trim the names');
-    expect(top.getByText('Open')).toBeTruthy();
+    expect(top.getByText('Waiting for review')).toBeTruthy();
     expect(top.getByText('Needs you')).toBeTruthy();
     const back = top.getByRole('link', { name: 'Reviews' });
     expect(back.querySelector('.icon-arrow-left')).not.toBeNull();

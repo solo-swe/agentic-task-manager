@@ -89,7 +89,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     /// # Errors
     /// Another status, an empty title, or the store's.
     pub fn create(&mut self, new: NewReview) -> Result<ReviewHeader> {
-        if !matches!(new.status, Status::Draft | Status::Open | Status::Live) {
+        if !matches!(new.status, Status::Draft | Status::Waiting | Status::Live) {
             return Err(Error::Invalid(format!(
                 "a review starts as a draft, open or live, not {}",
                 new.status.name()
@@ -116,7 +116,8 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
                 review.header.reference
             )));
         }
-        self.store.set_status(&review.header.id, Status::Open, by)
+        self.store
+            .set_status(&review.header.id, Status::Waiting, by)
     }
 
     /// The author's next round, after addressing the comments: a review sent back is open again, and a live one ends
@@ -150,7 +151,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
             Status::ChangesRequested | Status::Live
         ) {
             self.store
-                .set_status(&review.header.id, Status::Open, &by)?;
+                .set_status(&review.header.id, Status::Waiting, &by)?;
         }
         Ok(number)
     }
@@ -313,7 +314,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
             Verdict::Approve => {
                 if !matches!(
                     status,
-                    Status::Open | Status::Live | Status::ChangesRequested
+                    Status::Waiting | Status::Live | Status::ChangesRequested
                 ) {
                     return Err(not_now(&review, "be approved"));
                 }
@@ -330,7 +331,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
             // Sent back already, it isn't sent back again (CR-2): a reviewer's further words are a comment, which
             // the page calls *Publish comments*
             Verdict::RequestChanges => {
-                if status != Status::Open {
+                if status != Status::Waiting {
                     return Err(not_now(&review, "be sent back"));
                 }
                 Some(Status::ChangesRequested)
@@ -500,11 +501,11 @@ mod tests {
     fn a_review_starts_as_a_draft_open_or_live_with_a_title_and_its_first_round() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        let header = reviews.create(new_review(Status::Open)).unwrap();
+        let header = reviews.create(new_review(Status::Waiting)).unwrap();
         assert_eq!(header.reference, cr(1));
         assert_eq!(header.number, 1);
         assert!(reviews.create(new_review(Status::Approved)).is_err());
-        let mut untitled = new_review(Status::Open);
+        let mut untitled = new_review(Status::Waiting);
         untitled.title = "  ".into();
         assert!(reviews.create(untitled).is_err());
         assert_eq!(
@@ -523,7 +524,7 @@ mod tests {
     fn a_review_is_decided_by_its_reviewers_or_with_none_by_anyone_but_its_author() {
         let mut store = MemoryStore::new();
         let header = Reviews::new(&mut store)
-            .create(new_review(Status::Open))
+            .create(new_review(Status::Waiting))
             .unwrap();
         assert!(decides(&header, &hakan()));
         assert!(!decides(&header, &agent()));
@@ -539,7 +540,7 @@ mod tests {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
         // Hakan's own review, no reviewers named: by the rules, not his to decide
-        let mut own = new_review(Status::Open);
+        let mut own = new_review(Status::Waiting);
         own.author = Some(hakan());
         own.reviewers.clear();
         reviews.create(own).unwrap();
@@ -577,7 +578,7 @@ mod tests {
         );
 
         // It lifts who may decide, nothing else: an approval still needs every comment resolved
-        let mut other = new_review(Status::Open);
+        let mut other = new_review(Status::Waiting);
         other.author = Some(hakan());
         other.reviewers.clear();
         reviews.create(other).unwrap();
@@ -598,7 +599,7 @@ mod tests {
                 .contains("comments are open")
         );
         // A reviewer who may decide records no override
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         reviews
             .submit(
                 &cr(3),
@@ -629,7 +630,7 @@ mod tests {
         reviews.add_round(&cr(1), round(&agent())).unwrap();
         let header = reviews.store().get_review(&cr(1)).unwrap().header;
         assert_eq!(header.author, Some(agent()));
-        assert_eq!(header.status, Status::Open);
+        assert_eq!(header.status, Status::Waiting);
         assert!(decides(&header, &hakan()) && !decides(&header, &agent()));
     }
 
@@ -637,7 +638,7 @@ mod tests {
     fn sent_back_fixed_in_a_round_then_approved_once_every_comment_is_resolved() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         let question = reviews
             .comment(
                 &cr(1),
@@ -669,7 +670,7 @@ mod tests {
             .unwrap();
         assert_eq!(status(reviews.store(), 1), Status::ChangesRequested);
         assert_eq!(reviews.add_round(&cr(1), round(&agent())).unwrap(), 2);
-        assert_eq!(status(reviews.store(), 1), Status::Open);
+        assert_eq!(status(reviews.store(), 1), Status::Waiting);
 
         // Approving names what is still open: the question and the request's own words
         let refused = reviews
@@ -718,7 +719,7 @@ mod tests {
     fn a_comments_author_resolves_their_own_and_edits_only_their_own() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         let note = reviews
             .comment(&cr(1), on("a.rs", 1), "A note for the reviewer.", &agent())
             .unwrap();
@@ -741,7 +742,7 @@ mod tests {
     fn a_comment_needs_text_and_a_round_the_review_has() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         assert!(
             reviews
                 .comment(&cr(1), on("a.rs", 2), "no round 2", &hakan())
@@ -766,7 +767,7 @@ mod tests {
         );
         assert!(reviews.ask_for_review(&cr(1), &hakan()).is_err());
         reviews.ask_for_review(&cr(1), &agent()).unwrap();
-        assert_eq!(status(reviews.store(), 1), Status::Open);
+        assert_eq!(status(reviews.store(), 1), Status::Waiting);
         assert!(reviews.ask_for_review(&cr(1), &agent()).is_err());
     }
 
@@ -795,7 +796,7 @@ mod tests {
         assert_eq!(status(reviews.store(), 2), Status::Approved);
 
         reviews.add_round(&cr(1), round(&agent())).unwrap();
-        assert_eq!(status(reviews.store(), 1), Status::Open);
+        assert_eq!(status(reviews.store(), 1), Status::Waiting);
         assert!(reviews.checkpoint(&cr(1), checkpoint).is_err());
     }
 
@@ -803,7 +804,7 @@ mod tests {
     fn closed_by_its_author_or_a_reviewer_with_the_reason_kept() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         assert!(
             reviews
                 .close(&cr(1), "no", &Actor::from("someone else"))
@@ -823,7 +824,7 @@ mod tests {
     fn its_tasks_are_changed_by_its_author_or_a_reviewer() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         assert!(
             reviews
                 .set_tasks(&cr(1), vec![], &Actor::from("someone else"))
@@ -844,7 +845,7 @@ mod tests {
 
     /// Store a review of `status`, whatever the rules say about starting there: a review that came to it.
     fn at(store: &mut MemoryStore, status: Status) -> ReviewRef {
-        let header = store.create_review(new_review(Status::Open)).unwrap();
+        let header = store.create_review(new_review(Status::Waiting)).unwrap();
         store.set_status(&header.id, status, &hakan()).unwrap();
         header.reference
     }
@@ -861,7 +862,7 @@ mod tests {
     fn only_draft_open_and_live_are_statuses_a_review_starts_in() {
         for (status, starts) in [
             (Status::Draft, true),
-            (Status::Open, true),
+            (Status::Waiting, true),
             (Status::Live, true),
             (Status::ChangesRequested, false),
             (Status::Approved, false),
@@ -884,7 +885,7 @@ mod tests {
     fn whose_change_it_is_and_who_decides_when_no_author_is_known() {
         let mut store = MemoryStore::new();
         let mut header = Reviews::new(&mut store)
-            .create(new_review(Status::Open))
+            .create(new_review(Status::Waiting))
             .unwrap();
         assert!(is_author(&header, &agent()) && !is_author(&header, &hakan()));
         header.author = None;
@@ -966,7 +967,7 @@ mod tests {
 
     #[test]
     fn only_a_draft_is_asked_for_review() {
-        for status in [Status::Open, Status::Live, Status::ChangesRequested] {
+        for status in [Status::Waiting, Status::Live, Status::ChangesRequested] {
             let mut store = MemoryStore::new();
             let reference = at(&mut store, status);
             assert!(
@@ -991,9 +992,9 @@ mod tests {
     fn a_round_reopens_a_review_sent_back_or_live_and_leaves_a_draft_or_open_one_as_it_is() {
         for (before, after) in [
             (Status::Draft, Status::Draft),
-            (Status::Open, Status::Open),
-            (Status::Live, Status::Open),
-            (Status::ChangesRequested, Status::Open),
+            (Status::Waiting, Status::Waiting),
+            (Status::Live, Status::Waiting),
+            (Status::ChangesRequested, Status::Waiting),
         ] {
             let mut store = MemoryStore::new();
             let reference = at(&mut store, before);
@@ -1016,7 +1017,7 @@ mod tests {
     fn a_round_is_its_authors_and_someone_elses_is_refused_and_not_kept() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         for by in [hakan(), someone()] {
             assert!(is_refused(&reviews.add_round(&cr(1), round(&by))), "{by:?}");
         }
@@ -1040,7 +1041,7 @@ mod tests {
 
     #[test]
     fn a_checkpoint_is_only_a_live_reviews_and_anyone_taking_part_makes_one() {
-        for status in [Status::Draft, Status::Open, Status::ChangesRequested] {
+        for status in [Status::Draft, Status::Waiting, Status::ChangesRequested] {
             let mut store = MemoryStore::new();
             let reference = at(&mut store, status);
             assert!(
@@ -1101,7 +1102,7 @@ mod tests {
     fn a_reply_is_edited_by_its_author_only_and_a_missing_comment_is_not_found() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         let question = reviews
             .comment(&cr(1), on("a.rs", 1), "Why?", &hakan())
             .unwrap();
@@ -1133,7 +1134,7 @@ mod tests {
     fn a_comment_is_resolved_and_reopened_by_a_decider_or_its_author_only() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         let question = reviews
             .comment(&cr(1), on("a.rs", 1), "Why?", &hakan())
             .unwrap();
@@ -1160,7 +1161,7 @@ mod tests {
             Err(Error::NotFound(_))
         ));
         // With no reviewers named, anyone but the review's author decides, so resolves another's comment
-        let mut open = new_review(Status::Open);
+        let mut open = new_review(Status::Waiting);
         open.reviewers.clear();
         reviews.create(open).unwrap();
         let note = reviews
@@ -1174,7 +1175,7 @@ mod tests {
     fn a_comment_verdict_keeps_the_status_and_leaves_its_words_open() {
         for status in [
             Status::Draft,
-            Status::Open,
+            Status::Waiting,
             Status::Live,
             Status::ChangesRequested,
         ] {
@@ -1201,7 +1202,7 @@ mod tests {
     fn a_submits_words_are_about_the_last_round_and_blank_words_are_none() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         reviews.add_round(&cr(1), round(&agent())).unwrap();
         reviews
             .submit(&cr(1), Verdict::Comment, Some(" \n"), None, &hakan())
@@ -1232,7 +1233,7 @@ mod tests {
         for verdict in [Verdict::Approve, Verdict::RequestChanges, Verdict::Comment] {
             let mut store = MemoryStore::new();
             let mut reviews = Reviews::new(&mut store);
-            reviews.create(new_review(Status::Open)).unwrap();
+            reviews.create(new_review(Status::Waiting)).unwrap();
             for by in [agent(), someone()] {
                 assert!(
                     is_refused(&reviews.submit(&cr(1), verdict, Some("x"), None, &by)),
@@ -1242,7 +1243,7 @@ mod tests {
             let review = reviews.store().get_review(&cr(1)).unwrap();
             assert_eq!(
                 (review.header.status, review.chains.len()),
-                (Status::Open, 0)
+                (Status::Waiting, 0)
             );
         }
     }
@@ -1253,7 +1254,7 @@ mod tests {
     fn a_review_not_ended_takes_comments_and_replies_whatever_its_status() {
         for status in [
             Status::Draft,
-            Status::Open,
+            Status::Waiting,
             Status::Live,
             Status::ChangesRequested,
         ] {
@@ -1281,7 +1282,7 @@ mod tests {
     fn an_approval_is_for_an_open_live_or_sent_back_review_and_a_send_back_for_an_open_one() {
         for (status, verdict, after) in [
             (Status::Draft, Verdict::Approve, None),
-            (Status::Open, Verdict::Approve, Some(Status::Approved)),
+            (Status::Waiting, Verdict::Approve, Some(Status::Approved)),
             (Status::Live, Verdict::Approve, Some(Status::Approved)),
             // Sent back, then approved after all (ATM-609)
             (
@@ -1291,7 +1292,7 @@ mod tests {
             ),
             (Status::Draft, Verdict::RequestChanges, None),
             (
-                Status::Open,
+                Status::Waiting,
                 Verdict::RequestChanges,
                 Some(Status::ChangesRequested),
             ),
@@ -1299,7 +1300,7 @@ mod tests {
             // Sent back already: not again (CR-2); further words are a comment, below
             (Status::ChangesRequested, Verdict::RequestChanges, None),
             (Status::Draft, Verdict::Comment, Some(Status::Draft)),
-            (Status::Open, Verdict::Comment, Some(Status::Open)),
+            (Status::Waiting, Verdict::Comment, Some(Status::Waiting)),
             (Status::Live, Verdict::Comment, Some(Status::Live)),
             (
                 Status::ChangesRequested,
@@ -1332,7 +1333,7 @@ mod tests {
     fn an_override_by_someone_not_a_reviewer_is_recorded_as_such() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         reviews
             .submit(
                 &cr(1),
@@ -1375,7 +1376,7 @@ mod tests {
         }
         // A reviewer closes it as well as its author, the reason resolved
         let mut store = MemoryStore::new();
-        let reference = at(&mut store, Status::Open);
+        let reference = at(&mut store, Status::Waiting);
         Reviews::new(&mut store)
             .close(&reference, "Not needed.", &hakan())
             .unwrap();
@@ -1406,7 +1407,7 @@ mod tests {
     fn its_summary_is_changed_by_its_author_while_it_is_open() {
         let mut store = MemoryStore::new();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         let title = reviews.store().get_review(&cr(1)).unwrap().header.title;
         reviews
             .edit_summary(&cr(1), "1. Do this.\n2. Then that.", &agent())
@@ -1439,7 +1440,7 @@ mod tests {
             }))
             .unwrap();
         let mut reviews = Reviews::new(&mut store);
-        reviews.create(new_review(Status::Open)).unwrap();
+        reviews.create(new_review(Status::Waiting)).unwrap();
         reviews
             .comment(&cr(1), on("a.rs", 1), "One.", &hakan())
             .unwrap();

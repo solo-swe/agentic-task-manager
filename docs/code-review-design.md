@@ -141,17 +141,17 @@ A review goes through these statuses:
 ```mermaid
 stateDiagram-v2
     [*] --> draft: create --draft
-    [*] --> open: create
+    [*] --> waiting: create
     [*] --> live: live
-    draft --> open: the author asks for review
-    open --> changes_requested: a reviewer submits "request changes"
-    changes_requested --> open: the author adds a round
-    open --> approved: a reviewer approves (every top-level comment resolved)
+    draft --> waiting: the author asks for review
+    waiting --> changes_requested: a reviewer submits "request changes"
+    changes_requested --> waiting: the author adds a round
+    waiting --> approved: a reviewer approves (every top-level comment resolved)
     live --> approved: a reviewer approves (every top-level comment resolved)
     changes_requested --> approved: a reviewer approves after all (every top-level comment resolved; ATM-609)
-    live --> open: the author ends the live review with a round
+    live --> waiting: the author ends the live review with a round
     draft --> closed
-    open --> closed
+    waiting --> closed
     changes_requested --> closed
     live --> closed
     approved --> [*]
@@ -161,11 +161,15 @@ stateDiagram-v2
 | Status | Means | Who moves it there |
 |---|---|---|
 | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
-| `open` | waiting on the reviewers | the author, with a round |
+| `waiting` | *Waiting for review*: waiting on the reviewers (ATM-613: `open` until 0.41.0, still read as this) | the author, with a round |
 | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
 | `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words, as a comment (the page's *Publish comments*; ATM-597): it isn't sent back again (CR-2); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
 | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
 | `closed` | ended without approval (abandoned, replaced) | the author, or a reviewer |
+
+An **open** review is one not decided yet: draft, waiting, live or changes requested (ATM-613). `open` names that
+group wherever statuses are filtered (`atm review list --status open`, the list's `status=open`, its *Open* button);
+it is no status of its own.
 
 **How it relates to its tasks** (the review's decisions are its tasks', §3.8). A review names **one task or several**,
 and the names can be given at three points, marked ① ② ③ below:
@@ -341,14 +345,14 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
   an approval still needs every top-level comment resolved. An agent never uses it on its own: no skill pre-approves
   `atm review submit`, so its harness asks the user each time.
 - **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author
-  ends it with a round, which makes it an ordinary `open` review; or it is closed.
+  ends it with a round, which makes it an ordinary `waiting` review; or it is closed.
 - **When the task is finished**, the agent asks for its review as its review mode says, and atm sees which case it is:
 
   | During the task | At the end |
   |---|---|
   | no live review, no comments | the agent creates the CR (`atm review create --task ATM-482 …`) and the task goes in review, as today |
   | a live review, approved, the task's change unchanged since the approved checkpoint | **no other CR**: the live review's approval is the task's (`review_state = approved`, with the CR's link) |
-  | a live review, not approved (or changed since its approval) | no new CR: the agent ends the live review with a round on the final change (`atm review round CR-9`), which makes it `open`, and the task goes in review on it |
+  | a live review, not approved (or changed since its approval) | no new CR: the agent ends the live review with a round on the final change (`atm review round CR-9`), which makes it `waiting`, and the task goes in review on it |
 
 ### 3.6 Rounds, anchors and drift
 

@@ -1,6 +1,13 @@
 <script lang="ts">
   import Icon from '../ui/Icon.svelte';
-  import { NO_QUERY, STATUS_LABELS, type ListQuery as Query, type ReviewEntry, type ReviewStatus } from './types';
+  import {
+    NO_QUERY,
+    STATUS_LABELS,
+    type ListQuery as Query,
+    type ReviewEntry,
+    type ReviewStatus,
+    type StatusFilter,
+  } from './types';
 
   // The reviews page (docs/code-review-design.md §3.11, ATM-574): a project's reviews, the latest activity first,
   // with search (title, summary and comments, every word) and filters (status, author, reviewer, task, branch); those
@@ -45,7 +52,9 @@
     }
   }
 
-  const STATUSES = Object.keys(STATUS_LABELS) as ReviewStatus[];
+  // Open first, every review not decided yet (ATM-613), then each status to narrow it further
+  const STATUSES: StatusFilter[] = ['open', ...(Object.keys(STATUS_LABELS) as ReviewStatus[])];
+  const FILTER_LABELS: Record<StatusFilter, string> = { open: 'Open', ...STATUS_LABELS };
 
   // The choices each filter offers: what the reviews listed have, and what is chosen
   const choices = (pick: (e: ReviewEntry) => (string | null)[], chosen: string) =>
@@ -67,7 +76,7 @@
     timer = setTimeout(() => onquery({ ...query, q: text.trim() }), 250);
   }
 
-  function toggleStatus(status: ReviewStatus) {
+  function toggleStatus(status: StatusFilter) {
     const status_ = query.status.includes(status)
       ? query.status.filter((s) => s !== status)
       : [...query.status, status];
@@ -163,7 +172,8 @@
         class="review-chip status-{status}"
         aria-pressed={query.status.includes(status)}
         data-status={status}
-        onclick={() => toggleStatus(status)}>{STATUS_LABELS[status]}</button
+        title={status === 'open' ? 'Every review not decided yet: draft, waiting, live or sent back' : undefined}
+        onclick={() => toggleStatus(status)}>{FILTER_LABELS[status]}</button
       >
     {/each}
     {#each [['author', 'Author', authors], ['reviewer', 'Reviewer', reviewers], ['task', 'Task', tasks], ['branch', 'Branch', branches]] as const as [key, label, options] (key)}
@@ -426,7 +436,7 @@
     border-color: color-mix(in srgb, var(--red) 50%, transparent);
     background: color-mix(in srgb, var(--red) 10%, transparent);
   }
-  .review-status.status-open,
+  .review-status.status-waiting,
   .review-status.status-live {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 50%, transparent);

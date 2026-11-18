@@ -119,7 +119,8 @@ pub enum ReviewCommand {
     },
     /// List the reviews, of every working copy, newest first.
     List {
-        /// Only these statuses (repeatable): draft, open, live, changes_requested, approved, closed
+        /// Only these statuses (repeatable): open (any not decided yet: draft, waiting, live or changes_requested), or
+        /// one of draft, waiting, live, changes_requested, approved, closed
         #[arg(long = "status", value_name = "STATUS")]
         statuses: Vec<String>,
         /// Only the reviews of this task
@@ -445,10 +446,11 @@ fn heard_line(heard: &Value) -> String {
     )
 }
 
-fn status_of(name: &str) -> Result<Status> {
-    serde_json::from_value(json!(name)).map_err(|_| {
+/// The statuses `--status <name>` stands for: `open`, every review not decided yet (ATM-613); any other, its own.
+fn status_of(name: &str) -> Result<Vec<Status>> {
+    Status::filter_named(name).ok_or_else(|| {
         Error::Invalid(format!(
-            "no status {name}: draft, open, live, changes_requested, approved or closed"
+            "no status {name}: open (any not decided yet), draft, waiting, live, changes_requested, approved or closed"
         ))
     })
 }
@@ -554,7 +556,11 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                     tasks,
                     author: Some(author),
                     reviewers: reviewers.into_iter().map(Actor).collect(),
-                    status: if draft { Status::Draft } else { Status::Open },
+                    status: if draft {
+                        Status::Draft
+                    } else {
+                        Status::Waiting
+                    },
                     first,
                 },
             )?;
@@ -683,7 +689,8 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 statuses: statuses
                     .iter()
                     .map(|s| status_of(s))
-                    .collect::<Result<_>>()?,
+                    .collect::<Result<Vec<_>>>()?
+                    .concat(),
                 task: task.map(|t| reviews::task_reference(&project, &t)),
             };
             let root = project
@@ -1076,14 +1083,17 @@ mod tests {
     fn a_status_is_one_of_the_reviews() {
         for name in [
             "draft",
-            "open",
+            "waiting",
             "live",
             "changes_requested",
             "approved",
             "closed",
         ] {
-            assert_eq!(status_of(name).unwrap().name(), name);
+            let named: Vec<&str> = status_of(name).unwrap().iter().map(|s| s.name()).collect();
+            assert_eq!(named, [name]);
         }
+        // Open: every review not decided yet (ATM-613)
+        assert_eq!(status_of("open").unwrap(), Status::OPEN);
         for bad in ["", "Open", "changes-requested", "merged"] {
             assert_eq!(status_of(bad).unwrap_err().code(), 2, "{bad}");
         }

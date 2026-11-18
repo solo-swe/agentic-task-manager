@@ -39,10 +39,12 @@ pub struct ReviewQuery {
     pub branch: Option<String>,
 }
 
-fn status_named(name: &str) -> Result<Status> {
-    serde_json::from_value(json!(name)).map_err(|_| {
+/// The statuses a query's `status=` stands for: `open`, every review not decided yet (ATM-613: the list's *Open*);
+/// any other, its own.
+fn status_named(name: &str) -> Result<Vec<Status>> {
+    Status::filter_named(name).ok_or_else(|| {
         Error::Invalid(format!(
-            "{name}: not a review status (draft, open, live, changes_requested, approved, closed)"
+            "{name}: not a review status (open, draft, waiting, live, changes_requested, approved, closed)"
         ))
     })
 }
@@ -53,7 +55,7 @@ fn status_named(name: &str) -> Result<Status> {
 pub fn needs(header: &ReviewHeader, me: &Actor) -> bool {
     let authored = header.author.as_ref() == Some(me);
     match header.status {
-        Status::Open | Status::Live => {
+        Status::Waiting | Status::Live => {
             if header.reviewers.is_empty() {
                 !authored
             } else {
@@ -187,7 +189,8 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
         .status
         .iter()
         .map(|s| status_named(s))
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?
+        .concat();
     let root = project
         .root()
         .ok_or_else(|| Error::NotFound("this project has no folder with reviews".into()))?;
@@ -673,7 +676,7 @@ mod tests {
             // Its decision is yours: whatever was written
             (
                 "open, you its reviewer",
-                talked(header(Status::Open, agent, &["Ana"]), "Ana", &[]),
+                talked(header(Status::Waiting, agent, &["Ana"]), "Ana", &[]),
                 Some("review"),
             ),
             // Sent back, the agent answered you after your comment
@@ -721,7 +724,7 @@ mod tests {
             // Your own review: the comments of others on it
             (
                 "your own, commented on",
-                talked(header(Status::Open, Some("Ana"), &["Bo"]), "Bo", &[]),
+                talked(header(Status::Waiting, Some("Ana"), &["Bo"]), "Bo", &[]),
                 Some("answered"),
             ),
             // Decided: nothing waits, answered or not
@@ -752,12 +755,12 @@ mod tests {
     fn a_review_needs_its_reviewers_while_open_and_its_author_once_sent_back() {
         let ana = Actor::from("Ana");
         for (status, author, reviewers, expected) in [
-            (Status::Open, Some("claude:a"), &["Ana"][..], true),
-            (Status::Open, Some("claude:a"), &["Bo"][..], false),
+            (Status::Waiting, Some("claude:a"), &["Ana"][..], true),
+            (Status::Waiting, Some("claude:a"), &["Bo"][..], false),
             // No reviewers named: anyone but the author
-            (Status::Open, Some("claude:a"), &[][..], true),
-            (Status::Open, Some("Ana"), &[][..], false),
-            (Status::Open, None, &[][..], true),
+            (Status::Waiting, Some("claude:a"), &[][..], true),
+            (Status::Waiting, Some("Ana"), &[][..], false),
+            (Status::Waiting, None, &[][..], true),
             (Status::Live, Some("claude:a"), &["Ana"][..], true),
             (Status::Live, Some("Ana"), &["Bo"][..], false),
             (Status::ChangesRequested, Some("Ana"), &["Bo"][..], true),
@@ -781,7 +784,7 @@ mod tests {
 
     #[test]
     fn a_review_fits_the_author_reviewer_and_branch_asked_for() {
-        let h = header(Status::Open, Some("claude:a"), &["Ana", "Bo"]);
+        let h = header(Status::Waiting, Some("claude:a"), &["Ana", "Bo"]);
         let query =
             |author: Option<&str>, reviewer: Option<&str>, branch: Option<&str>| ReviewQuery {
                 author: author.map(String::from),
@@ -808,24 +811,27 @@ mod tests {
             assert_eq!(fits(&h, on, &q), expected, "{q:?} on {on:?}");
         }
         // No author yet: only a query naming none fits
-        let unknown = header(Status::Open, None, &[]);
+        let unknown = header(Status::Waiting, None, &[]);
         assert!(!fits(&unknown, None, &query(Some("claude:a"), None, None)));
         assert!(fits(&unknown, None, &query(None, None, None)));
     }
 
     #[test]
-    fn a_status_is_one_of_a_reviews() {
+    fn a_status_is_one_of_a_reviews_or_open_every_one_not_decided() {
         assert_eq!(
             status_named("changes_requested").unwrap(),
-            Status::ChangesRequested
+            [Status::ChangesRequested]
         );
+        assert_eq!(status_named("waiting").unwrap(), [Status::Waiting]);
+        // ATM-613: the list's Open
+        assert_eq!(status_named("open").unwrap(), Status::OPEN);
         for bad in ["", "Open", "merged"] {
             assert!(matches!(status_named(bad), Err(Error::Invalid(_))), "{bad}");
         }
     }
 
     fn review(title: &str, summary: &str, rounds: Vec<Round>) -> Review {
-        let mut h = header(Status::Open, None, &[]);
+        let mut h = header(Status::Waiting, None, &[]);
         h.title = title.into();
         Review {
             header: h,

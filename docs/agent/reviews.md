@@ -12,8 +12,9 @@
   is of the submodule's commits, its files named as the project has them (`lib/b.txt`); `--file` paths in one
   submodule are read from it; files of two repositories are two reviews. A range in the project that moves a
   submodule lists the move as one entry (its two commits), commented on as a whole (`--file lib`, no `--lines`).
-- **Statuses:** draft, open (waiting on the reviewers), live (being reviewed as it is made), changes_requested (sent
-  back), approved, closed.
+- **Statuses:** draft, waiting (waiting on the reviewers; `open` before atm 0.41.0), live (being reviewed as it is
+  made), changes_requested (sent back), approved, closed. In a filter, `open` is every review not decided yet
+  (`atm review list --status open`: draft, waiting, live or changes_requested).
 - **Reading it:** `atm review show CR-7` (the header, rounds and counts), `atm review comments CR-7 [--open]` (every
   chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (a round's diff, or what changed
   since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`.
@@ -33,7 +34,7 @@
   holding a task in that working copy, or the one whose task it names; nobody's until then). Your first
   `atm review round` names you its author. The reviewer sees your working copy as you write it; each comment (and an
   approval) records what they saw as a checkpoint round, so its lines stay anchored as you go on. It ends with their
-  approval, your `atm review round` (it becomes open), or their closing it.
+  approval, your `atm review round` (it becomes waiting), or their closing it.
 - **Listening, two ways** (never a loop of your own):
   - `atm review wait CR-7 [--for decision] [--timeout 2h] --json`, in the background, once your task is in review
     (its claim is released then, so there is none to hold): it ends when the reviewer submits (or decides) with what

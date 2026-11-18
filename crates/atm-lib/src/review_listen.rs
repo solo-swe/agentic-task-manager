@@ -553,7 +553,7 @@ mod tests {
     fn a_decision_is_approved_changes_requested_or_closed() {
         for (status, expected) in [
             (Status::Draft, false),
-            (Status::Open, false),
+            (Status::Waiting, false),
             (Status::Live, false),
             (Status::ChangesRequested, true),
             (Status::Approved, true),
@@ -591,7 +591,7 @@ mod tests {
 
     #[test]
     fn a_comment_heard_names_its_review_chain_place_and_text() {
-        let r = review(Status::Open, &["ATM-1"]);
+        let r = review(Status::Waiting, &["ATM-1"]);
         let parent = comment("c1", "claude:me", "Done", Vec::new());
         let reply = comment("c2", "Hakan", "Why?", Vec::new());
         let c = chain(Some("src/a.rs"), Vec::new());
@@ -635,7 +635,7 @@ mod tests {
 
     #[test]
     fn a_review_of_none_of_the_agents_tasks_isnt_its() {
-        let theirs = review(Status::Open, &["ATM-3"]);
+        let theirs = review(Status::Waiting, &["ATM-3"]);
         assert_eq!(
             about(&theirs, &by_hakan(Some("src/a.rs"), "ATM-1")),
             NOT_MINE
@@ -652,7 +652,7 @@ mod tests {
 
     #[test]
     fn in_a_batch_review_a_comment_is_the_agents_by_file_by_task_named_or_by_its_own_chain() {
-        let batch = review(Status::Open, &["ATM-1", "ATM-2", "ATM-3"]);
+        let batch = review(Status::Waiting, &["ATM-1", "ATM-2", "ATM-3"]);
         for (path, body, expected) in [
             // a file its task touched
             (Some("docs/a.md"), "x", "ATM-2"),

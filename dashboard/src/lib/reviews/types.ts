@@ -35,7 +35,14 @@ export interface Picked {
   quote: string;
 }
 
-export type ReviewStatus = 'draft' | 'open' | 'live' | 'changes_requested' | 'approved' | 'closed';
+/** Where a review stands; `waiting` is waiting on its reviewers (ATM-613: `open` until 0.41.0) */
+export type ReviewStatus = 'draft' | 'waiting' | 'live' | 'changes_requested' | 'approved' | 'closed';
+
+/** A status filter: one status, or `open`, every review not decided yet (draft, waiting, live, sent back) */
+export type StatusFilter = ReviewStatus | 'open';
+
+/** The statuses of an open review, one not decided yet (as atm-review's `Status::OPEN`) */
+export const OPEN_STATUSES: readonly ReviewStatus[] = ['draft', 'waiting', 'live', 'changes_requested'];
 
 /** A review's header (`review.md`'s): what lists and searches need */
 export interface ReviewHeader {
@@ -121,7 +128,8 @@ export interface ReviewPageData {
 /** What the reviews page lists by: each one given (not empty) must fit */
 export interface ListQuery {
   q: string;
-  status: ReviewStatus[];
+  /** `open` among them: every review not decided yet (the server expands it) */
+  status: StatusFilter[];
   author: string;
   reviewer: string;
   task: string;
@@ -132,7 +140,7 @@ export const NO_QUERY: ListQuery = { q: '', status: [], author: '', reviewer: ''
 
 export const STATUS_LABELS: Record<ReviewStatus, string> = {
   draft: 'Draft',
-  open: 'Open',
+  waiting: 'Waiting for review',
   live: 'Live',
   changes_requested: 'Changes requested',
   approved: 'Approved',

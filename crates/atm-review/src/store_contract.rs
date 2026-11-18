@@ -120,7 +120,7 @@ pub(crate) fn a_new_review_is_kept_numbered_with_its_first_round(store: &mut dyn
 /// Reviews are listed newest first, by status (one or several) and by task.
 pub(crate) fn reviews_are_listed_newest_first_and_filtered(store: &mut dyn ReviewStore) {
     store
-        .create_review(new_review("One", Status::Open, &["ATM-1"]))
+        .create_review(new_review("One", Status::Waiting, &["ATM-1"]))
         .unwrap();
     store
         .create_review(new_review("Two", Status::Draft, &["ATM-1", "ATM-2"]))
@@ -140,14 +140,14 @@ pub(crate) fn reviews_are_listed_newest_first_and_filtered(store: &mut dyn Revie
         (ReviewFilter::default(), vec!["Three", "Two", "One"]),
         (
             ReviewFilter {
-                statuses: vec![Status::Open],
+                statuses: vec![Status::Waiting],
                 task: None,
             },
             vec!["One"],
         ),
         (
             ReviewFilter {
-                statuses: vec![Status::Open, Status::Live],
+                statuses: vec![Status::Waiting, Status::Live],
                 task: None,
             },
             vec!["Three", "One"],
@@ -187,7 +187,7 @@ pub(crate) fn reviews_are_listed_newest_first_and_filtered(store: &mut dyn Revie
 
 /// A review's header and summary are changed as asked, and its rounds added after the last.
 pub(crate) fn a_reviews_header_and_rounds_are_changed_as_asked(store: &mut dyn ReviewStore) {
-    let mut unknown = new_review("One", Status::Open, &["ATM-1"]);
+    let mut unknown = new_review("One", Status::Waiting, &["ATM-1"]);
     unknown.author = None;
     let id = store.create_review(unknown).unwrap().id;
     store
@@ -232,7 +232,7 @@ pub(crate) fn a_reviews_header_and_rounds_are_changed_as_asked(store: &mut dyn R
 /// Chains are started, replied to, edited, resolved and listed, and a missing comment isn't found.
 pub(crate) fn comments_are_kept_replied_to_edited_and_resolved(store: &mut dyn ReviewStore) {
     let id = store
-        .create_review(new_review("One", Status::Open, &[]))
+        .create_review(new_review("One", Status::Waiting, &[]))
         .unwrap()
         .id;
     let question = store.add_comment(&id, anchor(), "Why?", &hakan()).unwrap();
@@ -294,12 +294,15 @@ pub(crate) fn comments_are_kept_replied_to_edited_and_resolved(store: &mut dyn R
 /// Every method on a review the store hasn't is `NotFound`.
 pub(crate) fn every_method_on_a_review_it_hasnt_is_not_found(store: &mut dyn ReviewStore) {
     store
-        .create_review(new_review("One", Status::Open, &[]))
+        .create_review(new_review("One", Status::Waiting, &[]))
         .unwrap();
     let id = ReviewId("0193a8f2-0000-7000-8000-00000000dead".into());
     let c1 = CommentId("c1".into());
     let results = [
-        ("set_status", store.set_status(&id, Status::Open, &hakan())),
+        (
+            "set_status",
+            store.set_status(&id, Status::Waiting, &hakan()),
+        ),
         ("edit_summary", store.edit_summary(&id, "t", "s")),
         ("set_tasks", store.set_tasks(&id, Vec::new())),
         ("set_author", store.set_author(&id, &agent())),

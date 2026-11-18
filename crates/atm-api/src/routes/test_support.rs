@@ -93,7 +93,7 @@ pub(super) fn header() -> ReviewHeader {
         reference: ReviewRef("CR-1".into()),
         number: 1,
         title: "Look".into(),
-        status: Status::Open,
+        status: Status::Waiting,
         tasks: Vec::new(),
         author: None,
         reviewers: Vec::new(),

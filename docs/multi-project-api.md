@@ -254,7 +254,9 @@ old parameters from its hash and moves to the new address.
 - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
-  needs_you, waiting}], you}`. A review needs the user when it is open or live with them a reviewer (anyone but its
+  needs_you, waiting}], you}`. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
+  the status waiting on the reviewers (`open` before 0.41.0). A review needs the user when it is waiting or live with
+  them a reviewer (anyone but its
   author when it names none), or sent back with them its author. `waiting` (ATM-606): `"review"` when it needs them,
   `"answered"` when someone else wrote in it after they last did (as the summary's `code_reviews`), else `null`. A
   status that isn't one is `400`.

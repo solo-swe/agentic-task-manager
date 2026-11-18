@@ -59,8 +59,10 @@ impl From<&str> for Actor {
 pub enum Status {
     /// The author is still putting it together; not waiting on anyone.
     Draft,
-    /// Waiting on the reviewers.
-    Open,
+    /// Waiting on the reviewers: *Waiting for review* (ATM-613; `open` until 0.41.0, still read as this). An *open*
+    /// review is any not decided yet ([`Status::OPEN`]).
+    #[serde(alias = "open")]
+    Waiting,
     /// The change is being made; reviewers comment as it grows (§3.5).
     Live,
     /// Sent back for fixes.
@@ -77,12 +79,43 @@ impl Status {
     pub fn name(self) -> &'static str {
         match self {
             Self::Draft => "draft",
-            Self::Open => "open",
+            Self::Waiting => "waiting",
             Self::Live => "live",
             Self::ChangesRequested => "changes_requested",
             Self::Approved => "approved",
             Self::Closed => "closed",
         }
+    }
+
+    /// The statuses of an *open* review, one not decided yet (ATM-613): `--status open`, and the list's *Open*.
+    pub const OPEN: [Self; 4] = [
+        Self::Draft,
+        Self::Waiting,
+        Self::Live,
+        Self::ChangesRequested,
+    ];
+
+    /// Every status, in their order (§3.2).
+    pub const EVERY: [Self; 6] = [
+        Self::Draft,
+        Self::Waiting,
+        Self::Live,
+        Self::ChangesRequested,
+        Self::Approved,
+        Self::Closed,
+    ];
+
+    /// The statuses a filter's name stands for (ATM-613): `open`, every review not decided yet ([`Status::OPEN`]);
+    /// any other, its status alone; none for a name that is neither.
+    #[must_use]
+    pub fn filter_named(name: &str) -> Option<Vec<Self>> {
+        if name == "open" {
+            return Some(Self::OPEN.to_vec());
+        }
+        Self::EVERY
+            .into_iter()
+            .find(|s| s.name() == name)
+            .map(|s| vec![s])
     }
 
     /// A review that has ended: approved or closed.
@@ -319,7 +352,7 @@ mod tests {
 
     const ALL: [Status; 6] = [
         Status::Draft,
-        Status::Open,
+        Status::Waiting,
         Status::Live,
         Status::ChangesRequested,
         Status::Approved,
@@ -333,7 +366,7 @@ mod tests {
             names,
             [
                 ("draft", false),
-                ("open", false),
+                ("waiting", false),
                 ("live", false),
                 ("changes_requested", false),
                 ("approved", true),
@@ -345,6 +378,36 @@ mod tests {
             let written = serde_json::to_value(status).unwrap();
             assert_eq!(written, status.name());
             assert_eq!(serde_json::from_value::<Status>(written).unwrap(), status);
+        }
+        assert_eq!(ALL, Status::EVERY);
+    }
+
+    /// ATM-613: a review an earlier atm wrote as `open` reads as waiting, and is written as `waiting`
+    #[test]
+    fn open_as_an_earlier_atm_wrote_it_reads_as_waiting() {
+        let read: Status = serde_json::from_value(serde_json::json!("open")).unwrap();
+        assert_eq!(read, Status::Waiting);
+        assert_eq!(serde_json::to_value(read).unwrap(), "waiting");
+    }
+
+    /// ATM-613: `open` in a filter is every review not decided yet; another name, its own status
+    #[test]
+    fn open_in_a_filter_is_every_status_not_decided_and_another_name_its_own() {
+        assert_eq!(
+            Status::filter_named("open"),
+            Some(vec![
+                Status::Draft,
+                Status::Waiting,
+                Status::Live,
+                Status::ChangesRequested
+            ])
+        );
+        assert!(Status::OPEN.iter().all(|s| !s.ended()));
+        for status in ALL {
+            assert_eq!(Status::filter_named(status.name()), Some(vec![status]));
+        }
+        for bad in ["", "Open", "merged", "changes-requested"] {
+            assert_eq!(Status::filter_named(bad), None, "{bad}");
         }
     }
 
@@ -436,7 +499,7 @@ mod tests {
                 reference: ReviewRef::numbered(1),
                 number: 1,
                 title: "T".into(),
-                status: Status::Open,
+                status: Status::Waiting,
                 tasks: Vec::new(),
                 author: None,
                 reviewers: Vec::new(),

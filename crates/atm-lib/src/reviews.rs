@@ -354,7 +354,7 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
         let _ = atm_db::jsongit::setup::ensure_review_merge(&paths);
     }
     link(project, &header, &ids, true)?;
-    if header.status == Status::Open {
+    if header.status == Status::Waiting {
         ask_review(project, &ids, &header, &header.title)?;
     }
     Ok(header)
@@ -522,7 +522,7 @@ pub fn set_tasks(
             &format!("No longer reviewed in {}", header.reference),
         )?;
     }
-    if header.status == Status::Open {
+    if header.status == Status::Waiting {
         ask_review(project, &added, &header, &header.title)?;
     }
     Ok(header)
@@ -706,7 +706,7 @@ mod tests {
                 tasks: vec!["T-1".into()],
                 author: Some("claude:1".into()),
                 reviewers: vec!["Hakan".into()],
-                status: Status::Open,
+                status: Status::Waiting,
                 first: round(),
             },
         )
@@ -761,7 +761,7 @@ mod tests {
                 tasks: vec!["T-1".into(), "T-2".into()],
                 author: Some("claude:1".into()),
                 reviewers: vec!["Hakan".into()],
-                status: Status::Open,
+                status: Status::Waiting,
                 first: round(),
             },
         )
@@ -847,7 +847,7 @@ mod tests {
                 tasks: vec!["T-1".into()],
                 author: Some("claude:1".into()),
                 reviewers: vec!["Hakan".into()],
-                status: Status::Open,
+                status: Status::Waiting,
                 first: round(),
             },
         )
@@ -895,7 +895,7 @@ mod tests {
                 tasks: tasks.iter().map(|t| (*t).to_string()).collect(),
                 author: Some("claude:1".into()),
                 reviewers: vec!["Hakan".into()],
-                status: Status::Open,
+                status: Status::Waiting,
                 first: round(),
             },
         )
@@ -1150,7 +1150,7 @@ mod tests {
                 tasks: vec!["T-1".into()],
                 author: None,
                 reviewers: Vec::new(),
-                status: Status::Open,
+                status: Status::Waiting,
                 first,
             },
         )
@@ -1227,7 +1227,7 @@ mod tests {
                 tasks: vec!["T-1".into()],
                 author: None,
                 reviewers: Vec::new(),
-                status: Status::Open,
+                status: Status::Waiting,
                 first,
             },
         )
@@ -1414,7 +1414,7 @@ mod tests {
         let reviews = super::store(&hakan).unwrap();
         assert_eq!(
             reviews.get_review(&header.reference).unwrap().header.status,
-            Status::Open
+            Status::Waiting
         );
         // A round neither: refused before anything is written
         let mut agent = reopen(&dir.0, "claude:1");

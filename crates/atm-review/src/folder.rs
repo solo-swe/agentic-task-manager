@@ -601,7 +601,7 @@ mod tests {
             tasks: vec!["ATM-482".into()],
             author: Some(agent()),
             reviewers: vec![hakan()],
-            status: Status::Open,
+            status: Status::Waiting,
             first: NewRound {
                 kind: RoundKind::Range {
                     base: "a1".into(),
@@ -664,7 +664,7 @@ mod tests {
         // Another store (another process) reads the same
         let again = FileStore::open(&task_dir).unwrap();
         let review = again.get_review(&cr).unwrap();
-        assert_eq!(review.header.status, Status::Open);
+        assert_eq!(review.header.status, Status::Waiting);
         assert_eq!(review.rounds.len(), 2);
         assert_eq!(review.chains[0].comments[0].replies[0].body, "Because.");
         assert_eq!(
@@ -733,7 +733,7 @@ mod tests {
             reference: ReviewRef::numbered(number),
             number,
             title: title.into(),
-            status: Status::Open,
+            status: Status::Waiting,
             tasks: Vec::new(),
             author: Some(agent()),
             reviewers: Vec::new(),

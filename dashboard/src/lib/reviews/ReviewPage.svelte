@@ -920,7 +920,7 @@
     border-color: color-mix(in srgb, var(--red) 50%, transparent);
     background: color-mix(in srgb, var(--red) 10%, transparent);
   }
-  .review-status.status-open,
+  .review-status.status-waiting,
   .review-status.status-live {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 50%, transparent);

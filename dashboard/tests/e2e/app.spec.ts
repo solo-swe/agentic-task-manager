@@ -292,7 +292,7 @@ test.describe('the dashboard in the atm app', () => {
       reference: 'CR-2',
       number: 2,
       title: 'Trim the names',
-      status: 'open',
+      status: 'waiting',
       tasks: [],
       author: 'claude:a',
       reviewers: [],

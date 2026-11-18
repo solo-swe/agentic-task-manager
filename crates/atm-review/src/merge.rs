@@ -408,9 +408,10 @@ mod tests {
 
     #[test]
     fn the_header_takes_each_sides_change_and_on_both_the_later() {
-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
+        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
         // Ours retitled it (earlier); theirs decided it (later) and changed the summary
-        let ours = review_md::write(&header(Status::Open, "Better title", T2), "Summary.").unwrap();
+        let ours =
+            review_md::write(&header(Status::Waiting, "Better title", T2), "Summary.").unwrap();
         let theirs =
             review_md::write(&header(Status::Approved, "Title", T3), "Summary, theirs.").unwrap();
         let (merged, summary) =
@@ -661,7 +662,7 @@ mod tests {
 
     #[test]
     fn with_an_unreadable_base_both_changed_and_the_later_side_wins() {
-        let ours = review_md::write(&header(Status::Open, "Ours", T2), "Ours.").unwrap();
+        let ours = review_md::write(&header(Status::Waiting, "Ours", T2), "Ours.").unwrap();
         let theirs = review_md::write(&header(Status::Approved, "Theirs", T3), "Theirs.").unwrap();
         let (h, s) = merged("not a review", &ours, &theirs);
         assert_eq!(
@@ -670,20 +671,20 @@ mod tests {
         );
         // Ours later: ours wins
         let ours = review_md::write(
-            &header(Status::Open, "Ours", "2026-11-17T13:00:00Z"),
+            &header(Status::Waiting, "Ours", "2026-11-17T13:00:00Z"),
             "Ours.",
         )
         .unwrap();
         let (h, s) = merged("", &ours, &theirs);
         assert_eq!(
             (h.title.as_str(), h.status, s.as_str()),
-            ("Ours", Status::Open, "Ours.")
+            ("Ours", Status::Waiting, "Ours.")
         );
     }
 
     #[test]
     fn both_changed_and_updated_at_the_same_time_keeps_ours() {
-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
+        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
         let ours =
             review_md::write(&header(Status::ChangesRequested, "Title", T2), "Summary.").unwrap();
         let theirs = review_md::write(&header(Status::Approved, "Title", T2), "Summary.").unwrap();
@@ -696,12 +697,12 @@ mod tests {
 
     #[test]
     fn tasks_reviewers_and_summary_are_merged_field_by_field() {
-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
+        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
         // Ours changed the tasks and the summary (earlier); theirs changed the reviewers and the title (later)
-        let mut our_header = header(Status::Open, "Title", T2);
+        let mut our_header = header(Status::Waiting, "Title", T2);
         our_header.tasks = vec!["ATM-1".into(), "ATM-2".into()];
         let ours = review_md::write(&our_header, "Summary, ours.").unwrap();
-        let mut their_header = header(Status::Open, "Retitled", T3);
+        let mut their_header = header(Status::Waiting, "Retitled", T3);
         their_header.reviewers = vec![Actor("Ana".into())];
         let theirs = review_md::write(&their_header, "Summary.").unwrap();
         let (h, s) = merged(&base, &ours, &theirs);
@@ -714,7 +715,7 @@ mod tests {
 
     #[test]
     fn an_unreadable_theirs_is_an_error() {
-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
+        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
         assert!(merge_review(&base, &base, "no header").is_err());
     }
 }

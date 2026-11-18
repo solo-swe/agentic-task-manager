@@ -52,7 +52,7 @@ afterEach(() => vi.useRealTimers());
 describe('ReviewList', () => {
   it('lists each review: its reference, title, status, tasks, branch, author, open chains', () => {
     const { container } = show([
-      entry(2, 'open', { tasks: ['ATM-1', 'ATM-2'] }, { branch: 'dev/1' }),
+      entry(2, 'waiting', { tasks: ['ATM-1', 'ATM-2'] }, { branch: 'dev/1' }),
       entry(1, 'approved', { author: null }, { branch: null }),
     ]);
     const rows = [...container.querySelectorAll('.review-row')];
@@ -60,7 +60,7 @@ describe('ReviewList', () => {
     const first = within(rows[0] as HTMLElement);
     expect(first.getByRole('link').getAttribute('href')).toBe('/projects/p1/reviews/CR-2');
     expect(first.getByText('Review 2')).toBeTruthy();
-    expect(first.getByText('Open')).toBeTruthy();
+    expect(first.getByText('Waiting for review')).toBeTruthy();
     expect(first.getByText('ATM-1, ATM-2')).toBeTruthy();
     expect(first.getByText('dev/1')).toBeTruthy();
     expect(first.getByText('1 open of 2')).toBeTruthy();
@@ -70,7 +70,7 @@ describe('ReviewList', () => {
 
   it('marks those that need you, and offers the first of them next', async () => {
     const { container, onopen } = show([
-      entry(3, 'open'),
+      entry(3, 'waiting'),
       entry(2, 'changes_requested', {}, { needs_you: true }),
       entry(1, 'live', {}, { needs_you: true }),
     ]);
@@ -85,12 +85,12 @@ describe('ReviewList', () => {
   });
 
   it('offers no next review when none needs you', () => {
-    show([entry(1, 'open')]);
+    show([entry(1, 'waiting')]);
     expect(screen.queryByRole('button', { name: /Next review needing you/ })).toBeNull();
   });
 
   it('opens a review on a click, in a new tab with ⌘ or Ctrl; leaves Shift, Alt and other buttons to the browser', async () => {
-    const { onopen } = show([entry(1, 'open')]);
+    const { onopen } = show([entry(1, 'waiting')]);
     const link = screen.getByRole('link');
     await fireEvent.click(link);
     await fireEvent.click(link, { metaKey: true });
@@ -108,7 +108,7 @@ describe('ReviewList', () => {
   });
 
   it('asks for a search once typing stops, trimmed', async () => {
-    const { onquery } = show([entry(1, 'open')]);
+    const { onquery } = show([entry(1, 'waiting')]);
     const search = screen.getByRole('searchbox', { name: 'Search reviews' });
     await fireEvent.input(search, { target: { value: 'tw' } });
     await fireEvent.input(search, { target: { value: ' two words ' } });
@@ -118,8 +118,24 @@ describe('ReviewList', () => {
     expect(onquery).toHaveBeenCalledWith({ ...NO_QUERY, q: 'two words' });
   });
 
+  // ATM-613: Open is every review not decided yet, the first chip; the statuses narrow it further
+  it('Open comes first, standing for every review not decided yet, before each status', () => {
+    show([]);
+    const chips = [...document.querySelectorAll('.review-chip')];
+    expect(chips.map((c) => [c.getAttribute('data-status'), c.textContent])).toEqual([
+      ['open', 'Open'],
+      ['draft', 'Draft'],
+      ['waiting', 'Waiting for review'],
+      ['live', 'Live'],
+      ['changes_requested', 'Changes requested'],
+      ['approved', 'Approved'],
+      ['closed', 'Closed'],
+    ]);
+    expect(chips[0].getAttribute('title')).toMatch(/not decided yet/);
+  });
+
   it('a status chip adds the status to the query, or takes it out; the others stay', async () => {
-    const { onquery } = show([entry(1, 'open')], { ...NO_QUERY, status: ['open'], author: 'Ana' });
+    const { onquery } = show([entry(1, 'waiting')], { ...NO_QUERY, status: ['open'], author: 'Ana' });
     expect(screen.getByRole('button', { name: 'Open' }).getAttribute('aria-pressed')).toBe('true');
     await fireEvent.click(screen.getByRole('button', { name: 'Live' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Open' }));
@@ -132,8 +148,8 @@ describe('ReviewList', () => {
   it('each filter offers what the reviews listed have, and what is chosen', async () => {
     const { onquery } = show(
       [
-        entry(2, 'open', { author: 'claude:b', reviewers: ['Ana', 'Bo'], tasks: ['ATM-2'] }, { branch: 'dev/2' }),
-        entry(1, 'open', { author: 'claude:a', reviewers: ['Ana'], tasks: ['ATM-1'] }, { branch: null }),
+        entry(2, 'waiting', { author: 'claude:b', reviewers: ['Ana', 'Bo'], tasks: ['ATM-2'] }, { branch: 'dev/2' }),
+        entry(1, 'waiting', { author: 'claude:a', reviewers: ['Ana'], tasks: ['ATM-1'] }, { branch: null }),
       ],
       { ...NO_QUERY, branch: 'gone' },
     );
@@ -149,9 +165,9 @@ describe('ReviewList', () => {
   });
 
   it('clears every filter, offered only while one is set', async () => {
-    show([entry(1, 'open')]);
+    show([entry(1, 'waiting')]);
     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
-    const { onquery } = show([entry(1, 'open')], { ...NO_QUERY, task: 'ATM-1' });
+    const { onquery } = show([entry(1, 'waiting')], { ...NO_QUERY, task: 'ATM-1' });
     await fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect(onquery).toHaveBeenCalledWith(NO_QUERY);
   });
@@ -166,7 +182,7 @@ describe('ReviewList', () => {
     const none = show([]);
     expect(screen.getByText(/No reviews yet/)).toBeTruthy();
     none.unmount();
-    show([entry(1, 'open')], { ...NO_QUERY }, { problem: 'no review CR-9' });
+    show([entry(1, 'waiting')], { ...NO_QUERY }, { problem: 'no review CR-9' });
     expect(screen.getByRole('alert').textContent).toBe('no review CR-9');
     expect(screen.queryByRole('link')).toBeNull();
   });

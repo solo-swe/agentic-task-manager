@@ -59,7 +59,24 @@ describe('atm review', () => {
         AGENT,
       ).json();
       assert.equal(opened.reference, 'CR-1');
-      assert.equal(opened.status, 'open');
+      // Waiting on its reviewers (ATM-613: `open` until 0.41.0); a file an earlier atm wrote with `open` reads the same
+      assert.equal(opened.status, 'waiting');
+      const reviewFile = path.join(
+        root,
+        '.agentic-task-manager/reviews',
+        fs.readdirSync(path.join(root, '.agentic-task-manager/reviews')).find((f) => f.startsWith('CR-1-')),
+        'review.md',
+      );
+      assert.match(fs.readFileSync(reviewFile, 'utf8'), /status = "waiting"/);
+      fs.writeFileSync(
+        reviewFile,
+        fs.readFileSync(reviewFile, 'utf8').replace('status = "waiting"', 'status = "open"'),
+      );
+      assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.status, 'waiting');
+      // Open, in a filter, is every review not decided yet; waiting is its own status
+      assert.equal(ok(['review', 'list', '--status', 'open', '--json'], root, HAKAN).json().length, 1);
+      assert.equal(ok(['review', 'list', '--status', 'waiting', '--json'], root, HAKAN).json().length, 1);
+      assert.equal(ok(['review', 'list', '--status', 'live', '--json'], root, HAKAN).json().length, 0);
       assert.equal(task(root, 'T-1').status, 'in_review');
       assert.equal(task(root, 'T-1').code_reviews[0].ref, 'CR-1');
 
@@ -201,7 +218,7 @@ describe('atm review', () => {
       assert.match(atm(['review', 'round', 'CR-1'], root, HAKAN).stderr, /not a reviewer's/);
       ok(['review', 'round', 'CR-1'], root, AGENT);
       header = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header;
-      assert.deepEqual([header.author, header.status], [AGENT.ATM_AGENT, 'open']);
+      assert.deepEqual([header.author, header.status], [AGENT.ATM_AGENT, 'waiting']);
       // Hakan decides it, as its reviewer, once his comment is resolved; the agent can't
       ok(['review', 'resolve', 'CR-1', 'c1'], root, HAKAN);
       assert.notEqual(atm(['review', 'submit', 'CR-1', '--approve'], root, AGENT).code, 0);
@@ -308,7 +325,7 @@ describe('atm review', () => {
       }
       // None of them changed the review
       const review = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
-      assert.deepEqual([review.header.status, review.chains.length], ['open', 0]);
+      assert.deepEqual([review.header.status, review.chains.length], ['waiting', 0]);
     } finally {
       removeDir(root);
     }
@@ -602,7 +619,7 @@ describe('a provisional task key in reviews (ATM-594)', () => {
         fs
           .readFileSync(file, 'utf8')
           .replace('tasks = ["ATM-12"]', 'tasks = ["~ATM-12"]')
-          .replace('status = "open"', 'status = "approved"'),
+          .replace('status = "waiting"', 'status = "approved"'),
       );
       assert.deepEqual(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.tasks, ['ATM-12']);
       const doctor = atm(['doctor'], root, HAKAN);

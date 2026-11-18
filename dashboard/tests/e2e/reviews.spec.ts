@@ -39,7 +39,7 @@ const NEW_D = '# Plan\n\nFirst step.\n\nNew ending.\n';
 const PATCH_D =
   'diff --git a/docs/plan.md b/docs/plan.md\n--- a/docs/plan.md\n+++ b/docs/plan.md\n@@ -5 +5 @@\n-Old ending.\n+New ending.\n';
 
-const header = (n: number, status = 'open', more: Record<string, unknown> = {}) => ({
+const header = (n: number, status = 'waiting', more: Record<string, unknown> = {}) => ({
   id: `r${n}`,
   reference: `CR-${n}`,
   number: n,
@@ -192,7 +192,14 @@ test.describe('the reviews tab', () => {
     tasksServer.setReviews({
       reviews: [
         { review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true, waiting: 'review' },
-        { review: header(3, 'changes_requested'), branch: null, chains: 1, open: 1, needs_you: false, waiting: 'answered' },
+        {
+          review: header(3, 'changes_requested'),
+          branch: null,
+          chains: 1,
+          open: 1,
+          needs_you: false,
+          waiting: 'answered',
+        },
       ],
       you: 'Ana',
     });
@@ -270,20 +277,20 @@ test.describe('the reviews tab', () => {
     tasksServer.setReviews({
       reviews: [
         {
-          review: header(8, 'open', { reference: 'CR-8.1', title: 'Theirs' }),
+          review: header(8, 'waiting', { reference: 'CR-8.1', title: 'Theirs' }),
           branch: null,
           chains: 0,
           open: 0,
           needs_you: false,
         },
         {
-          review: header(9, 'open', { reference: 'CR-8.2', title: 'Mine' }),
+          review: header(9, 'waiting', { reference: 'CR-8.2', title: 'Mine' }),
           branch: null,
           chains: 0,
           open: 0,
           needs_you: false,
         },
-        { review: header(1, 'open'), branch: null, chains: 0, open: 0, needs_you: false },
+        { review: header(1, 'waiting'), branch: null, chains: 0, open: 0, needs_you: false },
       ],
       you: 'Ana',
     });
@@ -291,7 +298,10 @@ test.describe('the reviews tab', () => {
     await expect(page.getByRole('alert')).toContainText('CR-8 is 2 reviews');
     const choices = page.getByRole('list', { name: 'The reviews CR-8 names' });
     await expect(choices.getByRole('listitem')).toHaveText([/CR-8\.1\s+Theirs/, /CR-8\.2\s+Mine/]);
-    tasksServer.setReview('CR-8.2', reviewPage({ review: header(9, 'open', { reference: 'CR-8.2', title: 'Mine' }) }));
+    tasksServer.setReview(
+      'CR-8.2',
+      reviewPage({ review: header(9, 'waiting', { reference: 'CR-8.2', title: 'Mine' }) }),
+    );
     await choices.getByRole('link', { name: 'CR-8.2' }).click();
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-8.2');
   });

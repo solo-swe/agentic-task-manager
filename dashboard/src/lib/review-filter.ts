@@ -1,5 +1,5 @@
 import { readStored, writeStored } from './prefs';
-import { NO_QUERY, STATUS_LABELS, type ListQuery, type ReviewStatus } from './reviews/types';
+import { NO_QUERY, STATUS_LABELS, type ListQuery, type StatusFilter } from './reviews/types';
 
 // The reviews list's last filter, kept in this browser per project (ATM-604): the list opens with it. Its statuses,
 // author, reviewer, task and branch; not the search words, which are for the moment.
@@ -14,9 +14,10 @@ export function keptFilter(project: string): ListQuery {
   const query: ListQuery = { ...NO_QUERY, status: [] };
   if (!kept || typeof kept !== 'object' || Array.isArray(kept)) return query;
   const from = kept as Record<string, unknown>;
+  // A status, or open (every review not decided yet: what a filter kept before ATM-613 meant by it, near enough)
   if (Array.isArray(from.status))
     query.status = from.status.filter(
-      (s): s is ReviewStatus => typeof s === 'string' && Object.hasOwn(STATUS_LABELS, s),
+      (s): s is StatusFilter => typeof s === 'string' && (s === 'open' || Object.hasOwn(STATUS_LABELS, s)),
     );
   for (const key of TEXTS) if (typeof from[key] === 'string') query[key] = from[key];
   return query;

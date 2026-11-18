@@ -219,7 +219,7 @@ pub fn open_review(project: &mut Project, opening: ReviewOpening) -> Result<Revi
             author: Some(by),
             reviewers: opening.reviewers.into_iter().map(Actor).collect(),
             status: match opening.start {
-                ReviewStart::Open => Status::Open,
+                ReviewStart::Open => Status::Waiting,
                 ReviewStart::Draft => Status::Draft,
                 ReviewStart::Live => Status::Live,
             },
@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn a_page_closes_a_review_and_changes_nothing_else_of_it() {
-        for status in [Status::Open, Status::Approved, Status::Draft] {
+        for status in [Status::Waiting, Status::Approved, Status::Draft] {
             let closing = ReviewClosing {
                 status,
                 reason: "why".into(),

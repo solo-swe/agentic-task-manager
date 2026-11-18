@@ -16971,7 +16971,7 @@
       "description": "Requested by Hakan (2026-11-18): an indication that reviews are waiting for his attention, without opening the reviews list.\n\n## What waits for you\n- A review you review that is open or live (the list's `needs_you`), or one sent back to you as its author.\n- A comment or reply by someone else, in a review you take part in, that you haven't seen yet.\n- A top-level comment of yours that is still open, now answered.\n\n## Change\n- atm-lib: a count per project of what waits for the user (`needs_you`, plus unseen comments). A comment is seen when the user's page has shown it; that is recorded per user and review in the browser or app (no write on a GET, security I11), or as an atm-lib record if the design says so: decide it first and note the choice in `docs/code-review-design.md`.\n- Dashboard: a badge with the count on the Reviews tab, and on the project in the project switcher, refreshed with the list. In the list and on a review's page, *new* marks on unseen comments; *Next review needing you* takes them into account.\n- The app: the count on the window's tab for the project (and the dock badge, if cheap).\n\n## Tests\n- Unit tests for the count: each case above, your own comments never counted, and a resolved one that isn't.\n- A component test for the badge.\n- E2e: a new reply shows the badge; opening the review clears it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_pages.rs",
@@ -16979,7 +16979,7 @@
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T06:05:07Z",
-      "updated_at": "2026-11-18T06:45:24Z",
+      "updated_at": "2026-11-18T07:02:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16992,7 +16992,24 @@
       "number": 606,
       "key_final": false,
       "started_at": "2026-11-18T06:45:24Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "a6864c08f36d02ae57a424fc105f35b4eaaac03c",
+      "code_reviews": [
+        {
+          "id": "01a1ed77-46c7-73d1-a630-a4032f4e8edb",
+          "ref": "CR-12"
+        }
+      ],
+      "review_requested_at": "2026-11-18T07:02:59Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-18T07:02:59Z",
+          "kind": "review",
+          "text": "CR-12: Reviews waiting for you, wherever you are",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ed47-a3c3-7749-bf96-439d862e8d64",
@@ -17279,7 +17296,7 @@
       "description": "Reported by Hakan (2026-11-18): *Open* is confusing. It should mean a review isn't approved or closed yet, but it is one particular status, waiting on its reviewers. The list's *Open* button should show every review still open.\n\n## Change\n- **The status:** `open` is renamed `waiting`, labelled *Waiting for review*. That covers the review files (`status = \"waiting\"`), atm-review's `Status`, the REST and CLI output, `--status` filters, the dashboard's `ReviewStatus` and `STATUS_LABELS`, and the docs. A review file an earlier atm wrote with `open` still reads, as `waiting`, and is written back as `waiting`. `atm doctor` stays quiet about it.\n- **Open, the group:** draft, waiting, live and changes requested (anything not approved or closed). In the list, *Open* is a filter of its own: the first button, standing for those four. The status buttons stay for narrowing further. The query's `status=open` means the group (the server expands it), so a list query and a filter kept by ATM-604 still work.\n- `atm review list --open` (or `--status open`), the same group.\n\n## Tests\n- atm-review: a review file with `open` reads as waiting and is written as `waiting`; every rule that named open works on waiting.\n- atm-lib and REST: `status=open` lists the four and not approved or closed; `status=waiting` lists that status only.\n- The CLI suite: `list --open`, and the status printed as waiting.\n- Component and e2e: *Open* shows a draft, a waiting, a live and a sent-back review and no decided one; a kept filter from before still works.\n- Update `docs/code-review-design.md` (the state diagram and table), `docs/agent/reviews.md`, `docs/multi-project-api.md`, and the skills where they say `open`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/",
@@ -17289,9 +17306,9 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-18T06:38:14Z",
-      "updated_at": "2026-11-18T06:38:14Z",
+      "updated_at": "2026-11-18T07:03:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17300,7 +17317,9 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 613,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T07:03:04Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed66-4c9a-72ce-8c9b-83d2ce6b9a14",

@@ -352,8 +352,7 @@ export class TasksServer {
       summary,
       logo: this.logos.has(id) ? `p/${id}/logo` : null,
     });
-    const own =
-      this.ownSummary ?? (this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null);
+    const own = this.ownSummary ?? (this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null);
     return [
       project(this.projectId, typeof this.meta.project === 'string' ? this.meta.project : this.projectId, own),
       ...[...this.others].map(([id, p]) => project(id, p.name, p.summary)),

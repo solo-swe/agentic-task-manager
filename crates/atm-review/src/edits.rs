@@ -179,7 +179,7 @@ mod tests {
                 reference: ReviewRef::numbered(1),
                 number: 1,
                 title: "T".into(),
-                status: Status::Open,
+                status: Status::Waiting,
                 tasks: Vec::new(),
                 author: None,
                 reviewers: Vec::new(),
