@@ -124,7 +124,11 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
     let store = reviews::store(project)?;
     let filter = ReviewFilter {
         statuses,
-        task: query.task.clone().filter(|t| !t.is_empty()),
+        task: query
+            .task
+            .as_deref()
+            .filter(|t| !t.is_empty())
+            .map(|t| reviews::task_reference(project, t)),
     };
     let (me, words) = (me(project), words(&query.q));
     let mut listed: Vec<(String, Value)> = Vec::new();

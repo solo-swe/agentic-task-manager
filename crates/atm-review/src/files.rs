@@ -92,7 +92,13 @@ pub mod review_md {
                 number: header.number,
                 title: header.title,
                 status: header.status,
-                tasks: header.tasks,
+                // A task by its key; one an earlier atm wrote as people read a provisional key (`~CMD-36`, ATM-594)
+                // is the same key
+                tasks: header
+                    .tasks
+                    .into_iter()
+                    .map(|t| t.strip_prefix('~').map(str::to_string).unwrap_or(t))
+                    .collect(),
                 author: header.author.map(Actor),
                 reviewers: header.reviewers.into_iter().map(Actor).collect(),
                 created: header.created.to_string(),
@@ -556,6 +562,22 @@ written at the margin by hand
             created: "2026-11-17T03:20:00Z".into(),
             updated: "2026-11-17T04:02:00Z".into(),
         }
+    }
+
+    /// ATM-594: an earlier atm wrote a provisional key as people read it; it reads as the key, and is written so
+    #[test]
+    fn a_task_written_with_a_provisional_keys_mark_reads_as_its_key() {
+        let text = review_md::write(&header(), "").unwrap().replace(
+            "tasks = [\"ATM-482\"]",
+            "tasks = [\"~CMD-36\", \"ATM-482\", \"T-1\"]",
+        );
+        let (read, _) = review_md::read(&text).unwrap();
+        assert_eq!(read.tasks, ["CMD-36", "ATM-482", "T-1"]);
+        let again = review_md::write(&read, "").unwrap();
+        assert!(
+            again.contains("tasks = [\"CMD-36\", \"ATM-482\", \"T-1\"]"),
+            "{again}"
+        );
     }
 
     #[test]

@@ -7,20 +7,23 @@ cut; `--color auto|always|never` only styles it for a terminal.
 
 `<id>` is a task's key (`ATM-527`, any case) in a project with task keys, or its old ID (`T-527`), an alias or its UUID;
 in a project without keys, its ID (`atm docs tasks`). A key shown with a `~` (`~ATM-538`) is provisional: use it freely
-(in commit messages too), it may move to another number before it is merged, and its old key keeps finding it.
+(in commit messages too), it may move to another number before it is merged, and its old key keeps finding it. The `~`
+is only how it reads: commands take the key with or without it, and `--json` gives it without.
 
 ## Reading
+
 - `atm project status`: the overview (the active sprint, what is in progress, in review or blocked, what's next);
   `--all` adds the counts by sprint, type and label
 - `atm task details <id>…`: tasks in full, with their notes
 - `atm task deps <id>`: what a task waits for, and what waits for it
 - `atm task list [--status S] [--sprint NAME | --backlog] [--type T] [--priority P] [--label L] [--ready]
-  [--blocked] [--in-pr] [--archived]`: one line per task (key, status, priority, name, labels), then a line counting
+[--blocked] [--in-pr] [--archived]`: one line per task (key, status, priority, name, labels), then a line counting
   them
 - `atm claim list`: who works on what; `atm project workflow`: how the project pushes
 - `atm docs <topic>`: this reference (`atm docs` lists the topics)
 
 ## Working on a task
+
 - `atm loop next --claim`: the next task, started and claimed in one step (`atm docs claims`)
 - `atm task state <id> <state>`: every change of status (`atm docs states`)
 - `atm task note <id> '<text>'`: a note on a task
@@ -30,16 +33,18 @@ in a project without keys, its ID (`atm docs tasks`). A key shown with a `~` (`~
   it (`atm docs reviews`)
 
 ## Pushing
+
 - `atm vcs pr <id>… --number N --url U`: record the pull request that contains the tasks
 - `atm vcs pushed --pr N [--at TIME]`: record that it merged
 
 ## Defining work
+
 - `atm task add` (`--json-file F` for many) and `atm task edit <id>`: a task's definition (never its status)
 - `atm sprint list|add|edit|rename|start|close|delete|move|backlog`: sprints (planned, started and closed with the
   user); `atm sprint rename <old> <new>` renames one in any state, and its tasks (archived ones too) follow
 - `atm release …`, `atm component …`: releases, and the project's parts by file globs; `atm release rename <old>
-  <new>` changes a release's ID, and its tasks (archived ones too) and sprints follow; `atm component rename <old>
-  <new>` a component's, and the tasks listing it follow
+<new>` changes a release's ID, and its tasks (archived ones too) and sprints follow; `atm component rename <old>
+<new>` a component's, and the tasks listing it follow
 - `atm label rename <old> <new>`: a label on every task that has it, archived ones too
 - `atm project vocab rename status|type|priority <old> [<new>] [--label L]`: a vocabulary entry's ID or label; the
   tasks using it (archived ones too) and the default priority follow
@@ -55,6 +60,7 @@ in a project without keys, its ID (`atm docs tasks`). A key shown with a `~` (`~
   and waited for until it is done there
 
 ## Maintenance
+
 - `atm db migrate`: move an old task file into `.agentic-task-manager/` and set the folder up
 - `atm db archive` (when atm suggests it) and `atm db unarchive <id>…`
 - `atm doctor`: check the task file

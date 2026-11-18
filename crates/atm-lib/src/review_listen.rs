@@ -179,7 +179,8 @@ fn work_of(project: &Project, me: &str) -> Work {
     let vcs = reviews::vcs(project).ok();
     for task in project.store().list_tasks().unwrap_or_default() {
         let by = |field: &str| task.get(field).and_then(Value::as_str) == Some(me);
-        let key = project.task_label(task);
+        // As a review names it: its key, never with the `~` people read (ATM-594)
+        let key = project.task_key(task);
         if !(by("started_by") || by("completed_by")) {
             work.others.push((key, declared_files(task)));
             continue;

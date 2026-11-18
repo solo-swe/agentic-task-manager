@@ -662,7 +662,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                     .iter()
                     .map(|s| status_of(s))
                     .collect::<Result<_>>()?,
-                task,
+                task: task.map(|t| reviews::task_reference(&project, &t)),
             };
             let root = project
                 .root()

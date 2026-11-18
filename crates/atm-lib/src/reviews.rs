@@ -138,6 +138,46 @@ pub fn check(project: &Project, document: &Value) -> (Vec<String>, Vec<String>) 
             refs.join(" and ")
         ));
     }
+    // A decision that didn't reach a task still waiting on it (an atm before ATM-594 named a provisional key with its
+    // `~`): the review's decision, the user's, is recorded on the task with the command named (I23: never by atm). A
+    // task follows its latest review (§3.8): the reviews are listed newest first, and only a task's first counts
+    let mut followed = std::collections::HashSet::new();
+    for header in &headers {
+        let latest: Vec<&String> = header
+            .tasks
+            .iter()
+            .filter(|k| followed.insert((*k).clone()))
+            .collect();
+        let (state, command) = match header.status {
+            Status::Approved => ("approved", "approve"),
+            Status::ChangesRequested => ("changes_requested", "request-changes"),
+            _ => continue,
+        };
+        for key in latest {
+            let Ok(id) = project.resolve_task(key) else {
+                warnings.push(format!(
+                    "review {}: it names {key}, which isn't one of the project's tasks",
+                    header.reference
+                ));
+                continue;
+            };
+            if let Ok(Some((Kind::Review, now))) = kind_of(project, &id)
+                && now.as_deref() != Some(state)
+                && now.as_deref() != Some("approved")
+            {
+                let reason = if command == "approve" {
+                    String::new()
+                } else {
+                    " --reason '…'".to_string()
+                };
+                warnings.push(format!(
+                    "{key}: {} is {} but the task still waits for its review: `atm task review {command} {key}{reason}` records the decision",
+                    header.reference,
+                    header.status.name().replace('_', " ")
+                ));
+            }
+        }
+    }
     let known: std::collections::HashSet<&str> = headers.iter().map(|h| h.id.0.as_str()).collect();
     for task in document["tasks"].as_array().into_iter().flatten() {
         for link in task
@@ -246,6 +286,26 @@ fn named(project: &Project, header: &ReviewHeader) -> Result<Vec<String>> {
     resolve(project, &header.tasks)
 }
 
+/// The task a filter names (`--task`, `?task=`: a key with or without its `~`, an older ID, the UUID), as reviews name
+/// it: its key (ATM-594). One the project doesn't have is kept as given, without a leading `~` (it fits no review).
+#[must_use]
+pub fn task_reference(project: &Project, reference: &str) -> String {
+    project.resolve_task(reference).map_or_else(
+        |_| reference.strip_prefix('~').unwrap_or(reference).to_string(),
+        |id| key_of_id(project, &id),
+    )
+}
+
+/// How a review names the task `id`: its key, never with the `~` people read (ATM-594), else its ID.
+fn key_of_id(project: &Project, id: &str) -> String {
+    project
+        .store()
+        .get_task(id)
+        .ok()
+        .flatten()
+        .map_or_else(|| id.to_string(), |t| project.task_key(t))
+}
+
 /// Put the in-progress tasks among `ids` in review, with the review's link in their note (§3.8).
 fn ask_review(
     project: &mut Project,
@@ -283,18 +343,8 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
         }
         new.author = agent_at_work(project).or_else(|| agent_of_tasks(project, &ids));
     }
-    // The review names its tasks by key, as people read them
-    new.tasks = ids
-        .iter()
-        .map(|id| {
-            project
-                .store()
-                .get_task(id)
-                .ok()
-                .flatten()
-                .map_or_else(|| id.clone(), |t| project.task_label(t))
-        })
-        .collect();
+    // The review names its tasks by key, without the `~` of a provisional one (ATM-594): a reference atm resolves
+    new.tasks = ids.iter().map(|id| key_of_id(project, id)).collect();
     let mut reviews = store(project)?;
     let header = Reviews::new(&mut reviews).create(new)?;
     // The first review: its files merge by atm on branches too (staged with the review's folder, by whoever commits)
@@ -339,6 +389,13 @@ pub fn submit(
 ) -> Result<()> {
     let by = actor_of(project);
     let mut reviews = store(project)?;
+    // Every task it names found first (ATM-594): a decision is never kept without reaching its tasks
+    let tasks = named(project, &reviews.get_review(reference)?.header).map_err(|e| {
+        Error::failed(format!(
+            "{reference}'s decision can't reach its tasks, so it isn't recorded: {e}",
+            reference = reference.0
+        ))
+    })?;
     Reviews::new(&mut reviews).submit(reference, verdict, body, overriding, &by)?;
     let review = reviews.get_review(reference)?;
     let command = match verdict {
@@ -357,7 +414,7 @@ pub fn submit(
         )),
         ..Options::default()
     };
-    for id in named(project, &review.header)? {
+    for id in tasks {
         if kind_of(project, &id)?.is_some_and(|(kind, _)| kind == Kind::Review) {
             change_task_status(project, command, &id, &options)?;
         }
@@ -409,23 +466,15 @@ pub fn set_tasks(
     let mut reviews = store(project)?;
     let header = reviews.get_review(reference)?.header;
     let (added, removed) = (resolve(project, add)?, resolve(project, remove)?);
-    let label = |project: &Project, id: &str| {
-        project
-            .store()
-            .get_task(id)
-            .ok()
-            .flatten()
-            .map_or_else(|| id.to_string(), |t| project.task_label(t))
-    };
-    let removed_labels: Vec<String> = removed.iter().map(|id| label(project, id)).collect();
+    let removed_keys: Vec<String> = removed.iter().map(|id| key_of_id(project, id)).collect();
     let mut tasks: Vec<String> = header
         .tasks
         .iter()
-        .filter(|t| !removed_labels.contains(t) && !remove.contains(t))
+        .filter(|t| !removed_keys.contains(t) && !remove.contains(t))
         .cloned()
         .collect();
     for id in &added {
-        let key = label(project, id);
+        let key = key_of_id(project, id);
         if !tasks.contains(&key) {
             tasks.push(key);
         }
@@ -461,10 +510,7 @@ pub fn set_tasks(
 /// The reviews can't be read, or git fails.
 pub fn live_approval_for(project: &Project, task: &str) -> Result<Option<ReviewHeader>> {
     let id = project.resolve_task(task)?;
-    let key = project
-        .store()
-        .get_task(&id)?
-        .map_or_else(|| id.clone(), |t| project.task_label(t));
+    let key = key_of_id(project, &id);
     let Some(vcs) = project.vcs() else {
         return Ok(None);
     };
@@ -856,5 +902,118 @@ mod tests {
             &crate::state::Options::default(),
         )
         .unwrap();
+    }
+
+    // ATM-594: a provisional key (`~ATM-12` as people read it) in reviews
+
+    const PROVISIONAL: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8012";
+
+    /// A project in task keys' format: ATM-11 final, ATM-12 provisional, both in progress (`blocker`), as `actor`.
+    fn keyed(root: &Path, actor: &str) -> Project {
+        let tasks = json!({
+            "meta": { "project": "Keyed", "format": 2, "key": "ATM", "next_number": 13, "review": "blocker" },
+            "tasks": [
+                { "id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8011", "number": 11, "key_final": true, "name": "Final",
+                  "type": "feature", "status": "in_progress", "started_by": "claude:1" },
+                { "id": PROVISIONAL, "number": 12, "key_final": false, "name": "Provisional",
+                  "type": "feature", "status": "in_progress", "started_by": "claude:1" },
+            ]
+        });
+        std::fs::create_dir_all(root.join(".agentic-task-manager")).unwrap();
+        std::fs::write(
+            root.join(".agentic-task-manager/tasks.json"),
+            tasks.to_string(),
+        )
+        .unwrap();
+        Project::open(root).unwrap().with_actor(Some(actor.into()))
+    }
+
+    #[test]
+    fn a_review_names_a_provisional_task_by_its_key_and_its_decision_reaches_it() {
+        let dir = dir();
+        let mut project = keyed(&dir.0, "claude:1");
+        // Named as atm prints it, with the mark: the key itself
+        let header = open_review(&mut project, &["~ATM-12", "ATM-11"]);
+        assert_eq!(header.tasks, ["ATM-12", "ATM-11"]);
+        let text = std::fs::read_to_string(
+            std::fs::read_dir(dir.0.join(".agentic-task-manager/reviews"))
+                .unwrap()
+                .filter_map(Result::ok)
+                .find(|e| e.path().is_dir())
+                .unwrap()
+                .path()
+                .join("review.md"),
+        )
+        .unwrap();
+        assert!(text.contains("tasks = [\"ATM-12\", \"ATM-11\"]"), "{text}");
+        assert_eq!(task(&project, PROVISIONAL)["status"], "in_review");
+        // The approval reaches both
+        let mut hakan = reopen(&dir.0, "Hakan");
+        super::submit(&mut hakan, &header.reference, Verdict::Approve, None, None).unwrap();
+        assert_eq!(task(&hakan, PROVISIONAL)["review_state"], "approved");
+        // And every command takes the key as people read it
+        assert_eq!(hakan.resolve_task("~ATM-12").unwrap(), PROVISIONAL);
+        assert_eq!(hakan.resolve_task("ATM-12").unwrap(), PROVISIONAL);
+        assert!(hakan.resolve_task("~").is_err(), "a mark alone is no key");
+    }
+
+    #[test]
+    fn a_decision_that_cant_reach_a_named_task_isnt_recorded_and_says_why() {
+        let dir = dir();
+        let mut project = keyed(&dir.0, "claude:1");
+        let header = open_review(&mut project, &["ATM-12"]);
+        // The task is gone from the project (a hand edit, a branch that dropped it)
+        let mut store = super::store(&project).unwrap();
+        store.set_tasks(&header.id, vec!["ATM-99".into()]).unwrap();
+        let mut hakan = reopen(&dir.0, "Hakan");
+        let error =
+            super::submit(&mut hakan, &header.reference, Verdict::Approve, None, None).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("CR-1's decision can't reach its tasks, so it isn't recorded: "),
+            "{error}"
+        );
+        let reviews = super::store(&hakan).unwrap();
+        assert_eq!(
+            reviews.get_review(&header.reference).unwrap().header.status,
+            Status::Open
+        );
+    }
+
+    #[test]
+    fn doctor_names_a_decided_review_whose_task_still_waits_and_the_command_that_records_it() {
+        let dir = dir();
+        let mut project = keyed(&dir.0, "claude:1");
+        let header = open_review(&mut project, &["ATM-12", "ATM-11"]);
+        // As an atm before ATM-594 left it: the review approved, its decision not on the tasks
+        let mut store = super::store(&project).unwrap();
+        store
+            .set_status(&header.id, Status::Approved, &"Hakan".into())
+            .unwrap();
+        let document = project.store().document().unwrap().clone();
+        let (errors, warnings) = super::check(&project, &document);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(
+            warnings,
+            [
+                "ATM-12: CR-1 is approved but the task still waits for its review: `atm task review approve ATM-12` records the decision",
+                "ATM-11: CR-1 is approved but the task still waits for its review: `atm task review approve ATM-11` records the decision",
+            ]
+        );
+        // Recorded: nothing more to say
+        let mut hakan = reopen(&dir.0, "Hakan");
+        for key in ["ATM-12", "ATM-11"] {
+            let id = hakan.resolve_task(key).unwrap();
+            crate::changes::change_task_status(
+                &mut hakan,
+                crate::state::Command::Approve,
+                &id,
+                &crate::state::Options::default(),
+            )
+            .unwrap();
+        }
+        let document = hakan.store().document().unwrap().clone();
+        assert_eq!(super::check(&hakan, &document), (Vec::new(), Vec::new()));
     }
 }
