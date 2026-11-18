@@ -362,7 +362,7 @@ pub fn watch(
             if before == Some(status) || !decided(status) {
                 continue;
             }
-            if let Some(task) = decision_about_my_work(&work, me, &review.header) {
+            if let Mine::About(task) = decision_about_my_work(&work, me, &review.header) {
                 emit(decision(&review.header, task.as_deref()));
             }
         }
@@ -371,7 +371,7 @@ pub fn watch(
 
 /// Whether a decided review is of the agent's work, and the task it decides: its own review, or one naming a task it
 /// has held (ATM-600).
-fn decision_about_my_work(work: &Work, me: &str, review: &ReviewHeader) -> Option<Option<String>> {
+fn decision_about_my_work(work: &Work, me: &str, review: &ReviewHeader) -> Mine {
     let task = work
         .tasks
         .iter()
@@ -379,7 +379,11 @@ fn decision_about_my_work(work: &Work, me: &str, review: &ReviewHeader) -> Optio
         .find(|key| review.tasks.contains(key))
         .cloned();
     let own = review.author.as_ref().is_some_and(|a| a.0 == me);
-    (task.is_some() || own).then_some(task)
+    if task.is_some() || own {
+        Mine::About(task)
+    } else {
+        Mine::No
+    }
 }
 
 /// A decision heard, as the watch prints it: `decision` the review's new status (`approved`, `changes_requested`,
@@ -504,11 +508,11 @@ mod tests {
                 Some(Some("ATM-1")),
             ),
         ] {
-            assert_eq!(
-                decision_about_my_work(&work(), "claude:me", &header),
-                expected.map(|t| t.map(String::from)),
-                "{header:?}"
-            );
+            let got = match decision_about_my_work(&work(), "claude:me", &header) {
+                Mine::No => None,
+                Mine::About(task) => Some(task),
+            };
+            assert_eq!(got, expected.map(|t| t.map(String::from)), "{header:?}");
         }
     }
 
