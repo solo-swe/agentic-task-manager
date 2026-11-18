@@ -203,6 +203,11 @@ pub fn compare<S: RoundDiffs + ?Sized>(
         .chain(&b.files)
         .map(|f| f.path.clone())
         .collect();
+    // A files round speaks only for the files it names (ATM-622): its tree is rebuilt from them alone, so a file of the
+    // earlier round it doesn't name isn't deleted, it just isn't in this round. One it alone names is new to the review
+    if b.kind == RoundKind::Files {
+        paths.retain(|p| b.files.iter().any(|f| &f.path == p));
+    }
     paths.sort();
     paths.dedup();
     Ok(Patch(vcs.diff_trees(&tree_a, &tree_b, &paths)?))
@@ -967,6 +972,57 @@ mod tests {
             from_working(&vcs, "nope", &Actor::from("claude:A")),
             Err(atm_common::Error::Invalid(_))
         ));
+    }
+
+    // ATM-622 (Hakan, 2026-11-18): a later files round naming only the file that changed showed every other file of
+    // the review as deleted since the round before
+    #[test]
+    fn a_files_round_that_names_fewer_files_compares_only_what_it_has() {
+        use super::{compare, from_files};
+        use crate::memory::MemoryStore;
+        use crate::model::{Actor, ReviewRef, Status};
+        use crate::rules::Reviews;
+        use crate::store::{NewReview, ReviewStore};
+
+        let (dir, vcs) = repo(&[
+            ("docs/plan.md", b"# Plan\n\nOld step.\nKept step.\n"),
+            ("docs/notes.md", b"# Notes\n\nA note.\n"),
+        ]);
+        let by = Actor::from("claude:A");
+        let mut store = MemoryStore::new();
+        let mut reviews = Reviews::new(&mut store);
+        reviews
+            .create(NewReview {
+                title: "Plan".into(),
+                summary: String::new(),
+                tasks: Vec::new(),
+                author: Some(by.clone()),
+                reviewers: Vec::new(),
+                status: Status::Waiting,
+                first: from_files(&vcs, &["docs/plan.md".into(), "docs/notes.md".into()], &by)
+                    .unwrap(),
+            })
+            .unwrap();
+        write(
+            dir.path(),
+            &[("docs/plan.md", b"# Plan\n\nNew step.\nKept step.\n")],
+        );
+        reviews
+            .add_round(
+                &ReviewRef::numbered(1),
+                from_files(&vcs, &["docs/plan.md".into()], &by).unwrap(),
+            )
+            .unwrap();
+        let review = store.get_review(&ReviewRef::numbered(1)).unwrap();
+        let between = compare(&vcs, &store, &review, 1, 2).unwrap();
+        // The one line that changed, and nothing about the file round 2 didn't name
+        assert!(
+            between.0.contains("-Old step.") && between.0.contains("+New step."),
+            "{}",
+            between.0
+        );
+        assert!(!between.0.contains("notes.md"), "{}", between.0);
+        assert!(!between.0.contains("deleted file"), "{}", between.0);
     }
 
     #[test]

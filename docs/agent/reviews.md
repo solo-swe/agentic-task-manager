@@ -23,7 +23,10 @@
   to make it readable, say so to the user (`atm doctor` reports it too).
 - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
-  tasks back in review; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
+  tasks back in review. A round is the whole change as it now is, not the fix alone: a range round keeps the
+  review's first base (`--range <the first round's base>..HEAD`, never the fix commit's own range), and a files round
+  keeps the files the last one reviewed (naming more adds them). The reviewer sees what the fix changed as *since round
+  N*; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
   check has changed. Start a chain of your own with `atm review comment CR-7 --file <path> --lines A-B --body '…'`
   (without `--file`, about the review as a whole).
 - **Resolving and deciding are the reviewer's:** a top-level comment is resolved (`atm review resolve CR-7 c9`) by a

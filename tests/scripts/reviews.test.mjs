@@ -402,6 +402,28 @@ describe('atm review', () => {
     }
   });
 
+  // ATM-622 (Hakan): a later round naming only the file that changed showed every other file as deleted since round 1
+  test('a later files round keeps the files the last one reviewed, and since round 1 is only what changed', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'b.txt'), 'bee\n');
+      ok(['review', 'create', '--title', 'Two files', '--file', 'a.txt', '--file', 'b.txt'], root, AGENT);
+      const a = fs.readFileSync(path.join(root, 'a.txt'), 'utf8');
+      fs.writeFileSync(path.join(root, 'a.txt'), a.replace(/\n$/, ' changed\n'));
+      assert.equal(ok(['review', 'round', 'CR-1', '--file', 'a.txt'], root, AGENT).stdout, 'CR-1: round 2\n');
+      assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 2 · files as they are · 2 file\(s\)/);
+      const since = ok(['review', 'show', 'CR-1', '--round', '2', '--against', '1'], root, HAKAN).stdout;
+      assert.match(since, /^\+.* changed$/m);
+      assert.doesNotMatch(since, /b\.txt/);
+      // A file gone since isn't kept
+      fs.rmSync(path.join(root, 'b.txt'));
+      assert.equal(ok(['review', 'round', 'CR-1', '--file', 'a.txt'], root, AGENT).stdout, 'CR-1: round 3\n');
+      assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 3 · files as they are · 1 file\(s\)/);
+    } finally {
+      removeDir(root);
+    }
+  });
+
   test('a draft of files as they are, with a summary: nothing in review yet; show prints its header and rounds', () => {
     const root = project();
     try {

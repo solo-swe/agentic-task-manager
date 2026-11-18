@@ -328,7 +328,18 @@ fn new_round(
         );
     }
     if !change.files.is_empty() {
-        let paths = vcs.paths(&change.files, Some(cwd))?;
+        let mut paths = vcs.paths(&change.files, Some(cwd))?;
+        // A later files round keeps the files the last one reviewed (ATM-622): naming only the file that changed made
+        // a round of that file alone, whose whole change was that file and since which every other one looked deleted.
+        // A file gone since isn't kept
+        if previous.is_some_and(|last| last.kind == RoundKind::Files) {
+            let root = project.root().map(Path::to_path_buf).unwrap_or_default();
+            for kept in previous_files {
+                if !paths.contains(kept) && root.join(kept).is_file() {
+                    paths.push(kept.clone());
+                }
+            }
+        }
         return rounds::from_files(&reviews::repository_of_files(&vcs, &paths)?, &paths, &by);
     }
     match (change.uncommitted, previous) {

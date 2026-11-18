@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 625
+    "next_number": 628
   },
   "tasks": [
     {
@@ -17978,7 +17978,7 @@
       "description": "Asked by Hakan (2026-11-18). Measured on CompMD's CR-1 (94 files): the Diffs tab keeps 16 to 32 CompMD renderers alive, but makes about 410 in one pass to the end and back, and the heap grows to about 110 MB with 117,000 DOM nodes alive while the page has about 4,000 elements. Renderers that are gone stay in memory. What is measured so far, and how: [docs/diff-viewer-profile.md](docs/diff-viewer-profile.md).\n\n## What this task delivers, in order\n1. **The analysis** in `docs/diff-viewer-profile.md`, completed:\n   - what holds the destroyed renderers (a heap snapshot's retainers of the detached `.compmd` trees);\n   - CompMD's own share of a renderer's cost, against the diff rows';\n   - the latency of one renderer from mount to drawn;\n   - the rendered Markdown view (`RenderedSide`, the document processed once per part);\n   - the same in WebKit, the app's engine (`tests/e2e/real-review.spec.ts` measures a real review in both).\n2. **The options, agreed with Hakan.** Write them in the document with what each buys and costs, then block this task on the user (`blocked --on user`) until he chooses. Don't build before that.\n3. **The optimizations chosen,** in atm: the document viewer, `DiffView.svelte`, `RenderedSide.svelte`, `CompMd.svelte` (and `ReviewFile.svelte` where it decides what is made), each with the numbers before and after in the document.\n4. **What only CompMD can change,** as tasks in CompMD's project (`CMD-…`), with the numbers. Possibly a leak in its view, drawing one text in ranges with gaps (close to CMD-250), or a processed tree several views share. The CompMD boundary holds: atm shows, CompMD renders.\n\n## Tests\n- A check that keeps the memory bounded: the long-review spec (`reviews.spec.ts`) after passes to the end and back, the DOM nodes alive (DevTools' `Performance.getMetrics` after a forced garbage collection) within a bound set from the measurements, not every renderer ever made.\n- The long-review spec's budgets still met, and met 10 times in a row with the CPU slowed 4× (as ATM-615).\n- Each optimization's own unit or e2e tests.\n\nNo budget is raised to make a test pass (AGENTS.md).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "docs/diff-viewer-profile.md",
@@ -17989,7 +17989,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T19:29:53Z",
-      "updated_at": "2026-11-18T19:49:14Z",
+      "updated_at": "2026-11-18T20:56:21Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18005,7 +18005,7 @@
       ],
       "number": 620,
       "key_final": false,
-      "commit": "02e336e8b85e66c4c442080fb4dbe4aa8eaecf6c",
+      "commit": "bf57dd8b81814240ded3917657dcad2731e73fca",
       "blocks": [
         {
           "from": "2026-11-18T19:39:54Z",
@@ -18022,7 +18022,12 @@
         }
       ],
       "started_at": "2026-11-18T19:49:14Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "waiting_on": "user",
+      "questions": [
+        "The analysis is in docs/diff-viewer-profile.md (executive summary and recommendations at the top). Which options should I build? Recommended: 1 (fix the render after destroy), 2 (drop content-visibility from the cards) and 3 (a memory bound in the long-review spec) now; 4 and 5 (faster highlighting in WebKit, a highlight cache) as CompMD tasks; 6 (the rendered view processed once a side) measured after 1 to 3."
+      ],
+      "blocked_at": "2026-11-18T20:56:21Z"
     },
     {
       "id": "01a1f02d-58a8-71cb-88c1-a94acbdbc50a",
@@ -18076,7 +18081,7 @@
       "description": "Reported by Hakan (2026-11-18), in a review he was reading: a single line changed in round 2, yet\n- **round 2's whole change** shows the whole file as added;\n- **since round 1** shows every other file of the review as deleted.\n\nBoth views should show what a reader expects: the whole change is everything the review is about, as of that round, with that one line in it; since round 1 is that one line, and nothing else.\n\n## Leads (not yet confirmed)\nThis repo's own reviews have rounds of this shape. CR-13's round 1 is the range `a6864c0..59c4948` (28 files), and its round 2 is `3c2b8d8..a7d3dd4`, the fix commit alone (3 files): the agent gave the round its own range, from the commit before the fix, not from the review's base.\n- **A round's whole change** may be taken from the round's own range, or from a base its files don't have, so a file reads as added. Find how `atm-review`'s `rounds.rs` (and `atm-lib`'s `review_pages.rs`, the view) builds a round's change. Decide what a range round means, with Hakan if unclear: the review's change as of the round (from the review's first base to the round's head) is what a reader expects.\n- **Since an earlier round** may compare the two rounds' file lists, or their patches, rather than the trees at the two rounds' heads. A file the later round's range doesn't touch then looks deleted. It should be the difference between the two rounds' after sides, file by file, for the files either round changed.\n- Uncommitted (`files`) rounds and live rounds may have the same problems: check each round kind (`range`, `files`, `uncommitted`, live) against each other.\n\nReproduce first with a test on a small repository: two rounds, the second a one-line fix made as a new commit; the round given both ways (the review's whole range, and the fix commit's alone). The CLI suite (`tests/scripts/reviews.test.mjs`) and `rounds.rs`'s own tests.\n\nAlso check what the agents' docs tell them to give `atm review round` (`atm docs reviews`), so that what they do gives the right rounds.\n\n## Tests\n- atm-review: a round's whole change, and since an earlier round, for each round kind and for a round given its own commit's range, as above.\n- The CLI suite: `atm review show CR-1 --round 2` and `--round 2 --against 1` on such a review.\n- The REST view (`review_pages`): the files and patches for both.\n- An e2e test with the fixture: since round 1 lists only the changed file.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rounds.rs",
@@ -18085,9 +18090,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T20:17:23Z",
-      "updated_at": "2026-11-18T20:17:23Z",
+      "updated_at": "2026-11-18T20:56:25Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -18100,7 +18105,9 @@
         "docs"
       ],
       "number": 622,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T20:56:25Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f05c-1dcc-74a9-82ca-2bb060c5e75f",
@@ -18175,6 +18182,113 @@
         "docs"
       ],
       "number": 624,
+      "key_final": false
+    },
+    {
+      "id": "01a1f07e-b5ea-7451-b1fb-a032eba1e31e",
+      "name": "Diff viewer: + on a wrapped long line keeps the pane where it is (it jumps to near the end)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): in a Markdown file shown as source (not rendered), with **Wrap** on (ATM-588), clicking **+** to comment on a long wrapped line makes the diffs pane jump to somewhere near the end of the review.\n\n## Leads\n- Wrapped rows are measured by `DiffCode`'s `measureWrapped` (a DOM range at each line's start). The composer opening under the row changes the run's height; if the rows are measured again from a stale layout, or the measuring itself scrolls (a range's `getClientRects` on a skipped or unlaid-out element), the pane can move.\n- The page pins the file gone to (`ReviewPage.svelte`'s `chosen`/`pinned` and its ResizeObserver): opening the composer may count as a jump, or pin a file other than the one written in.\n- The composer's textarea is focused on show (`focusOnShow`): a `focus()` without `preventScroll` scrolls it into view, and a wrong position for it (measured before layout) sends the pane far.\n\nReproduce first: an e2e in `reviews.spec.ts` with a long Markdown line, Wrap on, `+` clicked; the pane's `scrollTop` must stay within a few pixels, and the composer be in view.\n\n## Tests\nThat e2e, in Unified with Wrap (Split disables Wrap), and the same without Wrap.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/DiffCode.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-18T21:09:58Z",
+      "updated_at": "2026-11-18T21:09:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:09:58Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 625,
+      "key_final": false
+    },
+    {
+      "id": "01a1f07e-b5ea-7451-b1fb-a03375d418fc",
+      "name": "Rendered Markdown view shows only its first page of a new document",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): the **Rendered** view of a Markdown file still shows only about its first page; tried with a new document (added in the round). Not yet known whether a changed existing document does the same.\n\n## Leads\n- A new file is all one change: `RenderedSide`'s parts (`renderedParts`, ATM-591) should be one part, the whole document. Check what parts it gets, and whether `CompMd`'s `only` cuts the tree at the first block range.\n- The card's height: `ReviewFile`'s estimate (`.review-file-later`, the loading body's `min-height: var(--card-estimate)` from ATM-615, `contain-intrinsic-size`) may cap or clip the rendered side, or the side's `doc-sheet` may have a fixed height from a measurement taken before CompMD drew.\n- Long files are drawn in chunks (`DiffView`'s `CHUNK`, ATM-587): if the rendered view goes through the chunking meant for source rows, only the first chunk would show.\n\nReproduce first, both cases (a new document and a changed one, each longer than a few screens): an e2e in `reviews.spec.ts` (the fixture serves both sides) asserting the last heading of the document is drawn.\n\n## Tests\nThat e2e for a new and a changed document; a unit test of `renderedParts` for an added file.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/RenderedSide.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/src/lib/reviews/diff.ts",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-18T21:09:58Z",
+      "updated_at": "2026-11-18T21:09:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:09:58Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 626,
+      "key_final": false
+    },
+    {
+      "id": "01a1f07e-b5ea-7451-b1fb-a034b5e64291",
+      "name": "Rendered Markdown view: the comment box is drawn under the document",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): writing a comment on the **Rendered** view of a Markdown file, the comment box and the rendered document mix up: the document is drawn over the box.\n\n## Leads\n- Stacking: the rendered side's marks (`.diff-block-mark`, absolutely placed), the `doc-sheet`'s own stacking context, CompMD's page (`.compmd-page`, possibly positioned, or a frame for a component), the sticky card header (`z-index: 2`) and the fold rows (`z-index: 1`, ATM-590). The composer needs to sit above the document it comments on.\n- Where the composer is placed in the rendered view: inside the part, between parts, or absolutely at the picked block; a box placed in the flow of a part CompMD owns would be redrawn or overlapped by it.\n\nReproduce first: an e2e in `reviews.spec.ts` that picks a block in the Rendered view and checks that the composer is the topmost element at its centre (`document.elementFromPoint`).\n\n## Tests\nThat e2e, in a split and a single-side rendered view, light and dark.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/RenderedSide.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-18T21:09:58Z",
+      "updated_at": "2026-11-18T21:09:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-18T21:09:58Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 627,
       "key_final": false
     }
   ]
