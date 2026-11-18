@@ -368,6 +368,19 @@ describe('atm review', () => {
       fs.writeFileSync(path.join(root, 'a.txt'), 'one\ntwo\nthree\nfour\n');
       assert.equal(ok(['review', 'round', 'CR-1'], root, AGENT).stdout, 'CR-1: round 2\n');
       assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 2 · files as they are · 1 file\(s\)/);
+      // A round with a new summary (its Description): the author's; read before anything is written
+      fs.writeFileSync(path.join(root, 'next.md'), '1. Check the fourth line.\n');
+      assert.equal(
+        ok(['review', 'round', 'CR-1', '--summary-file', 'next.md', '--dry-run'], root, AGENT).stdout,
+        '[dry-run] would add a round to CR-1, with a new summary\n',
+      );
+      ok(['review', 'round', 'CR-1', '--summary-file', 'next.md'], root, AGENT);
+      assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().summary, '1. Check the fourth line.');
+      const missing = atm(['review', 'round', 'CR-1', '--summary-file', 'none.md'], root, AGENT);
+      assert.equal(missing.code, 1);
+      assert.match(missing.stderr, /can't read none\.md/);
+      assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 3 ·/);
+      assert.doesNotMatch(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 4 ·/);
     } finally {
       removeDir(root);
     }

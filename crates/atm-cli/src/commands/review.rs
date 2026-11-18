@@ -96,6 +96,9 @@ pub enum ReviewCommand {
         review: String,
         #[command(flatten)]
         change: Change,
+        /// A new summary (the review's Description), in Markdown, from a file: what the reviewers should check now
+        #[arg(long, value_name = "FILE")]
+        summary_file: Option<String>,
         /// Who adds it
         #[arg(long)]
         agent: Option<String>,
@@ -602,6 +605,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
         ReviewCommand::Round {
             review,
             change,
+            summary_file,
             agent,
         } => {
             let mut project = opened(cwd, agent.as_deref())?;
@@ -611,12 +615,30 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             let files: Vec<String> = last
                 .map(|r| r.files.iter().map(|f| f.path.clone()).collect())
                 .unwrap_or_default();
+            // The new summary read before anything is written
+            let summary = summary_file
+                .map(|file| {
+                    std::fs::read_to_string(cwd.join(&file))
+                        .map_err(|e| Error::failed(format!("can't read {file}: {e}")))
+                })
+                .transpose()?;
             let round = new_round(&project, change, cwd, last, &files)?;
             if ctx.dry_run {
-                println!("[dry-run] would add a round to {}", found.header.reference);
+                let with = if summary.is_some() {
+                    ", with a new summary"
+                } else {
+                    ""
+                };
+                println!(
+                    "[dry-run] would add a round to {}{with}",
+                    found.header.reference
+                );
                 return Ok(0);
             }
             let number = reviews::add_round(&mut project, &found.header.reference, round)?;
+            if let Some(summary) = summary {
+                reviews::edit_summary(&mut project, &found.header.reference, summary.trim_end())?;
+            }
             if ctx.json {
                 print_json(&json!({ "review": found.header.reference, "round": number }));
             } else {

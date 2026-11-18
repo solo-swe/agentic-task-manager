@@ -379,6 +379,16 @@ pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) 
     Ok(number)
 }
 
+/// The author changes the review's summary, its Description (with a round: `atm review round --summary-file`).
+///
+/// # Errors
+/// What the review's rules refuse (an ended review, not its author), or a store error.
+pub fn edit_summary(project: &mut Project, reference: &ReviewRef, summary: &str) -> Result<()> {
+    let by = actor_of(project);
+    let mut reviews = store(project)?;
+    Reviews::new(&mut reviews).edit_summary(reference, summary, &by)
+}
+
 /// A reviewer submits (§3.11's *Submit*); approving or sending back is every named task's decision, recorded as the
 /// reviewer: approved, or changes requested with a note linking the review (`atm loop next` then hands the task back).
 /// A task not in review (a live review's, still in progress) waits for [`apply_live_approval`]. `overriding`: a

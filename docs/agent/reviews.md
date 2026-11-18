@@ -19,7 +19,8 @@
   since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`.
 - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
-  tasks back in review. Start a chain of your own with `atm review comment CR-7 --file <path> --lines A-B --body '…'`
+  tasks back in review; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
+  check has changed. Start a chain of your own with `atm review comment CR-7 --file <path> --lines A-B --body '…'`
   (without `--file`, about the review as a whole).
 - **Resolving and deciding are the reviewer's:** a top-level comment is resolved (`atm review resolve CR-7 c9`) by a
   reviewer or its own author; never resolve a reviewer's comment yourself. `atm review submit` (approve, request

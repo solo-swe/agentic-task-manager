@@ -412,6 +412,23 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         }
         self.store.set_tasks(&review.header.id, tasks)
     }
+
+    /// Change a review's summary (its Description), its author's: with a round, when the round changes what the
+    /// reviewers should check (ATM-587's review: the steps named in it). The title stays.
+    ///
+    /// # Errors
+    /// An ended review, someone who isn't its author, or the store's.
+    pub fn edit_summary(&mut self, reference: &ReviewRef, summary: &str, by: &Actor) -> Result<()> {
+        let review = self.not_ended(reference, "change its summary")?;
+        if !is_author(&review.header, by) {
+            return Err(refused(format!(
+                "{}'s summary is its author's to change",
+                review.header.reference
+            )));
+        }
+        self.store
+            .edit_summary(&review.header.id, &review.header.title, summary)
+    }
 }
 
 #[cfg(test)]
@@ -1323,6 +1340,33 @@ mod tests {
             vec!["ATM-1".into()],
             &someone()
         )));
+    }
+
+    /// ATM-587's review: the summary (its Description) is its author's to change, until it has ended; the title stays
+    #[test]
+    fn its_summary_is_changed_by_its_author_while_it_is_open() {
+        let mut store = MemoryStore::new();
+        let mut reviews = Reviews::new(&mut store);
+        reviews.create(new_review(Status::Open)).unwrap();
+        let title = reviews.store().get_review(&cr(1)).unwrap().header.title;
+        reviews
+            .edit_summary(&cr(1), "1. Do this.\n2. Then that.", &agent())
+            .unwrap();
+        let review = reviews.store().get_review(&cr(1)).unwrap();
+        assert_eq!(review.summary, "1. Do this.\n2. Then that.");
+        assert_eq!(review.header.title, title);
+        // Not a reviewer's, nor anyone else's
+        for who in [hakan(), someone()] {
+            let refused = reviews.edit_summary(&cr(1), "mine", &who);
+            assert!(is_refused(&refused), "{who:?}");
+        }
+        assert_eq!(
+            reviews.store().get_review(&cr(1)).unwrap().summary,
+            "1. Do this.\n2. Then that."
+        );
+        // Nor once it has ended
+        reviews.close(&cr(1), "not needed", &agent()).unwrap();
+        assert!(is_not_now(&reviews.edit_summary(&cr(1), "late", &agent())));
     }
 
     #[test]

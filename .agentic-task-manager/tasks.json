@@ -15878,9 +15878,9 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T00:05:49Z",
-      "updated_at": "2026-11-18T00:48:05Z",
+      "updated_at": "2026-11-18T00:49:36Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -15904,15 +15904,22 @@
         }
       ],
       "review_requested_at": "2026-11-18T00:46:10Z",
-      "review_state": "waiting",
+      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-18T00:46:10Z",
           "kind": "review",
           "text": "CR-1: Large reviews: where the Diffs tab spends its time, and what to change",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T00:49:36Z",
+          "kind": "rejection",
+          "text": "CR-1 round 3: 1 open comment",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-18T00:49:36Z"
     },
     {
       "id": "01a1ebf9-5ab0-7489-8d25-ef4766068f19",
@@ -16153,7 +16160,7 @@
         "tests/scripts/reviews.test.mjs"
       ],
       "created_at": "2026-11-18T00:26:10Z",
-      "updated_at": "2026-11-18T00:41:29Z",
+      "updated_at": "2026-11-18T00:49:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16170,7 +16177,7 @@
       "key_final": false,
       "started_at": "2026-11-18T00:28:21Z",
       "started_by": "claude:0f56a916",
-      "commit": "0d47be4eff812d6c73d4b69f40592dd600f3f17b",
+      "commit": "cf0ead7dff737cb35e5190fa64ecce79e6c40731",
       "completed_at": "2026-11-18T00:41:29Z",
       "completed_by": "claude:0f56a916",
       "notes": [
