@@ -247,7 +247,10 @@ mod tests {
                 head: sha.trim().into(),
             },
         );
-        assert_eq!(task_of(&project, Some(&store), &header, "ATM-12").unwrap(), A);
+        assert_eq!(
+            task_of(&project, Some(&store), &header, "ATM-12").unwrap(),
+            A
+        );
     }
 
     /// At the review's commit a third task held the number (neither the holder now nor one that moved off it): the
