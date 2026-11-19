@@ -1760,7 +1760,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 649
+    "next_number": 654
   },
   "tasks": [
     {
@@ -16909,7 +16909,7 @@
       "description": "Move atm from CompMD 0.7.1 to 0.8.0 (asked by Hakan, 2026-11-19), everywhere it is pinned, and adapt what 0.8.0 changes.\n\n## The pins\n- **Rust** (the workspace `Cargo.toml`): `tauri-plugin-compmd` and `compmd-host`, both `=0.7.1`. `Cargo.lock` follows with `cargo build`.\n- **Dashboard** (`dashboard/package.json`): `@compmd/processor`, `@compmd/render`, `@compmd/sandbox`, `@compmd/vite`, all `0.7.1`. Update the lockfile on purpose (`pnpm install`, then commit `pnpm-lock.yaml`), never by a plain install elsewhere.\n- **CompMD's runtime** the dashboard builds into `dist/assets/compmd/<version>/` (`vite.compmd.config.ts`): the version folder moves to `0.8.0`; check what names it (the server's `/assets/` routes, the CSP, the tests that load it).\n- **CompMD's guide for agents**, `docs/agent/compmd-llms.txt` (`atm docs compmd`): replace it with 0.8.0's.\n\n## Adapt\nRead 0.8.0's changelog first, from the package itself (not the web), and list what changed for a host. In particular:\n- **The runtime per document** (ATM-646): atm keeps one CompMD runtime per document in `dashboard/src/lib/compmd-runtime.ts`, working around 0.7.1's per-page restyles. If 0.8.0 has CompMD's own fix (the proposal from ATM-646), use it and drop atm's workaround; keep the e2e bound on restyles (`reviews.spec.ts`, the jump test) passing.\n- **Line elements** (CMD-250): if 0.8.0 has them, the diff viewer's Wrap can work in Split too (ATM-588 waits for them).\n- Any API, option or output that changed: the processor's frontmatter and data (`md.data.task`), the sandbox's messages, the render's source-line map the document viewer's gutter and the rendered diff use.\n\n## Checks\n- `pnpm run verify` (the screenshots included: rendering may move pixels; regenerate only the ones that changed on purpose, and look at them), `cargo test`, clippy, `cargo deny check`.\n- `pnpm run size`: the page budget (1.5 MiB) still holds.\n- `docs/security-architecture.md`: the CompMD runtime and its sandbox are in the threat model (I1, the `/assets/` route); note the upgrade and anything that changes what the sandbox allows.\n- The CHANGELOG and WHATS-NEW entries of the release that ships it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -16921,7 +16921,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-19T16:22:15Z",
-      "updated_at": "2026-11-19T16:28:48Z",
+      "updated_at": "2026-11-19T17:53:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16933,7 +16933,182 @@
       "sprint": "Task&review state machine",
       "number": 648,
       "started_at": "2026-11-19T16:28:48Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f13a823ac1ed593b5ce4ef0d95b474d875e64b30",
+      "code_reviews": [
+        {
+          "id": "01a1f4f1-a0ed-7296-a91c-b4de7fce7cfb",
+          "ref": "CR-59"
+        }
+      ],
+      "review_requested_at": "2026-11-19T17:53:58Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T17:53:58Z",
+          "kind": "review",
+          "text": "CR-59: CompMD 0.8.0, measured before and after",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1f4fd-42b5-741f-92a8-84889ca15f2a",
+      "name": "Research: rendered Markdown shown as a document editor shows it (it looks very dark now)",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan (2026-11-19): a review's rendered Markdown looks very dark. It should simply look right, as a top-level document editor shows a document (Microsoft Word, Google Docs, Apple Pages, Notion): a page you read and comment on, not a dark panel.\n\n## Research\nWrite `docs/rendered-document-research.md`, reviewed as a CR:\n- **How editors show a document:** the page (its colour in light and dark modes, its paper, margins, width and shadow), the canvas around it, the text's type and size, headings, tables, code, images; how each handles dark mode (Word's and Docs' dark canvas with a light page, or a dark page; Pages; Notion's in-canvas text). Screenshots or precise descriptions, each sourced.\n- **What atm shows now:** the review's rendered side and the document viewer's page (`DocumentPage.svelte`, ATM-645), in each theme and mode, with screenshots; why it looks dark (the page's colours, the theme tokens, CompMD's styles: atm's own CSS, per the boundary).\n- **The gap:** what is missing to get there, as a list of concrete changes with where each lives (atm's CSS and components, the theme tokens; anything that would be CompMD's, named as such and not built here).\n- **A recommendation**, and the follow-up tasks it implies.\n\nThe diff's own marks (added, removed, changed blocks) and the comments must still read on the page.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/rendered-document-research.md"
+      ],
+      "created_at": "2026-11-19T18:06:40Z",
+      "updated_at": "2026-11-19T18:06:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T18:06:40Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 649
+    },
+    {
+      "id": "01a1f4fd-42b5-741f-92a8-848990a501dd",
+      "name": "Rendered Markdown in a review: commenting works as on code (the + on a line, a drag over lines)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan (2026-11-19): commenting on a review's rendered Markdown doesn't work as on code: there is no **+** button, and so on.\n\n## Expected\nThe rendered view takes comments the way the source view does: hovering a block (or a line of it) shows the **+** at its line number in the gutter; a click opens the comment box under it; a drag over several lines' + picks them; a text selection may start one too. The comment anchors to the source lines the block came from (CompMD's source-line map, as the gutter uses it), so it shows in the source view as well and moves with the code across rounds.\n\n## Check\n- Where the source view's + and drag live (`DiffCode.svelte`, `DiffView.svelte`) and what the rendered side (`RenderedSide.svelte`, `DocumentPage.svelte`) lacks; reuse the same component, not a copy.\n- Tests: e2e on a rendered Markdown file: the + appears on hover, a click opens the box anchored to the block's lines, a drag over two blocks anchors to their lines, the comment shows in the source view on the same lines.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/RenderedSide.svelte",
+        "dashboard/src/lib/documents/DocumentPage.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-19T18:06:40Z",
+      "updated_at": "2026-11-19T18:06:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T18:06:40Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 650
+    },
+    {
+      "id": "01a1f4fd-42b5-741f-92a8-848aa5d26e23",
+      "name": "Rendered Markdown in a review: a comment entered there is shown on the page",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan (2026-11-19): a comment entered on rendered Markdown isn't shown on the screen.\n\n## Two ways to show them (Hakan's)\n1. **In a margin on the right**, beside the block they are about, as Word and Google Docs show comments; a line or a highlight ties each to its block.\n2. **Cut the page at that point and split it in two**, the comment in the space between, as the source view shows a chain under its lines.\n\nPropose one (or both, by width) with a mockup in the CR, then build it: every chain on the file shows at its block, open ones and resolved ones as the source view shows them, with reply, resolve and edit; a comment being written shows where it will land. Follows from ATM-650 (commenting there) and fits the look the research task settles (ATM-649).\n\n## Tests\ne2e: a chain on a rendered block shows at that block, in both views; a new comment shows once sent; a resolved one folds as in the source view.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f4fd-42b5-741f-92a8-848990a501dd"
+      ],
+      "files": [
+        "dashboard/src/lib/reviews/RenderedSide.svelte",
+        "dashboard/src/lib/reviews/ChainBox.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-19T18:06:40Z",
+      "updated_at": "2026-11-19T18:06:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T18:06:40Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 651
+    },
+    {
+      "id": "01a1f4fd-42b5-741f-92a8-848b9d6a97b8",
+      "name": "Diff viewer: line numbers aligned with their lines exactly, and Wrap doesn't move them",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan (2026-11-19): the line numbers are not perfectly aligned with their lines, and toggling **Wrap** moves the numbers up and down although the lines stay the same.\n\n## Look into\n- Measure each number's box against its line's (top and baseline) in the source and rendered views, Unified and Split, wrapped and not, in Chromium and WebKit; find where they drift (font metrics of the gutter versus the code, a line's height CompMD draws versus the gutter's row, wrapped lines' heights).\n- CompMD 0.8.0 (ATM-648) gives a code block's lines through `view.lines()` and sizes them with `view.lineHeights()`: the gutter can place each number where CompMD draws its line, and the two sides of Split be kept level, instead of atm's own estimate. This also lets Wrap work in Split (ATM-588).\n\n## Tests\nAn e2e that measures every number's top against its line's (within 1 px), before and after toggling Wrap, in both views; the screenshots of the diff viewer regenerated if they change on purpose.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/DiffCode.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-19T18:06:40Z",
+      "updated_at": "2026-11-19T18:06:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T18:06:40Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 652
+    },
+    {
+      "id": "01a1f4fd-42b5-741f-92a8-848c3c638fe6",
+      "name": "Research and design: tabs, pop-ups, Back and Forward, and an address for every page",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "Hakan (2026-11-19): the way the app uses tabs is inconsistent. Overhaul it on a solid foundation.\n\n## Research (a document in `docs/`, reviewed as a CR)\nExisting tabbed windowing models: browsers (Chrome, Safari, Arc), editors (VS Code, Zed), Slack, Linear, Notion, Figma, macOS's document tabs. For each: what a tab represents (a document, a place, a session), what pop-ups (dialogs, panels, menus) are scoped to (the tab or the window), what Back and Forward walk (a tab's own history, across tabs), what ⌘/Ctrl-click and a middle click do, what a tab's context menu offers, and how a page's address is kept.\n\n## Define, for atm\n- **What a tab is**, and what it keeps (its address, its scroll, what is open over it).\n- **Pop-ups:** scoped to their tab or to the app? (Hakan: should switching tabs be possible without closing a pop-up opened on one tab?)\n- **Back and Forward:** each tab's own history, in the order the reader went. Today a review reached from a Kanban card, the task dialog or the Reviews list always goes Back to the Reviews list, not to where the reader came from.\n- **A proper address for every page and what is open over it** (a specific CR, its tab, its file and round; a task's details; a document), so Back, Forward, a reload and a new tab land where expected.\n- **Right-click** (today a browser-like menu with Back and Reload: does it do what it says?) and **⌘/Ctrl-click to a new tab**: what each should do, and check what they do now.\n- **Today, mapped:** every place that opens, closes or navigates (the title bar's tabs, `lib/navigation.ts`, `address.ts`, the app's windows and menus), what each does against the model, and what changes.\n\nThe design is agreed with Hakan before it is built; the build becomes tasks of its own.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/tabs-and-navigation-design.md"
+      ],
+      "created_at": "2026-11-19T18:06:40Z",
+      "updated_at": "2026-11-19T18:06:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T18:06:40Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 653
     }
   ]
 }
