@@ -17098,7 +17098,7 @@
       "description": "Hakan (2026-11-19): the line numbers are not perfectly aligned with their lines, and toggling **Wrap** moves the numbers up and down although the lines stay the same.\n\n## Look into\n- Measure each number's box against its line's (top and baseline) in the source and rendered views, Unified and Split, wrapped and not, in Chromium and WebKit; find where they drift (font metrics of the gutter versus the code, a line's height CompMD draws versus the gutter's row, wrapped lines' heights).\n- CompMD 0.8.0 (ATM-648) gives a code block's lines through `view.lines()` and sizes them with `view.lineHeights()`: the gutter can place each number where CompMD draws its line, and the two sides of Split be kept level, instead of atm's own estimate. This also lets Wrap work in Split (ATM-588).\n\n## Tests\nAn e2e that measures every number's top against its line's (within 1 px), before and after toggling Wrap, in both views; the screenshots of the diff viewer regenerated if they change on purpose.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -17106,7 +17106,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:22:06Z",
+      "updated_at": "2026-11-19T18:30:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17118,7 +17118,24 @@
       "sprint": "Task&review state machine",
       "number": 652,
       "started_at": "2026-11-19T18:22:06Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "bc2b174654eae72531be0e4052b87983dfbc6bc6",
+      "code_reviews": [
+        {
+          "id": "01a1f513-0935-72e9-be26-4f3a70c2b117",
+          "ref": "CR-62"
+        }
+      ],
+      "review_requested_at": "2026-11-19T18:30:28Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T18:30:28Z",
+          "kind": "review",
+          "text": "CR-62: Diff viewer: line numbers level with their lines; Wrap moves none",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848c3c638fe6",
@@ -17132,15 +17149,15 @@
       "description": "Hakan (2026-11-19): the way the app uses tabs is inconsistent. Overhaul it on a solid foundation.\n\n## Research (a document in `docs/`, reviewed as a CR)\nExisting tabbed windowing models: browsers (Chrome, Safari, Arc), editors (VS Code, Zed), Slack, Linear, Notion, Figma, macOS's document tabs. For each: what a tab represents (a document, a place, a session), what pop-ups (dialogs, panels, menus) are scoped to (the tab or the window), what Back and Forward walk (a tab's own history, across tabs), what ⌘/Ctrl-click and a middle click do, what a tab's context menu offers, and how a page's address is kept.\n\n## Define, for atm\n- **What a tab is**, and what it keeps (its address, its scroll, what is open over it).\n- **Pop-ups:** scoped to their tab or to the app? (Hakan: should switching tabs be possible without closing a pop-up opened on one tab?)\n- **Back and Forward:** each tab's own history, in the order the reader went. Today a review reached from a Kanban card, the task dialog or the Reviews list always goes Back to the Reviews list, not to where the reader came from.\n- **A proper address for every page and what is open over it** (a specific CR, its tab, its file and round; a task's details; a document), so Back, Forward, a reload and a new tab land where expected.\n- **Right-click** (today a browser-like menu with Back and Reload: does it do what it says?) and **⌘/Ctrl-click to a new tab**: what each should do, and check what they do now.\n- **Today, mapped:** every place that opens, closes or navigates (the title bar's tabs, `lib/navigation.ts`, `address.ts`, the app's windows and menus), what each does against the model, and what changes.\n\nThe design is agreed with Hakan before it is built; the build becomes tasks of its own.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/tabs-and-navigation-design.md"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:06:40Z",
+      "updated_at": "2026-11-19T18:30:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17148,7 +17165,9 @@
         }
       ],
       "sprint": "Task&review state machine",
-      "number": 653
+      "number": 653,
+      "started_at": "2026-11-19T18:30:30Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
