@@ -77,13 +77,14 @@
       return;
     }
     // A line's height as drawn: the code's height over its lines (every one is drawn, an empty last one too: ATM-589),
-    // so the rows never drift from the text; else what its style says
-    const style = getComputedStyle(code);
+    // so the rows never drift from the text; else what its style says. Its style only then (ATM-644): a computed
+    // style read forces a restyle of the whole page, which takes a second in the app's WebKit on a long review
     const drawnHeight = code.getBoundingClientRect().height;
-    const lineHeight =
-      !wrap && lines.length && drawnHeight > 0
-        ? drawnHeight / lines.length
-        : parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
+    const styled = () => {
+      const style = getComputedStyle(code);
+      return parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
+    };
+    const lineHeight = !wrap && lines.length && drawnHeight > 0 ? drawnHeight / lines.length : styled();
     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
     if (wrap) measureWrapped(code);
@@ -100,8 +101,11 @@
     measure();
     const resize = new ResizeObserver(measure);
     resize.observe(target);
+    // What CompMD draws, only (ATM-644): the run's own gutter (the + under the pointer, a line picked) changes nothing
+    // CompMD drew, so it never measures the run again; every hover did, a forced restyle of the page each
+    const drawn = target.querySelector('.compmd') ?? target;
     const rendered = new MutationObserver(measure);
-    rendered.observe(target, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-compmd'] });
+    rendered.observe(drawn, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-compmd'] });
     return () => {
       resize.disconnect();
       rendered.disconnect();
