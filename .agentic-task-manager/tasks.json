@@ -1618,7 +1618,6 @@
     {
       "id": "8a465845-4b8f-8188-9b0c-c8dfa7af8833",
       "number": 284,
-      "key_final": true,
       "name": "Task details: render descriptions and notes with CompMD",
       "type": "feature",
       "priority": "P2",
@@ -1706,7 +1705,6 @@
     {
       "id": "64d7f3ec-4dcd-8e47-bf52-c100e452c03f",
       "number": 285,
-      "key_final": true,
       "name": "Mermaid diagrams in task text: the @comp-markdown/mermaid pack in the strict sandbox",
       "type": "feature",
       "priority": "P2",
@@ -1771,7 +1769,6 @@
     {
       "id": "6974b510-4630-8ab4-b799-e4549d223c81",
       "number": 286,
-      "key_final": true,
       "name": "Tell agents what task text can use: CompMD and Mermaid diagrams",
       "type": "docs",
       "priority": "P2",
@@ -1831,7 +1828,6 @@
     {
       "id": "cf8f9f0d-b7e2-8f93-845a-45cb63627741",
       "number": 336,
-      "key_final": true,
       "name": "Design: open referenced documents in a CompMD viewer",
       "type": "docs",
       "priority": "P2",
@@ -1908,7 +1904,6 @@
     {
       "id": "949645c4-9213-833c-9f10-435f787a9ab8",
       "number": 337,
-      "key_final": true,
       "name": "Design: built-in code reviews recorded in the project (to replace Crit)",
       "type": "docs",
       "priority": "P2",
@@ -2001,7 +1996,6 @@
     {
       "id": "e4835eb2-79bb-8121-8028-35dcfe3aab39",
       "number": 342,
-      "key_final": true,
       "name": "Dashboard: find what makes the shipped file grow, and trim it",
       "type": "refactor",
       "priority": "P3",
@@ -2055,7 +2049,6 @@
     {
       "id": "1a2cc154-b65d-85a8-9d24-303512d076d0",
       "number": 360,
-      "key_final": true,
       "name": "Design a clear layer separation in atm: cli, rest api, client, db, common",
       "type": "docs",
       "priority": "P1",
@@ -2131,7 +2124,6 @@
     {
       "id": "fd4f9dfc-e461-8694-ae9d-77285eeaa025",
       "number": 361,
-      "key_final": true,
       "name": "Layers step 1: the skeleton, the layer rule's ratchet, and `atm show` on the new path",
       "type": "refactor",
       "priority": "P1",
@@ -2191,7 +2183,6 @@
     {
       "id": "ee83542c-657c-82e3-bc8b-fe6e7ca18a86",
       "number": 362,
-      "key_final": true,
       "name": "Layers step 2: the schema's seed, generated Task types for Python and the dashboard",
       "type": "infra",
       "priority": "P1",
@@ -2254,7 +2245,6 @@
     {
       "id": "e34bba4c-082f-80c2-b608-2c9176053b12",
       "number": 363,
-      "key_final": true,
       "name": "Layers step 3: every read command through atm-lib, with typed errors",
       "type": "refactor",
       "priority": "P1",
@@ -2314,7 +2304,6 @@
     {
       "id": "c7fa6b44-def7-8b11-a036-91535972d29b",
       "number": 364,
-      "key_final": true,
       "name": "Layers step 4: the REST API on atm-lib, and the first v1 route",
       "type": "refactor",
       "priority": "P1",
@@ -2384,7 +2373,6 @@
     {
       "id": "b41d7126-a5e6-8dc6-b68c-abb5e6e334bf",
       "number": 365,
-      "key_final": true,
       "name": "Layers step 5: the dashboard's client module, tasks loaded from v1",
       "type": "refactor",
       "priority": "P1",
@@ -2456,7 +2444,6 @@
     {
       "id": "33358325-0f75-8eec-bc60-406caaf1890e",
       "number": 366,
-      "key_final": true,
       "name": "Layers step 6: the dashboard takes readiness and waiting from the API",
       "type": "refactor",
       "priority": "P1",
@@ -2522,7 +2509,6 @@
     {
       "id": "ee7a8b46-28f8-85ba-84d1-3da9a31be833",
       "number": 367,
-      "key_final": true,
       "name": "Layers step 7: vocabularies and kinds generated from common",
       "type": "refactor",
       "priority": "P1",
@@ -2591,7 +2577,6 @@
     {
       "id": "5a18daa7-36eb-86eb-a82b-ae661c9a4c2a",
       "number": 368,
-      "key_final": true,
       "name": "Layers step 8: status changes through atm-lib, with conditional writes",
       "type": "refactor",
       "priority": "P1",
@@ -2664,7 +2649,6 @@
     {
       "id": "7236a59b-1cda-8dd2-b735-8f88ac9ea19c",
       "number": 369,
-      "key_final": true,
       "name": "Layers step 9: claims and next through atm-lib",
       "type": "refactor",
       "priority": "P2",
@@ -2724,7 +2708,6 @@
     {
       "id": "5cb756d1-1141-889e-a362-51fbb7c5956a",
       "number": 370,
-      "key_final": true,
       "name": "Layers step 10: add, edit, check and components through atm-lib",
       "type": "refactor",
       "priority": "P2",
@@ -2784,7 +2767,6 @@
     {
       "id": "ee3eae83-df4e-870b-b91c-df9c74daaaae",
       "number": 371,
-      "key_final": true,
       "name": "Layers step 11: sprints and releases through atm-lib; the dashboard drops its review and release rules",
       "type": "refactor",
       "priority": "P2",
@@ -2853,7 +2835,6 @@
     {
       "id": "a60505d4-2965-8b9c-ae0e-eedc7a0ff9cd",
       "number": 372,
-      "key_final": true,
       "name": "Layers step 12: the archive through atm-lib; the dashboard stops reading the archive file",
       "type": "refactor",
       "priority": "P2",
@@ -2916,7 +2897,6 @@
     {
       "id": "f15edb51-f624-86ee-bd52-68e9922dd11c",
       "number": 373,
-      "key_final": true,
       "name": "Layers step 13: code, PRs and settings through atm-lib; the vcs interface in full",
       "type": "refactor",
       "priority": "P2",
@@ -2976,7 +2956,6 @@
     {
       "id": "d46f1108-2192-801e-ba0d-13cabb64a4ad",
       "number": 374,
-      "key_final": true,
       "name": "Layers step 14: the store owns its own parts; the layer rule without exceptions",
       "type": "refactor",
       "priority": "P2",
@@ -3057,7 +3036,6 @@
     {
       "id": "6ec00469-8ea8-8c6e-981b-b594b29f7a37",
       "number": 375,
-      "key_final": true,
       "name": "Layers step 15: the dev server runs the real REST API",
       "type": "infra",
       "priority": "P2",
@@ -3124,7 +3102,6 @@
     {
       "id": "da1eeb5d-ac5c-8386-bc3e-2510b943950f",
       "number": 376,
-      "key_final": true,
       "name": "Layers step 16: atm-lib's public module, and the docs",
       "type": "docs",
       "priority": "P2",
@@ -3199,7 +3176,6 @@
     {
       "id": "6620ca2a-855e-8047-9a93-8432139b669f",
       "number": 377,
-      "key_final": true,
       "name": "Tolerant reads: the dashboard keeps showing a malformed task file, with what atm finds wrong",
       "type": "feature",
       "priority": "P1",
@@ -3268,7 +3244,6 @@
     {
       "id": "9489f21d-83e7-85df-9b3c-8d79534d08cc",
       "number": 378,
-      "key_final": true,
       "name": "Layers gap 11.4: pass the archive lookup to the rules; the global hook goes (fixes a server race)",
       "type": "bugfix",
       "priority": "P1",
@@ -3330,7 +3305,6 @@
     {
       "id": "1575f34b-3310-8866-8a18-be9e07160099",
       "number": 379,
-      "key_final": true,
       "name": "Layers gap 11.1: two launchers, atm and an internal atm-serve, replace the app layer",
       "type": "refactor",
       "priority": "P2",
@@ -3394,7 +3368,6 @@
     {
       "id": "9f24777f-72db-841b-8b76-51d6c656b248",
       "number": 380,
-      "key_final": true,
       "name": "Layers gap 11.2: split boot into what every store has and what only the JSON-in-git store has",
       "type": "refactor",
       "priority": "P2",
@@ -3454,7 +3427,6 @@
     {
       "id": "5c526168-5dd3-8a7a-ab1d-0b4d46ce4b4f",
       "number": 381,
-      "key_final": true,
       "name": "Layers gap 11.3: change(fn) as the write path by design; per-entity reads; the store private to atm-lib and boot",
       "type": "refactor",
       "priority": "P2",
@@ -3520,7 +3492,6 @@
     {
       "id": "4f6a80a5-67e6-8cff-a2a4-5187c48550c6",
       "number": 382,
-      "key_final": true,
       "name": "Layers gap 11.10 B: nullable types in the generator; ProjectSummary and StatusReport in the schema",
       "type": "infra",
       "priority": "P2",
@@ -3582,7 +3553,6 @@
     {
       "id": "3a72e767-c268-81d3-b238-f92115639508",
       "number": 383,
-      "key_final": true,
       "name": "Layers gap 11.7: atm-lib's public functions as §5.1 lists them",
       "type": "refactor",
       "priority": "P2",
@@ -3644,7 +3614,6 @@
     {
       "id": "aa0622c3-7877-84f7-ac78-b4d7e383eb99",
       "number": 384,
-      "key_final": true,
       "name": "Layers gap 11.6: atm.lib and atm.boot as the surface, an in-memory opener, frozen signatures",
       "type": "test",
       "priority": "P2",
@@ -3707,7 +3676,6 @@
     {
       "id": "bc315021-f3fd-8e21-98c4-bc04da6b5615",
       "number": 385,
-      "key_final": true,
       "name": "Layers gap 11.8: a host layer for running git and reading HEAD; one meaning of the branch",
       "type": "refactor",
       "priority": "P2",
@@ -3767,7 +3735,6 @@
     {
       "id": "a358a4c8-0216-8f27-952a-8a7ca4c388c9",
       "number": 386,
-      "key_final": true,
       "name": "Layers gap 11.9: the dev API restarts on rebuild, lists missing folders, matches the CSP, and is tested",
       "type": "infra",
       "priority": "P2",
@@ -3825,7 +3792,6 @@
     {
       "id": "864c0cde-c918-8936-9008-08dc258763e2",
       "number": 387,
-      "key_final": true,
       "name": "Layers gap 11.10 A: worktree copies with atm's derived values, computed in their own worktree; the dashboard's fallbacks go",
       "type": "refactor",
       "priority": "P2",
@@ -3894,7 +3860,6 @@
     {
       "id": "25e00a3f-ce29-89f6-84af-70a0d37e3523",
       "number": 388,
-      "key_final": true,
       "name": "Layers gap 11.5: check a 0.26.0 dashboard page left open across the update",
       "type": "test",
       "priority": "P2",
@@ -3948,7 +3913,6 @@
     {
       "id": "41a106c4-7df4-8f2a-9a6e-48c531ba2b8d",
       "number": 389,
-      "key_final": true,
       "name": "Add the tenets to the README",
       "type": "docs",
       "priority": "P2",
@@ -3999,7 +3963,6 @@
     {
       "id": "f40b3af5-0207-8e33-857c-652afd254af6",
       "number": 390,
-      "key_final": true,
       "name": "atm serve loses track of a running server: stop and status miss it, and it keeps running",
       "type": "bugfix",
       "priority": "P2",
@@ -4053,7 +4016,6 @@
     {
       "id": "617eea43-2f17-877c-be7e-a5eeb7222158",
       "number": 391,
-      "key_final": true,
       "name": "Text-fragment links: references open the document at the text, and agents write them that way",
       "type": "feature",
       "priority": "P2",
@@ -4127,7 +4089,6 @@
     {
       "id": "4e957759-6115-842b-9fc2-e5c36fa6f1b0",
       "number": 392,
-      "key_final": true,
       "name": "Document viewer: atm-lib read_file and the documents and files routes",
       "type": "feature",
       "priority": "P1",
@@ -4189,7 +4150,6 @@
     {
       "id": "7808dbe3-bc4f-899b-84b7-7c84fe1c9c7e",
       "number": 393,
-      "key_final": true,
       "name": "Document viewer: the window, the #doc= hash and Back",
       "type": "feature",
       "priority": "P1",
@@ -4264,7 +4224,6 @@
     {
       "id": "d21b88a0-ef92-8951-b093-bcf260ebd2ca",
       "number": 394,
-      "key_final": true,
       "name": "Document viewer: line numbers, refreshing in place, images",
       "type": "feature",
       "priority": "P2",
@@ -4331,7 +4290,6 @@
     {
       "id": "1a917cd6-0988-8f67-adae-80ca586b6f70",
       "number": 395,
-      "key_final": true,
       "name": "Document viewer: relative links and files entries open it",
       "type": "feature",
       "priority": "P2",
@@ -4393,7 +4351,6 @@
     {
       "id": "d3d27dae-3c28-80b8-b525-493a06122b1b",
       "number": 396,
-      "key_final": true,
       "name": "Document viewer: tell users and agents that relative links open in the dashboard",
       "type": "docs",
       "priority": "P3",
@@ -4454,7 +4411,6 @@
     {
       "id": "6d663778-6fbc-80e4-a407-4ddc6ccefad4",
       "number": 397,
-      "key_final": true,
       "name": "Release 0.28.0",
       "type": "infra",
       "priority": "P1",
@@ -4513,7 +4469,6 @@
     {
       "id": "58f25cce-4bce-8378-aa8c-3572220145cd",
       "number": 398,
-      "key_final": true,
       "name": "Upgrade CompMD to its next release, with host-mode math",
       "type": "infra",
       "priority": "P2",
@@ -4579,7 +4534,6 @@
     {
       "id": "a8ab3898-852d-83b8-8e84-788a7599deb1",
       "number": 399,
-      "key_final": true,
       "name": "Sweep the open tasks: references become relative and text-fragment links",
       "type": "docs",
       "priority": "P3",
@@ -4640,7 +4594,6 @@
     {
       "id": "319fda9a-7606-8ab7-9b02-34aa4088e133",
       "number": 400,
-      "key_final": true,
       "name": "Document viewer: line numbers and #L links in Markdown documents, from CompMD's renderer",
       "type": "feature",
       "priority": "P2",
@@ -4721,7 +4674,6 @@
     {
       "id": "fc5a069b-1c16-8d0f-bc06-71e73bc9c6f0",
       "number": 401,
-      "key_final": true,
       "name": "atm edit: add and remove requirements and use cases",
       "type": "feature",
       "priority": "P2",
@@ -4789,7 +4741,6 @@
     {
       "id": "6036cf59-243c-826d-a261-a584a2a2c425",
       "number": 402,
-      "key_final": true,
       "name": "Document viewer: a subtle table of contents that hides itself",
       "type": "feature",
       "priority": "P2",
@@ -4853,7 +4804,6 @@
     {
       "id": "a7671f87-2fd2-8cb1-aee9-dbb488438b92",
       "number": 403,
-      "key_final": true,
       "name": "Details panel: Requirements and Use Cases as a vertical list, like Files",
       "type": "polish",
       "priority": "P2",
@@ -4911,7 +4861,6 @@
     {
       "id": "daf7272d-112a-86f4-8b15-42800a2ff206",
       "number": 404,
-      "key_final": true,
       "name": "Document style: Auto, GitHub, Docs or Magazine for the document viewer's page",
       "type": "feature",
       "priority": "P2",
@@ -4975,7 +4924,6 @@
     {
       "id": "60b93cf5-87ee-871c-813b-0e2b5304d7f0",
       "number": 405,
-      "key_final": true,
       "name": "atm commit: a folder's changes at once, with --dir",
       "type": "feature",
       "priority": "P2",
@@ -5047,7 +4995,6 @@
     {
       "id": "163b4165-e4c5-8dd6-b272-907b686090f0",
       "number": 406,
-      "key_final": true,
       "name": "Upgrade CompMD to 0.5.0, and number every line of a Markdown document in the viewer's gutter",
       "type": "feature",
       "priority": "P2",
@@ -5114,7 +5061,6 @@
     {
       "id": "11a85ac8-53fc-84bd-b429-d3560aef8b1a",
       "number": 407,
-      "key_final": true,
       "name": "Release 0.29.0",
       "type": "infra",
       "priority": "P1",
@@ -5165,7 +5111,6 @@
     {
       "id": "caa838a1-e157-85be-85d7-dcedbf820cec",
       "number": 408,
-      "key_final": true,
       "name": "Files inside a git submodule open in the document viewer",
       "type": "bugfix",
       "priority": "P1",
@@ -5232,7 +5177,6 @@
     {
       "id": "ddcf5ff5-315d-8251-b5ab-879497ccbcf9",
       "number": 409,
-      "key_final": true,
       "name": "atm help lists edit's requirement and use-case flags",
       "type": "docs",
       "priority": "P3",
@@ -5291,7 +5235,6 @@
     {
       "id": "59c2920c-8a87-87fb-a89a-ad83ef32221a",
       "number": 410,
-      "key_final": true,
       "name": "Release 0.30.0",
       "type": "infra",
       "priority": "P1",
@@ -5347,7 +5290,6 @@
     {
       "id": "cdf2d1eb-fd6e-8fbb-821e-844b1e81048c",
       "number": 411,
-      "key_final": true,
       "name": "Omniboard: a card opens its task's details over the Omniboard, not the project's Kanban",
       "type": "bugfix",
       "priority": "P2",
@@ -5404,7 +5346,6 @@
     {
       "id": "475e38c0-bffc-8473-8f69-bfb0f0767397",
       "number": 412,
-      "key_final": true,
       "name": "Improve atm cli interface",
       "type": "refactor",
       "description": "Redesign the atm CLI for consistency and ergonomics.\n\nSee docs/task-states.md for the task state model and transitions (six kinds, all state commands, claims/leases, cross-worktree decisions).\n\nSee docs/improving-atm-cli-ergonomics.md for the proposed command structure (task, project, sprint, release, component, vcs, claim, loop, db, doctor, service), option normalization, risks, and a wrapper→delegate→delete migration plan.\n\nWork items:\n1. organize in subcommands like atm task, atm project, atm sprint, atm component, ...\n2. put a dry run command for all commands that make a change\n3. separate commands for infra from interface (interface is task/project etc, infra is merge-driver, file path, etc.)\n4. Implement dynamic autocompletion for atm for zsh/bash/fish\n\nTyper experiment (atm2): implement a Typer-based CLI entry point (atm2) as a separate entry point that delegates to the existing atm commands via subprocess. This evaluates Typer's ergonomics (nested groups, type-hinted options, auto-help) without touching the existing atm command surface.\n",
@@ -5479,7 +5420,6 @@
     {
       "id": "f4453999-099e-8731-9807-ac8b9f72c52c",
       "number": 413,
-      "key_final": true,
       "name": "Support the harnesses beyond Claude Code through atm agents install",
       "type": "feature",
       "priority": "P1",
@@ -5558,7 +5498,6 @@
     {
       "id": "6ae00513-55fe-8ea7-b630-00cae1e601a2",
       "number": 414,
-      "key_final": true,
       "name": "Modernize atm build approach with click, state machine, and uv",
       "type": "refactor",
       "description": "Modernize the atm CLI build approach: use uv for developer dependencies, click instead of argparse, a state machine library for task states, and evolve build.py to bundle third-party code into the single customer artifact (plugin/scripts/atm.py).\n\nSee docs/modernizing-build-approach.md for the full design: developer stack, click CLI example, state machine example, build flow, customer artifact options, risks, and migration plan.\n\nWork items:\n1. Add uv to developer workflow (uv sync --dev installs click, transitions, pytest, ruff, mypy)\n2. Rewrite command groups using click instead of argparse, one group at a time\n3. Replace hand-rolled task state transitions with a declared state machine\n4. Update build.py to bundle vendored click/transitions into plugin/scripts/atm.py\n5. Move layer-enforcement out of build.py into CI tests\n6. Remove old argparse flat commands one group at a time, testing after each removal\n",
@@ -5602,7 +5541,6 @@
     {
       "id": "11236fcd-6ba1-8747-9784-d132ca113e9e",
       "number": 415,
-      "key_final": true,
       "name": "Port atm-cli from Python to Rust",
       "type": "refactor",
       "description": "Port atm-cli from Python to Rust as a single static executable.\n\nPreserve the `atm` command interface and task state machine defined in docs/improving-atm-cli-ergonomics.md\nand docs/modernizing-build-approach.md. This depends on the Python design tasks (T-412, T-414, T-416) being complete\nand frozen before porting, so the Rust implementation translates a stable spec rather than a moving target.\n\nSee docs/porting-to-rust.md for the full analysis: Rust benefits (single binary, compile-time checks, clap/serde),\ncosts (loss of readable-script transparency, cross-platform CI, merge driver registration, atm serve parity),\nsketch of the Rust structure, risks, and open questions.\n\nWork items:\n1. Wait for T-412 (CLI ergonomics redesign), T-414 (build modernization), and T-416 (third-party libraries) to reach a frozen Python spec\n2. Choose Rust web framework for atm serve (Axum, Actix, std HTTP)\n3. Port task state machine to Rust enums (compile-time exhaustiveness)\n4. Port CLI to clap mirroring the frozen Python command structure\n5. Port REST API server\n6. Set up cross-platform CI build matrix (macOS x86_64/arm64, Linux, Windows)\n7. Ship single static binary; keep atm.sh launcher as thin wrapper\n8. Test merge driver (atm merge-driver) on all platforms\n",
@@ -5659,7 +5597,6 @@
     {
       "id": "4ebd2acb-4dc5-8e87-9803-92b1bece1735",
       "number": 416,
-      "key_final": true,
       "name": "Incorporate third-party libraries into atm-cli",
       "type": "refactor",
       "description": "Incorporate third-party libraries into atm-cli (enabled by T-414 build modernization).\n\nSee docs/cli-improvements-with-3p.md for the full survey: click/typer for CLI parsing, pydantic for data validation,\ntransitions for the state machine, rich for output formatting, loguru for logging, pendulum/arrow for date/time,\nhttpx/uvicorn for the REST API server, watchdog for serve --refresh, filelock for cross-platform locking, jsonschema\nfor tasks.json validation, pytest/hypothesis for testing.\n\nWork items:\n1. Add click (or typer) for one command group (e.g. atm task state), keeping old argparse commands as wrappers\n2. Add pydantic for task/meta model validation (fail-fast at load time)\n3. Add transitions for the task state machine (declarative guards and hooks)\n4. Add rich for atm list / atm show output (color-coded statuses, tables, panels)\n5. Add loguru for structured logging (levels, rotation, clean backtraces)\n6. Add filelock for cross-platform file locking (replaces fcntl + custom mkdir lock)\n7. Add jsonschema validation for tasks.json at load time (atm doctor)\n8. Add httpx + uvicorn for atm serve REST API (proper HTTP, async)\n9. Add watchdog for serve --refresh (file events instead of polling)\n10. Remove hand-rolled validation, parsing, and rendering code one area at a time\n\nDepends on T-414 (build modernization must bundle 3rd-party deps into plugin/scripts/atm.py).\n",
@@ -5701,7 +5638,6 @@
     {
       "id": "47819c2a-a84a-865f-a6b8-cfb25bfafde8",
       "number": 417,
-      "key_final": true,
       "name": "Replace hand-rolled task state machine with transitions library",
       "type": "refactor",
       "description": "Replace the hand-rolled task state machine (change_status in atm/common/model.py)\nwith a declared state machine using the transitions library.\n\nDepends on T-414 (build modernization must vendor third-party code into plugin/scripts/atm.py).\nPart of T-416 (third-party libraries): transitions is one of the libraries to adopt.\n\nWork items:\n1. Add transitions to uv dev dependencies and VENDORED_PACKAGES in build.py\n2. Vendor transitions source into atm-cli/vendored/transitions/\n3. Define TaskState enum and declare all transitions as data:\n   - start: todo, review -> active (conditions: dependencies_done)\n   - review: active -> review\n   - done: active, review -> done\n   - fail: active -> todo\n   - release: active -> todo\n   - reject: review -> todo\n   - approve: review -> review\n   - request-changes: review -> review\n   - block: todo, active -> blocked\n   - unblock: blocked -> todo\n   - reopen: done, skipped -> todo\n   - skip: todo, blocked -> skipped\n4. Implement guards (conditions): dependencies_done, review_decided, claim_holder, etc.\n5. Implement before/after hooks: create_claim, release_claim, record_completion,\n   wipe_attempt, add_failure_note, add_rejection_note, add_handoff_note\n6. Replace change_status in atm/common/model.py with state machine calls\n7. Update CLI commands (start, review, done, fail, release, reject, approve,\n   request-changes, block, unblock, reopen, skip) to use the new state machine\n8. Run full test suite (npm run test:scripts) and verify green\n",
@@ -5747,7 +5683,6 @@
     {
       "id": "3e75638f-62fe-8fc0-be26-0adbb7257a3c",
       "number": 418,
-      "key_final": true,
       "name": "Fix the status-command refusal scenarios failing since the T-417 state machine",
       "type": "bugfix",
       "priority": "P1",
@@ -5800,7 +5735,6 @@
     {
       "id": "0ecc5286-f4dc-8d2a-b8d0-0482da64481d",
       "number": 419,
-      "key_final": true,
       "name": "Make the atm-lib unit tests run without transitions installed system-wide",
       "type": "bugfix",
       "priority": "P1",
@@ -5856,7 +5790,6 @@
     {
       "id": "58b511f2-8914-8030-abbc-4cc3748d594a",
       "number": 420,
-      "key_final": true,
       "name": "atm2: loop and claim groups via atm-lib",
       "type": "refactor",
       "priority": "P2",
@@ -5910,7 +5843,6 @@
     {
       "id": "595dd440-206b-8ca5-80ba-8c38c9ac760f",
       "number": 421,
-      "key_final": true,
       "name": "atm2: project and sprint groups via atm-lib, then remove _delegate.py",
       "type": "refactor",
       "priority": "P2",
@@ -5968,7 +5900,6 @@
     {
       "id": "aa078e29-1354-8eed-86c4-a77f76f16b19",
       "number": 422,
-      "key_final": true,
       "name": "atm2: parity tests for the groups ported earlier, run in CI",
       "type": "test",
       "priority": "P2",
@@ -6031,7 +5962,6 @@
     {
       "id": "75c15d3a-88f8-8d81-a777-5fd0df296653",
       "number": 423,
-      "key_final": true,
       "name": "atm2: shell completion for zsh, bash and fish",
       "type": "feature",
       "priority": "P2",
@@ -6087,7 +6017,6 @@
     {
       "id": "f1b55590-3045-8460-81c4-c9399db42720",
       "number": 424,
-      "key_final": true,
       "name": "atm2: separate infra commands from the everyday ones",
       "type": "refactor",
       "priority": "P2",
@@ -6145,7 +6074,6 @@
     {
       "id": "410a56f8-dcbb-82c6-a57e-052e49a192e2",
       "number": 425,
-      "key_final": true,
       "name": "atm2 cutover: the new command tree becomes atm",
       "type": "refactor",
       "priority": "P2",
@@ -6222,7 +6150,6 @@
     {
       "id": "f7a043f3-0774-8054-ad69-40d435857a0a",
       "number": 426,
-      "key_final": true,
       "name": "Distribute atm as an app that installs its own skills",
       "type": "feature",
       "priority": "P1",
@@ -6285,7 +6212,6 @@
     {
       "id": "1f033090-e642-8237-aef7-c9872883e020",
       "number": 427,
-      "key_final": true,
       "name": "Dashboard: pnpm instead of npm (the devEngines pins come with T-436)",
       "type": "infra",
       "priority": "P2",
@@ -6368,7 +6294,6 @@
     {
       "id": "678c602b-0181-8e21-8ee1-0e13e5babdde",
       "number": 428,
-      "key_final": true,
       "name": "Dashboard: SvelteKit with the static adapter",
       "type": "refactor",
       "priority": "P2",
@@ -6449,7 +6374,6 @@
     {
       "id": "aad91e34-3876-8dd8-bc5f-8245051dd2d8",
       "number": 429,
-      "key_final": true,
       "name": "Dashboard: views as SvelteKit routes instead of hash routes",
       "type": "feature",
       "priority": "P2",
@@ -6528,7 +6452,6 @@
     {
       "id": "ccd89b0e-ee93-805f-819a-99109490788e",
       "number": 430,
-      "key_final": true,
       "name": "Dashboard: components grouped by area under src/lib/",
       "type": "refactor",
       "priority": "P2",
@@ -6586,7 +6509,6 @@
     {
       "id": "e95c258c-f8f5-8d5c-b84f-3b66185f6e53",
       "number": 431,
-      "key_final": true,
       "name": "Dashboard: Bits UI for menus, dialogs and popovers",
       "type": "refactor",
       "priority": "P2",
@@ -6663,7 +6585,6 @@
     {
       "id": "e9938909-253e-8b50-a604-50d818d2dc83",
       "number": 432,
-      "key_final": true,
       "name": "Dashboard: lucide’s Svelte package instead of embedded Lucide icons",
       "type": "refactor",
       "priority": "P2",
@@ -6721,7 +6642,6 @@
     {
       "id": "85bc7d62-5919-8a6a-b50e-c272ba1e6097",
       "number": 433,
-      "key_final": true,
       "name": "Dashboard: one tokens file for colours, spacing, radii and type",
       "type": "refactor",
       "priority": "P2",
@@ -6799,7 +6719,6 @@
     {
       "id": "9587ba38-920b-8cd6-adb8-e44741427721",
       "number": 434,
-      "key_final": true,
       "name": "Dashboard: no click handlers on div or span",
       "type": "polish",
       "priority": "P2",
@@ -6856,7 +6775,6 @@
     {
       "id": "c9e0396e-ee2c-86a4-90ad-9cb7f30dc699",
       "number": 435,
-      "key_final": true,
       "name": "Dashboard: inventory of domain logic to move to atm-lib",
       "type": "docs",
       "priority": "P2",
@@ -6917,7 +6835,6 @@
     {
       "id": "2ee4ed58-1cf0-8734-a26d-2cf16fc8e916",
       "number": 436,
-      "key_final": true,
       "name": "Dashboard: pin pnpm and Node with devEngines, once CompMD reads pnpm 12's lockfile",
       "type": "infra",
       "priority": "P3",
@@ -7000,7 +6917,6 @@
     {
       "id": "99977b61-39c7-88ff-8223-3b50aab6dd03",
       "number": 437,
-      "key_final": true,
       "name": "Remove atm run; atm claim hold keeps a claim alive instead",
       "type": "refactor",
       "priority": "P1",
@@ -7067,7 +6983,6 @@
     {
       "id": "8e5e5b1a-a3e5-8d1a-8372-836537d2f1e0",
       "number": 438,
-      "key_final": true,
       "name": "Review decisions as their own commands; guarded exits from review; one skip",
       "type": "refactor",
       "priority": "P1",
@@ -7139,7 +7054,6 @@
     {
       "id": "a940969b-750c-8ec6-a975-38d324684082",
       "number": 439,
-      "key_final": true,
       "name": "Claims renewed by atm itself, and a longer lease without hooks",
       "type": "feature",
       "priority": "P1",
@@ -7191,7 +7105,6 @@
     {
       "id": "c6f73511-fafa-87d0-971e-bd4734e39d9c",
       "number": 440,
-      "key_final": true,
       "name": "atm docs <topic>: version-matched reference for agents",
       "type": "feature",
       "priority": "P1",
@@ -7242,7 +7155,6 @@
     {
       "id": "ea9b6a5f-ec10-87a3-a4ed-306af004d2a4",
       "number": 441,
-      "key_final": true,
       "name": "Thin, portable skills in skills/, named atm-…",
       "type": "refactor",
       "priority": "P1",
@@ -7295,7 +7207,6 @@
     {
       "id": "30215c67-7dc5-84a0-ab63-74c08508db04",
       "number": 442,
-      "key_final": true,
       "name": "atm agents install|status|uninstall, for Claude Code",
       "type": "feature",
       "priority": "P1",
@@ -7348,7 +7259,6 @@
     {
       "id": "980d601a-e5d5-868c-b937-ad204deb82a2",
       "number": 443,
-      "key_final": true,
       "name": "Rust workspace skeleton, CI on three platforms, and ATM_IMPL in the suite",
       "type": "infra",
       "priority": "P1",
@@ -7407,7 +7317,6 @@
     {
       "id": "6b087659-3cc8-886b-a14e-20848fd503d7",
       "number": 444,
-      "key_final": true,
       "name": "Rust: the model, reading the store, task details",
       "type": "refactor",
       "priority": "P2",
@@ -7457,7 +7366,6 @@
     {
       "id": "a35e0ef5-bc4d-8ead-8534-2c2811ba1d8b",
       "number": 445,
-      "key_final": true,
       "name": "Rust: the write path: the lock folder, the change transaction, the claims store",
       "type": "refactor",
       "priority": "P2",
@@ -7509,7 +7417,6 @@
     {
       "id": "9a651d1d-b4f1-8214-8ed1-0f93e87592f2",
       "number": 446,
-      "key_final": true,
       "name": "Rust: claims, claim hold's watcher and the renewal",
       "type": "refactor",
       "priority": "P2",
@@ -7562,7 +7469,6 @@
     {
       "id": "bc3cc30c-d9c6-887e-b516-dde58e61dd87",
       "number": 447,
-      "key_final": true,
       "name": "Rust: task add and task note",
       "type": "refactor",
       "priority": "P2",
@@ -7613,7 +7519,6 @@
     {
       "id": "09b73858-c4d8-8c2a-b907-181916972307",
       "number": 448,
-      "key_final": true,
       "name": "Rust: atm-vcs and the vcs group",
       "type": "refactor",
       "priority": "P2",
@@ -7668,7 +7573,6 @@
     {
       "id": "43026c3d-9c09-8708-959e-8f90d4de1822",
       "number": 449,
-      "key_final": true,
       "name": "Rust: atm serve itself: the server, its record, the registry, the page and its headers",
       "type": "refactor",
       "priority": "P2",
@@ -7735,7 +7639,6 @@
     {
       "id": "9345d186-6ea6-80eb-984a-9bfe09c9db69",
       "number": 450,
-      "key_final": true,
       "name": "Rust: atm agents and atm docs, with the skills embedded",
       "type": "refactor",
       "priority": "P2",
@@ -7788,7 +7691,6 @@
     {
       "id": "0ec08112-1262-8f77-91a1-99cc0e74457d",
       "number": 451,
-      "key_final": true,
       "name": "Rust: completion, help text, and clap's text changes for approval",
       "type": "refactor",
       "priority": "P2",
@@ -7844,7 +7746,6 @@
     {
       "id": "34102443-f363-8c15-979e-d1a3df350297",
       "number": 452,
-      "key_final": true,
       "name": "Release machinery: signed binaries, the Homebrew formula, the release script",
       "type": "infra",
       "priority": "P2",
@@ -7910,7 +7811,6 @@
     {
       "id": "7c8dfb70-481d-82c4-986b-a3eaa5e1b9e8",
       "number": 453,
-      "key_final": true,
       "name": "Generate the public skills repo at release",
       "type": "infra",
       "priority": "P3",
@@ -7961,7 +7861,6 @@
     {
       "id": "50b6bbb1-1cbf-81a0-afc6-a8607ca17da5",
       "number": 454,
-      "key_final": true,
       "name": "The switch: remove atm-cli/, plugin/ and build.py (0.33.0)",
       "type": "refactor",
       "priority": "P1",
@@ -8053,7 +7952,6 @@
     {
       "id": "2d5fd616-f4fe-88ec-b507-ec587695a961",
       "number": 455,
-      "key_final": true,
       "name": "The atm app's skeleton (Tauri)",
       "type": "feature",
       "priority": "P2",
@@ -8128,7 +8026,6 @@
     {
       "id": "03a60dce-7101-8deb-8099-7b5c70963b37",
       "number": 456,
-      "key_final": true,
       "name": "The app's commands over atm-lib, and live changes through channels",
       "type": "feature",
       "priority": "P2",
@@ -8187,7 +8084,6 @@
     {
       "id": "85953bf6-86ff-8026-9b2c-8c8a810a2997",
       "number": 457,
-      "key_final": true,
       "name": "The dashboard's IPC transport",
       "type": "feature",
       "priority": "P2",
@@ -8260,7 +8156,6 @@
     {
       "id": "0e06fb80-7ed3-8580-847f-b57e3b0eae8a",
       "number": 458,
-      "key_final": true,
       "name": "The app's \"Connect your agents\" button",
       "type": "feature",
       "priority": "P2",
@@ -8313,7 +8208,6 @@
     {
       "id": "f5c5a8d8-a922-8822-93ff-6235812254f8",
       "number": 459,
-      "key_final": true,
       "name": "The app's deep links (atm://…)",
       "type": "feature",
       "priority": "P3",
@@ -8364,7 +8258,6 @@
     {
       "id": "6d93c758-d5b7-81dc-90ef-dc7db8d67871",
       "number": 460,
-      "key_final": true,
       "name": "macOS packaging: notarized DMG and the Homebrew cask",
       "type": "infra",
       "priority": "P2",
@@ -8437,7 +8330,6 @@
     {
       "id": "e6d0aae8-5cde-86c1-9cb8-5046abb31f36",
       "number": 461,
-      "key_final": true,
       "name": "Security review of the app",
       "type": "docs",
       "priority": "P1",
@@ -8490,7 +8382,6 @@
     {
       "id": "c83b600e-d904-85f3-a267-ff7dc036eb77",
       "number": 462,
-      "key_final": true,
       "name": "Rust: task list, its filters and --derived",
       "type": "refactor",
       "priority": "P2",
@@ -8540,7 +8431,6 @@
     {
       "id": "a5b7186a-4da8-89bc-818a-921d4fd09238",
       "number": 463,
-      "key_final": true,
       "name": "Rust: task deps",
       "type": "refactor",
       "priority": "P2",
@@ -8590,7 +8480,6 @@
     {
       "id": "c416824e-38b9-8d58-ae10-d06b73696dff",
       "number": 464,
-      "key_final": true,
       "name": "Rust: project status",
       "type": "refactor",
       "priority": "P2",
@@ -8640,7 +8529,6 @@
     {
       "id": "0a6e3a47-0244-8901-9814-9d16c5a228a8",
       "number": 465,
-      "key_final": true,
       "name": "Rust: the task states and task state",
       "type": "refactor",
       "priority": "P2",
@@ -8690,7 +8578,6 @@
     {
       "id": "7937d0fc-2839-8e25-ad69-ff16b171ae2c",
       "number": 466,
-      "key_final": true,
       "name": "Rust: task review approve|request-changes|reject",
       "type": "refactor",
       "priority": "P2",
@@ -8740,7 +8627,6 @@
     {
       "id": "21623608-e4ac-88fa-aba3-56653f5de301",
       "number": 467,
-      "key_final": true,
       "name": "Rust: loop next and --claim",
       "type": "refactor",
       "priority": "P2",
@@ -8796,7 +8682,6 @@
     {
       "id": "32c92065-b461-84b5-941d-cded452c7ddf",
       "number": 468,
-      "key_final": true,
       "name": "Rust: atm serve's read API: projects, tasks, claims, worktrees",
       "type": "refactor",
       "priority": "P2",
@@ -8851,7 +8736,6 @@
     {
       "id": "3f7db7cd-76b8-8c4a-b7a3-6fd40a3d22df",
       "number": 469,
-      "key_final": true,
       "name": "Rust: atm serve's project files: the document viewer, the logo, search",
       "type": "refactor",
       "priority": "P2",
@@ -8901,7 +8785,6 @@
     {
       "id": "d6ded60f-d12e-8503-a005-d5d1fa838d31",
       "number": 470,
-      "key_final": true,
       "name": "Rust: task edit",
       "type": "refactor",
       "priority": "P2",
@@ -8951,7 +8834,6 @@
     {
       "id": "7e070756-c2e2-868a-a23f-e97a503be207",
       "number": 471,
-      "key_final": true,
       "name": "Rust: the sprint group",
       "type": "refactor",
       "priority": "P2",
@@ -9001,7 +8883,6 @@
     {
       "id": "27b27898-ed90-877f-8fab-d066252d8915",
       "number": 472,
-      "key_final": true,
       "name": "Rust: the release group",
       "type": "refactor",
       "priority": "P2",
@@ -9051,7 +8932,6 @@
     {
       "id": "f43ba7ac-2696-8ed0-ae38-9d66043245b3",
       "number": 473,
-      "key_final": true,
       "name": "Rust: the component group",
       "type": "refactor",
       "priority": "P2",
@@ -9101,7 +8981,6 @@
     {
       "id": "750cbd0d-7ed0-8906-a629-021a25bb8f1d",
       "number": 474,
-      "key_final": true,
       "name": "Rust: project config, workflow, logo and the registry",
       "type": "refactor",
       "priority": "P2",
@@ -9151,7 +9030,6 @@
     {
       "id": "a3ca1a2a-a7cd-89a6-9349-319b41bcd7b2",
       "number": 475,
-      "key_final": true,
       "name": "Rust: the merge driver",
       "type": "refactor",
       "priority": "P2",
@@ -9201,7 +9079,6 @@
     {
       "id": "2423fa21-b60f-8963-93aa-95acad547306",
       "number": 476,
-      "key_final": true,
       "name": "Rust: the db group and doctor",
       "type": "refactor",
       "priority": "P2",
@@ -9251,7 +9128,6 @@
     {
       "id": "fd1b0b15-dcbf-8c7f-99e7-50127d0a0cd2",
       "number": 477,
-      "key_final": true,
       "name": "Before the switch: move what Rust and the dashboard need out of plugin/ and atm-cli/",
       "type": "refactor",
       "priority": "P1",
@@ -9308,7 +9184,6 @@
     {
       "id": "73048e58-f43a-8bfb-b596-ef87d25dd901",
       "number": 478,
-      "key_final": true,
       "name": "Before the switch: the suite, the dev server and e2e on the Rust atm only",
       "type": "test",
       "priority": "P1",
@@ -9375,7 +9250,6 @@
     {
       "id": "472028e4-672c-808e-b5b5-d7ce5705fe92",
       "number": 479,
-      "key_final": true,
       "name": "The plugin's last release (0.32.0): how plugin users move to the CLI",
       "type": "docs",
       "priority": "P1",
@@ -9446,7 +9320,6 @@
     {
       "id": "b22be8a3-7fd3-892e-86bc-4885c879f76f",
       "number": 480,
-      "key_final": true,
       "name": "Before the switch: the suite on Windows",
       "type": "test",
       "priority": "P1",
@@ -9507,7 +9380,6 @@
     {
       "id": "9d40a6f4-f771-86d4-8e8c-ed80bcf6d10b",
       "number": 481,
-      "key_final": true,
       "name": "Windows: the stress test (16 agents in two worktrees) fails",
       "type": "bugfix",
       "priority": "P2",
@@ -9565,7 +9437,6 @@
     {
       "id": "9153a747-c75d-8428-b697-bb04fcd9768c",
       "number": 482,
-      "key_final": true,
       "name": "Windows: the rest of the suite (claim hold watcher, serve, dev server), and the suite back in Windows CI",
       "type": "bugfix",
       "priority": "P2",
@@ -9668,7 +9539,6 @@
     {
       "id": "0d54e79d-ed37-868e-b29d-62f08e1a99a4",
       "number": 483,
-      "key_final": true,
       "name": "The app's in-app updates (Tauri updater)",
       "type": "feature",
       "priority": "P2",
@@ -9771,7 +9641,6 @@
     {
       "id": "8911bab4-d848-8aaa-a61a-9f5a30cba679",
       "number": 484,
-      "key_final": true,
       "name": "Release 0.33.0: atm as the Rust CLI only",
       "type": "infra",
       "priority": "P1",
@@ -9831,7 +9700,6 @@
     {
       "id": "7987ecd7-8a25-8c97-81d5-5b3044bffece",
       "number": 485,
-      "key_final": true,
       "name": "The local screenshot scripts need a Linux atm",
       "type": "bugfix",
       "priority": "P2",
@@ -9897,7 +9765,6 @@
     {
       "id": "e8b5c314-f775-8997-b089-ba62c2d3e5a8",
       "number": 486,
-      "key_final": true,
       "name": "A release whose tasks merge in several PRs is never released",
       "type": "bugfix",
       "priority": "P2",
@@ -9947,7 +9814,6 @@
     {
       "id": "39bccfe9-b2ea-87ce-be13-e6b4d9fefdb4",
       "number": 487,
-      "key_final": true,
       "name": "Review and refactor the CI jobs from what the Rust port taught us",
       "type": "infra",
       "priority": "P2",
@@ -10018,7 +9884,6 @@
     {
       "id": "2238c9b2-a361-848f-ac56-42807145ee8b",
       "number": 488,
-      "key_final": true,
       "name": "Overhaul atm's human-readable output: alignment, grouping and styling",
       "type": "polish",
       "priority": "P2",
@@ -10101,7 +9966,6 @@
     {
       "id": "47985a42-105c-88e6-b475-b09779b3ae8c",
       "number": 489,
-      "key_final": true,
       "name": "ADR-003: workspaces, the set of projects atm works on",
       "type": "docs",
       "priority": "P1",
@@ -10171,7 +10035,6 @@
     {
       "id": "b74598bf-24c3-866d-b4da-71fa670a899e",
       "number": 490,
-      "key_final": true,
       "name": "Workspaces 1: the state folder, and moving ~/.agentic-task-manager into it",
       "type": "refactor",
       "priority": "P1",
@@ -10226,7 +10089,6 @@
     {
       "id": "ebf20a29-cfe7-847c-8d7e-93f4d07722c0",
       "number": 491,
-      "key_final": true,
       "name": "Workspaces 2: atm-lib's Workspaces, Workspace and Project::open, on store and vcs factories",
       "type": "refactor",
       "priority": "P1",
@@ -10280,7 +10142,6 @@
     {
       "id": "c88c4e89-bd42-892d-a250-bf7f8d138ebc",
       "number": 492,
-      "key_final": true,
       "name": "Workspaces 3: the CLI and the API on atm-lib alone; the atm-boot crate removed",
       "type": "refactor",
       "priority": "P1",
@@ -10337,7 +10198,6 @@
     {
       "id": "c66fe836-6399-8876-942d-aa9590b01794",
       "number": 493,
-      "key_final": true,
       "name": "Workspaces 4: the atm workspace commands",
       "type": "feature",
       "priority": "P2",
@@ -10392,7 +10252,6 @@
     {
       "id": "abdc40e6-0877-858e-be8f-5928ba16970d",
       "number": 494,
-      "key_final": true,
       "name": "The Sprint filter in the address as repeated sprint= parameters",
       "type": "bugfix",
       "priority": "P1",
@@ -10442,7 +10301,6 @@
     {
       "id": "f5560044-9969-8b2b-ae1f-c2dc937042e2",
       "number": 495,
-      "key_final": true,
       "name": "atm serve answers SvelteKit's _app/version.json",
       "type": "bugfix",
       "priority": "P1",
@@ -10494,7 +10352,6 @@
     {
       "id": "e2fb1a2e-7d60-80c2-9851-a72fae61f187",
       "number": 496,
-      "key_final": true,
       "name": "Rename a sprint: atm sprint rename",
       "type": "feature",
       "priority": "P2",
@@ -10549,7 +10406,6 @@
     {
       "id": "12cf76a2-4bdc-8489-9630-85f966cac366",
       "number": 497,
-      "key_final": true,
       "name": "Rename a release's ID: atm release rename",
       "type": "feature",
       "priority": "P2",
@@ -10604,7 +10460,6 @@
     {
       "id": "13ebf0c1-7538-8b0b-8a7c-ef8f73436f42",
       "number": 498,
-      "key_final": true,
       "name": "Rename a component's ID: atm component rename",
       "type": "feature",
       "priority": "P2",
@@ -10659,7 +10514,6 @@
     {
       "id": "8a6b3e26-72fd-8b72-b7f1-ede2f63160fd",
       "number": 499,
-      "key_final": true,
       "name": "Rename a label across the tasks",
       "type": "feature",
       "priority": "P3",
@@ -10714,7 +10568,6 @@
     {
       "id": "594347aa-3b92-83af-acc7-d87f9daf3f78",
       "number": 500,
-      "key_final": true,
       "name": "Rename a vocabulary entry: a status, a type or a priority",
       "type": "feature",
       "priority": "P3",
@@ -10769,7 +10622,6 @@
     {
       "id": "6394aab3-a4c2-8dab-b467-12ffeb18b4a9",
       "number": 501,
-      "key_final": true,
       "name": "An older atm beside the new state folder: no projects lost, no server mistaken for ours",
       "type": "bugfix",
       "priority": "P1",
@@ -10826,7 +10678,6 @@
     {
       "id": "c545f556-86b3-8f63-8b76-709e5478b113",
       "number": 502,
-      "key_final": true,
       "name": "Markdown and the layout in the app: Tauri's style nonce and connect-src (diagrams: T-503)",
       "type": "bugfix",
       "priority": "P1",
@@ -10900,7 +10751,6 @@
     {
       "id": "052bbf20-77f3-8904-a9dc-d35e2e462caa",
       "number": 503,
-      "key_final": true,
       "name": "Mermaid diagrams in the app: CompMD from a scheme of its own (tauri-plugin-compmd)",
       "type": "feature",
       "priority": "P1",
@@ -11000,7 +10850,6 @@
     {
       "id": "c5177afd-264e-8467-b404-708120b4acfc",
       "number": 504,
-      "key_final": true,
       "name": "The app icon and GitHub avatar: macOS's rounded shape, on a light face",
       "type": "polish",
       "priority": "P2",
@@ -11082,7 +10931,6 @@
     {
       "id": "c8a42d92-f0bb-8901-b9b2-66323e029616",
       "number": 505,
-      "key_final": true,
       "name": "The app icon on macOS 26: an Icon Composer icon, made the sanctioned way",
       "type": "polish",
       "priority": "P2",
@@ -11140,7 +10988,6 @@
     {
       "id": "bfc01264-83dd-871a-8075-1d8108f7c303",
       "number": 506,
-      "key_final": true,
       "name": "The app reacts to changes: its subscriptions instead of polling, and no refresh settings",
       "type": "feature",
       "priority": "P2",
@@ -11230,7 +11077,6 @@
     {
       "id": "269f72d6-144f-850f-a6fc-1b94f7d12437",
       "number": 507,
-      "key_final": true,
       "name": "The browser reacts to changes too: atm serve pushes them, and the refresh settings go",
       "type": "feature",
       "priority": "P3",
@@ -11306,7 +11152,6 @@
     {
       "id": "f2f5508e-2da0-8927-8938-a842c1f99aaf",
       "number": 508,
-      "key_final": true,
       "name": "CompMD's files from compmd:// after an upgrade: WebKit's custom-scheme cache",
       "type": "bugfix",
       "priority": "P1",
@@ -11387,7 +11232,6 @@
     {
       "id": "8f681733-d394-829e-a4fc-e03f5df37b79",
       "number": 509,
-      "key_final": true,
       "name": "Release 0.34.0: the first atm app",
       "type": "infra",
       "priority": "P1",
@@ -11442,7 +11286,6 @@
     {
       "id": "aee3df13-4b2f-84fe-931f-2a7957ee38a1",
       "number": 510,
-      "key_final": true,
       "name": "The atm app's UI overhaul: a desktop app, not the web page in a window",
       "type": "feature",
       "priority": "P2",
@@ -11514,7 +11357,6 @@
     {
       "id": "c729a41c-64b2-88b4-8304-062b00ea19fc",
       "number": 511,
-      "key_final": true,
       "name": "Desktop app: windows and the shell (subscriptions by window, shell, open_window, set_title)",
       "type": "feature",
       "priority": "P1",
@@ -11573,7 +11415,6 @@
     {
       "id": "82543ab3-cb0c-8d75-bd27-7bac52333004",
       "number": 512,
-      "key_final": true,
       "name": "Desktop app: the menus, defined once in Rust (macOS menu bar, subscribe_menu, menu, menu_state)",
       "type": "feature",
       "priority": "P1",
@@ -11637,7 +11478,6 @@
     {
       "id": "533cb942-ef69-88be-99b9-a1a613dafc31",
       "number": 513,
-      "key_final": true,
       "name": "Desktop app: the title bar (one row of tabs, macOS overlay, the page’s window buttons and menus elsewhere)",
       "type": "feature",
       "priority": "P1",
@@ -11698,7 +11538,6 @@
     {
       "id": "ce6b75ca-90d9-8247-9671-14fc45727642",
       "number": 514,
-      "key_final": true,
       "name": "Desktop app: tabs as addresses (strip, New/Close Tab, switching, ⌘-click, Move Tab to New Window)",
       "type": "feature",
       "priority": "P1",
@@ -11763,7 +11602,6 @@
     {
       "id": "1e3fb584-24e2-8fac-85f6-3d3f8038c162",
       "number": 515,
-      "key_final": true,
       "name": "Desktop app: the sidebar (search on top, the workspace, Overview, projects with progress and needs-you)",
       "type": "feature",
       "priority": "P2",
@@ -11825,7 +11663,6 @@
     {
       "id": "3c2351cb-26aa-85d9-9734-e6c4ce42b7b6",
       "number": 516,
-      "key_final": true,
       "name": "Desktop app: the status bar in place of the footer",
       "type": "feature",
       "priority": "P2",
@@ -11881,7 +11718,6 @@
     {
       "id": "c96a3c2f-a165-870f-80be-598bfca9e938",
       "number": 517,
-      "key_final": true,
       "name": "Desktop app: Settings as a sheet (⌘,)",
       "type": "feature",
       "priority": "P2",
@@ -11942,7 +11778,6 @@
     {
       "id": "8e83e2be-be84-8cda-8c0f-d98ea7ebe509",
       "number": 518,
-      "key_final": true,
       "name": "Desktop app: windows come back with their tabs, and the needs-you badge",
       "type": "feature",
       "priority": "P2",
@@ -12005,7 +11840,6 @@
     {
       "id": "552bb19e-0754-86d6-8368-4716563bc7e4",
       "number": 519,
-      "key_final": true,
       "name": "Desktop app spike on Windows and Linux: the undecorated window and the hidden menu",
       "type": "infra",
       "priority": "P2",
@@ -12051,7 +11885,6 @@
     {
       "id": "630921c6-a3f5-8368-bf02-d4a32c263ec8",
       "number": 520,
-      "key_final": true,
       "name": "Desktop app: notifications for what needs you (tauri-plugin-notification)",
       "type": "feature",
       "priority": "P3",
@@ -12107,7 +11940,6 @@
     {
       "id": "4285dc75-8ede-8854-85df-b67337d90c3c",
       "number": 521,
-      "key_final": true,
       "name": "Release check: 0.35.0 ships the updater's manifest and signed archive, and finds no update",
       "type": "test",
       "priority": "P1",
@@ -12155,7 +11987,6 @@
     {
       "id": "6983b2a1-fd2f-85dd-b14c-09ecf8d35d4a",
       "number": 522,
-      "key_final": true,
       "name": "Release check: the first release after 0.35.0 updates the app end to end",
       "type": "test",
       "priority": "P1",
@@ -12202,7 +12033,6 @@
     {
       "id": "6dbd07a7-15ba-8f34-82ca-0bb03ab167b0",
       "number": 523,
-      "key_final": true,
       "name": "Release 0.35.0: diagrams in the app, in-app updates, live changes",
       "type": "infra",
       "priority": "P1",
@@ -12265,7 +12095,6 @@
     {
       "id": "2b247ab4-d7a7-8301-b880-c58979f5dccf",
       "number": 524,
-      "key_final": true,
       "name": "Update to CompMD 0.7.0 and use it as CompMD recommends, the Tauri integration above all",
       "type": "refactor",
       "priority": "P2",
@@ -12339,7 +12168,6 @@
     {
       "id": "61928c10-f2f0-8950-9f5a-5eef9fd86c26",
       "number": 525,
-      "key_final": true,
       "name": "Desktop app: time switching the app's tabs on a large project",
       "type": "test",
       "priority": "P2",
@@ -12393,7 +12221,6 @@
     {
       "id": "3c09a95b-1a54-8f12-97df-a4de3557f285",
       "number": 526,
-      "key_final": true,
       "name": "Desktop app: the update shows its download's progress, and the app restarts by itself after installing",
       "type": "bugfix",
       "priority": "P1",
@@ -12455,7 +12282,6 @@
     {
       "id": "0cc6735f-fe35-8201-aa91-da3f76e3c5d5",
       "number": 527,
-      "key_final": true,
       "name": "Mark a release released by hand: atm release edit --released",
       "type": "feature",
       "priority": "P2",
@@ -12511,7 +12337,6 @@
     {
       "id": "edb437a8-61c4-8e0f-b648-103e5f96ee1d",
       "number": 528,
-      "key_final": true,
       "name": "CI: the app's tab-switch timing test failed on main (Next Tab to the List, 416 and 523 ms against 400)",
       "type": "bugfix",
       "priority": "P1",
@@ -12568,7 +12393,6 @@
     {
       "id": "a4398dff-a437-89b2-b646-167afaab0118",
       "number": 529,
-      "key_final": true,
       "name": "Desktop app: the tab labels slide right and back as the sidebar is shown and hidden",
       "type": "polish",
       "priority": "P2",
@@ -12630,7 +12454,6 @@
     {
       "id": "5e402c10-8c65-825e-991b-e966254bf196",
       "number": 530,
-      "key_final": true,
       "name": "Desktop app: the Progress and Activity pills move into the project's tab, at the right of the subtitle line",
       "type": "polish",
       "priority": "P2",
@@ -12687,7 +12510,6 @@
     {
       "id": "c40a80f9-eafe-89a4-8577-1766b5e94777",
       "number": 531,
-      "key_final": true,
       "name": "Call it Agentic Task Manager where users see its name (the app's menus and windows, the dashboard), keeping the command atm",
       "type": "polish",
       "priority": "P2",
@@ -12746,7 +12568,6 @@
     {
       "id": "d45ae477-1ab1-8d0d-bb03-8bc174fbb273",
       "number": 532,
-      "key_final": true,
       "name": "Desktop app: reorder the title bar's tabs by dragging them",
       "type": "bugfix",
       "priority": "P2",
@@ -12803,7 +12624,6 @@
     {
       "id": "253be393-7009-85b7-b7c7-e0184be5859b",
       "number": 533,
-      "key_final": true,
       "name": "Desktop app: the sidebar shows every project's progress",
       "type": "bugfix",
       "priority": "P2",
@@ -12856,7 +12676,6 @@
     {
       "id": "ccbd95e8-7b9c-841b-9877-d56e1fa660fb",
       "number": 534,
-      "key_final": true,
       "name": "Design: two task IDs (a UUID and a project key, ATM-123) and dependencies across projects",
       "type": "docs",
       "priority": "P1",
@@ -12950,7 +12769,6 @@
     {
       "id": "e9cc8b18-74e9-8fc1-ae6b-e098a9089ee4",
       "number": 535,
-      "key_final": true,
       "name": "Desktop app: the sidebar the window's full height, the title bar and its tabs only to its right (as Notion's)",
       "type": "bugfix",
       "priority": "P1",
@@ -13010,7 +12828,6 @@
     {
       "id": "35f4b11b-5c26-82e3-b5c9-47efd8c2b64a",
       "number": 536,
-      "key_final": true,
       "name": "Desktop app: macOS's menu bar says Agentic Task Manager in dev builds too (bundle.macOS.bundleName)",
       "type": "bugfix",
       "priority": "P1",
@@ -13063,7 +12880,6 @@
     {
       "id": "559042ac-c44d-88db-b6d2-4a0dcfa30d99",
       "number": 537,
-      "key_final": true,
       "name": "Desktop app: the macOS bundle is Agentic Task Manager.app, so the Dock and ⌘-Tab name it",
       "type": "polish",
       "priority": "P1",
@@ -13119,7 +12935,6 @@
     {
       "id": "b73bbbd6-cba1-86f4-b2f2-29663e737187",
       "number": 538,
-      "key_final": true,
       "name": "Task keys: the data model (UUID ids, numbers, meta.key) and the file's format version",
       "type": "infra",
       "priority": "P1",
@@ -13180,7 +12995,6 @@
     {
       "id": "459fb056-93f4-8e58-9f59-d2131accff5f",
       "number": 539,
-      "key_final": true,
       "name": "Task keys: resolve a key, an old prefix, an alias or a UUID to its task",
       "type": "feature",
       "priority": "P1",
@@ -13232,7 +13046,6 @@
     {
       "id": "393f79b2-ca7f-8204-8557-5f152efee73a",
       "number": 540,
-      "key_final": true,
       "name": "Task keys: the migration (atm db migrate) and atm project key set",
       "type": "feature",
       "priority": "P1",
@@ -13295,7 +13108,6 @@
     {
       "id": "4719c4fd-2a00-8d53-bef7-e9beb2d3dd81",
       "number": 541,
-      "key_final": true,
       "name": "Task keys: the merge driver matches by UUID and moves only provisional numbers",
       "type": "feature",
       "priority": "P1",
@@ -13349,7 +13161,6 @@
     {
       "id": "d6e4fcee-a533-88aa-a734-2108967a0082",
       "number": 542,
-      "key_final": true,
       "name": "Task keys: a key becomes final once its task is on the base branch",
       "type": "feature",
       "priority": "P2",
@@ -13404,7 +13215,6 @@
     {
       "id": "70c4f562-9a4e-84de-a3bf-a86e2973eccf",
       "number": 543,
-      "key_final": true,
       "name": "Task keys in the CLI: every command takes a key and shows keys, the provisional ones marked",
       "type": "feature",
       "priority": "P1",
@@ -13474,7 +13284,6 @@
     {
       "id": "34ee32c2-339b-835d-a3a3-5df9bf85e26a",
       "number": 544,
-      "key_final": true,
       "name": "Task keys: dependencies and related tasks across projects",
       "type": "feature",
       "priority": "P2",
@@ -13533,7 +13342,6 @@
     {
       "id": "11f22ab7-6e54-8f47-8563-5669c07d9ca5",
       "number": 545,
-      "key_final": true,
       "name": "Task keys: two projects with the same short name",
       "type": "feature",
       "priority": "P2",
@@ -13588,7 +13396,6 @@
     {
       "id": "a6135551-7912-83c5-b131-e355dcd7a154",
       "number": 546,
-      "key_final": true,
       "name": "Task keys in the dashboard and the app: keys, the provisional mark, addresses and other projects' tasks",
       "type": "feature",
       "priority": "P1",
@@ -13650,7 +13457,6 @@
     {
       "id": "91e1abf3-1f02-8e3a-8505-3c4e91db3d81",
       "number": 547,
-      "key_final": true,
       "name": "Task keys: docs/agent, the skills, help and README",
       "type": "docs",
       "priority": "P2",
@@ -13720,7 +13526,6 @@
     {
       "id": "0fdf2711-dc60-8c16-a18e-c5a72d16eeb3",
       "number": 548,
-      "key_final": true,
       "name": "CompMD's site is compmd.dev: change every link from compmd.hakanserce.com",
       "type": "docs",
       "priority": "P2",
@@ -13778,7 +13583,6 @@
     {
       "id": "613626bc-6ee7-8dcc-abf8-c1d7155e6c65",
       "number": 549,
-      "key_final": true,
       "name": "Task keys on the overview and the All projects board, and other projects' tasks by key with status and link",
       "type": "feature",
       "priority": "P2",
@@ -13841,7 +13645,6 @@
     {
       "id": "e50ddca7-e326-8e0a-9d5f-8ac05d3ec198",
       "number": 550,
-      "key_final": true,
       "name": "CompMD 0.7.1 and @comp-markdown/mermaid 0.1.2",
       "type": "infra",
       "priority": "P2",
@@ -13898,7 +13701,6 @@
     {
       "id": "e4530edc-c677-8442-92ba-237961ee57e5",
       "number": 551,
-      "key_final": true,
       "name": "The app: external links (About, Help, repository, PRs) open in the browser",
       "type": "bugfix",
       "priority": "P1",
@@ -13964,7 +13766,6 @@
     {
       "id": "807230fc-531e-8e07-8717-a74616b96b15",
       "number": 552,
-      "key_final": true,
       "name": "ADR-008: other projects' tasks, referenced from any registered project and loaded when needed (replaces ADR-007 §7's wording)",
       "type": "docs",
       "priority": "P2",
@@ -14017,7 +13818,6 @@
     {
       "id": "534cd129-7ecb-8c71-a6f4-91318e9282db",
       "number": 553,
-      "key_final": true,
       "name": "Other projects' tasks: one stamp-keyed cache for the rules and the display",
       "type": "bugfix",
       "priority": "P1",
@@ -14073,7 +13873,6 @@
     {
       "id": "6ef2a445-1429-8a27-9a6a-4d87e914ad34",
       "number": 554,
-      "key_final": true,
       "name": "The tasks route's ETag also covers the projects a project's tasks reference",
       "type": "bugfix",
       "priority": "P1",
@@ -14135,7 +13934,6 @@
     {
       "id": "81509719-c9e7-8a32-9289-45bab42b987e",
       "number": 555,
-      "key_final": true,
       "name": "Store::subscribe in atm-db: how a store hears of changes is the store's; the app's file watcher moves behind it",
       "type": "refactor",
       "priority": "P2",
@@ -14196,7 +13994,6 @@
     {
       "id": "a02f88d0-a707-8953-bd96-369f6c87912b",
       "number": 556,
-      "key_final": true,
       "name": "The CLI: task text can't drive the terminal (control characters and escape sequences dropped)",
       "type": "bugfix",
       "priority": "P1",
@@ -14278,7 +14075,6 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 557,
-      "key_final": true,
       "notes": [
         {
           "at": "2026-11-17T01:48:06Z",
@@ -14335,7 +14131,6 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 558,
-      "key_final": true,
       "started_at": "2026-11-17T02:09:13Z",
       "started_by": "claude:0f56a916",
       "commit": "42feca7f68a4c2bbaa2eabfad38e2b0940bff0a3",
@@ -14385,7 +14180,6 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 559,
-      "key_final": true,
       "notes": [
         {
           "at": "2026-11-17T02:14:44Z",
@@ -14454,7 +14248,6 @@
       ],
       "sprint": "Keys follow-ups and housekeeping",
       "number": 560,
-      "key_final": true,
       "started_at": "2026-11-17T02:14:47Z",
       "started_by": "claude:0f56a916",
       "commit": "4995daba1dd3cfdd06bcd0a239d13dd07f03df98",
@@ -14497,7 +14290,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 561,
-      "key_final": true,
       "components": [
         "cli"
       ],
@@ -14550,7 +14342,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 562,
-      "key_final": true,
       "sprint_history": [
         {
           "sprint": "Code reviews: records and CLI",
@@ -14600,7 +14391,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 563,
-      "key_final": true,
       "sprint_history": [
         {
           "sprint": "Code reviews: records and CLI",
@@ -14651,7 +14441,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 564,
-      "key_final": true,
       "sprint_history": [
         {
           "sprint": "Code reviews: records and CLI",
@@ -14702,7 +14491,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 565,
-      "key_final": true,
       "sprint_history": [
         {
           "sprint": "Code reviews: records and CLI",
@@ -14755,7 +14543,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 566,
-      "key_final": true,
       "components": [
         "cli",
         "docs"
@@ -14817,7 +14604,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 567,
-      "key_final": true,
       "components": [
         "cli"
       ],
@@ -14872,7 +14658,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 568,
-      "key_final": true,
       "components": [
         "cli"
       ],
@@ -14930,7 +14715,6 @@
       "updated_by": "claude:0f56a916",
       "review": "blocker",
       "number": 569,
-      "key_final": true,
       "components": [
         "dashboard",
         "docs"
@@ -15005,7 +14789,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 570,
-      "key_final": true,
       "components": [
         "cli"
       ],
@@ -15059,7 +14842,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 571,
-      "key_final": true,
       "components": [
         "dashboard"
       ],
@@ -15117,7 +14899,6 @@
       "updated_by": "claude:0f56a916",
       "review": "blocker",
       "number": 572,
-      "key_final": true,
       "components": [
         "cli",
         "api",
@@ -15192,7 +14973,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 573,
-      "key_final": true,
       "components": [
         "dashboard"
       ],
@@ -15250,7 +15030,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 574,
-      "key_final": true,
       "components": [
         "dashboard",
         "api",
@@ -15370,7 +15149,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
-      "key_final": true,
       "components": [
         "dashboard"
       ],
@@ -15445,7 +15223,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 576,
-      "key_final": true,
       "components": [
         "dashboard"
       ],
@@ -15532,7 +15309,6 @@
       "updated_by": "claude:0f56a916",
       "with": "user",
       "number": 577,
-      "key_final": true,
       "components": [
         "docs"
       ],
@@ -15570,8 +15346,7 @@
         "dashboard",
         "ci"
       ],
-      "number": 578,
-      "key_final": true
+      "number": 578
     },
     {
       "id": "01a1e853-4d39-7220-b293-f23710b6d068",
@@ -15610,7 +15385,6 @@
         "docs"
       ],
       "number": 579,
-      "key_final": true,
       "started_at": "2026-11-17T07:39:30Z",
       "started_by": "claude:0f56a916",
       "commit": "9d012e0f6e0ffcfd804c4e9c4147976506f5fd6a",
@@ -15653,7 +15427,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 580,
-      "key_final": true,
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -15700,7 +15473,6 @@
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 581,
-      "key_final": true,
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -15757,7 +15529,6 @@
       ],
       "sprint": "Code reviews: records and CLI",
       "number": 582,
-      "key_final": true,
       "started_at": "2026-11-17T20:41:52Z",
       "started_by": "claude:0f56a916",
       "commit": "ecfc75fa79f91bd3350bcacd0fa9033231784f87",
@@ -15814,7 +15585,6 @@
         "cli"
       ],
       "number": 583,
-      "key_final": false,
       "started_at": "2026-11-17T22:51:36Z",
       "started_by": "claude:0f56a916",
       "commit": "35cbcfa1d5b7df908da4fe5f2a6dbcf55e73c6d6",
@@ -15864,7 +15634,6 @@
         "dashboard"
       ],
       "number": 584,
-      "key_final": false,
       "started_at": "2026-11-17T23:13:33Z",
       "started_by": "claude:0f56a916",
       "commit": "3b16d133ec4a46433061bd8f964b3c9acb604c03",
@@ -15916,7 +15685,6 @@
         "01a1e83f-8c1c-74d3-83f6-0e27bb7d4274"
       ],
       "number": 585,
-      "key_final": false,
       "started_at": "2026-11-18T07:14:57Z",
       "started_by": "claude:0f56a916",
       "commit": "18b5ca17238424d306dd1856e80bc9a9c9a66f20",
@@ -15991,7 +15759,6 @@
         "dashboard"
       ],
       "number": 586,
-      "key_final": false,
       "started_at": "2026-11-18T07:20:00Z",
       "started_by": "claude:0f56a916",
       "commit": "0b57dd68730ec7f38ad52d7381e9875a5096c6e7",
@@ -16068,7 +15835,6 @@
         "docs"
       ],
       "number": 587,
-      "key_final": false,
       "started_at": "2026-11-18T00:55:19Z",
       "started_by": "claude:0f56a916",
       "commit": "e73f4031eaeaee8b095cebfae587ac3bbc65720d",
@@ -16178,7 +15944,6 @@
         "dashboard"
       ],
       "number": 588,
-      "key_final": false,
       "started_at": "2026-11-18T07:25:33Z",
       "started_by": "claude:0f56a916",
       "commit": "6d0d8cbab54e4fc19f55135669e54134773427c8",
@@ -16253,7 +16018,6 @@
         "dashboard"
       ],
       "number": 589,
-      "key_final": false,
       "started_at": "2026-11-18T07:52:40Z",
       "started_by": "claude:0f56a916",
       "commit": "233407e276fd0f51379c2ce9016656f8c85a7111",
@@ -16327,7 +16091,6 @@
         "dashboard"
       ],
       "number": 590,
-      "key_final": false,
       "started_at": "2026-11-18T07:57:12Z",
       "started_by": "claude:0f56a916",
       "commit": "f948bc7715ebe73976bb4c4891cf70ffe4a43f72",
@@ -16401,7 +16164,6 @@
         "dashboard"
       ],
       "number": 591,
-      "key_final": false,
       "started_at": "2026-11-18T07:59:31Z",
       "started_by": "claude:0f56a916",
       "commit": "3c2b8d8a4966bc9cc6d44547909ea4d017816f7c",
@@ -16475,7 +16237,6 @@
         "dashboard"
       ],
       "number": 592,
-      "key_final": false,
       "started_at": "2026-11-18T00:46:31Z",
       "started_by": "claude:0f56a916",
       "commit": "eed542548e9cdcd88c50fb0f7633865692a34ce1",
@@ -16527,7 +16288,6 @@
         "01a1ebf2-f535-752d-88f8-ee8ac3ce346e"
       ],
       "number": 593,
-      "key_final": false,
       "started_at": "2026-11-18T08:07:34Z",
       "started_by": "claude:0f56a916",
       "commit": "dbda00eb6ab9801a2b40930e4f9bb1d8e09a7b48",
@@ -16603,7 +16363,6 @@
         "cli"
       ],
       "number": 594,
-      "key_final": false,
       "started_at": "2026-11-18T00:28:21Z",
       "started_by": "claude:0f56a916",
       "commit": "cf0ead7dff737cb35e5190fa64ecce79e6c40731",
@@ -16652,7 +16411,6 @@
         "dashboard"
       ],
       "number": 595,
-      "key_final": false,
       "started_at": "2026-11-18T19:39:59Z",
       "started_by": "claude:0f56a916",
       "commit": "10ccc4b798efe6bae880f0c2b1634c3fcbb02277",
@@ -16730,7 +16488,6 @@
         "01a1ec10-21dd-74ec-85fb-c2da5d38f9c1"
       ],
       "number": 596,
-      "key_final": false,
       "started_at": "2026-11-18T21:47:40Z",
       "started_by": "claude:0f56a916",
       "commit": "07f51ff90f6b77887b60814446352053bb51af7a",
@@ -16779,7 +16536,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 597,
-      "key_final": false,
       "started_at": "2026-11-18T06:35:40Z",
       "started_by": "claude:0f56a916",
       "commit": "73925a5c8c850ed503849a94763bc4901447095f",
@@ -16866,7 +16622,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 598,
-      "key_final": false,
       "started_at": "2026-11-18T06:38:25Z",
       "started_by": "claude:0f56a916",
       "commit": "0b3903c4d738fb8c9344d102778a1983a1481f43",
@@ -16954,7 +16709,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 599,
-      "key_final": false,
       "started_at": "2026-11-18T03:28:02Z",
       "started_by": "claude:0f56a916",
       "commit": "5305a61699f4af401fe1f774b6d7e3588e592abf",
@@ -17030,7 +16784,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 600,
-      "key_final": false,
       "started_at": "2026-11-18T03:29:11Z",
       "started_by": "claude:0f56a916",
       "commit": "ac80d217936e28b693653bf647e4fd7f32f77d34",
@@ -17099,7 +16852,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 601,
-      "key_final": false,
       "started_at": "2026-11-18T03:34:03Z",
       "started_by": "claude:0f56a916",
       "commit": "b056a992a443850e5f4a1ce3981c2cb27c5204ee",
@@ -17162,8 +16914,7 @@
       "updated_at": "2026-11-18T05:31:21Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
-      "number": 602,
-      "key_final": false
+      "number": 602
     },
     {
       "id": "01a1ed23-6191-76ce-bb12-16332b9f42b6",
@@ -17186,8 +16937,7 @@
       "updated_at": "2026-11-18T05:31:21Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
-      "number": 603,
-      "key_final": false
+      "number": 603
     },
     {
       "id": "01a1ed3a-01fa-7369-b3df-140f3e02d942",
@@ -17217,7 +16967,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 604,
-      "key_final": false,
       "started_at": "2026-11-18T05:56:04Z",
       "started_by": "claude:0f56a916",
       "commit": "2786d385f982fbbfb8714ebe78ad26df8c0b84b4",
@@ -17287,7 +17036,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 605,
-      "key_final": false,
       "started_at": "2026-11-18T06:04:55Z",
       "started_by": "claude:0f56a916",
       "commit": "733f391dd56299547a370c616855c8e47b2af018",
@@ -17358,7 +17106,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 606,
-      "key_final": false,
       "started_at": "2026-11-18T06:45:24Z",
       "started_by": "claude:0f56a916",
       "commit": "a6864c08f36d02ae57a424fc105f35b4eaaac03c",
@@ -17429,7 +17176,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 607,
-      "key_final": false,
       "started_at": "2026-11-18T22:48:00Z",
       "started_by": "claude:0f56a916",
       "commit": "b4e422fa804709b83790edad5b4d2249aa7f487f",
@@ -17480,7 +17226,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 608,
-      "key_final": false,
       "started_at": "2026-11-18T06:14:39Z",
       "started_by": "claude:0f56a916",
       "commit": "6c83bb10eecd2d50e0371e1fdd2c069701334f66",
@@ -17552,7 +17297,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 609,
-      "key_final": false,
       "started_at": "2026-11-18T06:23:37Z",
       "started_by": "claude:0f56a916",
       "commit": "5bb053f195b6e5e664d1155318d4c2a76d4d1ca8",
@@ -17623,7 +17367,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 610,
-      "key_final": false,
       "started_at": "2026-11-18T23:00:35Z",
       "started_by": "claude:0f56a916",
       "commit": "2807887a69d7a80db2e8a653acf6b4c338f3303d",
@@ -17677,7 +17420,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 611,
-      "key_final": false,
       "started_at": "2026-11-18T23:48:32Z",
       "started_by": "claude:0f56a916",
       "commit": "7b2e576781fd8fbffb078efd9dd28ddcc7c96a94",
@@ -17728,7 +17470,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 612,
-      "key_final": false,
       "notes": [
         {
           "at": "2026-11-19T00:03:27Z",
@@ -17800,7 +17541,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 613,
-      "key_final": false,
       "started_at": "2026-11-18T07:03:04Z",
       "started_by": "claude:0f56a916",
       "commit": "a7d3dd43be715b51f6e7474d32af4b54f6d50dd7",
@@ -17870,7 +17610,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 614,
-      "key_final": false,
       "started_at": "2026-11-19T00:43:20Z",
       "started_by": "claude:0f56a916",
       "commit": "05b4ccf9d7a56a32d504e5d75c55cd06003d5e8b",
@@ -17921,7 +17660,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 615,
-      "key_final": false,
       "notes": [
         {
           "at": "2026-11-18T18:06:43Z",
@@ -17989,8 +17727,7 @@
       "updated_at": "2026-11-18T07:51:25Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
-      "number": 616,
-      "key_final": false
+      "number": 616
     },
     {
       "id": "01a1edb5-a7a6-723b-9782-727820cea332",
@@ -18023,7 +17760,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 617,
-      "key_final": false,
       "started_at": "2026-11-18T19:02:38Z",
       "started_by": "claude:0f56a916",
       "commit": "d002bfad699f4fa503adc95468b768c9fd991e83",
@@ -18094,7 +17830,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 618,
-      "key_final": false,
       "components": [
         "dashboard"
       ],
@@ -18149,7 +17884,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 619,
-      "key_final": false,
       "components": [
         "dashboard"
       ],
@@ -18211,7 +17945,6 @@
         "docs"
       ],
       "number": 620,
-      "key_final": false,
       "commit": "2cf655f24b24b591301b8515d7b1f85dc16f58ca",
       "blocks": [
         {
@@ -18294,8 +18027,7 @@
       "components": [
         "dashboard"
       ],
-      "number": 621,
-      "key_final": false
+      "number": 621
     },
     {
       "id": "01a1f04e-91ae-724a-82c2-0301f423f175",
@@ -18332,7 +18064,6 @@
         "docs"
       ],
       "number": 622,
-      "key_final": false,
       "started_at": "2026-11-18T20:56:25Z",
       "started_by": "claude:0f56a916",
       "commit": "ef6ab1b53608813cd05fcf9a33c96131d185c9aa",
@@ -18407,7 +18138,6 @@
         "cli"
       ],
       "number": 623,
-      "key_final": false,
       "started_at": "2026-11-18T21:13:47Z",
       "started_by": "claude:0f56a916",
       "commit": "578c2d1c7a293fd5052e11adcd8f5c35abc7b05f",
@@ -18485,7 +18215,6 @@
         "docs"
       ],
       "number": 624,
-      "key_final": false,
       "started_at": "2026-11-18T21:18:48Z",
       "started_by": "claude:0f56a916",
       "commit": "99e1cab654764c3c24acef15e5e33c50bd1f5630",
@@ -18560,7 +18289,6 @@
         "dashboard"
       ],
       "number": 625,
-      "key_final": false,
       "started_at": "2026-11-18T21:25:50Z",
       "started_by": "claude:0f56a916",
       "commit": "95fdad8d6a0a4848c91100b45491e9d05f51c89f",
@@ -18635,7 +18363,6 @@
         "dashboard"
       ],
       "number": 626,
-      "key_final": false,
       "commit": "96f74134bdd6f32aa27f1d1e5388333f34938cd6",
       "blocks": [
         {
@@ -18696,7 +18423,6 @@
         "dashboard"
       ],
       "number": 627,
-      "key_final": false,
       "started_at": "2026-11-18T21:42:11Z",
       "started_by": "claude:0f56a916",
       "commit": "aefdbc036344fdffb19ce701576e652f2ce2040b",
@@ -18753,8 +18479,7 @@
         "docs"
       ],
       "with": "user",
-      "number": 628,
-      "key_final": false
+      "number": 628
     },
     {
       "id": "01a1f094-5995-7023-ab74-23dd50446bed",
@@ -18788,7 +18513,6 @@
         "dashboard"
       ],
       "number": 629,
-      "key_final": false,
       "notes": [
         {
           "at": "2026-11-18T23:27:59Z",
@@ -18885,7 +18609,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 630,
-      "key_final": false,
       "components": [
         "cli"
       ]
@@ -18920,7 +18643,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 631,
-      "key_final": false,
       "components": [
         "cli",
         "docs"
@@ -18975,7 +18697,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 632,
-      "key_final": false,
       "blocks": [
         {
           "from": "2026-11-18T22:47:58Z",
@@ -19039,7 +18760,6 @@
       "sprint": "Code reviews in the app",
       "with": "user",
       "number": 633,
-      "key_final": false,
       "components": [
         "docs"
       ]
@@ -19073,7 +18793,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 634,
-      "key_final": false,
       "components": [
         "docs"
       ],
@@ -19165,7 +18884,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 635,
-      "key_final": false,
       "components": [
         "docs",
         "cli"
@@ -19243,7 +18961,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 636,
-      "key_final": false,
       "components": [
         "docs"
       ],
@@ -19278,7 +18995,7 @@
       "description": "ADR-009: the dashboard and the app show every key plain.\n\n## Change\n- The draft mark, its tooltip and its lighter style go (`ui/TaskKey.svelte`, `keys.ts`, and where they are used: `TaskCard`, `DetailPanel`, `DepGraph`, `ProjectCard`, `waiting.ts`, `compmd.ts`'s task data).\n- A task whose number moved at a merge says so in its details (\"was ATM-538\"), from its `aliases`; an address or link with the old key (`?task=ATM-538`) opens it.\n- The generated types follow the schema (no `key_final`).\n\n## Tests\nUnit tests of `keys.ts` and `TaskKey`; an e2e that a task's key shows plain on its card and in its details, and that `?task=<alias>` opens the moved task. Screenshots that showed a draft mark are regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-239abe8c0ea5"
       ],
@@ -19293,7 +19010,7 @@
         "dashboard/src/lib/compmd.ts"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-19T02:10:19Z",
+      "updated_at": "2026-11-19T02:16:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19304,12 +19021,28 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 637,
-      "key_final": false,
       "components": [
         "dashboard"
       ],
       "started_at": "2026-11-19T02:10:19Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "cb994c4dbe920efa4b32eb687a978856e07f54dd",
+      "code_reviews": [
+        {
+          "id": "01a1f197-5401-7507-8d8a-62838fad5e26",
+          "ref": "CR-46"
+        }
+      ],
+      "review_requested_at": "2026-11-19T02:16:29Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T02:16:29Z",
+          "kind": "review",
+          "text": "CR-46: The dashboard shows keys plain; a moved task says the key it had",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f0e6-3843-7611-b898-c8d11a743991",
@@ -19343,7 +19076,6 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 638,
-      "key_final": false,
       "components": [
         "dashboard"
       ],
