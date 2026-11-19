@@ -226,60 +226,64 @@
       onclick={() => step(-1)}>‹</button
     >
   {/if}
-  <!-- Only this scrolls: the tabs, between the bar's other controls; never the page -->
-  <div
-    class="title-bar-tabs-scroller"
-    role="tablist"
-    aria-label={ariaLabel}
-    bind:this={scroller}
-    onscroll={measure}
-    {@attach wheelSideways}
-  >
-    {#each tabs as tab, index (tab.id)}
-      <div
-        class="title-bar-tab"
-        class:selected={tab.id === active}
-        class:dragging={dragging === tab.id}
-        class:sliding={dragging !== null && dragging !== tab.id}
-        style:transform={dragging === tab.id
-          ? `translateX(${offset}px)`
-          : shift(index, tab.id)
-            ? `translateX(${shift(index, tab.id)}px)`
-            : undefined}
-      >
-        <!-- The tab itself (Enter and Space select it, as a button's click), named by its label; dragged to move it -->
-        <button
-          bind:this={elements[tab.id]}
-          class="title-bar-tab-select"
-          role="tab"
-          id="{idPrefix}{tab.id}"
-          aria-selected={tab.id === active}
-          aria-labelledby="{idPrefix}{tab.id}-label"
-          aria-keyshortcuts={onmove ? 'Control+Shift+ArrowLeft Control+Shift+ArrowRight' : undefined}
-          tabindex={tab.id === active ? 0 : -1}
-          onclick={() => onclick(tab.id)}
-          onauxclick={(e) => onauxclick(e, tab.id)}
-          onkeydown={(e) => onkeydown(e, index)}
-          onpointerdown={(e) => onpointerdown(e, tab.id, index)}
-          {onpointermove}
-          {onpointerup}
-          onpointercancel={onpointerup}
-        ></button>
-        <div class="title-bar-tab-label" id="{idPrefix}{tab.id}-label">{@render label(tab)}</div>
-        {#if onclose}
+  <!-- Only this scrolls: the tabs, between the bar's other controls; never the page. It fills a box of the tabs' own
+       width, which shrinks to the room there is (ATM-639): sized by the scroller itself, WebKit (the app's webview)
+       took off what was scrolled out of view, so tabs closed while it was scrolled left it narrower than its room -->
+  <div class="title-bar-tabs-room" style:width="{tabs.length * width}px">
+    <div
+      class="title-bar-tabs-scroller"
+      role="tablist"
+      aria-label={ariaLabel}
+      bind:this={scroller}
+      onscroll={measure}
+      {@attach wheelSideways}
+    >
+      {#each tabs as tab, index (tab.id)}
+        <div
+          class="title-bar-tab"
+          class:selected={tab.id === active}
+          class:dragging={dragging === tab.id}
+          class:sliding={dragging !== null && dragging !== tab.id}
+          style:transform={dragging === tab.id
+            ? `translateX(${offset}px)`
+            : shift(index, tab.id)
+              ? `translateX(${shift(index, tab.id)}px)`
+              : undefined}
+        >
+          <!-- The tab itself (Enter and Space select it, as a button's click), named by its label; dragged to move it -->
           <button
-            class="title-bar-tab-close"
-            title="Close Tab"
-            aria-label="Close Tab"
-            tabindex="-1"
-            onclick={(e) => {
-              e.stopPropagation();
-              onclose(tab.id);
-            }}>×</button
-          >
-        {/if}
-      </div>
-    {/each}
+            bind:this={elements[tab.id]}
+            class="title-bar-tab-select"
+            role="tab"
+            id="{idPrefix}{tab.id}"
+            aria-selected={tab.id === active}
+            aria-labelledby="{idPrefix}{tab.id}-label"
+            aria-keyshortcuts={onmove ? 'Control+Shift+ArrowLeft Control+Shift+ArrowRight' : undefined}
+            tabindex={tab.id === active ? 0 : -1}
+            onclick={() => onclick(tab.id)}
+            onauxclick={(e) => onauxclick(e, tab.id)}
+            onkeydown={(e) => onkeydown(e, index)}
+            onpointerdown={(e) => onpointerdown(e, tab.id, index)}
+            {onpointermove}
+            {onpointerup}
+            onpointercancel={onpointerup}
+          ></button>
+          <div class="title-bar-tab-label" id="{idPrefix}{tab.id}-label">{@render label(tab)}</div>
+          {#if onclose}
+            <button
+              class="title-bar-tab-close"
+              title="Close Tab"
+              aria-label="Close Tab"
+              tabindex="-1"
+              onclick={(e) => {
+                e.stopPropagation();
+                onclose(tab.id);
+              }}>×</button
+            >
+          {/if}
+        </div>
+      {/each}
+    </div>
   </div>
   {#if overflow.more}
     <button
@@ -306,13 +310,18 @@
   }
   /* The tabs' own scroller: clipped to its room, its scroll bar hidden (the wheel and ‹ › scroll it), a scroll at its
      end never passed on to the page */
+  .title-bar-tabs-room {
+    flex: 0 1 auto;
+    min-width: 0;
+    position: relative;
+  }
   .title-bar-tabs-scroller {
     display: flex;
-    min-width: 0;
+    inset: 0;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior: contain;
-    position: relative;
+    position: absolute;
     scrollbar-width: none;
   }
   .title-bar-tabs-scroller::-webkit-scrollbar {
@@ -328,6 +337,8 @@
     font-size: var(--text-lg);
     height: 28px;
     line-height: 1;
+    /* Its width too, not only its basis: WebKit sizes the strip's box by its content's widths (ATM-639) */
+    width: 22px;
   }
   .title-bar-tabs-arrow:hover:not(:disabled) {
     background: var(--surface);
@@ -421,6 +432,7 @@
     font-size: var(--text-lg);
     height: 28px;
     margin-left: var(--space-1);
+    width: 28px;
   }
   .title-bar-tab-close:hover,
   .title-bar-tab-new:hover {

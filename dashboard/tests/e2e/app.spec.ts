@@ -273,6 +273,29 @@ test.describe('the dashboard in the atm app', () => {
     await right.click();
     await expect.poll(async () => (await state()).strip).toBeGreaterThan(0);
     await expect(left).toBeEnabled();
+    // Scrolled to the end, then the last tabs closed one by one (ATM-639): while the rest overflow, the strip keeps its
+    // room, the last tab at its end; once they fit (two, here), all of them shown, unscrolled, and no arrows
+    await scroller.hover();
+    await page.mouse.wheel(0, 10_000);
+    await expect(right).toBeDisabled();
+    const room = await scroller.evaluate((el) => el.clientWidth);
+    const geometry = () =>
+      scroller.evaluate((el) => ({
+        width: el.clientWidth,
+        scrolled: el.scrollLeft,
+        fits: el.scrollWidth <= el.clientWidth + 1,
+        gap: Math.round(el.getBoundingClientRect().right - el.lastElementChild!.getBoundingClientRect().right),
+      }));
+    for (let open = 11; open >= 2; open--) {
+      const tab = page.locator('.title-bar-tab').last();
+      await tab.hover();
+      await tab.locator('.title-bar-tab-close').click();
+      await expect(page.locator('.title-bar-tab')).toHaveCount(open);
+      if (open > 2) expect(await geometry(), `${open} tabs`).toMatchObject({ width: room, fits: false, gap: 0 });
+    }
+    await expect(left).toHaveCount(0);
+    await expect(right).toHaveCount(0);
+    expect(await geometry()).toMatchObject({ fits: true, scrolled: 0 });
     // Fewer tabs, all fitting: no arrows
     tasksServer.restoredTabs = { addresses: [board, board], active: 0 };
     await page.reload();

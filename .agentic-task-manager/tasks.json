@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 639
+    "next_number": 641
   },
   "tasks": [
     {
@@ -15460,7 +15460,7 @@
       "description": "In the atm app, a review opens in a tab of its own (ATM-574): `/projects/<id>/reviews/CR-7`, shown by `App.svelte` under the sidebar and the title bar, its tab labelled by the review (`AppTitleBar.svelte`). Clicking another project in the sidebar while that tab is active behaves oddly (Hakan, 2026-11-17).\n\n## Change\n- Reproduce it in the app: open a review in its tab, click another project in the sidebar; note what the tab, its label, the page and the address do.\n- Decide with Hakan what should happen (the review's tab becomes that project's page, or the project opens in a tab of its own and the review's tab stays), then make it so; ⌘-click keeps opening a new tab.\n\n## Tests\nAn e2e test in `dashboard/tests/e2e/app.spec.ts` (the app's mocked IPC answers the review commands): the tabs, their labels and the page after the click.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/App.svelte",
@@ -15469,7 +15469,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-17T20:40:40Z",
-      "updated_at": "2026-11-19T02:16:46Z",
+      "updated_at": "2026-11-19T02:39:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 581,
@@ -15493,10 +15493,25 @@
           "kind": "answer",
           "text": "In the app, a review is open in its tab and you click another project in the sidebar: (a) the tab becomes that project (the review is gone from it, Back brings it back), or (b) the project opens in a tab of its own and the review keeps its tab (a click on the sidebar from a review always opens a new tab)? ⌘-click opens a new tab either way. → a: the tab becomes the project’s page (Hakan, 2026-11-19).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T02:39:01Z",
+          "kind": "review",
+          "text": "CR-47: From a review, another project opens in the same tab",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-19T02:16:46Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "cb63ac9933d293afe353e83241bef0753ca243e7",
+      "code_reviews": [
+        {
+          "id": "01a1f1ab-f7d2-700d-9cff-591a08b4a050",
+          "ref": "CR-47"
+        }
+      ],
+      "review_requested_at": "2026-11-19T02:39:01Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1eb3e-a0c9-724d-a9e9-0fa4e8823e4f",
@@ -17875,9 +17890,9 @@
         "dashboard/tests/e2e/kanban.spec.ts"
       ],
       "created_at": "2026-11-18T19:00:58Z",
-      "updated_at": "2026-11-19T00:53:54Z",
+      "updated_at": "2026-11-19T05:26:01Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17899,15 +17914,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T00:53:54Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T00:53:54Z",
           "kind": "review",
           "text": "CR-41: A card in review links to its code review",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T05:26:01Z",
+          "kind": "note",
+          "text": "Approved: in CR-41 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-19T05:26:01Z"
     },
     {
       "id": "01a1f023-1636-76de-9795-f0ebcbfffafd",
@@ -19012,9 +19034,9 @@
         "dashboard/src/lib/compmd.ts"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-19T02:16:29Z",
+      "updated_at": "2026-11-19T05:27:40Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19036,15 +19058,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T02:16:29Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T02:16:29Z",
           "kind": "review",
           "text": "CR-46: The dashboard shows keys plain; a moved task says the key it had",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T05:27:40Z",
+          "kind": "note",
+          "text": "Approved: in CR-46 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-19T05:27:40Z"
     },
     {
       "id": "01a1f0e6-3843-7611-b898-c8d11a743991",
@@ -19100,6 +19129,74 @@
           "by": "claude:0f56a916"
         }
       ]
+    },
+    {
+      "id": "01a1f24e-19bc-7082-a5ba-c91cd59ed569",
+      "name": "App: tabs scrolled right, then closed, leave the tab strip narrower than its room",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "app"
+      ],
+      "description": "Hakan (2026-11-19): when the title bar's tabs are scrolled to the right and some are closed, the scrollable part gets smaller.\n\n## Cause\nWebKit (the app's webview) sizes the strip from its content:\n- the scroller by its tabs less what is scrolled off;\n- the box around it by the arrows' and the + button's glyphs, not their flex basis.\n\nSo with tabs closed while scrolled, the strip was narrower than the room it has, and two tabs that fit still showed ‹ ›. Chromium uses the flex basis, so the e2e suite never saw it.\n\n## Fix\nIn `ui/TitleBarTabs.svelte`, the scroller fills a box of the tabs' own width (count × tab width) that shrinks to its room, and the arrows and + get real widths.\n\n## Tests\nThe ATM-605 e2e in `app.spec.ts` closes the last tabs one by one from the scrolled end. While they overflow, the strip keeps its room with the last tab at its end; once they fit, there are no arrows and nothing is scrolled. Run in WebKit by hand, since the suite is Chromium only.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/ui/TitleBarTabs.svelte",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-19T05:36:07Z",
+      "updated_at": "2026-11-19T05:36:14Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T05:36:07Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 639,
+      "started_at": "2026-11-19T05:36:14Z",
+      "started_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f24e-19bc-7082-a5ba-c91d7da464ff",
+      "name": "The N need you list scrolls in a small popup when it gets long, without a scroll bar",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "ux"
+      ],
+      "description": "Hakan (2026-11-19): with many tasks and reviews needing you, the *N need you* popup grows without bound.\n\nIt should be a small popup that scrolls, with no scroll bar, like the dashboard's other scrolling lists (`HintScroll`: *▲ N more* / *▼ N more* at the cut edges).\n\n## Change\n`shell/NeedsYouMenu.svelte`:\n- its rows go in a `HintScroll`, the popup's height capped;\n- the keyboard (arrows) still moves through every row, scrolling the one with focus into view.\n\n## Tests\n- **e2e:** a long list is capped in height, shows *▼ N more*, scrolls, and keeps every row reachable.\n- **Unit:** a short list has no hints.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/NeedsYouMenu.svelte",
+        "dashboard/src/app.css"
+      ],
+      "created_at": "2026-11-19T05:36:07Z",
+      "updated_at": "2026-11-19T05:36:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T05:36:07Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 640
     }
   ]
 }
