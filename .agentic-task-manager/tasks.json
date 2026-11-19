@@ -15460,7 +15460,7 @@
       "description": "In the atm app, a review opens in a tab of its own (ATM-574): `/projects/<id>/reviews/CR-7`, shown by `App.svelte` under the sidebar and the title bar, its tab labelled by the review (`AppTitleBar.svelte`). Clicking another project in the sidebar while that tab is active behaves oddly (Hakan, 2026-11-17).\n\n## Change\n- Reproduce it in the app: open a review in its tab, click another project in the sidebar; note what the tab, its label, the page and the address do.\n- Decide with Hakan what should happen (the review's tab becomes that project's page, or the project opens in a tab of its own and the review's tab stays), then make it so; ⌘-click keeps opening a new tab.\n\n## Tests\nAn e2e test in `dashboard/tests/e2e/app.spec.ts` (the app's mocked IPC answers the review commands): the tabs, their labels and the page after the click.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/App.svelte",
@@ -15469,7 +15469,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-17T20:40:40Z",
-      "updated_at": "2026-11-19T01:22:45Z",
+      "updated_at": "2026-11-19T02:16:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 581,
@@ -15494,7 +15494,9 @@
           "text": "In the app, a review is open in its tab and you click another project in the sidebar: (a) the tab becomes that project (the review is gone from it, Back brings it back), or (b) the project opens in a tab of its own and the review keeps its tab (a click on the sidebar from a review always opens a new tab)? ⌘-click opens a new tab either way. → a: the tab becomes the project’s page (Hakan, 2026-11-19).",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-19T02:16:46Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1eb3e-a0c9-724d-a9e9-0fa4e8823e4f",

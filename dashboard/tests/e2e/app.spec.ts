@@ -311,6 +311,7 @@ test.describe('the dashboard in the atm app', () => {
         needs_you: false,
         you: 'Ana',
       });
+    tasksServer.addProject('second', 'minimal', 'Second Project');
     tasksServer.link(`/projects/${tasksServer.projectId}/reviews`);
     await page.goto('/');
     const tabs = page.locator('#app-titlebar [role="tab"]');
@@ -340,6 +341,20 @@ test.describe('the dashboard in the atm app', () => {
     // And the review's tab keeps its name while another is shown
     await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
     expect(tasksServer.httpRequests).toEqual([]);
+
+    // ATM-581 (Hakan): from the review's tab, a project in the sidebar: the tab becomes that project's page, labelled
+    // by it; no new tab
+    await tabs.nth(1).click();
+    await expect(page.locator('#review-page')).toBeVisible();
+    await page.locator('#app-sidebar [data-id="second"]').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#review-page')).toHaveCount(0);
+    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second(\/[a-z]+)?(\?|$)/);
+    await expect(page.locator('#app-tab-t2-label')).toContainText('Minimal Project');
+    // The first tab is as it was
+    await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
   });
 
   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
