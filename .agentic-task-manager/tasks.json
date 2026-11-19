@@ -17694,7 +17694,7 @@
       "description": "From CR-2 (Hakan, 2026-11-18, c1 and the step 2 agreed there): a reviewer writes comments and replies as drafts, and sends them together, as GitHub's *start a review*.\n\n## Change\n- **Writing a comment or a reply** offers **Add to my review** (a draft only you see), **Comment now** (sent at once, as today) and **Cancel**.\n- **The top button** counts your drafts and sends them with the summary: on an open review, *Comment*, *Request changes* or *Approve*; on a review sent back, *Publish comments*.\n- **Agents** (`atm review watch`, `wait`) hear nothing until the drafts are sent, so an agent never acts on half a review.\n- **Where drafts live:** in the user's own atm state (`ATM_STATE_DIR`), never in the review's folder, which is committed to git. Drafts are anchored like any comment and move with the code across rounds. Replies are drafts too.\n- Pending drafts show on the page, editable and removable; leaving the page keeps them.\n\n## Tests\n- atm-lib: a draft stored outside the review, sent with a decision (each kind), anchored after a new round, and never seen by the watch until it is sent.\n- REST and CLI: the drafts routes and commands; one user's drafts never shown to another.\n- Component and e2e: *Add to my review*, the count on the button, sending, and *Comment now* unchanged.\n- Update `docs/code-review-design.md`, `docs/multi-project-api.md` and `docs/security-architecture.md` (the new routes, and drafts kept out of the repository).",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/",
@@ -17702,7 +17702,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T06:37:37Z",
-      "updated_at": "2026-11-19T00:43:16Z",
+      "updated_at": "2026-11-19T00:49:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17720,16 +17720,24 @@
           "kind": "handoff",
           "text": "Not started: ATM-629 first (the e2e budgets failing under the full suite in every run), so each task after it has a clean suite to verify against.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T00:49:19Z",
+          "kind": "answer",
+          "text": "Drafts are built and committed (6e75ac5); every suite passes but one: the page is now 1,054,578 bytes against the 1 MiB guardrail (drafts added about 7 KB; the build was about 1 KB under before). Every raise so far was yours. Raise it (to 1.1 MiB, say, recorded in guardrails.spec.ts as before), or have me trim about 6 KB elsewhere first (ATM-342-style: find what grew) before I open the review? → Raise it to 1.5 MiB (Hakan, 2026-11-19).",
+          "by": "claude:0f56a916"
         }
       ],
-      "started_at": "2026-11-19T00:07:21Z",
-      "started_by": "claude:0f56a916",
       "commit": "6e75ac511fde7d6e1adb8b4716895275cde416a9",
-      "waiting_on": "user",
-      "questions": [
-        "Drafts are built and committed (6e75ac5); every suite passes but one: the page is now 1,054,578 bytes against the 1 MiB guardrail (drafts added about 7 KB; the build was about 1 KB under before). Every raise so far was yours. Raise it (to 1.1 MiB, say, recorded in guardrails.spec.ts as before), or have me trim about 6 KB elsewhere first (ATM-342-style: find what grew) before I open the review?"
+      "blocks": [
+        {
+          "from": "2026-11-19T00:43:16Z",
+          "to": "2026-11-19T00:49:19Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-19T00:43:16Z"
+      "started_at": "2026-11-19T00:49:28Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed60-9f24-779f-97fd-ef0f481b8965",
@@ -18038,7 +18046,7 @@
       "description": "Reported by Hakan (2026-11-18): in the document viewer, some table columns get so narrow that their text is squished, practically one letter a line, while other columns take most of the width.\n\n## Likely cause\n`.compmd` sets `overflow-wrap: anywhere` ([app.css](dashboard/src/app.css#L184)). With `anywhere`, a word may break between any two letters, so a cell's least width (its min-content) is one character. The browser's automatic table layout then gives a column with long text plenty of room, and shrinks the others to that least width. `.compmd-page table` is also `display: block` with `overflow-x: auto`, so the table never has to fit the width the way a table would. Check this first, in the browser, on a table that shows it.\n\n## Change\n- In tables, words don't break mid-word: `overflow-wrap: normal` (or `break-word`, which doesn't lower min-content) on `th` and `td`, so a column is at least as wide as its longest word. A long unbreakable value (a URL, a path, a hash) may still break, rather than widen the table without end.\n- **Widths from all the column's values, not the heading alone.** Start from even widths, and let a column with more text take more, in proportion to its content (the browser's auto layout does this once the least widths are right). If CSS alone can't give it, measure the cells' text once after rendering and set `col` widths. Keep it simple: CSS first.\n- A table wider than the viewer still scrolls sideways within it, it doesn't widen the panel.\n- The same in every document style (GitHub, Docs, Magazine, `src/themes/doc-styles.css`) and in task text, which shares `.compmd`.\n\nThe page styles are atm's, not CompMD's: the fix is in atm's CSS.\n\n## Tests\n- An e2e in the document viewer spec: a table of three columns (a short one, a word-per-cell one, a long sentence) at the viewer's width. No column is narrower than its longest word, and the long column wraps at word boundaries.\n- The same table in a narrow viewer: it scrolls sideways rather than squeezing columns to a letter.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/app.css",
@@ -18046,7 +18054,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-18T18:59:29Z",
-      "updated_at": "2026-11-19T00:45:23Z",
+      "updated_at": "2026-11-19T00:48:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18062,7 +18070,24 @@
         "dashboard"
       ],
       "started_at": "2026-11-19T00:45:23Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "0d12af23600e0095ebbda4a063a99e743cb1d37f",
+      "code_reviews": [
+        {
+          "id": "01a1f146-5a7e-7004-bccb-464c471bcdb7",
+          "ref": "CR-39"
+        }
+      ],
+      "review_requested_at": "2026-11-19T00:48:02Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T00:48:02Z",
+          "kind": "review",
+          "text": "CR-39: Table columns as wide as their words, never a letter a line",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f008-9a9f-714f-8e7b-93ac77245ac5",
