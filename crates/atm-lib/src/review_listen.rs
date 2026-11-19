@@ -422,10 +422,12 @@ pub fn watch(
         let before = count;
         // The tasks as they are now: the agent may have taken another meanwhile
         let fresh = root.as_deref().and_then(|r| Project::open(r).ok());
-        let work = work_of(fresh.as_ref().unwrap_or(project), me);
+        let now = fresh.as_ref().unwrap_or(project);
+        let work = work_of(now, me);
         // Told in the order they were written, oldest first, whichever review they are in
         let mut news: Vec<(String, u32, Value)> = Vec::new();
-        for review in all(&store)? {
+        for mut review in all(&store)? {
+            keyed_now(now, &mut review.header);
             for chain in &review.chains {
                 for (comment, parent) in with_parents(chain) {
                     if !seen.insert(format!("{}/{}", review.header.id.0, comment.id.0)) {
@@ -456,7 +458,8 @@ pub fn watch(
             count += 1;
         }
         // Then the decisions on reviews of its work, after the words that came with them
-        for review in all(&store)? {
+        for mut review in all(&store)? {
+            keyed_now(now, &mut review.header);
             let status = review.header.status;
             let was = statuses.insert(review.header.id.0.clone(), status);
             if was == Some(status) || !decided(status) {
@@ -472,6 +475,17 @@ pub fn watch(
             return Ok(count);
         }
     }
+}
+
+/// A review's tasks as they are keyed now (ATM-630): a review written before a task's number moved at a merge names
+/// the key it had (an alias now), an older one `~KEY` or an earlier prefix's; each resolved as every command resolves
+/// one, so the agent's work is found whatever key its review was written with. One the project doesn't have stays.
+fn keyed_now(project: &Project, header: &mut ReviewHeader) {
+    header.tasks = header
+        .tasks
+        .iter()
+        .map(|key| reviews::task_reference(project, key))
+        .collect();
 }
 
 /// Whether a decided review is of the agent's work, and the task it decides: its own review, or one naming a task it
@@ -612,7 +626,10 @@ pub fn watch_state(project: &Project, me: &str) -> Result<WatchState> {
             ..WatchState::default()
         });
     }
-    let headers = reviews::store(project)?.list_reviews(&ReviewFilter::default())?;
+    let mut headers = reviews::store(project)?.list_reviews(&ReviewFilter::default())?;
+    for header in &mut headers {
+        keyed_now(project, header);
+    }
     let mine: HashSet<String> = project
         .store()
         .list_tasks()?

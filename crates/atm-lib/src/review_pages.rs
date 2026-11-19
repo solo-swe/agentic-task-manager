@@ -208,7 +208,7 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
     };
     let (me, words) = (me(project), words(&query.q));
     let mut listed: Vec<(String, Value)> = Vec::new();
-    for found in list_everywhere(root, &filter)? {
+    for found in reviews::list_naming(project, root, &filter)? {
         if !fits(&found.header, found.branch.as_deref(), query) {
             continue;
         }

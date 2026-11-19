@@ -104,4 +104,44 @@ describe('a provisional task key in reviews (ATM-594)', () => {
       removeDir(root);
     }
   });
+
+  // ATM-630 (Hakan): a review names its task by the key it had when the review was opened. Once a merge moved the
+  // task's number (ADR-009: the old key its alias), atm still finds the task from the review, and the review from the
+  // task: listed by either key, the agent told of comments on it, the approval reaching it, done accepted
+  test('a task whose number moved at a merge keeps its review: listed by either key, heard, approved, done', () => {
+    const root = keyed();
+    try {
+      commitFile(root, 'a.txt', 'one\ntwo\n', 'the change');
+      ok(['review', 'create', '--title', 'Two', '--task', 'ATM-12', '--range', 'HEAD~1..HEAD'], root, AGENT);
+      // The first watch starts from now: nothing to tell yet
+      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, AGENT).code, 3);
+      // A merge moved it: number 14 now, ATM-12 its alias (as the merge driver writes it); the review still says ATM-12
+      const file = path.join(root, '.agentic-task-manager/tasks.json');
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      data.meta.next_number = 15;
+      const moved = data.tasks.find((t) => t.id === PROVISIONAL);
+      Object.assign(moved, { number: 14, aliases: ['ATM-12'] });
+      delete moved.key_final;
+      fs.writeFileSync(file, JSON.stringify(data, null, 2));
+      assert.deepEqual(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.tasks, ['ATM-12']);
+      // Listed by its key now, and by the key it had
+      for (const named of ['ATM-14', 'ATM-12', PROVISIONAL])
+        assert.equal(ok(['review', 'list', '--task', named, '--json'], root, HAKAN).json().length, 1, named);
+      // A comment on it is the agent's to hear, about the task by its key now
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '2', '--body', 'Why two?'], root, HAKAN);
+      const heard = atm(['review', 'watch', '--once', '--json', '--timeout', '10s'], root, AGENT);
+      assert.equal(heard.code, 0, heard.stderr);
+      const told = JSON.parse(heard.stdout.trim().split('\n')[0]);
+      assert.deepEqual([told.body, told.task], ['Why two?', 'ATM-14']);
+      // Resolved and approved: the approval reaches the task, which is done with no decision recorded by hand
+      const comment = ok(['review', 'comments', 'CR-1', '--json'], root, HAKAN).json()[0].comments[0].id;
+      ok(['review', 'resolve', 'CR-1', comment], root, HAKAN);
+      ok(['review', 'submit', 'CR-1', '--approve'], root, HAKAN);
+      assert.equal(task(root, 'ATM-14').review_state, 'approved');
+      ok(['task', 'state', 'ATM-14', 'done', '--note', 'Approved in CR-1.'], root, AGENT);
+      assert.equal(task(root, 'ATM-14').status, 'done');
+    } finally {
+      removeDir(root);
+    }
+  });
 });

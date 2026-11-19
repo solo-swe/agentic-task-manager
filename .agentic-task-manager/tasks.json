@@ -18864,7 +18864,7 @@
       "description": "Reported by Hakan (2026-11-19), from an agent closing a task in CompMD: CR-6 was opened while the task's key was provisional (`~CMD-250`); once the key was final (`CMD-250`), atm no longer matched CR-6's approval to the task, and the agent recorded the approval by hand.\n\nADR-009 (ATM-634) removes provisional keys (ATM-635), so the `~` mismatch goes with them. What remains is the same class of bug for a task whose number **moves at a merge** (ATM-636): its reviews name it by the key it had.\n\n## Change\nWherever atm goes from a review to its task, or from a task to its reviews, it resolves the review's key the way every command does (ADR-007 §5): a current key, an alias, an earlier prefix, or a leading `~` from an old review file. This covers the approval check in `atm task state … done`, `atm task review approve`, `atm loop next` handing tasks back from review, the review list and pages, and `atm review watch`'s `task`. Reviews keep storing keys (as decided: no UUIDs in `review.md`).\n\n## Tests\n- Unit: a review naming `X-5` finds the task now `X-9` with alias `X-5`; a review naming `~X-5` (an old file) finds `X-5`.\n- CLI scenario: a review is opened on a task, the task's number moves at a merge, the review is approved, and `atm task state <new key> done` is accepted with no manual approval.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-239abe8c0ea5",
         "01a1f0b9-f451-744a-956a-239bff26047e"
@@ -18875,7 +18875,7 @@
         "tests/scripts/scenarios"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-18T22:15:06Z",
+      "updated_at": "2026-11-19T07:55:18Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18888,7 +18888,9 @@
       "number": 630,
       "components": [
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-19T07:55:18Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
@@ -19653,7 +19655,7 @@
       "description": "Hakan (2026-11-19): an agent's review watch stopped, under a harness that caps background monitors at 5 minutes. Comments, a poke and four approvals went unseen until he asked. Agents must not be able to fail to watch, without making atm noisy.\n\n## Change\n1. **A live watch is known.** `atm review watch` keeps a lease file per agent in the state folder. It is renewed while the watch runs and removed when it stops (a crashed watch's lease runs out), as a claim's lease does.\n2. **One line, only when something is at stake.** When an agent (not a person) runs an atm command without a live watch, and a review of its work is still open, atm adds one line on stderr. The line names the open reviews and what came since the watch last told (from the watch's catch-up position, ATM-624), and says how to start the watch.\n   - It is silent when nothing of the agent's is out for review.\n   - It never touches stdout, so `--json` stays clean.\n   - It shows at most once every ~10 minutes, unless something new was missed.\n3. **The loop gets it as data.**\n   - `atm loop next --json` has a `watch` field (`{\"running\": bool, \"missed\": n}`).\n   - It hands back missed comments before new tasks, as it already hands back approved tasks.\n4. **Skills and docs.**\n   - `atm-loop-tasks` and `atm-do-task`: a `running: false` means start the watch first.\n   - Run the watch as a plain background command (it lasts its `--timeout`, 8h), not under a monitor with a short cap.\n   - `atm docs reviews` says all of this.\n\n## Tests\n- **Unit:** the lease (renewed, removed, run out); when the line shows (no open reviews, a live watch, a person, the rate limit, missed events always shown).\n- **CLI suite:** a scenario with an open review and no watch prints the line on stderr only; with a watch, nothing.\n- `loop next --json`'s `watch` field.\n\n## Release\nSkills change, so the written skill review (`docs/security-architecture.md` §3.3) covers it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -19663,7 +19665,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-19T05:51:33Z",
-      "updated_at": "2026-11-19T07:30:25Z",
+      "updated_at": "2026-11-19T07:47:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19704,6 +19706,18 @@
           "kind": "review",
           "text": "CR-51: round 2",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T07:43:08Z",
+          "kind": "note",
+          "text": "Approved: in CR-51 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T07:47:48Z",
+          "kind": "outcome",
+          "text": "CR-51 approved by Hakan: atm knows whether a watch runs, says so in loop next --json and on stderr; the review CLI tests split into tests/scripts/reviews/",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -19711,10 +19725,16 @@
           "from": "2026-11-19T07:05:00Z",
           "to": "2026-11-19T07:14:10Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-19T07:30:25Z",
+          "to": "2026-11-19T07:43:08Z",
+          "outcome": "approved"
         }
       ],
       "review_requested_at": "2026-11-19T07:30:25Z",
-      "review_state": "waiting"
+      "completed_at": "2026-11-19T07:47:48Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f266-f839-7263-878e-7c8ccd46c600",
@@ -19873,14 +19893,14 @@
       "description": "Hakan (2026-11-19), in the app, on CompMD's CR-7 README.md, rendered:\n- it shows only the first page, with no way to scroll further;\n- the last line is drawn outside the page;\n- the page looks narrower than the viewer's.\n\nHe asks that it be the Document Viewer's own component, not a copy.\n\n## Found\n- **A copy:** `reviews/RenderedSide.svelte` re-creates the viewer's page from its CSS classes (`.doc-sheet`, `.doc-page`, the gutter) with its own placement code and height rule (`aspect-ratio` with `min-height: auto`, ATM-592).\n- **Narrower:** Split halves the room, and `RenderedSide` adds its own 52 px left margin for the gutter.\n- **Not reproduced:** on the current build in Playwright's WebKit and Chromium, the README renders whole (820 px by 3,466 px, the last line inside). So the app's build or webview differs.\n\n## Change\nTake the viewer's page out of `DocumentViewer.svelte` as one component: the page on its desk, its paper by the document style, its CompMD, its gutter and its line placement. The viewer and the review's rendered sides both use it; the review adds only its change marks, folds and selection. One height rule, one width, one gutter.\n\n## Tests\n- e2e in both views: a document of several pages is drawn whole, its last line inside the page, as wide as the viewer's page in Unified.\n- The viewer's own specs unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/documents/DocumentViewer.svelte",
         "dashboard/src/lib/reviews/RenderedSide.svelte"
       ],
       "created_at": "2026-11-19T06:26:07Z",
-      "updated_at": "2026-11-19T07:30:48Z",
+      "updated_at": "2026-11-19T07:47:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19895,7 +19915,44 @@
       ],
       "number": 645,
       "started_at": "2026-11-19T07:30:48Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "b8548126dd84781bd4479147f7cba2d4b362e4c9",
+      "code_reviews": [
+        {
+          "id": "01a1f2bc-f2ed-75ca-93e2-b0056d742584",
+          "ref": "CR-54"
+        }
+      ],
+      "review_requested_at": "2026-11-19T07:37:12Z",
+      "notes": [
+        {
+          "at": "2026-11-19T07:37:12Z",
+          "kind": "review",
+          "text": "CR-54: Rendered Markdown in a review is the Document Viewer's own page",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T07:44:38Z",
+          "kind": "note",
+          "text": "Approved: in CR-54 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T07:47:49Z",
+          "kind": "outcome",
+          "text": "CR-54 approved by Hakan: the rendered Markdown in a review is the Document Viewer page (DocumentPage), as tall as its document, as wide as the viewer",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T07:37:12Z",
+          "to": "2026-11-19T07:44:38Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T07:47:49Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f294-fa17-77be-b5a2-8b151fd09746",
@@ -19909,7 +19966,7 @@
       "description": "Hakan (2026-11-19). The cause of ATM-644's lag, found in his app recording on CompMD's CR-7:\n- each CompMD page assigns `document.adoptedStyleSheets` and forces `getComputedStyle` on open and on every render;\n- each assignment or forced read is a full restyle of the document (~1 s in WKWebView), then a repaint of every tile of the review's ~526,000 px.\n\nCounted in WebKit: opening CR-7 and jumping to its last file made 26 sheet assignments, 188 computed-style reads and 17 `replaceSync` calls. CompMD's side (a shared sheet, no forced reads, per-document listeners) is a CompMD task Hakan takes there. This is atm's side.\n\n## Change\n1. **One seam.** `lib/compmd-runtime.ts` owns CompMD for the document:\n   - one sandbox (`createSandbox` once, not per `<CompMd>`);\n   - one `MutationObserver` on `<html>` telling every view its scheme (today each `<CompMd>` has its own).\n   `CompMd.svelte` opens and destroys its view through it, so the shared sheet and `scheme` are passed in one place once CompMD takes them.\n2. **Jump hygiene.** A jump to a file (the tree, n / p, a link):\n   - doesn't make the cards it passes over;\n   - doesn't give back made cards it scrolls by;\n   - waits until the scroll has settled at the target before making anything but the file gone to.\n   (`ReviewFile.svelte`'s near and far observers, `holdNearCards`.)\n3. **Inert placeholders.** A card not made yet (its estimated height) isn't restyled or repainted with the rest of the review: it is contained (`contain` on the placeholder) without bringing back ATM-620's leak (`content-visibility` was dropped there).\n4. **Fewer opens per file**, where it is free: no CompMD page for a run whose card isn't made, and none re-opened for a run whose text didn't change.\n\n## Tests\n- **WebKit and Chromium performance e2e** on a review shaped as CR-7 (15 files, one very long, ~500,000 px of placeholders). During a jump to the last file, count `adoptedStyleSheets` assignments, `getComputedStyle` calls and CompMD pages opened, and assert each is bounded: at most the target's own runs. Frames stay under budget during and after the jump, and the pointer sweep (`the + follows the pointer…`) stays at two frames per step.\n- **Unit:** the runtime module (one sandbox; scheme changes reach every view; destroy).\n- **Existing:** the review and document specs unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/compmd-runtime.ts",
@@ -19919,7 +19976,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T06:53:32Z",
-      "updated_at": "2026-11-19T07:24:43Z",
+      "updated_at": "2026-11-19T07:55:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19947,15 +20004,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T07:24:43Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T07:24:43Z",
           "kind": "review",
           "text": "CR-53: One CompMD runtime per document; a long review restyles only for what it shows",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T07:54:46Z",
+          "kind": "note",
+          "text": "Approved: in CR-53 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T07:55:03Z",
+          "kind": "outcome",
+          "text": "CR-53 approved by Hakan: one CompMD runtime per document; a jump restyles only for the CompMD pages it shows (28 reads, all CompMD own, from 96)",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T07:24:43Z",
+          "to": "2026-11-19T07:54:46Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T07:55:03Z",
+      "completed_by": "claude:0f56a916"
     }
   ]
 }

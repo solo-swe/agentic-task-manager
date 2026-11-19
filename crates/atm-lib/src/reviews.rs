@@ -296,6 +296,57 @@ pub fn task_reference(project: &Project, reference: &str) -> String {
     )
 }
 
+/// Whether a review names the task `wanted` (its key now, as [`task_reference`] gives it), by whatever key the review
+/// was written with (ATM-630): a task whose number moved at a merge (ADR-009) is named by the key it had, its alias
+/// now, and an older review by `~KEY` or an earlier prefix's key. Each is resolved as every command resolves one.
+#[must_use]
+pub fn names_task(project: &Project, header: &ReviewHeader, wanted: &str) -> bool {
+    header
+        .tasks
+        .iter()
+        .any(|key| task_reference(project, key) == wanted)
+}
+
+/// The reviews among `headers` that name the task `wanted` (a key now), whatever key they were written with
+fn naming(
+    project: &Project,
+    headers: Vec<ReviewHeader>,
+    wanted: Option<&str>,
+) -> Vec<ReviewHeader> {
+    match wanted {
+        None => headers,
+        Some(key) => headers
+            .into_iter()
+            .filter(|h| names_task(project, h, key))
+            .collect(),
+    }
+}
+
+/// The reviews of every working copy of the project at `root` (`list_everywhere`) that `filter` keeps, its task (a key
+/// now, as [`task_reference`] gives it) found by whatever key each review was written with (ATM-630), not as written.
+///
+/// # Errors
+/// The reviews can't be read.
+pub fn list_naming(
+    project: &Project,
+    root: &std::path::Path,
+    filter: &ReviewFilter,
+) -> Result<Vec<Found>> {
+    let wanted = filter.task.clone();
+    let every = ReviewFilter {
+        task: None,
+        ..filter.clone()
+    };
+    Ok(list_everywhere(root, &every)?
+        .into_iter()
+        .filter(|f| {
+            wanted
+                .as_deref()
+                .is_none_or(|key| names_task(project, &f.header, key))
+        })
+        .collect())
+}
+
 /// How a review names the task `id`: its key, never with the `~` people read (ATM-594), else its ID.
 fn key_of_id(project: &Project, id: &str) -> String {
     project
@@ -687,11 +738,13 @@ pub fn live_approval_for(project: &Project, task: &str) -> Result<Option<ReviewH
         return Ok(None);
     };
     let reviews = store(project)?;
+    // Every approved review, then those naming the task by any key it answers to (ATM-630): the store compares keys
+    // as written, and a review written before the task's number moved names the old one
     let filter = ReviewFilter {
         statuses: vec![Status::Approved],
-        task: Some(key),
+        task: None,
     };
-    for header in reviews.list_reviews(&filter)? {
+    for header in naming(project, reviews.list_reviews(&filter)?, Some(&key)) {
         let review = reviews.get_review(&header.reference)?;
         let Some(last) = review.rounds.last() else {
             continue;
@@ -1966,5 +2019,56 @@ mod tests {
         }
         let document = hakan.store().document().unwrap().clone();
         assert_eq!(super::check(&hakan, &document), (Vec::new(), Vec::new()));
+    }
+
+    /// ATM-630: a review names its task by the key it was written with; atm finds the task through it as every command
+    /// does: a task whose number moved (its old key an alias, ADR-009), an old review's `~KEY`; a current key over an
+    /// alias, as ADR-007 §5 has it
+    #[test]
+    fn a_review_names_its_task_by_the_key_it_had_an_alias_now_or_with_an_old_mark() {
+        let dir = dir();
+        let id = |n: u32| format!("0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f80{n:02}");
+        let tasks = json!({
+            "meta": { "project": "Moved", "format": 2, "key": "ATM", "next_number": 15 },
+            "tasks": [
+                // Moved off 9 at a merge, 9 free since
+                { "id": id(14), "number": 14, "aliases": ["ATM-9"], "name": "Moved", "type": "feature", "status": "todo" },
+                // 12 is this task's; another one moved off 12 to 13
+                { "id": id(12), "number": 12, "name": "Holds 12", "type": "feature", "status": "todo" },
+                { "id": id(13), "number": 13, "aliases": ["ATM-12"], "name": "Moved off 12", "type": "feature", "status": "todo" },
+            ]
+        });
+        std::fs::create_dir_all(dir.0.join(".agentic-task-manager")).unwrap();
+        std::fs::write(
+            dir.0.join(".agentic-task-manager/tasks.json"),
+            tasks.to_string(),
+        )
+        .unwrap();
+        let project = reopen(&dir.0, "Hakan");
+        let header = |keys: &[&str]| super::ReviewHeader {
+            id: super::ReviewId("r".into()),
+            reference: super::ReviewRef("CR-1".into()),
+            number: 1,
+            title: "T".into(),
+            status: Status::Waiting,
+            tasks: keys.iter().map(|k| (*k).to_string()).collect(),
+            author: None,
+            reviewers: Vec::new(),
+            created: String::new(),
+            updated: String::new(),
+        };
+        let names =
+            |keys: &[&str], wanted: &str| super::names_task(&project, &header(keys), wanted);
+        // Its key then, an alias now: the task, by its key now; with an old review's mark too
+        assert!(names(&["ATM-9"], "ATM-14"));
+        assert!(names(&["~ATM-9"], "ATM-14"));
+        assert!(names(&["atm-9", "ATM-12"], "ATM-14"));
+        // A key a task holds now names that task, not the one that moved off it
+        assert!(names(&["ATM-12"], "ATM-12"));
+        assert!(!names(&["ATM-12"], "ATM-13"));
+        // One the project doesn't have names no task of it
+        assert!(!names(&["ATM-99"], "ATM-14"));
+        assert_eq!(super::task_reference(&project, "ATM-99"), "ATM-99");
+        assert_eq!(super::task_reference(&project, "~ATM-9"), "ATM-14");
     }
 }

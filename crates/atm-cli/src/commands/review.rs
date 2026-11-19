@@ -918,7 +918,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 .map(str::to_lowercase)
                 .collect();
             let mut found = Vec::new();
-            for f in reviews::list_everywhere(root, &filter)? {
+            for f in reviews::list_naming(&project, root, &filter)? {
                 if mine
                     && f.header.author.as_ref() != Some(&me)
                     && !f.header.reviewers.contains(&me)
