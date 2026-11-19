@@ -107,6 +107,19 @@ describe('needingUser', () => {
     ]);
   });
 
+  // ATM-640: listed once, as its review, in the same chip; matched by the review's ID (its number can change)
+  it('a task in review through a review waiting on you is left out; through another, or blocked, it stays', () => {
+    const cr = (id: string) => ({ id, ref: 'CR-1' });
+    const tasks = [
+      task('in_review', { id: 'A', name: 'Alpha', code_reviews: [cr('r-old'), cr('r1')] }),
+      task('in_review', { id: 'C', name: 'Gamma', code_reviews: [cr('r2')] }),
+      task('in_review', { id: 'D', name: 'Delta' }),
+      task('blocked', { id: 'B', name: 'Beta', waiting_on: 'user', code_reviews: [cr('r1')] }),
+    ];
+    expect(needsYouItems(tasks, undefined, undefined, [{ id: 'r1' }]).map((t) => t.id)).toEqual(['C', 'D', 'B']);
+    expect(needsYouItems(tasks, undefined, undefined, []).map((t) => t.id)).toEqual(['A', 'C', 'D', 'B']);
+  });
+
   const derived = (ready: boolean) => ({ kind: 'todo', ready, waiting_for: [], priority: 'P2', archived: false });
 
   it('with you: only the active sprint’s, ready as atm says it (T-347, T-366)', () => {

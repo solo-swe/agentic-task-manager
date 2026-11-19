@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 642
+    "next_number": 643
   },
   "tasks": [
     {
@@ -15132,7 +15132,7 @@
       "description": "Where reviews show outside their pages ([§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), [§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The app's sidebar: a Reviews section under the projects (the reviews needing you, with a count; All reviews).\n- Cards and the details panel show a task's reviews as links (`CR-7 · changes requested`), a new tab with ⌘-click; *Add to review* on a task.\n- The needs-you menu counts reviews with tasks; deep links `atm://…/reviews/CR-7` (checked as I28).\n\n## Tests\nE2e (`app.spec.ts` for the sidebar, `detail.spec.ts` for the links); unit tests for the deep links.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -15145,9 +15145,9 @@
         "dashboard/src/lib/details/ReviewLink.svelte"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-19T05:37:50Z",
+      "updated_at": "2026-11-19T05:48:20Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "number": 575,
       "components": [
         "dashboard"
@@ -15183,6 +15183,12 @@
           "kind": "note",
           "text": "Approved: in CR-36 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T05:48:20Z",
+          "kind": "outcome",
+          "text": "CR-36 approved by Hakan: every project reviews on the overview, reviews in the needs-you chip",
+          "by": "claude:0f56a916"
         }
       ],
       "blocks": [
@@ -15202,8 +15208,15 @@
         }
       ],
       "review_requested_at": "2026-11-18T23:48:29Z",
-      "review_state": "approved",
-      "reviewed_at": "2026-11-19T05:37:50Z"
+      "reviews": [
+        {
+          "from": "2026-11-18T23:48:29Z",
+          "to": "2026-11-19T05:37:50Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T05:48:20Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
@@ -16487,7 +16500,7 @@
       "description": "On a review's Diffs tab the file tree (left) and the diffs (right) list the files in different orders (Hakan, 2026-11-18: in CompMD's CR-1, `pnpm-lock.yaml` is at the end of the tree but in the middle of the diffs). The tree sorts as a tree (folders, then their files), the diffs come in git's order (the patch's, by path).\n\n## Change\n- One order for both, the tree's (as you read it top to bottom, folders before the files beside them, each level by name): the diffs, the next and previous file, change and comment (`n p c C`), the round's file select and the Viewed count's order all follow it ([`ReviewPage.svelte`](dashboard/src/lib/reviews/ReviewPage.svelte), the view's `files`).\n- Folding a folder in the tree (ATM-595) folds nothing on the right; the order stays the same.\n\n## Tests\nA unit test of the order (a root file, nested folders, a lock file at the root: tree order and diff order equal); an e2e test in `reviews.spec.ts` that the cards' order is the tree's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -16495,9 +16508,9 @@
         "dashboard/tests/unit/page.test.ts"
       ],
       "created_at": "2026-11-18T00:33:32Z",
-      "updated_at": "2026-11-19T05:43:33Z",
+      "updated_at": "2026-11-19T05:48:21Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16522,7 +16535,6 @@
         }
       ],
       "review_requested_at": "2026-11-18T22:34:59Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-18T22:34:59Z",
@@ -16535,9 +16547,23 @@
           "kind": "note",
           "text": "Approved: in CR-31 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T05:48:21Z",
+          "kind": "outcome",
+          "text": "CR-31 approved by Hakan: the diffs follow the file tree order",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-19T05:43:33Z"
+      "reviews": [
+        {
+          "from": "2026-11-18T22:34:59Z",
+          "to": "2026-11-19T05:43:33Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T05:48:21Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ec2c-e2f8-7691-a51b-917d14a06947",
@@ -17896,7 +17922,7 @@
       "description": "Asked by Hakan (2026-11-18): on a task in review, the card itself gets its code review as a clickable badge (`CR-7`), so the review opens straight from the board or the list, without opening the task first and clicking the link in its details.\n\n## Change\n- `tasks/TaskCard.svelte`: a task with a review (its latest, as the details panel's `#detail-review` shows since ATM-585) shows a CR badge, its review's key and status (*Waiting for review*, *Changes requested*, …), in the card's badges or beside the review wait line (`.review-wait`).\n- Reuse `details/ReviewLink.svelte` and `reviews/known.svelte.ts` (`knownStatus`) rather than a second way of naming a review; the link's `href` is the review's page (`address.ts` `reviewPageOf`), so hovering or copying shows where it goes.\n- A click opens the review and does **not** open the task's details (stop the card's own click). ⌘-click, Ctrl-click or a middle click opens it in a tab of its own, as other links do (`new-tab-clicks.ts`).\n- Keyboard: the badge is a link in the card's tab order, Enter opens it.\n- Only tasks with a review show it; a task in review with no CR (a review without a change) shows nothing new.\n\n## Tests\n- `TaskCard.component.test.ts`: a task with a review shows its badge with the review's address; a click opens the review and not the task; a task without one shows none.\n- An e2e in the kanban spec: the badge on a card in review opens `CR-N`, and ⌘-click opens a new tab.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/tasks/TaskCard.svelte",
@@ -17904,9 +17930,9 @@
         "dashboard/tests/e2e/kanban.spec.ts"
       ],
       "created_at": "2026-11-18T19:00:58Z",
-      "updated_at": "2026-11-19T05:26:01Z",
+      "updated_at": "2026-11-19T05:48:20Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17928,7 +17954,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T00:53:54Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T00:53:54Z",
@@ -17941,9 +17966,23 @@
           "kind": "note",
           "text": "Approved: in CR-41 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T05:48:20Z",
+          "kind": "outcome",
+          "text": "CR-41 approved by Hakan: a card in review links to its code review",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-19T05:26:01Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T00:53:54Z",
+          "to": "2026-11-19T05:26:01Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T05:48:20Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f023-1636-76de-9795-f0ebcbfffafd",
@@ -19033,7 +19072,7 @@
       "description": "ADR-009: the dashboard and the app show every key plain.\n\n## Change\n- The draft mark, its tooltip and its lighter style go (`ui/TaskKey.svelte`, `keys.ts`, and where they are used: `TaskCard`, `DetailPanel`, `DepGraph`, `ProjectCard`, `waiting.ts`, `compmd.ts`'s task data).\n- A task whose number moved at a merge says so in its details (\"was ATM-538\"), from its `aliases`; an address or link with the old key (`?task=ATM-538`) opens it.\n- The generated types follow the schema (no `key_final`).\n\n## Tests\nUnit tests of `keys.ts` and `TaskKey`; an e2e that a task's key shows plain on its card and in its details, and that `?task=<alias>` opens the moved task. Screenshots that showed a draft mark are regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-239abe8c0ea5"
       ],
@@ -19048,9 +19087,9 @@
         "dashboard/src/lib/compmd.ts"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-19T05:27:40Z",
+      "updated_at": "2026-11-19T05:48:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19072,7 +19111,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T02:16:29Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T02:16:29Z",
@@ -19085,9 +19123,23 @@
           "kind": "note",
           "text": "Approved: in CR-46 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T05:48:19Z",
+          "kind": "outcome",
+          "text": "CR-46 approved by Hakan: keys plain in the dashboard, a moved task says the key it had",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-19T05:27:40Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T02:16:29Z",
+          "to": "2026-11-19T05:27:40Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T05:48:19Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0e6-3843-7611-b898-c8d11a743991",
@@ -19280,6 +19332,43 @@
         "dashboard"
       ],
       "number": 641
+    },
+    {
+      "id": "01a1f25c-3e45-7582-a10d-fb5cad19398e",
+      "name": "Agents never miss review comments: atm knows whether an agent's review watch runs, and says so when it matters",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "agents"
+      ],
+      "description": "Hakan (2026-11-19): an agent's review watch stopped, under a harness that caps background monitors at 5 minutes. Comments, a poke and four approvals went unseen until he asked. Agents must not be able to fail to watch, without making atm noisy.\n\n## Change\n1. **A live watch is known.** `atm review watch` keeps a lease file per agent in the state folder. It is renewed while the watch runs and removed when it stops (a crashed watch's lease runs out), as a claim's lease does.\n2. **One line, only when something is at stake.** When an agent (not a person) runs an atm command without a live watch, and a review of its work is still open, atm adds one line on stderr. The line names the open reviews and what came since the watch last told (from the watch's catch-up position, ATM-624), and says how to start the watch.\n   - It is silent when nothing of the agent's is out for review.\n   - It never touches stdout, so `--json` stays clean.\n   - It shows at most once every ~10 minutes, unless something new was missed.\n3. **The loop gets it as data.**\n   - `atm loop next --json` has a `watch` field (`{\"running\": bool, \"missed\": n}`).\n   - It hands back missed comments before new tasks, as it already hands back approved tasks.\n4. **Skills and docs.**\n   - `atm-loop-tasks` and `atm-do-task`: a `running: false` means start the watch first.\n   - Run the watch as a plain background command (it lasts its `--timeout`, 8h), not under a monitor with a short cap.\n   - `atm docs reviews` says all of this.\n\n## Tests\n- **Unit:** the lease (renewed, removed, run out); when the line shows (no open reviews, a live watch, a person, the rate limit, missed events always shown).\n- **CLI suite:** a scenario with an open review and no watch prints the line on stderr only; with a watch, nothing.\n- `loop next --json`'s `watch` field.\n\n## Release\nSkills change, so the written skill review (`docs/security-architecture.md` §3.3) covers it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/reviews.rs",
+        "crates/atm-cli/src",
+        "skills/atm-loop-tasks/SKILL.md",
+        "skills/atm-do-task/SKILL.md",
+        "docs/agent/reviews.md"
+      ],
+      "created_at": "2026-11-19T05:51:33Z",
+      "updated_at": "2026-11-19T05:51:33Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T05:51:33Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "docs"
+      ],
+      "number": 642
     }
   ]
 }

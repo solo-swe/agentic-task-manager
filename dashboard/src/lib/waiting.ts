@@ -112,15 +112,19 @@ export function needingUser(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULAR
  * and a summary's (the overview's cards, T-549) do */
 export type NeedsYouItem = NeedsYouEntry & Partial<Pick<Task, 'key'>>;
 
-/** needingUser as the chips list it */
+/** needingUser as the chips list it. A task in review whose code review is one of `reviews` (those waiting on the user,
+ * listed in the same chip) is waited on through it, so it isn't listed again, as atm's summary counts it (ATM-640) */
 export function needsYouItems(
   tasks: Task[],
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   scope?: NeedsYouScope,
+  reviews: readonly { id: string }[] = [],
 ): NeedsYouItem[] {
+  const waiting = new Set(reviews.map((r) => r.id));
   return tasks.flatMap((t) => {
     const reason = needsYouReason(t, vocab, scope);
     if (!reason) return [];
+    if (reason === 'review' && (t.code_reviews ?? []).some((l) => waiting.has(l.id))) return [];
     return [t.key ? { id: t.id, key: t.key, name: t.name, reason } : { id: t.id, name: t.name, reason }];
   });
 }

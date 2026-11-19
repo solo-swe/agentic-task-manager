@@ -97,8 +97,8 @@ describe('NeedsYouMenu', () => {
   // ATM-575: the reviews waiting on the user, counted in the same chip, listed after the tasks
   describe('with reviews', () => {
     const REVIEWS = [
-      { reference: 'CR-7', title: 'The editor', why: 'review' as const },
-      { reference: 'CR-9', title: 'Search', why: 'answered' as const },
+      { id: 'r7', reference: 'CR-7', title: 'The editor', why: 'review' as const },
+      { id: 'r9', reference: 'CR-9', title: 'Search', why: 'answered' as const },
     ];
 
     it('counted with the tasks and listed after them, with why; a row opens that review', async () => {

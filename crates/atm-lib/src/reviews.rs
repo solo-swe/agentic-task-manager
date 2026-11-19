@@ -898,9 +898,11 @@ mod tests {
         // T-1 is in review, through CR-1: not counted again
         assert_eq!(task(&project, "T-1")["status"], "in_review");
         assert_eq!(s["needs_you"]["review"], 0);
+        // With its ID, as T-1's code_reviews link it: the dashboard drops T-1 from its own list by it (ATM-640)
+        let link = task(&project, "T-1")["code_reviews"][0]["id"].clone();
         assert_eq!(
             s["needs_you_reviews"],
-            json!([{ "reference": "CR-1", "title": "One", "why": "review" }])
+            json!([{ "id": link, "reference": "CR-1", "title": "One", "why": "review" }])
         );
         // Sent back by the user: off their list until the agent answers
         let mut hakan = reopen(&dir.0, "Hakan");

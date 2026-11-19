@@ -40,10 +40,13 @@
   );
   // Tasks that need the user: in review, or blocked on a question for the user (D-3.3)
   // With you: only the active sprint's, ready to start (T-347), as atm's summary counts them
-  const needYou = $derived(needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints }));
-  // And the project's reviews waiting on the user (ATM-575), from its summary: in the same chip, after the tasks
+  // And the project's reviews waiting on the user (ATM-575), from its summary: in the same chip, after the tasks; a
+  // task in review through one of them is listed once, as its review (ATM-640)
   const reviewsNeedingYou = $derived(
     dashboard.projects.find((p) => p.id === dashboard.projectId)?.summary?.needs_you_reviews ?? [],
+  );
+  const needYou = $derived(
+    needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints }, reviewsNeedingYou),
   );
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>

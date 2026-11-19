@@ -1,4 +1,4 @@
-import { expect, summary, test } from './helpers';
+import { expect, loadFixture, openDashboard, summary, test } from './helpers';
 
 // ATM-575: every project's reviews on the overview's Reviews tab (Hakan: a fourth tab on the overview), with a project
 // picker; and the reviews waiting on the user in the needs-you chip
@@ -53,7 +53,7 @@ test.describe('Projects Overview: the Reviews tab', () => {
     tasksServer.withOwnSummary(
       summary({
         needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 1 },
-        needs_you_reviews: [{ reference: 'CR-7', title: 'The editor', why: 'review' }],
+        needs_you_reviews: [{ id: 'r7', reference: 'CR-7', title: 'The editor', why: 'review' }],
       }),
     );
     await page.goto('/projects');
@@ -63,6 +63,33 @@ test.describe('Projects Overview: the Reviews tab', () => {
     await expect(chip).toHaveAttribute('title', 'Open CR-7 The editor');
     await chip.click();
     await expect(page).toHaveURL(/\/projects\/[^/]+\/reviews\/CR-7/);
+  });
+
+  test('on a project, a task in review through a review waiting on you is listed once, as the review (ATM-640)', async ({
+    page,
+    tasksServer,
+  }) => {
+    // T-004 is in review through CR-7, which waits on you; T-005 is blocked on you
+    const data = loadFixture('v4');
+    data.tasks = data.tasks.map((t) =>
+      t.id === 'T-004'
+        ? { ...t, code_reviews: [{ id: 'r7', ref: 'CR-7' }] }
+        : t.id === 'T-006'
+          ? { ...t, waiting_on: 'agent' }
+          : t,
+    );
+    tasksServer.withOwnSummary(
+      summary({
+        needs_you: { review: 0, blocked_on_user: 1, together: 0, code_reviews: 1 },
+        needs_you_reviews: [{ id: 'r7', reference: 'CR-7', title: 'The editor', why: 'review' }],
+      }),
+    );
+    await openDashboard(page, tasksServer, data, { tab: 'list' });
+    const chip = page.locator('#attention-count');
+    await expect(chip).toHaveText('2 need you');
+    await chip.click();
+    const rows = page.locator('#needs-you-menu .needs-you-row');
+    await expect(rows.locator('.needs-you-id')).toHaveText(['T-005', 'CR-7']);
   });
 
   test('a project whose reviews can’t be read is named; the others are listed', async ({ page, tasksServer }) => {

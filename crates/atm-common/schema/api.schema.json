@@ -294,8 +294,12 @@
     "NeedsYouReview": {
       "type": "object",
       "description": "A code review waiting on the user, and why (ATM-606)",
-      "required": ["reference", "title", "why"],
+      "required": ["id", "reference", "title", "why"],
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "The review's UUID, as a task's code_reviews link it: a task waited on through it isn't listed again (ATM-640)"
+        },
         "reference": { "type": "string", "description": "CR-7" },
         "title": { "type": "string" },
         "why": { "enum": ["review", "answered"] }

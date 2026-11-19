@@ -826,7 +826,9 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         "needs_you_tasks": needs_you_tasks,
         "needs_you_reviews": waiting_reviews
             .iter()
-            .map(|(h, why)| json!({"reference": h.reference, "title": capped(Some(&json!(h.title))), "why": why}))
+            .map(|(h, why)| {
+                json!({"id": h.id.0, "reference": h.reference, "title": capped(Some(&json!(h.title))), "why": why})
+            })
             .collect::<Vec<_>>(),
         "git": git_summary(project, &tasks),
         "description": description(document.get("meta")),
