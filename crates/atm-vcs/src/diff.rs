@@ -379,7 +379,8 @@ mod tests {
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        // Without Windows' `\\?\` prefix, as atm and git name the folder (a submodule's URL too)
+        let dir = atm_common::pathtext::canonical(&dir).unwrap();
         let vcs = GitVcs::new(&dir);
         git(&vcs, &["init", "-q"]);
         (Repo(dir), vcs)

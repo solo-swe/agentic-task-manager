@@ -132,7 +132,8 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(path.join(TASK_DIR)).unwrap();
-        Dir(std::fs::canonicalize(&path).unwrap())
+        // Without Windows' `\\?\` prefix, as atm and git name the folder
+        Dir(atm_common::pathtext::canonical(&path).unwrap())
     }
     fn git(args: &[&str], cwd: &Path) {
         let mut all = vec!["-c", "user.name=t", "-c", "user.email=t@example.com"];

@@ -761,7 +761,8 @@ mod tests {
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        Scratch(std::fs::canonicalize(&dir).unwrap())
+        // Without Windows' `\\?\` prefix, as atm and git name the folder
+        Scratch(atm_common::pathtext::canonical(&dir).unwrap())
     }
 
     /// Run git in `cwd`, which must work: its output.

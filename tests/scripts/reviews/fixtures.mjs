@@ -52,6 +52,11 @@ export function projectWithSubmodule() {
   const root = project();
   const sub = makeProject({ commit: true, files: { 'b.txt': 'one\n' } });
   git(['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'lib'], root);
+  // The checkout in `lib` is a clone of its own: it gets an identity, as makeProject gives its repositories, so commits
+  // made in it work where git has none (CI)
+  const lib = path.join(root, 'lib');
+  git(['config', 'user.email', 'test@example.com'], lib);
+  git(['config', 'user.name', 'atm test'], lib);
   git(['commit', '-q', '-m', 'add lib'], root);
   return { root, sub };
 }

@@ -25,7 +25,8 @@ fn dir() -> Dir {
     let path = std::env::temp_dir().join(format!("atm-lib-drafts-{}-{count}", std::process::id()));
     let _ = std::fs::remove_dir_all(&path);
     std::fs::create_dir_all(&path).unwrap();
-    Dir(std::fs::canonicalize(&path).unwrap())
+    // Without Windows' `\\?\` prefix, as atm and git name the folder
+    Dir(atm_common::pathtext::canonical(&path).unwrap())
 }
 
 fn round() -> NewRound {

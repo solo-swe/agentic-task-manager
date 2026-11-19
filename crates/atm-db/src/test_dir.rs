@@ -19,23 +19,14 @@ impl TestDir {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&path).expect("the system's temporary folder is writable");
-        Self(plain(
-            &std::fs::canonicalize(&path).expect("the folder was just made"),
-        ))
+        // Without Windows' `\\?\` prefix (pathtext::canonical): the form atm and git name the folder by, so a path atm
+        // returns compares equal, and git takes the folder as a submodule's URL
+        Self(atm_common::pathtext::canonical(&path).expect("the folder was just made"))
     }
 
     pub(crate) fn path(&self) -> &Path {
         &self.0
     }
-}
-
-/// `path` without Windows' verbatim prefix (`\\?\C:\…`, which `canonicalize` gives there): the form atm and git name the
-/// folder by (`C:\…`), so a path atm returns compares equal, and git takes it as a submodule's URL. Elsewhere, as it is.
-fn plain(path: &Path) -> PathBuf {
-    path.to_str()
-        .and_then(|p| p.strip_prefix(r"\\?\"))
-        .filter(|p| !p.starts_with("UNC\\"))
-        .map_or_else(|| path.to_path_buf(), PathBuf::from)
 }
 
 impl Drop for TestDir {
