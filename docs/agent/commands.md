@@ -6,9 +6,9 @@ to do (`loop next`), 4 the task is claimed by another agent. Output to a pipe (a
 cut; `--color auto|always|never` only styles it for a terminal.
 
 `<id>` is a task's key (`ATM-527`, any case) in a project with task keys, or its old ID (`T-527`), an alias or its UUID;
-in a project without keys, its ID (`atm docs tasks`). A key shown with a `~` (`~ATM-538`) is provisional: use it freely
-(in commit messages too), it may move to another number before it is merged, and its old key keeps finding it. The `~`
-is only how it reads: commands take the key with or without it, and `--json` gives it without.
+in a project without keys, its ID (`atm docs tasks`). Keys are plain from the moment a task is made: use them anywhere
+(commit messages too). If two branches gave the same number, the merge moves one task to the next free number and its
+old key keeps finding it. (A `~` before a key, as older atm printed it, is still taken and ignored.)
 
 ## Reading
 
@@ -36,9 +36,7 @@ is only how it reads: commands take the key with or without it, and `--json` giv
 ## Pushing
 
 - `atm vcs pr <id>… --number N --url U`: record the pull request that contains the tasks
-- `atm vcs pushed --pr N [--at TIME]`: record that it merged
-- `atm vcs pushed`: after a direct push to the base branch; the keys of the tasks now on it become final (either form
-  makes keys final, read from git)
+- `atm vcs pushed --pr N [--at TIME]`: record that it merged (a direct push has nothing to record)
 
 ## Defining work
 

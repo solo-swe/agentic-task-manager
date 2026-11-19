@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use atm_common::keys::{key_final, key_of, keys_format, label_of, number_of, with_key};
+use atm_common::keys::{key_of, keys_format, label_of, number_of, with_key};
 use atm_common::py::{py_str, py_str_opt, strip, truthy};
 use atm_common::rules::{natural_cmp, unfinished_dependencies};
 use atm_common::time::{format_iso, now, parse_iso};
@@ -241,15 +241,14 @@ fn git_summary(project: &Project, tasks: &[&Task]) -> Value {
     json!({"branch": project.store().branch(), "pr": latest})
 }
 
-/// `entry` with its task's key and whether the key is final (ADR-007 §1, §3), as the task views give them, in a
-/// keys-format project; as it is before task keys, or for no task.
+/// `entry` with its task's key (ADR-007 §1), as the task views give it, in a keys-format project; as it is before task
+/// keys, or for no task.
 fn keyed(document: &Value, task: Option<&Task>, mut entry: Value) -> Value {
     if let Some(task) = task
         && let Some(key) = key_of(document, task)
         && let Some(map) = entry.as_object_mut()
     {
         map.insert("key".into(), json!(key));
-        map.insert("key_final".into(), json!(key_final(task)));
     }
     entry
 }
@@ -258,7 +257,7 @@ fn keyed(document: &Value, task: Option<&Task>, mut entry: Value) -> Value {
 struct Shown<'a> {
     vocab: &'a Vocabulary,
     document: &'a Value,
-    /// A task (a dependency) by its label: its key (`~` while provisional), another project's by its key there, else
+    /// A task (a dependency) by its label: its key, another project's by its key there, else
     /// its ID.
     label: &'a dyn Fn(&str) -> String,
 }

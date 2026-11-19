@@ -595,7 +595,7 @@ fn in_a_keys_file_new_tasks_get_a_uuid_the_next_number_and_references_by_key() {
     let existing = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8091";
     let meta = json!({"format": 2, "key": "ATM", "key_history": ["T"], "next_number": 5});
     let mut p = project(
-        json!([{"id": existing, "number": 4, "key_final": true, "status": "done"}]),
+        json!([{"id": existing, "number": 4, "status": "done"}]),
         meta.clone(),
     );
     let entries = [
@@ -609,7 +609,11 @@ fn in_a_keys_file_new_tasks_get_a_uuid_the_next_number_and_references_by_key() {
     assert!(uuids.iter().all(|u| atm_common::ids::valid_task_uuid(u)));
     assert_eq!(added.tasks[0]["number"], json!(5));
     assert_eq!(added.tasks[1]["number"], json!(6));
-    assert_eq!(added.tasks[0]["key_final"], json!(false), "provisional");
+    assert_eq!(
+        added.tasks[0].get("key_final"),
+        None,
+        "a key plain from creation (ADR-009)"
+    );
     assert_eq!(added.tasks[0]["dependencies"], json!([existing]));
     assert_eq!(added.tasks[1]["dependencies"], json!([uuids[0], existing]));
     assert_eq!(added.tasks[1]["related"], json!([existing]));

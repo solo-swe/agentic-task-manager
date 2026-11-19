@@ -65,6 +65,51 @@ fn finish_times_and_with_user_are_filled_in_once() {
     assert_eq!(document["meta"]["migrations"], json!(["interactive-label"]));
 }
 
+/// ADR-009 (ATM-635): `key_final`, true or false, leaves the task file and the archive once, and says so; after it
+/// the files are left alone
+#[test]
+fn key_final_is_dropped_from_the_tasks_and_the_archive_once() {
+    let (_dir, paths) = project(
+        r#"{"meta": {"format": 2, "key": "ATM"}, "tasks": [
+            {"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8001", "number": 1, "key_final": true, "status": "todo"},
+            {"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8002", "number": 2, "key_final": false, "status": "todo"},
+            {"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8003", "number": 3, "status": "todo"}
+        ]}"#,
+    );
+    std::fs::write(
+        paths.archive(),
+        r#"{"tasks": [{"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8000", "number": 9, "key_final": true, "status": "done"}]}"#,
+    )
+    .unwrap();
+    let result = migrate(&paths).unwrap();
+    assert_eq!(result["key_final_dropped"], json!(3));
+    assert!(
+        describe_migration(&result, &paths)
+            .contains(&"Task keys are plain now (ADR-009): dropped key_final from 3 tasks (staged, not committed).".to_string())
+    );
+    for file in [paths.tasks.clone(), paths.archive()] {
+        let document = read_json(&file).unwrap();
+        assert!(
+            document["tasks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|t| t.get("key_final").is_none()),
+            "{}",
+            file.display()
+        );
+    }
+    let document = read_json(&paths.tasks).unwrap();
+    assert_eq!(
+        document["tasks"][1]["number"],
+        json!(2),
+        "nothing else changed"
+    );
+    let again = migrate(&paths).unwrap();
+    assert_eq!(again["key_final_dropped"], json!(0));
+    assert_eq!(describe_migration(&again, &paths), ["Nothing to migrate."]);
+}
+
 #[test]
 fn phases_become_sprints_named_after_them() {
     let mut document = json!({

@@ -291,7 +291,7 @@ fn named(project: &Project, header: &ReviewHeader) -> Result<Vec<String>> {
 #[must_use]
 pub fn task_reference(project: &Project, reference: &str) -> String {
     project.resolve_task(reference).map_or_else(
-        |_| reference.strip_prefix('~').unwrap_or(reference).to_string(),
+        |_| atm_common::keys::without_draft_mark(reference).to_string(),
         |id| key_of_id(project, &id),
     )
 }

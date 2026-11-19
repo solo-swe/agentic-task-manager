@@ -15696,7 +15696,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-17T20:40:40Z",
-      "updated_at": "2026-11-17T22:15:54Z",
+      "updated_at": "2026-11-19T01:22:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 581,
@@ -15707,7 +15707,22 @@
           "from": "2026-11-17T22:15:54Z"
         }
       ],
-      "sprint": "Code reviews in the app"
+      "sprint": "Code reviews in the app",
+      "blocks": [
+        {
+          "from": "2026-11-19T01:02:30Z",
+          "to": "2026-11-19T01:22:45Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-19T01:22:45Z",
+          "kind": "answer",
+          "text": "In the app, a review is open in its tab and you click another project in the sidebar: (a) the tab becomes that project (the review is gone from it, Back brings it back), or (b) the project opens in a tab of its own and the review keeps its tab (a click on the sidebar from a review always opens a new tab)? ⌘-click opens a new tab either way. → a: the tab becomes the project’s page (Hakan, 2026-11-19).",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1eb3e-a0c9-724d-a9e9-0fa4e8823e4f",
@@ -19040,14 +19055,14 @@
       "description": "Hakan (2026-11-19): no draft (provisional) keys any more. \"T- era but better\": keep what ADR-007 got right, drop the provisional marker that every new task carried.\n\n## The decision to record\n- **Kept from ADR-007:** the UUID is the stored identity (§1), the project key and its history (§2), merges match tasks by UUID (§4), and every place that takes a task accepts a key, an alias or a UUID (§5).\n- **Gone:** `key_final`, `finalize_keys`, the `~` in the CLI and the draft mark in the dashboard (§3). A key is shown plain from the moment its task is created.\n- **A clash at merge:** when the incoming side has a task with a number the other side already uses, the incoming task takes the next free number (above both sides' numbers and `meta.next_number`), whichever side its task was made on. It keeps its old key as an alias (`aliases`), so a commit, a note or a review written on its branch still finds it, and atm says it moved (\"ATM-538 is now ATM-641\"). Two tasks never share a number in a merged file; the merge never stops on a clash.\n- **Why:** the provisional marker never prevented a renumber; it only labelled every new task as one that *might* move, and its bookkeeping caused the bugs (ATM-623: keys left draft after a direct push; CMD-250: a review's approval lost under `~CMD-250`; the `~` read as a home folder by zsh). Clashes are rare; the alias covers them.\n- **Options considered** (from the discussion with Hakan): a minor number on a clash (`ATM-630.2`), a counter per machine, reserving numbers on the remote with git refs, hash keys (as beads moved to), duplicate numbers told apart at lookup (git-bug's stance), number ranges per agent. Say in a line each why they were not taken.\n- **Migration:** today's provisional keys become plain as they are; `key_final` is dropped from `tasks.json` and the archive by `atm db migrate`.\n\n## Change\n- `docs/adr/ADR-009-task-keys-plain-from-creation.md` (status, context, decision, consequences), and ADR-007's status line: §3 and §4's provisional rules replaced by ADR-009.\n- Opened as a review for Hakan (`atm review create --task … --file docs/adr/ADR-009-…`); the code tasks start once it is approved.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/adr/ADR-009-task-keys-plain-from-creation.md",
         "docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-18T22:33:33Z",
+      "updated_at": "2026-11-19T01:22:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19072,15 +19087,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T22:33:33Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T22:33:33Z",
           "kind": "review",
           "text": "CR-30: ADR-009: task keys plain from creation",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T01:22:23Z",
+          "kind": "note",
+          "text": "Approved: in CR-30 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T01:22:31Z",
+          "kind": "outcome",
+          "text": "ADR-009 approved in CR-30 (Hakan, 2026-11-19).",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T22:33:33Z",
+          "to": "2026-11-19T01:22:23Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T01:22:31Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-239abe8c0ea5",
@@ -19093,7 +19128,7 @@
       "description": "ADR-009 (the task before this): keys are plain from creation.\n\n## Change\n- **Model and schema:** `key_final` leaves `task.schema.json`, `api.schema.json` and the Rust model; `--json` no longer carries it.\n- **Gone:** `finalize_keys` and every caller: `atm vcs pushed` (with and without `--pr`: it still records merges and releases, it no longer touches keys), `atm db migrate`'s key check, `atm task add`'s output. The direct-push step ATM-623 added to `/atm-push` (`atm vcs pushed` after a direct push) stays only if it still records something; otherwise it goes from the skill.\n- **The `~`:** never printed (`atm-common`'s `keys.rs`, the CLI's task, review and summary output, review files written by `atm-review`, commit messages). Input still accepts a leading `~` (old notes, old commits, old review files) and ignores it, so nothing written before breaks.\n- **Migration:** `atm db migrate` drops `key_final` from `tasks.json` and `tasks-archive.json`, once, and says so.\n- **Docs and skills:** `atm docs tasks`, `atm docs commands`, `atm docs reviews` and the skills say nothing of provisional keys; agents write keys plain.\n\n## Tests\n- Unit: keys print plain; `~ATM-5` and `ATM-5` find the same task.\n- Migration: a file with `key_final` true and false loads, migrates once, and is stable after.\n- CLI scenarios: `atm task add` prints the plain key; `atm vcs pushed` without `--pr` changes no task; the commands that took `~KEY` still do.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-23995623df35"
       ],
@@ -19119,7 +19154,7 @@
         "skills/atm-push/SKILL.md"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-18T22:14:53Z",
+      "updated_at": "2026-11-19T01:22:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19134,7 +19169,9 @@
       "components": [
         "docs",
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-19T01:22:46Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-239bff26047e",
@@ -19144,7 +19181,7 @@
       "labels": [
         "keys"
       ],
-      "description": "ADR-009: without provisional keys, the merge driver can't tell a final number from a provisional one, and it no longer needs to.\n\n## Change (`crates/atm-db/src/jsongit/merge.rs`)\n- Two different tasks (different UUIDs) with the same number: the **incoming** side's task takes the next free number (above both sides' numbers and `meta.next_number`) and keeps its old key in `aliases`. The case that stops the merge today (\"two final numbers\") goes: a clash never stops a merge.\n- `meta.next_number` merges as the larger of the two, past the moved number.\n- What moved is reported once: the merge leaves a record that the next atm command prints (\"ATM-538 is now ATM-641 (both branches made ATM-538)\"), or `atm db migrate` does; decide which in the task and write it in `atm docs tasks`.\n- References are UUIDs, so nothing else is rewritten; text written outside the file (commits, notes, reviews) finds the task by its alias.\n\n## Tests (`merge/tests.rs`, and a CLI test with two branches)\n- Each side adds one task with the same number: both kept, the incoming one moved, its alias set, `next_number` past both.\n- Several clashes in one merge; a clash with an archived task's number; the same task (same UUID) changed on both sides (not a clash).\n- After the merge, `atm task details ATM-538` finds the moved task by its alias and says it moved.",
+      "description": "ADR-009 (approved in CR-30): without provisional keys, the merge driver can't tell a final number from a provisional one, and it no longer needs to.\n\n## Change (`crates/atm-db/src/jsongit/merge.rs`)\n- **Two different tasks (different UUIDs) with the same number:** one moves to the next free number (above both sides' numbers and `meta.next_number`) and keeps its old key in `aliases`. A clash never stops a merge; the case that stops it today (\"two final numbers\") goes.\n- **Which one moves (ADR-009):** the task **not on the base branch**, checked from git when the merge runs. When neither is, or git can't tell, the **newer** one (its UUIDv7's time) moves.\n- **`meta.next_number`** merges as the larger of the two, past the moved number.\n- **What moved is reported once:** the merge leaves a record that the next atm command prints (\"ATM-538 is now ATM-641 (both branches made ATM-538)\"), or `atm db migrate` does. Decide which in the task and write it in `atm docs tasks`.\n- References are UUIDs, so nothing else is rewritten. Text written outside the file (commits, notes, reviews) finds the task by its alias.\n\n## Tests (`merge/tests.rs`, and a CLI test with two branches)\n- Each side adds one task with the same number: both kept, the one not on the base branch moved, its alias set, `next_number` past both.\n- Neither on the base branch: the newer one moves.\n- Several clashes in one merge; a clash with an archived task's number; the same task (same UUID) changed on both sides, which isn't a clash.\n- After the merge, `atm task details ATM-538` finds the moved task by its alias and says it moved.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -19158,7 +19195,7 @@
         "docs/agent/tasks.md"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-18T22:14:54Z",
+      "updated_at": "2026-11-19T01:22:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19227,7 +19264,7 @@
       "description": "Asked by Hakan (2026-11-19): comments and replies on a review should be editable, with an edit button.\n\natm already lets a comment's author change its text: `PATCH …/reviews/<CR>/comments/<c>` with `{body}` (docs/multi-project-api.md §2.9; `edit`, the comment author's own), the app's `update_review_comment`, and `atm review edit`. The dashboard has neither the call nor a button.\n\n## Change\n- `dashboard/src/lib/api/review-changes.ts`: `editComment(project, review, comment, body)`, as `resolveComment` does it (the REST route with the page's token, or the app's command).\n- `ChainBox.svelte`: on each comment and reply **you wrote** (its `author` is you, the page's `you`), an *Edit* button. It turns the text into a box with the text in it, *Save* and *Cancel* (Escape cancels, ⌘ Enter saves); saved, the page shows the new text; refused, the box stays with the reason, as the comment box does. Others' comments have no button. Not on an ended review (approved or closed), which takes no change.\n- Show that a comment was edited (\"edited\", with when, as the title) if the review's data says so; if it doesn't, say so in the task's outcome rather than adding a field here.\n- Wired through `ReviewPage`, `ReviewFile` and `DiffView` (`onedit`) as `onreply` and `onresolve` are, and in the Comments tab.\n\n## Tests\n- Unit: `editComment`'s request (route, method, body, token) and a refusal's message.\n- Component (`ChainBox`): the button only on your own comment and reply; Edit, change, Save sends it; Cancel and Escape keep the old text; a refusal keeps the box with why; none on an ended review.\n- E2e in `reviews.spec.ts`: edit your own reply in place; another's comment has no Edit.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/review-changes.ts",
@@ -19237,7 +19274,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T23:03:01Z",
-      "updated_at": "2026-11-19T00:58:59Z",
+      "updated_at": "2026-11-19T01:02:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19253,7 +19290,24 @@
         "dashboard"
       ],
       "started_at": "2026-11-19T00:58:59Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "75b27ed872a2ebf06fc689dd6fb262447202d49d",
+      "code_reviews": [
+        {
+          "id": "01a1f153-716c-71a4-82f6-1a06c4735843",
+          "ref": "CR-43"
+        }
+      ],
+      "review_requested_at": "2026-11-19T01:02:20Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T01:02:20Z",
+          "kind": "review",
+          "text": "CR-43: Edit your own comment or reply",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }

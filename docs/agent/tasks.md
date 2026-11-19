@@ -3,9 +3,10 @@
 For reading `atm task details --json` and the other commands' JSON, not for editing the file.
 
 - **Keys** (a project with task keys, `meta.format` 2): `id` is the task's UUID, never shown; `key` is how people and
-  you name it (`ATM-527`: `meta.key` and its `number`); `key_final` false means provisional (shown `~ATM-538`, final
-  once merged into the base branch); `aliases` are keys it had (they still find it). Before task keys, `id` is the ID
-  (`T-527`) and there is no `key`. Name tasks by their key in commands, notes and commit messages.
+  you name it (`ATM-527`: `meta.key` and its `number`), plain from the moment the task is made; `aliases` are keys it
+  had (a number that moved when two branches gave the same one, an ID from before task keys), and they still find it.
+  Before task keys, `id` is the ID (`T-527`) and there is no `key`. Name tasks by their key in commands, notes and
+  commit messages.
 - **Definition:** `id`, `name`, `type` (`feature`, `bugfix`, `test`, `infra`, `docs`, `refactor`, `polish` by default),
   `description` (Markdown), `dependencies` (the tasks' UUIDs, or IDs before task keys; `<project id>:<UUID>` is another
   project's task), `priority` (`P0`–`P3` by default; none counts as `P2`), `labels`,

@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
-use atm_common::keys::{key_final, key_of, keys_format, project_key, resolve};
+use atm_common::keys::{key_of, keys_format, project_key, resolve};
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
 use serde_json::{Value, json};
 
@@ -342,11 +342,7 @@ pub fn label(reference: &str) -> Option<String> {
         let uuid = task.get("id").and_then(Value::as_str).unwrap_or_default();
         return Some(uuid.chars().take(8).collect());
     }
-    Some(if key_final(task) {
-        key
-    } else {
-        format!("~{key}")
-    })
+    Some(key)
 }
 
 /// The project IDs the working tasks of `project` depend on (`<project id>:<UUID>` in `dependencies`), each once: what
@@ -455,7 +451,7 @@ pub struct Lookup {
 
 impl Lookup {
     /// What the dashboard shows of the task `<project id>:<UUID>` names: `{project, found}`; found, the project's name
-    /// and where it is registered (`places`), and the task's `key` and `key_final` (in a project with task keys),
+    /// and where it is registered (`places`), and the task's `key` (in a project with task keys),
     /// `ambiguous` (another registered project has the same key, ADR-007 §8), `name`, `status`, `kind` and `archived`;
     /// not found, `reason`: `unregistered` (no registered project has that ID, or its folder is gone) or `missing`
     /// (the project has no such task), with the project's name and places when it is there. Only those fields are
@@ -518,7 +514,6 @@ fn look_up(projects: &[Other], reference: &str) -> Value {
     }
     if let Some(key) = key_of(document, task) {
         view["key"] = json!(key);
-        view["key_final"] = json!(key_final(task));
         let prefix = snapshot.key().unwrap_or_default();
         let sharing = projects
             .iter()

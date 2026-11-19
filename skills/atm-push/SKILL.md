@@ -70,10 +70,6 @@ and no PR was opened.
 
 `git push` (with `-u origin <branch>` when the branch has no upstream yet). Never force-push.
 
-**direct**, once pushed to the base branch: `atm vcs pushed` (no `--pr`). The tasks the push put on the base branch get
-final keys (`~KEY-12` becomes `KEY-12`); atm reads that from git. If it says some keys are final now, commit that on
-its own (`git commit -m 'chore: task keys final' -- .agentic-task-manager/tasks.json`): it goes with the next push.
-
 ## Step 4: The pull request (pull-request only)
 
 `gh pr view --json number,url,state` says whether the branch has one.

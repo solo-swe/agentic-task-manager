@@ -115,7 +115,6 @@
         "kind": { "type": "string", "description": "Its status's kind there (done when archived)" },
         "archived": { "type": "boolean" },
         "key": { "type": "string", "description": "Its key there, with task keys" },
-        "key_final": { "type": "boolean", "description": "Whether that key is final (ADR-007 §3)" },
         "ambiguous": {
           "type": "boolean",
           "description": "Another registered project uses the same key: show the UUID's first 8 characters instead (ADR-007 §8)"
@@ -251,8 +250,7 @@
         "name": { "type": "string", "description": "The task's name, capped at 80 characters" },
         "agent": { "type": ["string", "null"] },
         "branch": { "type": ["string", "null"] },
-        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" }
       }
     },
     "TaskName": {
@@ -262,8 +260,7 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
       }
     },
     "LastDone": {
@@ -274,8 +271,7 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "completed_at": { "type": "string" },
-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
       }
     },
     "NeedsYou": {
@@ -313,8 +309,7 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "reason": { "enum": ["review", "blocked", "together"] },
-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
       }
     },
     "GitPr": {
@@ -363,8 +358,7 @@
           "items": { "type": "string" },
           "description": "With task keys: the same dependencies as people read them (a key, ~ before a provisional one; another project's by its key there)"
         },
-        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" }
       }
     },
     "BoardColumn": {

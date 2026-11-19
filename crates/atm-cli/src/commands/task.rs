@@ -241,13 +241,9 @@ pub fn view_row(view: &Value) -> Value {
         row["pr"] = pr.clone();
         row["merged_at"] = task.get("merged_at").cloned().unwrap_or(Value::Null);
     }
-    // With task keys (ADR-007 §1): the key and whether it is final; before them, the ID is all there is
+    // With task keys (ADR-007 §1): the key, plain (ADR-009); before them, the ID is all there is
     if let (Some(key), Some(map)) = (task.get("key"), row.as_object_mut()) {
         map.insert("key".into(), key.clone());
-        map.insert(
-            "key_final".into(),
-            task.get("key_final").cloned().unwrap_or(Value::Bool(false)),
-        );
     }
     if let Some(map) = row.as_object_mut()
         && !map.contains_key("key")

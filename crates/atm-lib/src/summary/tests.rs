@@ -55,13 +55,11 @@ fn a_keys_format_project_gives_its_tasks_keys_and_a_legacy_one_does_not() {
         &json!({"format": 2, "key": "ATM", "next_number": 14}),
     );
     let s = project_summary(&keyed).unwrap();
-    let key_of = |v: &Value| (v["key"].clone(), v["key_final"].clone());
-    assert_eq!(key_of(&s["last_done"]), (json!("ATM-2"), json!(true)));
-    assert_eq!(key_of(&s["next"][0]), (json!("ATM-10"), json!(true)));
-    assert_eq!(
-        key_of(&s["needs_you_tasks"][0]),
-        (json!("ATM-13"), json!(true))
-    );
+    // Keys plain (ADR-009): no key_final carried, whatever the file still says
+    let key_of = |v: &Value| (v["key"].clone(), v.get("key_final").cloned());
+    assert_eq!(key_of(&s["last_done"]), (json!("ATM-2"), None));
+    assert_eq!(key_of(&s["next"][0]), (json!("ATM-10"), None));
+    assert_eq!(key_of(&s["needs_you_tasks"][0]), (json!("ATM-13"), None));
     let todo = &s["board"]["todo"]["cards"];
     let draft = todo
         .as_array()
@@ -69,17 +67,12 @@ fn a_keys_format_project_gives_its_tasks_keys_and_a_legacy_one_does_not() {
         .iter()
         .find(|c| c["id"] == DRAFT)
         .unwrap();
-    assert_eq!(
-        key_of(draft),
-        (json!("ATM-11"), json!(false)),
-        "provisional"
-    );
+    assert_eq!(key_of(draft), (json!("ATM-11"), None));
     assert_eq!(draft["waiting_for"], json!([LOGIN]));
     assert_eq!(draft["waiting_for_labels"], json!(["ATM-10"]));
     assert_eq!(
         key_of(&s["board"]["active"]["cards"][0]),
-        (json!("ATM-12"), json!(false)),
-        "no key_final: provisional"
+        (json!("ATM-12"), None)
     );
 
     let legacy = project(

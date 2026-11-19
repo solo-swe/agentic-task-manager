@@ -19,12 +19,12 @@ fn project() -> (Value, Vec<Task>) {
     let document = json!({
         "meta": {"format": 2, "key": "ATM", "key_history": ["T"], "next_number": 542},
         "tasks": [
-            {"id": A, "number": 527, "key_final": true, "aliases": ["T-P1-03"]},
+            {"id": A, "number": 527, "aliases": ["T-P1-03"]},
             {"id": B, "number": 538},
             {"id": C, "number": 541, "aliases": ["ATM-538"]}
         ]
     });
-    let archive = vec![task(json!({"id": OLD, "number": 12, "key_final": true}))];
+    let archive = vec![task(json!({"id": OLD, "number": 12}))];
     (document, archive)
 }
 
@@ -53,6 +53,25 @@ fn a_key_any_case_an_earlier_prefix_an_alias_or_the_uuid_finds_its_task() {
     assert_eq!(found("T-527"), (A.into(), false, Via::EarlierPrefix));
     assert_eq!(found("T-P1-03"), (A.into(), false, Via::Alias));
     assert_eq!(found(A), (A.into(), false, Via::Uuid));
+}
+
+/// ADR-009: keys read plain, whatever a file still says of `key_final`; a `~` written before (old notes, commits,
+/// reviews) still finds its task; a `~` alone is no key
+#[test]
+fn keys_read_plain_and_an_old_draft_mark_still_finds_its_task() {
+    for task in [
+        json!({"id": A, "key": "ATM-527"}),
+        json!({"id": A, "key": "ATM-527", "key_final": false}),
+        json!({"id": A, "key": "ATM-527", "key_final": true}),
+    ] {
+        assert_eq!(label_of(&task), "ATM-527", "{task}");
+    }
+    assert_eq!(label_of(&json!({"id": "T-1"})), "T-1");
+    assert_eq!(found("~ATM-527"), (A.into(), false, Via::Key));
+    assert_eq!(found(" ~atm-527 "), (A.into(), false, Via::Key));
+    assert_eq!(found("~T-527"), (A.into(), false, Via::EarlierPrefix));
+    assert_eq!(without_draft_mark("~"), "~");
+    assert!(not_found("~").starts_with("no task '~'"));
 }
 
 #[test]
@@ -125,7 +144,6 @@ fn keys_numbers_and_order() {
     let (document, archive) = project();
     let tasks: Vec<&Task> = tasks_of(&document).collect();
     assert_eq!(key_of(&document, tasks[0]).as_deref(), Some("ATM-527"));
-    assert!(key_final(tasks[0]) && !key_final(tasks[1]));
     assert_eq!(
         key_of(&json!({"tasks": []}), tasks[0]),
         None,
