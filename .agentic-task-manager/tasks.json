@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 643
+    "next_number": 644
   },
   "tasks": [
     {
@@ -17413,9 +17413,9 @@
         "crates/atm-lib/src/review_pages.rs"
       ],
       "created_at": "2026-11-18T06:27:52Z",
-      "updated_at": "2026-11-18T23:28:16Z",
+      "updated_at": "2026-11-19T06:02:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17434,15 +17434,22 @@
         }
       ],
       "review_requested_at": "2026-11-18T23:28:16Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-18T23:28:16Z",
           "kind": "review",
           "text": "CR-34: The reviews list in groups: waiting for you first",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:02:30Z",
+          "kind": "note",
+          "text": "Approved: in CR-34 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-19T06:02:30Z"
     },
     {
       "id": "01a1ed5d-a3c2-727b-8133-da0a14731104",
@@ -17466,9 +17473,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T06:34:59Z",
-      "updated_at": "2026-11-19T00:03:16Z",
+      "updated_at": "2026-11-19T06:01:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17487,15 +17494,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T00:03:16Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T00:03:16Z",
           "kind": "review",
           "text": "CR-37: Poke a review: a nudge its agent hears and answers",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:01:41Z",
+          "kind": "note",
+          "text": "Approved: in CR-37 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-19T06:01:41Z"
     },
     {
       "id": "01a1ed60-0e8c-7024-980b-34c02d4b6ad4",
@@ -19027,9 +19041,9 @@
         "docs/agent/tasks.md"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-19T02:03:48Z",
+      "updated_at": "2026-11-19T06:01:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19051,15 +19065,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T02:03:48Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T02:03:48Z",
           "kind": "review",
           "text": "CR-45: A number clash moves the task not on the base branch",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:01:31Z",
+          "kind": "note",
+          "text": "Approved: in CR-45 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-19T06:01:31Z"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-239c2914aed8",
@@ -19266,9 +19287,9 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-19T05:36:07Z",
-      "updated_at": "2026-11-19T05:43:45Z",
+      "updated_at": "2026-11-19T06:00:25Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19282,7 +19303,7 @@
       "number": 640,
       "started_at": "2026-11-19T05:37:14Z",
       "started_by": "claude:0f56a916",
-      "commit": "d351da046574b362757bd4e02527a9f61681f02e",
+      "commit": "f7c2adbe52b15e446df9ac31285c10fda72e4d2c",
       "code_reviews": [
         {
           "id": "01a1f255-18f1-77ce-baa0-187b8e51ad9f",
@@ -19290,15 +19311,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T05:43:45Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T05:43:45Z",
           "kind": "review",
           "text": "CR-49: A long N need you list scrolls in a small popup",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:00:25Z",
+          "kind": "note",
+          "text": "Approved: in CR-49 (round 2)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-19T06:00:25Z"
     },
     {
       "id": "01a1f255-436f-729a-858d-8ae2e822b720",
@@ -19345,7 +19373,7 @@
       "description": "Hakan (2026-11-19): an agent's review watch stopped, under a harness that caps background monitors at 5 minutes. Comments, a poke and four approvals went unseen until he asked. Agents must not be able to fail to watch, without making atm noisy.\n\n## Change\n1. **A live watch is known.** `atm review watch` keeps a lease file per agent in the state folder. It is renewed while the watch runs and removed when it stops (a crashed watch's lease runs out), as a claim's lease does.\n2. **One line, only when something is at stake.** When an agent (not a person) runs an atm command without a live watch, and a review of its work is still open, atm adds one line on stderr. The line names the open reviews and what came since the watch last told (from the watch's catch-up position, ATM-624), and says how to start the watch.\n   - It is silent when nothing of the agent's is out for review.\n   - It never touches stdout, so `--json` stays clean.\n   - It shows at most once every ~10 minutes, unless something new was missed.\n3. **The loop gets it as data.**\n   - `atm loop next --json` has a `watch` field (`{\"running\": bool, \"missed\": n}`).\n   - It hands back missed comments before new tasks, as it already hands back approved tasks.\n4. **Skills and docs.**\n   - `atm-loop-tasks` and `atm-do-task`: a `running: false` means start the watch first.\n   - Run the watch as a plain background command (it lasts its `--timeout`, 8h), not under a monitor with a short cap.\n   - `atm docs reviews` says all of this.\n\n## Tests\n- **Unit:** the lease (renewed, removed, run out); when the line shows (no open reviews, a live watch, a person, the rate limit, missed events always shown).\n- **CLI suite:** a scenario with an open review and no watch prints the line on stderr only; with a watch, nothing.\n- `loop next --json`'s `watch` field.\n\n## Release\nSkills change, so the written skill review (`docs/security-architecture.md` §3.3) covers it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -19355,9 +19383,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-19T05:51:33Z",
-      "updated_at": "2026-11-19T05:51:33Z",
+      "updated_at": "2026-11-19T05:54:54Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19368,7 +19396,44 @@
       "components": [
         "docs"
       ],
-      "number": 642
+      "number": 642,
+      "started_at": "2026-11-19T05:54:54Z",
+      "started_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f266-f839-7263-878e-7c8ccd46c600",
+      "name": "A poke keeps a review from being approved in the dashboard: counted as an open comment",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Hakan (2026-11-19): a poke shows as a comment with no Resolve button, which is right. But Approve was then disabled with *1 comment is still open*.\n\n## Cause\nThe dashboard's `isResolved` (`reviews/page.ts`) took a chain as resolved only when every top-level comment's `resolved` is `true`. A poke's is `null` (it has no box, ATM-611), so its chain counted as open. atm's own rule (`open_comments`: a box unticked) never counted it, so only the dashboard blocked.\n\n## Fix\n`isOpen`: a box unticked, as atm counts it. `isResolved`: a box ticked and none open. A chain of pokes is neither: it shows under *All* only, and Approve stays pressable.\n\n## Tests\n- **Unit:** a table of chains (open, resolved, a poke, a poke with an open or resolved comment, none); the filter, with a poke's chain in *All* only.\n- **e2e:** a review with a resolved comment and an answered poke: no Resolve on the poke, no open count, Approve pressable and sent.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/page.ts",
+        "dashboard/src/lib/reviews/ReviewPage.svelte"
+      ],
+      "created_at": "2026-11-19T06:03:16Z",
+      "updated_at": "2026-11-19T06:03:21Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T06:03:16Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 643,
+      "started_at": "2026-11-19T06:03:21Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

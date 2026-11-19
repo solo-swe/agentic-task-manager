@@ -9,6 +9,7 @@ import {
   filterChains,
   groupReviews,
   hashOf,
+  isOpen,
   isResolved,
   lineCounts,
   mergeProjectReviews,
@@ -380,19 +381,33 @@ describe('the Comments tab’s filter', () => {
   const withComments = (id: string, ...resolved: (boolean | null)[]) =>
     chain(id, null, null, { comments: resolved.map(comment) });
 
-  it('a chain is resolved when each of its top-level comments is; one with none is open', () => {
-    expect(isResolved(withComments('a', true))).toBe(true);
-    expect(isResolved(withComments('b', true, true))).toBe(true);
-    expect(isResolved(withComments('c', true, false))).toBe(false);
-    expect(isResolved(withComments('d', false))).toBe(false);
-    expect(isResolved(withComments('e', null))).toBe(false);
-    expect(isResolved(withComments('f'))).toBe(false);
+  // As atm's rules count them: open is a box unticked; a poke has none (null), so its chain is neither (ATM-643)
+  it('a chain is open with a box unticked, resolved with a box ticked and none open; a poke’s is neither', () => {
+    for (const [id, boxes, open, resolved] of [
+      ['a', [true], false, true],
+      ['b', [true, true], false, true],
+      ['c', [true, false], true, false],
+      ['d', [false], true, false],
+      ['poke', [null], false, false],
+      ['poke and open', [null, false], true, false],
+      ['poke and resolved', [null, true], false, true],
+      ['none', [], false, false],
+    ] as const) {
+      const c = withComments(id, ...boxes);
+      expect([isOpen(c), isResolved(c)], id).toEqual([open, resolved]);
+    }
   });
 
-  it('keeps all, the open or the resolved ones, in their order; nothing from nothing', () => {
-    const chains = [withComments('a', true), withComments('b', false), withComments('c', true), withComments('d')];
+  it('keeps all, the open or the resolved ones, in their order; a poke’s chain in all only; nothing from nothing', () => {
+    const chains = [
+      withComments('a', true),
+      withComments('b', false),
+      withComments('poke', null),
+      withComments('c', true),
+      withComments('d', false),
+    ];
     const ids = (filter: ChainFilter) => filterChains(chains, filter).map((c) => c.id);
-    expect(ids('all')).toEqual(['a', 'b', 'c', 'd']);
+    expect(ids('all')).toEqual(['a', 'b', 'poke', 'c', 'd']);
     expect(ids('open')).toEqual(['b', 'd']);
     expect(ids('resolved')).toEqual(['a', 'c']);
     for (const filter of ['all', 'open', 'resolved'] as const) expect(filterChains([], filter)).toEqual([]);

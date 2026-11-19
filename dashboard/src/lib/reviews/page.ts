@@ -184,9 +184,15 @@ export function driftedOf(chains: PlacedChain[], file: ViewFile): PlacedChain[] 
   return chains.filter((c) => c.drifted && (c.anchor.path === file.path || c.anchor.path === file.old_path));
 }
 
-/** Whether a chain is resolved: each of its top-level comments is (a chain with none isn't) */
+/** Whether a chain is open, as atm's rules count it: one of its top-level comments has its box unticked. A poke has no
+ * box (`resolved` null, ATM-611), so a chain of pokes is never open, and never keeps the review from an approval */
+export function isOpen(chain: Chain): boolean {
+  return chain.comments.some((c) => c.resolved === false);
+}
+
+/** Whether a chain is resolved: a box ticked, and none left open (a chain of pokes is neither) */
 export function isResolved(chain: Chain): boolean {
-  return chain.comments.length > 0 && chain.comments.every((c) => c.resolved === true);
+  return chain.comments.some((c) => c.resolved === true) && !isOpen(chain);
 }
 
 /** Which chains the Comments tab lists */
@@ -194,7 +200,7 @@ export type ChainFilter = 'all' | 'open' | 'resolved';
 
 /** The chains a filter keeps, in their order */
 export function filterChains<C extends Chain>(chains: C[], filter: ChainFilter): C[] {
-  return filter === 'all' ? chains : chains.filter((c) => isResolved(c) === (filter === 'resolved'));
+  return filter === 'all' ? chains : chains.filter(filter === 'open' ? isOpen : isResolved);
 }
 
 /** A review's page's title, the window's and the tab's: the project's short name, the review's reference, its title */

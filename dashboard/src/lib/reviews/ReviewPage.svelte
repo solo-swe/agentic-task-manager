@@ -19,6 +19,7 @@
     fileTree,
     filesIn,
     filterChains,
+    isOpen,
     isResolved,
     lineCounts,
     openedTo,
@@ -495,7 +496,7 @@
   let filter = $state<ChainFilter>('all');
   const chainCounts = $derived({
     all: allChains.length,
-    open: allChains.filter((c) => !isResolved(c)).length,
+    open: allChains.filter(isOpen).length,
     resolved: allChains.filter((c) => isResolved(c)).length,
   });
   /** Nothing left open: the decision at hand is to approve */

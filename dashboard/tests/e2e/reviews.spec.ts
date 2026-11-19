@@ -1585,6 +1585,51 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(page.locator('.review-poke[data-review="CR-2"]')).toHaveText('Poked');
   });
 
+  // ATM-643: a poke has no Resolve, and is never open: with only a poke (answered) and a resolved comment left, the
+  // review can be approved, as atm's rules let it
+  test('a poke never keeps the review from an approval, nor counts as open', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    const poke = {
+      ...comment('c2', '', null),
+      author: 'Ana',
+      poke: true,
+      replies: [comment('c3', 'Nearly there.', null)],
+    };
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        chains: [
+          {
+            id: 't1',
+            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
+            comments: [{ ...comment('c1', 'Why upper case?'), resolved: true }],
+            placed: null,
+            drifted: null,
+          },
+          {
+            id: 't2',
+            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
+            comments: [poke],
+            placed: null,
+            drifted: null,
+          },
+        ],
+      }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await expect(page.locator('.review-conversation [data-comment="c3"]')).toBeVisible();
+    await expect(page.locator('[data-comment="c2"] .chain-resolve')).toHaveCount(0);
+    // Nothing open: Approve is the decision at hand, pressable
+    const approve = page.locator('#review-approve');
+    await expect(approve).toBeEnabled();
+    // The Comments tab counts none open (ATM-614): its total only
+    await expect(page.locator('#review-tab-comments .review-count-open')).toHaveCount(0);
+    await approve.click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'POST', path: '/CR-2/decisions', body: { decision: 'approve' } });
+  });
+
   test('submit: a decision is sent; a refusal is shown, and nothing else changes', async ({ page, tasksServer }) => {
     await openReviews(page, tasksServer, 'CR-2');
     await page.getByRole('button', { name: 'Submit review' }).click();
