@@ -9,8 +9,8 @@ use atm_lib::Project;
 use atm_lib::actor::agent_identity;
 use atm_lib::reviews::comments_md::{self, CommentsFile};
 use atm_lib::reviews::{
-    self, Actor, Anchor, CommentFilter, CommentId, FileStore, NewReview, NewRound, ReviewFilter,
-    ReviewHeader, ReviewRef, ReviewStore, Reviews, RoundKind, Side, Status, Verdict, rounds,
+    self, Actor, CommentFilter, CommentId, FileStore, NewReview, NewRound, ReviewFilter,
+    ReviewHeader, ReviewRef, ReviewStore, Reviews, Round, RoundKind, Side, Status, rounds,
     vcs as vcs_of,
 };
 use clap::{Args, Subcommand};
@@ -96,6 +96,9 @@ pub enum ReviewCommand {
         review: String,
         #[command(flatten)]
         change: Change,
+        /// A new summary (the review's Description), in Markdown, from a file: what the reviewers should check now
+        #[arg(long, value_name = "FILE")]
+        summary_file: Option<String>,
         /// Who adds it
         #[arg(long)]
         agent: Option<String>,
@@ -116,7 +119,8 @@ pub enum ReviewCommand {
     },
     /// List the reviews, of every working copy, newest first.
     List {
-        /// Only these statuses (repeatable): draft, open, live, changes_requested, approved, closed
+        /// Only these statuses (repeatable): open (any not decided yet: draft, waiting, live or changes_requested), or
+        /// one of draft, waiting, live, changes_requested, approved, closed
         #[arg(long = "status", value_name = "STATUS")]
         statuses: Vec<String>,
         /// Only the reviews of this task
@@ -173,6 +177,24 @@ pub enum ReviewCommand {
         /// Who writes it
         #[arg(long)]
         agent: Option<String>,
+    },
+    /// Poke a review: a person's nudge to its agent, which hears it through its review watch and answers it.
+    Poke {
+        /// The review (CR-7)
+        review: String,
+        /// What to say with it (optional)
+        #[arg(long)]
+        body: Option<String>,
+        /// Who pokes (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Your drafts on a review: comments and replies only you see, sent together with your next `atm review submit`
+    /// (`--comment` alone sends them). Kept in your atm state folder, never in the repository; a person's, not an
+    /// agent's.
+    Draft {
+        #[command(subcommand)]
+        command: DraftCommand,
     },
     /// Reply to a comment.
     Reply {
@@ -255,6 +277,12 @@ pub enum ReviewCommand {
         /// How long at most: 90s, 30m, 8h (seconds without a unit)
         #[arg(long, default_value = "8h")]
         timeout: String,
+        /// Stop once something was told (exit code 3 if nothing was, at the time up)
+        #[arg(long)]
+        once: bool,
+        /// Tell what came since this time (2026-10-24T18:00:00Z), whatever the last watch told
+        #[arg(long)]
+        since: Option<String>,
         /// Who watches
         #[arg(long)]
         agent: Option<String>,
@@ -300,12 +328,13 @@ fn text_of(body: Body, cwd: &Path) -> Result<String> {
     Ok(text)
 }
 
-/// A round from what the command names; with nothing named, the same kind as `previous` (a range needs naming).
+/// A round from what the command names; with nothing named, the same kind as `previous` (a range needs naming), in
+/// the same repository.
 fn new_round(
     project: &Project,
     change: Change,
     cwd: &Path,
-    previous: Option<&RoundKind>,
+    previous: Option<&Round>,
     previous_files: &[String],
 ) -> Result<NewRound> {
     let vcs = vcs_of(project)?;
@@ -314,18 +343,47 @@ fn new_round(
         let (base, head) = range
             .split_once("..")
             .ok_or_else(|| Error::Invalid(format!("--range takes BASE..HEAD, not {range}")))?;
-        return rounds::from_range(&vcs, base, if head.is_empty() { "HEAD" } else { head }, &by);
+        let here = reviews::repository_here(&vcs, cwd)?;
+        return rounds::from_range(
+            &here,
+            base,
+            if head.is_empty() { "HEAD" } else { head },
+            &by,
+        );
     }
     if !change.files.is_empty() {
-        let paths = vcs.paths(&change.files, Some(cwd))?;
-        return rounds::from_files(&vcs, &paths, &by);
+        let mut paths = vcs.paths(&change.files, Some(cwd))?;
+        // A later files round keeps the files the last one reviewed (ATM-622): naming only the file that changed made
+        // a round of that file alone, whose whole change was that file and since which every other one looked deleted.
+        // A file gone since isn't kept
+        if previous.is_some_and(|last| last.kind == RoundKind::Files) {
+            let root = project.root().map(Path::to_path_buf).unwrap_or_default();
+            for kept in previous_files {
+                if !paths.contains(kept) && root.join(kept).is_file() {
+                    paths.push(kept.clone());
+                }
+            }
+        }
+        return rounds::from_files(&reviews::repository_of_files(&vcs, &paths)?, &paths, &by);
     }
     match (change.uncommitted, previous) {
-        (true, _) => rounds::from_working(&vcs, change.base.as_deref().unwrap_or("HEAD"), &by),
-        (false, Some(RoundKind::Working { base })) => {
-            rounds::from_working(&vcs, change.base.as_deref().unwrap_or(base), &by)
+        (true, _) => rounds::from_working(
+            &reviews::repository_here(&vcs, cwd)?,
+            change.base.as_deref().unwrap_or("HEAD"),
+            &by,
+        ),
+        (false, Some(last)) => {
+            let same = rounds::repository(&vcs, last)?;
+            match &last.kind {
+                RoundKind::Working { base } => {
+                    rounds::from_working(&same, change.base.as_deref().unwrap_or(base), &by)
+                }
+                RoundKind::Files => rounds::from_files(&same, previous_files, &by),
+                RoundKind::Range { .. } => Err(Error::Invalid(
+                    "say what to review: --range BASE..HEAD, --uncommitted, or --file PATH".into(),
+                )),
+            }
         }
-        (false, Some(RoundKind::Files)) => rounds::from_files(&vcs, previous_files, &by),
         _ => Err(Error::Invalid(
             "say what to review: --range BASE..HEAD, --uncommitted, or --file PATH".into(),
         )),
@@ -355,6 +413,178 @@ macro_rules! as_json {
     ($value:expr) => {
         serde_json::to_value($value).unwrap_or(Value::Null)
     };
+}
+
+/// `atm review draft …` (ATM-612).
+#[derive(Debug, Subcommand)]
+pub enum DraftCommand {
+    /// Draft a comment (on a file's lines, a whole file, or the review as a whole), or with --reply-to, a reply.
+    Add {
+        /// The review (CR-7)
+        review: String,
+        /// The comment it answers (c9): a reply
+        #[arg(long, value_name = "ID", conflicts_with_all = ["file", "lines", "quote", "old", "round"])]
+        reply_to: Option<String>,
+        /// The file it is about
+        #[arg(long, value_name = "PATH")]
+        file: Option<String>,
+        /// Its lines, A-B (or A)
+        #[arg(long, value_name = "A-B", requires = "file")]
+        lines: Option<String>,
+        /// The text it is about
+        #[arg(long)]
+        quote: Option<String>,
+        /// On the old side of the change
+        #[arg(long)]
+        old: bool,
+        /// The round it is on (the latest by default)
+        #[arg(long, value_name = "N")]
+        round: Option<u32>,
+        #[command(flatten)]
+        body: Body,
+        /// Who drafts (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Your drafts on a review, the oldest first.
+    List {
+        /// The review (CR-7)
+        review: String,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Change a draft's text.
+    Edit {
+        /// The review (CR-7)
+        review: String,
+        /// The draft (d2)
+        draft: String,
+        #[command(flatten)]
+        body: Body,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Throw a draft away.
+    Remove {
+        /// The review (CR-7)
+        review: String,
+        /// The draft (d2)
+        draft: String,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
+/// A draft, for people: its ID, where it goes, its text.
+fn draft_line(draft: &atm_lib::review_drafts::Draft) -> String {
+    use atm_lib::review_drafts::Place;
+    let place = match &draft.place {
+        Place::Reply { to } => format!("reply to {to}"),
+        Place::Comment {
+            path: Some(path),
+            lines: Some((a, b)),
+            ..
+        } => format!("{path}:{a}-{b}"),
+        Place::Comment {
+            path: Some(path), ..
+        } => path.clone(),
+        Place::Comment { .. } => "the review".into(),
+    };
+    format!("{} ({place}): {}", draft.id, draft.body.replace('\n', " "))
+}
+
+/// Run a draft command.
+fn run_draft(command: DraftCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+    use atm_lib::review_drafts::{self as drafts, DraftUpdate, NewDraft};
+    match command {
+        DraftCommand::Add {
+            review,
+            reply_to,
+            file,
+            lines,
+            quote,
+            old,
+            round,
+            body,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let new = NewDraft {
+                reply_to,
+                path: file,
+                lines: lines.as_deref().map(parse_lines).transpose()?,
+                side: if old { Side::Old } else { Side::New },
+                quote,
+                round,
+                body: text_of(body, cwd)?,
+            };
+            if ctx.dry_run {
+                println!("[dry-run] would draft on {review}");
+                return Ok(0);
+            }
+            let draft = drafts::add_draft(&project, &reference(&review), new)?;
+            if ctx.json {
+                print_json(&as_json!(&draft));
+            } else {
+                println!("{review}: drafted {}", draft_line(&draft));
+            }
+        }
+        DraftCommand::List { review, agent } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let listed = drafts::list_drafts(&project, &reference(&review))?;
+            if ctx.json {
+                print_json(&json!({ "review": review, "drafts": as_json!(&listed) }));
+            } else if listed.is_empty() {
+                println!("{review}: no drafts");
+            } else {
+                for draft in &listed {
+                    println!("{}", draft_line(draft));
+                }
+            }
+        }
+        DraftCommand::Edit {
+            review,
+            draft,
+            body,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let update = DraftUpdate {
+                body: text_of(body, cwd)?,
+            };
+            if ctx.dry_run {
+                println!("[dry-run] would change {draft} on {review}");
+                return Ok(0);
+            }
+            let changed = drafts::update_draft(&project, &reference(&review), &draft, &update)?;
+            if ctx.json {
+                print_json(&as_json!(&changed));
+            } else {
+                println!("{review}: changed {}", draft_line(&changed));
+            }
+        }
+        DraftCommand::Remove {
+            review,
+            draft,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            if ctx.dry_run {
+                println!("[dry-run] would remove {draft} from {review}");
+                return Ok(0);
+            }
+            drafts::remove_draft(&project, &reference(&review), &draft)?;
+            if ctx.json {
+                print_json(&json!({ "review": review, "draft": draft, "removed": true }));
+            } else {
+                println!("{review}: removed {draft}");
+            }
+        }
+    }
+    Ok(0)
 }
 
 fn parse_lines(lines: &str) -> Result<(u32, u32)> {
@@ -423,10 +653,11 @@ fn heard_line(heard: &Value) -> String {
     )
 }
 
-fn status_of(name: &str) -> Result<Status> {
-    serde_json::from_value(json!(name)).map_err(|_| {
+/// The statuses `--status <name>` stands for: `open`, every review not decided yet (ATM-613); any other, its own.
+fn status_of(name: &str) -> Result<Vec<Status>> {
+    Status::filter_named(name).ok_or_else(|| {
         Error::Invalid(format!(
-            "no status {name}: draft, open, live, changes_requested, approved or closed"
+            "no status {name}: open (any not decided yet), draft, waiting, live, changes_requested, approved or closed"
         ))
     })
 }
@@ -479,7 +710,12 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             }
             return Ok(0);
         }
-        ReviewCommand::Watch { timeout, agent } => {
+        ReviewCommand::Watch {
+            timeout,
+            once,
+            since,
+            agent,
+        } => {
             let project = opened(cwd, agent.as_deref())?;
             let me = actor(&project);
             let mut ready = || eprintln!("Watching the reviews for {}'s work.", me.0);
@@ -491,14 +727,16 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                     println!("{}", heard_line(&heard));
                 }
             };
-            atm_lib::review_listen::watch(
+            let told = atm_lib::review_listen::watch(
                 &project,
                 &me.0,
                 duration_of(&timeout)?,
+                &atm_lib::review_listen::WatchOptions { once, since },
                 &mut ready,
                 &mut emit,
             )?;
-            return Ok(0);
+            // --once with nothing told by the time up: exit code 3, as `atm review wait` (ATM-624)
+            return Ok(if once && told == 0 { 3 } else { 0 });
         }
         ReviewCommand::Create {
             title,
@@ -532,7 +770,11 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                     tasks,
                     author: Some(author),
                     reviewers: reviewers.into_iter().map(Actor).collect(),
-                    status: if draft { Status::Draft } else { Status::Open },
+                    status: if draft {
+                        Status::Draft
+                    } else {
+                        Status::Waiting
+                    },
                     first,
                 },
             )?;
@@ -583,6 +825,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
         ReviewCommand::Round {
             review,
             change,
+            summary_file,
             agent,
         } => {
             let mut project = opened(cwd, agent.as_deref())?;
@@ -592,12 +835,30 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             let files: Vec<String> = last
                 .map(|r| r.files.iter().map(|f| f.path.clone()).collect())
                 .unwrap_or_default();
-            let round = new_round(&project, change, cwd, last.map(|r| &r.kind), &files)?;
+            // The new summary read before anything is written
+            let summary = summary_file
+                .map(|file| {
+                    std::fs::read_to_string(cwd.join(&file))
+                        .map_err(|e| Error::failed(format!("can't read {file}: {e}")))
+                })
+                .transpose()?;
+            let round = new_round(&project, change, cwd, last, &files)?;
             if ctx.dry_run {
-                println!("[dry-run] would add a round to {}", found.header.reference);
+                let with = if summary.is_some() {
+                    ", with a new summary"
+                } else {
+                    ""
+                };
+                println!(
+                    "[dry-run] would add a round to {}{with}",
+                    found.header.reference
+                );
                 return Ok(0);
             }
             let number = reviews::add_round(&mut project, &found.header.reference, round)?;
+            if let Some(summary) = summary {
+                reviews::edit_summary(&mut project, &found.header.reference, summary.trim_end())?;
+            }
             if ctx.json {
                 print_json(&json!({ "review": found.header.reference, "round": number }));
             } else {
@@ -642,8 +903,9 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 statuses: statuses
                     .iter()
                     .map(|s| status_of(s))
-                    .collect::<Result<_>>()?,
-                task,
+                    .collect::<Result<Vec<_>>>()?
+                    .concat(),
+                task: task.map(|t| reviews::task_reference(&project, &t)),
             };
             let root = project
                 .root()
@@ -656,7 +918,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 .map(str::to_lowercase)
                 .collect();
             let mut found = Vec::new();
-            for f in reviews::list_everywhere(root, &filter)? {
+            for f in reviews::list_naming(&project, root, &filter)? {
                 if mine
                     && f.header.author.as_ref() != Some(&me)
                     && !f.header.reviewers.contains(&me)
@@ -679,6 +941,18 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 }
                 found.push(f);
             }
+            // Whatever the filter (ATM-617): a review atm can't read is listed as such, never left out without a word.
+            // With --json, on stderr: the list stays the array older readers expect
+            let unreadable: Vec<String> = store
+                .unreadable()?
+                .iter()
+                .map(|u| {
+                    format!(
+                        "{} ({}): can't be read: {}. A newer atm may have written it.",
+                        u.reference, u.folder, u.problem
+                    )
+                })
+                .collect();
             if ctx.json {
                 print_json(&Value::Array(
                     found
@@ -686,15 +960,22 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                         .map(|f| json!({ "review": as_json!(&f.header), "branch": f.branch }))
                         .collect(),
                 ));
-            } else if found.is_empty() {
-                println!("No reviews.");
+                for line in &unreadable {
+                    eprintln!("atm: {line}");
+                }
             } else {
+                if found.is_empty() {
+                    println!("No reviews.");
+                }
                 for f in &found {
                     let branch = f
                         .branch
                         .as_deref()
                         .map_or_else(String::new, |b| format!(" · {b}"));
                     println!("{}{branch}", summary_line(&f.header));
+                }
+                for line in &unreadable {
+                    println!("{line}");
                 }
             }
         }
@@ -813,31 +1094,50 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
         } => {
             let project = opened(cwd, agent.as_deref())?;
             let text = text_of(body, cwd)?;
-            let mut store = reviews::store(&project)?;
-            let found = store.get_review(&reference(&review))?;
-            let anchor = Anchor {
-                round: round.unwrap_or_else(|| found.rounds.last().map_or(1, |r| r.number)),
+            let found = reviews::store(&project)?.get_review(&reference(&review))?;
+            let comment = atm_lib::review_requests::NewComment {
                 path: file,
-                side: if old { Side::Old } else { Side::New },
                 lines: lines.as_deref().map(parse_lines).transpose()?,
+                side: if old { Side::Old } else { Side::New },
                 quote,
+                round,
+                body: text,
             };
             if ctx.dry_run {
                 println!("[dry-run] would comment on {}", found.header.reference);
                 return Ok(0);
             }
-            let id = Reviews::new(&mut store).comment(
-                &found.header.reference,
-                anchor,
-                &text,
-                &actor(&project),
-            )?;
+            // On a live review, the working copy as it is now first becomes a checkpoint (ATM-576)
+            let id =
+                atm_lib::review_requests::add_comment(&project, &found.header.reference, comment)?;
             if ctx.json {
                 print_json(&json!({ "review": found.header.reference, "comment": id }));
             } else {
                 println!("{}: {id}", found.header.reference);
             }
         }
+        ReviewCommand::Poke {
+            review,
+            body,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            if ctx.dry_run {
+                println!("[dry-run] would poke {review}");
+                return Ok(0);
+            }
+            let id = atm_lib::review_requests::poke_review(
+                &project,
+                &reference(&review),
+                &atm_lib::review_requests::NewPoke { body },
+            )?;
+            if ctx.json {
+                print_json(&json!({ "review": review, "poke": id }));
+            } else {
+                println!("{review}: poked ({id})");
+            }
+        }
+        ReviewCommand::Draft { command } => return run_draft(command, ctx, cwd),
         ReviewCommand::Reply {
             review,
             comment,
@@ -927,10 +1227,11 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             override_rules,
             agent,
         } => {
-            let verdict = match (approve, request_changes, comment) {
-                (true, _, _) => Verdict::Approve,
-                (_, true, _) => Verdict::RequestChanges,
-                (_, _, true) => Verdict::Comment,
+            use atm_lib::review_requests::{Decision, DecisionKind, RulesOverride};
+            let decision = match (approve, request_changes, comment) {
+                (true, _, _) => DecisionKind::Approve,
+                (_, true, _) => DecisionKind::RequestChanges,
+                (_, _, true) => DecisionKind::Comment,
                 _ => {
                     return Err(Error::Invalid(
                         "submit with --approve, --request-changes or --comment".into(),
@@ -943,25 +1244,20 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             } else {
                 None
             };
-            if verdict == Verdict::Comment && text.is_none() {
-                return Err(Error::Invalid(
-                    "--comment needs its text: --body or --body-file".into(),
-                ));
-            }
             if ctx.dry_run {
                 println!("[dry-run] would submit on {review}");
                 return Ok(0);
             }
-            reviews::submit(
+            // With the person's drafts on it (ATM-612): `--comment` without a text only sends them
+            let header = atm_lib::review_requests::submit_decision(
                 &mut project,
                 &reference(&review),
-                verdict,
-                text.as_deref(),
-                override_rules.as_deref(),
+                &Decision {
+                    decision,
+                    body: text,
+                    override_rules: override_rules.map(|reason| RulesOverride { reason }),
+                },
             )?;
-            let header = reviews::store(&project)?
-                .get_review(&reference(&review))?
-                .header;
             if ctx.json {
                 print_json(&as_json!(&header));
             } else {
@@ -991,4 +1287,100 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
         }
     }
     Ok(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lines_are_a_range_or_one_line_counted_from_one() {
+        for (given, expected) in [("2", (2, 2)), ("3-7", (3, 7)), ("5-5", (5, 5))] {
+            assert_eq!(parse_lines(given).unwrap(), expected, "{given}");
+        }
+        for bad in ["", "0", "0-3", "7-3", "a", "1-b", "-3", "3-", "1-2-3", " 2"] {
+            let e = parse_lines(bad).unwrap_err();
+            assert_eq!(e.code(), 2, "{bad}");
+            assert_eq!(e.to_string(), format!("--lines takes A-B or A, not {bad}"));
+        }
+    }
+
+    #[test]
+    fn a_timeout_is_seconds_minutes_or_hours() {
+        for (given, seconds) in [
+            ("90s", 90.0),
+            ("90", 90.0),
+            ("30m", 1800.0),
+            ("2h", 7200.0),
+            ("1.5m", 90.0),
+            ("0.5", 0.5),
+        ] {
+            assert_eq!(
+                duration_of(given).unwrap(),
+                std::time::Duration::from_secs_f64(seconds),
+                "{given}"
+            );
+        }
+        for bad in [
+            "", "0", "0s", "-5m", "soon", "5d", "m", "NaN", "inf", "1e400",
+        ] {
+            let e = duration_of(bad).unwrap_err();
+            assert_eq!(e.code(), 2, "{bad}");
+            assert!(e.to_string().starts_with("--timeout takes"), "{bad}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_status_is_one_of_the_reviews() {
+        for name in [
+            "draft",
+            "waiting",
+            "live",
+            "changes_requested",
+            "approved",
+            "closed",
+        ] {
+            let named: Vec<&str> = status_of(name).unwrap().iter().map(|s| s.name()).collect();
+            assert_eq!(named, [name]);
+        }
+        // Open: every review not decided yet (ATM-613)
+        assert_eq!(status_of("open").unwrap(), Status::OPEN);
+        for bad in ["", "Open", "changes-requested", "merged"] {
+            assert_eq!(status_of(bad).unwrap_err().code(), 2, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_text_is_given_or_read_and_never_empty() {
+        let dir = std::env::temp_dir().join(format!("atm-cli-text-of-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("body.md"), "From the file.\n").unwrap();
+        std::fs::write(dir.join("blank.md"), " \n\t\n").unwrap();
+        let body = |text: Option<&str>, file: Option<&str>| Body {
+            body: text.map(String::from),
+            body_file: file.map(String::from),
+        };
+        assert_eq!(text_of(body(Some("Given"), None), &dir).unwrap(), "Given");
+        assert_eq!(
+            text_of(body(None, Some("body.md")), &dir).unwrap(),
+            "From the file.\n"
+        );
+        // [body, expected code, the message's start]
+        for (given, code, says) in [
+            (
+                body(None, None),
+                2,
+                "give the text with --body or --body-file",
+            ),
+            (body(Some(""), None), 2, "the text is empty"),
+            (body(Some("  \n"), None), 2, "the text is empty"),
+            (body(None, Some("blank.md")), 2, "the text is empty"),
+            (body(None, Some("gone.md")), 1, "can't read gone.md"),
+        ] {
+            let e = text_of(given, &dir).unwrap_err();
+            assert_eq!(e.code(), code, "{says}");
+            assert!(e.to_string().starts_with(says), "{e}");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

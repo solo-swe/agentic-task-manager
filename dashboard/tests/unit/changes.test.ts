@@ -1,6 +1,6 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { watchChanges, type Changed } from '../../src/lib/api/changes';
+import { watchChanges, watchWorkingCopy, type Changed } from '../../src/lib/api/changes';
 
 describe('the app’s changes (T-506)', () => {
   afterEach(() => clearMocks());
@@ -65,5 +65,47 @@ describe('the app’s changes (T-506)', () => {
     await vi.waitFor(() => expect(mock.ended).toEqual([1]));
     for (const [, channel] of mock.channels) send(channel, { workspace: 'default', project: null });
     expect(seen).toEqual([]);
+  });
+
+  it('a message after the end doesn’t reach the page', async () => {
+    const mock = app();
+    const seen: Changed[] = [];
+    const stop = watchChanges('default', 'p1', (c) => seen.push(c));
+    await vi.waitFor(() => expect(mock.subscribed).toHaveLength(2));
+    stop();
+    for (const [, channel] of mock.channels) send(channel, { workspace: 'default', project: 'p1' });
+    expect(seen).toEqual([]);
+  });
+
+  // ATM-607: a live review's page follows the working copy by the app's push, not a timer
+  it('watches a project’s working copy for a live review; each change reaches the page until it ends', async () => {
+    const mock = app();
+    let told = 0;
+    const stop = watchWorkingCopy('default', 'abcd1234', () => (told += 1));
+    await vi.waitFor(() => expect(mock.subscribed).toEqual(['subscribe_working_copy default/abcd1234']));
+    const [[id, channel]] = [...mock.channels];
+    send(channel, { workspace: 'default', project: 'abcd1234' });
+    expect(told).toBe(1);
+    stop();
+    await vi.waitFor(() => expect(mock.ended).toEqual([id]));
+    send(channel, { workspace: 'default', project: 'abcd1234' }, 1);
+    expect(told).toBe(1);
+  });
+
+  it('a subscription the app refuses, and an unsubscription that fails, are only logged', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const subscribed: string[] = [];
+    mockIPC((command) => {
+      if (command === 'subscribe_project') throw new Error('unknown project');
+      if (command === 'unsubscribe') throw new Error('gone');
+      subscribed.push(command);
+      return 1;
+    });
+    const stop = watchChanges('default', 'nope', () => {});
+    await vi.waitFor(() => expect(log).toHaveBeenCalledWith('Watching for changes failed:', expect.any(Error)));
+    expect(subscribed).toEqual(['subscribe_workspace']);
+    stop();
+    await vi.waitFor(() => expect(log).toHaveBeenCalledWith('Unsubscribing failed:', expect.any(Error)));
+    log.mockRestore();
   });
 });

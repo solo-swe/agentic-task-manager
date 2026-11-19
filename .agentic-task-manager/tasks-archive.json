@@ -7,7 +7,6 @@
     {
       "id": "88d31243-8bb1-8267-a1ae-2bfb6d5dc1c3",
       "number": 1,
-      "key_final": true,
       "name": "Stash zoom/pan WIP and create migration branch",
       "type": "infra",
       "description": "Stash the uncommitted zoom/pan/minimap work as `zoom-pan-minimap wip` (`git stash`), so the regression baseline is the **committed v0.4.0 dashboard**. Create branch `dev/svelte-dashboard`.\n",
@@ -34,7 +33,6 @@
     {
       "id": "addfefeb-eb88-87e9-9723-ce1f946a4831",
       "number": 2,
-      "key_final": true,
       "name": "Add migration plan and dogfood task list to docs/",
       "type": "docs",
       "description": "Add these, so the migration can be run with `/atm:do-task` and `/atm:loop-tasks` and watched via `cd docs && python3 -m http.server 8000`:\n- `docs/svelte-migration-plan.md` (the approved plan)\n- `docs/tasks.json` (this file)\n- `docs/tasks-dashboard.html` (a copy of the v0.4.0 dashboard)\n",
@@ -68,7 +66,6 @@
     {
       "id": "50309de5-ff6b-8a9c-b053-c6a8f49d9c2d",
       "number": 3,
-      "key_final": true,
       "name": "Scaffold dashboard/ with Vite, Svelte 5 and TypeScript",
       "type": "infra",
       "description": "Create `dashboard/` (**not shipped**; the plugin source is `./plugin`) with:\n- `package.json`, `vite.config.ts`, `svelte.config.js`, `tsconfig.json`\n- `index.html` (keeping `<meta name=\"atm-dashboard-version\">`)\n- `src/main.ts` and a placeholder `App.svelte`\n\nUse **Svelte 5 runes**. Add `dashboard/node_modules`, `dist`, `test-results` and `playwright-report` to `.gitignore`. `npm run dev` should serve the placeholder.\n",
@@ -109,7 +106,6 @@
     {
       "id": "f2ca2b86-3d55-85e8-98fd-a87155d7d25a",
       "number": 4,
-      "key_final": true,
       "name": "Single-file build to dashboard/dist with version injection",
       "type": "infra",
       "description": "- Add `vite-plugin-singlefile`, so `npm run build` emits **one self-contained** `dashboard/dist/tasks-dashboard.html` (no external JS/CSS).\n- Add a small Vite plugin (`transformIndexHtml`) that reads the version from `plugin/.claude-plugin/plugin.json` and writes it into the `atm-dashboard-version` meta tag.\n\n> Do **not** write to `plugin/templates` yet; that happens at cutover (T-023).\n",
@@ -144,7 +140,6 @@
     {
       "id": "610e3be4-7162-84f8-8d79-6ef8d08c2728",
       "number": 5,
-      "key_final": true,
       "name": "Configure Vitest with coverage and testing-library",
       "type": "test",
       "description": "Set up Vitest (jsdom) with `@testing-library/svelte` and `@vitest/coverage-v8`.\n- Coverage threshold: **90% lines on `src/lib/**`**.\n- Tests live in `dashboard/tests/unit/`.\n- Add `npm test` and `npm run test:coverage`.\n- Include one trivial passing test to prove the setup.\n",
@@ -176,7 +171,6 @@
     {
       "id": "35b4226f-4ec9-82f1-8b36-5e273c7b36b3",
       "number": 6,
-      "key_final": true,
       "name": "Playwright harness with legacy and svelte projects",
       "type": "test",
       "description": "### Freeze the baseline\nFreeze the current shipped dashboard as `dashboard/tests/legacy/tasks-dashboard.v0.4.0.html`.\n\n### `playwright.config.ts`\n- Chromium only, fixed viewport, a `webServer` serving a static dir.\n- **Two projects running the same specs**, selected via a per-project `baseURL`/path: `legacy` (the frozen file) and `svelte` (`dashboard/dist/tasks-dashboard.html`).\n- `snapshotPathTemplate` must **omit the project name**, so `svelte` compares against legacy screenshots.\n\n### Helpers\n`tests/e2e/helpers.ts` with:\n- `useFixture(page, name)`, which serves `tests/fixtures/<name>.json` for `**/tasks.json` via `page.route` (and can swap the response or return 404);\n- an auto fixture that **fails the test on any non-localhost request**.\n\nAdd `npm run test:e2e`.\n",
@@ -209,7 +203,6 @@
     {
       "id": "90101172-a407-8ee3-92f7-dd26f4288ff6",
       "number": 7,
-      "key_final": true,
       "name": "Lint, format, svelte-check, npm scripts and root CLAUDE.md",
       "type": "infra",
       "description": "### Tools\nAdd ESLint (flat config, `eslint-plugin-svelte`, `typescript-eslint`), Prettier (+ `prettier-plugin-svelte`) and `svelte-check`.\n\n### Scripts\n- `dev`, `build`, `test`, `test:coverage`, `test:e2e`\n- `check`: `svelte-check` + `eslint` + `prettier --check`\n- `verify`: `check` + `test` + `build` + `test:e2e`\n\n### `CLAUDE.md`\nAdd a repo-root `CLAUDE.md` describing the dev workflow, the plugin vs dashboard split, and that `plugin/templates/tasks-dashboard.html` is a **build artifact** (after cutover).\n",
@@ -244,7 +237,6 @@
     {
       "id": "f69c3c7b-ccb8-852d-8815-8a51a8aab7d1",
       "number": 8,
-      "key_final": true,
       "name": "Create tasks.json test fixtures",
       "type": "test",
       "description": "In `dashboard/tests/fixtures/`:\n- `empty.json`\n- `minimal.json`: 1 task\n- `standard.json`: all 7 types × 5 statuses, 3 phases, deps, `use_cases` / `requirements` / `files`, `created_at` / `updated_at` timestamps\n- `cycle.json`: a dependency cycle\n- `edge-cases.json`: unknown type and status, a dependency on a missing ID, tasks without timestamps, very long names, unicode, HTML like `<b>bold</b>` in name and description\n- `no-meta.json`: no `meta` block\n\nAdd `tests/fixtures/generate-large.mjs`, which **deterministically** writes `large-90.json` (90 tasks, wide graph, ~40 done, 1 `in_progress`), and commit its output.\n",
@@ -275,7 +267,6 @@
     {
       "id": "5b1a1f45-6462-86e0-8ce8-acab5a321f03",
       "number": 9,
-      "key_final": true,
       "name": "Regression specs: load, stats, timeline",
       "type": "test",
       "description": "`tests/e2e/load.spec.ts` and `stats.spec.ts`, **green on the legacy project**.\n\n### Load\n- The page title and `#dashboard-title` use `meta.project`.\n- The subtitle counts tasks and phases.\n- `no-meta` falls back to *Task Dashboard*.\n- A 404 for `tasks.json` shows the *Failed to load tasks.json* box with `python3 -m http.server` instructions.\n\n### Stats\n- *Total* / *Done* / *In Progress* / *Todo* numbers.\n- The *Blocked* card only when blocked > 0.\n- Per-type count cards; progress %.\n\n### Timeline\n- Shown only when tasks have timestamps.\n- Bucket count clamped to 4–16.\n- Start/end date labels.\n- A tooltip appears on bar hover.\n",
@@ -307,7 +298,6 @@
     {
       "id": "761ebfd6-99ec-8178-9399-f186c0b17fde",
       "number": 10,
-      "key_final": true,
       "name": "Regression specs: filters and task cards",
       "type": "test",
       "description": "`tests/e2e/filters.spec.ts` and `cards.spec.ts`, **green on legacy**.\n\n### Filters\n- Generated phase/type/status buttons (`.filter-btn[data-filter][data-value]`).\n- Status order `todo, in_progress, done, blocked, skipped`; capitalized labels.\n- Multi-select is **OR within a group and AND across groups**.\n- *All* clears the group; active classes stay in sync.\n- *N of M shown* text.\n- The empty-result message in both the card grid and the graph.\n\n### Cards\n- `.task-card[data-id]` with phase/type/status badges.\n- *needs:* dependency links scroll to and highlight the target card.\n- UC and requirement tags.\n",
@@ -339,7 +329,6 @@
     {
       "id": "3d1eadca-1c75-8cd6-a85d-cb5d378b23d5",
       "number": 11,
-      "key_final": true,
       "name": "Regression specs: detail panel and dependency graph",
       "type": "test",
       "description": "`tests/e2e/detail.spec.ts` and `graph.spec.ts`, **green on legacy**.\n\n### Detail\n- Opens from a card name and from a graph node (`#detail-overlay.open`).\n- Shows description, UCs, requirements, timestamps, files.\n- *Depends On* and *Required By* entries navigate to the other task.\n- Closes via the × button, an overlay click and `Escape`.\n\n### Graph\n- One node per filtered task; the edge count matches visible dependencies.\n- `#graph-badge` says *N tasks*.\n- `cycle.json` still renders every node.\n- A header click collapses and expands the graph.\n",
@@ -371,7 +360,6 @@
     {
       "id": "86ab7b38-ce50-8440-96e8-8286fc230b8c",
       "number": 12,
-      "key_final": true,
       "name": "Regression specs: reload, auto-refresh, edge cases",
       "type": "test",
       "description": "`tests/e2e/refresh.spec.ts` and `edge-cases.spec.ts`, **green on legacy**.\n\n### Refresh\n- `#reload-btn` re-fetches and re-renders after the fixture response is swapped.\n- `#auto-refresh-check` plus `#auto-refresh-interval` polls on the configured interval (use `page.clock`).\n- Active filters survive a reload.\n\n### Edge cases\n- Unknown type/status render with fallback styles.\n- A dependency on a missing ID does not crash.\n- Long names are truncated to 22 chars in graph nodes.\n\n### XSS divergence\nA test asserting task text is rendered as **literal text (not HTML)** is marked `test.fail()` for the legacy project only, with a comment explaining the svelte port fixes it.\n",
@@ -403,7 +391,6 @@
     {
       "id": "2dd54c0b-e1d9-89ba-b3fb-f5d3fb77ee4a",
       "number": 13,
-      "key_final": true,
       "name": "Visual baseline screenshots from legacy",
       "type": "test",
       "description": "`tests/e2e/visual.spec.ts`: `toHaveScreenshot` for the full page, the graph section and the open detail panel, on the `standard`, `large-90`, `empty` and `edge-cases` fixtures.\n\n- Generate baselines **from the legacy project only** (`--project=legacy --update-snapshots`) and commit them.\n- Use a small `maxDiffPixelRatio`.\n- Afterwards the whole suite must be green on legacy. **Commit this before any app code** (phase 3+).\n",
@@ -438,7 +425,6 @@
     {
       "id": "b5da416b-e5ed-84a7-9989-1107ebb6517a",
       "number": 14,
-      "key_final": true,
       "name": "Port types, theme and loader to src/lib",
       "type": "refactor",
       "description": "Lift from the legacy inline script:\n- **`src/lib/types.ts`**: `Task`, `TasksFile`, `Status`, `TaskType`.\n- **`src/lib/theme.ts`**: `TYPE_COLORS`, `STATUS_COLORS`, `PHASE_PALETTE`, `FALLBACK_TYPE`, type/status emoji maps, `phaseColor` / `typeStyle` / `statusStyle`.\n- **`src/lib/load.ts`**: fetch `./tasks.json?<timestamp>`; return `tasks`, `taskMap` and `projectName`, or a typed error.\n\nUnit tests for the style fallbacks and the loader (mock `fetch`, including HTTP error and no-meta).\n",
@@ -476,7 +462,6 @@
     {
       "id": "ffc2564c-2402-81cf-8426-1c2a838b19b8",
       "number": 15,
-      "key_final": true,
       "name": "Port filter and stats logic with unit tests",
       "type": "refactor",
       "description": "### `src/lib/filters.ts`\n- Filter option derivation: sorted phases, sorted types, statuses in the legacy order with unknowns last, label capitalization.\n- `filterTasks`: **OR within a group, AND across groups**, an empty set = all.\n\nMatching legacy `buildFilters` / `filterTasks`.\n\n### `src/lib/stats.ts`\nTotals, per-status and per-type counts, and progress % as legacy `renderStats` computes it.\n\nCharacterization unit tests for both.\n",
@@ -510,7 +495,6 @@
     {
       "id": "d3dbc97e-bb83-8dd3-b242-ef9a6e6a96c0",
       "number": 16,
-      "key_final": true,
       "name": "Port timeline bucketing with unit tests",
       "type": "refactor",
       "description": "`src/lib/timeline.ts`, matching the legacy timeline code in `renderStats`:\n- completion events from done tasks' timestamps;\n- bucket count **clamped to 4–16**, and bucket assignment;\n- min/max range and date formatting.\n\nUnit tests, including no timestamps, a single completion and identical timestamps.\n",
@@ -542,7 +526,6 @@
     {
       "id": "5539ba3c-af8d-8a43-915c-eb1d461efd07",
       "number": 17,
-      "key_final": true,
       "name": "Port dependency graph layout with unit tests",
       "type": "refactor",
       "description": "`src/lib/graph/layout.ts`, matching legacy `renderDepGraph`:\n- **topological layering** of the filtered tasks (only visible deps count; a cycle dumps the remaining tasks into one layer);\n- node positions: `nodeW 160`, `nodeH 52`, `padX 60`, `padY 24`, layers vertically centered;\n- an edge list with bezier path data;\n- total width/height, and `truncate(name, 22)`.\n\nUnit tests: chain, diamond, cycle, hidden deps, empty input.\n",
@@ -574,7 +557,6 @@
     {
       "id": "21da832c-bb63-8f92-b124-c02e949a135c",
       "number": 18,
-      "key_final": true,
       "name": "App shell, global styles, state, Header, Stats, Timeline",
       "type": "feature",
       "description": "- **Move the legacy CSS over verbatim** (global stylesheet first; scope into components later only if screenshots stay green).\n- `src/lib/state.svelte.ts` holds `tasks`, `taskMap`, `filters` and `autoRefresh` with runes.\n- Components `Header`, `Stats` and `Timeline` keep the **legacy DOM contract** (the ids/classes the e2e specs use).\n- Build to `dashboard/dist` and run the load/stats specs on the svelte project.\n",
@@ -612,7 +594,6 @@
     {
       "id": "991082df-a089-809e-b84c-57d47f23d130",
       "number": 19,
-      "key_final": true,
       "name": "Filters, refresh controls, task grid and cards",
       "type": "feature",
       "description": "Components `Filters`, `RefreshControls` (reload button, auto toggle, interval), `TaskGrid` and `TaskCard`, preserving the DOM contract:\n- `.filter-btn[data-filter][data-value]`\n- `.task-card[data-id]`\n- `#reload-btn`, `#auto-refresh-check`, `#auto-refresh-interval`\n\nTask text is **rendered escaped** (the Svelte default). The filters/cards/refresh specs pass on the svelte project.\n",
@@ -646,7 +627,6 @@
     {
       "id": "6f3956e4-4ed1-8094-930e-e4b34dbe6f44",
       "number": 20,
-      "key_final": true,
       "name": "Detail panel component",
       "type": "feature",
       "description": "`DetailPanel` component with `#detail-overlay` / `#detail-panel`, *Depends On* / *Required By* navigation, and close via ×, an overlay click and `Escape`. The detail spec passes on the svelte project.\n",
@@ -677,7 +657,6 @@
     {
       "id": "ddd2ed95-3cc1-8b9c-ac94-dc11d40df641",
       "number": 21,
-      "key_final": true,
       "name": "Dependency graph component",
       "type": "feature",
       "description": "`DepGraph` component rendering the `src/lib/graph/layout.ts` output as SVG with the legacy look (`viewBox` scaling as in v0.4.0; zoom/pan comes in phase 6). A node click opens details; collapsible header with `#graph-badge`. The graph spec passes on the svelte project.\n",
@@ -709,7 +688,6 @@
     {
       "id": "c79297e0-52c6-8dcb-916e-522a8a50c01d",
       "number": 22,
-      "key_final": true,
       "name": "Full parity with legacy plus component tests",
       "type": "test",
       "description": "### Parity\nThe **entire e2e suite**, including visual screenshots, passes on both the legacy and svelte projects (the XSS test passes on svelte).\n\nFix any differences **in the port, not by loosening tests**; any intentional difference must be documented in the spec.\n\n### Component tests\nAdd `@testing-library/svelte` component tests for `TaskCard` and `Filters`.\n\n### Then\nSwitch the `test:e2e` script from `--project=legacy` to both projects. Until parity it runs legacy only, so `npm run verify` stays green; `test:e2e:svelte` and `test:e2e:all` exist for porting work.\n",
@@ -742,7 +720,6 @@
     {
       "id": "7b64b4d1-71c9-80d5-9ea4-a23d06ef1845",
       "number": 23,
-      "key_final": true,
       "name": "Cut over: build into plugin/templates, guardrails, pre-commit hook",
       "type": "infra",
       "description": "- Switch `build.outDir` to `../plugin/templates` (`emptyOutDir: false`, so `templates/tasks.json` survives) and point the svelte Playwright project there.\n- Add guardrail tests: the built file references **no external URLs** and stays **under 150 KB**.\n- Add a pre-commit hook (`simple-git-hooks` + `lint-staged`, scoped to `dashboard/**`) that rebuilds and stages `plugin/templates/tasks-dashboard.html`.\n- Commit the built file.\n",
@@ -779,7 +756,6 @@
     {
       "id": "23864fa4-2e30-8d88-8319-972814c2bd88",
       "number": 24,
-      "key_final": true,
       "name": "GitHub Actions CI",
       "type": "infra",
       "description": "`.github/workflows/ci.yml`, on push and PR:\n1. `npm ci` in `dashboard/`\n2. `npm run check`\n3. unit tests with the coverage threshold\n4. build, then `git diff --exit-code plugin/templates/tasks-dashboard.html` (check-dist pattern; **CI never commits**)\n5. Playwright e2e (install browsers, upload the report on failure)\n6. a version-consistency script asserting that the `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` versions match\n",
@@ -812,7 +788,6 @@
     {
       "id": "51b29f40-0637-8706-8886-8547dfa9dcd1",
       "number": 25,
-      "key_final": true,
       "name": "Bump to 0.5.0 and document development workflow",
       "type": "docs",
       "description": "- Bump `plugin.json` and `marketplace.json` to **0.5.0** and rebuild (the dashboard version comes from `plugin.json`).\n- README: add a *Development* section (the `dashboard/` layout, npm scripts, fixtures, legacy vs svelte Playwright projects, the built file is committed and checked by CI) and update *Project Structure*.\n",
@@ -846,7 +821,6 @@
     {
       "id": "4546da72-6ce2-833e-b868-38e2785271cc",
       "number": 26,
-      "key_final": true,
       "name": "Re-baseline screenshots from svelte and retire legacy project",
       "type": "test",
       "description": "Once CI is green with both projects, **regenerate the screenshot baselines from the svelte project**, and remove the legacy Playwright project and the legacy-only `test.fail` annotation. Keep `tests/legacy/tasks-dashboard.v0.4.0.html` for reference.\n",
@@ -879,7 +853,6 @@
     {
       "id": "9090f1f0-991a-8c7f-8811-04e77d59d1c6",
       "number": 27,
-      "key_final": true,
       "name": "Write failing zoom/pan/minimap tests",
       "type": "test",
       "description": "**Test-first.** These must fail before T-028.\n\n### `tests/e2e/graph-zoom.spec.ts`\n- `large-90` opens at ≥60%, centered on the in-progress task.\n- A small graph opens at 100%, centered.\n- Dragging pans **without** opening details; a plain node click opens details.\n- `Ctrl`/`Cmd`+wheel zooms around the cursor.\n- The −, +, fit and 1:1 buttons and the `+` `-` `0` `F` and arrow keys work.\n- The minimap appears only when the graph overflows, and click/drag moves the view.\n- The view persists across reload and resets when filters change.\n\n### `tests/unit/view.test.ts`\nFit, clamp and zoom-at-point.\n",
@@ -911,7 +884,6 @@
     {
       "id": "a090d735-39fc-88f6-a81a-09d3306565e5",
       "number": 28,
-      "key_final": true,
       "name": "Implement zoom, pan and minimap",
       "type": "feature",
       "description": "Implement `src/lib/graph/view.ts` plus the `GraphControls` and `Minimap` components, and update `DepGraph` to a fixed-height pan/zoom viewport.\n\nPort the logic from `git stash show -p stash^{/zoom-pan-minimap}`: `applyGraphView`, `fitGraph`, `autoFitGraph`, `zoomGraphAt`, the minimap, and pointer handling with **click suppression after a drag**.\n\nMake T-027 pass; update the screenshot baselines for the graph intentionally.\n",
@@ -945,7 +917,6 @@
     {
       "id": "605d3975-f01e-869a-b4e4-872b154f7274",
       "number": 29,
-      "key_final": true,
       "name": "Release zoom/pan as 0.6.0 and drop the stash",
       "type": "docs",
       "description": "Bump to **0.6.0**, rebuild, add the dependency graph controls to the README's dashboard features list, and drop the `zoom-pan-minimap wip` stash once everything is merged.\n",
@@ -979,7 +950,6 @@
     {
       "id": "d356498e-e6ff-8efb-8212-016937a851e2",
       "number": 30,
-      "key_final": true,
       "name": "Safe localStorage preferences module",
       "type": "feature",
       "description": "Add `src/lib/prefs.ts`: typed get/set helpers for per-browser dashboard preferences, stored in `localStorage` under **one namespaced key** (e.g. `\"atm-dashboard\"`).\n\nEvery read/write is wrapped in `try`/`catch`: when storage is unavailable or the stored value is corrupt, reads return the given default and writes are no-ops (**no exceptions, no console errors**).\n\nUnit tests (jsdom):\n- round trip;\n- defaults when empty;\n- corrupt JSON;\n- a `localStorage` whose methods throw.\n\nSee `docs/dashboard-v2-requirements.md` FR-6.2.\n",
@@ -1013,7 +983,6 @@
     {
       "id": "2b18c6cc-7e40-8ffd-a635-632c41732c0c",
       "number": 31,
-      "key_final": true,
       "name": "Auto-refresh on by default and remembered",
       "type": "bugfix",
       "description": "Make auto-refresh **default to ON (5 s)** and persist the on/off choice and interval via `src/lib/prefs.ts` (FR-6.1, FR-6.2).\n\n### Test isolation first\n`openDashboard()` in `tests/e2e/helpers.ts` must store auto-refresh **OFF** via `page.addInitScript` before navigation, unless called with `{ autoRefresh: true }`, so existing specs (request counts, screenshots) are unaffected by background reloads.\n\n### Specs\nReplace the refresh.spec test *is off by default* with:\n- on by default (fresh browser, no init script);\n- polls every 5 s (`page.clock`);\n- switching off survives a page reload;\n- a changed interval survives a reload.\n\nUpdate the state unit tests. **Screenshots must not change** (the visual spec runs with auto-refresh off).\n",
@@ -1052,7 +1021,6 @@
     {
       "id": "33091969-c73d-859d-82a7-065f905ed19c",
       "number": 32,
-      "key_final": true,
       "name": "View math: detect visible nodes and pan to content",
       "type": "feature",
       "description": "Extend `src/lib/graph/view.ts` with pure functions for FR-6.3/6.4:\n- **`anyNodeVisible(view, nodes, nodeSize, viewport)`**: true if at least one node rectangle intersects the viewport.\n- **`panToContent(view, content, viewport, focus?)`**: same zoom `k`; pan so the focus node is centered (clamped like `autoFitView`), or, without focus, the content's top-left sits at the padding.\n\nUnit tests for both, including partially visible nodes and the **`k`-is-unchanged** guarantee.\n",
@@ -1086,7 +1054,6 @@
     {
       "id": "a5c5b183-3287-8544-a2c9-c5e793b979b4",
       "number": 33,
-      "key_final": true,
       "name": "Graph keeps zoom when visible tasks change",
       "type": "bugfix",
       "description": "### Behaviour\nChange `DepGraph` so **only the first successful layout auto-fits**. Afterwards, when the visible task set changes (filters or a reload):\n- **always keep `k`** (whether or not the user zoomed);\n- keep the pan if `anyNodeVisible()`, otherwise `panToContent()` with the in-progress/next-todo focus (FR-6.3, FR-6.4).\n\nThe minimap and zoom label follow (FR-6.5). Window resize/expand behaviour stays as today.\n\n### Specs\nReplace the graph-zoom spec *changing the visible tasks re-fits* with:\n- zoom in, filter by a phase → the zoom label is unchanged;\n- a filter whose nodes would all be off-screen → the view pans (same `k`) and at least one node is in the viewport;\n- clearing the filter keeps `k`;\n- the fit button still fits.\n",
@@ -1123,7 +1090,6 @@
     {
       "id": "78e42af0-c482-8d82-bed6-688b68a9831d",
       "number": 34,
-      "key_final": true,
       "name": "Document started_at/completed_at task fields",
       "type": "docs",
       "description": "Add optional, ISO 8601 UTC:\n- **`started_at`**: set when a task moves to `in_progress`;\n- **`completed_at`**: set when it moves to `done`.\n\nBoth are cleared when a task goes back to `todo`.\n\nUpdate the schema table and example in `README.md`, the schema line in `plugin/CLAUDE.md`, the example in `plugin/templates/tasks.json`, and the `Task` type in `dashboard/src/lib/types.ts`. **No behaviour changes.**\n",
@@ -1164,7 +1130,6 @@
     {
       "id": "874b7f5f-0392-8a8a-95af-094b75c6c858",
       "number": 35,
-      "key_final": true,
       "name": "Skills write started_at and completed_at",
       "type": "feature",
       "description": "Update `/atm:do-task` and `/atm:loop-tasks`:\n- when setting `in_progress`, also set `started_at`;\n- when setting `done`, also set `completed_at`;\n- when a task fails and goes back to `todo`, remove `started_at` / `completed_at`;\n- always keep updating `updated_at`.\n\nUse the same `date -u` command the skills already use, and keep the wording consistent between the two skills.\n\nVerify by **reading both files end to end** (no automated test covers skill text); `npm run verify` must still pass.\n",
@@ -1199,7 +1164,6 @@
     {
       "id": "48960c8b-3455-8e04-917d-b22d367087be",
       "number": 36,
-      "key_final": true,
       "name": "Timeline uses completed_at with updated_at fallback",
       "type": "feature",
       "description": "In `src/lib/timeline.ts` `completions()`: use `completed_at` when present, else `updated_at` (FR-5.2).\n\nUnit tests: `completed_at` wins over a later `updated_at`; the fallback for old files.\n\nOptionally add `completed_at` to some done tasks in a fixture, **only if no screenshot/e2e expectation changes**; otherwise leave fixtures alone.\n",
@@ -1235,7 +1199,6 @@
     {
       "id": "a7c5b191-ac7e-895d-b661-10c35fbb98d6",
       "number": 37,
-      "key_final": true,
       "name": "Create plugin/CHANGELOG.md with backfilled history",
       "type": "docs",
       "description": "Create `plugin/CHANGELOG.md` in *Keep a Changelog* style (`## [x.y.z] - YYYY-MM-DD`, `### Added/Changed/Fixed` bullet lists, newest first), with an `## [Unreleased]` section for the 0.7.0 work.\n\n### Backfill from git history\n- **0.1.0** (2026-04-04): initial plugin, skills + dashboard.\n- **0.2.0** (2026-04-04): restructure, rename to atm.\n- **0.3.0** (2026-04-04): plugin in its own subdirectory.\n- **0.4.0** (2026-04-05): task timestamps, activity timeline, `/atm:update-dashboard`; the loop auto-commits by default.\n- **0.5.0** (2026-10-22): dashboard rebuilt in Svelte 5 with tests; task text escaped (XSS fix); filters/tab title refresh on reload.\n- **0.6.0** (2026-10-22): graph zoom/pan/minimap.\n\nWrite **for plugin users, not developers**; check the details against `git log`.\n",
@@ -1265,7 +1228,6 @@
     {
       "id": "e11cba9c-54f7-8179-be15-70442f61cf77",
       "number": 38,
-      "key_final": true,
       "name": "Changelog parser and version range selection",
       "type": "feature",
       "description": "Add `src/lib/changelog.ts`:\n- **`parseChangelog(markdown)`** → `[{ version, date, sections: [{ title, items[] }] }]` (newest first; supports `[Unreleased]`);\n- **`compareVersions(a, b)`** for `x.y.z`;\n- **`entriesBetween(entries, fromExclusive, toInclusive)`**, treating a missing version as `0.0.0`.\n\nPure TS, **no Markdown library**; inline Markdown in items is kept as plain text.\n\nUnit tests against the real `plugin/CHANGELOG.md`, plus edge cases (empty file, missing date, unknown section names).\n",
@@ -1301,7 +1263,6 @@
     {
       "id": "7defa53f-257b-814c-91f8-33bd795b54d8",
       "number": 39,
-      "key_final": true,
       "name": "CI/check fails without a changelog entry for the version",
       "type": "infra",
       "description": "Extend `scripts/check-versions.mjs` (run by `npm run check` and CI) to also **fail with a clear message** when `plugin/CHANGELOG.md` has no `## [<plugin.json version>]` entry.\n\nWhile the version is still 0.6.0, this passes via the backfilled entry. Test the failure path manually (temporary edit, restore), as done for the version mismatch.\n",
@@ -1335,7 +1296,6 @@
     {
       "id": "d511bfb9-286a-8d31-95be-a770fdf3651a",
       "number": 40,
-      "key_final": true,
       "name": "Embed the parsed changelog in the build",
       "type": "infra",
       "description": "Make the changelog available to the app at build time, with **no runtime fetch**:\n- a small Vite plugin exposing a virtual module (e.g. `\"virtual:atm-changelog\"`) that reads `plugin/CHANGELOG.md` and returns the `parseChangelog()` output as JSON;\n- `src/lib/release-notes.ts`, which imports it with a typed wrapper (and a `.d.ts` for the virtual module).\n\nVitest must be able to resolve it too. The guardrail tests (single file, size budget) must still pass.\n",
@@ -1373,7 +1333,6 @@
     {
       "id": "564bb940-0d60-8425-8c51-a765088fe5bf",
       "number": 41,
-      "key_final": true,
       "name": "Version chip and What's new panel",
       "type": "feature",
       "description": "The header shows a **version chip** `v<version>` (the version from the `atm-dashboard-version` meta tag). Clicking it opens a **What's new** panel listing the changelog versions newest first, with their *Added* / *Changed* / *Fixed* items. It closes via ×, the backdrop and `Escape`, like the detail panel (reuse its styles and patterns).\n\n### Tests\n- e2e spec: the chip text, the panel opens and lists versions in order, and it closes three ways.\n- The header change alters page screenshots: regenerate the `-darwin` baselines intentionally, delete the matching `-linux` ones (CI regenerates them), and check the new images.\n",
@@ -1411,7 +1370,6 @@
     {
       "id": "1449545f-eda4-872a-97f2-e06e478d9ad5",
       "number": 42,
-      "key_final": true,
       "name": "\"New\" marker on the version chip after upgrades",
       "type": "feature",
       "description": "Store the **last-seen dashboard version** via `prefs.ts`.\n\n### Behaviour\n- When the current version is newer than the last-seen one (or none was ever seen), the chip shows a **new** marker until the What's new panel is opened once.\n- Opening it records the current version.\n- **Without storage**, never show the marker and never error.\n\n### Tests\n- e2e: the marker is present on the first visit, gone after opening, stays gone after a reload, and reappears when a lower last-seen version is stored.\n- Visual specs must stay stable (decide and document whether they run with the marker seen).\n",
@@ -1447,7 +1405,6 @@
     {
       "id": "3e9fb2ca-1c8d-8e6b-8c5f-f8d636e74e12",
       "number": 43,
-      "key_final": true,
       "name": "update-dashboard reports real changelog entries",
       "type": "feature",
       "description": "Rewrite the report step of `/atm:update-dashboard`:\n- Read `<plugin root>/CHANGELOG.md`.\n- Take every entry with a version **newer than the project's old version** (no version tag = `0.0.0`) and **not newer than the new version**.\n- Print them under *What's new* (version headers + bullets, newest first).\n- Remove the instruction to describe changes from the version difference.\n- If `CHANGELOG.md` is missing, **say so instead of guessing**.\n",
@@ -1481,7 +1438,6 @@
     {
       "id": "5884d4d9-6b70-895f-a324-e8e92f8c54f6",
       "number": 44,
-      "key_final": true,
       "name": "Outdated-dashboard hints name the headline change (P2)",
       "type": "polish",
       "description": "Where create-tasks, do-task and loop-tasks say the dashboard is outdated, also name the first *Added* item of the newest `CHANGELOG.md` entry (e.g. *\"0.8.0 adds a Kanban board\"*). **Keep the hint to one line.**\n",
@@ -1517,7 +1473,6 @@
     {
       "id": "66debf3e-9564-89dc-8592-e7b70393e720",
       "number": 45,
-      "key_final": true,
       "name": "Release 0.7.0",
       "type": "docs",
       "description": "### Changelog\nTurn `[Unreleased]` into `[0.7.0] - <date>`:\n- auto-refresh on by default;\n- the graph keeps its zoom on filter changes;\n- the What's new panel;\n- `/atm:update-dashboard` shows real release notes;\n- `started_at` / `completed_at`.\n\n### Release\n- Bump `plugin.json` and `marketplace.json` to **0.7.0**, and rebuild.\n- Update the README (dashboard features; the *Auto refresh* tip in Quick Start is no longer needed).\n- Copy the build to `docs/tasks-dashboard.html`.\n- `npm run verify` green.\n",
@@ -1559,7 +1514,6 @@
     {
       "id": "166c98ab-c771-869e-b377-1f39720d0323",
       "number": 46,
-      "key_final": true,
       "name": "View-tab state: hash parsing and persistence",
       "type": "feature",
       "description": "Add `src/lib/tabs.ts`: the view ids (`graph`, `kanban`, `progress`), parse `#view=<id>` from `location.hash` (unknown or missing → `graph`), and serialize it back **without disturbing other hash content**. Unit tests.\n",
@@ -1594,7 +1548,6 @@
     {
       "id": "07ee032a-3846-8b4c-a8ae-d7e899d88061",
       "number": 47,
-      "key_final": true,
       "name": "Tabbed panel: Dependency Graph | Kanban | Progress",
       "type": "feature",
       "description": "Replace the graph section header with a **WAI-ARIA tablist** (`role=tablist` / `tab` / `tabpanel`, Left/Right arrows, roving `tabindex`).\n\n### Tabs\n- *Dependency Graph* (default), *Kanban*, *Progress*.\n- Kanban and Progress show *\"Coming soon\"* placeholders until their tasks land.\n- The selected tab syncs with `#view=...` (back/forward work).\n- **Keep panels mounted** and hide inactive ones, so the graph keeps its pan/zoom (FR-2.4).\n- Keep `#graph-section`, `#graph-container`, `#dep-graph` and `#graph-badge` working, and collapse/expand for the whole panel.\n\n### Tests\n- e2e `tabs.spec`: the default tab, click and keyboard switching, the hash deep link and reload, graph zoom survives a tab round trip, filters and the badge apply.\n- Regenerate the affected screenshots intentionally (darwin; delete linux).\n",
@@ -1638,7 +1591,6 @@
     {
       "id": "2f38d5b3-84bd-838b-9a45-1eb54ab3105f",
       "number": 48,
-      "key_final": true,
       "name": "Kanban model: columns, ordering, readiness, next up",
       "type": "feature",
       "description": "Add `src/lib/kanban.ts`.\n\n### `buildBoard(tasks, allTasks, { showSkipped, statusFilter })`\nReturns the columns *Todo*, *In Progress*, *Blocked*, *Done* (+ *Skipped* when shown, + *Other* for unknown statuses when present), each with a count and ordered cards:\n- **Todo:** ready first, then by phase/id;\n- **In Progress:** by `started_at` (fallback `updated_at`), newest first;\n- **Done:** by `completed_at` (fallback `updated_at`), newest first;\n- **Blocked:** by phase/id.\n\nWith a status filter, only matching columns are returned.\n\n### Readiness and next up\n- `readiness(task, taskMap)` → ready, or the list of unfinished dependency ids (deps outside the file count as unfinished).\n- `nextUp(allTasks)` implements **exactly the loop-tasks selection rule**: status `todo`, all deps done, lowest phase, then lowest id.\n\n### Tests\nUnit tests, including a test that `nextUp` matches the rule described in `plugin/skills/loop-tasks/SKILL.md`.\n",
@@ -1677,7 +1629,6 @@
     {
       "id": "5a4110b2-9b02-8931-988f-a211bf06caf8",
       "number": 49,
-      "key_final": true,
       "name": "Kanban test fixture",
       "type": "test",
       "description": "Add `tests/fixtures/kanban.json` with:\n- every status, including an unknown one;\n- todo tasks that are ready and waiting (including waiting on a missing id);\n- several `in_progress` tasks with `started_at`;\n- more than 20 done tasks with distinct `completed_at`;\n- skipped tasks;\n- 3 phases.\n\nThe fixtures smoke spec must load it **without errors**.\n",
@@ -1713,7 +1664,6 @@
     {
       "id": "9e1fe941-71c4-83c5-863a-d45d7461df30",
       "number": 50,
-      "key_final": true,
       "name": "Kanban board component",
       "type": "feature",
       "description": "Render `buildBoard()` in the Kanban tab.\n\n### The board\n- Columns with a header and a count.\n- Compact cards: id, name, phase and type badges (using theme colours), *Ready* / *Waiting on ...* for todo tasks, and a *Next up* marker.\n- A click opens the existing detail panel.\n- A *Show skipped* toggle.\n- *Done* limited to 20, with *Show all (N)*.\n- Columns scroll independently; horizontal scroll on narrow screens.\n- **Respect filters.**\n\n### Hooks for tests\nStable selectors: `.kanban-column[data-status]`, `.kanban-card[data-id]`.\n",
@@ -1756,7 +1706,6 @@
     {
       "id": "973ce626-5cdf-847c-9bc3-f86dcb6d69ce",
       "number": 51,
-      "key_final": true,
       "name": "Kanban e2e specs and screenshots",
       "type": "test",
       "description": "### e2e `kanban.spec`\nOn `kanban.json` and `standard`:\n- columns and counts;\n- card order per column;\n- readiness text;\n- *Next up* on the right card (and it moves after a reload where that task is done);\n- the detail panel opens on click;\n- the skipped toggle and *Show all*;\n- a status filter limits the columns;\n- live update via Reload.\n\n### Screenshots\nAdd Kanban screenshots to `visual.spec` (`standard`, `kanban`): darwin baselines; CI generates linux.\n",
@@ -1798,7 +1747,6 @@
     {
       "id": "9689afdd-0beb-83de-8c97-f734b4bc7ae3",
       "number": 52,
-      "key_final": true,
       "name": "Kanban: group by phase (P2)",
       "type": "feature",
       "description": "A *Group by phase* toggle splits the board into **one swimlane per phase** (a phase header with done/total), with the same columns in each lane; remembered via `prefs.ts`. Unit and e2e coverage.\n",
@@ -1834,7 +1782,6 @@
     {
       "id": "ab7cd054-5793-85bf-8d90-69c6e5370db1",
       "number": 53,
-      "key_final": true,
       "name": "Release 0.8.0",
       "type": "docs",
       "description": "- Changelog entry `[0.8.0]`: tabs, and the Kanban board with readiness and *Next up*.\n- Bump to **0.8.0** and rebuild.\n- README: dashboard features.\n- Copy the build to `docs/`.\n- `npm run verify` green.\n",
@@ -1871,7 +1818,6 @@
     {
       "id": "dd720543-2163-8586-a37d-368dbd5bef4d",
       "number": 54,
-      "key_final": true,
       "name": "Progress test fixture",
       "type": "test",
       "description": "Add `tests/fixtures/progress.json` with:\n- 3 phases across several days;\n- done tasks with `started_at` / `completed_at` (and some with only `updated_at`);\n- an idle gap of hours between sessions;\n- tasks added midway (later `created_at`);\n- one blocked and one skipped task;\n- phase 0 fully done.\n\n**Document the intended expected numbers** (pace, ranges, ETAs at a fixed *now*) in a comment block in the generator or a sibling README, so tests can cite them.\n",
@@ -1907,7 +1853,6 @@
     {
       "id": "733b59c4-93b4-8499-9afd-6e494251200f",
       "number": 55,
-      "key_final": true,
       "name": "Forecast model",
       "type": "feature",
       "description": "Implement `docs/dashboard-v2-requirements.md` section 3 in `src/lib/forecast.ts`:\n- **Per-task durations:** `completed_at - started_at`, else the gap since the previous completion, capped at 30 min.\n- **Pace:** the median of the last 10, with a P25/P75 range.\n- **Phase estimates** accumulated in loop order (unfinished tasks in phases ≤ N; blocked/skipped excluded; blocked counted for a warning).\n- A working-time result, plus calendar time from an injected *now*.\n- Done phases report their last completion date.\n- Fewer than 3 timed completions → *\"not enough history\"*.\n\nUnit tests with fake timers.\n",
@@ -1944,7 +1889,6 @@
     {
       "id": "a785215d-0dba-87e3-b0a7-95bfdf4f047a",
       "number": 56,
-      "key_final": true,
       "name": "Burndown series",
       "type": "feature",
       "description": "`src/lib/burndown.ts`:\n- step series of **remaining tasks** and of **total scope** over time (by `created_at`; the done time from `completed_at` / `updated_at`);\n- a **forecast segment** from now to the projected finish (from `forecast.ts`);\n- an optional phase filter for FR-4.6;\n- handles a missing `created_at` (falls back to the earliest known timestamp).\n\nUnit tests.\n",
@@ -1979,7 +1923,6 @@
     {
       "id": "de1a7605-7b31-8377-bb80-2958ec96ebc8",
       "number": 57,
-      "key_final": true,
       "name": "Progress tab: phase table",
       "type": "feature",
       "description": "The **phase table** in the Progress tab.\n\n### Columns and content\n- the phase (in its phase colour), done/total, a progress bar, remaining;\n- the state: *Done* / *In progress* / *Not started*;\n- the estimate: *\"≈ 1 h 10 m of agent work (50 m - 1 h 40 m)\"*, with the calendar time secondary (*\"if the loop keeps running: ...\"*);\n- the done date for finished phases;\n- a blocked warning;\n- *\"based on the last N tasks: ~X min each\"*;\n- *\"Not enough history to estimate\"* when applicable.\n\n### Tests\ne2e with `page.clock` at a fixed time, on `progress.json` and on a fixture with too little history.\n",
@@ -2019,7 +1962,6 @@
     {
       "id": "d406bec7-79cb-84ea-bf49-a368e7ed7141",
       "number": 58,
-      "key_final": true,
       "name": "Progress tab: burndown chart",
       "type": "feature",
       "description": "A **hand-written SVG burndown** above the phase table.\n\n### The chart\n- *remaining* (step line), *scope* (step line), a dashed forecast segment;\n- a time axis with dates;\n- hover tooltips on data points;\n- responsive width.\n\nFollow the dataviz skill for colours and marks, and keep both themes' tokens consistent with `app.css`.\n\n### Tests\n- e2e for the tooltip content and that the lines are present.\n- Screenshot baselines (darwin; CI linux).\n- The size budget is still met.\n",
@@ -2060,7 +2002,6 @@
     {
       "id": "7b8a9798-8e9c-8c68-a594-c4d2b1519ca5",
       "number": 59,
-      "key_final": true,
       "name": "Progress: click a phase to focus the burndown (P2)",
       "type": "feature",
       "description": "Clicking a phase row **limits the burndown to that phase** (click again, or *All phases*, to reset); the selected row is highlighted. e2e.\n",
@@ -2095,7 +2036,6 @@
     {
       "id": "c681802e-3e87-80d3-9ef1-f40699de218a",
       "number": 60,
-      "key_final": true,
       "name": "Performance and backward-compatibility checks",
       "type": "test",
       "description": "### Performance\nGenerate a **500-task fixture** (extend `generate-large.mjs`) and an e2e check that switching between all tabs and a Reload each render **within 200 ms** (measured via performance marks; a generous CI margin, documented).\n\n### Backward compatibility\n`compat.spec`: a 0.6.0-era `tasks.json` (no `started_at` / `completed_at`, no estimates) renders every tab without page errors and with sensible fallbacks.\n",
@@ -2132,7 +2072,6 @@
     {
       "id": "2d7cfe5d-5a52-8460-aec0-8ef88af906f0",
       "number": 61,
-      "key_final": true,
       "name": "Release 0.9.0",
       "type": "docs",
       "description": "- Changelog `[0.9.0]`: the Progress tab, with the burndown and per-phase estimates.\n- Bump to **0.9.0** and rebuild.\n- README: dashboard features, plus a note that estimates need `started_at` / `completed_at` (written by the skills since 0.7.0).\n- Copy the build to `docs/`.\n- `npm run verify` green.\n",
@@ -2169,7 +2108,6 @@
     {
       "id": "1e0a2d8c-5a77-8529-92a5-8779f49780a0",
       "number": 62,
-      "key_final": true,
       "name": "Helper launcher and twin runtimes skeleton",
       "type": "infra",
       "description": "### The launcher\nCreate `plugin/scripts/atm` (POSIX sh, executable):\n- if `python3` ≥ 3.9 is on `PATH`, run `atm.py`;\n- else if `node` ≥ 18, run `atm.mjs`;\n- else print what to install and exit `127`.\n\n`ATM_RUNTIME=python|node` forces one (used by tests; an error if that runtime is missing).\n\n### The two runtimes\nCreate `plugin/scripts/atm.py` (stdlib only) and `plugin/scripts/atm.mjs` (Node built-ins only), with:\n- argument parsing and `--help`;\n- `version`: prints the plugin version read from `../.claude-plugin/plugin.json`;\n- `paths --json`: prints the project root (git top level, or cwd), the task dir, the `tasks.json` path, the dashboard path, and the legacy location if any (`.agentic-task-manager/` first, then `docs/tasks.json`, then `tasks.json` in the root).\n\n**Identical output from both.** Keep the two files structured the same way (same function names and order), so they are easy to keep equal.\n",
@@ -2208,7 +2146,6 @@
     {
       "id": "917fed97-0dda-8d02-b30f-a947b8af4551",
       "number": 63,
-      "key_final": true,
       "name": "Conformance test suite for both runtimes, in CI",
       "type": "test",
       "description": "### The runner\nCreate `tests/scripts/` at the repo root: a **dependency-free Node runner** (`node:test`) that runs every scenario against the launcher once with `ATM_RUNTIME=python` and once with `ATM_RUNTIME=node`.\n\n### Scenarios\n- Scenarios are data (`tests/scripts/scenarios/*.json`: setup files, an optional `git init`, the command, the expected exit code, stdout/JSON, and the expected files afterwards), so they are **language-neutral**.\n- Helpers create temp dirs and repos.\n- Cover T-062's `version` and `paths` (each location, legacy detection, git vs non-git).\n\n### Wiring\n- Add `npm run test:scripts` in `dashboard/package.json` (runs `node ../tests/scripts/run.mjs`) and include it in `npm run verify`.\n- CI: a new `scripts` job with a matrix of (python 3.9, node 18) and (python 3.13, node 24) running the suite.\n- Document it in the root `CLAUDE.md` (layout, commands, *change both implementations together*).\n",
@@ -2250,7 +2187,6 @@
     {
       "id": "5fe1317b-15d2-87cf-910d-458363a164e0",
       "number": 64,
-      "key_final": true,
       "name": "`atm migrate`: automatic move to .agentic-task-manager/",
       "type": "feature",
       "description": "**Both runtimes.** `atm migrate [--json]`:\n\n### Moving\n- If `.agentic-task-manager/tasks.json` exists and a legacy file too: move nothing and print a warning (exit 0).\n- If only a legacy `tasks.json` exists (`docs/` or the root): create the folder, and `git mv` it when tracked (a plain move otherwise).\n- The legacy `tasks-dashboard.html` next to it: `git rm --cached` if tracked, then delete.\n\n### Setting up\n- Always ensure `.agentic-task-manager/.gitignore` contains `tasks-dashboard.html`, `.server.json`, `claims.json`, `.lock/` (idempotent; preserve user lines).\n- Copy the plugin's `templates/tasks-dashboard.html` into the folder if missing or older (compare the `atm-dashboard-version` meta numerically; shared helper `ensure_dashboard`).\n- Print one line describing what moved (or nothing to do). **Never commits.**\n\n### Tests\nConformance scenarios: tracked/untracked, `docs/` and root legacy, both locations present, already migrated (idempotent), a non-git directory, `.gitignore` merging.\n",
@@ -2290,7 +2226,6 @@
     {
       "id": "cd9f9310-fdd3-8f24-a755-4dd689a38de3",
       "number": 65,
-      "key_final": true,
       "name": "`atm serve` in Python: start/stop/status",
       "type": "feature",
       "description": "`atm.py` `serve [start|stop|status] [--open] [--port N]`.\n\n### start\n- Run the `migrate` checks' `ensure_dashboard`.\n- Spawn a **detached child** (a new session, stdio to `.agentic-task-manager/.server.log`) running a stdlib `http.server` bound to `127.0.0.1`, which serves the folder **by absolute path** (it works after the launching shell's cwd is deleted) and answers `GET /__atm/whoami` with `{project folder, pid, runtime}`.\n- Port: `--port`, or 8000, else the next free port up to 8099.\n- Record `{pid, port, folder, runtime, started_at}` in `.agentic-task-manager/.server.json`.\n- If a record exists and `whoami` at that port answers with this folder: report its URL instead of starting.\n- A stale record (the pid is gone, or a `whoami` mismatch): remove it and start.\n\n### stop\n**Only kill the pid if `whoami` confirms** it is this folder's server, then remove the record; otherwise just clean the record and say so.\n\n### status\nRunning (URL, pid, uptime) or not running.\n\n### Output\n- The URL `http://localhost:PORT/tasks-dashboard.html`; `--open` opens it (`open` / `xdg-open`).\n- The server survives the parent process exiting.\n",
@@ -2331,7 +2266,6 @@
     {
       "id": "f4a13da7-a818-8a0a-8ab2-51a1df3f0915",
       "number": 66,
-      "key_final": true,
       "name": "`atm serve` in Node, plus serve tests for both",
       "type": "feature",
       "description": "### Node\nThe `atm.mjs` equivalent of T-065:\n- a `node:http` static server with correct content types for `.html` / `.json`;\n- a detached child via `spawn({detached:true, stdio:[ignore, log, log]}).unref()`;\n- the same `whoami` endpoint, record format and output.\n\n### Conformance tests\nFor both runtimes, with a temp project and a test port range (to avoid 8000):\n- start, then status reports it, and the dashboard and `tasks.json` are served;\n- a second start reuses it;\n- a port in use moves to the next port;\n- a stale record (a fake pid) is cleaned;\n- stop **refuses to kill a pid whose `whoami` doesn't match** (spawn an unrelated sleeping process and record its pid);\n- serving keeps working after the launching cwd is removed;\n- stop leaves no process.\n\n**Always stop servers in test teardown.**\n",
@@ -2372,7 +2306,6 @@
     {
       "id": "1bfeca0b-ebc2-8969-8ebf-a83da3b0ce5e",
       "number": 67,
-      "key_final": true,
       "name": "`/atm:serve` skill; retire serve-dashboard.sh",
       "type": "feature",
       "description": "### The skill\n`plugin/skills/serve/SKILL.md`:\n- parses `start` (default) | `stop` | `status` and `--open`;\n- runs `${CLAUDE_SKILL_DIR}/../../scripts/atm serve ...` from the project root and relays the URL or status;\n- mentions that it **keeps running after the session**, and how to stop it.\n\n### Clean up\n- Delete `plugin/scripts/serve-dashboard.sh` (replace references).\n- create-tasks Step 5: suggest `/atm:serve` instead of the `python3 -m http.server` command.\n",
@@ -2411,7 +2344,6 @@
     {
       "id": "b3565458-683c-82fa-a5ef-fb89b3d0f639",
       "number": 68,
-      "key_final": true,
       "name": "Skills use .agentic-task-manager/ and migrate automatically",
       "type": "feature",
       "description": "**Every skill** (create-tasks, do-task, loop-tasks, update-dashboard, serve) starts by running `atm migrate` and relays its one-line report; then it uses `atm paths --json` instead of its own location search.\n\n### Per skill\n- **create-tasks:** creates `.agentic-task-manager/` (via migrate) and writes `tasks.json` there.\n- **loop-tasks:** if migrate moved something and committing is on, commit only the moved/removed paths and `.gitignore` as `chore: move atm files to .agentic-task-manager/`, before the first task. Other skills say the move is staged.\n- **update-dashboard:** uses the `ensure_dashboard` behaviour (or an `atm` command) and still prints the release notes.\n- **`plugin/CLAUDE.md`:** the new location; the dashboard isn't committed.\n",
@@ -2453,7 +2385,6 @@
     {
       "id": "762d7ab7-d502-8950-8617-cd306083c016",
       "number": 69,
-      "key_final": true,
       "name": "README: new folder, /atm:serve, /reload-plugins update steps",
       "type": "docs",
       "description": "### README\n- Install/update steps use `/plugin marketplace update hakanserce-plugins`, then `/reload-plugins`.\n- **Remove every *restart Claude Code* instruction** (currently around the install and update sections).\n- Document `.agentic-task-manager/`: what's committed (`tasks.json`) and what's ignored (dashboard, server state, claims).\n- Automatic migration from `docs/`.\n- `/atm:serve [stop|status] [--open]`.\n- The runtime requirement (Python 3.9+ or Node 18+).\n\n### FR-7.2\nAdd a line to the release task's checklist in the PR description, asking the maintainer to confirm a fresh install works with `/reload-plugins` (it can't be done from inside a session).\n",
@@ -2490,7 +2421,6 @@
     {
       "id": "54729060-e62c-8e6d-9504-302b3ec1b05e",
       "number": 70,
-      "key_final": true,
       "name": "Release 0.10.0",
       "type": "docs",
       "description": "### Changelog `[0.10.0]`\n- *Added*: `/atm:serve`, the `.agentic-task-manager/` folder with automatic migration, the runtime launcher.\n- *Changed*: the dashboard is no longer committed; update with `/reload-plugins`.\n\n### Release\n- Bump `plugin.json` and `marketplace.json` to **0.10.0**, and rebuild the dashboard.\n- `npm run verify` and the scripts suite green.\n",
@@ -2525,7 +2455,6 @@
     {
       "id": "4fbfc8d8-f945-8087-af7d-e7186849d5be",
       "number": 71,
-      "key_final": true,
       "name": "Dogfood: move this repo's tasks into .agentic-task-manager/",
       "type": "infra",
       "description": "**Last task of phase 10.**\n\n### Steps\n1. Run `plugin/scripts/atm migrate` in this repo: `docs/tasks.json` moves to `.agentic-task-manager/tasks.json` (`git mv`), and `docs/tasks-dashboard.html` leaves git.\n2. Update the root `CLAUDE.md` (`docs/` now holds plans only; the task list is in `.agentic-task-manager/`), and any dev script or doc that points at `docs/tasks.json`.\n3. Mark this task done **in the new file**.\n\n> **Note:** the installed 0.9.0 skills only look in `docs/`, so phases 11–12 need the 0.10.0 plugin installed (merge, `/plugin marketplace update`, `/reload-plugins`) before looping on.\n",
@@ -2563,7 +2492,6 @@
     {
       "id": "36088a36-1344-81d1-922b-8703db0d5aba",
       "number": 72,
-      "key_final": true,
       "name": "Lock directory and atomic writes",
       "type": "feature",
       "description": "`atm.py`, per design §4 *The lock*.\n\n### The lock\n- **Acquire** = `mkdir <dir>/.lock`, and write `owner.json` `{host, pid, acquired_at}`; retry every 50 ms, up to 10 s.\n- **Break the lock only if** the owner is on this host and the pid is gone, or it is older than 60 s.\n- **Release** removes it (also on exceptions and signals).\n\n### Atomic write\nWrite a temp file in the same dir, `fsync`, rename over the target, and `fsync` the dir where supported.\n\nExpose a `with_lock(path, fn)` context helper and reuse `write_json_atomic`.\n\n### Tests\n`tests/scripts/lock.test.mjs`, driving small atm commands or a hidden `_lock-test` command:\n- mutual exclusion between processes;\n- a stale lock from a dead pid is broken;\n- a live foreign lock times out with a clear error.\n",
@@ -2601,7 +2529,6 @@
     {
       "id": "9ff801a2-05b5-82f8-9cfd-70099867da56",
       "number": 73,
-      "key_final": true,
       "name": "`atm start|done|fail|release` status commands",
       "type": "feature",
       "description": "`atm.py`. **Under the tasks lock:** re-read `tasks.json`, validate that the task exists and the transition is legal:\n- **start:** `todo` → `in_progress`; sets `started_at` and `updated_at`;\n- **done:** `in_progress` → `done`; sets `completed_at`;\n- **fail:** `in_progress` → `todo`, with a `last_failure` note;\n- **release:** `in_progress` → `todo`.\n\nWrite atomically, preserving key order and 2-space formatting (**unchanged tasks byte-identical**). Clear exit codes and messages.\n\nScenarios for each transition, illegal transitions, an unknown id, and a missing file.\n",
@@ -2637,7 +2564,6 @@
     {
       "id": "430ef40e-228c-893f-aa98-dc0d202cb9e9",
       "number": 74,
-      "key_final": true,
       "name": "Claims with leases: store, heartbeat, claims, expiry",
       "type": "feature",
       "description": "`atm.py`.\n\n### The claims file\n- `$(git rev-parse --git-common-dir)/atm/claims.json` (fallback `.agentic-task-manager/claims-store.json` outside git), guarded by its own lock dir.\n- A claim = `{task, agent, branch, worktree, claimed_at, lease_expires_at}`, where `agent` is `CLAUDE_SESSION_ID` or the `ATM_AGENT` env, else `host:pid`.\n- Lease: 30 min by default (`meta.lease_minutes` overrides).\n\n### Commands\n- `start` takes a claim, and **fails if another live claim holds the task**.\n- `done` / `fail` / `release` drop it.\n- `heartbeat <id>` extends it (only for the holder).\n- `claims [--json]` lists live claims with the time left.\n- Any command first **expires stale leases**: the task goes back to `todo` with `last_failure: 'lease expired (agent X)'`.\n\nAfter every change, write the gitignored snapshot `.agentic-task-manager/claims.json` for the dashboard.\n\n### Tests\nIncluding two worktrees of one repo seeing each other's claims, and lease expiry with an injectable clock (`ATM_NOW`).\n",
@@ -2676,7 +2602,6 @@
     {
       "id": "4b8272ae-56ff-8a1f-ad12-d4e9f6444f72",
       "number": 75,
-      "key_final": true,
       "name": "`atm next --claim` with the loop's selection rule",
       "type": "feature",
       "description": "`atm.py`: `atm next [--phase N] [--type T] [--claim] [--json]`:\n- the **lowest phase, then lowest id** among todo tasks whose dependencies are all done and that have no live claim;\n- with `--claim`, start and claim it **in the same lock section**;\n- prints the task (JSON with `--json`), or exits `3` with *\"no task available\"* (distinguishing *blocked* from *all done*).\n\nConformance scenarios mirroring the dashboard's *Next up* rule (`dashboard/src/lib/kanban.ts`), so both agree.\n",
@@ -2711,7 +2636,6 @@
     {
       "id": "eec1147e-bcad-8c36-a2f5-61364fd5a3df",
       "number": 76,
-      "key_final": true,
       "name": "Concurrency stress test",
       "type": "test",
       "description": "`tests/scripts/stress.test.mjs`:\n- a 40-task project;\n- spawn **16 concurrent workers** that loop `atm next --claim`, then `atm done`, until none are left;\n- assert **every task done exactly once** and no claim double-granted (each worker logs what it got);\n- in parallel, a reader polls `tasks.json` and `claims.json` every few ms and asserts it always parses;\n- run in a temp git repo with two worktrees (workers split across them).\n\nKeep the test under ~30 s.\n",
@@ -2745,7 +2669,6 @@
     {
       "id": "2eeaf05e-5fa1-8727-9af1-b5cde38b3a1e",
       "number": 77,
-      "key_final": true,
       "name": "tasks.json merge driver and `atm init`",
       "type": "feature",
       "description": "`atm.py`.\n\n### `atm merge-driver %O %A %B`\nMerges **task by task** (design option E):\n- the union of tasks by id;\n- the same id changed on one side takes that side;\n- changed on both: the status takes the furthest along (`todo` < `in_progress` < `done`; an explicit `blocked` / `skipped` wins over `todo`), and timestamps take the newest;\n- definition fields (`name`, `description`, deps, `files`, `phase`, `type`, `requirements`) changed differently on both sides = **a conflict** (exit 1, leave a conflict-marker-free file, plus a report on stderr);\n- new tasks on both sides with colliding ids: keep both, renumber theirs to the next free id, and rewrite dependencies that point to it within their new tasks.\n\nWrites the result to `%A` in the standard format.\n\n### `atm init`\nAdds `tasks.json merge=atm` to `.agentic-task-manager/.gitattributes` and sets git config `merge.atm.name` / `driver` (pointing at the launcher by absolute path). Idempotent.\n",
@@ -2782,7 +2705,6 @@
     {
       "id": "5717b8a6-44ab-8371-9b00-7627b08b134c",
       "number": 78,
-      "key_final": true,
       "name": "Merge driver tests from the design's experiments",
       "type": "test",
       "description": "`tests/scripts/merge.test.mjs`: in temp repos with `atm init`, reproduce the design doc's experiments with a **real `git merge`**:\n- adjacent status changes (clean);\n- finishing adjacent tasks (clean);\n- the same task claimed on both branches (a clean merge, status `in_progress`, the newest timestamp);\n- both sides append a task (both kept, renumbered, deps rewritten);\n- the same task's description edited differently (the merge fails and reports it).\n\nPlus unit scenarios for the driver directly.\n",
@@ -2817,7 +2739,6 @@
     {
       "id": "6ce4102a-f57f-8b22-b5fe-e5a39dc7811e",
       "number": 79,
-      "key_final": true,
       "name": "Skills use atm for every status change; commit hygiene",
       "type": "feature",
       "description": "### do-task and loop-tasks\n- Get work **only** via `atm next --claim` (or `atm start <id>`); finish with `atm done`, `atm fail` on failure, and `atm heartbeat` roughly every 10 minutes on long tasks.\n- **Never edit** `status` / `started_at` / `completed_at` by hand (state the 6 agent rules from design §4).\n- Commit `.agentic-task-manager/tasks.json` plus **exactly the files the agent changed** for this task (tracked by the agent; `git add <paths>`), never `git add -A` / `git add .`.\n\n### create-tasks\nRuns `atm init`.\n\nRemove the now-obsolete manual timestamp instructions.\n",
@@ -2856,7 +2777,6 @@
     {
       "id": "7960fddd-ea8f-892e-beea-66a0105b8629",
       "number": 80,
-      "key_final": true,
       "name": "Dashboard shows live claims",
       "type": "feature",
       "description": "### Loading\nLoad `./claims.json` alongside `tasks.json` on every (auto-)refresh; a missing file or a 404 means **no claims** (no error shown).\n\n### Showing\n- `src/lib/claims.ts`: parse, keep the live ones, map by task id.\n- In-progress task cards and Kanban cards show the agent (short form), the branch, and *\"claimed 12 m ago\"*.\n- The detail panel shows the full claim and the lease expiry.\n\n### Tests\n- Extend the e2e `tasksServer` fixture to route `claims.json` (default 404; can serve an object).\n- Unit tests for `claims.ts` (90% coverage), component/e2e tests.\n- Update screenshots if the card layout changes.\n",
@@ -2897,7 +2817,6 @@
     {
       "id": "781c7135-e50a-82ea-aac9-f8d6b6a6d690",
       "number": 81,
-      "key_final": true,
       "name": "Remote claims via refs/atm/claims (P2)",
       "type": "feature",
       "description": "`atm.py`: **opt-in** with `meta.coordination = 'remote'`.\n\n### Behaviour\n- Claiming also runs `git push origin <HEAD sha>:refs/atm/claims/<id>` and **only proceeds if accepted** (rejected = someone else holds it; roll back the local claim).\n- `done` / `fail` / `release` / expiry push a deletion (best-effort, logged on failure).\n- `atm claims --remote` lists remote claim refs (`git ls-remote`).\n\n### Tests\nTests with a local bare repo as `origin` and two clones.\n\n> Skip if it can't be done cheaply; record the reason.\n",
@@ -2935,7 +2854,6 @@
     {
       "id": "6d47fb93-7d85-8048-bfd7-0fb031f95900",
       "number": 82,
-      "key_final": true,
       "name": "README: Running agents in parallel",
       "type": "docs",
       "description": "A README section, *Running agents in parallel*:\n- **the problem** in two sentences;\n- **recommended setup**: one worktree + branch per agent from one clone (`git worktree add ../proj-agent2 -b agent2`), run `/atm:loop-tasks` in each;\n- **what atm guarantees**: single writer with lock, claims shared across worktrees, leases, merge driver;\n- **what it doesn't**: same files edited in one working tree; different machines without remote claims;\n- the agent rules;\n- the atm commands for humans;\n- remote claims, if T-081 shipped.\n\nLink `docs/parallel-agents-design.md`.\n",
@@ -2973,7 +2891,6 @@
     {
       "id": "329ea728-ff15-8925-ac75-0443247744f0",
       "number": 83,
-      "key_final": true,
       "name": "Release 0.11.0",
       "type": "docs",
       "description": "Changelog **[0.11.0]** (parallel agents: atm helper, claims with leases, merge driver, commit hygiene, claims on the dashboard). Bump to 0.11.0, rebuild. **All suites green.**\n",
@@ -3010,7 +2927,6 @@
     {
       "id": "dcf15dab-61fb-8e45-9315-0869bc1f2725",
       "number": 84,
-      "key_final": true,
       "name": "Faceted filter counts (logic)",
       "type": "feature",
       "description": "`src/lib/filters.ts`: `facetCounts(tasks, filters)` → for each group and value, **the number of tasks matching that value given the selections in the OTHER groups** (OR within group, AND across), plus the group's *All* count.\n\nUnit tests including empty selections, multiple selections and unknown values.\n",
@@ -3046,7 +2962,6 @@
     {
       "id": "8ca29baf-eb1b-8011-b405-ab3ab77d36e5",
       "number": 85,
-      "key_final": true,
       "name": "Count badges on filter buttons",
       "type": "feature",
       "description": "### `Filters.svelte`\n- A badge with the faceted count on **every** button, including *All*.\n- Count 0 dims the button, but **it stays clickable**.\n- `aria-label` like *\"Feature, 3 tasks\"*.\n- Updates with filters, reload and auto-refresh.\n\n### Tests\n- Component test + e2e.\n- Update screenshot baselines (delete the matching `-linux.png`).\n",
@@ -3085,7 +3000,6 @@
     {
       "id": "23a5ad33-0c70-8363-9049-e821e14a574b",
       "number": 86,
-      "key_final": true,
       "name": "Saved view per project (storage logic)",
       "type": "feature",
       "description": "### `src/lib/view-store.ts`\n- **Project key** = `meta.id`, else `meta.project`, else `'default'`.\n- Stores `{filters, tab, graphCollapsed, kanban: {groupByPhase, showSkipped}, progressPhase}` under localStorage `'atm-dashboard:view:<key>'` (reuse `prefs.ts` safe storage).\n- `sanitize(view, tasks)` drops phases/types/statuses that no longer exist.\n- Migrate the per-browser Kanban options from the old prefs key on first read.\n\n### Tests\nUnit tests (90%).\n",
@@ -3123,7 +3037,6 @@
     {
       "id": "9541046d-1628-8d99-b646-12c145ce864c",
       "number": 87,
-      "key_final": true,
       "name": "Restore and save the view; Reset view",
       "type": "feature",
       "description": "### Restore and save\n- `state.svelte.ts` restores the saved view after the first load and saves on change.\n- URL `#view=` **overrides** the saved tab.\n- Theme, mode, auto-refresh and last-seen version stay in the **per-browser** prefs.\n- A *Reset view* control (header or filters row) clears this project's saved view and returns to defaults.\n\n### Project id\n`create-tasks` writes `meta.id` (random, e.g. 8 hex chars) for new task files, and `atm init` adds one when missing.\n\n### Tests\ne2e:\n- reload restores filters / tab / collapsed / kanban / progress focus;\n- two projects (different `meta.id`) on the same origin keep separate views;\n- the hash wins;\n- reset works.\n",
@@ -3167,7 +3080,6 @@
     {
       "id": "158887be-ba3d-8932-9054-dcb15554813e",
       "number": 88,
-      "key_final": true,
       "name": "Save graph zoom and pan per project (P2)",
       "type": "feature",
       "description": "Add the graph view (scale, offset) to the saved view; restore it when the graph first renders instead of the initial fit, **if the content still overlaps the viewport** (else fall back to the normal initial view). e2e.\n",
@@ -3203,7 +3115,6 @@
     {
       "id": "afdf103c-7e4f-8f1a-804d-bd7434d63e94",
       "number": 89,
-      "key_final": true,
       "name": "Colour tokens everywhere (no visual change)",
       "type": "refactor",
       "description": "Move **every colour** to CSS custom properties:\n- surfaces, text, borders, accent;\n- status, type and phase colours;\n- chart series;\n- graph node fills/strokes/edges;\n- the minimap.\n\n### How\n- `theme.ts` exposes token names instead of hex values where components need colours in JS (SVG attributes use `var(--...)`).\n- **No hard-coded colour remains in components**: add a unit/lint test that greps `src/components` and `src/lib` for hex/rgb literals outside the token files.\n- Existing dark screenshots **must stay identical**.\n",
@@ -3247,7 +3158,6 @@
     {
       "id": "3e711bc8-b8e5-806e-80d2-16800b612a13",
       "number": 90,
-      "key_final": true,
       "name": "Themes as data; light/dark for Default; mode control",
       "type": "feature",
       "description": "### Themes as data\n- `src/lib/themes/`: one token map per theme, with light and dark variants.\n- *Default* dark = today's colours; *Default* light = a GitHub-light style counterpart.\n- Apply via `data-theme` / `data-mode` on `<html>`.\n\n### Mode control\n- Header control *System* / *Light* / *Dark* (*System* follows `prefers-color-scheme` live); stored per browser.\n- An inline script in `index.html` applies the stored theme/mode **before first paint** (no flash).\n\n### Validation and tests\n- Burndown series re-validated for the light surface with the dataviz validator (record the result in a comment).\n- Unit tests for theme resolution.\n- e2e for the control, persistence and emulated `prefers-color-scheme`.\n",
@@ -3291,7 +3201,6 @@
     {
       "id": "5d9ee491-39eb-880d-830b-009f721d8255",
       "number": 91,
-      "key_final": true,
       "name": "Light-mode screenshot baselines and view check",
       "type": "test",
       "description": "Visual specs **in light mode** for the main views (task grid, graph, Kanban, Progress, detail and What's new panels). Inspect every view in light mode for unreadable or invisible elements and fix tokens. Add the new `-darwin` baselines; CI generates `-linux`.\n",
@@ -3328,7 +3237,6 @@
     {
       "id": "bac70fbc-eb43-8aef-9aeb-d6910b61c77a",
       "number": 92,
-      "key_final": true,
       "name": "Themes: Nord, Solarized; theme picker",
       "type": "feature",
       "description": "### Themes\nToken maps for:\n- **Nord**: light = *Snow Storm* surfaces, dark = *Polar Night*;\n- **Solarized**: light / dark;\n\nfrom their published palettes. **Status colours keep meaning** (done green-ish, blocked red-ish).\n\n### Picker\nTheme picker next to the mode control, stored per browser, applied before first paint.\n\n### Tests\ne2e: switching theme changes tokens and persists.\n",
@@ -3367,7 +3275,6 @@
     {
       "id": "88f696c4-c37a-8930-817f-2f7e44955527",
       "number": 93,
-      "key_final": true,
       "name": "Themes: Catppuccin, Tokyo Night, High contrast",
       "type": "feature",
       "description": "- **Catppuccin**: *Latte* light, *Mocha* dark;\n- **Tokyo Night**: *Day* light, *Night* dark;\n\nboth from their published palettes.\n- **High contrast** light and dark, designed for **WCAG AAA text (7:1)**.\n\nWhere a palette colour fails validation for a slot, use the nearest passing colour and note it in the theme file.\n",
@@ -3405,7 +3312,6 @@
     {
       "id": "17d85552-72e8-8aa4-b697-8c88d9612a44",
       "number": 94,
-      "key_final": true,
       "name": "Contrast checks for every theme and mode",
       "type": "test",
       "description": "### Contrast test\nA unit test that, for **every theme × mode**, computes the WCAG contrast of text tokens (primary, secondary, muted, on-accent, badge text) against the surfaces they are used on:\n- **≥ 4.5** (muted ≥ 3 for large/secondary labels, as documented);\n- **High contrast ≥ 7**.\n\n### Charts\nRun the dataviz palette validator on each theme's chart series per mode and fix failures; record the results in `docs/theme-validation.md`.\n\n### Screenshots and budget\n- Screenshot one main view per theme (dark and light) to catch regressions.\n- Check the **150 KB budget** (guardrails spec) still holds.\n",
@@ -3445,7 +3351,6 @@
     {
       "id": "856a939c-8ad0-85e2-8e15-8801028b8c96",
       "number": 95,
-      "key_final": true,
       "name": "Release 0.12.0",
       "type": "docs",
       "description": "Changelog **[0.12.0]** (filter counts, saved views per project, light/dark modes, six themes). README dashboard features. Bump to 0.12.0, rebuild. **All suites green.**\n",
@@ -3483,7 +3388,6 @@
     {
       "id": "53c19e7c-024f-86a5-8a14-6d20b869ee96",
       "number": 96,
-      "key_final": true,
       "name": "atm-cli: modules in atm-cli/, built into one atm.py",
       "type": "refactor",
       "priority": "P0",
@@ -3538,7 +3442,6 @@
     {
       "id": "2600b3d4-ccef-8a80-9f21-22f6f6d667d7",
       "number": 97,
-      "key_final": true,
       "name": "atm-cli: project vocabularies and status kinds",
       "type": "feature",
       "priority": "P0",
@@ -3592,7 +3495,6 @@
     {
       "id": "b9d7d313-632b-88ea-8296-e760380ed765",
       "number": 98,
-      "key_final": true,
       "name": "atm-cli: priority in task selection",
       "type": "feature",
       "priority": "P0",
@@ -3635,7 +3537,6 @@
     {
       "id": "4b06306d-734c-88b6-a4f7-de541927596d",
       "number": 99,
-      "key_final": true,
       "name": "atm-cli: atm review and atm reject",
       "type": "feature",
       "priority": "P0",
@@ -3682,7 +3583,6 @@
     {
       "id": "146ddcbc-c77d-86c2-ad85-4942449fd29c",
       "number": 100,
-      "key_final": true,
       "name": "Dashboard: vocabularies from meta, status kinds",
       "type": "feature",
       "priority": "P0",
@@ -3732,7 +3632,6 @@
     {
       "id": "7d660d0c-5c9d-8fb4-8b3e-09d64421edc0",
       "number": 101,
-      "key_final": true,
       "name": "Dashboard: kinds in forecast, burndown, agents and utilisation",
       "type": "feature",
       "priority": "P1",
@@ -3781,7 +3680,6 @@
     {
       "id": "6e73b5b9-465b-860c-bef0-9182815b984c",
       "number": 102,
-      "key_final": true,
       "name": "Dashboard: priority badges, filter and sort",
       "type": "feature",
       "priority": "P1",
@@ -3828,7 +3726,6 @@
     {
       "id": "a6a0c01d-4705-8afc-8800-9374de4311ed",
       "number": 103,
-      "key_final": true,
       "name": "Dashboard: In Review waiting time",
       "type": "feature",
       "priority": "P1",
@@ -3873,7 +3770,6 @@
     {
       "id": "8e1023dd-4aba-8058-a9d0-3bba149462e5",
       "number": 104,
-      "key_final": true,
       "name": "Dashboard: footer",
       "type": "feature",
       "priority": "P1",
@@ -3913,7 +3809,6 @@
     {
       "id": "d4f28eba-f3dc-867e-81c8-4a6efd977dd3",
       "number": 105,
-      "key_final": true,
       "name": "Help page: docs/help.md and the Help dialog",
       "type": "feature",
       "priority": "P1",
@@ -3961,7 +3856,6 @@
     {
       "id": "96a1b4eb-abde-82b8-8cb5-03d590b64bf7",
       "number": 106,
-      "key_final": true,
       "name": "Dashboard: About dialog",
       "type": "feature",
       "priority": "P1",
@@ -3999,7 +3893,6 @@
     {
       "id": "5294ccd5-9934-8270-802a-0d3852886a13",
       "number": 107,
-      "key_final": true,
       "name": "Skill: create-tasks confirms vocabularies and sets priorities",
       "type": "feature",
       "priority": "P0",
@@ -4041,7 +3934,6 @@
     {
       "id": "28a42201-6d16-8f4c-be3a-c63d64461195",
       "number": 108,
-      "key_final": true,
       "name": "Skills: priority order and In Review in do-task and loop-tasks",
       "type": "feature",
       "priority": "P0",
@@ -4087,7 +3979,6 @@
     {
       "id": "d6ec2261-f2ce-8dc9-9d31-c7c9b2b620e2",
       "number": 111,
-      "key_final": true,
       "name": "atm-cli: argparse and --json on every command",
       "type": "refactor",
       "priority": "P0",
@@ -4133,7 +4024,6 @@
     {
       "id": "0fd823ca-3687-8085-a7b1-4a201657af90",
       "number": 112,
-      "key_final": true,
       "name": "atm-cli: actors and notes",
       "type": "feature",
       "priority": "P0",
@@ -4181,7 +4071,6 @@
     {
       "id": "0d72660f-3e69-8874-b181-32f77c89a62e",
       "number": 113,
-      "key_final": true,
       "name": "Benchmark: atm-cli and dashboard at 1k and 10k tasks",
       "type": "test",
       "priority": "P1",
@@ -4229,7 +4118,6 @@
     {
       "id": "f06d4582-9766-8de4-a1ea-03dc07f80c20",
       "number": 114,
-      "key_final": true,
       "name": "atm-cli: show, list, status, deps; richer start and done",
       "type": "feature",
       "priority": "P0",
@@ -4277,7 +4165,6 @@
     {
       "id": "825eadbc-c8d3-8413-8623-afb29f3f5cb1",
       "number": 115,
-      "key_final": true,
       "name": "atm-cli: atm add, next_id and labels",
       "type": "feature",
       "priority": "P0",
@@ -4326,7 +4213,6 @@
     {
       "id": "8707140e-fff8-8944-8255-3edb0de1ba75",
       "number": 116,
-      "key_final": true,
       "name": "atm-cli: atm edit and atm check",
       "type": "feature",
       "priority": "P0",
@@ -4370,7 +4256,6 @@
     {
       "id": "08d8f60d-711a-80b8-b598-045350ddcff2",
       "number": 117,
-      "key_final": true,
       "name": "atm-cli: atm block and atm unblock",
       "type": "feature",
       "priority": "P0",
@@ -4416,7 +4301,6 @@
     {
       "id": "086621fb-f3ab-8318-823b-40d9601e8671",
       "number": 118,
-      "key_final": true,
       "name": "atm-cli: archive and unarchive",
       "type": "feature",
       "priority": "P1",
@@ -4471,7 +4355,6 @@
     {
       "id": "ed7f23c1-6391-8330-a220-392f10786795",
       "number": 119,
-      "key_final": true,
       "name": "atm-cli: suggest archiving",
       "type": "feature",
       "priority": "P1",
@@ -4517,7 +4400,6 @@
     {
       "id": "1bd5405f-61e5-80e6-be97-72097eb4b099",
       "number": 120,
-      "key_final": true,
       "name": "Dashboard build ID, compared by atm migrate",
       "type": "bugfix",
       "priority": "P1",
@@ -4565,7 +4447,6 @@
     {
       "id": "965de50b-e8ec-861a-a16c-f9286071ef6f",
       "number": 121,
-      "key_final": true,
       "name": "atm-cli: atm serve --dir",
       "type": "feature",
       "priority": "P2",
@@ -4610,7 +4491,6 @@
     {
       "id": "2142feb8-189d-89a9-9c51-95ce934ad6cc",
       "number": 122,
-      "key_final": true,
       "name": "atm-cli: meta.workflow and atm workflow",
       "type": "feature",
       "priority": "P1",
@@ -4657,7 +4537,6 @@
     {
       "id": "7e8d7a58-f724-8bfd-96b5-b223f36fde3f",
       "number": 123,
-      "key_final": true,
       "name": "atm-cli: atm commit, atm pr, atm merged",
       "type": "feature",
       "priority": "P1",
@@ -4702,7 +4581,6 @@
     {
       "id": "63bf3a9d-378d-8d75-b289-43ed00eeb913",
       "number": 124,
-      "key_final": true,
       "name": "A stable command name for atm",
       "type": "infra",
       "priority": "P1",
@@ -4752,7 +4630,6 @@
     {
       "id": "a0f003ee-7208-8090-82bc-57125cb81abe",
       "number": 125,
-      "key_final": true,
       "name": "Automatic claim heartbeats from a plugin hook",
       "type": "feature",
       "priority": "P2",
@@ -4798,7 +4675,6 @@
     {
       "id": "9a2e8e67-e4c5-8b1b-8d3f-6ac33b9637fa",
       "number": 126,
-      "key_final": true,
       "name": "Skills: never read tasks.json; use atm's read commands",
       "type": "feature",
       "priority": "P0",
@@ -4844,7 +4720,6 @@
     {
       "id": "86773c09-f80d-826d-9940-309d8d95a3c5",
       "number": 127,
-      "key_final": true,
       "name": "Skills: edit, notes, block and commit through atm",
       "type": "feature",
       "priority": "P0",
@@ -4893,7 +4768,6 @@
     {
       "id": "00276feb-1b54-8a31-a261-bfdd4a96dde9",
       "number": 128,
-      "key_final": true,
       "name": "create-tasks writes through atm add, with labels",
       "type": "feature",
       "priority": "P0",
@@ -4937,7 +4811,6 @@
     {
       "id": "d5cffded-f682-8b4b-9146-f62173b69bb1",
       "number": 129,
-      "key_final": true,
       "name": "Skills act on the archive hint",
       "type": "feature",
       "priority": "P1",
@@ -4981,7 +4854,6 @@
     {
       "id": "4fc9a292-fdd3-8bef-89b9-b337a9774dbd",
       "number": 130,
-      "key_final": true,
       "name": "Skill: /atm:push",
       "type": "feature",
       "priority": "P1",
@@ -5025,7 +4897,6 @@
     {
       "id": "491908e1-b035-873e-9b7e-7760fd552df7",
       "number": 109,
-      "key_final": true,
       "name": "Screenshots and e2e for every v4 dashboard feature",
       "type": "test",
       "priority": "P1",
@@ -5081,7 +4952,6 @@
     {
       "id": "325ed542-e7df-86a8-a848-a62949a68311",
       "number": 110,
-      "key_final": true,
       "name": "Release 0.13.0",
       "type": "docs",
       "priority": "P1",
@@ -5131,7 +5001,6 @@
     {
       "id": "cdb6dbb4-ddcb-8d2e-8da8-0af49aed21f8",
       "number": 131,
-      "key_final": true,
       "name": "Skills: workflows in create-tasks, loop-tasks and do-task",
       "type": "feature",
       "priority": "P1",
@@ -5177,7 +5046,6 @@
     {
       "id": "71736309-92d2-8302-8280-74f9904f75e4",
       "number": 132,
-      "key_final": true,
       "name": "This repo: CI notes in CLAUDE.md and its workflow",
       "type": "docs",
       "priority": "P2",
@@ -5218,7 +5086,6 @@
     {
       "id": "194e40ea-066d-829f-ace0-3ca70b7e0221",
       "number": 133,
-      "key_final": true,
       "name": "About shows \"Agentic Task Manager (atm)\"",
       "type": "polish",
       "priority": "P2",
@@ -5260,7 +5127,6 @@
     {
       "id": "8f928ded-f761-84dc-b1dc-3acdd516e27b",
       "number": 134,
-      "key_final": true,
       "name": "Dashboard: labels",
       "type": "feature",
       "priority": "P1",
@@ -5305,7 +5171,6 @@
     {
       "id": "ff940e21-b23f-8e17-a815-5b3a3d192c6b",
       "number": 135,
-      "key_final": true,
       "name": "Dashboard: Blocked, waiting on you or an agent",
       "type": "feature",
       "priority": "P1",
@@ -5350,7 +5215,6 @@
     {
       "id": "c3fc3b23-490a-8c04-8318-1046e8c6e957",
       "number": 136,
-      "key_final": true,
       "name": "Dashboard: notes in the detail panel",
       "type": "feature",
       "priority": "P1",
@@ -5394,7 +5258,6 @@
     {
       "id": "7c32136a-d01d-88f8-b80e-ff0aae1c2678",
       "number": 137,
-      "key_final": true,
       "name": "Dashboard: actors (created, started, completed by)",
       "type": "feature",
       "priority": "P1",
@@ -5442,7 +5305,6 @@
     {
       "id": "e00f28d5-a0ba-8f85-8543-b860df588a57",
       "number": 138,
-      "key_final": true,
       "name": "Dashboard: stages of Done (In PR, Merged)",
       "type": "feature",
       "priority": "P1",
@@ -5490,7 +5352,6 @@
     {
       "id": "6a6b1d93-f86f-89ac-b2c9-1a6f3c897c76",
       "number": 139,
-      "key_final": true,
       "name": "Dashboard: conditional fetch (304 when unchanged)",
       "type": "feature",
       "priority": "P0",
@@ -5532,7 +5393,6 @@
     {
       "id": "4e0d0335-fe53-8c7d-bac7-f0fe8baff4e9",
       "number": 140,
-      "key_final": true,
       "name": "Dashboard: load the archive only when needed",
       "type": "feature",
       "priority": "P1",
@@ -5580,7 +5440,6 @@
     {
       "id": "a50b5a64-c03c-8ff4-94f7-e5d71e885086",
       "number": 141,
-      "key_final": true,
       "name": "Docs: README, plugin/CLAUDE.md and Help for v4",
       "type": "docs",
       "priority": "P1",
@@ -5631,7 +5490,6 @@
     {
       "id": "b524271a-8509-809f-bd7e-9981c861f40d",
       "number": 142,
-      "key_final": true,
       "name": "Dashboard: Markdown in task descriptions",
       "type": "feature",
       "priority": "P2",
@@ -5691,7 +5549,6 @@
     {
       "id": "94b8af54-68c9-8e18-8fd9-e0031bb0f415",
       "number": 143,
-      "key_final": true,
       "name": "Progress panel: rings as separate items",
       "type": "polish",
       "priority": "P3",
@@ -5742,7 +5599,6 @@
     {
       "id": "80b5e565-ce05-89fd-8205-3fad22d872a8",
       "number": 144,
-      "key_final": true,
       "name": "Activity: titles name the selected period",
       "type": "bugfix",
       "priority": "P1",
@@ -5820,7 +5676,6 @@
     {
       "id": "c457ffe0-8ef2-8871-bfac-3ce6aff048d8",
       "number": 145,
-      "key_final": true,
       "name": "Progress tab: show all phases or only active ones",
       "type": "feature",
       "priority": "P2",
@@ -5875,7 +5730,6 @@
     {
       "id": "09112af4-9842-81a8-a8de-f7abb9f2d9e1",
       "number": 146,
-      "key_final": true,
       "name": "Short, end-user What's New, separate from the changelog",
       "type": "docs",
       "priority": "P2",
@@ -5934,7 +5788,6 @@
     {
       "id": "21a25ed8-1714-894a-995a-964b414d4133",
       "number": 147,
-      "key_final": true,
       "name": "Themes: pick the top 20 VS Code themes",
       "type": "docs",
       "priority": "P2",
@@ -5987,7 +5840,6 @@
     {
       "id": "9848fc93-ae9d-8113-9558-1fa7451de7cf",
       "number": 148,
-      "key_final": true,
       "name": "Themes: add batch 1 (Ayu, Night Owl, Gruvbox)",
       "type": "feature",
       "priority": "P2",
@@ -6050,7 +5902,6 @@
     {
       "id": "8049f66a-7d11-82e0-931f-9915ab1c1b7c",
       "number": 149,
-      "key_final": true,
       "name": "Themes: add batch 2 (Noctis, Sublime Material)",
       "type": "feature",
       "priority": "P2",
@@ -6107,7 +5958,6 @@
     {
       "id": "8eb83325-2424-815b-9e9c-401dabc0733f",
       "number": 150,
-      "key_final": true,
       "name": "Themes: add batch 3 (5 themes)",
       "type": "feature",
       "priority": "P2",
@@ -6154,7 +6004,6 @@
     {
       "id": "57069258-0058-8ba1-889c-306a7be73aec",
       "number": 151,
-      "key_final": true,
       "name": "Themes: add batch 4 (5 themes)",
       "type": "feature",
       "priority": "P2",
@@ -6201,7 +6050,6 @@
     {
       "id": "7269186d-9cc6-8fe7-a6b8-b73ef6ec9e12",
       "number": 152,
-      "key_final": true,
       "name": "Appearance menu for 11 themes",
       "type": "polish",
       "priority": "P2",
@@ -6259,7 +6107,6 @@
     {
       "id": "d8dce816-2da3-8f61-9bf5-93a839c12f05",
       "number": 153,
-      "key_final": true,
       "name": "atm commit: accept git-rm'd files; atm reopen",
       "type": "bugfix",
       "priority": "P0",
@@ -6330,7 +6177,6 @@
     {
       "id": "5ad8a7e4-e17b-8206-93aa-094d8bc7bc7a",
       "number": 154,
-      "key_final": true,
       "name": "Skills: commit before marking a task done",
       "type": "bugfix",
       "priority": "P1",
@@ -6383,7 +6229,6 @@
     {
       "id": "ac755053-175e-8691-b275-bec1672f6c3e",
       "number": 155,
-      "key_final": true,
       "name": "atm skip: drop a to-do or blocked task that isn't needed",
       "type": "feature",
       "description": "There is **no way to skip a task through atm**: the theme batches T-150/T-151 became unneeded and could only be repurposed.\n\nAdd `atm skip <id> --reason TEXT`:\n- a todo- or blocked-kind task moves to the skipped kind;\n- the reason is kept as a note (*\"Skipped: ...\"*);\n- any claim is dropped;\n- `reopen` undoes it.\n\nUsage text, scenarios in `tests/scripts/scenarios/skip.json`, skills (do-task, loop-tasks) mention it, CHANGELOG.\n",
@@ -6435,7 +6280,6 @@
     {
       "id": "202dd2a7-435b-8e9b-b06c-153fbe599024",
       "number": 156,
-      "key_final": true,
       "name": "Progress panel: one card for By Phase, one for By Type",
       "type": "bugfix",
       "priority": "P2",
@@ -6489,7 +6333,6 @@
     {
       "id": "3a994724-114e-816c-b67c-adc0c87bbd1a",
       "number": 157,
-      "key_final": true,
       "name": "Progress panel: \"Active phases only\" for By Phase",
       "type": "feature",
       "priority": "P3",
@@ -6545,7 +6388,6 @@
     {
       "id": "c5316219-a696-80d7-b44f-c5513bfbee91",
       "number": 158,
-      "key_final": true,
       "name": "Record the git repository address in meta.repository",
       "type": "feature",
       "priority": "P2",
@@ -6606,7 +6448,6 @@
     {
       "id": "c61b44f2-a13c-8edd-9b31-b50a4b3ab782",
       "number": 159,
-      "key_final": true,
       "name": "Task details: started, finished and duration",
       "type": "feature",
       "priority": "P2",
@@ -6660,7 +6501,6 @@
     {
       "id": "dc09b607-45bb-83c6-911a-0478e83458d6",
       "number": 160,
-      "key_final": true,
       "name": "Task details: commit and PR as GitHub links",
       "type": "feature",
       "priority": "P2",
@@ -6717,7 +6557,6 @@
     {
       "id": "36595650-d689-80d5-8533-9e5874773b53",
       "number": 161,
-      "key_final": true,
       "name": "Commit and PR links for GitLab, Bitbucket and others",
       "type": "feature",
       "priority": "P3",
@@ -6772,7 +6611,6 @@
     {
       "id": "2f4e0599-32d3-84b9-a12a-612556dbc2e0",
       "number": 162,
-      "key_final": true,
       "name": "Completion % leaves out skipped tasks; show them separately",
       "type": "bugfix",
       "priority": "P2",
@@ -6843,7 +6681,6 @@
     {
       "id": "c6e0ed85-9b97-8db6-a7e5-ccb516de7797",
       "number": 163,
-      "key_final": true,
       "name": "Appearance menu: theme picker as a combo box",
       "type": "polish",
       "priority": "P2",
@@ -6900,7 +6737,6 @@
     {
       "id": "189f1968-7a5c-8f39-afc6-ed7d9baf5857",
       "number": 164,
-      "key_final": true,
       "name": "Status filter lists every status in the project's vocabulary",
       "type": "bugfix",
       "priority": "P2",
@@ -6954,7 +6790,6 @@
     {
       "id": "8169148d-ecec-81e3-98af-e84929fe8877",
       "number": 165,
-      "key_final": true,
       "name": "Multi-project API: write down the server's routes and formats",
       "type": "docs",
       "priority": "P0",
@@ -7010,7 +6845,6 @@
     {
       "id": "cc873af2-6ce6-8a0d-b8ea-84ead91dff73",
       "number": 166,
-      "key_final": true,
       "name": "atm-cli: project registry and atm projects",
       "type": "feature",
       "priority": "P0",
@@ -7069,7 +6903,6 @@
     {
       "id": "69b99515-45fa-859c-90c0-1e8c2bd8ca88",
       "number": 167,
-      "key_final": true,
       "name": "atm-cli: register projects automatically",
       "type": "feature",
       "priority": "P1",
@@ -7127,7 +6960,6 @@
     {
       "id": "7bd81e05-f2c6-87cc-b7e8-cdc732f69474",
       "number": 168,
-      "key_final": true,
       "name": "atm-cli: one dashboard server per user",
       "type": "feature",
       "priority": "P0",
@@ -7186,7 +7018,6 @@
     {
       "id": "e302899f-e6b1-836d-88f4-1a6fe6a77320",
       "number": 169,
-      "key_final": true,
       "name": "atm-cli: project summaries in /api/projects",
       "type": "feature",
       "priority": "P1",
@@ -7241,7 +7072,6 @@
     {
       "id": "d36cc88a-dbec-8638-ada0-8458aa68929d",
       "number": 170,
-      "key_final": true,
       "name": "Restart an outdated server: serve --refresh and hooks",
       "type": "feature",
       "priority": "P1",
@@ -7299,7 +7129,6 @@
     {
       "id": "a7a284fc-d5ac-8f84-a6d6-85447a73bb30",
       "number": 171,
-      "key_final": true,
       "name": "atm migrate: stop copying the dashboard; clean up old ones",
       "type": "feature",
       "priority": "P1",
@@ -7361,7 +7190,6 @@
     {
       "id": "731d8bf6-efaa-8a82-a425-07ebc37f2a9a",
       "number": 172,
-      "key_final": true,
       "name": "Dashboard: load data from the server's API",
       "type": "refactor",
       "priority": "P0",
@@ -7421,7 +7249,6 @@
     {
       "id": "b4792150-0517-824c-8bb6-37142215a3dc",
       "number": 173,
-      "key_final": true,
       "name": "Dashboard: project routing and the landing page",
       "type": "feature",
       "priority": "P1",
@@ -7476,7 +7303,6 @@
     {
       "id": "a921ef10-f81c-8ac0-ac45-46108f5341f6",
       "number": 174,
-      "key_final": true,
       "name": "Dashboard: project selector next to the title",
       "type": "feature",
       "priority": "P1",
@@ -7530,7 +7356,6 @@
     {
       "id": "3e3d99da-125b-8bda-9e0a-d2cc481023c2",
       "number": 175,
-      "key_final": true,
       "name": "Dashboard: All projects overview",
       "type": "feature",
       "priority": "P1",
@@ -7585,7 +7410,6 @@
     {
       "id": "ce768dd9-1c20-8743-9177-9211551b73da",
       "number": 176,
-      "key_final": true,
       "name": "Dashboard: 'new version ready' notice",
       "type": "feature",
       "priority": "P2",
@@ -7639,7 +7463,6 @@
     {
       "id": "c17824ac-d471-8080-b143-45321f43f7c8",
       "number": 177,
-      "key_final": true,
       "name": "Skills and docs for one dashboard; remove update-dashboard",
       "type": "docs",
       "priority": "P1",
@@ -7702,7 +7525,6 @@
     {
       "id": "8f1fc48f-58a1-8076-ac82-4e21e55eaab4",
       "number": 178,
-      "key_final": true,
       "name": "Release 0.15.0: one dashboard for all projects",
       "type": "docs",
       "priority": "P1",
@@ -7761,7 +7583,6 @@
     {
       "id": "cd07bf3d-0d7d-84a2-9d8f-5cb797167aad",
       "number": 179,
-      "key_final": true,
       "name": "Dashboard: git worktrees of a project",
       "type": "feature",
       "priority": "P2",
@@ -7827,7 +7648,6 @@
     {
       "id": "ae801798-b87c-8269-bbf3-f91e49e313fe",
       "number": 180,
-      "key_final": true,
       "name": "atm phases: list and name phases one at a time",
       "type": "feature",
       "priority": "P1",
@@ -7886,7 +7706,6 @@
     {
       "id": "43a00e17-2943-80bb-a77d-ac496913c3f7",
       "number": 181,
-      "key_final": true,
       "name": "Finish times for every finished task: migrate backfills them",
       "type": "bugfix",
       "priority": "P1",
@@ -7946,7 +7765,6 @@
     {
       "id": "e04c260c-dee4-8250-802e-028294e9e9a9",
       "number": 182,
-      "key_final": true,
       "name": "Task details: scroll to the top when another task opens",
       "type": "bugfix",
       "priority": "P2",
@@ -7999,7 +7817,6 @@
     {
       "id": "cd9f957d-7909-8505-9dc9-36abf1b90eab",
       "number": 183,
-      "key_final": true,
       "name": "Task details: set the Markdown description apart",
       "type": "polish",
       "priority": "P2",
@@ -8053,7 +7870,6 @@
     {
       "id": "dd1be511-adef-8809-b73c-117d2bbc06ab",
       "number": 184,
-      "key_final": true,
       "name": "Explain an expired lease when its agent finishes the task",
       "type": "bugfix",
       "priority": "P2",
@@ -8111,7 +7927,6 @@
     {
       "id": "674da797-4a0b-89ab-9d60-b755718d0c2c",
       "number": 185,
-      "key_final": true,
       "name": "Update notice: clipped by the title bar",
       "type": "bugfix",
       "priority": "P1",
@@ -8162,7 +7977,6 @@
     {
       "id": "2fa27332-a1e6-81f5-a0f1-7ef105e19897",
       "number": 186,
-      "key_final": true,
       "name": "Update notice: shown when the page is already the new build",
       "type": "bugfix",
       "priority": "P1",
@@ -8215,7 +8029,6 @@
     {
       "id": "9ff6c2f3-35f6-879e-9b30-0edf9fde25e5",
       "number": 187,
-      "key_final": true,
       "name": "Update notice: shows only once per new build",
       "type": "bugfix",
       "priority": "P2",
@@ -8269,7 +8082,6 @@
     {
       "id": "d041ccd0-2843-8c7b-b54c-b89b60ed4826",
       "number": 188,
-      "key_final": true,
       "name": "One title bar for every page",
       "type": "refactor",
       "priority": "P1",
@@ -8323,7 +8135,6 @@
     {
       "id": "5b6bfd12-9db5-8a2d-9b21-0b96e863ef31",
       "number": 189,
-      "key_final": true,
       "name": "Status bar pinned to the bottom on All projects",
       "type": "bugfix",
       "priority": "P1",
@@ -8380,7 +8191,6 @@
     {
       "id": "5e7f7964-f7f0-80e1-aeb0-ef3af86d2a12",
       "number": 190,
-      "key_final": true,
       "name": "Project card: a long phase name stays on one line",
       "type": "bugfix",
       "priority": "P2",
@@ -8434,7 +8244,6 @@
     {
       "id": "a41aecba-ba98-8e1a-8b37-62aa6c39b3f8",
       "number": 191,
-      "key_final": true,
       "name": "Brainstorm: what project cards should show",
       "type": "docs",
       "priority": "P2",
@@ -8493,7 +8302,6 @@
     {
       "id": "d2b9c783-8660-8f7e-b596-7e7b4224de6f",
       "number": 192,
-      "key_final": true,
       "name": "Server summary: the most recently active phases",
       "type": "feature",
       "priority": "P1",
@@ -8553,7 +8361,6 @@
     {
       "id": "3db99e2f-e122-8e9d-948e-f40e7a523c2a",
       "number": 193,
-      "key_final": true,
       "name": "Project card: rings for the recent phases, on one line",
       "type": "feature",
       "priority": "P1",
@@ -8611,7 +8418,6 @@
     {
       "id": "4b941606-7997-8256-8d98-84b59da9344d",
       "number": 194,
-      "key_final": true,
       "name": "Check the phase rings live on real projects",
       "type": "test",
       "priority": "P1",
@@ -8672,7 +8478,6 @@
     {
       "id": "807fb6e4-db4e-8d89-a1ac-ab00bf3ab3da",
       "number": 195,
-      "key_final": true,
       "name": "ATM logo",
       "type": "feature",
       "priority": "P2",
@@ -8749,7 +8554,6 @@
     {
       "id": "ff452a02-f6af-8637-945f-122d0303a2bd",
       "number": 196,
-      "key_final": true,
       "name": "Project logos: atm-cli and server",
       "type": "feature",
       "priority": "P2",
@@ -8804,7 +8608,6 @@
     {
       "id": "8de166a9-c6f0-8a01-9d60-b3882c238b39",
       "number": 197,
-      "key_final": true,
       "name": "Project logos in the project selector and cards",
       "type": "feature",
       "priority": "P2",
@@ -8863,7 +8666,6 @@
     {
       "id": "c2c2aaf4-0257-84b7-9a0e-0a12b913171e",
       "number": 198,
-      "key_final": true,
       "name": "Kanban: completion ring for the tasks shown",
       "type": "feature",
       "priority": "P2",
@@ -8920,7 +8722,6 @@
     {
       "id": "16ed5c1f-45aa-8923-9db6-541e120d0779",
       "number": 199,
-      "key_final": true,
       "name": "\"Needs you\" chip opens the task, or a list of them",
       "type": "feature",
       "priority": "P1",
@@ -8973,7 +8774,6 @@
     {
       "id": "4cfb028e-0eeb-819b-be38-9812bb54464a",
       "number": 200,
-      "key_final": true,
       "name": "Project card: \"needs you\" chip opens the task, or a list of them",
       "type": "feature",
       "priority": "P2",
@@ -9036,7 +8836,6 @@
     {
       "id": "2df3ba10-c2da-8d68-b88e-558f9736fc6b",
       "number": 201,
-      "key_final": true,
       "name": "\"Active phases only\": the last finished phase plus every unfinished one",
       "type": "bugfix",
       "priority": "P1",
@@ -9092,7 +8891,6 @@
     {
       "id": "17721da1-37bd-8e2f-8228-29ecb2f3fc69",
       "number": 202,
-      "key_final": true,
       "name": "Agent identity: tell apart subagents of one session in different worktrees",
       "type": "bugfix",
       "priority": "P1",
@@ -9149,7 +8947,6 @@
     {
       "id": "f46c551e-b292-8204-9c33-9e49160e9d69",
       "number": 203,
-      "key_final": true,
       "name": "Leases: keep a claim alive while its agent waits on a long command",
       "type": "bugfix",
       "priority": "P1",
@@ -9208,7 +9005,6 @@
     {
       "id": "462836b0-f2dc-83e6-9d12-8252df4a3cb8",
       "number": 204,
-      "key_final": true,
       "name": "Share blocked and in-review tasks across worktrees",
       "type": "bugfix",
       "priority": "P1",
@@ -9267,7 +9063,6 @@
     {
       "id": "9634aae0-38e2-8595-a5a4-b18e42c96a9e",
       "number": 205,
-      "key_final": true,
       "name": "Server summary: working, next and last finished task",
       "type": "feature",
       "priority": "P2",
@@ -9327,7 +9122,6 @@
     {
       "id": "f40e6f08-c196-8f76-9cbb-dd7fc6252aa1",
       "number": 206,
-      "key_final": true,
       "name": "Server summary: git branch and latest PR",
       "type": "feature",
       "priority": "P2",
@@ -9388,7 +9182,6 @@
     {
       "id": "ab0f1576-9f76-862e-bd3d-558378de2fbb",
       "number": 207,
-      "key_final": true,
       "name": "Project card: working now and next, by task name",
       "type": "feature",
       "priority": "P2",
@@ -9445,7 +9238,6 @@
     {
       "id": "d6ac3a5a-e893-825e-90f9-a6251083b82a",
       "number": 208,
-      "key_final": true,
       "name": "Project card: git line and last finished task",
       "type": "feature",
       "priority": "P2",
@@ -9503,7 +9295,6 @@
     {
       "id": "3a4d2835-8e98-8f8e-8095-6a2e25c321fa",
       "number": 209,
-      "key_final": true,
       "name": "Project card: layout pass in the approved order",
       "type": "polish",
       "priority": "P2",
@@ -9571,7 +9362,6 @@
     {
       "id": "0e8908f5-dc98-8de8-89f2-b6cf6ad4037f",
       "number": 210,
-      "key_final": true,
       "name": "Activity popup: Idle box fits on one line; explain or fix its color bar",
       "type": "bugfix",
       "priority": "P1",
@@ -9625,7 +9415,6 @@
     {
       "id": "d520419d-ab74-8331-b105-bea4bb2f31ca",
       "number": 211,
-      "key_final": true,
       "name": "Security review of the whole repo; security tasks for each gap",
       "type": "docs",
       "priority": "P1",
@@ -9683,7 +9472,6 @@
     {
       "id": "7d9ac02b-4ae5-8c0c-9ce8-09bb48b5f2e0",
       "number": 212,
-      "key_final": true,
       "name": "Progress tab: review every chart and number with the user, then add the agreed helpers",
       "type": "polish",
       "priority": "P2",
@@ -9738,7 +9526,6 @@
     {
       "id": "8080e9f9-8b01-8637-a473-fc3fe12d847a",
       "number": 213,
-      "key_final": true,
       "name": "Activity popup: review every chart and number with the user, then add the agreed helpers",
       "type": "polish",
       "priority": "P2",
@@ -9795,7 +9582,6 @@
     {
       "id": "d1be951e-934d-8415-b7df-af9a4f6de90b",
       "number": 214,
-      "key_final": true,
       "name": "Project stats: decide with the user what to show, where and how",
       "type": "docs",
       "priority": "P2",
@@ -9849,7 +9635,6 @@
     {
       "id": "d78aba4e-32ed-8aed-b646-19e82d3f4355",
       "number": 215,
-      "key_final": true,
       "name": "All Projects Kanban: decide the design with the user",
       "type": "docs",
       "priority": "P2",
@@ -9904,7 +9689,6 @@
     {
       "id": "3b98d9d0-f86f-8ed4-a176-49fc17144b46",
       "number": 216,
-      "key_final": true,
       "name": "Project information: decide with the user what to show, where and how",
       "type": "docs",
       "priority": "P2",
@@ -9957,7 +9741,6 @@
     {
       "id": "deb9df5f-7d69-86c1-a45f-2fa6604d27f0",
       "number": 217,
-      "key_final": true,
       "name": "About dialog: no stale project section in All projects; name the project with its logo",
       "type": "bugfix",
       "priority": "P1",
@@ -10008,7 +9791,6 @@
     {
       "id": "ff253726-f68d-8169-99a0-74e097f061d5",
       "number": 218,
-      "key_final": true,
       "name": "Skills: write task descriptions and notes in Markdown",
       "type": "docs",
       "priority": "P2",
@@ -10061,7 +9843,6 @@
     {
       "id": "3baa6c6c-7116-8d57-8add-e19447793638",
       "number": 219,
-      "key_final": true,
       "name": "Dashboard: render notes as Markdown",
       "type": "feature",
       "priority": "P2",
@@ -10113,7 +9894,6 @@
     {
       "id": "d8d7f14d-9881-85d2-ac4e-3ac2c79746b0",
       "number": 220,
-      "key_final": true,
       "name": "Skills: pre-approve only the atm subcommands each skill needs, not atm run",
       "type": "bugfix",
       "priority": "P0",
@@ -10169,7 +9949,6 @@
     {
       "id": "5b06be58-b579-8a5b-b191-2a2032d57b12",
       "number": 221,
-      "key_final": true,
       "name": "Skills: task text, notes and CI logs are data, not commands",
       "type": "bugfix",
       "priority": "P0",
@@ -10225,7 +10004,6 @@
     {
       "id": "c0dbcea2-9cda-8c93-ae65-da44ffc3e18f",
       "number": 222,
-      "key_final": true,
       "name": "Shell-safe values: quote agent text in skills; validate task IDs and the base branch",
       "type": "bugfix",
       "priority": "P1",
@@ -10282,7 +10060,6 @@
     {
       "id": "5dcd4a09-f2ed-8865-8c6b-916a4c9bc807",
       "number": 223,
-      "key_final": true,
       "name": "atm commit: each --file names exactly one file (literal pathspecs)",
       "type": "bugfix",
       "priority": "P1",
@@ -10335,7 +10112,6 @@
     {
       "id": "364c352f-f427-82ca-953b-306430494b72",
       "number": 224,
-      "key_final": true,
       "name": "atm-cli and server: no writes or reads through symlinks",
       "type": "bugfix",
       "priority": "P1",
@@ -10392,7 +10168,6 @@
     {
       "id": "eec2dd28-bb78-83de-91ac-a8856800e50b",
       "number": 225,
-      "key_final": true,
       "name": "Dashboard: every link goes through one safeUrl check; atm pr accepts only http(s)",
       "type": "bugfix",
       "priority": "P1",
@@ -10449,7 +10224,6 @@
     {
       "id": "8bf8801a-f18f-8792-8ee7-73d79d8219ae",
       "number": 226,
-      "key_final": true,
       "name": "Server: Content-Security-Policy and other security headers",
       "type": "feature",
       "priority": "P1",
@@ -10506,7 +10280,6 @@
     {
       "id": "e8ab49f9-2329-874e-8328-8dd2456d5265",
       "number": 227,
-      "key_final": true,
       "name": "Server: loopback address, one bad project can't break the overview, limits",
       "type": "bugfix",
       "priority": "P2",
@@ -10562,7 +10335,6 @@
     {
       "id": "5651418a-5377-8142-a593-29817eda217c",
       "number": 228,
-      "key_final": true,
       "name": "atm-cli: robust against hostile task files",
       "type": "bugfix",
       "priority": "P2",
@@ -10620,7 +10392,6 @@
     {
       "id": "b8723a60-0c77-827e-97ee-95ddc30237c3",
       "number": 229,
-      "key_final": true,
       "name": "Loop: confirm --push in the direct workflow; stop when a hook rejects a commit",
       "type": "bugfix",
       "priority": "P2",
@@ -10673,7 +10444,6 @@
     {
       "id": "c24f34c5-6db1-816f-9a0a-ff7c8ca956fe",
       "number": 230,
-      "key_final": true,
       "name": "CI hardening: read-only token, no persisted credentials, pinned actions, Dependabot",
       "type": "infra",
       "priority": "P2",
@@ -10728,7 +10498,6 @@
     {
       "id": "ee82e741-33fe-8d4e-89a5-19e02625b3fb",
       "number": 231,
-      "key_final": true,
       "name": "Distribution: branch protection, SECURITY.md, release pinning decision",
       "type": "infra",
       "priority": "P2",
@@ -10800,7 +10569,6 @@
     {
       "id": "466f4dd7-f156-8ab6-b188-aa7b333c93ef",
       "number": 232,
-      "key_final": true,
       "name": "Define the security architecture: threat model, invariants and their checks",
       "type": "docs",
       "priority": "P1",
@@ -10866,7 +10634,6 @@
     {
       "id": "4e3cb93b-a307-855d-954f-8884a5eb64b0",
       "number": 233,
-      "key_final": true,
       "name": "Decide on the verification sandbox",
       "type": "docs",
       "priority": "P1",
@@ -10933,7 +10700,6 @@
     {
       "id": "3f507037-118f-80b5-8a4c-068229cac04c",
       "number": 234,
-      "key_final": true,
       "name": "Hostile-repo test suite for atm-cli and the server",
       "type": "test",
       "priority": "P1",
@@ -10988,7 +10754,6 @@
     {
       "id": "5fb40e02-1121-8c03-a115-8eb72566f4c4",
       "number": 235,
-      "key_final": true,
       "name": "Agent sandbox: red-team tasks run against the skills in a container",
       "type": "infra",
       "priority": "P2",
@@ -11043,7 +10808,6 @@
     {
       "id": "5e12feaf-68c9-889d-81c5-2ef42368556c",
       "number": 236,
-      "key_final": true,
       "name": "Security verification schedule: every PR, every release, every quarter",
       "type": "infra",
       "priority": "P2",
@@ -11113,7 +10877,6 @@
     {
       "id": "2e9e1204-b14d-8548-955a-84c344f7eaea",
       "number": 237,
-      "key_final": true,
       "name": "Kanban: columns use the full page height",
       "type": "bugfix",
       "priority": "P2",
@@ -11166,7 +10929,6 @@
     {
       "id": "032596fb-1cd6-8244-9e6c-8b015aea6f31",
       "number": 238,
-      "key_final": true,
       "name": "Progress: header widget and utilisation count archived tasks",
       "type": "bugfix",
       "priority": "P1",
@@ -11220,7 +10982,6 @@
     {
       "id": "4a337f31-65bf-8058-9773-2835e1424d46",
       "number": 239,
-      "key_final": true,
       "name": "Progress tab: a filter banner; status and stage filters don't apply; estimates stay whole-phase",
       "type": "feature",
       "priority": "P2",
@@ -11276,7 +11037,6 @@
     {
       "id": "aa21b370-b6ff-82a1-a43d-c2a9390f40dc",
       "number": 240,
-      "key_final": true,
       "name": "Burndown: title with an info popover, a time range, and what's waiting on people",
       "type": "feature",
       "priority": "P2",
@@ -11334,7 +11094,6 @@
     {
       "id": "d389608a-f5ad-8115-a5d7-b1032623e030",
       "number": 241,
-      "key_final": true,
       "name": "Phase table: finished phases in one row, Finished by first, phase names",
       "type": "feature",
       "priority": "P2",
@@ -11389,7 +11148,6 @@
     {
       "id": "bc5cbfc4-379a-830e-a2b4-6af793c1bce5",
       "number": 242,
-      "key_final": true,
       "name": "Progress tab: agent time, waiting on you and idle replace utilisation",
       "type": "feature",
       "priority": "P2",
@@ -11445,7 +11203,6 @@
     {
       "id": "ff55f254-c747-82d2-bdfd-61b863a11352",
       "number": 243,
-      "key_final": true,
       "name": "Header Progress popover: finished phases as chips, types as a stacked bar, a Go to section",
       "type": "feature",
       "priority": "P2",
@@ -11500,7 +11257,6 @@
     {
       "id": "a3b8cd40-5537-8309-a4e9-d3446751c345",
       "number": 244,
-      "key_final": true,
       "name": "atm: keep each block's start and end, so waiting time can be measured",
       "type": "feature",
       "priority": "P2",
@@ -11556,7 +11312,6 @@
     {
       "id": "e5518631-bd32-8b33-8902-d5ada2b4e975",
       "number": 245,
-      "key_final": true,
       "name": "Shared time use: agents working, waiting on you, idle, and the Where the time went bar",
       "type": "feature",
       "priority": "P2",
@@ -11613,7 +11368,6 @@
     {
       "id": "86ad490b-4d7e-85c3-bac4-088fca5fbac0",
       "number": 246,
-      "key_final": true,
       "name": "Activity popup: three KPI cards (done, time per task alone and with you, where the time went)",
       "type": "feature",
       "priority": "P2",
@@ -11670,7 +11424,6 @@
     {
       "id": "d8cb4191-9b9a-8d9e-ba8c-9b6e136e6a5d",
       "number": 247,
-      "key_final": true,
       "name": "Activity: the agents chart by kind, with waiting on you",
       "type": "feature",
       "priority": "P2",
@@ -11726,7 +11479,6 @@
     {
       "id": "3288bc0b-24f2-8b01-ac53-252c4e8b07b1",
       "number": 248,
-      "key_final": true,
       "name": "Activity: time per task chart readable with outliers; interactive tasks apart",
       "type": "feature",
       "priority": "P2",
@@ -11781,7 +11533,6 @@
     {
       "id": "8d0b5606-8a4c-8440-becd-20c4dbd23419",
       "number": 249,
-      "key_final": true,
       "name": "Activity: sparkline explained, info on the popup and the completed chart, unused fields dropped",
       "type": "polish",
       "priority": "P3",
@@ -11837,7 +11588,6 @@
     {
       "id": "327c0de8-9b83-80cf-b7ea-6244bedb0b85",
       "number": 250,
-      "key_final": true,
       "name": "Filters: show only active phases in the Phase filter, with a toggle for finished ones",
       "type": "polish",
       "priority": "P2",
@@ -11892,7 +11642,6 @@
     {
       "id": "ec53bc1e-02d9-8955-8c8e-abb2793f15a7",
       "number": 251,
-      "key_final": true,
       "name": "Tab order: Kanban, List, Graph, then Progress, Agents; Kanban the default",
       "type": "polish",
       "priority": "P2",
@@ -11946,7 +11695,6 @@
     {
       "id": "8ce42923-ca62-802a-8387-7af5df96d56c",
       "number": 252,
-      "key_final": true,
       "name": "Project tab: the Information section",
       "type": "feature",
       "priority": "P2",
@@ -12002,7 +11750,6 @@
     {
       "id": "db17039f-3cda-8297-bbfc-719938232fca",
       "number": 253,
-      "key_final": true,
       "name": "Project tab: the Stats numbers",
       "type": "feature",
       "priority": "P2",
@@ -12059,7 +11806,6 @@
     {
       "id": "51290561-7163-82eb-8081-0a3ee853b50b",
       "number": 254,
-      "key_final": true,
       "name": "Project tab: time per task histogram and the slowest tasks",
       "type": "feature",
       "priority": "P2",
@@ -12114,7 +11860,6 @@
     {
       "id": "9e6868e9-39df-8790-bcc4-a7b251cbe847",
       "number": 255,
-      "key_final": true,
       "name": "About dialog and All projects cards: link to the Project tab, one line of stats",
       "type": "feature",
       "priority": "P3",
@@ -12171,7 +11916,6 @@
     {
       "id": "d9eed0d3-010a-8547-ac6d-2dbed73a600d",
       "number": 256,
-      "key_final": true,
       "name": "Kanban cards: labels on one line, with a +N chip that shows them all",
       "type": "polish",
       "priority": "P2",
@@ -12225,7 +11969,6 @@
     {
       "id": "afb08eb7-128c-897b-8a5f-036e0999d2c0",
       "number": 257,
-      "key_final": true,
       "name": "Project summaries: a board object for the All projects Kanban",
       "type": "feature",
       "priority": "P2",
@@ -12284,7 +12027,6 @@
     {
       "id": "5e71d6fe-4e02-8ecf-899c-da2730f56d6b",
       "number": 258,
-      "key_final": true,
       "name": "Server: a read-only search route across projects",
       "type": "feature",
       "priority": "P2",
@@ -12342,7 +12084,6 @@
     {
       "id": "e4178dcf-70af-8bda-a621-1efbee428ec4",
       "number": 259,
-      "key_final": true,
       "name": "All projects: Projects and Board tabs, and the cross-project board",
       "type": "feature",
       "priority": "P2",
@@ -12405,7 +12146,6 @@
     {
       "id": "0e243a9e-8448-8b1c-8983-26aca90ef52d",
       "number": 260,
-      "key_final": true,
       "name": "All projects board: group by project",
       "type": "feature",
       "priority": "P3",
@@ -12460,7 +12200,6 @@
     {
       "id": "1cd3517f-0647-857f-ac45-25fb40b99bd4",
       "number": 261,
-      "key_final": true,
       "name": "All projects board: search box",
       "type": "feature",
       "priority": "P3",
@@ -12518,7 +12257,6 @@
     {
       "id": "c24a2ff0-0ab9-89e8-832d-2cbe125cf252",
       "number": 262,
-      "key_final": true,
       "name": "Kanban: one scroll per column, no page scrollbar; more-above/below hints instead of scrollbars",
       "type": "bugfix",
       "priority": "P1",
@@ -12573,7 +12311,6 @@
     {
       "id": "0c86dc56-ab97-8d67-96b2-2cb79c85b039",
       "number": 263,
-      "key_final": true,
       "name": "Activity popup: the heading names the period, not the bar size",
       "type": "bugfix",
       "priority": "P1",
@@ -12626,7 +12363,6 @@
     {
       "id": "2529434a-0fa8-8194-975b-2db3632f2270",
       "number": 264,
-      "key_final": true,
       "name": "Activity: an e2e test per period preset for the popup's headings",
       "type": "test",
       "priority": "P1",
@@ -12681,7 +12417,6 @@
     {
       "id": "923a8a45-6136-8bc3-a82a-d43be58281ee",
       "number": 265,
-      "key_final": true,
       "name": "All projects board: one scroll per column, no page scrollbar",
       "type": "bugfix",
       "priority": "P2",
@@ -12737,7 +12472,6 @@
     {
       "id": "c932c72e-c917-800c-a058-75edfe99cc79",
       "number": 266,
-      "key_final": true,
       "name": "All projects: rename the Board tab to Omniboard, with an ⓘ",
       "type": "polish",
       "priority": "P2",
@@ -12790,7 +12524,6 @@
     {
       "id": "eb17be7f-bded-8a81-b69e-6611095ade8d",
       "number": 267,
-      "key_final": true,
       "name": "Project tab: no description under the project's name",
       "type": "polish",
       "priority": "P2",
@@ -12844,7 +12577,6 @@
     {
       "id": "cb611508-97a4-89f6-9641-ccef0ceec593",
       "number": 268,
-      "key_final": true,
       "name": "Project tab: Information and Stats panels of the same height",
       "type": "polish",
       "priority": "P2",
@@ -12899,7 +12631,6 @@
     {
       "id": "22f60be7-2762-851c-b2aa-6977747d7214",
       "number": 269,
-      "key_final": true,
       "name": "Point the repository's references at solo-swe",
       "type": "infra",
       "priority": "P2",
@@ -12959,7 +12690,6 @@
     {
       "id": "a632b60d-67f0-87a2-afeb-15e5817ce3f2",
       "number": 270,
-      "key_final": true,
       "name": "Rename the marketplace to solo-swe-plugins",
       "type": "infra",
       "priority": "P2",
@@ -13016,7 +12746,6 @@
     {
       "id": "06a57956-c264-8a56-b082-b7d0e4970da3",
       "number": 271,
-      "key_final": true,
       "name": "Titles: Projects Overview, and project pages without the Task Dashboard suffix",
       "type": "polish",
       "priority": "P2",
@@ -13068,7 +12797,6 @@
     {
       "id": "323a9bb0-6bc2-85c0-b9d1-5e3851357285",
       "number": 272,
-      "key_final": true,
       "name": "The atm logo on GitHub: README header and a social preview image",
       "type": "polish",
       "priority": "P2",
@@ -13122,7 +12850,6 @@
     {
       "id": "0bfd22f5-cda0-8ced-83d6-ee688b3147e8",
       "number": 273,
-      "key_final": true,
       "name": "atm repository set: move recorded PR links to the new address",
       "type": "feature",
       "priority": "P2",
@@ -13177,7 +12904,6 @@
     {
       "id": "16922c32-f2cc-84ec-8a80-19d076de658a",
       "number": 274,
-      "key_final": true,
       "name": "Project selector: the All projects option is called Projects Overview",
       "type": "polish",
       "priority": "P2",
@@ -13229,7 +12955,6 @@
     {
       "id": "6784ea64-1793-81a2-93b2-f811cf96560b",
       "number": 275,
-      "key_final": true,
       "name": "Dependabot: one grouped PR per ecosystem a week",
       "type": "infra",
       "priority": "P2",
@@ -13281,7 +13006,6 @@
     {
       "id": "87e3a734-d1e9-82e0-a044-1cc1103472d4",
       "number": 276,
-      "key_final": true,
       "name": "Fix the flaky server test: use the port atm serve reports",
       "type": "bugfix",
       "priority": "P2",
@@ -13332,7 +13056,6 @@
     {
       "id": "e222df28-533f-82c6-96ef-f254f4c09224",
       "number": 277,
-      "key_final": true,
       "name": "Test the archive and its UI together on a test project",
       "type": "test",
       "priority": "P2",
@@ -13392,7 +13115,6 @@
     {
       "id": "9381258c-3f95-8653-977e-021f4027d479",
       "number": 278,
-      "key_final": true,
       "name": "One branding folder, made by a script from the logo's source",
       "type": "refactor",
       "priority": "P2",
@@ -13451,7 +13173,6 @@
     {
       "id": "d68ff7db-b187-8f5d-b99e-47f600eac64d",
       "number": 279,
-      "key_final": true,
       "name": "A richer social preview: the dashboard, the logo and how to install, from the script",
       "type": "feature",
       "priority": "P2",
@@ -13525,7 +13246,6 @@
     {
       "id": "9cae2ffb-2490-89a4-b100-494acf55c6cf",
       "number": 280,
-      "key_final": true,
       "name": "Task details without a scrollbar, with a section rail to jump around",
       "type": "polish",
       "priority": "P2",
@@ -13582,7 +13302,6 @@
     {
       "id": "34e65e87-1538-81b1-b3a5-46f65624fb67",
       "number": 281,
-      "key_final": true,
       "name": "Make the List-tab screenshot tests pass locally again",
       "type": "test",
       "priority": "P1",
@@ -13633,7 +13352,6 @@
     {
       "id": "2f45b257-755e-8a62-9136-a132d3dfb53a",
       "number": 282,
-      "key_final": true,
       "name": "What's new without a scrollbar",
       "type": "polish",
       "priority": "P2",
@@ -13693,7 +13411,6 @@
     {
       "id": "437feb3e-4e3b-879b-9f65-05d7dc870a79",
       "number": 283,
-      "key_final": true,
       "name": "A sticky-note theme: whiteboard or blackboard, cards as sticky notes",
       "type": "feature",
       "priority": "P2",
@@ -13751,7 +13468,6 @@
     {
       "id": "3df03f0e-0f71-8eca-9624-1006664216ae",
       "number": 287,
-      "key_final": true,
       "name": "Sprint data model: meta.sprints, the task's sprint and sprint history",
       "type": "feature",
       "priority": "P0",
@@ -13810,7 +13526,6 @@
     {
       "id": "6d4511f2-704c-89ab-b8cb-60e92575dfa8",
       "number": 288,
-      "key_final": true,
       "name": "Generated sprint names: historical people or the creation time",
       "type": "feature",
       "priority": "P1",
@@ -13867,7 +13582,6 @@
     {
       "id": "1c33c8c6-69c5-8104-945f-ea3d00ea430c",
       "number": 289,
-      "key_final": true,
       "name": "Merge driver: sprints, releases and components item by item",
       "type": "feature",
       "priority": "P0",
@@ -13924,7 +13638,6 @@
     {
       "id": "04b64c33-4271-80ee-838e-a1a0e4c389bd",
       "number": 290,
-      "key_final": true,
       "name": "atm sprints, atm move and atm backlog",
       "type": "feature",
       "priority": "P0",
@@ -13985,7 +13698,6 @@
     {
       "id": "9de2c5de-540e-820a-94e5-f7eede94daf5",
       "number": 291,
-      "key_final": true,
       "name": "Selections in atm next; sprint, backlog, release and component options",
       "type": "feature",
       "priority": "P0",
@@ -14047,7 +13759,6 @@
     {
       "id": "cb4eda1b-197a-8f07-87d9-6f472f654773",
       "number": 292,
-      "key_final": true,
       "name": "Phases become sprints in atm migrate",
       "type": "feature",
       "priority": "P0",
@@ -14122,7 +13833,6 @@
     {
       "id": "c3aabd5a-f4ae-8faf-8b06-f903a919cc8c",
       "number": 293,
-      "key_final": true,
       "name": "Dashboard reads sprints, and phases as sprints for unmigrated projects",
       "type": "feature",
       "priority": "P1",
@@ -14180,7 +13890,6 @@
     {
       "id": "252da581-77b5-8c93-a664-e61dd89370df",
       "number": 294,
-      "key_final": true,
       "name": "Sprint, Release and Component filters replace the Phase filter",
       "type": "feature",
       "priority": "P1",
@@ -14238,7 +13947,6 @@
     {
       "id": "bab097f5-a10f-867a-bdf7-51fb530bf502",
       "number": 295,
-      "key_final": true,
       "name": "Sprint header: goal, due, progress, added and carried",
       "type": "feature",
       "priority": "P1",
@@ -14295,7 +14003,6 @@
     {
       "id": "ffb2d872-85c4-8a1d-9766-e42cdbb9cae3",
       "number": 296,
-      "key_final": true,
       "name": "Kanban: Group by sprint",
       "type": "feature",
       "priority": "P2",
@@ -14358,7 +14065,6 @@
     {
       "id": "eb04e428-1c3c-877e-98a8-e5a0da0eb35f",
       "number": 297,
-      "key_final": true,
       "name": "Progress tab: sprint table, burndown and forecast per sprint",
       "type": "feature",
       "priority": "P1",
@@ -14416,7 +14122,6 @@
     {
       "id": "a698f6c3-3911-8caa-a9e5-3c1813af6a33",
       "number": 298,
-      "key_final": true,
       "name": "Sprints in the detail panel, the overview and project cards",
       "type": "feature",
       "priority": "P2",
@@ -14481,7 +14186,6 @@
     {
       "id": "4452f039-361b-84d8-941b-2993b73923b1",
       "number": 299,
-      "key_final": true,
       "name": "atm sprints close: carry-over and the sprint's report",
       "type": "feature",
       "priority": "P1",
@@ -14538,7 +14242,6 @@
     {
       "id": "68d53061-6775-8ccc-8455-3ac204569b53",
       "number": 300,
-      "key_final": true,
       "name": "/atm:plan-sprint: plan a sprint with the user",
       "type": "feature",
       "priority": "P1",
@@ -14596,7 +14299,6 @@
     {
       "id": "47fea3e4-e7c9-81a0-9a84-ff51a3197ff3",
       "number": 301,
-      "key_final": true,
       "name": "/atm:close-sprint: review the sprint and carry over what's left",
       "type": "feature",
       "priority": "P1",
@@ -14651,7 +14353,6 @@
     {
       "id": "bf3db641-44bd-84de-9507-8ad3c335888e",
       "number": 302,
-      "key_final": true,
       "name": "Loop selections, stopping and --continue; do-task's default selection",
       "type": "feature",
       "priority": "P1",
@@ -14708,7 +14409,6 @@
     {
       "id": "e836b956-b1db-8f29-b76e-3a3d32f31655",
       "number": 303,
-      "key_final": true,
       "name": "/atm:create-tasks proposes sprints instead of phases",
       "type": "feature",
       "priority": "P2",
@@ -14763,7 +14463,6 @@
     {
       "id": "1f97becc-9cf7-8095-b6fe-2dbc7bd61d47",
       "number": 304,
-      "key_final": true,
       "name": "Agent sandbox and security doc for the sprint skills",
       "type": "infra",
       "priority": "P1",
@@ -14820,7 +14519,6 @@
     {
       "id": "5601450f-4717-8a58-9a02-380c9b2e5a68",
       "number": 305,
-      "key_final": true,
       "name": "Plan this repository's first sprint, together",
       "type": "feature",
       "priority": "P1",
@@ -14882,7 +14580,6 @@
     {
       "id": "eb2065fb-d436-8478-95b4-99bc44c5b2cf",
       "number": 306,
-      "key_final": true,
       "name": "Releases in atm-cli: meta.releases and atm releases",
       "type": "feature",
       "priority": "P1",
@@ -14940,7 +14637,6 @@
     {
       "id": "8cc03bf3-160d-8d35-b28c-3bb9062dc035",
       "number": 307,
-      "key_final": true,
       "name": "atm releases notes: a draft from the release's tasks",
       "type": "feature",
       "priority": "P2",
@@ -14994,7 +14690,6 @@
     {
       "id": "eeafe259-c23d-8c3c-b66c-72d02a47c39b",
       "number": 308,
-      "key_final": true,
       "name": "atm merged releases a release; /atm:push suggests the branch",
       "type": "feature",
       "priority": "P2",
@@ -15053,7 +14748,6 @@
     {
       "id": "122a164d-d822-8367-a9c9-f691fac1832b",
       "number": 309,
-      "key_final": true,
       "name": "Release view on the dashboard",
       "type": "feature",
       "priority": "P2",
@@ -15123,7 +14817,6 @@
     {
       "id": "81763d5a-4f3a-8549-82a2-33e46a48f42f",
       "number": 310,
-      "key_final": true,
       "name": "This repository's releases, recovered from its PRs",
       "type": "infra",
       "priority": "P3",
@@ -15174,7 +14867,6 @@
     {
       "id": "41727fdc-7a1a-8870-b1e1-017d82acce0d",
       "number": 311,
-      "key_final": true,
       "name": "Components: meta.components and suggestions from files",
       "type": "feature",
       "priority": "P2",
@@ -15233,7 +14925,6 @@
     {
       "id": "c71ace23-a35c-8dc0-be64-f18af3f90e8a",
       "number": 312,
-      "key_final": true,
       "name": "Review modes: atm done by mode, batch tasks wait for the sprint review",
       "type": "feature",
       "priority": "P2",
@@ -15292,7 +14983,6 @@
     {
       "id": "e4b43960-fffb-80bc-b2ca-6bb11717b5c8",
       "number": 313,
-      "key_final": true,
       "name": "atm approve and request-changes; rework goes back to the same agent",
       "type": "feature",
       "priority": "P2",
@@ -15355,7 +15045,6 @@
     {
       "id": "e1ecff89-6af4-81e3-866e-06d9e1d140d2",
       "number": 314,
-      "key_final": true,
       "name": "with: user: work done together, skipped by unattended loops",
       "type": "feature",
       "priority": "P2",
@@ -15418,7 +15107,6 @@
     {
       "id": "d336bcb3-6ef5-8484-860b-d03b52309456",
       "number": 315,
-      "key_final": true,
       "name": "Skills end tasks by their review mode; close-sprint's review step",
       "type": "feature",
       "priority": "P2",
@@ -15478,7 +15166,6 @@
     {
       "id": "73cc26a7-a3ff-8bf8-97b4-fdadeb8c7169",
       "number": 316,
-      "key_final": true,
       "name": "Dashboard: review states, components, needs you and pending sprint reviews",
       "type": "feature",
       "priority": "P2",
@@ -15545,7 +15232,6 @@
     {
       "id": "cba68433-e13a-8c73-8760-5a13c03860be",
       "number": 317,
-      "key_final": true,
       "name": "Agent sandbox and security doc for review modes and with: user",
       "type": "infra",
       "priority": "P2",
@@ -15600,7 +15286,6 @@
     {
       "id": "bfb5e108-59b9-8b91-8827-364abf8c0982",
       "number": 318,
-      "key_final": true,
       "name": "Resolution and relations in atm-cli",
       "type": "feature",
       "priority": "P3",
@@ -15658,7 +15343,6 @@
     {
       "id": "4dc694e4-b9fb-8cdd-ba58-d9e734ba5ce1",
       "number": 319,
-      "key_final": true,
       "name": "Resolution and relations on the dashboard",
       "type": "feature",
       "priority": "P3",
@@ -15715,7 +15399,6 @@
     {
       "id": "ad3d2b62-7f63-8ff6-a0b9-ab7692d79258",
       "number": 320,
-      "key_final": true,
       "name": "Remove phases from atm-cli",
       "type": "refactor",
       "priority": "P2",
@@ -15791,7 +15474,6 @@
     {
       "id": "086f9027-70cf-8dc4-9707-48e61df8fb68",
       "number": 321,
-      "key_final": true,
       "name": "Kanban Next up comes from atm serve's summary",
       "type": "refactor",
       "priority": "P2",
@@ -15851,7 +15533,6 @@
     {
       "id": "0e9ec5a0-16d7-8f77-a6f9-4f2442f600d7",
       "number": 322,
-      "key_final": true,
       "name": "Release v0.24.0",
       "type": "infra",
       "priority": "P1",
@@ -15909,7 +15590,6 @@
     {
       "id": "c00886ea-27b4-8edd-a6f4-ba264c317d4b",
       "number": 323,
-      "key_final": true,
       "name": "Walk through the dashboard's sprint views together, and align them live",
       "type": "polish",
       "priority": "P1",
@@ -15977,7 +15657,6 @@
     {
       "id": "3b5fa12f-a3f7-8604-829f-770f9d23f103",
       "number": 324,
-      "key_final": true,
       "name": "atm components: define components and move labels onto them",
       "type": "feature",
       "priority": "P1",
@@ -16036,7 +15715,6 @@
     {
       "id": "fe2e4803-e265-897b-8d6f-580d9b4b2d0c",
       "number": 325,
-      "key_final": true,
       "name": "Make this repository's components real",
       "type": "infra",
       "priority": "P1",
@@ -16086,7 +15764,6 @@
     {
       "id": "c48d733d-2511-87c8-918a-3420793f8475",
       "number": 326,
-      "key_final": true,
       "name": "atm components edit: change a component, move a label onto it",
       "type": "feature",
       "priority": "P1",
@@ -16145,7 +15822,6 @@
     {
       "id": "3347db99-c75a-8bd8-b34e-670fd66b15c4",
       "number": 327,
-      "key_final": true,
       "name": "This repository's remaining components: ci, branding, docs; atm-cli and server labels moved",
       "type": "infra",
       "priority": "P1",
@@ -16196,7 +15872,6 @@
     {
       "id": "1894ec04-4d5c-8c1a-b451-ec4a1bfa995c",
       "number": 328,
-      "key_final": true,
       "name": "Projects Overview: the Activity popup across all projects",
       "type": "feature",
       "priority": "P2",
@@ -16297,7 +15972,6 @@
     {
       "id": "ee9d3fce-244c-8ce2-a5df-2bea4ca1dcb3",
       "number": 329,
-      "key_final": true,
       "name": "Projects Overview: a Progress tab across all projects",
       "type": "feature",
       "priority": "P2",
@@ -16382,7 +16056,6 @@
     {
       "id": "72f326f0-9078-828b-83cc-066b38100693",
       "number": 330,
-      "key_final": true,
       "name": "atm surfaces open tasks left in closed sprints",
       "type": "feature",
       "priority": "P2",
@@ -16441,7 +16114,6 @@
     {
       "id": "eae1ca13-a93e-8374-9848-db7a9e4661a7",
       "number": 331,
-      "key_final": true,
       "name": "Release v0.25.0",
       "type": "infra",
       "priority": "P1",
@@ -16495,7 +16167,6 @@
     {
       "id": "07f1b0f5-2739-81d4-82ba-ac8db2a09666",
       "number": 332,
-      "key_final": true,
       "name": "Projects Overview: the needs-you popup on a project card opens off screen",
       "type": "bugfix",
       "priority": "P2",
@@ -16549,7 +16220,6 @@
     {
       "id": "c273252e-fe16-86d2-8269-dc8747973d93",
       "number": 333,
-      "key_final": true,
       "name": "Projects Overview: a combined Agents tab",
       "type": "feature",
       "priority": "P2",
@@ -16607,7 +16277,6 @@
     {
       "id": "4757ba51-1dff-854a-ad82-abdba783b733",
       "number": 334,
-      "key_final": true,
       "name": "Projects Overview: less white space under the title bar",
       "type": "polish",
       "priority": "P2",
@@ -16672,7 +16341,6 @@
     {
       "id": "2a9d3533-250f-87d3-aff1-106318799f4d",
       "number": 335,
-      "key_final": true,
       "name": "Projects Overview: a more appealing project card",
       "type": "polish",
       "priority": "P2",
@@ -16727,7 +16395,6 @@
     {
       "id": "986e6bb7-2be8-85f6-b932-df165a39659e",
       "number": 338,
-      "key_final": true,
       "name": "Task List: richer cards that use the row's width",
       "type": "polish",
       "priority": "P2",
@@ -16781,7 +16448,6 @@
     {
       "id": "48410cac-40ea-8370-8006-5afd1b3383f9",
       "number": 339,
-      "key_final": true,
       "name": "atm sprints delete: remove a sprint created by mistake",
       "type": "feature",
       "priority": "P2",
@@ -16841,7 +16507,6 @@
     {
       "id": "1e730e81-384c-85ca-ae85-b94f73f7c3f9",
       "number": 340,
-      "key_final": true,
       "name": "All Projects Board: show only the active sprints by default",
       "type": "feature",
       "priority": "P2",
@@ -16903,7 +16568,6 @@
     {
       "id": "fa9131c0-063b-8419-835a-41f6910bc3b4",
       "number": 341,
-      "key_final": true,
       "name": "Dependency Graph: a more usable fit (auto-fit toggle, fit all vs the filtered tasks)",
       "type": "polish",
       "priority": "P1",
@@ -16970,7 +16634,6 @@
     {
       "id": "a2573a40-4318-883e-99a2-79986484f83c",
       "number": 343,
-      "key_final": true,
       "name": "atm commit --record: record an existing commit on a task (after a rebase)",
       "type": "feature",
       "priority": "P2",
@@ -17028,7 +16691,6 @@
     {
       "id": "b1a99318-4a6a-893a-b8df-22312fed8645",
       "number": 344,
-      "key_final": true,
       "name": "Release v0.26.0",
       "type": "infra",
       "priority": "P1",
@@ -17109,7 +16771,6 @@
     {
       "id": "28b2d4d1-0c6f-8972-a43c-9053bd04d2f8",
       "number": 345,
-      "key_final": true,
       "name": "Testing: make screenshots and e2e tests cheaper to keep up",
       "type": "infra",
       "priority": "P1",
@@ -17190,7 +16851,6 @@
     {
       "id": "5d3ebe5f-cdc6-8416-a4b8-57276913cd58",
       "number": 346,
-      "key_final": true,
       "name": "One look for the tabs on the overview and on a project's page",
       "type": "polish",
       "priority": "P2",
@@ -17243,7 +16903,6 @@
     {
       "id": "a9911e65-3ed7-8e8c-9819-0c17a938defe",
       "number": 347,
-      "key_final": true,
       "name": "\"Needs you\": count a with-you task only when it is in the active sprint and ready",
       "type": "bugfix",
       "priority": "P1",
@@ -17299,7 +16958,6 @@
     {
       "id": "4be0156f-a164-8f32-8704-f659c2446bb9",
       "number": 348,
-      "key_final": true,
       "name": "Project selector: an icon for Projects Overview",
       "type": "polish",
       "priority": "P2",
@@ -17353,7 +17011,6 @@
     {
       "id": "e289334c-5319-8b9a-bb8b-4ec901b2481b",
       "number": 349,
-      "key_final": true,
       "name": "Omniboard: the To Do column lists every to-do task, not only what the loop takes",
       "type": "bugfix",
       "priority": "P1",
@@ -17411,7 +17068,6 @@
     {
       "id": "f5b2be33-a09b-8b20-b1ce-b14eac8bcec5",
       "number": 350,
-      "key_final": true,
       "name": "Activity popup: correct values per hour, day and week, and its hover inside the pane",
       "type": "bugfix",
       "priority": "P1",
@@ -17497,7 +17153,6 @@
     {
       "id": "d2de89ec-b9c5-8369-b925-f95bb1f5f076",
       "number": 351,
-      "key_final": true,
       "name": "atm --dir PATH: run any command on the project at PATH",
       "type": "feature",
       "priority": "P1",
@@ -17552,7 +17207,6 @@
     {
       "id": "da8bb5e1-dc09-860d-a6df-6e77d0c93b20",
       "number": 352,
-      "key_final": true,
       "name": "atm archive --dry-run: say what stays, and why",
       "type": "feature",
       "priority": "P2",
@@ -17604,7 +17258,6 @@
     {
       "id": "a56ef5c3-86da-8bf9-aad1-22e3d9980e81",
       "number": 353,
-      "key_final": true,
       "name": "atm show: mark an archived task as archived",
       "type": "bugfix",
       "priority": "P2",
@@ -17656,7 +17309,6 @@
     {
       "id": "8e4cadc4-fadc-8cee-9bc0-e5ac7ff41151",
       "number": 354,
-      "key_final": true,
       "name": "Dashboard: the archive one click away (the subtitle's \"N archived\", the List's note)",
       "type": "polish",
       "priority": "P2",
@@ -17710,7 +17362,6 @@
     {
       "id": "1604fa50-f654-8f00-bfd5-a38e4e759f35",
       "number": 355,
-      "key_final": true,
       "name": "Projects Overview: Activity, Progress and Agents count each project's archive",
       "type": "bugfix",
       "priority": "P1",
@@ -17763,7 +17414,6 @@
     {
       "id": "263b3c57-836e-88b2-98dc-dc96f8ff455f",
       "number": 356,
-      "key_final": true,
       "name": "atm add / atm edit --add-dep: a dependency on an archived task is fine",
       "type": "bugfix",
       "priority": "P1",
@@ -17815,7 +17465,6 @@
     {
       "id": "9c0db781-e013-888e-9f14-8fcd434f0884",
       "number": 357,
-      "key_final": true,
       "name": "atm unarchive: tell an ID already in tasks.json from an unknown one, and say archiving moves it back",
       "type": "feature",
       "priority": "P2",
@@ -17867,7 +17516,6 @@
     {
       "id": "6695ae8b-6fca-8392-ab8b-053e7e9fc934",
       "number": 358,
-      "key_final": true,
       "name": "atm deps: list archived tasks that wait on this one",
       "type": "feature",
       "priority": "P3",
@@ -17919,7 +17567,6 @@
     {
       "id": "fb71af24-cff8-8ac0-bcb2-1465c0cd263e",
       "number": 359,
-      "key_final": true,
       "name": "Archive tests: fill the gaps found in T-277",
       "type": "test",
       "priority": "P2",

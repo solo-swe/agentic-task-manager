@@ -178,6 +178,43 @@ describe('DiffView: the layout', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('f.txt: not in head');
   });
 
+  it('a long file is drawn 100 rows at a time, each chunk when the page is idle, standing at the rest’s height meanwhile (ATM-587)', async () => {
+    const waiting = new Map<number, () => void>();
+    let next = 0;
+    vi.stubGlobal('requestIdleCallback', (act: () => void) => (waiting.set(++next, act), next));
+    vi.stubGlobal('cancelIdleCallback', (id: number) => waiting.delete(id));
+    const idle = {
+      shift: () => {
+        const [id, act] = [...waiting][0];
+        waiting.delete(id);
+        return act;
+      },
+      get length() {
+        return waiting.size;
+      },
+    };
+    try {
+      const lines = Array.from({ length: 250 }, (_, i) => `line ${i + 1}`);
+      const { container } = show({
+        before: null,
+        patch: `@@ -0,0 +1,250 @@\n${lines.map((l) => `+${l}`).join('\n')}\n`,
+        after: at('head', lines.join('\n') + '\n'),
+      });
+      await numbers();
+      const drawn = () => container.querySelectorAll('.diff-new .diff-added').length;
+      expect(drawn()).toBe(100);
+      expect(container.querySelector('.diff-more')).toHaveStyle({ height: `${150 * 20}px` });
+      idle.shift()!();
+      await vi.waitFor(() => expect(drawn()).toBe(200));
+      idle.shift()!();
+      await vi.waitFor(() => expect(drawn()).toBe(250));
+      expect(container.querySelector('.diff-more')).toBeNull();
+      expect(idle).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('the same sides given again (a refresh) keep what is shown: no Loading, nothing asked again', async () => {
     const before = at('base', OLD);
     const after = at('head', NEW);

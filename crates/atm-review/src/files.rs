@@ -17,7 +17,8 @@ pub mod review_md {
         id: String,
         number: u32,
         title: String,
-        status: Status,
+        /// As the file writes it ([`stored`]): an older atm reads the review too
+        status: String,
         #[serde(default)]
         tasks: Vec<String>,
         /// None (left out) while whose change it is isn't known
@@ -27,6 +28,31 @@ pub mod review_md {
         reviewers: Vec<String>,
         created: Datetime,
         updated: Datetime,
+    }
+
+    /// A status as `review.md` writes it: its name, but waiting on the reviewers, which the file keeps writing as
+    /// `open`, as atm before 0.41.0 did and reads (ATM-613 renamed the status, not the file's word for it: a clone or
+    /// an app on an older atm would otherwise not see the review at all)
+    fn stored(status: Status) -> &'static str {
+        match status {
+            Status::Waiting => "open",
+            other => other.name(),
+        }
+    }
+
+    /// A status from `review.md`: `open` (as written) or `waiting` (as a 0.41.0 build wrote it a while) is waiting
+    fn status_of(name: &str) -> Result<Status> {
+        if name == "open" || name == "waiting" {
+            return Ok(Status::Waiting);
+        }
+        Status::EVERY
+            .into_iter()
+            .find(|s| s.name() == name)
+            .ok_or_else(|| {
+                Error::Invalid(format!(
+                    "review.md's header can't be read: no status {name}"
+                ))
+            })
     }
 
     fn date(text: &str, what: &str) -> Result<Datetime> {
@@ -43,7 +69,7 @@ pub mod review_md {
             id: header.id.0.clone(),
             number: header.number,
             title: header.title.clone(),
-            status: header.status,
+            status: stored(header.status).to_string(),
             tasks: header.tasks.clone(),
             author: header.author.as_ref().map(|a| a.0.clone()),
             reviewers: header.reviewers.iter().map(|r| r.0.clone()).collect(),
@@ -91,8 +117,14 @@ pub mod review_md {
                 reference: ReviewRef::numbered(header.number),
                 number: header.number,
                 title: header.title,
-                status: header.status,
-                tasks: header.tasks,
+                status: status_of(&header.status)?,
+                // A task by its key; one an earlier atm wrote as people read a provisional key (`~CMD-36`, ATM-594)
+                // is the same key
+                tasks: header
+                    .tasks
+                    .into_iter()
+                    .map(|t| t.strip_prefix('~').map(str::to_string).unwrap_or(t))
+                    .collect(),
                 author: header.author.map(Actor),
                 reviewers: header.reviewers.into_iter().map(Actor).collect(),
                 created: header.created.to_string(),
@@ -147,6 +179,8 @@ pub mod comments_md {
 
     const SEP: &str = " · ";
     const THE_REVIEW: &str = "(the review)";
+    /// A poke's mark, where a top-level comment has its resolved box (ATM-611)
+    const POKE: &str = "[poke] ";
     const OLD_SIDE: &str = "old side";
 
     fn heading(chain: &Chain) -> String {
@@ -175,6 +209,7 @@ pub mod comments_md {
         let resolved = match comment.resolved {
             Some(true) => "[x] ",
             Some(false) => "[ ] ",
+            None if comment.poke => POKE,
             None => "",
         };
         out.push(format!(
@@ -279,12 +314,14 @@ pub mod comments_md {
             return None;
         }
         let rest = line[spaces..].strip_prefix("- ")?;
-        let (resolved, rest) = if let Some(rest) = rest.strip_prefix("[ ] ") {
-            (Some(false), rest)
+        let (resolved, poke, rest) = if let Some(rest) = rest.strip_prefix("[ ] ") {
+            (Some(false), false, rest)
         } else if let Some(rest) = rest.strip_prefix("[x] ") {
-            (Some(true), rest)
+            (Some(true), false, rest)
+        } else if let Some(rest) = rest.strip_prefix(POKE) {
+            (None, true, rest)
         } else {
-            (None, rest)
+            (None, false, rest)
         };
         let (author, rest) = rest.strip_prefix("**")?.split_once(&format!("**{SEP}"))?;
         let (at, id) = rest.rsplit_once(SEP)?;
@@ -303,6 +340,7 @@ pub mod comments_md {
                 at: at.to_string(),
                 body: String::new(),
                 resolved,
+                poke,
                 replies: Vec::new(),
             },
         ))
@@ -400,8 +438,9 @@ pub mod comments_md {
                     None => depth == 0,
                     Some(previous) => depth <= previous + 1,
                 };
-                // A top-level comment has its box, a reply none
-                if fits && (depth == 0) == comment.resolved.is_some() {
+                // A top-level comment has its box (a poke, its mark instead), a reply neither
+                let top_level = comment.resolved.is_some() || comment.poke;
+                if fits && (depth == 0) == top_level {
                     chain.items.push((depth, comment));
                     continue;
                 }
@@ -497,6 +536,32 @@ mod tests {
         assert_eq!(comments_md::write(&file), COMMENTS);
     }
 
+    /// ATM-611: a poke is marked where a top-level comment has its box, and read back as a poke, with its replies
+    #[test]
+    fn a_poke_is_written_marked_and_read_back_as_one() {
+        let text = "\
+## (the review) · round 2 · t3
+- [poke] **Hakan Serce** · 2026-11-19T10:00:00Z · c7
+  Where are we?
+  - **claude:0f56a916** · 2026-11-19T10:05:00Z · c8
+    Round 3 is coming: two comments left.
+- [poke] **Hakan Serce** · 2026-11-19T11:00:00Z · c9
+";
+        let file = comments_md::read(text);
+        assert!(file.unread.is_empty(), "{:?}", file.unread);
+        let [first, second] = &file.chains[0].comments[..] else {
+            panic!("two pokes")
+        };
+        assert!(first.poke && second.poke);
+        assert_eq!(
+            (first.resolved, first.body.as_str()),
+            (None, "Where are we?")
+        );
+        assert!(!first.replies[0].poke);
+        assert_eq!(second.body, "");
+        assert_eq!(comments_md::write(&file), text);
+    }
+
     #[test]
     fn what_atm_cant_read_is_kept_where_it_was_and_reported() {
         let broken = "\
@@ -558,6 +623,22 @@ written at the margin by hand
         }
     }
 
+    /// ATM-594: an earlier atm wrote a provisional key as people read it; it reads as the key, and is written so
+    #[test]
+    fn a_task_written_with_a_provisional_keys_mark_reads_as_its_key() {
+        let text = review_md::write(&header(), "").unwrap().replace(
+            "tasks = [\"ATM-482\"]",
+            "tasks = [\"~CMD-36\", \"ATM-482\", \"T-1\"]",
+        );
+        let (read, _) = review_md::read(&text).unwrap();
+        assert_eq!(read.tasks, ["CMD-36", "ATM-482", "T-1"]);
+        let again = review_md::write(&read, "").unwrap();
+        assert!(
+            again.contains("tasks = [\"CMD-36\", \"ATM-482\", \"T-1\"]"),
+            "{again}"
+        );
+    }
+
     #[test]
     fn review_md_is_the_header_in_toml_then_the_summary_and_reads_back() {
         let text = review_md::write(
@@ -588,6 +669,277 @@ written at the margin by hand
         let text = review_md::write(&unknown, "").unwrap();
         assert!(!text.contains("author"), "{text}");
         assert_eq!(review_md::read(&text).unwrap().0.author, None);
+    }
+
+    #[test]
+    fn review_md_reads_windows_line_ends_a_header_closing_the_file_and_missing_lists() {
+        let text = review_md::write(&header(), "Line one.\n\nLine two.  \n\n").unwrap();
+        assert!(text.ends_with("+++\n\nLine one.\n\nLine two.\n"), "{text}");
+        let (read, summary) = review_md::read(&text.replace('\n', "\r\n")).unwrap();
+        assert_eq!(
+            (read, summary.as_str()),
+            (header(), "Line one.\n\nLine two.")
+        );
+        // The closing +++ as the file's last line, without its line end
+        let bare = review_md::write(&header(), "").unwrap();
+        let (read, summary) = review_md::read(bare.trim_end()).unwrap();
+        assert_eq!((read, summary.as_str()), (header(), ""));
+        // Written by hand: no tasks, reviewers or author lines are none
+        let by_hand = "+++\nid = \"u\"\nnumber = 3\ntitle = \"T\"\nstatus = \"draft\"\n\
+                       created = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T03:20:00Z\n+++\n";
+        let (read, _) = review_md::read(by_hand).unwrap();
+        assert_eq!(
+            (
+                read.reference,
+                read.tasks.len(),
+                read.reviewers.len(),
+                read.author
+            ),
+            (ReviewRef::numbered(3), 0, 0, None)
+        );
+        // A summary that starts without the blank line still reads
+        let tight = format!("{bare}Summary.\n");
+        assert_eq!(review_md::read(&tight).unwrap().1, "Summary.");
+    }
+
+    /// ATM-613: waiting on the reviewers is written `open`, as atm before 0.41.0 wrote and reads it, so an app or a
+    /// clone on an older atm still sees the review; `waiting`, as a 0.41.0 build wrote it a while, reads the same
+    #[test]
+    fn waiting_is_written_open_for_an_older_atm_and_both_read_as_waiting() {
+        let mut waiting = header();
+        waiting.status = Status::Waiting;
+        let text = review_md::write(&waiting, "").unwrap();
+        assert!(text.contains("status = \"open\"\n"), "{text}");
+        assert_eq!(review_md::read(&text).unwrap().0.status, Status::Waiting);
+        let newer = text.replace("status = \"open\"", "status = \"waiting\"");
+        assert_eq!(review_md::read(&newer).unwrap().0.status, Status::Waiting);
+        // Every other status by its own name, both ways
+        for status in Status::EVERY.into_iter().filter(|s| *s != Status::Waiting) {
+            let mut h = header();
+            h.status = status;
+            let text = review_md::write(&h, "").unwrap();
+            assert!(
+                text.contains(&format!("status = \"{}\"\n", status.name())),
+                "{text}"
+            );
+            assert_eq!(review_md::read(&text).unwrap().0.status, status);
+        }
+    }
+
+    #[test]
+    fn a_review_md_with_a_status_or_date_atm_doesnt_know_cant_be_read() {
+        for header in [
+            "id = \"u\"\nnumber = 1\ntitle = \"T\"\nstatus = \"merged\"\ncreated = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T03:20:00Z\n",
+            "id = \"u\"\nnumber = 1\ntitle = \"T\"\nstatus = \"open\"\ncreated = \"yesterday\"\nupdated = 2026-11-17T03:20:00Z\n",
+            "id = \"u\"\nnumber = -1\ntitle = \"T\"\nstatus = \"open\"\ncreated = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T03:20:00Z\n",
+            "id = \"u\"\ntitle = \"T\"\nstatus = \"open\"\ncreated = 2026-11-17T03:20:00Z\nupdated = 2026-11-17T03:20:00Z\n",
+        ] {
+            let read = review_md::read(&format!("+++\n{header}+++\n"));
+            assert!(
+                read.as_ref()
+                    .is_err_and(|e| e.to_string().contains("can't be read")),
+                "{header}: {read:?}"
+            );
+        }
+        let mut bad = header();
+        bad.updated = "later".into();
+        assert!(
+            review_md::write(&bad, "")
+                .unwrap_err()
+                .to_string()
+                .contains("update time")
+        );
+    }
+
+    #[test]
+    fn a_heading_names_a_line_a_range_a_whole_file_or_the_review_on_either_side() {
+        use crate::model::{Anchor, Chain};
+        for (path, lines, side, heading) in [
+            (
+                Some("a.rs"),
+                Some((3, 3)),
+                Side::New,
+                "## a.rs:3 · round 2 · t1",
+            ),
+            (
+                Some("a.rs"),
+                Some((3, 5)),
+                Side::Old,
+                "## a.rs:3-5 · round 2 · old side · t1",
+            ),
+            (
+                Some("docs/plan.md"),
+                None,
+                Side::New,
+                "## docs/plan.md · round 2 · t1",
+            ),
+            (None, None, Side::New, "## (the review) · round 2 · t1"),
+            // A path with a colon of its own, and with the separator in it, reads back the same
+            (
+                Some("a:b.rs"),
+                Some((1, 2)),
+                Side::New,
+                "## a:b.rs:1-2 · round 2 · t1",
+            ),
+            (
+                Some("odd · name.md"),
+                None,
+                Side::New,
+                "## odd · name.md · round 2 · t1",
+            ),
+        ] {
+            let chain = Chain {
+                id: ChainId("t1".into()),
+                anchor: Anchor {
+                    round: 2,
+                    path: path.map(String::from),
+                    side,
+                    lines,
+                    quote: None,
+                },
+                comments: Vec::new(),
+            };
+            let file = CommentsFile {
+                chains: vec![chain.clone()],
+                unread: Vec::new(),
+            };
+            let text = comments_md::write(&file);
+            assert_eq!(text, format!("{heading}\n"));
+            assert_eq!(comments_md::read(&text).chains, [chain], "{heading}");
+        }
+    }
+
+    #[test]
+    fn a_heading_atm_didnt_write_is_kept_unread_with_what_follows_it() {
+        for heading in [
+            "## a.rs · round x · t1",
+            "## a.rs · t1",
+            "## a.rs · round 1 · tx",
+            "## a.rs · round 1 · c1",
+            "## :3 · round 1 · t1",
+            "## t1",
+            "## ",
+        ] {
+            let text =
+                format!("{heading}\n- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1\n  Why?\n");
+            let file = comments_md::read(&text);
+            assert!(file.chains.is_empty(), "{heading}: {:?}", file.chains);
+            assert_eq!(file.unread.len(), 3, "{heading}");
+            assert_eq!(comments_md::write(&file), text, "{heading}");
+        }
+    }
+
+    #[test]
+    fn a_quote_keeps_its_blank_lines_and_ends_at_the_first_comment() {
+        let text = "\
+## a.rs:1-3 · round 1 · t1
+> one
+>
+> three
+
+- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1
+  Why?
+> not a quote: the comment's
+";
+        let file = comments_md::read(text);
+        let chain = &file.chains[0];
+        assert_eq!(chain.anchor.quote.as_deref(), Some("one\n\nthree"));
+        // A line like a quote after a comment is no quote, and not the comment's text (not indented): kept unread
+        assert_eq!(chain.comments[0].body, "Why?");
+        assert_eq!(file.unread.len(), 1);
+        assert_eq!(file.unread[0].line, 8);
+        assert_eq!(comments_md::write(&file), text);
+    }
+
+    #[test]
+    fn a_comment_line_atm_didnt_write_is_text_or_kept_unread_never_a_comment() {
+        let item = |line: &str| {
+            format!(
+                "## a.rs · round 1 · t1\n- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1\n  Why?\n{line}\n"
+            )
+        };
+        // Not a comment of its own: under the comment before, indented, it is that comment's text
+        for (line, body) in [
+            // A reply two levels down at once
+            (
+                "    - **Ana** · 2026-11-17T03:32:00Z · c2",
+                "Why?\n  - **Ana** · 2026-11-17T03:32:00Z · c2",
+            ),
+            // A reply with a box
+            (
+                "  - [ ] **Ana** · 2026-11-17T03:32:00Z · c2",
+                "Why?\n- [ ] **Ana** · 2026-11-17T03:32:00Z · c2",
+            ),
+            // No ID, a bad ID, no author, no time
+            (
+                "  - **Ana** · 2026-11-17T03:32:00Z",
+                "Why?\n- **Ana** · 2026-11-17T03:32:00Z",
+            ),
+            (
+                "  - **Ana** · 2026-11-17T03:32:00Z · cx",
+                "Why?\n- **Ana** · 2026-11-17T03:32:00Z · cx",
+            ),
+            (
+                "  - **** · 2026-11-17T03:32:00Z · c2",
+                "Why?\n- **** · 2026-11-17T03:32:00Z · c2",
+            ),
+            ("  - **Ana** ·  · c2", "Why?\n- **Ana** ·  · c2"),
+        ] {
+            let file = comments_md::read(&item(line));
+            assert!(file.unread.is_empty(), "{line}: {:?}", file.unread);
+            let comments = &file.chains[0].comments;
+            assert_eq!(comments.len(), 1, "{line}");
+            assert!(comments[0].replies.is_empty(), "{line}");
+            assert_eq!(comments[0].body, body, "{line}");
+        }
+        // Not indented under it, and not a comment atm writes: kept unread
+        for line in [
+            " - **Ana** · 2026-11-17T03:32:00Z · c2",
+            "- **Ana** · 2026-11-17T03:32:00Z · c2",
+            "- [x] **Ana** · 2026-11-17T03:32:00Z",
+            "text at the margin",
+        ] {
+            let text = item(line);
+            let file = comments_md::read(&text);
+            assert_eq!(file.unread.len(), 1, "{line}");
+            assert_eq!(file.unread[0].text, line);
+            assert_eq!(file.chains[0].comments.len(), 1, "{line}");
+            assert_eq!(comments_md::write(&file), text, "{line}");
+        }
+    }
+
+    #[test]
+    fn lines_before_the_first_comment_of_a_chain_are_kept_unread_and_blank_ones_dropped() {
+        let text = "\n\n## a.rs · round 1 · t1\n\nA note before the comments.\n- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1\n  Why?\n";
+        let file = comments_md::read(text);
+        assert_eq!(file.chains[0].comments.len(), 1);
+        assert_eq!(
+            file.unread
+                .iter()
+                .map(|u| (u.line, u.after.clone()))
+                .collect::<Vec<_>>(),
+            [(5, Some(ChainId("t1".into())))]
+        );
+        assert_eq!(
+            file.problems(),
+            ["comments.md line 5: not a comment atm can read: A note before the comments."]
+        );
+    }
+
+    #[test]
+    fn a_comment_without_text_and_a_chain_without_comments_read_back() {
+        let text = "\
+## a.rs · round 1 · t1
+- [x] **Hakan Serce** · 2026-11-17T03:31:00Z · c1
+
+## b.rs · round 1 · t2
+";
+        let file = comments_md::read(text);
+        assert!(file.unread.is_empty(), "{:?}", file.unread);
+        assert_eq!(file.chains[0].comments[0].body, "");
+        assert_eq!(file.chains[0].comments[0].resolved, Some(true));
+        assert_eq!(file.chains[1].comments.len(), 0);
+        assert_eq!(comments_md::write(&file), text);
     }
 
     #[test]

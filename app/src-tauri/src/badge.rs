@@ -29,8 +29,9 @@ pub struct Waiting {
     pub count: u32,
 }
 
-/// How many tasks need the user in each project of a listing (`list_projects`'s): in review, blocked on the user, and
-/// work done together, as the dashboard counts them (`needsYou`); a missing project has none.
+/// How many things need the user in each project of a listing (`list_projects`'s): tasks in review, blocked on the
+/// user, and work done together, and code reviews waiting on them (ATM-606: a task in review through one of those is
+/// counted once, by atm-lib), as the dashboard counts them (`needsYou`); a missing project has none.
 #[must_use]
 pub fn waiting_of(projects: &[Value]) -> Vec<Waiting> {
     let count = |n: &Value, key: &str| n.get(key).and_then(Value::as_u64).unwrap_or(0);
@@ -38,7 +39,10 @@ pub fn waiting_of(projects: &[Value]) -> Vec<Waiting> {
         .iter()
         .filter_map(|p| {
             let n = p.get("summary")?.get("needs_you")?;
-            let total = count(n, "review") + count(n, "blocked_on_user") + count(n, "together");
+            let total = count(n, "review")
+                + count(n, "blocked_on_user")
+                + count(n, "together")
+                + count(n, "code_reviews");
             Some(Waiting {
                 id: p.get("id")?.as_str()?.to_owned(),
                 name: p
@@ -60,10 +64,11 @@ pub fn notice(name: &str, count: u32) -> String {
         .filter(|c| !c.is_control())
         .take(MAX_NAME)
         .collect();
+    // Tasks and code reviews alike (ATM-606)
     if count == 1 {
-        format!("{name}: 1 task needs you")
+        format!("{name}: 1 thing needs you")
     } else {
-        format!("{name}: {count} tasks need you")
+        format!("{name}: {count} things need you")
     }
 }
 
@@ -228,7 +233,10 @@ mod tests {
             listed(
                 "a",
                 "Alpha",
-                Some(serde_json::json!({"review": 2, "blocked_on_user": 1, "together": 1})),
+                // Code reviews waiting on the user count too (ATM-606)
+                Some(
+                    serde_json::json!({"review": 2, "blocked_on_user": 1, "together": 1, "code_reviews": 2}),
+                ),
             ),
             listed(
                 "b",
@@ -244,12 +252,41 @@ mod tests {
                 Waiting {
                     id: "a".into(),
                     name: "Alpha".into(),
-                    count: 4
+                    count: 6
                 },
                 Waiting {
                     id: "b".into(),
                     name: "Beta".into(),
                     count: 0
+                },
+            ]
+        );
+    }
+
+    /// A listing as atm may hand it: no projects; an entry without an ID or with one that isn't text (skipped); a
+    /// count missing or not a number (none); no name (an empty one); more than a `u32` holds (its largest)
+    #[test]
+    fn a_listing_of_any_shape_counts_what_it_can() {
+        assert_eq!(waiting_of(&[]), Vec::new());
+        let projects = [
+            serde_json::json!({"name": "No ID", "summary": {"needs_you": {"review": 1}}}),
+            serde_json::json!({"id": 7, "summary": {"needs_you": {"review": 1}}}),
+            serde_json::json!({"id": "a", "summary": {"needs_you": {"review": "2", "together": 3}}}),
+            serde_json::json!({"id": "b", "summary": {"needs_you": {"blocked_on_user": u64::MAX}}}),
+            serde_json::json!({"id": "c", "summary": {}}),
+        ];
+        assert_eq!(
+            waiting_of(&projects),
+            vec![
+                Waiting {
+                    id: "a".into(),
+                    name: String::new(),
+                    count: 3
+                },
+                Waiting {
+                    id: "b".into(),
+                    name: String::new(),
+                    count: u32::MAX
                 },
             ]
         );
@@ -276,7 +313,7 @@ mod tests {
         );
         assert_eq!(
             seen.update("default", &[waiting("a", 3), waiting("b", 1)]),
-            ["A: 3 tasks need you", "B: 1 task needs you"]
+            ["A: 3 things need you", "B: 1 thing needs you"]
         );
         assert_eq!(
             seen.update("default", &[waiting("a", 1)]),
@@ -290,12 +327,35 @@ mod tests {
         );
     }
 
+    /// A project gone from the listing and back counts from nothing, as a new one does; a new one with nothing
+    /// waiting says nothing
+    #[test]
+    fn a_project_new_to_the_listing_counts_from_nothing() {
+        let seen = NeedsYou::default();
+        seen.update("default", &[waiting("a", 2)]);
+        assert_eq!(
+            seen.update("default", &[waiting("b", 0)]),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            seen.update("default", &[waiting("a", 2), waiting("b", 0)]),
+            ["A: 2 things need you"]
+        );
+    }
+
     #[test]
     fn a_notice_shows_a_projects_name_without_control_characters_and_cut_short() {
-        assert_eq!(notice("App\n\u{7}", 2), "App: 2 tasks need you");
+        // At the limit it is whole; its characters, not its bytes, are counted
+        let at_limit = "é".repeat(MAX_NAME);
+        assert_eq!(
+            notice(&at_limit, 1),
+            format!("{at_limit}: 1 thing needs you")
+        );
+        assert_eq!(notice("", 3), ": 3 things need you");
+        assert_eq!(notice("App\n\u{7}", 2), "App: 2 things need you");
         assert_eq!(
             notice(&"x".repeat(200), 1).chars().count(),
-            MAX_NAME + ": 1 task needs you".len()
+            MAX_NAME + ": 1 thing needs you".len()
         );
     }
 
@@ -328,5 +388,17 @@ mod tests {
         // Past nine, every count looks the same ("9+")
         assert_eq!(overlay_icon(12), overlay_icon(400));
         assert_ne!(overlay_icon(1), overlay_icon(7));
+    }
+
+    /// Each count from one to nine draws its own digit, and ten is the first "9+"
+    #[test]
+    fn each_count_to_nine_looks_its_own() {
+        let icons: Vec<Vec<u8>> = (1..=10).map(overlay_icon).collect();
+        for (a, first) in icons.iter().enumerate() {
+            for (b, second) in icons.iter().enumerate().skip(a + 1) {
+                assert_ne!(first, second, "{} and {} look the same", a + 1, b + 1);
+            }
+        }
+        assert_eq!(overlay_icon(10), overlay_icon(u32::MAX));
     }
 }

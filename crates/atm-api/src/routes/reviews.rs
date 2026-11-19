@@ -11,11 +11,18 @@
 //! | POST | `reviews/<CR>/comments` | a new chain |
 //! | PATCH | `reviews/<CR>/comments/<c>` | a comment's text or resolved box |
 //! | POST | `reviews/<CR>/comments/<c>/replies` | a reply |
+//! | POST | `reviews/<CR>/pokes` | a poke (ATM-611): a nudge its agent answers |
+//! | POST | `reviews/<CR>/drafts` | a draft of the user's (ATM-612), sent with their next decision |
+//! | PATCH | `reviews/<CR>/drafts/<d>` | a draft's text |
+//! | DELETE | `reviews/<CR>/drafts/<d>` | a draft thrown away |
+//!
+//! And one read here, as the user: `GET reviews/<CR>/drafts`, their drafts (another's are never shown).
 
 use atm_common::py::to_json;
+use atm_lib::review_drafts::Draft;
 use atm_lib::review_requests::request_from;
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewRef};
-use axum::http::{Method, StatusCode};
+use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::Response;
 use serde_json::{Value, json};
 
@@ -23,7 +30,7 @@ use atm_lib::review_pages::ReviewQuery;
 
 use super::query::{parameter, parse_query};
 use super::source::{ProjectSource, ReviewChanges};
-use super::{Projects, error_response, ok_json, stamped};
+use super::{Projects, error_response, etag, not_modified, ok_json, stamped, unchanged};
 use crate::{send, send_error};
 
 /// `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews the query keeps (`status` repeats; the
@@ -70,14 +77,31 @@ fn round_number(query: &str, name: &str) -> Result<Option<u32>, String> {
 }
 
 /// `GET …/reviews/<CR>?round=&against=`: the review's page for one view, the whole change of a round (the latest when
-/// none) or a round against an earlier one. Never cached, as the list.
-pub(super) fn get_review(project: &dyn ProjectSource, review: &str, query: &str) -> Response {
+/// none) or a round against an earlier one. Never cached, as the list, except a live review's page of its working copy
+/// now (ATM-607): tagged from what it is made of (the reviews, the working copy's state, who asks), so the page's poll
+/// gets a 304 without a diff being made while nothing changed.
+pub(super) fn get_review(
+    project: &dyn ProjectSource,
+    review: &str,
+    query: &str,
+    request: &HeaderMap,
+) -> Response {
     let (round, against) = match (round_number(query, "round"), round_number(query, "against")) {
         (Ok(round), Ok(against)) => (round, against),
         (Err(why), _) | (_, Err(why)) => return send_error(StatusCode::BAD_REQUEST, &why),
     };
-    match project.review(&ReviewRef(review.to_string()), round, against) {
-        Ok(page) => ok_json(&stamped(page), None),
+    let reference = ReviewRef(review.to_string());
+    let tag = match project.live_review_stamp(&reference, round, against) {
+        Ok(stamp) => stamp.map(|s| etag(&s)),
+        Err(e) => return error_response(&e),
+    };
+    if let Some(tag) = &tag
+        && unchanged(request, tag)
+    {
+        return not_modified(tag, &[]);
+    }
+    match project.review(&reference, round, against) {
+        Ok(page) => ok_json(&stamped(page), tag.as_deref()),
         Err(e) => error_response(&e),
     }
 }
@@ -184,6 +208,83 @@ fn post_reply(
     )
 }
 
+/// `POST …/reviews/<CR>/pokes` (ATM-611): a poke, with an optional message.
+fn post_poke(reviews: &mut dyn ReviewChanges, review: &ReviewRef, body: Value) -> Response {
+    review_answer(
+        true,
+        request_from(body)
+            .and_then(|poke| reviews.poke_review(review, &poke))
+            .map(|id| json!({ "review": review.0, "poke": id })),
+    )
+}
+
+fn draft_json(draft: &Draft) -> atm_common::Result<Value> {
+    serde_json::to_value(draft).map_err(|e| atm_common::Error::failed(e.to_string()))
+}
+
+/// `GET …/reviews/<CR>/drafts` (ATM-612): the user's drafts on the review, read as the user; never cached.
+pub(super) fn get_drafts(project: &dyn ProjectSource, review: &str) -> Response {
+    let reference = ReviewRef(review.to_string());
+    let listed = project
+        .reviews_as_user()
+        .and_then(|reviews| reviews.list_drafts(&reference));
+    match listed.and_then(|drafts| {
+        serde_json::to_value(&drafts).map_err(|e| atm_common::Error::failed(e.to_string()))
+    }) {
+        Ok(drafts) => ok_json(
+            &stamped(json!({ "review": reference.0, "drafts": drafts })),
+            None,
+        ),
+        Err(e) => error_response(&e),
+    }
+}
+
+/// `POST …/reviews/<CR>/drafts`: a draft.
+fn post_draft(reviews: &mut dyn ReviewChanges, review: &ReviewRef, body: Value) -> Response {
+    review_answer(
+        true,
+        request_from(body)
+            .and_then(|draft| reviews.add_draft(review, draft))
+            .and_then(|d| draft_json(&d)),
+    )
+}
+
+/// `PATCH …/reviews/<CR>/drafts/<d>`: a draft's text.
+fn patch_draft(
+    reviews: &mut dyn ReviewChanges,
+    review: &ReviewRef,
+    draft: &str,
+    body: Value,
+) -> Response {
+    review_answer(
+        false,
+        request_from(body)
+            .and_then(|update| reviews.update_draft(review, draft, &update))
+            .and_then(|d| draft_json(&d)),
+    )
+}
+
+/// `DELETE …/reviews/<CR>/drafts/<d>`: a draft thrown away; its body, if any, an empty object.
+fn delete_draft(
+    reviews: &mut dyn ReviewChanges,
+    review: &ReviewRef,
+    draft: &str,
+    body: &Value,
+) -> Response {
+    if body.as_object().is_none_or(|o| !o.is_empty()) {
+        return send_error(
+            StatusCode::BAD_REQUEST,
+            "a draft is removed with an empty body ({})",
+        );
+    }
+    review_answer(
+        false,
+        reviews
+            .remove_draft(review, draft)
+            .map(|()| json!({ "review": review.0, "draft": draft, "removed": true })),
+    )
+}
+
 /// Whether `path` is under a project's reviews (`/api/v2/workspaces/<w>/projects/<p>/reviews…`), where a POST, PATCH
 /// or PUT may change something; on any other path those methods are refused as on a read-only server.
 #[must_use]
@@ -204,6 +305,10 @@ enum Route {
     Comment(ReviewRef),
     UpdateComment(ReviewRef, CommentId),
     Reply(ReviewRef, CommentId),
+    Poke(ReviewRef),
+    AddDraft(ReviewRef),
+    UpdateDraft(ReviewRef, String),
+    RemoveDraft(ReviewRef, String),
 }
 
 /// The route for `method` on `resource` (past `reviews`): a resource no route has is 404, one the method isn't for
@@ -219,12 +324,16 @@ fn route(method: &Method, resource: &[&str]) -> Result<Route, (StatusCode, &'sta
         ("POST", [cr, "comments"]) => Route::Comment(review(cr)),
         ("PATCH", [cr, "comments", c]) => Route::UpdateComment(review(cr), comment(c)),
         ("POST", [cr, "comments", c, "replies"]) => Route::Reply(review(cr), comment(c)),
+        ("POST", [cr, "pokes"]) => Route::Poke(review(cr)),
+        ("POST", [cr, "drafts"]) => Route::AddDraft(review(cr)),
+        ("PATCH", [cr, "drafts", d]) => Route::UpdateDraft(review(cr), (*d).to_string()),
+        ("DELETE", [cr, "drafts", d]) => Route::RemoveDraft(review(cr), (*d).to_string()),
         (
             _,
             []
             | [_]
-            | [_, "tasks" | "decisions" | "comments"]
-            | [_, "comments", _]
+            | [_, "tasks" | "decisions" | "comments" | "pokes" | "drafts"]
+            | [_, "comments" | "drafts", _]
             | [_, "comments", _, "replies"],
         ) => return Err((StatusCode::METHOD_NOT_ALLOWED, "not with this method")),
         _ => return Err((StatusCode::NOT_FOUND, "not found")),
@@ -270,6 +379,10 @@ pub fn serve_review_change(
         Route::Comment(review) => post_comment(reviews, &review, body),
         Route::UpdateComment(review, comment) => patch_comment(reviews, &review, &comment, body),
         Route::Reply(review, comment) => post_reply(reviews, &review, &comment, body),
+        Route::Poke(review) => post_poke(reviews, &review, body),
+        Route::AddDraft(review) => post_draft(reviews, &review, body),
+        Route::UpdateDraft(review, draft) => patch_draft(reviews, &review, &draft, body),
+        Route::RemoveDraft(review, draft) => delete_draft(reviews, &review, &draft, &body),
     }
 }
 
@@ -279,18 +392,72 @@ pub fn serve_review_change(
 #[cfg(test)]
 mod tests {
     use atm_common::Error;
+    use atm_lib::review_drafts::{DraftUpdate, NewDraft};
     use atm_lib::review_requests::{
-        ChangeToReview, CommentUpdate, Decision, DecisionKind, NewComment, NewReply, ReviewClosing,
-        ReviewOpening, ReviewStart, ReviewTasks, RulesOverride,
+        ChangeToReview, CommentUpdate, Decision, DecisionKind, NewComment, NewPoke, NewReply,
+        ReviewClosing, ReviewOpening, ReviewStart, ReviewTasks, RulesOverride,
     };
     use atm_lib::reviews::{Side, Status};
 
     use super::super::test_support::{
-        Answer, Call, Fake, FakeProject, FakeReviews, answer, bound, header, refusals,
+        Answer, Call, Fake, FakeProject, FakeReviews, answer, bound, having, header, plain,
+        refusals,
     };
     use super::*;
 
     const REVIEWS: &str = "/api/v2/workspaces/work/projects/p1/reviews";
+
+    /// The fake's draft, as a route answers it
+    fn drafted() -> Value {
+        json!({"id": "d1", "at": "2026-11-19T10:00:00Z", "body": "Why?", "kind": "comment",
+               "path": null, "lines": null, "side": "new", "quote": null, "round": 1})
+    }
+
+    /// ATM-612: the user's drafts, read as the user, never cached; each refusal its status
+    #[test]
+    fn the_drafts_are_the_users_read_as_the_user_and_never_cached() {
+        let (project, calls) = bound(FakeProject::default());
+        let got = answer(get_drafts(project.as_ref(), "CR-2"));
+        assert_eq!(got.status, StatusCode::OK);
+        assert_eq!(
+            got.unstamped(),
+            json!({"review": "CR-2", "drafts": [drafted()]})
+        );
+        assert_eq!(got.header("cache-control"), "no-store");
+        assert_eq!(calls.taken(), [Call::AsUser, Call::Drafts(r("CR-2"))]);
+        for (error, status) in refusals() {
+            let (project, _) = bound(FakeProject {
+                reviews: Ok(FakeReviews {
+                    draft: Err(error.clone()),
+                    ..FakeReviews::default()
+                }),
+                ..FakeProject::default()
+            });
+            let got = answer(get_drafts(project.as_ref(), "CR-2"));
+            assert_eq!(got.status, status, "{error}");
+            assert_eq!(got.json(), json!({"error": error.to_string()}));
+            // The project not opened as the user: the same
+            let (project, _) = bound(FakeProject {
+                reviews: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            assert_eq!(get_drafts(project.as_ref(), "CR-2").status(), status);
+        }
+    }
+
+    /// A draft is removed with an empty body: anything else is refused before atm-lib is asked
+    #[test]
+    fn a_draft_is_removed_only_with_an_empty_body() {
+        for body in [json!({"id": "d2"}), json!([]), Value::Null, json!("d1")] {
+            let (answer, calls) = send(ok(), &Method::DELETE, "/CR-1/drafts/d1", body.clone());
+            assert_eq!(answer.status, StatusCode::BAD_REQUEST, "{body}");
+            assert_eq!(
+                calls,
+                [Call::Project("work".into(), "p1".into()), Call::AsUser],
+                "{body}"
+            );
+        }
+    }
 
     #[test]
     fn the_list_asks_for_the_querys_filters_status_repeated_the_others_their_first() {
@@ -339,7 +506,10 @@ mod tests {
         });
         for (got, expected) in [
             (answer(get_reviews(project.as_ref(), "")), listed),
-            (answer(get_review(project.as_ref(), "CR-2", "")), page),
+            (
+                answer(get_review(project.as_ref(), "CR-2", "", &plain())),
+                page,
+            ),
         ] {
             assert_eq!(got.status, StatusCode::OK);
             assert_eq!(got.unstamped(), expected);
@@ -361,7 +531,7 @@ mod tests {
         ] {
             let (project, calls) = bound(FakeProject::default());
             assert_eq!(
-                get_review(project.as_ref(), "CR-7", query).status(),
+                get_review(project.as_ref(), "CR-7", query, &plain()).status(),
                 StatusCode::OK
             );
             assert_eq!(
@@ -384,7 +554,7 @@ mod tests {
             "against=y",
         ] {
             let (project, calls) = bound(FakeProject::default());
-            let refused = answer(get_review(project.as_ref(), "CR-7", query));
+            let refused = answer(get_review(project.as_ref(), "CR-7", query, &plain()));
             assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{query}");
             assert!(
                 refused.json()["error"]
@@ -405,11 +575,50 @@ mod tests {
             });
             for got in [
                 answer(get_reviews(project.as_ref(), "")),
-                answer(get_review(project.as_ref(), "CR-1", "")),
+                answer(get_review(project.as_ref(), "CR-1", "", &plain())),
             ] {
                 assert_eq!(got.status, status, "{error}");
                 assert_eq!(got.json(), json!({"error": error.to_string()}));
             }
+        }
+    }
+
+    /// ATM-607: a live review's page of its working copy now is tagged from what it is made of; asked again with the
+    /// tag while that is the same, a 304 with no page made; once it changes, the page and a new tag
+    #[test]
+    fn a_live_pages_poll_gets_a_304_while_its_working_copy_is_the_same() {
+        let live = |state: &str| FakeProject {
+            live_stamp: Ok(Some(json!(["live", "r1", null, [1, 1], state, "Ana"]))),
+            ..FakeProject::default()
+        };
+        let (project, calls) = bound(live("a.txt 3:1"));
+        let first = answer(get_review(project.as_ref(), "CR-1", "", &plain()));
+        assert_eq!(first.status, StatusCode::OK);
+        let tag = first.tag();
+        assert!(!tag.is_empty(), "tagged");
+        assert_eq!(calls.taken(), [Call::Review(r("CR-1"), None, None)]);
+        let again = answer(get_review(project.as_ref(), "CR-1", "", &having(&tag)));
+        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+        assert_eq!(again.tag(), tag);
+        assert_eq!(calls.taken(), [], "no page made for a 304");
+        // A file written: another tag, and the page made again
+        let (project, calls) = bound(live("a.txt 4:2"));
+        let changed = answer(get_review(project.as_ref(), "CR-1", "", &having(&tag)));
+        assert_eq!(changed.status, StatusCode::OK);
+        assert_ne!(changed.tag(), tag);
+        assert_eq!(calls.taken(), [Call::Review(r("CR-1"), None, None)]);
+    }
+
+    #[test]
+    fn a_live_pages_stamp_refused_is_its_status() {
+        for (error, status) in refusals() {
+            let (project, calls) = bound(FakeProject {
+                live_stamp: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            let got = answer(get_review(project.as_ref(), "CR-1", "", &plain()));
+            assert_eq!(got.status, status, "{error}");
+            assert_eq!(calls.taken(), [], "{error}: no page made");
         }
     }
 
@@ -577,6 +786,82 @@ mod tests {
                 StatusCode::CREATED,
                 json!({"review": "CR-1", "comment": "c1", "reply_to": "c4"}),
             ),
+            // ATM-611: a poke, with a message or without one
+            (
+                Method::POST,
+                "/CR-1/pokes",
+                json!({"body": "Where are we?"}),
+                Call::Poke(
+                    r("CR-1"),
+                    NewPoke {
+                        body: Some("Where are we?".into()),
+                    },
+                ),
+                StatusCode::CREATED,
+                json!({"review": "CR-1", "poke": "c1"}),
+            ),
+            (
+                Method::POST,
+                "/CR-1/pokes",
+                json!({}),
+                Call::Poke(r("CR-1"), NewPoke::default()),
+                StatusCode::CREATED,
+                json!({"review": "CR-1", "poke": "c1"}),
+            ),
+            // ATM-612: a draft made, its text changed, thrown away
+            (
+                Method::POST,
+                "/CR-1/drafts",
+                json!({"path": "a.rs", "lines": [2, 3], "body": "Why?"}),
+                Call::AddDraft(
+                    r("CR-1"),
+                    NewDraft {
+                        path: Some("a.rs".into()),
+                        lines: Some((2, 3)),
+                        body: "Why?".into(),
+                        ..NewDraft::default()
+                    },
+                ),
+                StatusCode::CREATED,
+                drafted(),
+            ),
+            (
+                Method::POST,
+                "/CR-1/drafts",
+                json!({"reply_to": "c4", "body": "Because."}),
+                Call::AddDraft(
+                    r("CR-1"),
+                    NewDraft {
+                        reply_to: Some("c4".into()),
+                        body: "Because.".into(),
+                        ..NewDraft::default()
+                    },
+                ),
+                StatusCode::CREATED,
+                drafted(),
+            ),
+            (
+                Method::PATCH,
+                "/CR-1/drafts/d1",
+                json!({"body": "Why not?"}),
+                Call::UpdateDraft(
+                    r("CR-1"),
+                    "d1".into(),
+                    DraftUpdate {
+                        body: "Why not?".into(),
+                    },
+                ),
+                StatusCode::OK,
+                drafted(),
+            ),
+            (
+                Method::DELETE,
+                "/CR-1/drafts/d1",
+                json!({}),
+                Call::RemoveDraft(r("CR-1"), "d1".into()),
+                StatusCode::OK,
+                json!({"review": "CR-1", "draft": "d1", "removed": true}),
+            ),
         ];
         for (method, resource, body, call, status, answered) in cases {
             let (answer, calls) = send(ok(), &method, resource, body);
@@ -620,6 +905,11 @@ mod tests {
             (Method::POST, "/CR-1/comments/c1"),
             (Method::PUT, "/CR-1/comments/c1"),
             (Method::PATCH, "/CR-1/comments/c1/replies"),
+            (Method::DELETE, "/CR-1/comments/c1"),
+            (Method::PUT, "/CR-1/drafts"),
+            (Method::DELETE, "/CR-1/drafts"),
+            (Method::POST, "/CR-1/drafts/d1"),
+            (Method::PUT, "/CR-1/drafts/d1"),
         ] {
             let (answer, calls) = send(ok(), &method, resource, json!({}));
             assert_eq!(
@@ -760,6 +1050,18 @@ mod tests {
                 "/CR-1/comments/c1/replies",
                 json!({"body": "x", "author": "claude:x"}),
             ),
+            (Method::POST, "/CR-1/drafts", json!({"path": "a"})),
+            (
+                Method::POST,
+                "/CR-1/drafts",
+                json!({"body": "x", "author": "claude:x"}),
+            ),
+            (Method::PATCH, "/CR-1/drafts/d1", json!({})),
+            (
+                Method::PATCH,
+                "/CR-1/drafts/d1",
+                json!({"body": "x", "path": "b"}),
+            ),
         ] {
             let (answer, calls) = send(ok(), &method, resource, body.clone());
             assert_eq!(
@@ -785,7 +1087,7 @@ mod tests {
     /// Every refusal atm-lib can give (the rules', a malformed text, no such review), on every route: its status
     #[test]
     fn each_refusal_of_atm_lib_on_each_route_is_its_status() {
-        let routes: [(Method, &str, Value); 7] = [
+        let routes: [(Method, &str, Value); 10] = [
             (
                 Method::POST,
                 "",
@@ -809,6 +1111,9 @@ mod tests {
                 "/CR-1/comments/c1/replies",
                 json!({"body": "z"}),
             ),
+            (Method::POST, "/CR-1/drafts", json!({"body": "x"})),
+            (Method::PATCH, "/CR-1/drafts/d1", json!({"body": "y"})),
+            (Method::DELETE, "/CR-1/drafts/d1", json!({})),
         ];
         for (error, status) in refusals() {
             for (method, resource, body) in &routes {
@@ -817,6 +1122,7 @@ mod tests {
                         header: Err(error.clone()),
                         comment: Err(error.clone()),
                         updated: Err(error.clone()),
+                        draft: Err(error.clone()),
                     }),
                     ..FakeProject::default()
                 });

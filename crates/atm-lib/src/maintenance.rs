@@ -158,6 +158,43 @@ impl StoreMaintenance {
     }
 }
 
+/// The task UUIDs on the project's base branch (`meta.workflow.base` of this branch's file, else the remote's default
+/// branch), as `origin/<base>` has them in its task file and archive (ADR-009: a clash moves the task that isn't
+/// there). Git runs a merge driver at the working copy's top; none when git has no such branch here.
+fn tasks_on_base_branch(ours: &Path) -> Vec<String> {
+    let Ok(root) = std::env::current_dir() else {
+        return Vec::new();
+    };
+    let vcs = atm_vcs::GitVcs::new(&root);
+    let document = std::fs::read_to_string(ours)
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
+    let branch = document
+        .as_ref()
+        .and_then(|d| d.pointer("/meta/workflow/base"))
+        .and_then(serde_json::Value::as_str)
+        .map_or_else(|| vcs.default_base(), String::from);
+    let mut ids = Vec::new();
+    for file in ["tasks.json", "tasks-archive.json"] {
+        let relative = format!("{}/{file}", atm_common::TASK_DIR);
+        let Some(text) = vcs.file_on_remote_branch(&branch, &relative) else {
+            continue;
+        };
+        let Ok(doc) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        ids.extend(
+            doc["tasks"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|t| t.get("id").and_then(serde_json::Value::as_str))
+                .map(String::from),
+        );
+    }
+    ids
+}
+
 /// `atm db merge-driver` (git runs it, on three files, outside any opened project): merge the versions of a task file
 /// task by task, or of a review's `comments.md` or `review.md` (by `path`, the file git merges; none from a driver
 /// registered before reviews, which merged only task files), writing the result over `ours`. Returns the conflicts
@@ -173,7 +210,11 @@ pub fn merge_versions(
 ) -> Result<Vec<String>> {
     let name = path.map(|p| p.rsplit('/').next().unwrap_or(p));
     if !matches!(name, Some("comments.md" | "review.md")) {
-        return atm_db::jsongit::merge::merge_files(base, ours, theirs);
+        // A number clash moves the task that isn't on the base branch (ADR-009), read from git
+        let on_base = tasks_on_base_branch(ours);
+        return atm_db::jsongit::merge::merge_files_with(base, ours, theirs, &|id| {
+            on_base.iter().any(|known| known == id)
+        });
     }
     let read = |p: &Path| {
         std::fs::read_to_string(p)

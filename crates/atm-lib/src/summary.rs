@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use atm_common::keys::{key_final, key_of, keys_format, label_of, number_of, with_key};
+use atm_common::keys::{key_of, keys_format, label_of, number_of, with_key};
 use atm_common::py::{py_str, py_str_opt, strip, truthy};
 use atm_common::rules::{natural_cmp, unfinished_dependencies};
 use atm_common::time::{format_iso, now, parse_iso};
@@ -241,15 +241,14 @@ fn git_summary(project: &Project, tasks: &[&Task]) -> Value {
     json!({"branch": project.store().branch(), "pr": latest})
 }
 
-/// `entry` with its task's key and whether the key is final (ADR-007 §1, §3), as the task views give them, in a
-/// keys-format project; as it is before task keys, or for no task.
+/// `entry` with its task's key (ADR-007 §1), as the task views give it, in a keys-format project; as it is before task
+/// keys, or for no task.
 fn keyed(document: &Value, task: Option<&Task>, mut entry: Value) -> Value {
     if let Some(task) = task
         && let Some(key) = key_of(document, task)
         && let Some(map) = entry.as_object_mut()
     {
         map.insert("key".into(), json!(key));
-        map.insert("key_final".into(), json!(key_final(task)));
     }
     entry
 }
@@ -258,7 +257,7 @@ fn keyed(document: &Value, task: Option<&Task>, mut entry: Value) -> Value {
 struct Shown<'a> {
     vocab: &'a Vocabulary,
     document: &'a Value,
-    /// A task (a dependency) by its label: its key (`~` while provisional), another project's by its key there, else
+    /// A task (a dependency) by its label: its key, another project's by its key there, else
     /// its ID.
     label: &'a dyn Fn(&str) -> String,
 }
@@ -748,10 +747,26 @@ pub fn project_summary(project: &Project) -> Result<Value> {
     // The tasks that need the user, as the dashboard's needsYouReason decides it: in review and waiting for the
     // reviewer, blocked on the user, or to do together with the user now: in the active sprint (any, without one) and
     // ready, its dependencies done (T-347)
+    // The code reviews waiting on the user (ATM-606): a task in review whose review is one of them is waited on through
+    // it, so it isn't counted again
+    let waiting_reviews = crate::review_pages::waiting_reviews(project);
+    let waiting_ids: std::collections::HashSet<&str> = waiting_reviews
+        .iter()
+        .map(|(h, _)| h.id.0.as_str())
+        .collect();
+    let through_review = |t: &Task| {
+        t.get("code_reviews")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|l| l.get("id").and_then(Value::as_str))
+            .any(|id| waiting_ids.contains(id))
+    };
     let active = active_sprint(vocab);
     let mut needs_you_tasks = Vec::new();
     for (t, k) in tasks.iter().zip(&kinds) {
         let reason = match k {
+            Some(Kind::Review) if through_review(t) => None,
             Some(Kind::Review) => {
                 let state = t.get("review_state").and_then(Value::as_str);
                 (!state.is_some_and(|s| REWORK_STATES.contains(&s))).then_some("review")
@@ -806,8 +821,15 @@ pub fn project_summary(project: &Project) -> Result<Value> {
             "review": reasons("review"),
             "blocked_on_user": reasons("blocked"),
             "together": reasons("together"),
+            "code_reviews": waiting_reviews.len(),
         },
         "needs_you_tasks": needs_you_tasks,
+        "needs_you_reviews": waiting_reviews
+            .iter()
+            .map(|(h, why)| {
+                json!({"id": h.id.0, "reference": h.reference, "title": capped(Some(&json!(h.title))), "why": why})
+            })
+            .collect::<Vec<_>>(),
         "git": git_summary(project, &tasks),
         "description": description(document.get("meta")),
         "last_activity": last.map(format_iso),

@@ -62,23 +62,25 @@ pub fn with_key(document: &Value, task: &Task) -> Task {
     out
 }
 
-/// How a task reads to people: its key, `~` before a provisional one (`~ATM-538`), or its `id` when it has no key (a
-/// task as [`with_key`] gives it, or as stored before task keys).
+/// How a task reads to people: its key, plain from the start (ADR-009: no provisional keys, no `~`), or its `id` when
+/// it has no key (a task as [`with_key`] gives it, or as stored before task keys).
 #[must_use]
 pub fn label_of(task: &Value) -> String {
     match task.get("key").and_then(Value::as_str) {
-        Some(key) if task.get("key_final").and_then(Value::as_bool) == Some(true) => {
-            key.to_string()
-        }
-        Some(key) => format!("~{key}"),
+        Some(key) => key.to_string(),
         None => crate::py::py_str_opt(task.get("id")),
     }
 }
 
-/// Whether a task's number is final (ADR-007 §3): it never changes once it is.
+/// A reference as people or agents typed it, without the `~` atm once printed before a provisional key (ADR-007,
+/// gone with ADR-009): old notes, commits and review files still have it, and still find their task.
 #[must_use]
-pub fn key_final(task: &Task) -> bool {
-    task.get("key_final").and_then(Value::as_bool) == Some(true)
+pub fn without_draft_mark(reference: &str) -> &str {
+    let trimmed = reference.trim();
+    match trimmed.strip_prefix('~') {
+        Some(rest) if !rest.is_empty() => rest,
+        _ => trimmed,
+    }
 }
 
 /// The order tasks are listed and taken in: by number when both have one (`ATM-2` before `ATM-10`), else by ID as
@@ -198,6 +200,28 @@ fn one<'a>(found: &[(&'a Task, bool)], reference: &str, via: Via) -> Result<Opti
     }
 }
 
+/// The tasks that have `reference` among their aliases (any case, a leading `~` ignored), working and archived: the
+/// tasks a merge moved off a number (ADR-009) that another task may hold now (ATM-630).
+#[must_use]
+pub fn alias_holders<'a>(
+    document: &'a Value,
+    archive: &'a [Task],
+    reference: &str,
+) -> Vec<&'a Task> {
+    let reference = without_draft_mark(reference);
+    let has = |t: &&Task| {
+        t.get("aliases").and_then(Value::as_array).is_some_and(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .any(|x| x.eq_ignore_ascii_case(reference))
+        })
+    };
+    tasks_of(document)
+        .filter(has)
+        .chain(archive.iter().filter(has))
+        .collect()
+}
+
 /// The task a reference names (ADR-007 §5). In a keys-format document, in this order: the UUID; the current key
 /// (`ATM-527`, any case); a key with an earlier prefix (`T-527`, from `meta.key_history`); a task's own alias (a key
 /// that moved, an ID from before task keys). A current key wins over an alias: when a provisional number moved, the
@@ -208,7 +232,8 @@ fn one<'a>(found: &[(&'a Task, bool)], reference: &str, via: Via) -> Result<Opti
 /// [`Error::NotFound`] when nothing matches, saying why (another project's key, no such number); a failure when the
 /// reference names more than one task (a file to repair).
 pub fn resolve<'a>(document: &'a Value, archive: &'a [Task], reference: &str) -> Result<Found<'a>> {
-    let reference = reference.trim();
+    // `~ATM-5`, as atm printed a provisional key before ADR-009, is `ATM-5`
+    let reference = without_draft_mark(reference);
     let id_is = |t: &Task| t.get("id").and_then(Value::as_str) == Some(reference);
     if !keys_format(document) {
         return one(&matching(document, archive, &id_is), reference, Via::Id)?

@@ -57,9 +57,13 @@ const SESSION_HEADER: &str = "x-atm-session";
 /// The largest body a review change may send.
 const MAX_CHANGE_BYTES: usize = 1_000_000;
 
-/// The methods of the review routes that change something (`routes::serve_review_change`).
+/// The methods of the review routes that change something (`routes::serve_review_change`); DELETE only a draft
+/// (ATM-612), with the same checks and a JSON body (`{}`).
 fn changes_something(method: &Method) -> bool {
-    *method == Method::POST || *method == Method::PATCH || *method == Method::PUT
+    *method == Method::POST
+        || *method == Method::PATCH
+        || *method == Method::PUT
+        || *method == Method::DELETE
 }
 
 /// A random token for this start: 244 bits from the system's source, as two v4 UUIDs.
@@ -243,7 +247,7 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
         // every path but a project's reviews is read-only
         return send_error(
             StatusCode::METHOD_NOT_ALLOWED,
-            "only GET and HEAD, and POST, PATCH or PUT on reviews",
+            "only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews",
         );
     }
     let host = request

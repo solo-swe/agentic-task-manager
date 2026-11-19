@@ -19,6 +19,10 @@ export interface ReviewComment {
   at: string;
   body: string;
   resolved: boolean | null;
+  /** A poke (ATM-611): the user's nudge on the whole review, never open; absent for any other comment */
+  poke?: boolean;
+  /** One of the user's drafts (ATM-612), not sent yet: only they see it; absent for any other comment */
+  draft?: boolean;
   replies: ReviewComment[];
 }
 
@@ -35,7 +39,14 @@ export interface Picked {
   quote: string;
 }
 
-export type ReviewStatus = 'draft' | 'open' | 'live' | 'changes_requested' | 'approved' | 'closed';
+/** Where a review stands; `waiting` is waiting on its reviewers (ATM-613: `open` until 0.41.0) */
+export type ReviewStatus = 'draft' | 'waiting' | 'live' | 'changes_requested' | 'approved' | 'closed';
+
+/** A status filter: one status, or `open`, every review not decided yet (draft, waiting, live, sent back) */
+export type StatusFilter = ReviewStatus | 'open';
+
+/** The statuses of an open review, one not decided yet (as atm-review's `Status::OPEN`) */
+export const OPEN_STATUSES: readonly ReviewStatus[] = ['draft', 'waiting', 'live', 'changes_requested'];
 
 /** A review's header (`review.md`'s): what lists and searches need */
 export interface ReviewHeader {
@@ -58,10 +69,26 @@ export interface ReviewEntry {
   chains: number;
   open: number;
   needs_you: boolean;
+  /** What it waits on you for (ATM-606): its decision or round, or an answer since you last wrote; none, `null`.
+   * Optional, for an older atm's lists */
+  waiting?: 'review' | 'answered' | null;
+  /** When it began waiting on its reviewers, its latest round's time (ATM-610). Optional, for an older atm's lists */
+  waiting_since?: string | null;
+  /** The project it is in, on a list of several projects' reviews (ATM-575, the overview's Reviews); the page's own */
+  project?: { id: string; name: string };
+}
+
+/** A review's folder atm can't read (ATM-617): a status a newer atm wrote, a broken header */
+export interface UnreadableReview {
+  folder: string;
+  reference: string;
+  problem: string;
 }
 
 export interface ReviewList {
   reviews: ReviewEntry[];
+  /** Optional, for an older atm's lists */
+  unreadable?: UnreadableReview[];
   you: string;
 }
 
@@ -72,6 +99,8 @@ export type RoundKind =
 export interface Round {
   number: number;
   kind: RoundKind;
+  /** The submodule its commits are in (its folder), none for the project's own (ATM-583) */
+  submodule?: string | null;
   files: { path: string; binary: boolean }[];
   by: string;
   at: string;
@@ -84,6 +113,9 @@ export interface ViewFile {
   old_path: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed';
   binary: boolean;
+  /** A submodule this change moved (ATM-583): the commits it was and is at (none where added or removed), and its
+   * repository's web address when it has one; none for a file */
+  submodule?: { from: string | null; to: string | null; repository: string | null } | null;
   patch: string;
   before: string | null;
   after: string | null;
@@ -96,6 +128,23 @@ export interface PlacedChain extends Chain {
   drifted: { round: number; lines: [number, number] | null } | null;
 }
 
+/** One of the user's drafts on the review (ATM-612), as the page has it: a comment placed in the round shown as a chain
+ * is, or a reply */
+export type PlacedDraft = { id: string; at: string; body: string } & (
+  | {
+      kind: 'comment';
+      path: string | null;
+      lines: [number, number] | null;
+      side: Side;
+      quote: string | null;
+      /** None: on what a live review is when it is sent */
+      round: number | null;
+      placed?: [number, number] | null;
+      drifted?: { round: number; lines: [number, number] | null } | null;
+    }
+  | { kind: 'reply'; to: string }
+);
+
 /** A review's page for one view (`GET …/reviews/<CR>?round=&against=`) */
 export interface ReviewPageData {
   review: ReviewHeader;
@@ -103,7 +152,11 @@ export interface ReviewPageData {
   branch: string | null;
   rounds: Round[];
   chains: PlacedChain[];
-  view: { round: number; against: number | null; files: ViewFile[] };
+  /** The user's drafts on it (ATM-612). Optional, for an older atm's pages */
+  drafts?: PlacedDraft[];
+  /** `now`: a live review's working copy as it is now (ATM-576); its `round` is the one after `rounds` when it changed
+   * since the last checkpoint (a comment on it makes it one) */
+  view: { round: number; against: number | null; now?: boolean; files: ViewFile[] };
   needs_you: boolean;
   you: string;
 }
@@ -111,7 +164,8 @@ export interface ReviewPageData {
 /** What the reviews page lists by: each one given (not empty) must fit */
 export interface ListQuery {
   q: string;
-  status: ReviewStatus[];
+  /** `open` among them: every review not decided yet (the server expands it) */
+  status: StatusFilter[];
   author: string;
   reviewer: string;
   task: string;
@@ -122,7 +176,7 @@ export const NO_QUERY: ListQuery = { q: '', status: [], author: '', reviewer: ''
 
 export const STATUS_LABELS: Record<ReviewStatus, string> = {
   draft: 'Draft',
-  open: 'Open',
+  waiting: 'Waiting for review',
   live: 'Live',
   changes_requested: 'Changes requested',
   approved: 'Approved',

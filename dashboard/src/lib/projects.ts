@@ -7,10 +7,16 @@ import type { ProjectEntry, ProjectSummary } from './load';
 export const ACTIVE_DAYS = 14;
 const DAY_MS = 24 * 3_600_000;
 
-/** Tasks that need the user: in review, or blocked on a question for the user */
+/** What needs the user: tasks in review, blocked on a question for them or to do together, and code reviews waiting
+ * on them (ATM-606; a task in review through one of those is counted once, by the server) */
 export function needsYou(p: ProjectEntry): number {
   const n = p.summary?.needs_you;
-  return n ? n.review + n.blocked_on_user + (n.together ?? 0) : 0;
+  return n ? n.review + n.blocked_on_user + (n.together ?? 0) + (n.code_reviews ?? 0) : 0;
+}
+
+/** Code reviews waiting on the user in a project (ATM-606): their decision or round, or answered since they wrote */
+export function reviewsWaiting(p: ProjectEntry | undefined): number {
+  return p?.summary?.needs_you.code_reviews ?? 0;
 }
 
 /** Tasks still to do: neither done nor skipped */

@@ -1,0 +1,214 @@
+diff --git a/crates/atm-lib/src/review_pages.rs b/crates/atm-lib/src/review_pages.rs
+index ed1ef1ea..d0e7a4a6 100644
+--- a/crates/atm-lib/src/review_pages.rs
++++ b/crates/atm-lib/src/review_pages.rs
+@@ -313,7 +313,26 @@ fn view<S: RoundDiffs + ?Sized>(
+             (Some(before), after, between, None)
+         }
+     };
+-    let patches = file_patches(&patch.0);
++    // A submodule only moved (renamed, its commit the same) has no `Subproject commit` lines: its sides' trees say it
++    // is one (ATM-599: CompMD's `markdown-rs`, moved into `crates/`, showed as a file not in its commit)
++    let repo = rounds::repository(vcs, round).unwrap_or_else(|_| vcs.clone());
++    let linked =
++        |object: Option<&String>, path: &str| object.and_then(|o| repo.gitlink_in(o, path));
++    let patches: Vec<FilePatch> = file_patches(&patch.0)
++        .into_iter()
++        .map(|mut file| {
++            if file.submodule.is_none() && !file.patch.contains("\n@@") {
++                let (old, new) = (
++                    linked(before.as_ref(), &file.old_path),
++                    linked(Some(&after), &file.path),
++                );
++                if old.is_some() || new.is_some() {
++                    file.submodule = Some((old, new));
++                }
++            }
++            file
++        })
++        .collect();
+     // A moved submodule's entry: its two commits and its repository's web address, when it has one, for links
+     let submodule = |file: &FilePatch| {
+         file.submodule.as_ref().map(|(from, to)| {
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index ce28c770..5bf9fef4 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -991,6 +991,69 @@ mod tests {
+         );
+     }
+ 
++    /// ATM-599 (`markdown-rs` moved into `crates/`, in CompMD): a commit that only moves a submodule's folder shows it as
++    /// the submodule, at its one commit, not as a file whose sides are read
++    #[test]
++    fn a_submodule_only_moved_shows_as_the_submodule_at_its_commit() {
++        let dir = dir();
++        let sub = dir.0.join("sub-origin");
++        std::fs::create_dir_all(&sub).unwrap();
++        git(&["init", "-q"], &sub);
++        std::fs::write(sub.join("a.txt"), "a\n").unwrap();
++        git(&["add", "-A"], &sub);
++        git(&["commit", "-q", "-m", "sub"], &sub);
++        let root = dir.0.join("repo");
++        std::fs::create_dir_all(&root).unwrap();
++        git(&["init", "-q"], &root);
++        let project = project(&root, "claude:1");
++        let add = [
++            "-c",
++            "protocol.file.allow=always",
++            "submodule",
++            "--quiet",
++            "add",
++            "../sub-origin",
++            "lib",
++        ];
++        git(&add, &root);
++        git(&["add", "-A"], &root);
++        git(&["commit", "-q", "-m", "base"], &root);
++        std::fs::create_dir_all(root.join("crates")).unwrap();
++        git(&["mv", "lib", "crates/lib"], &root);
++        git(&["commit", "-q", "-m", "moved"], &root);
++        let vcs = project.vcs().unwrap();
++        let first = super::rounds::from_range(&vcs, "HEAD~1", "HEAD", &"claude:1".into()).unwrap();
++        let mut agent = reopen(&root, "claude:1");
++        let header = super::create(
++            &mut agent,
++            NewReview {
++                title: "Moved".into(),
++                summary: String::new(),
++                tasks: vec!["T-1".into()],
++                author: None,
++                reviewers: Vec::new(),
++                status: Status::Open,
++                first,
++            },
++        )
++        .unwrap();
++        let page =
++            crate::review_pages::review_page(&agent, &ReviewRef(header.reference.0), None, None)
++                .unwrap();
++        let files = page["view"]["files"].as_array().unwrap();
++        let moved = files.iter().find(|f| f["path"] == "crates/lib").unwrap();
++        assert_eq!(moved["old_path"], "lib");
++        let (from, to) = (&moved["submodule"]["from"], &moved["submodule"]["to"]);
++        assert!(from.is_string() && from == to, "{moved}");
++        // The other entries are files, as before
++        assert!(
++            files
++                .iter()
++                .filter(|f| f["path"] != "crates/lib")
++                .all(|f| f["submodule"].is_null())
++        );
++    }
++
+     /// ATM-576: approving a live review approves the working copy as it is then, a checkpoint, which its task's change
+     /// is compared with when it is done
+     #[test]
+diff --git a/crates/atm-vcs/src/lib.rs b/crates/atm-vcs/src/lib.rs
+index bb914f95..2b2e8f25 100644
+--- a/crates/atm-vcs/src/lib.rs
++++ b/crates/atm-vcs/src/lib.rs
+@@ -483,6 +483,26 @@ impl GitVcs {
+         Some((size.parse().ok()?, (*blob).to_string()))
+     }
+ 
++    /// The commit a submodule is at in `object` (a commit or a tree): its entry at `relative` is a link (mode
++    /// 160000); none for anything else there, or nothing (ATM-599: a submodule only moved has no other trace in a
++    /// diff).
++    #[must_use]
++    pub fn gitlink_in(&self, object: &str, relative: &str) -> Option<String> {
++        // Named as the project has it; read as this repository has it (a submodule's round, ATM-583)
++        let relative = self.inside_path(relative)?;
++        let output = run(&["ls-tree", "-z", object, "--", relative], &self.root)?;
++        if !output.status.success() {
++            return None;
++        }
++        let listing = String::from_utf8_lossy(&output.stdout);
++        let (meta, path) = listing.split('\0').next()?.split_once('\t')?;
++        let parts: Vec<&str> = meta.split_whitespace().collect();
++        match parts.as_slice() {
++            ["160000", "commit", sha] if path == relative => Some((*sha).to_string()),
++            _ => None,
++        }
++    }
++
+     /// A blob's bytes (from [`GitVcs::blob_in`]).
+     ///
+     /// # Errors
+@@ -1041,6 +1061,42 @@ mod tests {
+         }
+     }
+ 
++    /// ATM-599: a submodule's link in a commit or a tree gives its commit; a file, a folder or nothing there, none
++    #[test]
++    fn a_submodules_link_in_a_commit_or_tree_names_its_commit() {
++        let dir = scratch();
++        let sub = init(&dir.0.join("sub-origin"));
++        write(&sub, "a.txt", "a");
++        let sub_head = commit_all(&sub, "sub");
++        let vcs = init(&dir.0.join("repo"));
++        write(&vcs, "lib/top.txt", "t");
++        commit_all(&vcs, "first");
++        git(
++            &vcs.root,
++            &[
++                "-c",
++                "protocol.file.allow=always",
++                "submodule",
++                "--quiet",
++                "add",
++                "../sub-origin",
++                "lib/sub",
++            ],
++        );
++        let head = commit_all(&vcs, "the submodule");
++        let tree = vcs.resolve_tree(&head).unwrap();
++        for object in [head.as_str(), tree.as_str()] {
++            assert_eq!(
++                vcs.gitlink_in(object, "lib/sub"),
++                Some(sub_head.clone()),
++                "{object}"
++            );
++            for other in ["lib/top.txt", "lib", "lib/none", "lib/sub/a.txt", "-p"] {
++                assert_eq!(vcs.gitlink_in(object, other), None, "{object} {other}");
++            }
++        }
++    }
++
+     #[test]
+     fn a_file_in_a_submodule_is_answered_by_the_submodules_own_repository() {
+         let dir = scratch();
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index 93779e0a..73d4d1a2 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -233,7 +233,11 @@
+                   >{short(sha)}</code
+                 >{/if}
+             {/snippet}
+-            {#if moved.from && moved.to}
++            {#if moved.from && moved.to && moved.from === moved.to}
++              <!-- Only its folder moved (ATM-599: CompMD's markdown-rs into crates/) -->
++              The submodule {file.old_path !== file.path ? `moved from ${file.old_path}` : 'is unchanged'}; it stays at
++              {@render commit(moved.to)}.
++            {:else if moved.from && moved.to}
+               The submodule moved from {@render commit(moved.from)} to {@render commit(moved.to)}.
+             {:else if moved.to}
+               The submodule was added, at {@render commit(moved.to)}.
+diff --git a/dashboard/tests/unit/ReviewFile.component.test.ts b/dashboard/tests/unit/ReviewFile.component.test.ts
+index 4ad8007e..bc06417e 100644
+--- a/dashboard/tests/unit/ReviewFile.component.test.ts
++++ b/dashboard/tests/unit/ReviewFile.component.test.ts
+@@ -197,6 +197,12 @@ describe('ReviewFile: a submodule’s move (ATM-583)', () => {
+     ['moved', moved('1111111aaaa', '2222222bbbb'), 'The submodule moved from 1111111 to 2222222.'],
+     ['added', moved(null, '3333333cccc'), 'The submodule was added, at 3333333.'],
+     ['removed', moved('4444444dddd', null), 'The submodule was removed; it was at 4444444.'],
++    // ATM-599: only its folder moved, its commit the same
++    [
++      'its folder moved',
++      { ...moved('5555555eeee', '5555555eeee'), path: 'crates/lib', status: 'renamed' as const, patch: '' },
++      'The submodule moved from lib; it stays at 5555555.',
++    ],
+   ])('%s: says so with its commits, no diff and no lines loaded', (_, entry, says) => {
+     const load = vi.fn();
+     const { container } = show({ file: entry, before: { ...side(''), load }, after: { ...side(''), load } });

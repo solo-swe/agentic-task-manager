@@ -227,6 +227,83 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.windowTitles.slice(titles)).not.toContain('Task Dashboard');
   });
 
+  test('more tabs than fit scroll in their own strip, with ‹ ›; the window buttons and the page stay put (ATM-605)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.windowShell = { system_menu_bar: true, system_window_buttons: false };
+    tasksServer.use('standard');
+    const board = `/projects/${tasksServer.projectId}/kanban`;
+    tasksServer.restoredTabs = { addresses: Array.from({ length: 12 }, () => board), active: 11 };
+    await page.setViewportSize({ width: 1000, height: 700 });
+    await page.goto('/');
+    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(12);
+    const scroller = page.locator('.title-bar-tabs-scroller');
+    const left = page.getByRole('button', { name: 'Tabs to the left' });
+    const right = page.getByRole('button', { name: 'Tabs to the right' });
+    const state = () =>
+      page.evaluate(() => {
+        const bar = document.querySelector('#app-titlebar')!;
+        const strip = document.querySelector('.title-bar-tabs-scroller')!;
+        const buttons = document.querySelector('#window-buttons')!.getBoundingClientRect();
+        return {
+          barFits: bar.scrollWidth <= bar.clientWidth,
+          buttonsIn: buttons.right <= window.innerWidth && buttons.left > 0,
+          pageX: document.scrollingElement!.scrollLeft,
+          pageY: document.scrollingElement!.scrollTop,
+          strip: strip.scrollLeft,
+        };
+      });
+    // The last tab, active, is in view: the strip at its end, only ‹ to press; the bar fits the window
+    await expect(left).toBeEnabled();
+    await expect(right).toBeDisabled();
+    const atEnd = await state();
+    expect(atEnd).toMatchObject({ barFits: true, buttonsIn: true, pageX: 0 });
+    expect(atEnd.strip).toBeGreaterThan(0);
+    // The wheel over the strip scrolls it, and only it
+    await scroller.hover();
+    await page.mouse.wheel(0, -400);
+    await expect.poll(async () => (await state()).strip).toBeLessThan(atEnd.strip);
+    expect(await state()).toMatchObject({ pageX: 0, pageY: atEnd.pageY, buttonsIn: true });
+    // ‹ to the start, then › away from it
+    await page.mouse.wheel(0, -10_000);
+    await expect(left).toBeDisabled();
+    await expect.poll(async () => (await state()).strip).toBe(0);
+    await right.click();
+    await expect.poll(async () => (await state()).strip).toBeGreaterThan(0);
+    await expect(left).toBeEnabled();
+    // Scrolled to the end, then the last tabs closed one by one (ATM-639): while the rest overflow, the strip keeps its
+    // room, the last tab at its end; once they fit (two, here), all of them shown, unscrolled, and no arrows
+    await scroller.hover();
+    await page.mouse.wheel(0, 10_000);
+    await expect(right).toBeDisabled();
+    const room = await scroller.evaluate((el) => el.clientWidth);
+    const geometry = () =>
+      scroller.evaluate((el) => ({
+        width: el.clientWidth,
+        scrolled: el.scrollLeft,
+        fits: el.scrollWidth <= el.clientWidth + 1,
+        gap: Math.round(el.getBoundingClientRect().right - el.lastElementChild!.getBoundingClientRect().right),
+      }));
+    for (let open = 11; open >= 2; open--) {
+      const tab = page.locator('.title-bar-tab').last();
+      await tab.hover();
+      await tab.locator('.title-bar-tab-close').click();
+      await expect(page.locator('.title-bar-tab')).toHaveCount(open);
+      if (open > 2) expect(await geometry(), `${open} tabs`).toMatchObject({ width: room, fits: false, gap: 0 });
+    }
+    await expect(left).toHaveCount(0);
+    await expect(right).toHaveCount(0);
+    expect(await geometry()).toMatchObject({ fits: true, scrolled: 0 });
+    // Fewer tabs, all fitting: no arrows
+    tasksServer.restoredTabs = { addresses: [board, board], active: 0 };
+    await page.reload();
+    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(2);
+    await expect(left).toHaveCount(0);
+    await expect(right).toHaveCount(0);
+  });
+
   test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
     page,
     tasksServer,
@@ -238,7 +315,7 @@ test.describe('the dashboard in the atm app', () => {
       reference: 'CR-2',
       number: 2,
       title: 'Trim the names',
-      status: 'open',
+      status: 'waiting',
       tasks: [],
       author: 'claude:a',
       reviewers: [],
@@ -257,6 +334,7 @@ test.describe('the dashboard in the atm app', () => {
         needs_you: false,
         you: 'Ana',
       });
+    tasksServer.addProject('second', 'minimal', 'Second Project');
     tasksServer.link(`/projects/${tasksServer.projectId}/reviews`);
     await page.goto('/');
     const tabs = page.locator('#app-titlebar [role="tab"]');
@@ -272,6 +350,13 @@ test.describe('the dashboard in the atm app', () => {
     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
     // The window's own bar and sidebar toggle are there, as on every tab
     await expect(page.locator('#app-titlebar')).toBeVisible();
+    // The selected tab joins the review's top bar under it, in one colour, as a project's tab joins its page (ATM-608)
+    const colours = await page.evaluate(() => {
+      const of = (selector: string) => getComputedStyle(document.querySelector(selector)!).backgroundColor;
+      return { tab: of('.title-bar-tab.selected'), top: of('.review-top'), bar: of('#app-titlebar') };
+    });
+    expect(colours.top).toBe(colours.tab);
+    expect(colours.bar).not.toBe(colours.tab);
     // The first tab still shows the reviews
     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
     await tabs.nth(0).click();
@@ -279,6 +364,20 @@ test.describe('the dashboard in the atm app', () => {
     // And the review's tab keeps its name while another is shown
     await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
     expect(tasksServer.httpRequests).toEqual([]);
+
+    // ATM-581 (Hakan): from the review's tab, a project in the sidebar: the tab becomes that project's page, labelled
+    // by it; no new tab
+    await tabs.nth(1).click();
+    await expect(page.locator('#review-page')).toBeVisible();
+    await page.locator('#app-sidebar [data-id="second"]').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#review-page')).toHaveCount(0);
+    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second(\/[a-z]+)?(\?|$)/);
+    await expect(page.locator('#app-tab-t2-label')).toContainText('Minimal Project');
+    // The first tab is as it was
+    await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
   });
 
   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
@@ -534,6 +633,37 @@ test.describe('the dashboard in the atm app', () => {
       .toEqual({ addresses: [first, '/projects/second/list', '/board'], active: 2 });
     await page.locator('.title-bar-tab').nth(0).locator('[role="tab"]').click();
     await expect.poll(() => tasksServer.savedTabs?.active).toBe(0);
+  });
+
+  test('Reload (ATM-584) loads the window again through the app, back at its tabs and the one it showed', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    const list = `/projects/${tasksServer.projectId}/list`;
+    tasksServer.restoredTabs = { addresses: ['/board', list, '/projects/second/kanban'], active: 1 };
+    // The list's address, with the scope the page adds to it
+    const atList = new RegExp(`^${list}(\\?|$)`);
+    await page.goto('/');
+    await expect(page.locator('.title-bar-tab')).toHaveCount(3);
+    await expect.poll(() => addressOf(page)).toMatch(atList);
+    await expect.poll(() => tasksServer.savedTabs?.active).toBe(1);
+
+    // A mark on this page, which a page loaded again doesn't have
+    await page.evaluate(() => ((window as unknown as { beforeReload: boolean }).beforeReload = true));
+    await tasksServer.chooseMenu({ kind: 'reload' });
+    await expect.poll(() => tasksServer.windowCalls).toContain('reload_window');
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { beforeReload?: boolean }).beforeReload ?? false))
+      .toBe(false);
+    // Loaded again: the same tabs, the same one shown, its page drawn
+    await page.waitForLoadState('load');
+    await expect(page.locator('.title-bar-tab')).toHaveCount(3);
+    await expect.poll(() => addressOf(page)).toMatch(atList);
+    await expect(page.locator('.task-card').first()).toBeVisible();
+    await expect(page.locator('.title-bar-tab').nth(2)).toContainText('Second Project');
   });
 
   test('a tab dragged along the strip moves there and is kept; a plain click still selects; the bar still drags the window (T-532)', async ({

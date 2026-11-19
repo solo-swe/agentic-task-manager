@@ -652,11 +652,12 @@ export class DashboardState {
     }
     if (route.page !== 'project' || !this.loaded) return;
     this.tab = viewOf(address);
-    // Back past a task's details closes them, Forward opens them again
+    // Back past a task's details closes them, Forward opens them again. A link to the task already open, written
+    // another way (`~ATM-10`, `atm-10`, an alias), still puts its key in the address
     if (!this.peeking) {
       const task = taskOf(address);
       if (task === null) this.detailOpen = false;
-      else if (!this.detailOpen || this.detailId !== this.findTask(task)?.id) this.openAddressed(task);
+      else this.openAddressed(task);
     }
     // Back, or a link to another sprint of the project shown (T-323)
     const linked = this.#sprintParam === 'pending' ? null : sprintParamOf(address, this.sprints);
@@ -943,8 +944,10 @@ export class DashboardState {
   private openAddressed(ref: string) {
     const task = this.openDetail(ref);
     if (!task || this.peeking || this.route.page !== 'project') return;
-    const address = withTask(currentAddress(), taskLabel(task));
-    if (address !== currentAddress()) navigate(address, { replace: true });
+    // Only when the address names it otherwise; in place, keeping the entry's own state (the document viewer's depth,
+    // which its Back goes by)
+    if (taskOf(currentAddress()) === taskLabel(task)) return;
+    navigate(withTask(currentAddress(), taskLabel(task)), { replace: true, state: entryState() });
   }
 
   closeDetail() {

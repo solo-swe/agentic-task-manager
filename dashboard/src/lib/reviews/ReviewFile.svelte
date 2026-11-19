@@ -1,6 +1,9 @@
 <script lang="ts" module>
   /** How far past the view a card is made ahead of being scrolled to, in pixels */
   export const MARGIN = 800;
+  /** How far past the view a made card keeps its diff before giving it back (ATM-587), in pixels: well past MARGIN, so
+   * a card near the edge isn't made and given back as the view moves a little */
+  export const FAR = 3200;
 
   /** Whether an entry of an observer with MARGIN is in the view itself (its root's box without the margin) */
   export function inView(entry: IntersectionObserverEntry): boolean {
@@ -46,7 +49,11 @@
 <script lang="ts">
   import type { DocumentSource } from '../documents/source';
   import Icon from '../ui/Icon.svelte';
+  import ChainBox from './ChainBox.svelte';
+  import ComposerActions from './ComposerActions.svelte';
   import DiffView from './DiffView.svelte';
+  import { draftActions } from './drafts';
+  import { focusOnShow } from './focus';
   import { lineCounts } from './page';
   import type { Chain, PlacedChain, Picked, ViewFile } from './types';
 
@@ -63,6 +70,7 @@
     folded,
     mode,
     view,
+    wrap = false,
     busy = false,
     docStyle = null,
     root = null,
@@ -83,6 +91,8 @@
     folded: boolean;
     mode: 'split' | 'unified';
     view: 'source' | 'rendered';
+    /** Long lines wrap, in Unified (ATM-588) */
+    wrap?: boolean;
     busy?: boolean;
     /** The document style picked in Settings, for a Markdown file's rendered view */
     docStyle?: string | null;
@@ -92,7 +102,8 @@
     wanted?: boolean;
     onfold: () => void;
     onviewed: () => void;
-    oncomment: (picked: Picked, body: string) => Promise<string | null> | void;
+    /** A comment on lines (`picked`), or on the file as a whole (none: a submodule's move) */
+    oncomment: (picked: Picked | null, body: string) => Promise<string | null> | void;
     onreply: (to: string, body: string) => void;
     onresolve: (comment: string, resolved: boolean) => void;
     onround: (round: number) => void;
@@ -100,6 +111,27 @@
 
   const counts = $derived(lineCounts(file.patch));
   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
+
+  // A submodule's move (ATM-583): its two commits, linked to its repository when it has a web address; comments on it
+  // are on the entry as a whole
+  const moved = $derived(file.submodule ?? null);
+  const short = (sha: string) => sha.slice(0, 7);
+  const commitUrl = (sha: string) => (moved?.repository ? `${moved.repository}/commit/${sha}` : null);
+  let writing = $state(false);
+  let draft = $state('');
+  let problem = $state<string | null>(null);
+  async function save(asDraft = false) {
+    const body = draft.trim();
+    if (!body) return;
+    problem = (asDraft && drafts ? await drafts.comment(file.path, null, body) : await oncomment(null, body)) ?? null;
+    if (!problem) {
+      draft = '';
+      writing = false;
+    }
+  }
+  /** What drafting does on this page (ATM-612); none where drafts can't be kept */
+  const drafts = draftActions();
+  const drafting = $derived(!!drafts && drafts.pending > 0);
 
   // A card in view is made at once; one only near it (within MARGIN), once the page is idle. Right after a jump, only
   // the file gone to (`wanted`) is made at once, the others a moment later: its sides load first
@@ -115,7 +147,12 @@
     const seen = new IntersectionObserver(
       (entries) => {
         const entry = entries.find((e) => e.isIntersecting);
-        if (!entry) return;
+        if (!entry) {
+          // Scrolled past before the page was idle (ATM-615): not made once it is, far from the view by then
+          later?.();
+          later = null;
+          return;
+        }
         if (inView(entry) && !holding()) {
           later?.();
           near = true;
@@ -129,8 +166,49 @@
       later?.();
     };
   });
-  /** How tall a diff not made yet stands: about its lines, so the list's scroll bar is about right */
-  const estimate = $derived(Math.min(4000, (counts.added + counts.removed + 8) * 20));
+  // A card made and then far from the view gives back its diff (ATM-587: the page holds the rows near the view, not
+  // every file's), standing in at the height it had, and is made again when it comes near; not while a comment is
+  // being written in it, nor the file gone to. Not while a jump is still being made (ATM-646): each CompMD page closed
+  // restyles the whole page (a second each in the app's WebKit on a long review), so those a jump scrolled away from
+  // wait until the page has settled, and stay made if they came near again meanwhile
+  let body = $state<HTMLElement>();
+  /** The height its diff had, when made: what it stands at once given back */
+  let measured = $state(0);
+  $effect(() => {
+    const target = el;
+    if (!target || !near || wanted || typeof IntersectionObserver === 'undefined') return;
+    let later: (() => void) | null = null;
+    const giveBack = () => {
+      later = null;
+      const writingHere = target.querySelector('textarea, [contenteditable="true"]') !== null;
+      if (writingHere || target.contains(document.activeElement)) return;
+      // Only a drawn diff's height (ATM-615): one still loading is a line high, and the card stood at that
+      if (body && !body.querySelector('.diff-loading')) measured = body.offsetHeight;
+      near = false;
+    };
+    const far = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          later?.();
+          later = null;
+          return;
+        }
+        // At once, as the view moves; only right after a jump, once the page has settled
+        if (!holding()) giveBack();
+        else later ??= whenSettled(giveBack);
+      },
+      { root, rootMargin: `${FAR}px 0px` },
+    );
+    far.observe(target);
+    return () => {
+      far.disconnect();
+      later?.();
+    };
+  });
+  /** How tall a diff not made yet stands: the height it had, else about its lines, so the scroll bar is about right */
+  // No cap (ATM-587, CompMD's CR-1): a 600-line file stood at 4,000 px and grew to 12,000 once drawn, so the end of the
+  // review moved away from a reader who had just scrolled to it
+  const estimate = $derived(measured || (counts.added + counts.removed + 8) * 20);
 </script>
 
 <section
@@ -138,9 +216,10 @@
   class:folded
   bind:this={el}
   data-file={file.path}
-  data-pending={!folded && !near && !file.binary ? '' : undefined}
+  data-pending={!folded && !near && !file.binary && !moved ? '' : undefined}
   data-comments={chains.length ? '' : undefined}
   aria-label={file.path}
+  style:--card-estimate="{folded ? 0 : estimate}px"
 >
   <header class="review-file-head">
     <button
@@ -152,7 +231,7 @@
     <span class="review-file-status status-{file.status}" title={file.status}>{statusLetter[file.status]}</span>
     <span class="review-file-path">{file.old_path !== file.path ? `${file.old_path} → ${file.path}` : file.path}</span>
     <span class="review-file-counts">
-      {#if file.binary}binary{:else}<span class="added">+{counts.added}</span>
+      {#if moved}submodule{:else if file.binary}binary{:else}<span class="added">+{counts.added}</span>
         <span class="removed">−{counts.removed}</span>{/if}
     </span>
     {#if chains.length}<span class="review-file-chains"
@@ -164,7 +243,7 @@
     </label>
   </header>
   {#if !folded}
-    <div class="review-file-body">
+    <div class="review-file-body" bind:this={body}>
       {#each drifted as chain (chain.id)}
         <p class="review-drifted" data-chain={chain.id}>
           A comment's text is gone from this round:
@@ -175,7 +254,65 @@
           </button>
         </p>
       {/each}
-      {#if file.binary}
+      {#if moved}
+        <div class="review-submodule">
+          <p class="review-submodule-move">
+            <Icon name="git-commit" size={14} />
+            {#snippet commit(sha: string)}
+              {@const url = commitUrl(sha)}
+              {#if url}<a href={url} target="_blank" rel="noopener noreferrer"><code>{short(sha)}</code></a>{:else}<code
+                  >{short(sha)}</code
+                >{/if}
+            {/snippet}
+            {#if moved.from && moved.to && moved.from === moved.to}
+              <!-- Only its folder moved (ATM-599: CompMD's markdown-rs into crates/) -->
+              The submodule {file.old_path !== file.path ? `moved from ${file.old_path}` : 'is unchanged'}; it stays at
+              {@render commit(moved.to)}.
+            {:else if moved.from && moved.to}
+              The submodule moved from {@render commit(moved.from)} to {@render commit(moved.to)}.
+            {:else if moved.to}
+              The submodule was added, at {@render commit(moved.to)}.
+            {:else if moved.from}
+              The submodule was removed; it was at {@render commit(moved.from)}.
+            {/if}
+          </p>
+          {#each chains as chain (chain.id)}
+            <ChainBox {chain} {onreply} {onresolve} />
+          {/each}
+          {#if writing}
+            <form
+              class="review-submodule-composer"
+              onsubmit={(e) => {
+                e.preventDefault();
+                void save(drafting);
+              }}
+            >
+              <textarea
+                aria-label="Comment on {file.path}"
+                bind:value={draft}
+                {@attach focusOnShow}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save(drafting);
+                  if (e.key === 'Escape') writing = false;
+                }}></textarea>
+              {#if problem}<p class="review-submodule-problem" role="alert">Not saved: {problem}</p>{/if}
+              <div class="review-submodule-actions">
+                <ComposerActions
+                  ready={!busy && !!draft.trim()}
+                  {drafting}
+                  now={() => void save(false)}
+                  oncancel={() => (writing = false)}
+                  ondraft={drafts ? () => void save(true) : undefined}
+                />
+              </div>
+            </form>
+          {:else}
+            <button class="review-submodule-comment" onclick={() => (writing = true)}>
+              <Icon name="message-square" size={13} /> Comment on this submodule
+            </button>
+          {/if}
+        </div>
+      {:else if file.binary}
         <p class="review-empty">A binary file: listed, not shown.</p>
       {:else if near}
         <DiffView
@@ -187,6 +324,7 @@
           {chains}
           {mode}
           {view}
+          {wrap}
           {viewed}
           {busy}
           header={false}
@@ -210,6 +348,21 @@
     border-radius: var(--radius-md);
     background: var(--bg);
     scroll-margin-top: var(--space-4);
+    /* Laid out as any element, not skipped off screen (ATM-620: `content-visibility: auto` kept every card's old
+       layout, rows long given back, alive: up to 175 MB on CMD CR-1; the rows made are bounded by FAR and CHUNK, so
+       laying out those near the view costs nothing measurable). Never shrunk (ATM-615) */
+    flex: none;
+  }
+  /* A card not made yet stands at its estimate, an empty box (ATM-646): contained, so a restyle or repaint of the rest
+     of the review has nothing to do in it; a long review is mostly these (CMD CR-7: ~500,000 px). Empty, so none of
+     ATM-620's leak (that was content-visibility keeping made cards' old layout) */
+  .review-file-later {
+    contain: strict;
+  }
+  /* A diff still loading stands at its estimate (ATM-615), so the pane doesn't shrink under the reader while it
+     loads */
+  .review-file-body:has(:global(.diff-loading)) {
+    min-height: var(--card-estimate);
   }
   .review-file-head {
     position: sticky;
@@ -310,5 +463,85 @@
   .review-empty {
     padding: var(--space-6);
     color: var(--text-muted);
+  }
+  .review-submodule {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
+  }
+  .review-submodule-move {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+  .review-submodule-move code {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    color: var(--text);
+  }
+  .review-submodule-move a {
+    color: var(--accent);
+  }
+  .review-submodule-comment {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+  .review-submodule-composer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .review-submodule-composer textarea {
+    min-height: calc(var(--space-8) * 3);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+  .review-submodule-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+  }
+  /* Its buttons are ComposerActions' (ATM-612) */
+  .review-submodule-actions :global(button) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+  .review-submodule-actions :global(button.primary) {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .review-submodule-problem {
+    margin: 0;
+    color: var(--red);
+    font-size: var(--text-xs);
   }
 </style>

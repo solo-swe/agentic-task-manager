@@ -158,6 +158,94 @@ mod tests {
         assert_eq!(String::from_utf8_lossy(post.body()), "only GET and HEAD");
     }
 
+    /// A `GET` answers the file's own bytes; the path is the same with or without its leading `/`
+    #[test]
+    fn a_file_is_served_whole() {
+        for path in [
+            "/assets/compmd/1.0.0/compmd_wasm_bg.wasm",
+            "assets/compmd/1.0.0/compmd_wasm_bg.wasm",
+        ] {
+            let response = respond(FILES, &Method::GET, path);
+            assert_eq!(response.status(), StatusCode::OK, "{path}");
+            assert_eq!(response.body().as_ref(), b"\0asm", "{path}");
+        }
+    }
+
+    /// Only scripts and `WebAssembly` have a type; anything else (a page, a stylesheet, a name without an extension)
+    /// is none, so it is never served even when embedded
+    #[test]
+    fn only_scripts_and_webassembly_are_served() {
+        const PAGE: Files = &[("assets/x.html", b"<p>"), ("assets/x", b"x")];
+        for (path, kind) in [
+            ("a/b.js", Some("text/javascript; charset=utf-8")),
+            ("a/b.wasm", Some("application/wasm")),
+            ("a/b.html", None),
+            ("a/b.css", None),
+            ("a/b.JS", None),
+            ("a/compmd", None),
+            ("", None),
+        ] {
+            assert_eq!(content_type(path), kind, "{path}");
+        }
+        for path in ["/assets/x.html", "/assets/x"] {
+            assert_eq!(
+                respond(PAGE, &Method::GET, path).status(),
+                StatusCode::NOT_FOUND,
+                "{path}"
+            );
+        }
+    }
+
+    /// Each segment is a plain name: none empty, none starting with `-`, none escaped
+    #[test]
+    fn a_path_of_anything_but_plain_names_is_refused() {
+        for path in [
+            "/assets//compmd/1.0.0/compmd.js",
+            "/assets/compmd/1.0.0/compmd.js/",
+            "/assets/compmd/1.0.0/-compmd.js",
+            "/assets/compmd/%2e%2e/1.0.0/compmd.js",
+            "/assets/compmd/1.0.0/compmd.js?x=1",
+            "/assets/compmd/1.0.0/comp md.js",
+            "/assets\\compmd\\1.0.0\\compmd.js",
+        ] {
+            assert_eq!(
+                respond(FILES, &Method::GET, path).status(),
+                StatusCode::NOT_FOUND,
+                "{path}"
+            );
+        }
+    }
+
+    /// Every method but `GET` and `HEAD` is refused, before the path is looked at; a `HEAD` of a missing file is 404
+    #[test]
+    fn other_methods_are_refused_whatever_the_path() {
+        for method in [
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::PATCH,
+            Method::OPTIONS,
+        ] {
+            for path in ["/assets/compmd/1.0.0/compmd.js", "/missing.js"] {
+                assert_eq!(
+                    respond(FILES, &method, path).status(),
+                    StatusCode::METHOD_NOT_ALLOWED,
+                    "{method} {path}"
+                );
+            }
+        }
+        assert_eq!(
+            respond(FILES, &Method::HEAD, "/missing.js").status(),
+            StatusCode::NOT_FOUND
+        );
+        // A refusal is plain text
+        let refused = respond(FILES, &Method::GET, "/missing.js");
+        assert_eq!(
+            header_of(&refused, "content-type"),
+            Some("text/plain; charset=utf-8")
+        );
+    }
+
     /// The scheme is the deep links' too, but no asset address opens a page
     #[test]
     fn no_asset_address_is_a_deep_link() {

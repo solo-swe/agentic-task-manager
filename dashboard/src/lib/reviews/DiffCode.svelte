@@ -27,9 +27,13 @@
     changes = [],
     picked = null,
     marked = null,
+    wrap = false,
     onpick,
     onover,
   }: {
+    /** Long lines wrap at the column's width (ATM-588): each line's row as tall as CompMD drew it, its number on its
+     * first visual line */
+    wrap?: boolean;
     /** The lines of the chain selected, by their index in `lines`: marked */
     marked?: [number, number] | null;
     lines: CodeLine[];
@@ -48,7 +52,15 @@
     onover?: (index: number) => void;
   } = $props();
 
-  const text = $derived(fenced(lines.map((l) => l.text).join('\n'), language));
+  const source = $derived(lines.map((l) => l.text).join('\n'));
+  /** Nothing in it to highlight: padding rows and empty lines only */
+  const blank = $derived(lines.every((l) => l.kind === 'pad' || l.text.trim() === ''));
+  const text = $derived(
+    fenced(
+      lines.map((l) => l.text),
+      language,
+    ),
+  );
 
   let el = $state<HTMLElement>();
   let layout = $state<{ top: number; lineHeight: number } | null>(null);
@@ -66,11 +78,24 @@
       if (state === 'failed' && layout?.lineHeight !== FALLBACK_LINE) layout = { top: 0, lineHeight: FALLBACK_LINE };
       return;
     }
-    const style = getComputedStyle(code);
-    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
+    // A line's height as drawn: the code's height over its lines (every one is drawn, an empty last one too: ATM-589),
+    // so the rows never drift from the text; else what its style says. Its style only then (ATM-644): a computed
+    // style read forces a restyle of the whole page, which takes a second in the app's WebKit on a long review
+    const drawnHeight = code.getBoundingClientRect().height;
+    const styled = () => {
+      const style = getComputedStyle(code);
+      return parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
+    };
+    const lineHeight = !wrap && lines.length && drawnHeight > 0 ? drawnHeight / lines.length : styled();
     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
+    if (wrap) measureWrapped(code);
   }
+  // Wrapped or not: measured again (the code's lines take their new heights)
+  $effect(() => {
+    void wrap;
+    requestAnimationFrame(() => measure());
+  });
 
   $effect(() => {
     const target = el;
@@ -78,19 +103,77 @@
     measure();
     const resize = new ResizeObserver(measure);
     resize.observe(target);
+    // What CompMD draws, only (ATM-644): the run's own gutter (the + under the pointer, a line picked) changes nothing
+    // CompMD drew, so it never measures the run again; every hover did, a forced restyle of the page each
+    const drawn = target.querySelector('.compmd') ?? target;
     const rendered = new MutationObserver(measure);
-    rendered.observe(target, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-compmd'] });
+    rendered.observe(drawn, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-compmd'] });
     return () => {
       resize.disconnect();
       rendered.disconnect();
     };
   });
 
+  /** Wrapped (ATM-588): each line's row in the run's pixels, from its first visual line to the next line's. Lines aren't
+   * one height then, so the gutter follows the text. CompMD draws a code block's lines as text between newlines (and
+   * says where only a Markdown document's lines are), so each line's top is read here, from a collapsed range at its
+   * start: read only, nothing of CompMD's page is changed */
+  let wrapped = $state.raw<{ top: number; height: number }[] | null>(null);
+  function measureWrapped(code: HTMLElement) {
+    if (!el) return;
+    const origin = el.getBoundingClientRect().top;
+    const starts: { node: Text; offset: number }[] = [];
+    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+    let atStart = true;
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      const text = node.data;
+      for (let at = 0; at <= text.length; at++) {
+        if (atStart && at < text.length) {
+          starts.push({ node, offset: at });
+          atStart = false;
+        }
+        if (text[at] === '\n') atStart = true;
+      }
+    }
+    const range = document.createRange();
+    // Where nothing is laid out (a test's page), there is nothing to measure: the lines keep one height
+    if (typeof range.getClientRects !== 'function') return;
+    const tops = starts.map(({ node, offset }) => {
+      range.setStart(node, offset);
+      range.collapse(true);
+      const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
+      return rect.top - origin;
+    });
+    const bottom = code.getBoundingClientRect().bottom - origin;
+    // Empty lines at the end have no character to measure: one line height each, up from the code's end
+    const lineHeight = layout?.lineHeight ?? FALLBACK_LINE;
+    const missing = lines.length - tops.length;
+    for (let k = missing; k > 0; k--) tops.push(bottom - k * lineHeight);
+    const rows = lines.map((_, i) => {
+      const top = tops[i];
+      const next = i + 1 < lines.length ? tops[i + 1] : bottom;
+      return { top, height: Math.max(next - top, layout?.lineHeight ?? FALLBACK_LINE) };
+    });
+    if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
+  }
+  $effect(() => {
+    if (!wrap) wrapped = null;
+  });
+  /** Each line's row: measured when wrapped, else the code's one line height */
+  const rowOf = (i: number) =>
+    wrap && wrapped?.[i]
+      ? wrapped[i]
+      : layout
+        ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
+        : null;
+
   /** The line at a pointer's height in the run, if there is one there */
   function lineAt(e: MouseEvent): number | null {
     if (!el || !layout) return null;
-    const y = e.clientY - el.getBoundingClientRect().top - layout.top;
-    const i = Math.floor(y / layout.lineHeight);
+    const y = e.clientY - el.getBoundingClientRect().top;
+    let i: number;
+    if (wrap && wrapped) i = wrapped.findIndex((r) => y >= r.top && y < r.top + r.height);
+    else i = Math.floor((y - layout.top) / layout.lineHeight);
     return i >= 0 && i < lines.length && lines[i].kind !== 'pad' ? i : null;
   }
 
@@ -116,6 +199,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions (the pointer over a line shows its +; the + is the button) -->
 <div
   class="diff-code"
+  class:wrap
   class:both={numbers === 'both'}
   class:pickable={!!onpick}
   bind:this={el}
@@ -125,14 +209,16 @@
 >
   {#if layout}
     {#each lines as line, i (i)}
+      {@const row = rowOf(i)!}
       <div
         class="diff-line diff-{line.kind}"
         class:picked={isPicked(i)}
         class:commented={!!marked && i >= marked[0] && i <= marked[1]}
         data-row={keys[i]}
         data-change={starts.has(i) ? '' : undefined}
-        style:top="{layout.top + i * layout.lineHeight}px"
-        style:height="{layout.lineHeight}px"
+        style:top="{row.top}px"
+        style:height="{row.height}px"
+        style:--line-height="{layout.lineHeight}px"
       >
         {#if line.kind !== 'pad'}
           <button
@@ -155,7 +241,16 @@
       </div>
     {/each}
   {/if}
-  <CompMd {text} />
+  {#if blank}
+    <!-- Nothing to highlight (a side of added or removed lines only: its padding rows, ATM-646): no CompMD page, whose
+         opening and closing each restyle the whole page; the text as written, as a run waits for its turn below -->
+    <div class="compmd" data-compmd="ready">
+      <div class="compmd-page compmd-waiting"><pre><code>{source}</code></pre></div>
+    </div>
+  {:else}
+    <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
+    <CompMd {text} plain={source} />
+  {/if}
 </div>
 
 <style>
@@ -164,6 +259,10 @@
     --plus: var(--space-8);
     position: relative;
     padding-left: calc(var(--gutter) + var(--plus));
+    /* Nothing of a run is drawn past it (ATM-590): a scroll bar the system lays over the content (macOS's), or a row
+       of its gutter, stays inside the run, off the fold row after it */
+    overflow: clip;
+    overflow-clip-margin: 2px;
   }
   .diff-code.both {
     --gutter: calc(var(--space-10) * 2);
@@ -173,9 +272,27 @@
     white-space: pre;
     overflow-x: auto;
     background: transparent;
+    /* Room under the last line for a scroll bar laid over the content (ATM-590), so it covers neither that line nor
+       what comes after the run; a classic scroll bar takes its own room below it */
+    padding-bottom: var(--space-4);
   }
   .diff-code :global(.compmd-page pre > code) {
     display: block;
+  }
+  /* Wrapped (ATM-588): long lines break at the column's width, anywhere if they must; no sideways scroll */
+  .diff-code.wrap :global(.compmd-page pre),
+  .diff-code.wrap :global(.compmd-plain) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow-x: hidden;
+  }
+  /* A wrapped line's number stays on its first visual line, the gutter as tall as all of them */
+  .diff-code.wrap .diff-number {
+    align-items: flex-start;
+    line-height: var(--line-height);
+  }
+  .diff-code.wrap .diff-plus {
+    top: calc(var(--line-height) / 2);
   }
   .diff-line {
     position: absolute;

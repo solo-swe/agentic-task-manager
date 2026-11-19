@@ -16,8 +16,9 @@ const BUILT = TARGET;
 // a target, until the move to Rust and Tauri sets the new ones (decided with Hakan, 2026-11-06); this only catches
 // a runaway build. Raised from 850 KiB in 0.36.0 for the desktop app's own UI (menus, sidebar, title bar and tabs,
 // status bar, Settings sheet; decided with Hakan, T-517), and from 900 KiB in 0.40.0 for the review pages (decided
-// with Hakan, ATM-574)
-const MAX_BYTES = 1024 * 1024;
+// with Hakan, ATM-574). Raised from 1 MiB in 0.41.0 for the reviews' drafts and what the sprint adds after them
+// (decided with Hakan, 2026-11-19, ATM-612)
+const MAX_BYTES = 1.5 * 1024 * 1024;
 
 test.describe('shipped dashboard file', () => {
   const html = () => readFileSync(BUILT, 'utf8');

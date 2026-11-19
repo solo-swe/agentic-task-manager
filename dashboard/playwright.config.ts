@@ -34,8 +34,32 @@ export default defineConfig({
     // `pnpm exec playwright test <spec> --trace on` records them while looking into a failure
     trace: 'on-first-retry',
   },
-  // The dashboard at its pages' paths, as atm serve serves it (T-429)
-  projects: [{ name: 'svelte', use: { baseURL: `http://localhost:${PORT}/` } }],
+  // The dashboard at its pages' paths, as atm serve serves it (T-429), in three projects, one after the other (ATM-641):
+  // the tests that measure time against a budget (tagged @timed) must not share the machine with heavy ones, which made
+  // them miss it (the long review's settle, 104 to 110 ms for 100, beside a review of 5,000 lines and a WebKit page
+  // busy for seconds; alone, 26 to 61).
+  // - `svelte`: every other test;
+  // - `timed`: the @timed tests, once `svelte` is done;
+  // - `measure`: a real review measured in Chromium and WebKit (real-review.spec.ts), last; it runs only when given a
+  //   review (a developer's real-review.local.json, or the environment).
+  // A project runs only once the one before it passed: with a functional test failing, the timed ones wait for its fix.
+  // One project alone: `pnpm exec playwright test --project timed --no-deps`
+  projects: [
+    {
+      name: 'svelte',
+      testIgnore: /real-review\.spec\.ts/,
+      grepInvert: /@timed/,
+      use: { baseURL: `http://localhost:${PORT}/` },
+    },
+    {
+      name: 'timed',
+      testIgnore: /real-review\.spec\.ts/,
+      grep: /@timed/,
+      dependencies: ['svelte'],
+      use: { baseURL: `http://localhost:${PORT}/` },
+    },
+    { name: 'measure', testMatch: /real-review\.spec\.ts/, dependencies: ['timed'] },
+  ],
   webServer: {
     command: 'node tests/e2e/serve.mjs',
     url: `http://localhost:${PORT}/`,

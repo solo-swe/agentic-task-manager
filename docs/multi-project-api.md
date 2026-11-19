@@ -29,7 +29,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /p/<id>/worktrees.json` | that project's git worktrees and their changed tasks (§2.2) | yes |
 | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
 | `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
-| `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6); `&at=<rev>` as a commit or tree has it | yes (no with `at`) |
+| `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6); `&at=<rev>` as a commit or tree has it | yes (with `at`, only at a full object ID, kept by the browser) |
 | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
 | `GET /api/v1/projects/<id>/reviews?q=&status=&…` | that project's code reviews (§2.9) | no |
 | `GET /api/v1/projects/<id>/reviews/<CR>?round=&against=` | a review's page for one view of it (§2.9) | no |
@@ -143,6 +143,12 @@ typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/ge
 task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
 `in_pr`, `merged`) and `archived`; what doesn't apply is left out.
 
+- **Its code reviews' statuses** (ATM-621): a task with code reviews (`code_reviews`) has `derived.review_statuses`,
+  by review ID: each review's status (`draft`, `waiting`, `live`, `changes_requested`, `approved`, `closed`), or
+  `unreadable` for one atm can't read (ATM-617). They're read from the project's reviews once for all the views. A
+  review this working copy doesn't have is left out. The tasks' `ETag` already moves with the reviews' files
+  (ATM-606), so a decision shows on the next refresh. The task cards' and the details' review badges show them.
+
 - **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
   `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,
   found }`, and when found, the project's `project_name` and `places` (`[{ workspace, project }]`, where it is
@@ -194,11 +200,15 @@ reads the working copy through the version control. `path` is relative to the pr
   its diff). `revision` is the object's SHA, `commit` the commit's (`null` for a tree), `modified_at` and `submodule`
   `null`, `tracked` true. The path's checks are the same, and git's ignore rules are the working copy's; a revision is
   resolved before git sees it, so one that starts with `-` or isn't an object is `400`, one the clone doesn't have, or
-  a file it doesn't hold, `404`. It never changes: no ETag.
+  a file it doesn't hold, `404`. At a full object ID (40 or 64 lower-case hex digits) it never changes: the ETag is the
+  revision and the path, a 304 needs nothing read, and it is sent with `Cache-Control: private, max-age=31536000,
+  immutable`, so the browser keeps it (ATM-587); at any other revision (a name, a short ID), or refused, no ETag and
+  `no-store`.
 - `files?path=` answers an image's bytes (PNG, JPEG, GIF, WebP, SVG whose bytes match its name) with its type,
   `Cache-Control: no-cache`, `nosniff` and a sandboxing CSP; any other file `403`. The ETag is the size and mtime.
-- Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; a hidden file or
-  folder, a key file (`*.pem`, `id_rsa*`, …) or one git ignores `403`; a missing file, or one reached through a
+- Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; git's or atm's own
+  folder (`.git`, `.agentic-task-manager`), an environment file (`.env`, `.env.local`; not `.env.example`), a key file
+  (`*.pem`, `id_rsa*`, …) or one git ignores `403` (other hidden files, `.github/` or `.gitignore`, are shown: CR-3); a missing file, or one reached through a
   symlink, `404`; over 1 MB (5 MB for an image) `413`. Each with `{"error": …}`.
 
 ### 2.7 The dashboard's pages
@@ -211,7 +221,7 @@ text the page reads, never a file it looks up.
 | Path | The page shows |
 |---|---|
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
-| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` its other tabs |
+| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs |
 | `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`) |
 | `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64), with `?round=&against=&file=` the view and the file gone to: a window of its own, without the dashboard's title bar and tabs, titled by the project's key, the reference and the title; the Reviews tab opens it in place (with ⌘ or Ctrl, in a browser tab) |
 | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
@@ -240,7 +250,8 @@ old parameters from its hash and moves to the new address.
 - The app's commands answer the same (without `generated_at`): `list_workspaces`, `list_projects`, `search`,
   `project_tasks`, `claims`, `worktrees`, `document` (with `at`), `file`, `logo`, `project_reviews` and
   `project_review`, and `subscribe_workspace`, `subscribe_project` and `unsubscribe` for live changes
-  (docs/guides/tauri.md).
+  (docs/guides/tauri.md); `subscribe_working_copy` (ATM-607) for a live review's page: told when a file of the work
+  changes (not in `.git/` or the task folder, not one git ignores), so the page asks again then, not every 2 s.
 
 ### 2.9 A project's code reviews (ATM-572, ATM-574)
 
@@ -250,8 +261,16 @@ old parameters from its hash and moves to the new address.
 - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
-  needs_you}], you}`. A review needs the user when it is open or live with them a reviewer (anyone but its author when
-  it names none), or sent back with them its author. A status that isn't one is `400`.
+  needs_you, waiting, waiting_since}], unreadable: [{folder, reference, problem}], you}`. `waiting_since` (ATM-610) is
+  its latest round's time, when it began waiting on its reviewers: the unfiltered list groups the reviews (what waits
+  for the user first, the longest waiting on top, saying for how long). `unreadable` (ATM-617) lists the project's
+  review folders atm can't read (a status a newer atm wrote, a broken header), whatever the query: the Reviews tab
+  shows each as a row saying why. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
+  the status waiting on the reviewers (`open` before 0.41.0). A review needs the user when it is waiting or live with
+  them a reviewer (anyone but its
+  author when it names none), or sent back with them its author. `waiting` (ATM-606): `"review"` when it needs them,
+  `"answered"` when someone else wrote in it after they last did (as the summary's `code_reviews`), else `null`. A
+  status that isn't one is `400`.
 - `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
   when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
   against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you}`. Each file's `patch` is
@@ -260,6 +279,13 @@ old parameters from its hash and moves to the new address.
   the round it was made on), and `drifted`, the round and lines it was made on when its text is gone from the round
   shown. A round that isn't a whole number from 1 is `400`, one the review doesn't have `404`, a round against itself
   `400`; a reference two reviews share (`CR-8`, two clones took the number) is `400` naming both (`CR-8.1`, `CR-8.2`).
+  A live review with no `round` asked for is shown as its working copy is now (ATM-576): `view.now: true`, its
+  `round` the one after its checkpoints (`rounds` lists only those) when the copy changed since the last checkpoint,
+  that checkpoint when it didn't. Nothing is written: the page asks again every 2 s while it shows
+  one (in the app, when `subscribe_working_copy` says the work changed); a comment, or an approval, keeps what was
+  seen as a checkpoint (a `working` round) first. That page alone is tagged (ATM-607): its `ETag` is made from the
+  reviews' stamp, the working copy's state (the commit checked out, `git status` and the changed files' sizes and
+  times) and who asks, so the browser's poll with `If-None-Match` gets a `304` with no diff made while nothing changed.
 
 **The changes**: the only routes that change anything (docs/code-review-design.md §3.12), under
 `/api/v2/workspaces/<w>/projects/<id>/reviews`. Each is the same atm-lib call as its `atm review …` command, acting as
@@ -273,10 +299,17 @@ that copy (or nobody yet).
 | `POST reviews` | `{title, summary?, tasks?, reviewers?, start?: open\|draft\|live, change: {range?: "BASE..HEAD", uncommitted?, base?, files?}}` | opens a review (`atm review create`, `live`) | `201`, its header |
 | `PATCH reviews/<CR>` | `{status: "closed", reason, reject_tasks?}` | closes it (`close`) | `200`, its header |
 | `PUT reviews/<CR>/tasks` | `{tasks: [<key>, …]}` | the tasks it reviews, as a whole (`tasks`) | `200`, its header |
-| `POST reviews/<CR>/decisions` | `{decision: approve\|request_changes\|comment, body?, override_rules?: {reason}}` | a reviewer's decision (`submit`); with `override_rules`, the user's decision over the rule on who decides (their own review, say), recorded in the review with the reason | `201`, its header |
+| `POST reviews/<CR>/decisions` | `{decision: approve\|request_changes\|comment, body?, override_rules?: {reason}}` | a reviewer's decision (`submit`), sent with the user's drafts (ATM-612; every check first, an approval refused while a drafted comment would be open); `comment` with no `body` only sends the drafts (*Publish comments*); with `override_rules`, the user's decision over the rule on who decides (their own review, say), recorded in the review with the reason | `201`, its header |
 | `POST reviews/<CR>/comments` | `{path?, lines?: [a, b], side?: new\|old, quote?, round?, body}` | a new chain (`comment`) | `201`, `{review, comment}` |
 | `PATCH reviews/<CR>/comments/<c>` | `{body}` or `{resolved}` | one's own text, or a top-level comment's box (`edit`, `resolve`) | `200`, `{review, comment}` |
 | `POST reviews/<CR>/comments/<c>/replies` | `{body}` | a reply (`reply`) | `201`, `{review, comment, reply_to}` |
+| `POST reviews/<CR>/pokes` | `{body?}` | a poke (`poke`, ATM-611): the user's nudge on the whole review, which its agent hears through its watch (`kind: "poke"`) and answers; never open; refused for an agent and on an ended review | `201`, `{review, poke}` |
+| `POST reviews/<CR>/drafts` | a comment's `{path?, lines?, side?, quote?, round?, body}`, or `{reply_to, body}` | a draft of the user's (`draft add`, ATM-612), kept in their state folder, never in the repository; sent with their next decision; refused for an agent and on an ended review | `201`, the draft: `{id: d1, at, body, kind: comment\|reply, …}` |
+| `PATCH reviews/<CR>/drafts/<d>` | `{body}` | a draft's text (`draft edit`) | `200`, the draft |
+| `DELETE reviews/<CR>/drafts/<d>` | `{}` | a draft thrown away (`draft remove`) | `200`, `{review, draft, removed}` |
+
+`GET reviews/<CR>/drafts` reads the user's drafts on the review (`{review, drafts}`), never another's; a review's
+page has them as `drafts` too, a draft comment placed in the round shown (`placed`, `drifted`) as a chain is.
 
 - **Only from atm's own page.** Besides the Host check (§1): an `Origin` that is the server's own
   (`http://localhost:<port>` or `http://127.0.0.1:<port>`), this start's session token in `X-Atm-Session` (random, in
@@ -289,7 +322,8 @@ that copy (or nobody yet).
   review's rules refuse `403`, `404` or `400`.
 - The app's commands do the same, one each (no session token: the app's own IPC, I25): `create_review`,
   `close_review`, `set_review_tasks`, `submit_review_decision`, `add_review_comment`, `update_review_comment`,
-  `reply_to_review_comment`.
+  `reply_to_review_comment`, `poke_review`, and the drafts' `list_review_drafts`, `add_review_draft`,
+  `update_review_draft` and `remove_review_draft`.
 
 ## 3. `GET /api/projects`
 
@@ -378,7 +412,9 @@ and `key_final` too, as the task views give them; a project before task keys has
 | `description` | `meta.description` (an optional line about the project), trimmed and capped at 200 characters; `null` without one. The card shows it only as the name's tooltip |
 | `git.branch` | the main worktree's checked-out branch (from `.git/HEAD`; a detached HEAD's short SHA), or `null` outside git |
 | `git.pr` | the latest PR recorded on the tasks (`atm vcs pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm vcs pushed`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
-| `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent) |
+| `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent), and those waiting through a code review counted in `code_reviews` (ATM-606: counted once) |
+| `needs_you.code_reviews` | the project's code reviews (its own folder's, not its other working copies') waiting on the user at the machine (their git name, whatever environment the server runs in): their decision or round is the user's (the list's `needs_you`), or, in one they take part in and not decided or a draft, someone else wrote after the user last did (`answered`, by the comments' order; nothing is stored of what they have read). The summary's stamp includes the reviews' files, so its cache and `ETag` move with a comment |
+| `needs_you_reviews` | those reviews, the longest waiting first: `{ id, reference, title, why }`, `why` being `"review"` or `"answered"`, `id` the review's UUID as a task's `code_reviews` link it (the title bar's chip lists a task in review through one of them once, as the review: ATM-640). The Reviews tab counts them |
 | `needs_you.blocked_on_user` | blocked-kind tasks with `waiting_on: "user"` |
 | `needs_you.together` | to-do tasks with `with: "user"` the user can take up now (T-347): in the active sprint (in any sprint or the backlog without an active sprint), their dependencies done (an archived one counts as done) |
 | `needs_you_tasks` | those same tasks, in file order: `{ id, name, reason }`, `reason` being `"review"`, `"blocked"` (on a question for the user) or `"together"`. The card's "needs you" chip opens them |

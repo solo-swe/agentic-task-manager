@@ -13,16 +13,12 @@
     "number": {
       "type": "integer",
       "minimum": 1,
-      "description": "Its number in the project: its key is meta.key, '-' and this (ATM-527, ADR-007 §1). Final once key_final"
-    },
-    "key_final": {
-      "type": "boolean",
-      "description": "Whether its number is final: true once the task is on the base branch, never changed after (ADR-007 §3); false or absent, provisional"
+      "description": "Its number in the project: its key is meta.key, '-' and this (ATM-527, ADR-007 §1), plain from creation (ADR-009)"
     },
     "aliases": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Keys it had before (a provisional number that moved in a merge, an ID from before task keys), which still find it (ADR-007 §4, §6)"
+      "description": "Keys it had before (a number that moved when two branches gave the same one, ADR-009; an ID from before task keys), which still find it"
     },
     "name": { "type": "string" },
     "type": { "type": "string", "description": "A type ID from the vocabulary (meta.types)" },

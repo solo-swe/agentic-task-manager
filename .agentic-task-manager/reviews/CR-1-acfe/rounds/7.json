@@ -1,0 +1,77 @@
+{
+  "number": 7,
+  "kind": {
+    "kind": "range",
+    "base": "79e8adee813e3341d8545826405bf61b7dc617c2",
+    "head": "05160c331973ffb39c2cd7963e75ce68e3a90240"
+  },
+  "files": [
+    {
+      "path": ".gitignore",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/documents/CompMd.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/render-turns.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/review-data.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/DiffCode.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ReviewFile.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/real-review.spec.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/CompMd.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ReviewFile.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/render-turns.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/review-data.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/review-performance.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T03:43:02Z"
+}

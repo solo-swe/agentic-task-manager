@@ -30,6 +30,8 @@ dashboard/node_modules/
 dashboard/dist/
 dashboard/test-results/
 dashboard/playwright-report/
+# Which review of which project real-review.spec.ts measures, on this machine (ATM-587)
+dashboard/tests/e2e/real-review.local.json
 dashboard/coverage/
 # SvelteKit's generated files and its static adapter's output (build/finish-page.ts ships the page from there)
 dashboard/.svelte-kit/

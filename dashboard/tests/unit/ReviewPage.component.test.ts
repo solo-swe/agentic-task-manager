@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentResult } from '../../src/lib/documents';
 import type { DocumentSource } from '../../src/lib/documents/source';
 import ReviewPage from '../../src/lib/reviews/ReviewPage.svelte';
-import type { PlacedChain, ReviewPageData, ViewFile } from '../../src/lib/reviews/types';
+import type { PlacedChain, PlacedDraft, ReviewPageData, ViewFile } from '../../src/lib/reviews/types';
 
 // A review's page (lib/reviews/ReviewPage.svelte, ATM-574): its data and its sides are given, what the user does is
 // reported through the handlers (stubs). CompMD doesn't load in these tests (its fallback text shows, 20 px a line);
@@ -42,7 +42,7 @@ function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['
       reference: 'CR-7',
       number: 7,
       title: 'Trim the names',
-      status: 'open',
+      status: 'waiting',
       tasks: ['ATM-1'],
       author: 'claude:a',
       reviewers: ['Ana'],
@@ -54,6 +54,8 @@ function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['
     rounds: [1, 2, 3].map((number) => ({
       number,
       kind: { kind: 'files' },
+      // Round 2 of commits made in a submodule (ATM-583)
+      submodule: number === 2 ? 'lib' : undefined,
       files: [{ path: 'src/a.rs', binary: false }],
       by: 'claude:a',
       at: `2026-11-1${number}`,
@@ -132,7 +134,7 @@ describe('ReviewPage: the top bar', () => {
     const { container } = show(data(), { backHref: '/projects/p1/reviews', onback });
     const top = within(container.querySelector('.review-top') as HTMLElement);
     expect(top.getByRole('heading').textContent?.replace(/\s+/g, ' ').trim()).toBe('ATM CR-7 Trim the names');
-    expect(top.getByText('Open')).toBeTruthy();
+    expect(top.getByText('Waiting for review')).toBeTruthy();
     expect(top.getByText('Needs you')).toBeTruthy();
     const back = top.getByRole('link', { name: 'Reviews' });
     expect(back.querySelector('.icon-arrow-left')).not.toBeNull();
@@ -204,7 +206,7 @@ describe('ReviewPage: Overview', () => {
       [...container.querySelectorAll('.review-round-list li')].map((li) => li.textContent?.replace(/\s+/g, ' ').trim()),
     ).toEqual([
       expect.stringMatching(/^Round 3 1 file · claude:a · .+ shown$/),
-      expect.stringMatching(/^Round 2 1 file · claude:a · /),
+      expect.stringMatching(/^Round 2 1 file in the submodule lib · claude:a · /),
       expect.stringMatching(/^Round 1 1 file · claude:a · /),
     ]);
     // A round opens its whole change on the Diffs tab
@@ -270,6 +272,34 @@ describe('ReviewPage: Diffs', () => {
     ]);
   });
 
+  it('a live review (ATM-576): Now, its working copy, is picked first and says so; a round picked is that round', async () => {
+    const live = data({}, { round: 4, now: true });
+    live.review = { ...live.review, status: 'live' };
+    const { onround, unmount } = await diffs(live);
+    const round = screen.getByLabelText('Round') as HTMLSelectElement;
+    expect([...round.options].map((o) => o.textContent)).toEqual([
+      'Now, as it is being made',
+      '1 of 3',
+      '2 of 3',
+      '3 of 3',
+    ]);
+    expect(round.value).toBe('now');
+    expect(screen.getByText('Following the working copy')).toBeTruthy();
+    await fireEvent.change(round, { target: { value: '2' } });
+    await fireEvent.change(round, { target: { value: 'now' } });
+    expect(onround.mock.calls).toEqual([
+      [2, null],
+      [null, null],
+    ]);
+    unmount();
+    // A round named: not following
+    const named = data({}, { round: 2, now: false });
+    named.review = { ...named.review, status: 'live' };
+    await diffs(named);
+    expect((screen.getByLabelText('Round') as HTMLSelectElement).value).toBe('2');
+    expect(screen.queryByText('Following the working copy')).toBeNull();
+  });
+
   it('round 1 has nothing to compare against', async () => {
     await diffs(data({}, { round: 1 }));
     expect([...(screen.getByLabelText('Showing') as HTMLSelectElement).options].map((o) => o.value)).toEqual(['']);
@@ -289,12 +319,13 @@ describe('ReviewPage: Diffs', () => {
     expect(screen.getByText('1 of 3 viewed')).toBeTruthy();
   });
 
-  it('every file a card, in the view’s order; a file viewed is folded, its diff not made, its sides not read', async () => {
+  it('every file a card, in the tree’s order; a file viewed is folded, its diff not made, its sides not read', async () => {
     const { container, sides } = await diffs();
+    // The view lists src/b.rs, README.md, src/a.rs; the cards follow the tree (ATM-596): the folder first, by name
     expect([...container.querySelectorAll('.review-file-card')].map((c) => (c as HTMLElement).dataset.file)).toEqual([
+      'src/a.rs',
       'src/b.rs',
       'README.md',
-      'src/a.rs',
     ]);
     await vi.waitFor(() => expect(container.querySelectorAll('.diff-view')).toHaveLength(2));
     expect(card(container, 'README.md')).toHaveClass('folded');
@@ -356,14 +387,14 @@ describe('ReviewPage: Diffs', () => {
       grow();
       expect(scroll.mock.contexts).not.toContain(card(container, 'src/a.rs'));
       // Another file gone to is pinned in its turn; Next unpins it
-      await fireEvent.keyDown(window, { key: '[' });
+      await fireEvent.keyDown(window, { key: ']' });
       scroll.mockClear();
       grow();
-      expect(scroll.mock.contexts).toContain(card(container, 'README.md'));
+      expect(scroll.mock.contexts).toContain(card(container, 'src/b.rs'));
       await fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
       scroll.mockClear();
       grow();
-      expect(scroll.mock.contexts).not.toContain(card(container, 'README.md'));
+      expect(scroll.mock.contexts).not.toContain(card(container, 'src/b.rs'));
     } finally {
       vi.unstubAllGlobals();
     }
@@ -376,6 +407,65 @@ describe('ReviewPage: Diffs', () => {
     );
     expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toContain(card(container, 'src/a.rs'));
     expect(onfile).not.toHaveBeenCalled();
+  });
+
+  // ATM-595: the tree's folders fold, by click and keys, all at once, kept for the session; a jump opens them
+  describe('the tree’s folders fold', () => {
+    const treeRows = (container: HTMLElement) =>
+      [...container.querySelectorAll('.review-files li')].map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
+    beforeEach(() => sessionStorage.clear());
+
+    it('a folder collapses and expands by a click, or ← and →; folded, it sums its files', async () => {
+      const { container } = await diffs(data({ chains: [chain('k1', 'src/a.rs')] }));
+      const folder = () => container.querySelector('.review-folder[data-folder="src"]') as HTMLElement;
+      expect(container.querySelector('[role="tree"]')).not.toBeNull();
+      expect(folder()).toHaveAttribute('aria-expanded', 'true');
+      await fireEvent.click(screen.getByRole('button', { name: 'Collapse src' }));
+      expect(folder()).toHaveAttribute('aria-expanded', 'false');
+      // Its two files hidden; the sum says how many, how many have comments, and that none of them is viewed yet
+      expect(treeRows(container)).toEqual(['src 2 files · 1 with comments · none viewed', 'M README.md +1 −1']);
+      await fireEvent.keyDown(screen.getByRole('button', { name: 'Expand src' }), { key: 'ArrowRight' });
+      expect(folder()).toHaveAttribute('aria-expanded', 'true');
+      expect(treeRows(container)).toHaveLength(4);
+      await fireEvent.keyDown(screen.getByRole('button', { name: 'Collapse src' }), { key: 'ArrowLeft' });
+      expect(folder()).toHaveAttribute('aria-expanded', 'false');
+      // Other keys are left alone
+      await fireEvent.keyDown(screen.getByRole('button', { name: 'Expand src' }), { key: 'ArrowUp' });
+      expect(folder()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('Collapse all and Expand all; a tree without folders offers neither', async () => {
+      const { container, unmount } = await diffs();
+      await fireEvent.click(screen.getByRole('button', { name: 'Collapse all folders' }));
+      expect(treeRows(container)).toEqual(['src 2 files · none viewed', 'M README.md +1 −1']);
+      await fireEvent.click(screen.getByRole('button', { name: 'Expand all folders' }));
+      expect(treeRows(container)).toHaveLength(4);
+      unmount();
+      await diffs(data({}, { files: [file('README.md')] }));
+      expect(screen.queryByRole('button', { name: 'Collapse all folders' })).toBeNull();
+    });
+
+    it('what is folded is kept for the session, per review; going to a file in a folded folder opens it', async () => {
+      const first = await diffs();
+      await fireEvent.click(screen.getByRole('button', { name: 'Collapse src' }));
+      first.unmount();
+      // Opened again: still folded
+      const again = await diffs();
+      expect(screen.getByRole('button', { name: 'Expand src' })).toBeTruthy();
+      again.unmount();
+      // Another review: nothing folded
+      const other = data();
+      other.review = { ...other.review, id: 'another' };
+      const elsewhere = await diffs(other);
+      expect(screen.getByRole('button', { name: 'Collapse src' })).toBeTruthy();
+      elsewhere.unmount();
+      // The address names a file in the folded folder: the folder opens, the file marked
+      const { container } = show(data(), { file: 'src/a.rs' });
+      await vi.waitFor(() =>
+        expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs'),
+      );
+      expect(container.querySelector('.review-folder[data-folder="src"]')).toHaveAttribute('aria-expanded', 'true');
+    });
   });
 
   it('a binary file is listed, not shown; a view with no files says so', async () => {
@@ -415,19 +505,20 @@ describe('ReviewPage: Diffs', () => {
     const current = () => container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file');
     await fireEvent.keyDown(window, { key: '[' });
     expect(current()).toBeUndefined();
+    // In the tree's order (ATM-596): src/a.rs, src/b.rs, README.md
+    await fireEvent.keyDown(window, { key: ']' });
+    expect(current()).toBe('src/b.rs');
+    await fireEvent.keyDown(window, { key: ']' });
     await fireEvent.keyDown(window, { key: ']' });
     expect(current()).toBe('README.md');
-    await fireEvent.keyDown(window, { key: ']' });
-    await fireEvent.keyDown(window, { key: ']' });
-    expect(current()).toBe('src/a.rs');
     // Two jumps before the page is idle: the address is written once, with the last
     await vi.waitFor(() => expect(onfile).toHaveBeenCalled());
-    expect(onfile.mock.calls).toEqual([['src/a.rs']]);
+    expect(onfile.mock.calls).toEqual([['README.md']]);
     await fireEvent.keyDown(window, { key: 'v' });
-    expect(onviewed).toHaveBeenCalledWith(expect.objectContaining({ path: 'src/a.rs' }));
+    expect(onviewed).toHaveBeenCalledWith(expect.objectContaining({ path: 'README.md' }));
     await fireEvent.keyDown(window, { key: '[' });
-    expect(current()).toBe('README.md');
-    await vi.waitFor(() => expect(onfile.mock.calls.at(-1)).toEqual(['README.md']));
+    expect(current()).toBe('src/b.rs');
+    await vi.waitFor(() => expect(onfile.mock.calls.at(-1)).toEqual(['src/b.rs']));
   });
 
   it('keys are the Diffs tab’s: not on another tab, not while typing', async () => {
@@ -437,6 +528,32 @@ describe('ReviewPage: Diffs', () => {
     await fireEvent.click(tab(/^Diffs/));
     await fireEvent.keyDown(screen.getByLabelText('Round'), { key: ']' });
     expect(onfile).not.toHaveBeenCalled();
+  });
+
+  // ATM-588: Wrap, in Unified; in Split it waits, saying why (its sides kept level line by line)
+  it('Wrap: in Unified it wraps every file’s lines, kept for the next page; in Split it is disabled, saying why', async () => {
+    localStorage.removeItem('atm-review-layout');
+    const { container, unmount } = await diffs(data({}, { files: [file('src/a.rs')] }));
+    await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+    const wrap = () => screen.getByRole('button', { name: 'Wrap' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
+    expect(wrap()).toBeDisabled();
+    expect(wrap()).toHaveAttribute('title', expect.stringMatching(/Unified for now/));
+    expect(wrap().closest('[title]')).toHaveAttribute('title', expect.stringMatching(/level line by line/));
+    await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
+    expect(wrap()).toBeEnabled();
+    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
+    await fireEvent.click(wrap());
+    expect(wrap()).toHaveAttribute('aria-pressed', 'true');
+    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).not.toBeNull());
+    // Back to Split: not wrapped there, and pressed again only in Unified
+    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
+    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).toBeNull());
+    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
+    await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
+    unmount();
+    await diffs(data({}, { files: [file('src/a.rs')] }));
+    expect(screen.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('Split or Unified for every file, kept for the next review page; Source or Rendered only with a Markdown file', async () => {
@@ -538,20 +655,102 @@ describe('ReviewPage: Comments', () => {
   });
 });
 
+describe('ReviewPage: the Comments tab’s counts (ATM-614)', () => {
+  it('the total, and the open ones beside it, named for screen readers; none open, the total alone', async () => {
+    const { rerender } = show(
+      data({ chains: [chain('t1', 'src/a.rs'), chain('t2', null), chain('t3', 'src/b.rs', {}, true)] }),
+    );
+    expect(tab('Comments: 3, 2 open')).toHaveTextContent(/Comments\s*3\s*\(2 open\)/);
+    await rerender({ page: data({ chains: [chain('t3', 'src/b.rs', {}, true)] }) });
+    const comments = tab(/Comments/);
+    expect(comments).not.toHaveAttribute('aria-label');
+    expect(comments).toHaveTextContent(/^Comments\s*1$/);
+  });
+});
+
+describe('ReviewPage: drafts (ATM-612)', () => {
+  const drafted = (id: string, path: string | null = 'src/a.rs'): PlacedDraft => ({
+    id,
+    at: '2026-11-19T10:00:00Z',
+    body: `Draft ${id}`,
+    kind: 'comment',
+    path,
+    lines: path ? [2, 2] : null,
+    side: 'new',
+    quote: null,
+    round: 3,
+    placed: path ? [2, 2] : null,
+    drifted: null,
+  });
+  const handlers = () => ({
+    comment: vi.fn(async () => null),
+    reply: vi.fn(async () => null),
+    edit: vi.fn(async () => null),
+    remove: vi.fn(async () => null),
+  });
+
+  it('the drafts show among the comments, marked, counted on Submit review, and said in its box', async () => {
+    const { container } = show(data({ drafts: [drafted('d1'), drafted('d2', null)] }), { ondrafts: handlers() });
+    expect(screen.getByRole('button', { name: /Submit review/ })).toHaveTextContent('2');
+    expect(container.querySelector('#review-pending')).toHaveTextContent('2');
+    // On the review, in the conversation; the other on its file's lines
+    expect(container.querySelector('.review-conversation [data-comment="d2"] .chain-draft')).toBeTruthy();
+    await fireEvent.click(tab(/Comments/));
+    expect(tab(/Comments/)).toHaveTextContent('2');
+    await fireEvent.click(screen.getByRole('button', { name: /Submit review/ }));
+    expect(container.querySelector('#review-pending-note')).toHaveTextContent('2 drafts will be sent with it');
+  });
+
+  it('with drafts, Comment needs no summary: it sends them; Approve is blocked by drafted comments, saying so', async () => {
+    const { onsubmit } = show(data({ drafts: [drafted('d1')] }), { ondrafts: handlers() });
+    await fireEvent.click(screen.getByRole('button', { name: /Submit review/ }));
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeDisabled();
+    expect(approve).toHaveAccessibleDescription(
+      'Your draft comment would be open once sent: send it with Comment or Request changes, or remove it',
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+    expect(onsubmit.mock.calls).toEqual([['comment', '']]);
+  });
+
+  it('sent back with drafts: the top button publishes them', () => {
+    const page = data({ drafts: [drafted('d1')] });
+    show({ ...page, review: { ...page.review, status: 'changes_requested' } }, { ondrafts: handlers() });
+    expect(screen.getByRole('button', { name: /Publish comments/ })).toHaveTextContent('1');
+  });
+
+  it('a comment on the review offers Add to my review, which drafts it with no file', async () => {
+    const ondrafts = handlers();
+    const { oncomment } = show(data(), { ondrafts });
+    await fireEvent.click(screen.getByRole('button', { name: /Comment on the review/ }));
+    await fireEvent.input(screen.getByLabelText('Comment'), { target: { value: ' Overall fine. ' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to my review' }));
+    expect(ondrafts.comment).toHaveBeenCalledWith(null, null, 'Overall fine.');
+    expect(oncomment).not.toHaveBeenCalled();
+  });
+
+  it('a page with drafts but no way to keep them (an older atm) shows none of the draft actions', async () => {
+    show(data());
+    await fireEvent.click(screen.getByRole('button', { name: /Comment on the review/ }));
+    expect(screen.queryByRole('button', { name: 'Add to my review' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Comment' })).toBeTruthy();
+  });
+});
+
 describe('ReviewPage: submit', () => {
   /** A review with a comment still open: the decision is Submit review's */
   const open = (more: Partial<ReviewPageData> = {}) => data({ chains: [chain('t1', 'src/a.rs')], ...more });
 
-  it('Submit review opens the decision: approve or request changes, with or without a summary; comment only with one', async () => {
+  it('Submit review opens the decision: request changes, with or without a summary; comment only with one', async () => {
     const { onsubmit } = show(open());
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     const toggle = screen.getByRole('button', { name: 'Submit review' });
     await fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
-    await fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
     // A decision made closes it
-    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
     await fireEvent.click(toggle);
     await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: ' Two things. ' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
@@ -559,10 +758,60 @@ describe('ReviewPage: submit', () => {
     await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: ' Two things. ' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
     expect(onsubmit.mock.calls).toEqual([
-      ['approve', ''],
+      ['request_changes', ''],
       ['request_changes', 'Two things.'],
       ['comment', 'Two things.'],
     ]);
+  });
+
+  // ATM-601: pressed, it failed with atm's refusal
+  it.each([
+    ['a comment is open', (p: ReviewPageData) => p, '1 comment is still open: resolve them first'],
+    [
+      'two are open',
+      (p: ReviewPageData) => ({ ...p, chains: [...p.chains, { ...p.chains[0], id: 't2' }] }),
+      '2 comments are still open: resolve them first',
+    ],
+  ])('while %s, Approve is disabled and says why', async (_, made, why) => {
+    const { onsubmit } = show(made(open()));
+    // No one-click Approve either
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeDisabled();
+    expect(approve).toHaveAccessibleDescription(why);
+    expect(approve.closest('[title]')).toHaveAttribute('title', why);
+    expect(screen.getByText(why)).toBeTruthy();
+    await fireEvent.click(approve);
+    expect(onsubmit).not.toHaveBeenCalled();
+  });
+
+  it('nothing standing in the way, Approve in the panel is enabled, with no reason shown', async () => {
+    show(data({ chains: [chain('t1', 'src/a.rs', {}, true)] }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Other decisions' }));
+    const approve = screen.getAllByRole('button', { name: 'Approve' }).at(-1)!;
+    expect(approve).toBeEnabled();
+    expect(approve).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByText(/still open|Sent back/)).toBeNull();
+  });
+
+  // ATM-609: a reviewer may approve a review they sent back, its comments resolved; with one open, still not
+  it('sent back, everything resolved: Approve is one click, and sends the approval', async () => {
+    const { onsubmit } = show(
+      data({ chains: [chain('t1', 'src/a.rs', {}, true)], review: { ...open().review, status: 'changes_requested' } }),
+    );
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeEnabled();
+    expect(approve).not.toHaveAttribute('aria-describedby');
+    await fireEvent.click(approve);
+    expect(onsubmit.mock.calls).toEqual([['approve', '']]);
+  });
+
+  it('sent back with a comment open: Approve is disabled, saying so', async () => {
+    show({ ...open(), review: { ...open().review, status: 'changes_requested' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(
+      '1 comment is still open: resolve them first',
+    );
   });
 
   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {
@@ -576,6 +825,36 @@ describe('ReviewPage: submit', () => {
     decided.review = { ...decided.review, updated: '2026-11-17T11:00:00Z' };
     await rerender({ page: decided });
     expect(screen.getByLabelText('Summary')).toHaveValue('');
+  });
+
+  it('a review sent back still takes the reviewer’s words, as Publish comments; it isn’t sent back again (ATM-597, CR-2)', async () => {
+    const page = open();
+    page.review = { ...page.review, status: 'changes_requested' };
+    const { onsubmit } = show(page);
+    expect(screen.getByRole('button', { name: 'Comment on the review' })).toBeEnabled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull();
+    const publish = screen.getByRole('button', { name: 'Publish comments' });
+    expect(publish).toBeDisabled();
+    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Still the title.' } });
+    await fireEvent.click(publish);
+    expect(onsubmit.mock.calls).toEqual([['comment', 'Still the title.']]);
+  });
+
+  it('a live review (ATM-576): approved, commented on or closed with why, never sent back', async () => {
+    const page = open();
+    page.review = { ...page.review, status: 'live' };
+    const onclose = vi.fn();
+    const { onsubmit } = show(page, { onclose });
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
+    const close = screen.getByRole('button', { name: 'Close review' });
+    expect(close).toBeDisabled();
+    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: ' Wrong turn. ' } });
+    await fireEvent.click(close);
+    expect(onclose).toHaveBeenCalledWith('Wrong turn.');
+    expect(onsubmit).not.toHaveBeenCalled();
   });
 
   it('an ended review takes no decision; a busy page none until it is done', async () => {

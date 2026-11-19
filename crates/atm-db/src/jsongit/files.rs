@@ -81,7 +81,8 @@ pub fn checked_format(document: &Value, file: &str) -> Result<u64> {
 }
 
 /// What a task of a keys-format file (ADR-007 §1) must hold beyond a legacy one's: a UUID `id`, a `number` of at least
-/// 1, and, when present, a boolean `key_final` and `aliases` that are a list of keys. None when it holds them.
+/// 1, and, when present, `aliases` that are a list of keys. None when it holds them. (An old `key_final` is ignored,
+/// whatever it holds: ADR-009, and `atm db migrate` drops it.)
 fn keys_problem(task: &Value) -> Option<&'static str> {
     let id = task.get("id").and_then(Value::as_str).unwrap_or_default();
     if !valid_task_uuid(id) {
@@ -93,9 +94,6 @@ fn keys_problem(task: &Value) -> Option<&'static str> {
         .is_none_or(|n| n < 1)
     {
         return Some("it has no number (a whole number of at least 1)");
-    }
-    if task.get("key_final").is_some_and(|v| !v.is_boolean()) {
-        return Some("its key_final isn't true or false");
     }
     if task
         .get("aliases")
@@ -402,6 +400,12 @@ mod tests {
         let (_dir, paths) = project(&good);
         let loaded = load_tasks(&paths).unwrap();
         assert_eq!(loaded.tasks().next().unwrap()["number"], json!(527));
+        // An old key_final, whatever it holds, is ignored (ADR-009)
+        let old = format!(
+            r#"{{"meta": {{"format": 2, "key": "ATM"}}, "tasks": [{{"id": "{uuid}", "number": 1, "key_final": "yes"}}]}}"#
+        );
+        let (_old_dir, old_paths) = project(&old);
+        assert!(load_tasks(&old_paths).is_ok());
 
         assert!(
             error(r#"{"meta": {"format": 2, "key": "ATM"}, "tasks": [{"id": "T-1", "number": 1}]}"#)
@@ -415,10 +419,6 @@ mod tests {
             (
                 format!(r#"{{"id": "{uuid}", "number": 0}}"#),
                 "it has no number (a whole number of at least 1)",
-            ),
-            (
-                format!(r#"{{"id": "{uuid}", "number": 1, "key_final": "yes"}}"#),
-                "its key_final isn't true or false",
             ),
             (
                 format!(r#"{{"id": "{uuid}", "number": 1, "aliases": "T-1"}}"#),

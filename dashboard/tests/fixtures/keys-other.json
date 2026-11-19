@@ -10,7 +10,6 @@
     {
       "id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8f99",
       "number": 5,
-      "key_final": false,
       "name": "Write the post about the onboarding",
       "type": "feature",
       "status": "in_progress",

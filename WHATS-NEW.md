@@ -2,6 +2,18 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.41.0] - 2026-11-19
+
+- See which reviews wait for you from anywhere: a count in the sidebar and in what needs you, and each task's review
+  badge says where its review stands.
+- Watch an agent's work as it happens in a live review, and comment while the change is still being made.
+- Write comments as drafts and send them all with your decision, edit your own comments, or poke a review to nudge
+  its agent.
+- Long reviews open and scroll smoothly, and Markdown files show as whole pages, folded around what changed.
+- Agents no longer miss your comments: atm notices when an agent stops listening and tells it to start again.
+- Task numbers stay plain from the start; if two branches pick the same number, one moves on merge and its old
+  number still finds it.
+
 ## [0.40.0] - 2026-11-17
 
 - Code reviews live in your project now: agents open one when a task needs your review, and wait for your answer.

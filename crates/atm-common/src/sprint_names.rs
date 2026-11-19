@@ -146,6 +146,65 @@ mod tests {
         assert_eq!(time_name(5, 12, 22, 38), "May 12-10:38pm");
         assert_eq!(time_name(1, 3, 0, 5), "Jan 3-12:05am");
         assert_eq!(time_name(7, 1, 12, 0), "Jul 1-12:00pm");
+        assert_eq!(time_name(12, 31, 23, 59), "Dec 31-11:59pm");
+    }
+
+    #[test]
+    fn a_month_out_of_range_reads_as_january() {
+        for month in [0, 13, -1] {
+            assert!(time_name(month, 1, 9, 0).starts_with("Jan "), "{month}");
+        }
+    }
+
+    #[test]
+    fn every_person_is_one_shell_safe_name_once() {
+        let mut seen: Vec<String> = Vec::new();
+        for person in PEOPLE {
+            assert!(
+                person
+                    .bytes()
+                    .all(|b| b.is_ascii_alphabetic() || b" .-".contains(&b)),
+                "{person}"
+            );
+            assert!(!seen.contains(&person.to_lowercase()), "{person} twice");
+            seen.push(person.to_lowercase());
+        }
+    }
+
+    #[test]
+    fn a_time_name_taken_again_and_again_takes_the_next_number() {
+        let taken: Vec<String> = ["May 12-10:38pm", "MAY 12-10:38PM-2"]
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            generate_sprint_name("time", &taken, (5, 12, 22, 38), None),
+            "May 12-10:38pm-3"
+        );
+    }
+
+    #[test]
+    fn of_the_people_only_one_not_taken_whatever_its_case_is_picked() {
+        let taken: Vec<String> = PEOPLE[1..].iter().map(|p| p.to_uppercase()).collect();
+        for seed in ["1", "2", "3"] {
+            assert_eq!(
+                generate_sprint_name("people", &taken, (1, 1, 0, 0), Some(seed)),
+                PEOPLE[0]
+            );
+        }
+        // Any naming but `time` names after people
+        assert_eq!(
+            generate_sprint_name("unknown", &taken, (1, 1, 0, 0), None),
+            PEOPLE[0]
+        );
+    }
+
+    #[test]
+    fn with_every_name_taken_in_two_rounds_the_third_round_is_numbered_3() {
+        let mut taken: Vec<String> = PEOPLE.iter().map(|p| (*p).to_string()).collect();
+        taken.extend(PEOPLE.iter().map(|p| format!("{p} 2")));
+        let name = generate_sprint_name("people", &taken, (1, 1, 0, 0), Some("7"));
+        assert!(name.ends_with(" 3"), "{name}");
     }
 
     #[test]

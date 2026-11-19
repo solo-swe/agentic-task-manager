@@ -1,21 +1,32 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from 'svelte';
   import CompMd from '../documents/CompMd.svelte';
+  import type { DocumentRef } from '../documents';
   import type { DocumentSource } from '../documents/source';
   import { formatWhen } from '../format';
   import { readStored, writeStored } from '../prefs';
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
+  import ComposerActions from './ComposerActions.svelte';
+  import { draftedComments, setDraftActions, withDrafts, type DraftActions } from './drafts';
   import { focusOnShow } from './focus';
+  import { setCommentEdits, setDocumentLinks, setTaskLinks } from './links';
+  import type { TaskLinks } from '../compmd';
   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
   import {
     chainsOf,
     driftedOf,
     fileTree,
+    filesIn,
     filterChains,
+    isOpen,
     isResolved,
     lineCounts,
+    openedTo,
     reviewChains,
+    shownRows,
+    treeFolders,
+    treeOrder,
     treeWidth,
     TREE_WIDTH,
     type ChainFilter,
@@ -38,6 +49,7 @@
     side,
     isViewed,
     taskHref,
+    tasks,
     backHref,
     busy = false,
     problem = null,
@@ -50,6 +62,11 @@
     onreply,
     onresolve,
     onsubmit,
+    onclose,
+    onpoke,
+    ondrafts,
+    onedit,
+    ondocument,
   }: {
     page: ReviewPageData;
     /** The project's short name (its key), before the reference */
@@ -61,6 +78,9 @@
     isViewed: (file: ViewFile) => boolean;
     /** A task's address, for its link */
     taskHref?: (key: string) => string;
+    /** What a task named in the review opens (ATM-593): the Tasks fact's keys, and the keys written in the description
+     * and the comments that name a task (`known`); `open`, its details over the review, or `newTab` a tab of its own */
+    tasks?: TaskLinks;
     /** The reviews page's address, for the link back */
     backHref?: string;
     busy?: boolean;
@@ -69,20 +89,62 @@
     docStyle?: string | null;
     onback?: () => void;
     onfile: (path: string) => void;
-    onround: (round: number, against: number | null) => void;
+    /** `round` null: the latest (a live review's working copy now) */
+    onround: (round: number | null, against: number | null) => void;
     onviewed: (file: ViewFile) => void;
     /** A comment made; why it wasn't saved, if it wasn't (its box keeps it) */
     oncomment: (comment: { path: string | null; picked: Picked | null; body: string }) => Promise<string | null> | void;
     onreply: (to: string, body: string) => void;
     onresolve: (comment: string, resolved: boolean) => void;
     onsubmit: (decision: 'approve' | 'request_changes' | 'comment', body: string) => void;
+    /** The review closed, ended without approval, the summary its reason (ATM-576: how a live review ends unapproved) */
+    onclose?: (reason: string) => void;
+    /** A poke sent, with its message (ATM-611); why it wasn't, if it wasn't (its box keeps it) */
+    onpoke?: (body: string) => Promise<string | null> | void;
+    /** What writing, changing and removing a draft does (ATM-612): every box that writes a comment or a reply then
+     * offers *Add to my review*; without it, they send at once */
+    ondrafts?: Omit<DraftActions, 'pending'>;
+    /** One's own comment's text changed (ATM-638); why it wasn't, if it wasn't (its box keeps it) */
+    onedit?: (comment: string, body: string) => Promise<string | null>;
+    /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
+     * manager opens its document viewer (ATM-586) */
+    ondocument?: (ref: DocumentRef) => void;
   } = $props();
 
   const review = $derived(page.review);
   const view = $derived(page.view);
-  const files = $derived(view.files);
+  // The user's drafts among the chains (ATM-612): placed where the server placed them, marked, counted open (each would
+  // be an open comment once sent, which an approval can't be made with)
+  const allChains = $derived(withDrafts(page.chains, page.drafts, page.you, view.round));
+  const pendingDrafts = $derived(page.drafts?.length ?? 0);
+  // Editing one's own comments (ATM-638): none on an ended review, which takes no change (no one is "you" there)
+  if (untrack(() => onedit))
+    setCommentEdits({
+      get you() {
+        return ended ? '' : page.you;
+      },
+      edit: (comment, body) => onedit?.(comment, body) ?? Promise.resolve('Comments can’t be changed here.'),
+    });
+  // Set once, for the boxes under the page: each calls the handlers as they are then (a round shown since, say)
+  const refusedHere = 'Drafts can’t be kept here.';
+  if (untrack(() => ondrafts))
+    setDraftActions({
+      get pending() {
+        return pendingDrafts;
+      },
+      comment: (path, picked, body) => ondrafts?.comment(path, picked, body) ?? Promise.resolve(refusedHere),
+      reply: (to, body) => ondrafts?.reply(to, body) ?? Promise.resolve(refusedHere),
+      edit: (id, body) => ondrafts?.edit(id, body) ?? Promise.resolve(refusedHere),
+      remove: (id) => ondrafts?.remove(id) ?? Promise.resolve(refusedHere),
+    });
+  // In the tree's order (ATM-596): the diffs, moving between files, the round's select and the Viewed count follow it
+  const files = $derived(treeOrder(view.files));
   const tree = $derived(fileTree(files));
   const ended = $derived(review.status === 'approved' || review.status === 'closed');
+  /** A live review: its working copy followed as it is made (ATM-576) */
+  const live = $derived(review.status === 'live');
+  /** Sent back to its author: more words are *Publish comments*, never a second send-back (ATM-597, CR-2) */
+  const sentBack = $derived(review.status === 'changes_requested');
   const rounds = $derived(page.rounds.map((r) => r.number));
   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
@@ -112,7 +174,10 @@
   let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
   let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
   let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
-  $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width }));
+  /** Long lines wrap (ATM-588): in Unified, until Split can keep its sides level with a wrapped line */
+  let wrap = $state(stored.wrap === true);
+  $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width, wrap }));
+  const WRAP_IN_SPLIT = 'Wrap works in Unified for now: Split keeps its two sides level line by line';
   const hasMarkdown = $derived(files.some((f) => /\.(md|markdown|mdx)$/i.test(f.path)));
 
   // A file folds once viewed; its fold button opens or folds it again whatever its tick
@@ -125,6 +190,62 @@
     onviewed(f);
   }
   const viewedCount = $derived(files.filter((f) => isViewed(f)).length);
+
+  // The tree's folders fold (ATM-595): what is folded is kept per review for the session (a reload keeps it, nothing
+  // else does), and going to a file opens the folders on its way, so the file shown is always in the tree
+  const TREE_KEY = 'atm-review-tree:';
+  let collapsed = $state.raw<ReadonlySet<string>>(new Set());
+  let collapsedFor = '';
+  $effect.pre(() => {
+    const id = review.id;
+    if (id === collapsedFor) return;
+    collapsedFor = id;
+    let kept: unknown = null;
+    try {
+      kept = JSON.parse(sessionStorage.getItem(TREE_KEY + id) ?? 'null');
+    } catch {
+      // no storage (a private window), or not ours: nothing folded
+    }
+    collapsed = new Set(Array.isArray(kept) ? kept.filter((p): p is string => typeof p === 'string') : []);
+  });
+  function fold(next: ReadonlySet<string>) {
+    collapsed = next;
+    try {
+      sessionStorage.setItem(TREE_KEY + review.id, JSON.stringify([...next]));
+    } catch {
+      // kept for the page only
+    }
+  }
+  function toggleFolder(path: string, open = collapsed.has(path)) {
+    const rest = [...collapsed].filter((p) => p !== path);
+    fold(new Set(open ? rest : [...rest, path]));
+  }
+  function folderKeys(e: KeyboardEvent, path: string) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    toggleFolder(path, e.key === 'ArrowRight');
+  }
+  const shownTree = $derived(shownRows(tree, collapsed));
+  $effect(() => {
+    const path = atFile;
+    if (!path) return;
+    untrack(() => {
+      const next = openedTo(collapsed, path);
+      if (next !== collapsed) fold(next);
+    });
+  });
+  /** A folded folder's sum: its files, those with comments, those not viewed yet */
+  function folderSum(path: string) {
+    const inIt = filesIn(tree, path);
+    const commented = inIt.filter((f) => chainsOf(allChains, f).length).length;
+    const unviewed = inIt.filter((f) => !isViewed(f)).length;
+    return [
+      `${inIt.length} ${inIt.length === 1 ? 'file' : 'files'}`,
+      ...(commented ? [`${commented} with comments`] : []),
+      ...(unviewed && unviewed < inIt.length ? [`${unviewed} not viewed`] : []),
+      ...(unviewed && unviewed === inIt.length && viewedCount ? ['none viewed'] : []),
+    ].join(' · ');
+  }
 
   // The list of diffs, and the file at its top (the tree marks it; ] [ and v act on it)
   let list = $state<HTMLElement | null>(null);
@@ -160,6 +281,26 @@
 
   let writing: (() => void) | null = null;
   onDestroy(() => writing?.());
+  /** A link in the summary or a comment to a document of the project (ATM-586): a file the round changed opens its diff
+   * here, the review being about it; anything else, or a document's heading or text, the document viewer */
+  function openLink(ref: DocumentRef) {
+    if (!ref.heading && !ref.text && files.some((f) => f.path === ref.path)) void showFile(ref.path);
+    else ondocument?.(ref);
+  }
+  setDocumentLinks(openLink);
+  // The keys in its texts: links to their tasks (ATM-593). Read when a text is drawn, so the latest handlers apply
+  setTaskLinks({
+    known: (key) => tasks?.known(key) ?? false,
+    open: (key, newTab) => tasks?.open(key, newTab),
+  });
+  /** A task's key clicked (the Tasks fact): its details over the review, or with ⌘, Ctrl or a middle click a tab of
+   * its own; without `tasks`, the link's own address */
+  function openTask(e: MouseEvent, key: string) {
+    if (!tasks) return;
+    e.preventDefault();
+    tasks.open(key, e.metaKey || e.ctrlKey || e.button === 1);
+  }
+
   /** The file just gone to: its card is made at once, the others after it */
   let wanted = $state<string | null>(null);
   const cardOf = (path: string) =>
@@ -305,11 +446,15 @@
   let composing = $state(false);
   let draft = $state('');
   let refused = $state<string | null>(null);
-  async function saveComment() {
+  /** Sent at once, or kept as a draft (`asDraft`, ATM-612) */
+  async function saveComment(asDraft = false) {
     const body = draft.trim();
     if (!body) return;
     refused = null;
-    const problem = await oncomment({ path: null, picked: null, body });
+    const problem =
+      asDraft && ondrafts
+        ? await ondrafts.comment(null, null, body)
+        : await oncomment({ path: null, picked: null, body });
     if (typeof problem === 'string') {
       refused = problem;
       return;
@@ -318,10 +463,23 @@
     draft = '';
   }
 
+  // Poke (ATM-611): a nudge with an optional message; the box closes once it is sent, and keeps it with why if not
+  let poking = $state(false);
+  let pokeText = $state('');
+  let pokeRefused = $state<string | null>(null);
+  async function poke() {
+    pokeRefused = (await onpoke?.(pokeText.trim())) ?? null;
+    if (!pokeRefused) {
+      poking = false;
+      pokeText = '';
+    }
+  }
+
   // Submit: a summary and a decision
   let submitting = $state(false);
   let summary = $state('');
   function submit(decision: 'approve' | 'request_changes' | 'comment') {
+    if (decision === 'approve' && approveBlocked) return;
     onsubmit(decision, summary.trim());
     submitting = false;
   }
@@ -337,13 +495,27 @@
   // The Comments tab
   let filter = $state<ChainFilter>('all');
   const chainCounts = $derived({
-    all: page.chains.length,
-    open: page.chains.filter((c) => !isResolved(c)).length,
-    resolved: page.chains.filter((c) => isResolved(c)).length,
+    all: allChains.length,
+    open: allChains.filter(isOpen).length,
+    resolved: allChains.filter((c) => isResolved(c)).length,
   });
   /** Nothing left open: the decision at hand is to approve */
   const settled = $derived(chainCounts.open === 0);
-  const listed = $derived(filterChains(page.chains, filter));
+  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can. A review
+   * sent back can be approved too (ATM-609) */
+  const approveBlocked = $derived.by(() => {
+    const drafted = draftedComments(page.drafts);
+    const open = chainCounts.open - drafted;
+    if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
+    if (drafted > 0)
+      return `Your ${drafted === 1 ? 'draft comment' : `${drafted} draft comments`} would be open once sent: send ${drafted === 1 ? 'it' : 'them'} with Comment or Request changes, or remove ${drafted === 1 ? 'it' : 'them'}`;
+    return null;
+  });
+  /** What a decision sends with it (ATM-612): the user's drafts */
+  const pendingLabel = $derived(
+    pendingDrafts ? `${pendingDrafts} ${pendingDrafts === 1 ? 'draft' : 'drafts'} will be sent with it` : null,
+  );
+  const listed = $derived(filterChains(allChains, filter));
   /** A chain as the Comments tab shows it: where it was made (a drifted one at its own lines) */
   const asMade = (c: PlacedChain) => ({
     ...c,
@@ -351,9 +523,10 @@
   });
 
   const tabs = $derived([
-    { id: 'overview', label: 'Overview', icon: 'info', count: null },
-    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length },
-    { id: 'comments', label: 'Comments', icon: 'message-square', count: page.chains.length },
+    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0 },
+    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length, open: 0 },
+    // The open ones beside the total (ATM-614): *Comments 7 (2 open)*
+    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length, open: chainCounts.open },
   ] as const);
 </script>
 
@@ -384,9 +557,50 @@
         >{STATUS_LABELS[review.status]}</span
       >
       {#if page.needs_you}<span class="review-needs">Needs you</span>{/if}
+      {#if live && view.now}<span
+          class="review-following"
+          id="review-following"
+          title="The change as it is being made; a comment keeps what you saw as a checkpoint"
+          >Following the working copy</span
+        >{/if}
+      {#if !ended && onpoke}
+        <!-- A poke (ATM-611): a nudge its agent hears and answers, saying where the review stands -->
+        <div class="review-submit-anchor">
+          <button
+            class="review-button"
+            id="review-poke"
+            aria-expanded={poking}
+            title="Nudge its agent: it answers, saying where the review stands"
+            onclick={() => (poking = !poking)}><Icon name="bell" size={15} /> Poke</button
+          >
+          {#if poking}
+            <form
+              class="review-submit review-poke"
+              aria-label="Poke"
+              onsubmit={(e) => {
+                e.preventDefault();
+                void poke();
+              }}
+            >
+              <textarea
+                id="review-poke-body"
+                bind:value={pokeText}
+                rows="2"
+                placeholder="A message (optional)"
+                aria-label="Poke message"
+                {@attach focusOnShow}></textarea>
+              {#if pokeRefused}<p class="review-poke-problem" role="alert">{pokeRefused}</p>{/if}
+              <div class="review-actions">
+                <button type="button" class="review-button" onclick={() => (poking = false)}>Cancel</button>
+                <button type="submit" class="review-button primary" disabled={busy}>Poke</button>
+              </div>
+            </form>
+          {/if}
+        </div>
+      {/if}
       {#if !ended}
         <div class="review-submit-anchor">
-          {#if settled}
+          {#if settled && !approveBlocked}
             <div class="review-split-button">
               <button
                 class="review-button primary approve"
@@ -406,39 +620,79 @@
             <button
               class="review-button primary review-submit-toggle"
               aria-expanded={submitting}
-              onclick={() => (submitting = !submitting)}>Submit review <Icon name="chevron-down" size={15} /></button
+              onclick={() => (submitting = !submitting)}
+              >{sentBack && pendingDrafts ? 'Publish comments' : 'Submit review'}{#if pendingDrafts}<span
+                  class="review-pending"
+                  id="review-pending"
+                  title="Your drafts, sent with your review">{pendingDrafts}</span
+                >{/if}
+              <Icon name="chevron-down" size={15} /></button
             >
           {/if}
           {#if submitting}
             <section class="review-submit" aria-label="Submit">
               <h2 class="review-submit-title">Finish your review</h2>
+              {#if pendingLabel}<p class="review-pending-note" id="review-pending-note">
+                  <Icon name="pencil" size={13} />
+                  {pendingLabel}
+                </p>{/if}
               <textarea
                 id="review-summary-body"
                 bind:value={summary}
                 rows="4"
-                placeholder="A summary of your review (needed to comment)"
+                placeholder={pendingDrafts
+                  ? 'A summary of your review (optional)'
+                  : 'A summary of your review (needed to comment)'}
                 aria-label="Summary"
                 {@attach focusOnShow}></textarea>
               <div class="review-actions">
                 <button
                   class="review-button"
                   data-decision="comment"
-                  disabled={busy || !summary.trim()}
-                  onclick={() => submit('comment')}>Comment</button
+                  disabled={busy || (!summary.trim() && !pendingDrafts)}
+                  onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
                 >
-                <button
-                  class="review-button danger"
-                  data-decision="request_changes"
-                  disabled={busy}
-                  onclick={() => submit('request_changes')}>Request changes</button
-                >
-                <button
-                  class="review-button primary"
-                  data-decision="approve"
-                  disabled={busy}
-                  onclick={() => submit('approve')}><Icon name="check" size={14} /> Approve</button
-                >
+                {#if live}
+                  <!-- A live review isn't sent back: its author ends it with a round; a reviewer approves or closes it -->
+                  {#if onclose}
+                    <button
+                      class="review-button danger"
+                      data-decision="close"
+                      disabled={busy || !summary.trim()}
+                      title="End it without approval; the summary says why"
+                      onclick={() => {
+                        onclose(summary.trim());
+                        submitting = false;
+                      }}>Close review</button
+                    >
+                  {/if}
+                {:else if !sentBack}
+                  <!-- Sent back already, it isn't sent back again (CR-2): more words are published as comments -->
+                  <button
+                    class="review-button danger"
+                    data-decision="request_changes"
+                    disabled={busy}
+                    onclick={() => submit('request_changes')}>Request changes</button
+                  >
+                {/if}
+                <!-- Disabled, saying why, while the rules would refuse it (ATM-601): the reason on the wrapper, as a
+                     disabled button shows no tooltip in every engine, and as its description for screen readers -->
+                <span class="review-approve-wrap" title={approveBlocked ?? undefined}>
+                  <button
+                    class="review-button primary"
+                    data-decision="approve"
+                    disabled={busy || !!approveBlocked}
+                    aria-describedby={approveBlocked ? 'review-approve-why' : undefined}
+                    onclick={() => submit('approve')}><Icon name="check" size={14} /> Approve</button
+                  >
+                </span>
               </div>
+              {#if approveBlocked}
+                <p class="review-approve-why" id="review-approve-why">
+                  <Icon name="info" size={13} />
+                  {approveBlocked}
+                </p>
+              {/if}
             </section>
           {/if}
         </div>
@@ -447,10 +701,15 @@
     <div class="review-top-row review-bar">
       <div class="review-tabs" role="tablist" aria-label="Review">
         {#each tabs as t (t.id)}
-          <button role="tab" id="review-tab-{t.id}" aria-selected={tab === t.id} onclick={() => (tab = t.id)}
+          <button
+            role="tab"
+            id="review-tab-{t.id}"
+            aria-selected={tab === t.id}
+            onclick={() => (tab = t.id)}
+            aria-label={t.open ? `${t.label}: ${t.count}, ${t.open} open` : undefined}
             ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
                 class="review-count">{t.count}</span
-              >{/if}</button
+              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}</button
           >
         {/each}
       </div>
@@ -458,8 +717,16 @@
         <div class="review-tools">
           <label class="review-select">
             <span>Round</span>
-            <select id="review-round" value={view.round} onchange={(e) => onround(Number(e.currentTarget.value), null)}>
-              {#each rounds as n (n)}<option value={n}>{n} of {rounds.length}</option>{/each}
+            <select
+              id="review-round"
+              value={view.now ? 'now' : String(view.round)}
+              onchange={(e) => {
+                const value = e.currentTarget.value;
+                onround(value === 'now' ? null : Number(value), null);
+              }}
+            >
+              {#if live}<option value="now">Now, as it is being made</option>{/if}
+              {#each rounds as n (n)}<option value={String(n)}>{n} of {rounds.length}</option>{/each}
             </select>
           </label>
           <select
@@ -525,6 +792,18 @@
               onclick={() => (mode = 'unified')}><Icon name="rows-2" size={15} /></button
             >
           </div>
+          <div class="review-segmented" role="group" aria-label="Lines">
+            <span class="review-wrap-hint" title={mode === 'split' ? WRAP_IN_SPLIT : undefined}>
+              <button
+                id="review-wrap"
+                aria-pressed={wrap && mode === 'unified'}
+                aria-label="Wrap"
+                title={mode === 'split' ? WRAP_IN_SPLIT : 'Wrap long lines'}
+                disabled={mode === 'split'}
+                onclick={() => (wrap = !wrap)}><Icon name="wrap-text" size={15} /></button
+              >
+            </span>
+          </div>
           {#if hasMarkdown}
             <div class="review-segmented" role="group" aria-label="View">
               <button
@@ -570,9 +849,13 @@
             <dt><Icon name="list-todo" size={13} /> Tasks</dt>
             <dd>
               {#each review.tasks as task (task)}
-                {#if taskHref}<a class="review-task" href={taskHref(task)}>{task}</a>{:else}<span class="review-task"
-                    >{task}</span
-                  >{/if}
+                {#if taskHref}<a
+                    class="review-task"
+                    href={taskHref(task)}
+                    data-task={task}
+                    onclick={(e) => openTask(e, task)}
+                    onauxclick={(e) => e.button === 1 && openTask(e, task)}>{task}</a
+                  >{:else}<span class="review-task">{task}</span>{/if}
               {/each}
             </dd>
           </div>
@@ -596,7 +879,9 @@
         <div class="review-main">
           <section class="review-card review-summary" aria-label="Description">
             <h2 class="review-card-title">Description</h2>
-            {#if page.summary.trim()}<CompMd text={page.summary} />{:else}<p class="review-empty">
+            {#if page.summary.trim()}<CompMd text={page.summary} onopen={openLink} {tasks} />{:else}<p
+                class="review-empty"
+              >
                 No description.
               </p>{/if}
           </section>
@@ -614,7 +899,9 @@
                   >
                   <span class="review-round-facts"
                     >{r.files.length}
-                    {r.files.length === 1 ? 'file' : 'files'} · {r.by}{r.at ? ` · ${when(r.at)}` : ''}</span
+                    {r.files.length === 1 ? 'file' : 'files'}{r.submodule ? ` in the submodule ${r.submodule}` : ''} · {r.by}{r.at
+                      ? ` · ${when(r.at)}`
+                      : ''}</span
                   >
                   {#if r.number === view.round}<span class="review-round-shown">shown</span>{/if}
                 </li>
@@ -625,12 +912,18 @@
 
         <aside class="review-conversation" aria-label="Comments on the review">
           <h2 class="review-card-title">Conversation</h2>
-          {#each reviewChains(page.chains) as chain (chain.id)}<ChainBox {chain} {onreply} {onresolve} />{/each}
-          {#if !reviewChains(page.chains).length && !composing}
+          {#each reviewChains(allChains) as chain (chain.id)}<ChainBox {chain} {onreply} {onresolve} />{/each}
+          {#if !reviewChains(allChains).length && !composing}
             <p class="review-empty">No comments on the review as a whole yet.</p>
           {/if}
           {#if composing}
-            <div class="review-composer">
+            <form
+              class="review-composer"
+              onsubmit={(e) => {
+                e.preventDefault();
+                void saveComment(!!ondrafts && pendingDrafts > 0);
+              }}
+            >
               <textarea
                 id="review-comment-body"
                 bind:value={draft}
@@ -640,12 +933,16 @@
                 {@attach focusOnShow}></textarea>
               {#if refused}<p class="review-refused" role="alert">Not saved: {refused}</p>{/if}
               <div class="review-actions">
-                <button class="review-button" onclick={() => (composing = false)}>Cancel</button>
-                <button class="review-button primary" disabled={!draft.trim() || busy} onclick={saveComment}
-                  >Comment</button
-                >
+                <ComposerActions
+                  buttonClass="review-button"
+                  ready={!!draft.trim() && !busy}
+                  drafting={!!ondrafts && pendingDrafts > 0}
+                  now={() => void saveComment(false)}
+                  oncancel={() => (composing = false)}
+                  ondraft={ondrafts ? () => void saveComment(true) : undefined}
+                />
               </div>
-            </div>
+            </form>
           {:else}
             <button class="review-button review-add-comment" onclick={() => (composing = true)}
               ><Icon name="message-square" size={14} /> Comment on the review</button
@@ -668,18 +965,58 @@
           <span class="review-files-total"
             ><span class="added">+{totals.added}</span> <span class="removed">−{totals.removed}</span></span
           >
+          {#if treeFolders(tree).length}
+            <span class="review-files-folds">
+              <button
+                class="review-files-fold"
+                id="review-collapse-all"
+                title="Collapse all folders"
+                aria-label="Collapse all folders"
+                onclick={() => fold(new Set(treeFolders(tree)))}><Icon name="chevrons-down-up" size={13} /></button
+              >
+              <button
+                class="review-files-fold"
+                id="review-expand-all"
+                title="Expand all folders"
+                aria-label="Expand all folders"
+                onclick={() => fold(new Set())}><Icon name="chevrons-up-down" size={13} /></button
+              >
+            </span>
+          {/if}
         </div>
         {#if !files.length}<p class="review-empty">No files changed here.</p>{/if}
-        <ul>
-          {#each tree as row (row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`)}
+        <ul role="tree" aria-label="Files changed">
+          {#each shownTree as row (row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`)}
             {#if row.kind === 'folder'}
-              <li class="review-folder" style:--depth={row.depth}>
-                <Icon name="folder" size={13} />{row.name}
+              {@const shut = collapsed.has(row.path)}
+              <li
+                class="review-folder"
+                role="treeitem"
+                aria-expanded={!shut}
+                aria-selected="false"
+                aria-level={row.depth + 1}
+                data-folder={row.path}
+                style:--depth={row.depth}
+              >
+                <button
+                  class="review-folder-toggle"
+                  aria-label="{shut ? 'Expand' : 'Collapse'} {row.path}"
+                  onclick={() => toggleFolder(row.path)}
+                  onkeydown={(e) => folderKeys(e, row.path)}
+                  ><Icon name={shut ? 'chevron-right' : 'chevron-down'} size={13} /><Icon
+                    name="folder"
+                    size={13}
+                  />{row.name}</button
+                >
+                {#if shut}<span class="review-folder-sum">{folderSum(row.path)}</span>{/if}
               </li>
             {:else}
               {@const counts = lineCounts(row.file.patch)}
               <li
                 class="review-file"
+                role="treeitem"
+                aria-selected={row.file.path === atFile}
+                aria-level={row.depth + 1}
                 class:current={row.file.path === atFile}
                 class:viewed={isViewed(row.file)}
                 style:--depth={row.depth}
@@ -720,14 +1057,15 @@
         {#each files as f (f.path)}
           <ReviewFile
             file={f}
-            chains={chainsOf(page.chains, f)}
-            drifted={driftedOf(page.chains, f)}
+            chains={chainsOf(allChains, f)}
+            drifted={driftedOf(allChains, f)}
             before={sideOf(f.before)}
             after={sideOf(f.after)}
             viewed={isViewed(f)}
             folded={folded(f)}
             {mode}
             view={rendered}
+            wrap={wrap && mode === 'unified'}
             {busy}
             {docStyle}
             root={list}
@@ -780,10 +1118,11 @@
     font-size: var(--text-md);
   }
   /* The top bar: the title and the decision, then the tabs and the Diffs tab's tools */
+  /* In the page's background, as a project's header: the app's selected tab, in it too, joins it (ATM-608) */
   .review-top {
     flex: none;
     border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--bg);
   }
   .review-top-row {
     display: flex;
@@ -859,7 +1198,7 @@
     border-color: color-mix(in srgb, var(--red) 50%, transparent);
     background: color-mix(in srgb, var(--red) 10%, transparent);
   }
-  .review-status.status-open,
+  .review-status.status-waiting,
   .review-status.status-live {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 50%, transparent);
@@ -870,8 +1209,13 @@
     border-color: color-mix(in srgb, var(--purple) 50%, transparent);
     background: color-mix(in srgb, var(--purple) 10%, transparent);
   }
-  /* Buttons, as the dashboard's dialogs draw theirs */
-  .review-button {
+  .review-following {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  /* Buttons, as the dashboard's dialogs draw theirs; a comment box's are ComposerActions' (ATM-612), which these reach */
+  .review-page :global(.review-button) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -887,10 +1231,10 @@
     white-space: nowrap;
     cursor: pointer;
   }
-  .review-button:hover:not(:disabled) {
+  .review-page :global(.review-button:hover:not(:disabled)) {
     border-color: color-mix(in srgb, var(--text-muted) 60%, var(--border));
   }
-  .review-button.primary {
+  .review-page :global(.review-button.primary) {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
@@ -902,9 +1246,26 @@
   .review-button.danger {
     color: var(--red);
   }
-  .review-button:disabled {
+  .review-page :global(.review-button:disabled) {
     opacity: 0.5;
     cursor: default;
+  }
+  /* The drafts a decision sends (ATM-612): counted on the button, said in its box */
+  .review-pending {
+    min-width: var(--space-8);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--on-accent) 25%, transparent);
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+  .review-pending-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
   .review-submit-anchor {
     position: relative;
@@ -982,6 +1343,11 @@
     font-size: var(--text-xs);
     font-weight: 600;
     text-align: center;
+  }
+  /* The open comments beside the total, quieter (ATM-614) */
+  .review-count-open {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
   }
   /* The Diffs tab's tools */
   .review-tools {
@@ -1285,6 +1651,42 @@
   }
   .review-folder {
     color: var(--text-muted);
+    flex-wrap: wrap;
+  }
+  .review-folder-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .review-folder-toggle:hover {
+    color: var(--text);
+  }
+  .review-folder-sum {
+    font-size: var(--text-xs);
+  }
+  .review-files-folds {
+    display: inline-flex;
+    gap: var(--space-1);
+    margin-left: var(--space-4);
+  }
+  .review-files-fold {
+    display: inline-flex;
+    padding: var(--space-1);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .review-files-fold:hover {
+    background: var(--surface2);
+    color: var(--text);
   }
   .review-file:hover {
     background: var(--surface2);
@@ -1402,6 +1804,21 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--space-4);
+  }
+  .review-approve-wrap {
+    display: inline-flex;
+  }
+  .review-approve-wrap:has(button:disabled) {
+    cursor: not-allowed;
+  }
+  .review-approve-why {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
   }
   .review-empty {
     margin: 0;

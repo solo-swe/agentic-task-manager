@@ -12,6 +12,7 @@
   import InfoTip from '../ui/InfoTip.svelte';
   import OverviewAgents from './OverviewAgents.svelte';
   import OverviewProgress from './OverviewProgress.svelte';
+  import OverviewReviews from './OverviewReviews.svelte';
   import ProjectCard from './ProjectCard.svelte';
 
   const ordered = $derived(orderProjects(dashboard.projects));
@@ -28,8 +29,15 @@
     board: 'Omniboard',
     progress: 'Progress',
     agents: 'Agents',
+    reviews: 'Reviews',
   };
-  const ICONS = { projects: 'folder', board: 'square-kanban', progress: 'trending-up', agents: 'bot' } as const;
+  const ICONS = {
+    projects: 'folder',
+    board: 'square-kanban',
+    progress: 'trending-up',
+    agents: 'bot',
+    reviews: 'message-square',
+  } as const;
   const buttons: Partial<Record<OverviewTab, HTMLButtonElement>> = {};
 
   function onTabKeydown(e: KeyboardEvent) {
@@ -145,6 +153,8 @@
       <OverviewAgents projects={shown} />
     {:else if tab === 'progress'}
       <OverviewProgress projects={shown} />
+    {:else if tab === 'reviews'}
+      <OverviewReviews projects={shown} />
     {:else}
       <div class="projects-grid" id="projects-grid">
         {#each shown as project (project.id)}

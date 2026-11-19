@@ -3,7 +3,9 @@
   import type { ProjectDocument } from '../documents';
   import type { DocumentSource } from '../documents/source';
   import ChainBox from './ChainBox.svelte';
+  import ComposerActions from './ComposerActions.svelte';
   import DiffCode, { type CodeLine } from './DiffCode.svelte';
+  import { draftActions } from './drafts';
   import { focusOnShow } from './focus';
   import RenderedSide from './RenderedSide.svelte';
   import {
@@ -19,6 +21,10 @@
     type UnifiedRow,
   } from './diff';
   import type { Chain, Picked, Side } from './types';
+
+  /** How many rows of a file are drawn at a time (ATM-587): 300 made a frame of about 120 ms when scrolled into a
+   * long file, 100 about 30 */
+  const CHUNK = 100;
 
   // The diff viewer (docs/code-review-design.md §3.7, ATM-573): one file of a round, its two sides read from document
   // sources (the round's base and head; none for a side the file doesn't have) and its hunks from the round's patch.
@@ -38,6 +44,7 @@
     chains = [],
     mode = $bindable('split'),
     view = $bindable('source'),
+    wrap = false,
     viewed = false,
     header = true,
     keyboard = true,
@@ -58,6 +65,9 @@
     chains?: Chain[];
     mode?: 'split' | 'unified';
     view?: 'source' | 'rendered';
+    /** Long lines wrap (ATM-588), in Unified: Split keeps its two sides' lines level, which a wrapped line can't do
+     * until CompMD draws each line as an element of its own */
+    wrap?: boolean;
     viewed?: boolean;
     /** Its own header (the path, the layout and view switches, Viewed); the review's page has its own */
     header?: boolean;
@@ -159,13 +169,50 @@
     let first = 0;
     rows.forEach((row, i) => {
       const here = chainsAfter(row).sort((x, y) => (y.anchor.lines?.[0] ?? 0) - (x.anchor.lines?.[0] ?? 0));
-      if (here.length || i === cut || i === rows.length - 1) {
+      // A long run is cut every CHUNK rows too, so it can be drawn a chunk at a time (ATM-587)
+      if (here.length || i === cut || i === rows.length - 1 || i - first + 1 >= CHUNK) {
         out.push({ rows: rows.slice(first, i + 1), first, chains: here });
         first = i + 1;
       }
     });
     return out;
   }
+
+  // A long file drawn a chunk at a time (ATM-587): its first CHUNK rows at once, the rest a chunk a frame once the
+  // page is idle, so making a file of thousands of rows is never one long task; another file starts again
+  type Item =
+    | { kind: 'fold'; b: number; fold: Extract<Block<SplitRow | UnifiedRow>, { type: 'fold' }>['fold']; start: number }
+    | { kind: 'rows'; b: number; segment: ReturnType<typeof segments<SplitRow | UnifiedRow>>[number]; start: number };
+  const items = $derived.by(() => {
+    const out: Item[] = [];
+    let start = 0;
+    blocks.forEach((block, b) => {
+      if (block.type === 'fold') out.push({ kind: 'fold', b, fold: block.fold, start });
+      else
+        for (const segment of segments(block.rows as (SplitRow | UnifiedRow)[], b)) {
+          out.push({ kind: 'rows', b, segment, start });
+          start += segment.rows.length;
+        }
+    });
+    return { out, total: start };
+  });
+  let limit = $state(CHUNK);
+  $effect(() => {
+    void path;
+    untrack(() => (limit = CHUNK));
+  });
+  $effect(() => {
+    const total = items.total;
+    if (limit >= total) return;
+    const more = () => (limit += CHUNK);
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(more, { timeout: 200 });
+      return () => cancelIdleCallback(id);
+    }
+    const id = setTimeout(more, 16);
+    return () => clearTimeout(id);
+  });
+  const drawnItems = $derived(items.out.filter((item) => item.start < limit));
 
   const splitSide = (rows: SplitRow[], s: Side): CodeLine[] =>
     rows.map((r) => {
@@ -239,6 +286,20 @@
 
   // The rendered view's pick: the lines under the text selected
   let renderedPick = $state<Picked | null>(null);
+  // Where its comment box goes (ATM-627): right under the text selected, over the side it was selected on, in the
+  // rendered view's coordinates. Not after the document: a comment on its first lines was written a document away
+  let renderedEl = $state<HTMLElement>();
+  let pickAt = $state<{ top: number; left: number; width: number } | null>(null);
+  function placePick() {
+    const selection = window.getSelection();
+    const within = renderedEl?.getBoundingClientRect();
+    if (!within || !selection || !selection.rangeCount) return (pickAt = null);
+    const text = selection.getRangeAt(0).getBoundingClientRect();
+    const start = selection.anchorNode;
+    const pane = (start instanceof Element ? start : start?.parentElement)?.closest('.diff-pane');
+    const side = pane?.getBoundingClientRect() ?? within;
+    pickAt = { top: text.bottom - within.top, left: side.left - within.left, width: side.width };
+  }
   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
 
   function cancel() {
@@ -252,16 +313,22 @@
   // Sent: the box stays, with what was written, until the page says it is saved; a refusal shows in it
   let saving = $state(false);
   let refused = $state<string | null>(null);
-  async function save() {
+  async function save(asDraft = false) {
     const body = draft.trim();
     if (!body || !composing || saving) return;
     saving = true;
     refused = null;
-    const problem = await oncomment?.(composing, body);
+    const problem =
+      asDraft && drafts ? await drafts.comment(path, composing, body) : await oncomment?.(composing, body);
     saving = false;
     if (typeof problem === 'string') refused = problem;
     else cancel();
   }
+  /** What drafting does on this page (ATM-612); none where drafts can't be kept */
+  const drafts = draftActions();
+  /** The form's submit and ⌘ Enter: the main action, adding a draft while the user has some */
+  const drafting = $derived(!!drafts && drafts.pending > 0);
+  const submit = () => void save(drafting);
 
   // The chain selected (hovered, focused, or clicked to keep it): its lines are marked
   let hovered = $state<string | null>(null);
@@ -345,7 +412,7 @@
     class="diff-composer"
     onsubmit={(e) => {
       e.preventDefault();
-      void save();
+      submit();
     }}
   >
     <div class="diff-composer-where">
@@ -361,13 +428,18 @@
       {@attach focusOnShow}
       onkeydown={(e) => {
         if (e.key === 'Escape') cancel();
-        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save();
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
       }}></textarea>
     {#if refused}<p class="diff-composer-problem" role="alert">Not saved: {refused}</p>{/if}
     <div class="diff-composer-actions">
-      <span class="diff-composer-hint">⌘ Enter to comment</span>
-      <button type="button" onclick={cancel}>Cancel</button>
-      <button type="submit" class="primary" disabled={!draft.trim() || busy || saving}>Comment</button>
+      <span class="diff-composer-hint">⌘ Enter to {drafting ? 'add to your review' : 'comment'}</span>
+      <ComposerActions
+        ready={!!draft.trim() && !busy && !saving}
+        {drafting}
+        now={() => void save(false)}
+        oncancel={cancel}
+        ondraft={drafts ? () => void save(true) : undefined}
+      />
     </div>
   </form>
 {/snippet}
@@ -397,62 +469,67 @@
   {:else if !loaded}
     <p class="diff-loading">Loading…</p>
   {:else if shownView === 'source'}
-    {#each blocks as block, b (b)}
-      {#if block.type === 'fold'}
+    {#each drawnItems as item (`${item.b}-${item.kind === 'fold' ? 'fold' : item.segment.first}`)}
+      {@const b = item.b}
+      {#if item.kind === 'fold'}
+        {@const fold = item.fold}
         <button
           class="diff-fold"
-          onclick={() => (expanded = new Set([...expanded, foldKey(block.fold)]))}
-          data-fold={block.fold.newFrom}
+          onclick={() => (expanded = new Set([...expanded, foldKey(fold)]))}
+          data-fold={fold.newFrom}
         >
-          Show {block.fold.count} unchanged {block.fold.count === 1 ? 'line' : 'lines'}
+          Show {fold.count} unchanged {fold.count === 1 ? 'line' : 'lines'}
         </button>
       {:else}
-        {#each segments(block.rows as (SplitRow | UnifiedRow)[], b) as segment (segment.first)}
-          {@const keys = segment.rows.map((_, i) => `${b}-${segment.first + i}`)}
-          {@const isPicked = (s: Side) => pickedIn(b, segment.first, segment.rows.length, s)}
-          {@const changes = changesIn(b, segment.first, segment.rows.length)}
-          <div class="diff-run" data-keys={keys.join(' ')}>
-            {#if mode === 'split'}
-              {#each ['old', 'new'] as const as s (s)}
-                <div class="diff-column diff-{s}">
-                  <DiffCode
-                    lines={splitSide(segment.rows as SplitRow[], s)}
-                    {language}
-                    numbers={s}
-                    {keys}
-                    changes={s === 'new' ? changes : []}
-                    picked={isPicked(s)}
-                    marked={markedIn(segment.rows, s)}
-                    onpick={oncomment ? (i, extend) => pick(b, s, segment.first + i, extend) : undefined}
-                    onover={(i) => over(b, s, segment.first + i)}
-                  />
-                </div>
-              {/each}
-            {:else}
-              <div class="diff-column">
+        {@const segment = item.segment}
+        {@const keys = segment.rows.map((_, i) => `${b}-${segment.first + i}`)}
+        {@const isPicked = (s: Side) => pickedIn(b, segment.first, segment.rows.length, s)}
+        {@const changes = changesIn(b, segment.first, segment.rows.length)}
+        <div class="diff-run" data-keys={keys.join(' ')}>
+          {#if mode === 'split'}
+            {#each ['old', 'new'] as const as s (s)}
+              <div class="diff-column diff-{s}">
                 <DiffCode
-                  lines={unifiedLines(segment.rows as UnifiedRow[])}
+                  lines={splitSide(segment.rows as SplitRow[], s)}
                   {language}
-                  numbers="both"
+                  numbers={s}
                   {keys}
-                  {changes}
-                  picked={isPicked('new')}
-                  marked={markedIn(segment.rows, 'both')}
-                  onpick={oncomment ? (i, extend) => pick(b, 'new', segment.first + i, extend) : undefined}
-                  onover={(i) => over(b, 'new', segment.first + i)}
+                  changes={s === 'new' ? changes : []}
+                  picked={isPicked(s)}
+                  marked={markedIn(segment.rows, s)}
+                  onpick={oncomment ? (i, extend) => pick(b, s, segment.first + i, extend) : undefined}
+                  onover={(i) => over(b, s, segment.first + i)}
                 />
               </div>
-            {/if}
-          </div>
-          {#if composing && picked && picked.block === b && picked.to >= segment.first && picked.to < segment.first + segment.rows.length && oncomment}
-            {@render composer(composing)}
+            {/each}
+          {:else}
+            <div class="diff-column">
+              <DiffCode
+                lines={unifiedLines(segment.rows as UnifiedRow[])}
+                {language}
+                {wrap}
+                numbers="both"
+                {keys}
+                {changes}
+                picked={isPicked('new')}
+                marked={markedIn(segment.rows, 'both')}
+                onpick={oncomment ? (i, extend) => pick(b, 'new', segment.first + i, extend) : undefined}
+                onover={(i) => over(b, 'new', segment.first + i)}
+              />
+            </div>
           {/if}
-          {#each segment.chains as chain (chain.id)}{@render chainBox(chain)}{/each}
-        {/each}
+        </div>
+        {#if composing && picked && picked.block === b && picked.to >= segment.first && picked.to < segment.first + segment.rows.length && oncomment}
+          {@render composer(composing)}
+        {/if}
+        {#each segment.chains as chain (chain.id)}{@render chainBox(chain)}{/each}
       {/if}
     {/each}
+    {#if limit < items.total}
+      <div class="diff-more" style:height="{(items.total - limit) * 20}px" aria-hidden="true"></div>
+    {/if}
   {:else}
-    <div class="diff-rendered" class:single={sides.length < 2}>
+    <div class="diff-rendered" class:single={sides.length < 2} bind:this={renderedEl}>
       {#each sides as s (s)}
         {@const doc = s === 'old' ? oldDoc : newDoc}
         {#if doc}
@@ -471,6 +548,7 @@
                 : 'After'}
             onpick={oncomment
               ? (p) => {
+                  placePick();
                   renderedPick = p;
                   draft = '';
                 }
@@ -478,8 +556,17 @@
           />
         {/if}
       {/each}
+      {#if composing && oncomment}
+        <div
+          class="diff-rendered-composer"
+          style:top="{pickAt?.top ?? 0}px"
+          style:left="{pickAt?.left ?? 0}px"
+          style:width={pickAt ? `${pickAt.width}px` : '100%'}
+        >
+          {@render composer(composing)}
+        </div>
+      {/if}
     </div>
-    {#if composing && oncomment}{@render composer(composing)}{/if}
   {/if}
 
   {#if loaded && !problem && elsewhere.length}
@@ -555,6 +642,9 @@
   }
   .diff-fold {
     display: block;
+    /* Over anything a run before it could draw past its end (ATM-590: a scroll bar laid over the content) */
+    position: relative;
+    z-index: 1;
     width: 100%;
     padding: var(--space-2) var(--space-6);
     border: none;
@@ -632,7 +722,11 @@
     justify-content: flex-end;
     gap: var(--space-3);
   }
-  .diff-composer-actions button {
+  /* Its buttons are ComposerActions' (ATM-612) */
+  .diff-composer-actions :global(button) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
     padding: var(--space-2) var(--space-6);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -642,18 +736,27 @@
     font: inherit;
     cursor: pointer;
   }
-  .diff-composer-actions button.primary {
+  .diff-composer-actions :global(button.primary) {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
   }
-  .diff-composer-actions button:disabled {
+  .diff-composer-actions :global(button:disabled) {
     opacity: 0.5;
     cursor: default;
   }
+  /* Its own stacking context: the comment box is above the pages, their marks and folds, and under the card's
+     sticky header */
   .diff-rendered {
+    position: relative;
+    isolation: isolate;
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+  /* The comment box, under the text selected, over the document below it (ATM-627) */
+  .diff-rendered-composer {
+    position: absolute;
+    z-index: 2;
   }
   .diff-rendered.single {
     grid-template-columns: 1fr;

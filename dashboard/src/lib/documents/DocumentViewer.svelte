@@ -17,10 +17,10 @@
     type ViewerGeometry,
   } from '../documents';
   import { getPref, setPref } from '../prefs';
-  import { gutterRows, slug, type DrawnLine, type GutterRow } from '../compmd';
+  import { slug, type DrawnLine, type GutterRow } from '../compmd';
   import { compactAt } from '../scroll';
   import type { DocumentRefresh, DocumentSource } from './source';
-  import CompMd from './CompMd.svelte';
+  import DocumentPage from './DocumentPage.svelte';
   import Icon from '../ui/Icon.svelte';
 
   // The document viewer (docs/compmd-viewer-design.md §2, §6): a window over the details panel showing a file of the
@@ -140,32 +140,11 @@
   /** Where a Markdown document's lines were drawn, in the page's coordinates */
   let drawnLines = $state.raw<DrawnLine[]>([]);
 
-  function placeMarkdownLines(lines: DrawnLine[], from: HTMLElement) {
-    const el = pageEl;
-    if (!el || doc?.kind !== 'markdown') return;
-    // The lines' boxes are from the top left of CompMD's container's content; the gutter and the marks are in the page
-    const page = el.getBoundingClientRect();
-    const box = from.getBoundingClientRect();
-    const style = getComputedStyle(from);
-    const dx = box.left - page.left + from.clientLeft + parseFloat(style.paddingLeft || '0');
-    const dy = box.top - page.top + from.clientTop + parseFloat(style.paddingTop || '0');
-    const round = (n: number) => Math.round(n * 10) / 10;
-    const moved = lines.map((l) => ({
-      line: l.line,
-      rects: l.rects.map((r) => ({
-        x: round(r.x + dx),
-        y: round(r.y + dy),
-        width: round(r.width),
-        height: round(r.height),
-      })),
-    }));
-    const next = gutterRows(moved, doc.lines, { top: 0, bottom: el.clientHeight }).map((r) => ({
-      ...r,
-      top: round(r.top),
-      height: round(r.height),
-    }));
-    if (JSON.stringify(moved) !== JSON.stringify(drawnLines)) drawnLines = moved;
-    if (JSON.stringify(next) !== JSON.stringify(rows)) rows = next;
+  /** Where the page drew a Markdown document's lines, and its margin's rows (DocumentPage places them, ATM-645) */
+  function placedOn(placed: { drawn: DrawnLine[]; rows: GutterRow[] }) {
+    if (doc?.kind !== 'markdown') return;
+    if (JSON.stringify(placed.drawn) !== JSON.stringify(drawnLines)) drawnLines = placed.drawn;
+    if (JSON.stringify(placed.rows) !== JSON.stringify(rows)) rows = placed.rows;
     scrollToMarkedRows();
   }
 
@@ -561,45 +540,42 @@
         <div class="doc-note" id="doc-fragment-missing">The text this link points to isn't in this document.</div>
       {/if}
       {#if doc}
-        <!-- A page on the desk: each theme may give it its own paper (--doc-page-*, themes/*.css) -->
-        <article class="doc-page" data-kind={doc.kind} bind:this={pageEl}>
-          {#if lineLayout}
-            <!-- The code's line numbers and the lines the link names: the viewer's own, beside CompMD's block -->
-            <div
-              class="doc-gutter"
-              id="doc-gutter"
-              aria-hidden="true"
-              style:top="{lineLayout.top}px"
-              style:line-height="{lineLayout.lineHeight}px"
-              style:font-size="{lineLayout.fontSize}px"
-            >
-              {#each lineNumbers as line (line)}<div class:marked={isMarked(line)}>{line}</div>{/each}
-            </div>
-            {#if ref.lines}
+        <!-- The document's page (ATM-645: DocumentPage, the same as a review's rendered Markdown), with the viewer's
+             own marks over it: a code file's line numbers and the lines a link names; a Markdown document's link marks
+             on their text (its line numbers are the page's own) -->
+        <DocumentPage
+          text={doc.document}
+          path={doc.path}
+          kind={doc.kind}
+          lines={doc.lines}
+          {localImage}
+          {onopen}
+          marked={inLink}
+          onplaced={placedOn}
+          bind:page={pageEl}
+        >
+          {#snippet overlay()}
+            {#if lineLayout && doc}
+              <!-- The code's line numbers and the lines the link names: the viewer's own, beside CompMD's block -->
               <div
-                class="doc-line-mark"
-                id="doc-line-mark"
-                style:top="{lineLayout.top + (ref.lines[0] - 1) * lineLayout.lineHeight}px"
-                style:height="{(Math.min(ref.lines[1], doc.lines) - ref.lines[0] + 1) * lineLayout.lineHeight}px"
-              ></div>
-            {/if}
-          {/if}
-          {#if doc.kind === 'markdown' && rows.length}
-            <!-- A Markdown document's line numbers (T-406): each line beside its text, where CompMD drew it; lines
-                 that draw nothing in the gaps; a link's lines marked, in the gutter and on their text -->
-            <div class="doc-gutter doc-gutter-lines" id="doc-gutter" aria-hidden="true">
-              {#each rows as row (row.from)}
+                class="doc-gutter"
+                id="doc-gutter"
+                aria-hidden="true"
+                style:top="{lineLayout.top}px"
+                style:line-height="{lineLayout.lineHeight}px"
+                style:font-size="{lineLayout.fontSize}px"
+              >
+                {#each lineNumbers as line (line)}<div class:marked={isMarked(line)}>{line}</div>{/each}
+              </div>
+              {#if ref?.lines}
                 <div
-                  class:marked={inLink(row.from, row.to)}
-                  class:blank={!row.drawn}
-                  data-line={row.from}
-                  style:top="{row.top}px"
-                  style:height="{row.height}px"
-                >
-                  {row.from === row.to ? row.from : `${row.from}–${row.to}`}
-                </div>
-              {/each}
-            </div>
+                  class="doc-line-mark"
+                  id="doc-line-mark"
+                  style:top="{lineLayout.top + (ref.lines[0] - 1) * lineLayout.lineHeight}px"
+                  style:height="{(Math.min(ref.lines[1], doc.lines) - ref.lines[0] + 1) * lineLayout.lineHeight}px"
+                ></div>
+              {/if}
+            {/if}
             {#each markedRects as rect, i (i)}
               <div
                 class="doc-line-mark doc-text-mark"
@@ -610,11 +586,8 @@
                 style:height="{rect.height}px"
               ></div>
             {/each}
-          {/if}
-          {#key `${ref.path}`}
-            <CompMd text={doc.document} path={doc.path} {localImage} {onopen} onlines={placeMarkdownLines} />
-          {/key}
-        </article>
+          {/snippet}
+        </DocumentPage>
       {:else if error}
         <div class="doc-fallback" id="doc-fallback" data-error={error.kind}>
           <strong>{MESSAGES[error.kind]}</strong>

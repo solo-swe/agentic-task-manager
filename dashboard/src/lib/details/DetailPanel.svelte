@@ -14,6 +14,7 @@
   import { referenceTo, type DocumentRef } from '../documents';
   import { cutOff, scrollBehavior } from '../scroll';
   import RepoRef from '../ui/RepoRef.svelte';
+  import ReviewLink from './ReviewLink.svelte';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
   import LabelChips from '../ui/LabelChips.svelte';
@@ -22,7 +23,7 @@
   import StageChip from '../ui/StageChip.svelte';
   import Icon from '../ui/Icon.svelte';
   import TaskKey from '../ui/TaskKey.svelte';
-  import { parseRef, taskLabel, type RefView } from '../keys';
+  import { movedFrom, parseRef, taskLabel, type RefView } from '../keys';
   import { inApp } from '../api/http';
   import { navigate } from '../navigation';
   import { tabActions, wantsNewTab } from '../tab-actions';
@@ -73,6 +74,14 @@
   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
   const carried = $derived(task && sprint ? carriedCount(task, sprint) : 0);
   const reviewMode = $derived(task ? effectiveReview(task) : 'none');
+  // Its code reviews (ATM-585: `code_reviews`, oldest first): the latest to open, the others after it, in the project
+  // shown
+  const codeReviews = $derived(task?.code_reviews ?? []);
+  const latestReview = $derived(codeReviews.at(-1) ?? null);
+  const earlierReviews = $derived(codeReviews.slice(0, -1).reverse());
+  /** Where a review of the task stands, as its view from atm says (ATM-621) */
+  const reviewStatusOf = (id: string) => task?.derived?.review_statuses?.[id];
+  const reviewProject = $derived(dashboard.projectId);
   const actors = $derived(task ? actorsLine(task) : '');
   const attempts = $derived(task ? earlierAttempts(task) : []);
   const requiredBy = $derived(task ? dashboard.tasks.filter((t) => (t.dependencies ?? []).includes(task.id)) : []);
@@ -204,6 +213,13 @@
         </h3>
         <button class="detail-close" aria-label="Close" onclick={() => dashboard.closeDetail()}>&times;</button>
       </div>
+      {@const was = movedFrom(task, typeof dashboard.meta?.key === 'string' ? dashboard.meta.key : undefined)}
+      {#if was.length}
+        <!-- Its number moved when two branches gave the same one (ADR-009): its old key still finds it -->
+        <p class="detail-moved" id="detail-moved" title="Two branches gave this number; the merge moved this task">
+          was {was.join(', ')}
+        </p>
+      {/if}
       {#if task.derived?.problems?.length}
         <!-- A malformed task, shown as far as atm could read it (T-377) -->
         <ul class="archive-notice" id="detail-problems" aria-label="What atm check finds wrong with this task">
@@ -483,10 +499,38 @@
       <div class="label">In review</div>
       <div class="value" style="font-size:13px">
         <div><strong>{reviewSummary(review)}</strong></div>
+        {#if latestReview && reviewProject}
+          <!-- Its code review, the latest it names, to open (ATM-585); the earlier ones after it -->
+          <div class="detail-review-links">
+            <ReviewLink
+              project={reviewProject}
+              reference={latestReview.ref}
+              status={reviewStatusOf(latestReview.id)}
+              prominent
+            />
+            {#each earlierReviews as r (r.id)}<ReviewLink
+                project={reviewProject}
+                reference={r.ref}
+                status={reviewStatusOf(r.id)}
+              />{/each}
+          </div>
+        {/if}
         <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
         {#if review.note}<div class="review-note">
             <CompMd text={review.note.text} {task} onopen={openDocument} />
           </div>{/if}
+      </div>
+    </div>
+  {:else if latestReview && reviewProject}
+    <!-- Not in review (done, sent back, …): its code reviews still, less prominently (ATM-585) -->
+    <div class="detail-section" id="detail-code-reviews">
+      <div class="label">Code reviews</div>
+      <div class="value detail-review-links">
+        {#each [...earlierReviews, latestReview] as r (r.id)}<ReviewLink
+            project={reviewProject}
+            reference={r.ref}
+            status={reviewStatusOf(r.id)}
+          />{/each}
       </div>
     </div>
   {/if}
@@ -539,7 +583,7 @@
     {@const ref = dashboard.refOf(id)}
     <div class="detail-dep-item archived" data-archived={id} title={old?.name ?? ''}>
       <span class="detail-dep-arrow">{arrow}</span>
-      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      <strong><TaskKey label={ref.label} /></strong>
       <span style="color:var(--text-muted)">· {old ? 'archived' : 'not found'}</span>
     </div>
   {/if}
@@ -559,14 +603,14 @@
       onclick={(e) => openForeign(e, ref.address!)}
     >
       <span class="detail-dep-arrow">{arrow}</span>
-      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      <strong><TaskKey label={ref.label} /></strong>
       <span class="detail-dep-name">{ref.found.name}</span>
       {@render foreignStatus(ref.found)}
     </a>
   {:else}
     <div class="detail-dep-item foreign" data-foreign={id} title={ref.tip}>
       <span class="detail-dep-arrow">{arrow}</span>
-      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      <strong><TaskKey label={ref.label} /></strong>
       {#if ref.found}
         <span class="detail-dep-name">{ref.found.name}</span>
         {@render foreignStatus(ref.found)}
@@ -594,7 +638,7 @@
   {@const ref = dashboard.refOf(id)}
   <button type="button" class="detail-dep-item" onclick={() => dashboard.showDetail(id)} title={name}>
     <span class="detail-dep-arrow">{arrow}</span>
-    <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+    <strong><TaskKey label={ref.label} /></strong>
     <span class="detail-dep-name">{name}</span>
     {#if status !== undefined}
       {@const ds = statusStyle(status)}

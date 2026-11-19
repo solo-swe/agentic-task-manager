@@ -2,7 +2,9 @@
 
 - **Status:** accepted, 2026-11-15 (T-534); §7's lookup and freshness replaced by
   [ADR-008](ADR-008-other-projects-tasks-referenced-anywhere-loaded-when-needed.md) (2026-11-16, from
-  [cross-project-freshness-design.md](../cross-project-freshness-design.md))
+  [cross-project-freshness-design.md](../cross-project-freshness-design.md)); §3 (provisional keys) and §4's rules on
+  which number moves replaced by [ADR-009](ADR-009-task-keys-plain-from-creation.md) (2026-11-19: keys plain from
+  creation, a clash moving one task to the next free number)
 - **Decided by:** Hakan Serce (T-534: "stored as UUID, displayed as human-readable", the number permanently tied to the
   UUID, the prefix a project's short name of 3 to 6 letters and digits, a migration that changes it any time, a
   clash shown by UUID with a warning; provisional keys until merged, with a marker)

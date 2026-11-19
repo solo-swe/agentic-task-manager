@@ -97,6 +97,8 @@ impl Project {
     /// # Errors
     /// In a keys-format file, a reference that names no task (saying why), or several; task data that can't be read.
     pub fn resolve_task(&self, reference: &str) -> Result<String> {
+        // `~ATM-538`, as atm printed a provisional key before ADR-009, is the key (ATM-594)
+        let reference = atm_common::keys::without_draft_mark(reference);
         let document = self.store.document()?;
         if !atm_common::keys::keys_format(document) {
             return Ok(reference.to_string());
@@ -166,24 +168,28 @@ impl Project {
         references.iter().map(|r| self.resolve_task(r)).collect()
     }
 
-    /// How a task is shown to people (ADR-007 §1, §3): its key, `~` before a provisional one (`~ATM-538`), in a
-    /// keys-format file; its ID before task keys.
+    /// How a task is named where atm keeps or hands on a reference to it (a review's tasks, `--json`, ATM-594): its key;
+    /// its ID before task keys.
     #[must_use]
-    pub fn task_label(&self, task: &atm_common::Task) -> String {
+    pub fn task_key(&self, task: &atm_common::Task) -> String {
         let id = || {
             task.get("id")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default()
                 .to_string()
         };
-        let Ok(document) = self.store.document() else {
-            return id();
-        };
-        match atm_common::keys::key_of(document, task) {
-            Some(key) if atm_common::keys::key_final(task) => key,
-            Some(key) => format!("~{key}"),
-            None => id(),
-        }
+        self.store
+            .document()
+            .ok()
+            .and_then(|document| atm_common::keys::key_of(document, task))
+            .unwrap_or_else(id)
+    }
+
+    /// How a task is shown to people: its key, plain from creation (ADR-009), in a keys-format file; its ID before task
+    /// keys. The same as [`Project::task_key`] now that no key is provisional.
+    #[must_use]
+    pub fn task_label(&self, task: &atm_common::Task) -> String {
+        self.task_key(task)
     }
 
     /// Its root folder, when it was opened from one.

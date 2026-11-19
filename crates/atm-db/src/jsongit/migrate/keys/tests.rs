@@ -61,9 +61,10 @@ fn every_task_gets_a_uuid_its_number_and_is_final() {
         "8",
         "version 8, from the project and old ID"
     );
+    // A number, and no key_final (ADR-009: keys are plain from creation)
     assert_eq!(
-        (t[0]["number"].clone(), t[0]["key_final"].clone()),
-        (json!(12), json!(true))
+        (t[0]["number"].clone(), t[0].get("key_final")),
+        (json!(12), None)
     );
     assert_eq!(
         t[0].get("aliases"),
@@ -78,12 +79,8 @@ fn every_task_gets_a_uuid_its_number_and_is_final() {
     assert_eq!(t[1]["aliases"], json!(["T-P1-03"]));
     assert_eq!(archive["tasks"][0]["number"], json!(1));
     assert_eq!(archive["meta"]["format"], json!(2));
-    let keys: Vec<&String> = t[0].as_object().unwrap().keys().take(4).collect();
-    assert_eq!(
-        keys,
-        ["id", "number", "key_final", "name"],
-        "the new fields first"
-    );
+    let keys: Vec<&String> = t[0].as_object().unwrap().keys().take(3).collect();
+    assert_eq!(keys, ["id", "number", "name"], "the new fields first");
 }
 
 #[test]

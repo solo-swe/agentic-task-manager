@@ -307,7 +307,9 @@ export async function loadDocument(
   let resp: Response;
   try {
     const url = at ? v1DocumentAtUrl(project, path, at) : v1DocumentUrl(project, path);
-    resp = await fetchFn(url, { cache: 'no-store', headers });
+    // A side at a revision may come from the browser's cache: atm says how long it keeps (a year at a full object
+    // ID, never at a name that can move; ATM-587). The working copy's file is always asked for
+    resp = await fetchFn(url, { cache: at ? 'default' : 'no-store', headers });
   } catch (e) {
     return { unchanged: false, error: 'failed', message: (e as Error).message };
   }

@@ -130,9 +130,10 @@
   .app-titlebar-end {
     align-items: center;
     display: flex;
+    /* It and the window buttons keep their room: only the tabs' strip gives way, and scrolls (ATM-605) */
+    flex: 0 0 auto;
     gap: var(--space-3);
     margin-left: auto;
-    min-width: 0;
   }
   /* With the sidebar open (and no menus of the page's before the tabs), the first tab starts at the sidebar's edge:
      the sidebar's border is its left line, not a second one beside it */
@@ -176,6 +177,7 @@
     align-self: stretch;
     align-items: center;
     display: flex;
+    flex: 0 0 auto;
   }
   .window-button {
     background: none;

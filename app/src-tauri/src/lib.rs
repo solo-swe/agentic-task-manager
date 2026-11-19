@@ -16,16 +16,17 @@ pub mod windows;
 use tauri::Manager;
 
 use badge::needs_you;
-use session::{restored_tabs, save_tabs};
+use session::{reload_window, restored_tabs, save_tabs};
 
 use commands::{
     AppState, agents_status, claims, connect_agents, document, file, list_projects,
     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
-    subscribe_workspace, unsubscribe, version, worktrees,
+    subscribe_working_copy, subscribe_workspace, unsubscribe, version, worktrees,
 };
 use commands::{
-    add_review_comment, close_review, create_review, project_review, project_reviews,
-    reply_to_review_comment, set_review_tasks, submit_review_decision, update_review_comment,
+    add_review_comment, add_review_draft, close_review, create_review, list_review_drafts,
+    poke_review, project_review, project_reviews, remove_review_draft, reply_to_review_comment,
+    set_review_tasks, submit_review_decision, update_review_comment, update_review_draft,
 };
 use external::open_url;
 use menu::{menu, menu_state, subscribe_menu};
@@ -56,6 +57,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         project_review,
         subscribe_workspace::<tauri::Wry>,
         subscribe_project::<tauri::Wry>,
+        subscribe_working_copy::<tauri::Wry>,
         unsubscribe::<tauri::Wry>,
         agents_status,
         connect_agents,
@@ -66,6 +68,11 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         add_review_comment,
         update_review_comment,
         reply_to_review_comment,
+        poke_review,
+        list_review_drafts,
+        add_review_draft,
+        update_review_draft,
+        remove_review_draft,
         subscribe_links::<tauri::Wry>,
         check_update,
         install_update,
@@ -82,6 +89,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         start_dragging::<tauri::Wry>,
         save_tabs::<tauri::Wry>,
         restored_tabs::<tauri::Wry>,
+        reload_window::<tauri::Wry>,
         needs_you::<tauri::Wry>,
         open_url::<tauri::Wry>,
     ])
@@ -228,20 +236,9 @@ fn context<R: tauri::Runtime>() -> tauri::Context<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::commands::{
-        AppError, ReviewFilters, TaskFilters, claims_of, document_of, file_of, logo_of,
-        projects_of, review_of, reviews_of, search_in, tasks_of, workspaces_of, worktrees_of,
-    };
     use super::*;
     use serde_json::{Value, json};
-    use std::path::{Path, PathBuf};
-
-    fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("atm-app-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a scratch folder");
-        dir
-    }
+    use std::path::PathBuf;
 
     #[test]
     fn the_typescript_types_are_written_to_generated() {
@@ -393,6 +390,126 @@ mod tests {
         assert!(!include_str!("../Info.plist").contains("<key>CFBundleName</key>"));
     }
 
+    /// ADR-006, T-524: the app serves what its page loads of the dashboard's `CompMD` build on `atm:` (`compmd.js` and
+    /// its `WebAssembly`), at the paths `atm serve` gives them and with its headers; no frame document and no pack's
+    /// module, which `CompMD`'s plugin serves from the bundle
+    #[test]
+    fn the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them() {
+        use tauri::http::Method;
+        let compmd = std::fs::read_dir(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dashboard/dist/assets/compmd"),
+        )
+        .expect("the built dashboard's CompMD folder")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .next()
+        .expect("CompMD's version folder");
+        // The headers CompMD needs from a host (H1, H2): the table `atm serve` is checked against too
+        // (tests/scripts/serve.test.mjs), so the two hosts never drift apart
+        let table: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/scripts/compmd-host-headers.json"
+        ))
+        .expect("the host headers table");
+        let files = table["files"].as_object().expect("files");
+        let mut served = 0;
+        for (file, headers) in files {
+            let path = format!("/assets/compmd/{compmd}/{file}");
+            let response = assets::respond(ATM_ASSETS, &Method::GET, &path);
+            served += 1;
+            assert_eq!(response.status(), 200, "{path}");
+            for (name, value) in headers.as_object().expect("headers") {
+                let sent = response
+                    .headers()
+                    .get(name.as_str())
+                    .and_then(|v| v.to_str().ok());
+                assert_eq!(sent, value.as_str(), "{file}: {name}");
+            }
+        }
+        assert!(served >= 2, "compmd.js and its WebAssembly");
+        // Those two alone: the packs' modules are in CompMD's bundle, which its plugin serves
+        let embedded: Vec<&str> = ATM_ASSETS.iter().map(|(path, _)| *path).collect();
+        assert_eq!(
+            embedded,
+            [
+                format!("assets/compmd/{compmd}/compmd.js"),
+                format!("assets/compmd/{compmd}/compmd_wasm_bg.wasm")
+            ]
+        );
+    }
+
+    /// ATM-559: the build script fills Tauri's asset cache with its own `tauri-codegen`, so that must be the one
+    /// `generate_context!` (tauri-macros) uses: one version in the lockfile. Two would name the cache's files apart,
+    /// and the macro would write the page itself again, as two compiles at once can embed it half-written.
+    #[test]
+    fn the_build_script_fills_the_cache_with_the_macros_tauri_codegen() {
+        let lock = std::fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.lock"),
+        )
+        .expect("the lockfile");
+        let versions = lock.matches("name = \"tauri-codegen\"\n").count();
+        assert_eq!(
+            versions, 1,
+            "tauri-codegen in Cargo.lock {versions} times: pin the workspace's to tauri-macros' version"
+        );
+    }
+
+    /// T-502: the policy Tauri serves the dashboard's page with lets it work as under `atm serve`: its inline styles
+    /// and `style` attributes apply (a nonce would make the browser ignore `'unsafe-inline'`), and `CompMD` loads and
+    /// fetches its files from atm's scheme and its frames' folder
+    #[test]
+    fn the_page_is_served_with_a_policy_it_works_under() {
+        let app = tauri::test::mock_builder()
+            .build(context())
+            .expect("the mock app");
+        let page = app
+            .asset_resolver()
+            .get("tasks-dashboard.html".into())
+            .expect("the dashboard's page in the app's files");
+        let csp = page.csp_header.unwrap_or_default();
+        let shown: String = csp
+            .split_whitespace()
+            .filter(|w| !w.starts_with("'sha256-"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let directive = |name: &str| {
+            csp.split(';')
+                .map(str::trim)
+                .find(|d| d.starts_with(&format!("{name} ")))
+                .unwrap_or_default()
+                .to_owned()
+        };
+        assert!(!directive("style-src").contains("'nonce-"), "{shown}");
+        for name in ["script-src", "connect-src"] {
+            for folder in [
+                "atm://localhost/assets/compmd/",
+                "compmd://localhost/frames/",
+            ] {
+                assert!(directive(name).contains(folder), "{name}: {shown}");
+            }
+        }
+    }
+}
+
+/// Integration: the commands on a real state folder (a project in a git repository, on disk), through atm-lib, and
+/// through Tauri's mock runtime with the app's own context, so its capability decides what a window may call. (Here,
+/// not in `tests/`: the commands' handler macros and the app's context are this crate's.)
+#[cfg(test)]
+mod integration_tests {
+    use super::commands::{
+        AppError, ReviewFilters, TaskFilters, claims_of, document_of, file_of, logo_of,
+        projects_of, review_of, reviews_of, search_in, tasks_of, workspaces_of, worktrees_of,
+    };
+    use super::*;
+    use serde_json::{Value, json};
+    use std::path::{Path, PathBuf};
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("atm-app-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch folder");
+        dir
+    }
+
     #[test]
     fn an_empty_state_folder_has_only_default_with_no_projects() {
         let home = scratch("empty");
@@ -446,6 +563,18 @@ mod tests {
         };
         git(&["init", "-q"]);
         git(&["add", "-A"]);
+        // A commit, for a review's round to be made from
+        git(&[
+            "-c",
+            "user.name=Tester",
+            "-c",
+            "user.email=tester@example.com",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "The project",
+        ]);
         let list = json!({"version": 1, "projects": [
             {"id": "abcd1234", "name": "App", "path": root.to_string_lossy()}
         ]});
@@ -558,19 +687,6 @@ mod tests {
         ));
         assert_eq!(rest(&home, &format!("{p}/reviews"), "status=merged").0, 400);
         std::fs::remove_dir_all(&home).expect("clean up");
-    }
-
-    #[test]
-    fn errors_keep_their_kind() {
-        assert_eq!(
-            AppError::from(atm_common::Error::failed("no")),
-            AppError::Failed("no".into())
-        );
-        let json = serde_json::to_value(AppError::NotFound("T-1".into())).expect("json");
-        assert_eq!(
-            json,
-            serde_json::json!({"kind": "not_found", "message": "T-1"})
-        );
     }
 
     /// Each read command, its arguments, and what the plain function behind it answers (for a state folder made by
@@ -972,102 +1088,418 @@ mod tests {
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 
-    /// ADR-006, T-524: the app serves what its page loads of the dashboard's `CompMD` build on `atm:` (`compmd.js` and
-    /// its `WebAssembly`), at the paths `atm serve` gives them and with its headers; no frame document and no pack's
-    /// module, which `CompMD`'s plugin serves from the bundle
-    #[test]
-    fn the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them() {
-        use tauri::http::Method;
-        let compmd = std::fs::read_dir(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dashboard/dist/assets/compmd"),
-        )
-        .expect("the built dashboard's CompMD folder")
-        .filter_map(Result::ok)
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .next()
-        .expect("CompMD's version folder");
-        // The headers CompMD needs from a host (H1, H2): the table `atm serve` is checked against too
-        // (tests/scripts/serve.test.mjs), so the two hosts never drift apart
-        let table: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../tests/scripts/compmd-host-headers.json"
-        ))
-        .expect("the host headers table");
-        let files = table["files"].as_object().expect("files");
-        let mut served = 0;
-        for (file, headers) in files {
-            let path = format!("/assets/compmd/{compmd}/{file}");
-            let response = assets::respond(ATM_ASSETS, &Method::GET, &path);
-            served += 1;
-            assert_eq!(response.status(), 200, "{path}");
-            for (name, value) in headers.as_object().expect("headers") {
-                let sent = response
-                    .headers()
-                    .get(name.as_str())
-                    .and_then(|v| v.to_str().ok());
-                assert_eq!(sent, value.as_str(), "{file}: {name}");
-            }
-        }
-        assert!(served >= 2, "compmd.js and its WebAssembly");
-        // Those two alone: the packs' modules are in CompMD's bundle, which its plugin serves
-        let embedded: Vec<&str> = ATM_ASSETS.iter().map(|(path, _)| *path).collect();
-        assert_eq!(
-            embedded,
-            [
-                format!("assets/compmd/{compmd}/compmd.js"),
-                format!("assets/compmd/{compmd}/compmd_wasm_bg.wasm")
-            ]
-        );
-    }
-
-    /// ATM-559: the build script fills Tauri's asset cache with its own `tauri-codegen`, so that must be the one
-    /// `generate_context!` (tauri-macros) uses: one version in the lockfile. Two would name the cache's files apart,
-    /// and the macro would write the page itself again, as two compiles at once can embed it half-written.
-    #[test]
-    fn the_build_script_fills_the_cache_with_the_macros_tauri_codegen() {
-        let lock = std::fs::read_to_string(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.lock"),
-        )
-        .expect("the lockfile");
-        let versions = lock.matches("name = \"tauri-codegen\"\n").count();
-        assert_eq!(
-            versions, 1,
-            "tauri-codegen in Cargo.lock {versions} times: pin the workspace's to tauri-macros' version"
-        );
-    }
-
-    /// T-502: the policy Tauri serves the dashboard's page with lets it work as under `atm serve`: its inline styles
-    /// and `style` attributes apply (a nonce would make the browser ignore `'unsafe-inline'`), and `CompMD` loads and
-    /// fetches its files from atm's scheme and its frames' folder
-    #[test]
-    fn the_page_is_served_with_a_policy_it_works_under() {
+    /// A mock app on `home`'s state with the app's context and `handler`, and its windows by label.
+    fn mock_app(
+        home: &Path,
+        handler: impl Fn(tauri::ipc::Invoke<tauri::test::MockRuntime>) -> bool + Send + Sync + 'static,
+        labels: &[&str],
+    ) -> (
+        tauri::App<tauri::test::MockRuntime>,
+        Vec<tauri::WebviewWindow<tauri::test::MockRuntime>>,
+    ) {
         let app = tauri::test::mock_builder()
+            .manage(AppState::new(atm_lib::Workspaces::at(home)))
+            .invoke_handler(handler)
             .build(context())
             .expect("the mock app");
-        let page = app
-            .asset_resolver()
-            .get("tasks-dashboard.html".into())
-            .expect("the dashboard's page in the app's files");
-        let csp = page.csp_header.unwrap_or_default();
-        let shown: String = csp
-            .split_whitespace()
-            .filter(|w| !w.starts_with("'sha256-"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let directive = |name: &str| {
-            csp.split(';')
-                .map(str::trim)
-                .find(|d| d.starts_with(&format!("{name} ")))
-                .unwrap_or_default()
-                .to_owned()
+        let windows = labels
+            .iter()
+            .map(|label| {
+                tauri::WebviewWindowBuilder::new(&app, *label, tauri::WebviewUrl::default())
+                    .build()
+                    .expect("a window")
+            })
+            .collect();
+        (app, windows)
+    }
+
+    /// `command` with `args` from `window`'s page, the app's own: its answer, or its error.
+    fn call(
+        window: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        command: &str,
+        args: &Value,
+    ) -> Result<Value, Value> {
+        tauri::test::get_ipc_response(window, ipc_request(command, args, "tauri://localhost"))
+            .map(|answer| answer.deserialize::<Value>().expect("json"))
+    }
+
+    /// ATM-572: each review command answers what the page reads, after atm-lib did it: a review's header for those that
+    /// change the review, the review's and the comment's IDs for those on a comment (a reply's with the comment it
+    /// answers)
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn each_review_command_answers_what_the_page_reads() {
+        let home = a_state_with_a_project("review-flow");
+        let (_app, windows) = mock_app(
+            &home,
+            tauri::generate_handler![
+                create_review,
+                close_review,
+                set_review_tasks,
+                add_review_comment,
+                update_review_comment,
+                reply_to_review_comment,
+                poke_review,
+            ],
+            &["main"],
+        );
+        let window = &windows[0];
+        let on = |extra: Value| {
+            let mut args = json!({"workspace": "work", "project": "abcd1234"});
+            args.as_object_mut()
+                .expect("an object")
+                .extend(extra.as_object().expect("an object").clone());
+            args
         };
-        assert!(!directive("style-src").contains("'nonce-"), "{shown}");
-        for name in ["script-src", "connect-src"] {
-            for folder in [
-                "atm://localhost/assets/compmd/",
-                "compmd://localhost/frames/",
-            ] {
-                assert!(directive(name).contains(folder), "{name}: {shown}");
-            }
+        let opened = call(
+            window,
+            "create_review",
+            &on(json!({"opening": {"title": "The README", "change": {"files": ["README.md"]}}})),
+        )
+        .expect("a review");
+        assert_eq!(opened["reference"], json!("CR-1"), "{opened}");
+        assert_eq!(opened["title"], json!("The README"), "{opened}");
+        let review = |extra: Value| {
+            let mut args = on(json!({"review": "CR-1"}));
+            args.as_object_mut()
+                .expect("an object")
+                .extend(extra.as_object().expect("an object").clone());
+            args
+        };
+        let added = call(
+            window,
+            "add_review_comment",
+            &review(json!({"comment": {"body": "Why?"}})),
+        )
+        .expect("a comment");
+        let comment = added["comment"].as_str().expect("its ID").to_owned();
+        assert_eq!(added, json!({"review": "CR-1", "comment": comment}));
+        let replied = call(
+            window,
+            "reply_to_review_comment",
+            &review(json!({"comment": comment, "body": "Because."})),
+        )
+        .expect("a reply");
+        let reply = replied["comment"].as_str().expect("its ID").to_owned();
+        assert_ne!(reply, comment);
+        assert_eq!(
+            replied,
+            json!({"review": "CR-1", "comment": reply, "reply_to": comment})
+        );
+        // ATM-611: a poke, as the user at the machine
+        let poked = call(
+            window,
+            "poke_review",
+            &review(json!({"body": "Where are we?"})),
+        )
+        .expect("a poke");
+        assert_eq!(poked["review"], json!("CR-1"), "{poked}");
+        assert!(poked["poke"].is_string(), "{poked}");
+        assert_eq!(
+            call(
+                window,
+                "update_review_comment",
+                &review(json!({"comment": comment, "update": {"body": "Why so?"}})),
+            ),
+            Ok(json!({"review": "CR-1", "comment": comment}))
+        );
+        let tasks = call(
+            window,
+            "set_review_tasks",
+            &review(json!({"tasks": ["T-1"]})),
+        )
+        .expect("its tasks");
+        assert_eq!(tasks["reference"], json!("CR-1"), "{tasks}");
+        assert_eq!(tasks["tasks"], json!(["T-1"]), "{tasks}");
+        let closed = call(
+            window,
+            "close_review",
+            &review(json!({"closing": {"status": "closed", "reason": "Not now."}})),
+        )
+        .expect("closed");
+        assert_eq!(closed["status"], json!("closed"), "{closed}");
+        // A body of the wrong shape is refused before atm-lib is asked
+        let wrong = call(
+            window,
+            "create_review",
+            &on(json!({"opening": {"title": "x", "colour": "red"}})),
+        )
+        .expect_err("not an opening");
+        assert_eq!(wrong["kind"], json!("invalid"), "{wrong}");
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// ATM-612: the user's drafts on a review, as atm-lib answers: listed (none here, so the test writes nothing to the
+    /// state folder, which it doesn't pick), and each change refused as atm-lib refuses it, before it keeps anything
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn the_draft_commands_answer_as_atm_lib_does() {
+        let home = a_state_with_a_project("review-drafts");
+        let (_app, windows) = mock_app(
+            &home,
+            tauri::generate_handler![
+                create_review,
+                list_review_drafts,
+                add_review_draft,
+                update_review_draft,
+                remove_review_draft,
+            ],
+            &["main"],
+        );
+        let window = &windows[0];
+        let on = |extra: Value| {
+            let mut args = json!({"workspace": "work", "project": "abcd1234", "review": "CR-1"});
+            args.as_object_mut()
+                .expect("an object")
+                .extend(extra.as_object().expect("an object").clone());
+            args
+        };
+        call(
+            window,
+            "create_review",
+            &on(json!({"opening": {"title": "The README", "change": {"files": ["README.md"]}}})),
+        )
+        .expect("a review");
+        assert_eq!(
+            call(window, "list_review_drafts", &on(json!({}))),
+            Ok(json!({"review": "CR-1", "drafts": []}))
+        );
+        let empty = call(
+            window,
+            "add_review_draft",
+            &on(json!({"draft": {"body": " "}})),
+        )
+        .expect_err("an empty draft");
+        assert_eq!(empty["message"], json!("the draft is empty"), "{empty}");
+        let shape = call(
+            window,
+            "add_review_draft",
+            &on(json!({"draft": {"body": "x", "author": "claude:x"}})),
+        )
+        .expect_err("not a draft");
+        assert_eq!(shape["kind"], json!("invalid"), "{shape}");
+        for (command, args) in [
+            ("update_review_draft", json!({"draft": "d9", "body": "x"})),
+            ("remove_review_draft", json!({"draft": "d9"})),
+        ] {
+            let none = call(window, command, &on(args)).expect_err("no such draft");
+            assert_eq!(
+                none["message"],
+                json!("you have no draft d9 on CR-1"),
+                "{command}: {none}"
+            );
         }
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// T-518: a window's page saves its tabs (checked: none of the dashboard's pages is refused) and asks, once, for
+    /// those it comes back with
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn a_windows_page_saves_its_tabs_and_gets_back_those_it_comes_back_with() {
+        let home = scratch("tabs");
+        let (app, windows) = mock_app(
+            &home,
+            tauri::generate_handler![save_tabs, restored_tabs, reload_window],
+            &["main", "window-1"],
+        );
+        let (main, other) = (&windows[0], &windows[1]);
+        assert_eq!(call(main, "restored_tabs", &json!({})), Ok(Value::Null));
+        let tabs = session::Tabs {
+            addresses: vec!["/board".into(), "/projects/abc".into()],
+            active: 1,
+        };
+        app.state::<AppState>()
+            .session()
+            .restore("main", tabs.clone());
+        let back = json!({"addresses": ["/board", "/projects/abc"], "active": 1});
+        assert_eq!(call(other, "restored_tabs", &json!({})), Ok(Value::Null));
+        assert_eq!(call(main, "restored_tabs", &json!({})), Ok(back.clone()));
+        assert_eq!(call(main, "restored_tabs", &json!({})), Ok(Value::Null));
+        // Saving: only the dashboard's pages, kept for the window that saved them
+        let refused = call(
+            main,
+            "save_tabs",
+            &json!({"tabs": {"addresses": ["/api/v2/workspaces"], "active": 0}}),
+        )
+        .expect_err("no page of the dashboard's");
+        assert_eq!(refused["kind"], json!("invalid"), "{refused}");
+        assert_eq!(
+            call(other, "save_tabs", &json!({"tabs": back})),
+            Ok(Value::Null)
+        );
+        let saved = app.state::<AppState>().session().saved();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].tabs, tabs);
+        // ATM-584: a Reload loads the window's page again, which gets back the tabs it showed, once
+        assert_eq!(call(other, "reload_window", &json!({})), Ok(Value::Null));
+        assert_eq!(call(other, "restored_tabs", &json!({})), Ok(back));
+        assert_eq!(call(other, "restored_tabs", &json!({})), Ok(Value::Null));
+        assert_eq!(
+            call(main, "reload_window", &json!({})),
+            Ok(Value::Null),
+            "no tabs said yet"
+        );
+        assert_eq!(call(main, "restored_tabs", &json!({})), Ok(Value::Null));
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// T-520: the app reads what needs the user from the workspace itself (the page names only the workspace), and
+    /// keeps what it saw for the next notification; an unknown workspace is its error
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn needs_you_reads_the_workspace_and_remembers_what_it_saw() {
+        let home = a_state_with_a_project("needs-you");
+        let (app, windows) = mock_app(&home, tauri::generate_handler![needs_you], &["main"]);
+        let unknown = call(
+            &windows[0],
+            "needs_you",
+            &json!({"workspace": "nope", "badge": true, "notify": true}),
+        )
+        .expect_err("no such workspace");
+        assert_eq!(
+            unknown,
+            json!({"kind": "not_found", "message": "unknown workspace"})
+        );
+        for badge in [true, false] {
+            assert_eq!(
+                call(
+                    &windows[0],
+                    "needs_you",
+                    &json!({"workspace": "work", "badge": badge, "notify": false}),
+                ),
+                Ok(Value::Null)
+            );
+        }
+        // It saw the project with nothing waiting: one task more is news
+        let more = [badge::Waiting {
+            id: "abcd1234".into(),
+            name: "App".into(),
+            count: 1,
+        }];
+        assert_eq!(
+            app.state::<AppState>().needs_you().update("work", &more),
+            ["App: 1 thing needs you"]
+        );
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// T-512: the Go menu's places are the workspaces and the shown workspace's projects, by name
+    #[test]
+    fn the_go_menus_places_are_the_workspaces_and_the_shown_ones_projects() {
+        let home = a_state_with_a_project("places");
+        let workspaces = atm_lib::Workspaces::at(&home);
+        let ids = vec!["default".to_owned(), "work".to_owned()];
+        assert_eq!(
+            menu::places_of(&workspaces, Some("work")),
+            menu::Places {
+                workspaces: ids.clone(),
+                projects: vec![("abcd1234".into(), "App".into())],
+            }
+        );
+        assert_eq!(
+            menu::places_of(&workspaces, Some("nope")),
+            menu::Places {
+                workspaces: ids,
+                projects: vec![],
+            }
+        );
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// T-512, T-513: each window's page reports its own menu state, and gets its own menus with it checked and its
+    /// workspace's projects in Go; a window not in front doesn't remake the menu bar
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn each_windows_menu_shows_what_its_page_reports() {
+        let home = a_state_with_a_project("menus");
+        let workspaces = atm_lib::Workspaces::at(&home);
+        let (_app, windows) = mock_app(
+            &home,
+            tauri::generate_handler![menu, menu_state],
+            &["main", "window-1"],
+        );
+        let (main, other) = (&windows[0], &windows[1]);
+        // `main` is in front (nothing focused yet), so window-1's report changes no menu bar
+        assert_eq!(
+            call(
+                other,
+                "menu_state",
+                &json!({"shown": {"view": "list", "workspace": "work"}}),
+            ),
+            Ok(Value::Null)
+        );
+        let shown = menu::MenuState {
+            view: Some("list".into()),
+            workspace: Some("work".into()),
+            ..menu::MenuState::default()
+        };
+        let expected = |shown: &menu::MenuState| {
+            serde_json::to_value(menu::definition(
+                menu::Platform::current(),
+                shown,
+                &menu::places_of(&workspaces, shown.workspace.as_deref()),
+            ))
+            .expect("json")
+        };
+        assert_eq!(call(other, "menu", &json!({})), Ok(expected(&shown)));
+        assert_eq!(
+            call(main, "menu", &json!({})),
+            Ok(expected(&menu::MenuState::default()))
+        );
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// T-513: the page's window buttons and title reach its own window; the title as the window can show it
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn the_window_commands_act_on_the_calling_window() {
+        let home = scratch("window-commands");
+        let (_app, windows) = mock_app(
+            &home,
+            tauri::generate_handler![
+                set_title,
+                minimize,
+                toggle_maximize,
+                start_dragging,
+                close_window
+            ],
+            &["main"],
+        );
+        let missing = call(&windows[0], "set_title", &json!({})).expect_err("no title");
+        assert!(missing.is_string(), "Tauri's own refusal: {missing}");
+        // Closing last: the window goes
+        for (command, args) in [
+            ("set_title", json!({"title": "App\n(2)"})),
+            ("minimize", json!({})),
+            ("toggle_maximize", json!({})),
+            ("start_dragging", json!({})),
+            ("close_window", json!({})),
+        ] {
+            assert_eq!(
+                call(&windows[0], command, &args),
+                Ok(Value::Null),
+                "{command}"
+            );
+        }
+        std::fs::remove_dir_all(&home).expect("clean up");
     }
 }

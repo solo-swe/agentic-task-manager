@@ -235,6 +235,94 @@ mod tests {
         assert_eq!(title_of("atm (2)"), "atm (2)");
         assert_eq!(title_of("a\nb\u{7}c"), "abc");
         assert_eq!(title_of(&"x".repeat(500)).chars().count(), MAX_TITLE);
+        assert_eq!(title_of(""), "");
+        // At the limit it is whole, counted in characters, not bytes; control characters don't count towards it
+        let at_limit = "ü".repeat(MAX_TITLE);
+        assert_eq!(title_of(&at_limit), at_limit);
+        assert_eq!(title_of(&format!("\n{at_limit}")), at_limit);
+        assert_eq!(title_of(&format!("{at_limit}x")), at_limit);
+    }
+
+    /// A mock app with the app's state (its workspaces never read) and the given windows.
+    fn app_with(windows: &[&str]) -> tauri::App<tauri::test::MockRuntime> {
+        let app = tauri::test::mock_builder()
+            .manage(AppState::new(atm_lib::Workspaces::at(
+                &std::env::temp_dir().join("atm-app-unread"),
+            )))
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("the mock app");
+        for label in windows {
+            WebviewWindowBuilder::new(&app, *label, WebviewUrl::default())
+                .build()
+                .expect("a window");
+        }
+        app
+    }
+
+    /// The window in front is the one focused last while it is open, else `main`, else any; none without a window
+    #[test]
+    fn the_window_in_front_is_the_last_focused_still_open() {
+        let front_of = |app: &tauri::App<tauri::test::MockRuntime>| {
+            front(app.handle()).map(|w| w.label().to_owned())
+        };
+        assert_eq!(front_of(&app_with(&[])), None);
+        let app = app_with(&[MAIN, "window-1"]);
+        assert_eq!(front_of(&app).as_deref(), Some(MAIN), "nothing focused yet");
+        app.state::<AppState>().focused("window-1");
+        assert_eq!(front_of(&app).as_deref(), Some("window-1"));
+        app.state::<AppState>().focused("window-9");
+        assert_eq!(
+            front_of(&app).as_deref(),
+            Some(MAIN),
+            "the one focused is gone"
+        );
+        let others = app_with(&["window-3"]);
+        assert_eq!(front_of(&others).as_deref(), Some("window-3"), "no main");
+    }
+
+    /// With no window open, a link or a second instance gets a new `main`
+    #[test]
+    fn with_no_window_open_main_is_made_again() {
+        let app = app_with(&[]);
+        let window = front_or_new(app.handle()).expect("a window");
+        assert_eq!(window.label(), MAIN);
+        assert!(app.get_webview_window(MAIN).is_some());
+        // Now there is one: it is the one in front, no other is made
+        let again = front_or_new(app.handle()).expect("a window");
+        assert_eq!(again.label(), MAIN);
+        assert_eq!(app.webview_windows().len(), 1);
+    }
+
+    /// `open_window` checks its address before it makes anything; a page's address waits for the new window's page
+    #[test]
+    fn a_new_window_opens_at_a_checked_address_only() {
+        let app = app_with(&[MAIN]);
+        let open = |address: &str| {
+            tauri::async_runtime::block_on(open_window(
+                app.handle().clone(),
+                app.state::<AppState>(),
+                address.to_owned(),
+            ))
+        };
+        for refused in ["/api/v2/workspaces", "https://example.com", ""] {
+            assert!(
+                matches!(open(refused), Err(AppError::Invalid(_))),
+                "{refused}"
+            );
+        }
+        assert_eq!(app.webview_windows().len(), 1, "no window for a refusal");
+        assert_eq!(open("/projects/abc/list?task=T-1"), Ok(()));
+        assert!(app.get_webview_window("window-1").is_some());
+        let state = app.state::<AppState>();
+        assert_eq!(
+            state
+                .links()
+                .subscribe("window-1", tauri::ipc::Channel::new(|_| Ok(())))
+                .as_deref(),
+            Some("/projects/abc/list?task=T-1")
+        );
+        // The refusals took no label
+        assert_eq!(state.new_window_label(), "window-2");
     }
 
     #[test]

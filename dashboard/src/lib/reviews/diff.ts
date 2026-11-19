@@ -248,11 +248,67 @@ export function nextChange(starts: [number, number][], at: [number, number] | nu
   return starts.find((s) => before(at, s)) ?? starts[0];
 }
 
-/** `text` as a fenced code block of `language`, the fence longer than any run of backticks in it */
-export function fenced(text: string, language: string | null): string {
-  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+/** What a rendered Markdown side shows (ATM-591): runs of whole blocks, from a line to a line, and the unchanged
+ * blocks between them folded, each fold opened by its first line */
+export type RenderedPart = { type: 'shown'; from: number; to: number } | { type: 'fold'; from: number; to: number };
+
+/** The source view's context: the unchanged lines git keeps around a change */
+export const CONTEXT = 3;
+
+/**
+ * A rendered Markdown side, folded as the source view is (ATM-591): the blocks within `context` lines of a change
+ * shown, whole (a paragraph, a list, a table, a diagram: never cut), the unchanged blocks between them folded, from
+ * the document's first line to its last (`total`). A fold whose first line is in `opened` is shown. Lines between
+ * shown blocks that hold no block (blank lines, a frontmatter) go with what they lie between, never a fold of their
+ * own. A document without blocks (none known) is shown whole.
+ */
+export function renderedParts(
+  blocks: readonly { from: number; to: number }[],
+  changed: ReadonlySet<number>,
+  total: number,
+  opened: ReadonlySet<number> = new Set(),
+  context = CONTEXT,
+): RenderedPart[] {
+  if (!blocks.length || total < 1) return [{ type: 'shown', from: 1, to: Math.max(total, 1) }];
+  const near = (b: { from: number; to: number }) => {
+    for (const n of changed) if (n >= b.from - context && n <= b.to + context) return true;
+    return false;
+  };
+  // Runs of blocks shown or folded, in order
+  type Run = { shown: boolean; from: number; to: number };
+  const runs: Run[] = [];
+  for (const b of blocks) {
+    const shown = near(b);
+    const last = runs.at(-1);
+    if (last && last.shown === shown) last.to = b.to;
+    else runs.push({ shown, from: b.from, to: b.to });
+  }
+  // Each run reaches to the next one's first line; the first from line 1, the last to the end
+  const parts: RenderedPart[] = runs.map((r, i) => ({
+    type: r.shown ? 'shown' : 'fold',
+    from: i === 0 ? 1 : r.from,
+    to: i + 1 < runs.length ? runs[i + 1].from - 1 : total,
+  }));
+  // A fold opened is shown; shown parts side by side are one
+  const merged: RenderedPart[] = [];
+  for (const p of parts) {
+    const part: RenderedPart = p.type === 'fold' && opened.has(p.from) ? { ...p, type: 'shown' } : p;
+    const last = merged.at(-1);
+    if (last && last.type === 'shown' && part.type === 'shown') last.to = part.to;
+    else merged.push({ ...part });
+  }
+  return merged;
+}
+
+/** `lines` as a fenced code block of `language`, the fence longer than any run of backticks in them: every line, an
+ * empty last one too (ATM-589: one dropped made the run a line short, its number then drawn over the row after it).
+ * The block's text ends without the last newline, and a text ending in a newline draws no line after it: an empty
+ * last line gets one newline more, so it is drawn */
+export function fenced(lines: readonly string[], language: string | null): string {
+  const body = lines.map((l) => `${l}\n`).join('') + (lines.length && lines.at(-1) === '' ? '\n' : '');
+  const longest = Math.max(0, ...(body.match(/`+/g) ?? []).map((run) => run.length));
   const marks = '`'.repeat(Math.max(3, longest + 1));
-  return `${marks}${language ?? ''}\n${text}${text.endsWith('\n') || !text ? '' : '\n'}${marks}\n`;
+  return `${marks}${language ?? ''}\n${body}${marks}\n`;
 }
 
 /** The lines a selection spans, from the lines' boxes CompMD drew (the rendered view): those whose boxes it crosses */

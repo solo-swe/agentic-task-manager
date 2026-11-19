@@ -439,8 +439,8 @@ fn add_tasks(work: &mut Working, entries: &[Task], actor: Option<&str>) -> Resul
     Ok(tasks)
 }
 
-/// [`add_tasks`] in a keys-format file (ADR-007 §1): each new task gets a UUID and the next number, provisional
-/// (`key_final: false`), and `meta.next_number` moves on. A dependency or related task is a placeholder of this batch,
+/// [`add_tasks`] in a keys-format file (ADR-007 §1): each new task gets a UUID and the next number, its key plain from
+/// the start (ADR-009), and `meta.next_number` moves on. A dependency or related task is a placeholder of this batch,
 /// or a reference [`resolve`] finds (a key, an earlier prefix, an alias, a UUID; archived ones too), stored as its UUID.
 fn add_keyed_tasks(
     work: &mut Working,
@@ -476,7 +476,6 @@ fn add_keyed_tasks(
     for (n, task) in tasks.iter_mut().enumerate() {
         task.insert("id".into(), json!(uuids[n]));
         task.insert("number".into(), json!(first + n as u64));
-        task.insert("key_final".into(), json!(false));
         let mut deps = Vec::new();
         let mut missing = Vec::new();
         for d in task["dependencies"].as_array().into_iter().flatten() {

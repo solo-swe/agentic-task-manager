@@ -127,7 +127,8 @@ fn rewrite_list(value: &mut Value, map: &HashMap<String, String>) {
     }
 }
 
-/// The task with its new fields first (`id`, `number`, `key_final`, `aliases`), then the rest as it was.
+/// The task with its new fields first (`id`, `number`, `aliases`), then the rest as it was; no `key_final` (ADR-009:
+/// keys are plain from creation).
 fn rekeyed(
     task: &Map<String, Value>,
     uuid: &str,
@@ -137,7 +138,6 @@ fn rekeyed(
     let mut out = Map::new();
     out.insert("id".into(), json!(uuid));
     out.insert("number".into(), json!(number));
-    out.insert("key_final".into(), json!(true));
     let mut aliases: Vec<Value> = task
         .get("aliases")
         .and_then(Value::as_array)

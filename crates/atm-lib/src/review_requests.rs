@@ -92,6 +92,14 @@ pub struct NewReply {
     pub body: String,
 }
 
+/// `POST …/reviews/<CR>/pokes`: a poke (ATM-611), with an optional message.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NewPoke {
+    #[serde(default)]
+    pub body: Option<String>,
+}
+
 /// `PATCH …/comments/<c>`: a comment's text (one's own), or a top-level comment's resolved box; one of them.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -157,6 +165,11 @@ pub fn request_from<T: for<'de> Deserialize<'de>>(body: serde_json::Value) -> Re
     serde_json::from_value(body).map_err(|e| Error::Invalid(format!("not this request: {e}")))
 }
 
+/// A request's text, checked: not empty, at most [`MAX_TEXT`] characters.
+pub(crate) fn checked_text<'t>(what: &str, text: &'t str) -> Result<&'t str> {
+    self::text(what, text)
+}
+
 fn text<'t>(what: &str, text: &'t str) -> Result<&'t str> {
     if text.trim().is_empty() {
         return Err(Error::Invalid(format!("{what} is empty")));
@@ -219,7 +232,7 @@ pub fn open_review(project: &mut Project, opening: ReviewOpening) -> Result<Revi
             author: Some(by),
             reviewers: opening.reviewers.into_iter().map(Actor).collect(),
             status: match opening.start {
-                ReviewStart::Open => Status::Open,
+                ReviewStart::Open => Status::Waiting,
                 ReviewStart::Draft => Status::Draft,
                 ReviewStart::Live => Status::Live,
             },
@@ -239,21 +252,46 @@ pub fn add_comment(
 ) -> Result<CommentId> {
     let mut store = reviews::store(project)?;
     let found = store.get_review(review)?;
+    let body = text("the comment", &comment.body)?;
+    let last = found.rounds.last().map_or(1, |r| r.number);
+    // On a live review, a comment on what is there now (no round, or the working copy shown after the last
+    // checkpoint) makes it a checkpoint first, and is anchored to it (§3.5, ATM-576)
+    let now = comment.round.is_none_or(|r| r > last);
+    let round = if found.header.status == Status::Live && now {
+        reviews::checkpoint_now(project, &found.header.reference)?
+    } else {
+        comment.round.unwrap_or(last)
+    };
     let anchor = Anchor {
-        round: comment
-            .round
-            .unwrap_or_else(|| found.rounds.last().map_or(1, |r| r.number)),
+        round,
         path: comment.path,
         side: comment.side,
         lines: comment.lines,
         quote: comment.quote,
     };
-    Reviews::new(&mut store).comment(
-        &found.header.reference,
-        anchor,
-        text("the comment", &comment.body)?,
-        &actor_of(project),
-    )
+    Reviews::new(&mut store).comment(&found.header.reference, anchor, body, &actor_of(project))
+}
+
+/// A poke on `review` (`atm review poke`, ATM-611): a nudge its agent hears through its review watch and answers,
+/// with an optional message; the poke's ID. A person pokes; an agent answers pokes, never makes one.
+///
+/// # Errors
+/// No such review, an agent poking, a message over [`MAX_TEXT`], or what the review's rules refuse (an ended
+/// review).
+pub fn poke_review(project: &Project, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
+    let by = actor_of(project);
+    if atm_common::edits::is_agent(Some(&by.0)) {
+        return Err(Error::Invalid(
+            "a person pokes a review: an agent answers a poke (atm review reply), never makes one"
+                .into(),
+        ));
+    }
+    let body = poke.body.as_deref().map_or("", str::trim);
+    if !body.is_empty() {
+        text("the poke's message", body)?;
+    }
+    let mut store = reviews::store(project)?;
+    Reviews::new(&mut store).poke(review, body, &by)
 }
 
 /// A reply to `comment` (`atm review reply`): the reply's ID.
@@ -298,14 +336,35 @@ pub fn update_comment(
     }
 }
 
-/// A reviewer's decision (`atm review submit`), which becomes the review's tasks'.
+/// A reviewer's decision (`atm review submit`), which becomes the review's tasks', sent with the person's drafts on the
+/// review (ATM-612): every check first, then the drafts, then the decision. A comment with no words of its own and
+/// drafts to send only sends them (the page's *Publish comments*), which anyone may.
 ///
 /// # Errors
-/// A comment without its text, or what the review's rules refuse (the author deciding, open comments on approval).
+/// A comment with neither its text nor drafts, what the review's rules refuse (the author deciding, open comments on
+/// approval, the drafts counted), or a draft that can't be sent (it and those after it kept).
 pub fn submit_decision(
     project: &mut Project,
     review: &ReviewRef,
     decision: &Decision,
+) -> Result<ReviewHeader> {
+    submit_decision_with(
+        project,
+        review,
+        decision,
+        &crate::review_drafts::Drafts::of_user(),
+    )
+}
+
+/// [`submit_decision`], with the drafts kept in `drafts`.
+///
+/// # Errors
+/// As [`submit_decision`].
+pub fn submit_decision_with(
+    project: &mut Project,
+    review: &ReviewRef,
+    decision: &Decision,
+    drafts: &crate::review_drafts::Drafts,
 ) -> Result<ReviewHeader> {
     let verdict = match decision.decision {
         DecisionKind::Approve => Verdict::Approve,
@@ -317,17 +376,40 @@ pub fn submit_decision(
         .as_deref()
         .map(|b| text("the comment", b))
         .transpose()?;
-    if verdict == Verdict::Comment && body.is_none() {
-        return Err(Error::Invalid(
-            "a comment on the review needs its text".into(),
-        ));
-    }
     let overriding = decision
         .override_rules
         .as_ref()
         .map(|o| text("the reason for the override", &o.reason))
         .transpose()?;
-    reviews::submit(project, review, verdict, body, overriding)?;
+    // A person's drafts go with it; an agent has none (it comments at once)
+    let by = actor_of(project);
+    let pending = if atm_common::edits::is_agent(Some(&by.0)) {
+        Vec::new()
+    } else {
+        crate::review_drafts::list_drafts_in(project, review, drafts)?
+    };
+    let publish_only = verdict == Verdict::Comment && body.is_none();
+    if publish_only && pending.is_empty() {
+        return Err(Error::Invalid(
+            "a comment on the review needs its text, or drafts to send".into(),
+        ));
+    }
+    if !publish_only {
+        // Taken, with the drafts open by then, before any is sent
+        let also_open: Vec<String> = pending
+            .iter()
+            .filter(|d| d.is_top_level())
+            .map(|d| format!("{} (your draft)", d.id))
+            .collect();
+        Reviews::new(&mut reviews::store(project)?)
+            .check_submit(review, verdict, overriding, &by, &also_open)?;
+    }
+    if !pending.is_empty() {
+        crate::review_drafts::send_drafts_in(project, review, drafts)?;
+    }
+    if !publish_only {
+        reviews::submit(project, review, verdict, body, overriding)?;
+    }
     Ok(reviews::store(project)?.get_review(review)?.header)
 }
 
@@ -417,5 +499,107 @@ mod tests {
             Err(Error::TooLarge(_))
         ));
         assert_eq!(text("the reply", "ok").unwrap(), "ok");
+        let at_limit = "x".repeat(MAX_TEXT);
+        assert_eq!(text("the reply", &at_limit).unwrap(), at_limit);
+        // characters, not bytes
+        let wide = "é".repeat(MAX_TEXT);
+        assert!(text("the reply", &wide).is_ok());
+        assert_eq!(
+            text("the title", "\n\t").unwrap_err().to_string(),
+            "the title is empty"
+        );
+    }
+
+    /// A project in memory: the request's own checks come before any review is read.
+    fn memory() -> Project {
+        Project::new(Box::new(
+            atm_db::MemoryStore::new(Vec::new(), Vec::new(), &serde_json::Map::new()).unwrap(),
+        ))
+        .with_actor(Some("Hakan".into()))
+    }
+
+    #[test]
+    fn a_page_closes_a_review_and_changes_nothing_else_of_it() {
+        for status in [Status::Waiting, Status::Approved, Status::Draft] {
+            let closing = ReviewClosing {
+                status,
+                reason: "why".into(),
+                reject_tasks: false,
+            };
+            let error = close_review(&mut memory(), &ReviewRef("CR-1".into()), &closing);
+            assert_eq!(
+                error.unwrap_err().to_string(),
+                "a review is changed here only to closed",
+                "{status:?}"
+            );
+        }
+        let closing = ReviewClosing {
+            status: Status::Closed,
+            reason: " ".into(),
+            reject_tasks: true,
+        };
+        // the reason is checked once the review is: a project without reviews says so first
+        assert!(close_review(&mut memory(), &ReviewRef("CR-1".into()), &closing).is_err());
+    }
+
+    #[test]
+    fn a_decision_checks_its_texts_before_it_is_made() {
+        let decide = |decision: DecisionKind, body: Option<&str>, reason: Option<&str>| {
+            submit_decision(
+                &mut memory(),
+                &ReviewRef("CR-1".into()),
+                &Decision {
+                    decision,
+                    body: body.map(String::from),
+                    override_rules: reason.map(|r| RulesOverride { reason: r.into() }),
+                },
+            )
+            .unwrap_err()
+            .to_string()
+        };
+        assert_eq!(
+            decide(DecisionKind::Approve, Some(" "), None),
+            "the comment is empty"
+        );
+        assert_eq!(
+            decide(DecisionKind::Approve, None, Some("")),
+            "the reason for the override is empty"
+        );
+        let long = "x".repeat(MAX_TEXT + 1);
+        assert_eq!(
+            decide(DecisionKind::RequestChanges, Some(&long), None),
+            "the comment is longer than 100000 characters"
+        );
+    }
+
+    #[test]
+    fn the_page_bodies_take_their_defaults() {
+        let opening: ReviewOpening = request_from(json!({"title": "T"})).unwrap();
+        assert_eq!(
+            (opening.summary.as_str(), opening.start, opening.change),
+            ("", ReviewStart::Open, ChangeToReview::default())
+        );
+        let live: ReviewOpening =
+            request_from(json!({"title": "T", "start": "live", "change": {"base": "main"}}))
+                .unwrap();
+        assert_eq!(live.start, ReviewStart::Live);
+        let update: CommentUpdate = request_from(json!({})).unwrap();
+        assert_eq!(update, CommentUpdate::default());
+        let closing: ReviewClosing =
+            request_from(json!({"status": "closed", "reason": "r"})).unwrap();
+        assert!(!closing.reject_tasks);
+        for bad in [
+            json!({"title": "T", "start": "closed"}),
+            json!({"title": "T", "change": {"range": "a..b", "extra": 1}}),
+        ] {
+            assert!(matches!(
+                request_from::<ReviewOpening>(bad),
+                Err(Error::Invalid(_))
+            ));
+        }
+        assert!(matches!(
+            request_from::<ReviewTasks>(json!({"tasks": "T-1"})),
+            Err(Error::Invalid(_))
+        ));
     }
 }

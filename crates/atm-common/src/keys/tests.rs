@@ -19,12 +19,12 @@ fn project() -> (Value, Vec<Task>) {
     let document = json!({
         "meta": {"format": 2, "key": "ATM", "key_history": ["T"], "next_number": 542},
         "tasks": [
-            {"id": A, "number": 527, "key_final": true, "aliases": ["T-P1-03"]},
+            {"id": A, "number": 527, "aliases": ["T-P1-03"]},
             {"id": B, "number": 538},
             {"id": C, "number": 541, "aliases": ["ATM-538"]}
         ]
     });
-    let archive = vec![task(json!({"id": OLD, "number": 12, "key_final": true}))];
+    let archive = vec![task(json!({"id": OLD, "number": 12}))];
     (document, archive)
 }
 
@@ -55,6 +55,25 @@ fn a_key_any_case_an_earlier_prefix_an_alias_or_the_uuid_finds_its_task() {
     assert_eq!(found(A), (A.into(), false, Via::Uuid));
 }
 
+/// ADR-009: keys read plain, whatever a file still says of `key_final`; a `~` written before (old notes, commits,
+/// reviews) still finds its task; a `~` alone is no key
+#[test]
+fn keys_read_plain_and_an_old_draft_mark_still_finds_its_task() {
+    for task in [
+        json!({"id": A, "key": "ATM-527"}),
+        json!({"id": A, "key": "ATM-527", "key_final": false}),
+        json!({"id": A, "key": "ATM-527", "key_final": true}),
+    ] {
+        assert_eq!(label_of(&task), "ATM-527", "{task}");
+    }
+    assert_eq!(label_of(&json!({"id": "T-1"})), "T-1");
+    assert_eq!(found("~ATM-527"), (A.into(), false, Via::Key));
+    assert_eq!(found(" ~atm-527 "), (A.into(), false, Via::Key));
+    assert_eq!(found("~T-527"), (A.into(), false, Via::EarlierPrefix));
+    assert_eq!(without_draft_mark("~"), "~");
+    assert!(not_found("~").starts_with("no task '~'"));
+}
+
 #[test]
 fn the_archive_too() {
     assert_eq!(found("ATM-12"), (OLD.into(), true, Via::Key));
@@ -72,6 +91,28 @@ fn a_current_key_wins_over_an_alias_that_moved_off_it() {
     document["tasks"].as_array_mut().unwrap().remove(1);
     let f = resolve(&document, &archive, "ATM-538").unwrap();
     assert_eq!((f.task["id"].as_str().unwrap(), f.via), (C, Via::Alias));
+}
+
+/// ATM-630: who moved off a number, whoever holds it now; working and archived, any case, a `~` ignored
+#[test]
+fn the_tasks_holding_a_reference_as_an_alias() {
+    let (document, mut archive) = project();
+    archive.push(task(
+        json!({"id": OLD, "number": 3, "aliases": ["ATM-538"]}),
+    ));
+    let holders = |reference: &str| -> Vec<String> {
+        alias_holders(&document, &archive, reference)
+            .iter()
+            .map(|t| t["id"].as_str().unwrap().to_string())
+            .collect()
+    };
+    for reference in ["ATM-538", "atm-538", "~ATM-538"] {
+        assert_eq!(holders(reference), [C, OLD], "{reference}");
+    }
+    assert_eq!(holders("T-P1-03"), [A]);
+    for none in ["ATM-527", "ATM-999", "", B] {
+        assert!(holders(none).is_empty(), "{none}");
+    }
 }
 
 #[test]
@@ -125,7 +166,6 @@ fn keys_numbers_and_order() {
     let (document, archive) = project();
     let tasks: Vec<&Task> = tasks_of(&document).collect();
     assert_eq!(key_of(&document, tasks[0]).as_deref(), Some("ATM-527"));
-    assert!(key_final(tasks[0]) && !key_final(tasks[1]));
     assert_eq!(
         key_of(&json!({"tasks": []}), tasks[0]),
         None,

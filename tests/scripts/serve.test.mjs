@@ -259,11 +259,13 @@ describe('serve', () => {
         name: 'T-1',
         completed_at: '2026-03-15T10:00:00Z',
       },
-      needs_you: { review: 1, blocked_on_user: 1, together: 0 },
+      // No code reviews in this project (ATM-606: reviews.rs's tests count them)
+      needs_you: { review: 1, blocked_on_user: 1, together: 0, code_reviews: 0 },
       needs_you_tasks: [
         { id: 'T-5', name: 'T-5', reason: 'review' },
         { id: 'T-6', name: 'T-6', reason: 'blocked' },
       ],
+      needs_you_reviews: [],
       git: { branch: 'main', pr: null },
       description: null,
       last_activity: '2026-03-15T11:00:00Z',
@@ -757,6 +759,11 @@ describe('serve', () => {
       ['code', 'ts', '```ts\nexport const a = `x`;\n```\n', 1, false],
     );
 
+    // A hidden file is shown (CR-3), but not git's or atm's own, an environment file or one git ignores (below)
+    const hidden = await get('documents', '.gitignore');
+    assert.equal(hidden.status, 200);
+    assert.match((await hidden.json()).document, /secrets\//);
+
     // An image: a Markdown image in documents, its bytes from files, sandboxed and never sniffed
     assert.equal((await (await get('documents', 'img/a.png')).json()).document, '![a.png](a.png)\n');
     const image = await get('files', 'img/a.png');
@@ -1033,7 +1040,7 @@ describe('serve', () => {
     for (const method of ['POST', 'PUT', 'DELETE'])
       assert.deepEqual(await get('/api/projects', { method }), [
         405,
-        'only GET and HEAD, and POST, PATCH or PUT on reviews',
+        'only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews',
       ]);
     atm(['service', 'stop'], root);
   });
@@ -1152,6 +1159,44 @@ describe('serve', () => {
     r = await send('PATCH', `${reviews}/CR-2`, { status: 'closed', reason: 'Not needed.' });
     assert.equal(r.status, 200, await r.clone().text());
     assert.equal((await r.json()).status, 'closed');
+
+    // ATM-612: drafts, the user's alone, kept in atm's state folder and never in the repository, sent together
+    r = await send('POST', reviews, { title: 'Drafted', change: { files: ['a.txt'] } });
+    assert.equal(r.status, 201, await r.clone().text());
+    const drafts = `${reviews}/CR-3/drafts`;
+    r = await send('POST', drafts, { path: 'a.txt', lines: [2, 2], body: 'Two?' });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).id, 'd1');
+    r = await send('POST', drafts, { body: 'Overall fine.' });
+    assert.equal((await r.json()).id, 'd2');
+    r = await send('PATCH', `${drafts}/d1`, { body: 'Why two?' });
+    assert.equal(r.status, 200, await r.clone().text());
+    // Removing one needs the token like any change
+    assert.equal((await send('DELETE', `${drafts}/d2`, {}, { 'X-Atm-Session': '' })).status, 403);
+    r = await send('DELETE', `${drafts}/d2`, {});
+    assert.equal(r.status, 200, await r.clone().text());
+    const listed = await (await fetch(drafts)).json();
+    assert.deepEqual(
+      listed.drafts.map((d) => [d.id, d.kind, d.path, d.body]),
+      [['d1', 'comment', 'a.txt', 'Why two?']],
+    );
+    assert.equal(JSON.parse(atm(['review', 'comments', 'CR-3', '--json'], root).stdout).length, 0, 'not sent yet');
+    // The review's page shows them, placed in the round shown as a comment is, apart from its chains
+    const shownPage = await (await fetch(`${reviews}/CR-3`)).json();
+    assert.deepEqual(shownPage.chains, []);
+    assert.deepEqual(
+      shownPage.drafts.map((d) => [d.id, d.placed, d.drifted]),
+      [['d1', [2, 2], null]],
+    );
+    const kept = fs.readdirSync(path.join(atmHome, 'drafts'));
+    assert.equal(kept.length, 1, 'kept in the state folder');
+    assert.ok(!git(['status', '--porcelain', '--untracked-files=all'], root).includes('draft'), 'nothing in the repo');
+    // Publish comments: a comment with no words of its own sends them
+    r = await send('POST', `${reviews}/CR-3/decisions`, { decision: 'comment' });
+    assert.equal(r.status, 201, await r.clone().text());
+    const [sent] = JSON.parse(atm(['review', 'comments', 'CR-3', '--json'], root).stdout);
+    assert.deepEqual([sent.comments[0].body, sent.anchor.path], ['Why two?', 'a.txt']);
+    assert.deepEqual((await (await fetch(drafts)).json()).drafts, []);
     atm(['service', 'stop'], root);
   });
 
@@ -1255,12 +1300,30 @@ describe('serve', () => {
     assert.equal((await get(`${reviews}/CR-1?round=2&against=2`))[0], 400);
     assert.equal((await at('a.txt', '--output=x'))[0], 400);
     assert.equal((await at('a.txt', 'f'.repeat(40)))[0], 404);
+    // Hidden files are shown at a revision (ATM-598), but never atm's own folder or an environment file
+    assert.equal((await at('.agentic-task-manager%2Ftasks.json', base))[0], 403);
+    assert.equal((await at('.env', base))[0], 403);
     // The page is served at a review's address
     const served = await fetch(`${origin}/projects/abcd1234/reviews/CR-1`);
     assert.equal(served.status, 200);
     assert.match(served.headers.get('content-type'), /text\/html/);
     // Reading changed nothing: no new round, no comment
     assert.deepEqual(JSON.parse(atm(['review', 'comments', 'CR-1', '--json'], root).stdout).length, 1);
+    // A review atm can't read (ATM-617: a newer atm's, a broken header) is listed as such, whatever the query
+    assert.deepEqual(list.unreadable, []);
+    const broken = path.join(root, '.agentic-task-manager', 'reviews', 'CR-3-abcd');
+    fs.mkdirSync(broken);
+    fs.writeFileSync(path.join(broken, 'review.md'), 'no header\n');
+    for (const query of ['', '?status=approved']) {
+      [status, list] = await get(`${reviews}${query}`);
+      assert.equal(status, 200, JSON.stringify(list));
+      assert.deepEqual(
+        list.unreadable.map((u) => [u.folder, u.reference]),
+        [['CR-3-abcd', 'CR-3']],
+        query,
+      );
+      assert.ok(list.unreadable[0].problem, JSON.stringify(list.unreadable));
+    }
     atm(['service', 'stop'], root);
   });
 

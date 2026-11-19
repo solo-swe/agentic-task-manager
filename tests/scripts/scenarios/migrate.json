@@ -68,7 +68,9 @@
         "cleaned_up": null,
         "finish_times_filled": 0,
         "sprints_from_phases": null,
-        "with_user_from_label": 0
+        "with_user_from_label": 0,
+        "key_final_dropped": 0,
+        "renumbered": []
       }
     }
   },
@@ -233,7 +235,9 @@
         "cleaned_up": { "dashboard": false, "server": null },
         "finish_times_filled": 0,
         "sprints_from_phases": null,
-        "with_user_from_label": 0
+        "with_user_from_label": 0,
+        "key_final_dropped": 0,
+        "renumbered": []
       },
       "files": {
         ".agentic-task-manager/.server.json": false,

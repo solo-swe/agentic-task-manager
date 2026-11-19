@@ -124,7 +124,13 @@ fn next(args: NextArgs, ctx: Context, cwd: &Path) -> Result<u8> {
         );
     }
     if ctx.json {
-        print_json(&json!({"task": result.task, "claim": result.claim, "reason": result.reason}));
+        // Whether the agent's reviews are watched (ATM-642): the loop starts its watch first when not
+        let watch = project
+            .actor()
+            .and_then(|me| atm_lib::review_listen::watch_state(&project, me).ok());
+        print_json(
+            &json!({"task": result.task, "claim": result.claim, "reason": result.reason, "watch": watch}),
+        );
     } else if let Some(task) = &result.task {
         let verb = if result.claim.is_some() {
             "Claimed"

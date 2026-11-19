@@ -34,6 +34,8 @@ pub struct NewReview {
 pub struct NewRound {
     /// What it was made from.
     pub kind: RoundKind,
+    /// The submodule its commits are in, none for the project's own (ATM-583).
+    pub submodule: Option<String>,
     /// Its files.
     pub files: Vec<FileChange>,
     /// Its diff.
@@ -132,6 +134,18 @@ pub trait ReviewStore {
     /// # Errors
     /// No such review, or it can't be written.
     fn add_comment(
+        &mut self,
+        id: &ReviewId,
+        anchor: Anchor,
+        body: &str,
+        by: &Actor,
+    ) -> Result<CommentId>;
+
+    /// Start a chain with a poke (ATM-611): on the review as a whole, never open; the poke's ID.
+    ///
+    /// # Errors
+    /// No such review, or it can't be written.
+    fn add_poke(
         &mut self,
         id: &ReviewId,
         anchor: Anchor,

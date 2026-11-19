@@ -265,6 +265,59 @@ fn foreign_views(task: &Task, lookup: &mut crate::foreign::Lookup) -> Map<String
     out
 }
 
+/// Where the project's code reviews stand (ATM-621), read once for all the task views: each review's status by its
+/// ID, and the references of those atm can't read (ATM-617). None in a project without reviews.
+#[derive(Default)]
+struct ReviewStatuses {
+    by_id: std::collections::HashMap<String, &'static str>,
+    unreadable: HashSet<String>,
+}
+
+impl ReviewStatuses {
+    fn of(project: &Project) -> Self {
+        use crate::reviews::ReviewStore as _;
+        let Ok(store) = crate::reviews::store(project) else {
+            return Self::default();
+        };
+        let by_id = store
+            .list_reviews(&crate::reviews::ReviewFilter::default())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|h| (h.id.0, h.status.name()))
+            .collect();
+        let unreadable = store
+            .unreadable()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|u| u.reference)
+            .collect();
+        Self { by_id, unreadable }
+    }
+
+    /// The statuses of task `t`'s code reviews (`code_reviews`: their IDs and references), by review ID: its status,
+    /// or `unreadable`; one this working copy doesn't have (another branch's) is left out
+    fn of_task(&self, t: &Task) -> Map<String, Value> {
+        let mut out = Map::new();
+        for link in t
+            .get("code_reviews")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let Some(id) = link.get("id").and_then(Value::as_str) else {
+                continue;
+            };
+            let reference = link.get("ref").and_then(Value::as_str).unwrap_or_default();
+            if let Some(status) = self.by_id.get(id) {
+                out.insert(id.to_string(), json!(status));
+            } else if self.unreadable.contains(reference) {
+                out.insert(id.to_string(), json!("unreadable"));
+            }
+        }
+        out
+    }
+}
+
 /// The tasks the filters keep, each as `{task, derived}`: what atm derives for it (the REST API's tasks,
 /// docs/layered-architecture.md §6.2): its kind, whether it is ready, the dependencies it waits for, who a blocked
 /// task waits on, its effective priority, review mode and release, its stage, and whether it is archived. What
@@ -289,6 +342,7 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         store.problems()?.tasks
     };
     let mut lookup = crate::foreign::Lookup::default();
+    let statuses = ReviewStatuses::of(project);
     let mut views = Vec::new();
     for t in list_matching(project, filters)? {
         let kind = vocab.kind_of(t.get("status"));
@@ -332,6 +386,11 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         let others = foreign_views(t, &mut lookup);
         if !others.is_empty() {
             derived.insert("foreign".into(), Value::Object(others));
+        }
+        // Where each of its code reviews stands (ATM-621), so its badge says so from the first load
+        let reviews = statuses.of_task(t);
+        if !reviews.is_empty() {
+            derived.insert("review_statuses".into(), Value::Object(reviews));
         }
         // Its key beside its UUID, with task keys (ADR-007 §1)
         let shown = atm_common::keys::with_key(store.document()?, t);

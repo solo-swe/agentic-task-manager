@@ -466,19 +466,33 @@ fn same_format(base: &Value, ours: &Value, theirs: &Value) -> [Value; 3] {
     sides
 }
 
-/// In a keys-format merge (ADR-007 §4), no two tasks may share a number. Of two that do: a final one keeps it (only
-/// the base branch makes numbers final); of two provisional ones, ours keeps it and theirs takes the next free number
-/// (above every number and both sides' `meta.next_number`), keeping its old key as an alias. Two final ones can't
-/// happen; if they do, both are kept and it is a conflict. The next free number, for `meta.next_number`.
+/// The newer of two tasks by their UUIDs, when both are version 7 (time-ordered, ADR-007 §1): whether `a` is newer
+/// than `b`. None when either isn't (a task migrated from an ID has a version 8 UUID, not time-ordered).
+fn newer(a: &Value, b: &Value) -> Option<bool> {
+    let v7 = |t: &Value| {
+        t.get("id")
+            .and_then(Value::as_str)
+            .filter(|id| id.len() == 36 && id.as_bytes()[14] == b'7')
+            .map(str::to_ascii_lowercase)
+    };
+    Some(v7(a)? > v7(b)?)
+}
+
+/// In a keys-format merge, no two tasks may share a number, and a clash never stops a merge (ADR-009). Of two that
+/// do, one takes the next free number (above every number and both sides' `meta.next_number`), keeping its old key
+/// as an alias: the one **not on the base branch** (`on_base`, from git), so a key the base branch has never moves;
+/// when both or neither are, the **newer** one (its `UUIDv7`'s time); when that can't be told, theirs. The next free
+/// number, for `meta.next_number`, and what moved (`(from, to)` keys).
 fn renumber_clashes(
     tasks: &mut [Value],
     ours: &[(Value, &Map<String, Value>)],
     key: &str,
     stored_next: u64,
-    conflicts: &mut Vec<String>,
-) -> u64 {
+    on_base: &dyn Fn(&str) -> bool,
+) -> (u64, Vec<(String, String)>) {
     let number = |t: &Value| t.get("number").and_then(Value::as_u64);
-    let final_ = |t: &Value| t.get("key_final").and_then(Value::as_bool) == Some(true);
+    let based = |t: &Value| t.get("id").and_then(Value::as_str).is_some_and(on_base);
+    let mut renumbered = Vec::new();
     let mut next = tasks
         .iter()
         .filter_map(number)
@@ -496,28 +510,23 @@ fn renumber_clashes(
             continue;
         };
         let (a, b) = (&tasks[j], &tasks[i]);
-        let mover = match (final_(a), final_(b)) {
-            (true, true) => {
-                conflicts.push(format!(
-                    "{}: two final tasks have this number ({} and {}); both kept, give one another number by hand",
-                    task_key(key, n),
-                    py_str(&id_of_value(a)),
-                    py_str(&id_of_value(b))
-                ));
-                continue;
-            }
+        let mover = match (based(a), based(b)) {
             (true, false) => i,
             (false, true) => j,
-            // Both provisional: ours keeps it
-            (false, false) => {
-                if lookup(ours, &id_of_value(b)).is_some()
-                    && lookup(ours, &id_of_value(a)).is_none()
-                {
-                    j
-                } else {
-                    i
+            // Both on it (two branches made it so) or neither: the newer moves; else theirs
+            _ => match newer(a, b) {
+                Some(true) => j,
+                Some(false) => i,
+                None => {
+                    if lookup(ours, &id_of_value(b)).is_some()
+                        && lookup(ours, &id_of_value(a)).is_none()
+                    {
+                        j
+                    } else {
+                        i
+                    }
                 }
-            }
+            },
         };
         if mover == j {
             // The one seen first moves: the other takes its place
@@ -537,10 +546,11 @@ fn renumber_clashes(
         }
         task["number"] = json!(next);
         task["aliases"] = Value::Array(aliases);
+        renumbered.push((old, task_key(key, next)));
         seen.push((next, mover));
         next += 1;
     }
-    next
+    (next, renumbered)
 }
 
 fn id_of_value(task: &Value) -> Value {
@@ -552,8 +562,21 @@ fn id_of_value(task: &Value) -> Value {
 /// format, tasks match by UUID and numbers that clash are settled ([`renumber_clashes`]).
 #[must_use]
 pub fn merge_task_files(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<String>) {
+    merge_task_files_with(base, ours, theirs, &|_| false)
+}
+
+/// [`merge_task_files`], with which task UUIDs are on the project's base branch (`on_base`, read from git by the
+/// driver): a clash moves the task that isn't (ADR-009). What moved is kept in `meta.renumbered` (`[{from, to}]`),
+/// which the next `atm db migrate` says once.
+#[must_use]
+pub fn merge_task_files_with(
+    base: &Value,
+    ours: &Value,
+    theirs: &Value,
+    on_base: &dyn Fn(&str) -> bool,
+) -> (Value, Vec<String>) {
     let [base, ours, theirs] = same_format(base, ours, theirs);
-    let (mut merged, mut conflicts) = merge_same_format(&base, &ours, &theirs);
+    let (mut merged, conflicts) = merge_same_format(&base, &ours, &theirs);
     if keys_format(&merged) {
         let key = project_key(&merged).unwrap_or_default().to_string();
         let stored = |d: &Value| {
@@ -565,14 +588,27 @@ pub fn merge_task_files(base: &Value, ours: &Value, theirs: &Value) -> (Value, V
         let stored_next = stored(&ours).max(stored(&theirs));
         let our_list = tasks_of(&ours);
         let our_tasks = by_id(&our_list);
-        let next = merged
+        let (next, moved) = merged
             .get_mut("tasks")
             .and_then(Value::as_array_mut)
-            .map_or(stored_next, |tasks| {
-                renumber_clashes(tasks, &our_tasks, &key, stored_next, &mut conflicts)
+            .map_or((stored_next, Vec::new()), |tasks| {
+                renumber_clashes(tasks, &our_tasks, &key, stored_next, on_base)
             });
         if let Some(meta) = merged.get_mut("meta").and_then(Value::as_object_mut) {
             meta.insert("next_number".into(), json!(next));
+            if !moved.is_empty() {
+                let mut renumbered = meta
+                    .get("renumbered")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                renumbered.extend(
+                    moved
+                        .into_iter()
+                        .map(|(from, to)| json!({"from": from, "to": to})),
+                );
+                meta.insert("renumbered".into(), Value::Array(renumbered));
+            }
         }
     }
     (merged, conflicts)
@@ -734,6 +770,19 @@ fn merge_same_format(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<
 /// # Errors
 /// A version that isn't task data (resolve the conflict by hand), or one that can't be written.
 pub fn merge_files(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String>> {
+    merge_files_with(base, ours, theirs, &|_| false)
+}
+
+/// [`merge_files`], with which task UUIDs are on the base branch ([`merge_task_files_with`]).
+///
+/// # Errors
+/// As [`merge_files`].
+pub fn merge_files_with(
+    base: &Path,
+    ours: &Path,
+    theirs: &Path,
+    on_base: &dyn Fn(&str) -> bool,
+) -> Result<Vec<String>> {
     let mut versions: Vec<Option<Value>> =
         [base, ours, theirs].iter().map(|p| read_json(p)).collect();
     if versions[0].is_none() && std::fs::metadata(base).is_ok_and(|m| m.len() == 0) {
@@ -751,7 +800,7 @@ pub fn merge_files(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String
     let [Some(b), Some(o), Some(t)] = [&versions[0], &versions[1], &versions[2]] else {
         return Err(Error::failed("tasks.json merge: one side is missing"));
     };
-    let (merged, conflicts) = merge_task_files(b, o, t);
+    let (merged, conflicts) = merge_task_files_with(b, o, t, on_base);
     write_text_atomic(ours, &(to_json(&merged) + "\n"))
         .map_err(|e| Error::failed(format!("{}: {e}", ours.shown())))?;
     Ok(conflicts)

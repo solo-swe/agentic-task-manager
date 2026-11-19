@@ -53,9 +53,10 @@ pub enum VcsCommand {
         #[arg(long)]
         agent: Option<String>,
     },
-    /// Record that a PR was merged, on the tasks it contains.
+    /// Record that a PR was merged, on the tasks it contains; without --pr, a direct push to the base branch. Either
+    /// way, the keys of tasks now on the base branch become final.
     Pushed {
-        /// The PR number
+        /// The PR number (none: a direct push)
         #[arg(long)]
         pr: Option<i64>,
         /// When it was merged (ISO 8601 UTC)
@@ -221,8 +222,35 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 );
             }
         }
-        VcsCommand::Pushed { pr, at, agent } => {
-            let pr = pr.ok_or_else(|| missing("--pr"))?;
+        VcsCommand::Pushed {
+            pr: None,
+            at,
+            agent,
+        } => {
+            // A direct push: nothing to record on the tasks. It made keys final before ADR-009 (ATM-623); keys are
+            // plain from creation now, so it changes nothing, and stays for skills installed before
+            let _ = agent;
+            if at.is_some() {
+                return Err(Error::Invalid(
+                    "--at is when a PR was merged: give --pr too".into(),
+                ));
+            }
+            if ctx.dry_run {
+                dry_run(&["atm vcs pushed".to_string()]);
+                return Ok(());
+            }
+            Project::open(cwd)?;
+            if ctx.json {
+                print_json(&json!({ "tasks": [] }));
+            } else {
+                println!("Nothing to record without --pr: a direct push changes no task.");
+            }
+        }
+        VcsCommand::Pushed {
+            pr: Some(pr),
+            at,
+            agent,
+        } => {
             if ctx.dry_run {
                 let mut parts = vec![format!("atm vcs pushed --pr {pr}")];
                 flags(&mut parts, "at", &at.iter().collect::<Vec<_>>());
@@ -232,19 +260,10 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             let mut project =
                 Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
-            let mut result = record_merge(&mut project, pr, at.as_deref())?;
-            // Keys of tasks now on the base branch are final (ADR-007 §3)
-            let vcs = project.vcs();
-            let finalized = atm_lib::code::finalize_keys(&mut project, vcs.as_ref())?;
-            if !finalized.is_empty() {
-                result["keys_final"] = json!(finalized);
-            }
+            let result = record_merge(&mut project, pr, at.as_deref())?;
             if ctx.json {
                 print_json(&result);
                 return Ok(());
-            }
-            if !finalized.is_empty() {
-                println!("Final now (on the base branch): {}", finalized.join(", "));
             }
             let ids: Vec<String> = result["tasks"]
                 .as_array()

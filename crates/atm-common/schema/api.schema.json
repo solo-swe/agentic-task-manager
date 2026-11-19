@@ -8,7 +8,10 @@
   "properties": {
     "generated_at": { "type": "string", "description": "ISO 8601 UTC" },
     "meta": { "$ref": "meta.schema.json" },
-    "bytes": { "type": "integer", "description": "How big the project's working task data is (tasks.json), for the archive notice" },
+    "bytes": {
+      "type": "integer",
+      "description": "How big the project's working task data is (tasks.json), for the archive notice"
+    },
     "tasks": { "type": "array", "items": { "$ref": "#/$defs/TaskView" } },
     "problems": {
       "type": "array",
@@ -48,7 +51,10 @@
           "type": "string",
           "description": "The status's kind: todo, active, review, blocked, done or skipped (absent for an unknown status)"
         },
-        "ready": { "type": "boolean", "description": "To do, and every dependency done (an archived one counts as done)" },
+        "ready": {
+          "type": "boolean",
+          "description": "To do, and every dependency done (an archived one counts as done)"
+        },
         "waiting_for": {
           "type": "array",
           "items": { "type": "string" },
@@ -56,7 +62,10 @@
         },
         "waiting_on": { "type": "string", "description": "Who a blocked task waits on: user or agent" },
         "priority": { "type": "string", "description": "Its priority, or the project's default" },
-        "effective_review": { "type": "string", "description": "Its review mode: its own, else its component's, else the project's" },
+        "effective_review": {
+          "type": "string",
+          "description": "Its review mode: its own, else its component's, else the project's"
+        },
         "effective_release": { "type": "string", "description": "Its release: its own, else its sprint's" },
         "stage": { "type": "string", "description": "A done task's stage: done, in_pr or merged (DM-4.3)" },
         "archived": { "type": "boolean", "description": "From the archive" },
@@ -69,6 +78,13 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/ForeignTask" },
           "description": "The other projects' tasks it names (<project id>:<UUID> in dependencies, related or duplicate_of), by reference, as they are there (ADR-007 §7); absent when it names none"
+        },
+        "review_statuses": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": ["draft", "waiting", "live", "changes_requested", "approved", "closed", "unreadable"]
+          },
+          "description": "Where each of its code reviews stands (ATM-621), by the review's ID as its code_reviews link it: the review's status, or unreadable for one atm can't read (ATM-617); one this working copy doesn't have is left out, and the field is absent when it has none"
         }
       }
     },
@@ -92,7 +108,10 @@
           "enum": ["unregistered", "missing"],
           "description": "Not found: no registered project has that ID (or its folder is gone), or the project has no such task"
         },
-        "project_name": { "type": ["string", "null"], "description": "The project's name (meta.project), when it is registered" },
+        "project_name": {
+          "type": ["string", "null"],
+          "description": "The project's name (meta.project), when it is registered"
+        },
         "places": {
           "type": "array",
           "items": { "$ref": "#/$defs/ForeignPlace" },
@@ -103,7 +122,6 @@
         "kind": { "type": "string", "description": "Its status's kind there (done when archived)" },
         "archived": { "type": "boolean" },
         "key": { "type": "string", "description": "Its key there, with task keys" },
-        "key_final": { "type": "boolean", "description": "Whether that key is final (ADR-007 §3)" },
         "ambiguous": {
           "type": "boolean",
           "description": "Another registered project uses the same key: show the UUID's first 8 characters instead (ADR-007 §8)"
@@ -115,7 +133,10 @@
       "required": ["id", "status", "name"],
       "properties": {
         "id": { "type": "string" },
-        "status": { "type": "string", "description": "Its status (\", archived\" added for an archived task), or missing" },
+        "status": {
+          "type": "string",
+          "description": "Its status (\", archived\" added for an archived task), or missing"
+        },
         "name": { "type": "string" }
       }
     },
@@ -236,8 +257,7 @@
         "name": { "type": "string", "description": "The task's name, capped at 80 characters" },
         "agent": { "type": ["string", "null"] },
         "branch": { "type": ["string", "null"] },
-        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" }
       }
     },
     "TaskName": {
@@ -247,8 +267,7 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
       }
     },
     "LastDone": {
@@ -259,18 +278,38 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "completed_at": { "type": "string" },
-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
       }
     },
     "NeedsYou": {
       "type": "object",
-      "description": "How many tasks need the user, by why",
-      "required": ["review", "blocked_on_user", "together"],
+      "description": "How many tasks and code reviews need the user, by why",
+      "required": ["review", "blocked_on_user", "together", "code_reviews"],
       "properties": {
-        "review": { "type": "integer", "description": "In review, waiting for the reviewer" },
+        "review": {
+          "type": "integer",
+          "description": "In review, waiting for the reviewer (not one waiting through a code review counted in code_reviews)"
+        },
         "blocked_on_user": { "type": "integer" },
-        "together": { "type": "integer", "description": "To do with the user now (SR-6.6)" }
+        "together": { "type": "integer", "description": "To do with the user now (SR-6.6)" },
+        "code_reviews": {
+          "type": "integer",
+          "description": "Code reviews waiting on the user: their decision or round, or answered since they last wrote (ATM-606)"
+        }
+      }
+    },
+    "NeedsYouReview": {
+      "type": "object",
+      "description": "A code review waiting on the user, and why (ATM-606)",
+      "required": ["id", "reference", "title", "why"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The review's UUID, as a task's code_reviews link it: a task waited on through it isn't listed again (ATM-640)"
+        },
+        "reference": { "type": "string", "description": "CR-7" },
+        "title": { "type": "string" },
+        "why": { "enum": ["review", "answered"] }
       }
     },
     "NeedsYouItem": {
@@ -281,8 +320,7 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "reason": { "enum": ["review", "blocked", "together"] },
-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
       }
     },
     "GitPr": {
@@ -331,8 +369,7 @@
           "items": { "type": "string" },
           "description": "With task keys: the same dependencies as people read them (a key, ~ before a provisional one; another project's by its key there)"
         },
-        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" },
-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
+        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" }
       }
     },
     "BoardColumn": {
@@ -382,6 +419,7 @@
         "last_done",
         "needs_you",
         "needs_you_tasks",
+        "needs_you_reviews",
         "git",
         "description",
         "last_activity",
@@ -418,6 +456,11 @@
         "last_done": { "anyOf": [{ "$ref": "#/$defs/LastDone" }, { "type": "null" }] },
         "needs_you": { "$ref": "#/$defs/NeedsYou" },
         "needs_you_tasks": { "type": "array", "items": { "$ref": "#/$defs/NeedsYouItem" } },
+        "needs_you_reviews": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NeedsYouReview" },
+          "description": "The code reviews waiting on the user, the longest waiting first (ATM-606)"
+        },
         "git": { "$ref": "#/$defs/GitSummary" },
         "description": { "type": ["string", "null"], "description": "meta.description, capped at 200 characters" },
         "last_activity": { "type": ["string", "null"] },

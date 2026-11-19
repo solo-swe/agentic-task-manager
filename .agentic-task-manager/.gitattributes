@@ -2,3 +2,5 @@
 # Without it, git merges tasks.json line by line as usual.
 tasks.json merge=atm
 tasks-archive.json merge=atm
+reviews/*/review.md merge=atm
+reviews/*/comments.md merge=atm

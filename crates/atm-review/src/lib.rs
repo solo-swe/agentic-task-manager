@@ -19,6 +19,8 @@ pub mod rules;
 pub mod store;
 
 #[cfg(test)]
+mod store_contract;
+#[cfg(test)]
 mod test_dir;
 
 pub use model::{

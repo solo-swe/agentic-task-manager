@@ -6,9 +6,11 @@ use std::sync::{Arc, Mutex};
 
 use atm_common::{Error, Result};
 use atm_lib::query::Filters;
+use atm_lib::review_drafts::{Draft, DraftUpdate, NewDraft, Place};
 use atm_lib::review_pages::ReviewQuery;
 use atm_lib::review_requests::{
-    CommentUpdate, Decision, NewComment, NewReply, ReviewClosing, ReviewOpening, ReviewTasks,
+    CommentUpdate, Decision, NewComment, NewPoke, NewReply, ReviewClosing, ReviewOpening,
+    ReviewTasks,
 };
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewId, ReviewRef, Status};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -46,6 +48,11 @@ pub(super) enum Call {
     Comment(ReviewRef, NewComment),
     UpdateComment(ReviewRef, CommentId, CommentUpdate),
     Reply(ReviewRef, CommentId, NewReply),
+    Poke(ReviewRef, NewPoke),
+    Drafts(ReviewRef),
+    AddDraft(ReviewRef, NewDraft),
+    UpdateDraft(ReviewRef, String, DraftUpdate),
+    RemoveDraft(ReviewRef, String),
 }
 
 impl PartialEq for Call {
@@ -84,6 +91,7 @@ pub(super) struct FakeReviews {
     pub header: Result<ReviewHeader>,
     pub comment: Result<CommentId>,
     pub updated: Result<()>,
+    pub draft: Result<Draft>,
 }
 
 /// A review's header, `CR-1`, open.
@@ -93,7 +101,7 @@ pub(super) fn header() -> ReviewHeader {
         reference: ReviewRef("CR-1".into()),
         number: 1,
         title: "Look".into(),
-        status: Status::Open,
+        status: Status::Waiting,
         tasks: Vec::new(),
         author: None,
         reviewers: Vec::new(),
@@ -108,6 +116,7 @@ impl Default for FakeReviews {
             header: Ok(header()),
             comment: Ok(CommentId("c1".into())),
             updated: Ok(()),
+            draft: Ok(draft()),
         }
     }
 }
@@ -133,6 +142,8 @@ pub(super) struct FakeProject {
     pub listed: Result<Value>,
     /// What a review's page answers
     pub page: Result<Value>,
+    /// What a live review's page is made from (ATM-607): none, a page that isn't tagged
+    pub live_stamp: Result<Option<Value>>,
 }
 
 impl Default for FakeProject {
@@ -150,6 +161,7 @@ impl Default for FakeProject {
             at_revision: Ok(json!({"path": "a.md", "revision": "t1"})),
             listed: Ok(json!({"reviews": [], "you": "Ana"})),
             page: Ok(json!({"review": {"reference": "CR-1"}, "view": {"files": []}})),
+            live_stamp: Ok(None),
         }
     }
 }
@@ -368,6 +380,15 @@ impl ProjectSource for Bound<FakeProject> {
         self.fake.page.clone()
     }
 
+    fn live_review_stamp(
+        &self,
+        _review: &ReviewRef,
+        _round: Option<u32>,
+        _against: Option<u32>,
+    ) -> Result<Option<Value>> {
+        self.fake.live_stamp.clone()
+    }
+
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {
         self.calls.note(Call::Image(path.into()));
         self.file(path)?.image
@@ -440,6 +461,57 @@ impl ReviewChanges for Bound<FakeReviews> {
         self.calls
             .note(Call::Reply(review.clone(), comment.clone(), reply.clone()));
         self.fake.comment.clone()
+    }
+
+    fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
+        self.calls.note(Call::Poke(review.clone(), poke.clone()));
+        self.fake.comment.clone()
+    }
+
+    fn list_drafts(&self, review: &ReviewRef) -> Result<Vec<Draft>> {
+        self.calls.note(Call::Drafts(review.clone()));
+        self.fake.draft.clone().map(|d| vec![d])
+    }
+
+    fn add_draft(&mut self, review: &ReviewRef, draft: NewDraft) -> Result<Draft> {
+        self.calls.note(Call::AddDraft(review.clone(), draft));
+        self.fake.draft.clone()
+    }
+
+    fn update_draft(
+        &mut self,
+        review: &ReviewRef,
+        draft: &str,
+        update: &DraftUpdate,
+    ) -> Result<Draft> {
+        self.calls.note(Call::UpdateDraft(
+            review.clone(),
+            draft.to_string(),
+            update.clone(),
+        ));
+        self.fake.draft.clone()
+    }
+
+    fn remove_draft(&mut self, review: &ReviewRef, draft: &str) -> Result<()> {
+        self.calls
+            .note(Call::RemoveDraft(review.clone(), draft.to_string()));
+        self.fake.updated.clone()
+    }
+}
+
+/// A draft, `d1`, on the review as a whole.
+pub(super) fn draft() -> Draft {
+    Draft {
+        id: "d1".into(),
+        at: "2026-11-19T10:00:00Z".into(),
+        body: "Why?".into(),
+        place: Place::Comment {
+            path: None,
+            lines: None,
+            side: atm_lib::reviews::Side::New,
+            quote: None,
+            round: Some(1),
+        },
     }
 }
 

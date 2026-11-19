@@ -1,0 +1,37 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "020ee70f414a27c7c3adc83dfcb57df202e55296",
+    "head": "4317186dc50392e6d67ef058bc1f1a11833681bc"
+  },
+  "files": [
+    {
+      "path": "crates/atm-lib/src/review_listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/reviews.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/atm-do-task/SKILL.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/atm-loop-tasks/SKILL.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T03:32:44Z"
+}

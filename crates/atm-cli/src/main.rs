@@ -204,6 +204,16 @@ impl Command {
         self.refreshes_server() && !matches!(self, Command::Claim(ClaimCommand::Heartbeat { .. }))
     }
 
+    /// Whether an agent running it is reminded that it isn't watching its reviews (ATM-642): the commands it works
+    /// with, not the watch or a wait on a review (they are the watching), nor the hook's heartbeat.
+    fn reminds_to_watch(&self) -> bool {
+        self.renews_claims()
+            && !matches!(
+                self,
+                Command::Review(ReviewCommand::Watch { .. } | ReviewCommand::Wait { .. })
+            )
+    }
+
     /// Whether running it first brings an outdated dashboard server along (after an update, the first atm command
     /// restarts it on the new dashboard): every command that works on a project, the hook's heartbeat too.
     fn refreshes_server(&self) -> bool {
@@ -227,11 +237,7 @@ impl Command {
 /// minutes old, so most commands only read. Not for a command run as someone else (`--agent`), and never in the way of
 /// the command itself.
 fn renew_own_claims(args: &[OsString], cwd: &Path) {
-    let as_someone_else = args.iter().take_while(|a| *a != "--").any(|a| {
-        let a = a.to_string_lossy();
-        a == "--agent" || a.starts_with("--agent=")
-    });
-    if as_someone_else {
+    if as_someone_else(args) {
         return;
     }
     if let Ok(project) = atm_lib::Project::open(cwd) {
@@ -357,13 +363,41 @@ fn run(args: &[OsString]) -> u8 {
     if cli.command.renews_claims() {
         renew_own_claims(args, &cwd);
     }
-    match dispatch(cli.command, ctx, &cwd) {
+    let reminds = cli.command.reminds_to_watch();
+    let code = match dispatch(cli.command, ctx, &cwd) {
         Ok(code) => code,
         Err(error) => {
             report(&labelled(&error.to_string(), &cwd), error.code(), as_json);
             error.code()
         }
+    };
+    if reminds {
+        remind_to_watch(args, &cwd);
     }
+    code
+}
+
+/// An agent that runs a command with a review of its work open and no watch of its reviews running is told so, once
+/// in a while, on stderr (ATM-642, `review_listen::reminder`): comments, pokes and decisions would go unseen. After
+/// the command, so its own output comes first; never with `--agent` (run as someone else), never in its way.
+fn remind_to_watch(args: &[OsString], cwd: &Path) {
+    if as_someone_else(args) {
+        return;
+    }
+    if let Ok(project) = atm_lib::Project::open(cwd) {
+        let me = atm_lib::actor::agent_identity(None, cwd);
+        if let Some(line) = atm_lib::review_listen::reminder(&project, &me) {
+            eprintln!("atm: {line}");
+        }
+    }
+}
+
+/// Whether a command is run as someone else (`--agent`, before any `--`).
+fn as_someone_else(args: &[OsString]) -> bool {
+    args.iter().take_while(|a| *a != "--").any(|a| {
+        let a = a.to_string_lossy();
+        a == "--agent" || a.starts_with("--agent=")
+    })
 }
 
 /// Run one command in `cwd`: its exit code when it ends without an error (`agents install` ends with 1 when it left a
@@ -432,11 +466,27 @@ fn labelled(message: &str, cwd: &Path) -> String {
     commands::labelled(cwd, message)
 }
 
+/// atm's own stack: 8 MiB, what Linux and macOS give a main thread. Windows gives one 1 MiB, which a debug build's
+/// commands outgrew in 0.41.0 (every command overflowed it, in CI's Windows suite); the same everywhere, so no platform
+/// runs out first.
+const STACK: usize = 8 * 1024 * 1024;
+
 fn main() -> ExitCode {
-    // `COMPLETE=<shell> atm …`: the shell asks for completions (`atm completion <shell>` prints the line that does)
-    clap_complete::CompleteEnv::with_factory(cli_command).complete();
-    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
-    ExitCode::from(run(&args))
+    let work = std::thread::Builder::new()
+        .name("atm".into())
+        .stack_size(STACK)
+        .spawn(|| {
+            // `COMPLETE=<shell> atm …`: the shell asks for completions (`atm completion <shell>` prints the line that
+            // does)
+            clap_complete::CompleteEnv::with_factory(cli_command).complete();
+            let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+            run(&args)
+        });
+    // A panic was told on stderr by the hook, as before; it fails the command
+    match work.map(std::thread::JoinHandle::join) {
+        Ok(Ok(code)) => ExitCode::from(code),
+        _ => ExitCode::FAILURE,
+    }
 }
 
 #[cfg(test)]

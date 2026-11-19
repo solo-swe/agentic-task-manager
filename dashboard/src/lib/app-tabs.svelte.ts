@@ -28,9 +28,16 @@ export class AppTabs {
     this.#storage = storage;
   }
 
-  /** Start with the tabs kept over a reload; else with those the app brings back as it starts (T-518), answering the
-   * active one's address, to go to; else with one tab at `address` */
+  /** Start with those the app brings back (as it starts, T-518, or after its Reload, ATM-584, which loads the page at
+   * the app's root), answering the active one's address, to go to; else with the tabs kept over a reload of the page
+   * itself, the active one following `address`; else with one tab at `address` */
   start(address: string, restored: KeptTabs | null = null): string | null {
+    if (restored && restored.addresses.length > 0) {
+      this.tabs = restored.addresses.map((a) => ({ id: `t${this.#next++}`, address: a }));
+      this.active = (this.tabs[restored.active] ?? this.tabs[0]).id;
+      this.#save();
+      return this.current!.address;
+    }
     try {
       const kept = JSON.parse(this.#storage?.getItem(STORE) ?? 'null') as { tabs: AppTab[]; active: string } | null;
       if (kept && kept.tabs.length > 0 && kept.tabs.some((t) => t.id === kept.active)) {
@@ -42,12 +49,6 @@ export class AppTabs {
       }
     } catch {
       // nothing kept, or nothing readable: a fresh start
-    }
-    if (restored && restored.addresses.length > 0) {
-      this.tabs = restored.addresses.map((a) => ({ id: `t${this.#next++}`, address: a }));
-      this.active = (this.tabs[restored.active] ?? this.tabs[0]).id;
-      this.#save();
-      return this.current!.address;
     }
     this.tabs = [];
     this.open(address);

@@ -18,7 +18,8 @@
       "json": {
         "task": { "id": "T-3", "status": "todo", "sprint": "A", "priority": "P3" },
         "claim": null,
-        "reason": null
+        "reason": null,
+        "watch": { "running": false, "open": [], "since_last_watch": [] }
       }
     }
   },
@@ -52,7 +53,14 @@
       }
     },
     "args": ["loop", "next", "--sprint", "b", "--json"],
-    "expect": { "json": { "task": { "id": "T-2", "status": "todo", "sprint": "B" }, "claim": null, "reason": null } }
+    "expect": {
+      "json": {
+        "task": { "id": "T-2", "status": "todo", "sprint": "B" },
+        "claim": null,
+        "reason": null,
+        "watch": { "running": false, "open": [], "since_last_watch": [] }
+      }
+    }
   },
   {
     "name": "next --sprint of a closed sprint is refused",
@@ -78,7 +86,14 @@
       }
     },
     "args": ["loop", "next", "--tasks", "T-3,T-1", "--json"],
-    "expect": { "json": { "task": { "id": "T-3", "status": "todo" }, "claim": null, "reason": null } }
+    "expect": {
+      "json": {
+        "task": { "id": "T-3", "status": "todo" },
+        "claim": null,
+        "reason": null,
+        "watch": { "running": false, "open": [], "since_last_watch": [] }
+      }
+    }
   },
   {
     "name": "next --tasks with a task that doesn't exist is refused",
@@ -102,7 +117,14 @@
       }
     },
     "args": ["loop", "next", "--all", "--json"],
-    "expect": { "json": { "task": { "id": "T-3", "status": "todo", "sprint": "B" }, "claim": null, "reason": null } }
+    "expect": {
+      "json": {
+        "task": { "id": "T-3", "status": "todo", "sprint": "B" },
+        "claim": null,
+        "reason": null,
+        "watch": { "running": false, "open": [], "since_last_watch": [] }
+      }
+    }
   },
   {
     "name": "next --backlog: the tasks with no sprint",
@@ -118,7 +140,14 @@
       }
     },
     "args": ["loop", "next", "--backlog", "--json"],
-    "expect": { "json": { "task": { "id": "T-2", "status": "todo" }, "claim": null, "reason": null } }
+    "expect": {
+      "json": {
+        "task": { "id": "T-2", "status": "todo" },
+        "claim": null,
+        "reason": null,
+        "watch": { "running": false, "open": [], "since_last_watch": [] }
+      }
+    }
   },
   {
     "name": "next: a finished sprint says so, with what got done",

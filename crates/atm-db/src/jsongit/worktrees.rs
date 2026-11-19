@@ -50,3 +50,76 @@ pub fn worktrees(root: &Path) -> Vec<Value> {
     }
     found
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_dir::TestDir;
+
+    fn write(path: &Path, text: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn outside_git_or_in_a_bare_repository_there_are_no_worktrees() {
+        let dir = TestDir::new();
+        assert_eq!(worktrees(dir.path()), Vec::<Value>::new());
+        write(&dir.path().join("HEAD"), "ref: refs/heads/main\n");
+        assert_eq!(worktrees(dir.path()), Vec::<Value>::new());
+        // A `.git` file (the root is itself a linked worktree) isn't a main worktree
+        write(&dir.path().join(".git"), "gitdir: elsewhere\n");
+        assert_eq!(worktrees(dir.path()), Vec::<Value>::new());
+    }
+
+    #[test]
+    fn the_main_worktree_comes_first_then_the_linked_ones_by_name_without_those_gone() {
+        let dir = TestDir::new();
+        let root = dir.path().join("repo");
+        let git = root.join(".git");
+        write(&git.join("HEAD"), "ref: refs/heads/main\n");
+        let linked = |name: &str, gitdir: &str, head: &str| {
+            let admin = git.join("worktrees").join(name);
+            write(&admin.join("gitdir"), gitdir);
+            write(&admin.join("HEAD"), head);
+        };
+        let (b, a) = (dir.path().join("b"), dir.path().join("a"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        linked(
+            "b",
+            &format!("{}\n", b.join(".git").display()),
+            "ref: refs/heads/feature-b\n",
+        );
+        linked(
+            "a",
+            &format!("  {}  \n", a.join(".git").display()),
+            "0123456789abcdef\n",
+        );
+        linked(
+            "gone",
+            &format!("{}\n", dir.path().join("gone/.git").display()),
+            "ref: refs/heads/x\n",
+        );
+        linked("empty", "", "ref: refs/heads/y\n");
+        std::fs::create_dir_all(git.join("worktrees/no-gitdir")).unwrap();
+        assert_eq!(
+            worktrees(&root),
+            [
+                json!({"path": root.shown(), "branch": "main", "main": true}),
+                json!({"path": a.shown(), "branch": "0123456", "main": false}),
+                json!({"path": b.shown(), "branch": "feature-b", "main": false}),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_main_worktree_without_linked_ones_or_a_head_is_listed_alone_with_no_branch() {
+        let dir = TestDir::new();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        assert_eq!(
+            worktrees(dir.path()),
+            [json!({"path": dir.path().shown(), "branch": null, "main": true})]
+        );
+    }
+}

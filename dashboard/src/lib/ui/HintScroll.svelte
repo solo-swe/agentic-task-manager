@@ -4,13 +4,16 @@
 
   // Content scrolling on its own without a scrollbar (T-262, T-282): "▲ N more" and "▼ N more" at the edges say how
   // many items (`item`, a selector) are cut off above and below; the wheel and the trackpad scroll as usual, a hint
-  // scrolls a page. `outer` and `body` add classes to the wrapper and the scroller.
+  // scrolls a page. `outer` and `body` add classes to the wrapper and the scroller; `tag` is their element (a span
+  // where only phrasing content may go, the "need you" list in a card's paragraph, ATM-640).
   let {
     children,
     item,
     outer = '',
     body = '',
     id,
+    tag = 'div',
+    tabbable = true,
     onscrolled,
   }: {
     children: Snippet;
@@ -18,6 +21,10 @@
     outer?: string;
     body?: string;
     id?: string;
+    tag?: 'div' | 'span';
+    /** Whether Tab stops at the hints: not in a menu, whose arrows reach every row and which focuses its first tab
+     * stop on opening (ATM-640) */
+    tabbable?: boolean;
     /** Told how far the content has scrolled, on every scroll (Help shrinks its title once it has) */
     onscrolled?: (scrollTop: number) => void;
   } = $props();
@@ -46,12 +53,17 @@
     el?.scrollBy({ top: direction * el.clientHeight * 0.85, behavior: scrollBehavior() });
 </script>
 
-<div class="hint-scroll {outer}">
+<svelte:element this={tag} class="hint-scroll {outer}">
   {#if above}
-    <button class="kanban-more top" aria-label="Scroll up: {above} more" onclick={() => page(-1)}>▲ {above} more</button
+    <button
+      class="kanban-more top"
+      aria-label="Scroll up: {above} more"
+      tabindex={tabbable ? undefined : -1}
+      onclick={() => page(-1)}>▲ {above} more</button
     >
   {/if}
-  <div
+  <svelte:element
+    this={tag}
     class="hint-scroll-body {body}"
     {id}
     bind:this={el}
@@ -61,10 +73,13 @@
     }}
   >
     {@render children()}
-  </div>
+  </svelte:element>
   {#if below}
-    <button class="kanban-more bottom" aria-label="Scroll down: {below} more" onclick={() => page(1)}
-      >▼ {below} more</button
+    <button
+      class="kanban-more bottom"
+      aria-label="Scroll down: {below} more"
+      tabindex={tabbable ? undefined : -1}
+      onclick={() => page(1)}>▼ {below} more</button
     >
   {/if}
-</div>
+</svelte:element>

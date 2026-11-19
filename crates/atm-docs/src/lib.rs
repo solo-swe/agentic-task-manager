@@ -122,13 +122,38 @@ fn key_file(name: &str) -> bool {
     by_extension || ssh
 }
 
-/// The path a request names, checked (§4b): relative to the project's root, `/`-separated, normalized (no `..`, `.`
-/// or empty segment), no hidden segment (`.git`, `.env`, `.agentic-task-manager`), no NUL or backslash, at most 512
-/// characters.
+/// The path a request names, checked (§4b), in the working copy and at a revision alike: relative to the project's
+/// root, `/`-separated, normalized (no `..`, `.` or empty segment), no NUL or backslash, at most 512 characters.
+/// Hidden files are shown (ATM-598: a review's `.github/workflows/ci.yml` or `.gitignore`, then the viewer's too,
+/// CR-3); refused: git's own folder and atm's (`.git`, `.agentic-task-manager`), environment files (`.env`,
+/// `.env.local`, … but not `.env.example`, `.env.sample` or `.env.template`) and key files. What git ignores is
+/// refused by the reads themselves.
 ///
 /// # Errors
-/// `Invalid` for a path that isn't one; `Refused` for a hidden or key file.
+/// `Invalid` for a path that isn't one; `Refused` for one of git's or atm's, an environment file or a key file.
 pub fn document_path(path: &str) -> Result<&str> {
+    let path = path_shape(path)?;
+    let refused = |what: &str| Err(Error::Refused(format!("{path}: {what} aren't shown")));
+    let segments: Vec<&str> = path.split('/').collect();
+    if segments
+        .iter()
+        .any(|s| matches!(*s, ".git" | ".agentic-task-manager"))
+    {
+        return refused("git's and atm's own folders");
+    }
+    let name = segments.last().copied().unwrap_or_default();
+    let lower = name.to_ascii_lowercase();
+    let example = [".example", ".sample", ".template"]
+        .iter()
+        .any(|e| lower.ends_with(e));
+    if (lower == ".env" || lower.starts_with(".env.")) && !example {
+        return refused("environment files");
+    }
+    Ok(path)
+}
+
+/// A path's shape and its key-file check, common to both: relative, normalized, at most 512 characters, not a key file.
+fn path_shape(path: &str) -> Result<&str> {
     if path.is_empty() || path.chars().count() > DOC_MAX_PATH {
         return Err(Error::Invalid(
             "a file path, relative to the project, of at most 512 characters".into(),
@@ -143,11 +168,6 @@ pub fn document_path(path: &str) -> Result<&str> {
     if segments.iter().any(|s| matches!(*s, "" | "." | "..")) {
         return Err(Error::Invalid(format!(
             "{path}: a path inside the project, without . or .. parts"
-        )));
-    }
-    if segments.iter().any(|s| s.starts_with('.')) {
-        return Err(Error::Refused(format!(
-            "{path}: hidden files and folders aren't shown"
         )));
     }
     if segments.last().is_some_and(|name| key_file(name)) {
@@ -327,6 +347,7 @@ pub fn read_document(vcs: Option<&GitVcs>, path: &str) -> Result<Value> {
 /// `Invalid` for a path or revision that isn't one; `NotFound` when the commit or the file isn't there; `Refused` and
 /// `TooLarge` as [`read_document`].
 pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Result<Value> {
+    // A file a review names, at its revision: hidden ones too (ATM-598)
     let path = document_path(path)?;
     let Some(vcs) = vcs else {
         return Err(Error::NotFound(
@@ -337,16 +358,22 @@ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Res
     if revision.is_empty() || revision.starts_with('-') || revision.contains('\0') {
         return Err(Error::Invalid(format!("{revision}: not a revision")));
     }
-    // A commit, or a tree (a review's round rebuilt from its diff, which no commit has)
-    let commit = vcs.resolve(revision);
-    let object = match &commit {
-        Some(commit) => commit.clone(),
+    // A commit, or a tree (a review's round rebuilt from its diff, which no commit has): the project's, or, for a file
+    // in a submodule, the submodule's own (a review's round of commits made in it, ATM-583), read by its path there
+    let found = |repo: &GitVcs| {
+        let commit = repo.resolve(revision);
+        let object = commit.clone().or_else(|| repo.resolve_tree(revision))?;
+        Some((commit, object))
+    };
+    let (repo, inside, commit, object) = match found(vcs) {
+        Some((commit, object)) => (vcs.clone(), path.to_string(), commit, object),
         None => vcs
-            .resolve_tree(revision)
+            .in_submodule(path)
+            .and_then(|(sub, inside)| found(&sub).map(|(c, o)| (sub, inside, c, o)))
             .ok_or_else(|| Error::NotFound(format!("{revision}: no such commit")))?,
     };
-    let (size, blob) = vcs
-        .blob_in(&object, path)
+    let (size, blob) = repo
+        .blob_in(&object, &inside)
         .ok_or_else(|| Error::NotFound(format!("{path}: not a file in {revision}")))?;
     if vcs.ignored(path) {
         return Err(Error::Refused(format!(
@@ -365,7 +392,7 @@ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Res
             limit / 1_000_000
         )));
     }
-    let data = vcs.blob_bytes(&blob)?;
+    let data = repo.blob_bytes(&blob)?;
     let rendered = render(path, kind, detail, &data);
     Ok(json!({
         "path": path,
@@ -494,6 +521,280 @@ mod tests {
     }
 
     #[test]
+    fn a_path_of_512_characters_is_taken_and_one_longer_is_invalid() {
+        let at_limit = "a".repeat(DOC_MAX_PATH);
+        assert!(document_path(&at_limit).is_ok());
+        assert!(matches!(
+            document_path(&format!("{at_limit}a")),
+            Err(Error::Invalid(_))
+        ));
+        // Characters are counted, not bytes
+        assert!(document_path(&"é".repeat(DOC_MAX_PATH)).is_ok());
+    }
+
+    #[test]
+    fn a_path_that_isnt_a_normalized_relative_one_is_invalid() {
+        for bad in ["a\0b", "a/./b", "./a", "a/", "..", "/", "a/b/.."] {
+            assert!(
+                matches!(document_path(bad), Err(Error::Invalid(_))),
+                "{bad:?}"
+            );
+        }
+    }
+
+    /// ATM-598, CR-3: hidden files shown, in the working copy and at a revision, but not git's or atm's folders,
+    /// environment files or key files; its shape checked as any path's
+    #[test]
+    fn a_hidden_file_is_shown_but_not_gits_atms_environments_or_keys() {
+        for shown in [
+            ".github/workflows/ci.yml",
+            ".gitignore",
+            ".gitattributes",
+            "docs/.hidden/x.md",
+            ".env.example",
+            "app/.env.sample",
+            ".env.TEMPLATE",
+            ".prettierrc",
+            "src/.environment.ts",
+        ] {
+            assert_eq!(document_path(shown).ok(), Some(shown), "{shown}");
+        }
+        for refused in [
+            ".git/config",
+            "sub/.git/HEAD",
+            ".agentic-task-manager/tasks.json",
+            ".env",
+            "src/.env.local",
+            ".ENV.production",
+            ".ssh/id_rsa",
+            "certs/.server.pem",
+        ] {
+            assert!(
+                matches!(document_path(refused), Err(Error::Refused(_))),
+                "{refused}"
+            );
+        }
+        for bad in ["", "/etc/passwd", "a/../b", "a\\b", "./a"] {
+            assert!(
+                matches!(document_path(bad), Err(Error::Invalid(_))),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_key_file_name_is_refused_in_any_case_and_only_by_its_name() {
+        for key in [
+            "a.pem",
+            "a.key",
+            "a.p12",
+            "a.pfx",
+            "a.keystore",
+            "a.jks",
+            "certs/SERVER.KEY",
+            "id_rsa",
+            "id_dsa",
+            "id_ecdsa",
+            "ssh/id_ed25519",
+            "ID_RSA.pub",
+            "id_ecdsa.old",
+        ] {
+            assert!(
+                matches!(document_path(key), Err(Error::Refused(_))),
+                "{key}"
+            );
+        }
+        // Only the file's own name: a folder named like a key, a key's name inside another name, are shown
+        for shown in [
+            "x.pem/notes.md",
+            "a.pem.md",
+            "keys.md",
+            "pem",
+            "id_rsa_backup",
+            "my_id_rsa",
+        ] {
+            assert!(document_path(shown).is_ok(), "{shown}");
+        }
+    }
+
+    #[test]
+    fn every_kind_of_file_is_known_by_its_last_segments_extension_or_whole_name() {
+        for (path, kind) in [
+            ("README.MD", ("markdown", None)),
+            ("notes.markdown", ("markdown", None)),
+            ("a.png", ("image", Some("image/png"))),
+            ("a.JPG", ("image", Some("image/jpeg"))),
+            ("a.jpeg", ("image", Some("image/jpeg"))),
+            ("a.gif", ("image", Some("image/gif"))),
+            ("a.webp", ("image", Some("image/webp"))),
+            ("web/App.svelte", ("code", Some("svelte"))),
+            ("Cargo.toml", ("code", Some("toml"))),
+            ("src/Makefile", ("code", Some("makefile"))),
+            ("fix.patch", ("code", Some("diff"))),
+            // The last dot's part: a double extension is its last one
+            ("a.tar.gz", ("text", None)),
+            ("a.test.ts", ("code", Some("ts"))),
+            // No extension, no name atm knows: text
+            ("LICENSE", ("text", None)),
+            // A leading dot isn't an extension's
+            (".bashrc", ("text", None)),
+            // The extension of the file, not of a folder on its way
+            ("src.rs/notes", ("text", None)),
+            // A whole name is matched as it is written
+            ("makefile", ("text", None)),
+        ] {
+            assert_eq!(document_kind(path), kind, "{path}");
+        }
+    }
+
+    #[test]
+    fn a_fence_holds_any_text_with_its_own_last_line_end() {
+        for (text, language, fenced) in [
+            ("", None, "```\n```\n"),
+            ("x", Some("rust"), "```rust\nx\n```\n"),
+            ("x\n", None, "```\nx\n```\n"),
+            // Runs of backticks shorter than three keep the usual fence; three or more get one longer
+            ("a `` b\n", None, "```\na `` b\n```\n"),
+            ("```\n", None, "````\n```\n````\n"),
+            ("` `` ```", None, "````\n` `` ```\n````\n"),
+        ] {
+            assert_eq!(fence(text, language), fenced, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn an_image_matches_only_the_bytes_its_type_starts_with() {
+        let mut far_svg = vec![b' '; DOC_SNIFF_BYTES];
+        far_svg.extend_from_slice(b"<svg>");
+        let cases: [(&[u8], &str, bool); 15] = [
+            (b"\x89PNG\r\n\x1a\nrest", "image/png", true),
+            (b"\x89PNG", "image/png", false),
+            (b"\xff\xd8\xff\xe0", "image/jpeg", true),
+            (b"\xff\xd8", "image/jpeg", false),
+            (b"GIF87a", "image/gif", true),
+            (b"GIF88a", "image/gif", false),
+            (b"RIFF\0\0\0\0WEBPVP8 ", "image/webp", true),
+            (b"RIFF\0\0\0\0WAVE", "image/webp", false),
+            (b"RIFF", "image/webp", false),
+            (
+                b"<?xml version=\"1.0\"?>\n<svg xmlns=\"\">",
+                "image/svg+xml",
+                true,
+            ),
+            (b"<SVG>", "image/svg+xml", true),
+            (b"<html></html>", "image/svg+xml", false),
+            (&far_svg, "image/svg+xml", false),
+            (b"", "image/png", false),
+            // A type the viewer doesn't show matches nothing
+            (b"BM", "image/bmp", false),
+        ];
+        for (data, content_type, matches) in cases {
+            assert_eq!(
+                image_matches(data, content_type),
+                matches,
+                "{content_type} {:?}",
+                String::from_utf8_lossy(&data[..data.len().min(24)])
+            );
+        }
+    }
+
+    #[test]
+    fn a_link_target_is_bracketed_only_when_markdown_would_misread_it() {
+        for (name, target) in [
+            ("a.png", "a.png"),
+            ("a-b_c.png", "a-b_c.png"),
+            ("a b.png", "<a b.png>"),
+            ("a\tb.png", "<a\tb.png>"),
+            ("a(1).png", "<a(1).png>"),
+            ("a)b.png", "<a)b.png>"),
+            ("a<b>.png", "<a<b>.png>"),
+        ] {
+            assert_eq!(link_target(name), target, "{name}");
+        }
+    }
+
+    #[test]
+    fn markdown_is_rendered_as_it_is_and_code_and_text_in_a_fence() {
+        let markdown = render("docs/a.md", "markdown", None, b"# A\n\nText.\n");
+        assert_eq!(
+            (
+                markdown.kind,
+                markdown.language,
+                markdown.document.as_str(),
+                markdown.line_offset,
+                markdown.lines
+            ),
+            ("markdown", None, "# A\n\nText.\n", 0, 3)
+        );
+        assert_eq!(markdown.text.as_deref(), Some("# A\n\nText.\n"));
+        let code = render("a.rs", "code", Some("rust"), b"fn a() {}\nfn b() {}");
+        assert_eq!(
+            (
+                code.kind,
+                code.language,
+                code.document.as_str(),
+                code.line_offset,
+                code.lines
+            ),
+            (
+                "code",
+                Some("rust"),
+                "```rust\nfn a() {}\nfn b() {}\n```\n",
+                1,
+                2
+            )
+        );
+        // Text has no language; an empty file no lines
+        let text = render("notes.txt", "text", None, b"");
+        assert_eq!(
+            (text.kind, text.language, text.document.as_str(), text.lines),
+            ("text", None, "```\n```\n", 0)
+        );
+    }
+
+    #[test]
+    fn a_file_that_isnt_utf8_text_is_rendered_as_a_line_saying_its_binary() {
+        let nul = render("a.rs", "code", Some("rust"), b"fn\0");
+        assert_eq!(
+            (nul.kind, nul.language, nul.text, nul.document.as_str()),
+            ("binary", None, None, "*a.rs is a binary file: 3 bytes.*\n")
+        );
+        assert_eq!((nul.lines, nul.line_offset), (0, 0));
+        let latin1 = render("dir/b.md", "markdown", None, b"caf\xe9");
+        assert_eq!(
+            (latin1.kind, latin1.document.as_str()),
+            ("binary", "*b.md is a binary file: 4 bytes.*\n")
+        );
+        // A NUL past what is sniffed doesn't make a file binary
+        let mut late = vec![b'a'; DOC_SNIFF_BYTES];
+        late.push(0);
+        assert_eq!(render("a.txt", "text", None, &late).kind, "text");
+    }
+
+    #[test]
+    fn an_image_is_rendered_as_a_markdown_image_of_itself_or_binary_when_it_isnt_one() {
+        let png = b"\x89PNG\r\n\x1a\n";
+        let image = render("img/a b.png", "image", Some("image/png"), png);
+        assert_eq!(
+            (
+                image.kind,
+                image.language,
+                image.text,
+                image.document.as_str()
+            ),
+            ("image", None, None, "![a b.png](<a b.png>)\n")
+        );
+        let fake = render("a.png", "image", Some("image/png"), b"<html>");
+        assert_eq!(
+            (fake.kind, fake.document.as_str()),
+            (
+                "binary",
+                "*a.png isn't the image its name says: 6 bytes.*\n"
+            )
+        );
+    }
+
+    #[test]
     fn a_file_is_known_by_its_name() {
         assert_eq!(document_kind("docs/a.comp.md"), ("markdown", None));
         assert_eq!(document_kind("x.SVG"), ("image", Some("image/svg+xml")));
@@ -552,6 +853,51 @@ mod tests {
         }
     }
 
+    /// ATM-583: a review's round of commits made in a submodule names them by the submodule's commits (or trees)
+    #[test]
+    fn a_file_in_a_submodule_at_one_of_its_revisions_is_read_from_its_own_repository() {
+        let sub = Repo::new();
+        let project = Repo::new();
+        let source = sub.0.to_string_lossy().into_owned();
+        project.git(&[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            &source,
+            "lib",
+        ]);
+        project.git(&["commit", "-q", "-m", "add lib"]);
+        let lib = Repo(project.0.join("lib"));
+        lib.git(&["config", "user.email", "t@example.invalid"]);
+        lib.git(&["config", "user.name", "t"]);
+        lib.commit("a.md", "# Three, in lib\n");
+        let head = atm_fs::git::git(&["rev-parse", "HEAD"], &lib.0).unwrap();
+        let tree = atm_fs::git::git(&["rev-parse", "HEAD^{tree}"], &lib.0).unwrap();
+        let vcs = project.vcs();
+        let at_commit = read_document_at(Some(&vcs), &head, "lib/a.md").unwrap();
+        assert_eq!(at_commit["text"], json!("# Three, in lib\n"));
+        assert_eq!(at_commit["path"], json!("lib/a.md"));
+        assert_eq!(at_commit["commit"], json!(head));
+        let at_tree = read_document_at(Some(&vcs), &tree, "lib/a.md").unwrap();
+        assert_eq!(at_tree["text"], json!("# Three, in lib\n"));
+        // The project's own revisions still read the project's files; the submodule's name none of them
+        assert_eq!(
+            read_document_at(Some(&vcs), "first", "a.md").unwrap()["text"],
+            json!("# One\n")
+        );
+        assert!(matches!(
+            read_document_at(Some(&vcs), &head, "a.md"),
+            Err(Error::NotFound(_))
+        ));
+        assert!(matches!(
+            read_document_at(Some(&vcs), &head, "lib/none.md"),
+            Err(Error::NotFound(_))
+        ));
+        std::mem::forget(lib); // inside the project, which removes it
+    }
+
     #[test]
     fn a_file_at_a_revision_is_read_as_that_commit_has_it() {
         let repo = Repo::new();
@@ -593,6 +939,33 @@ mod tests {
         ));
         assert!(matches!(
             read_document_at(Some(&vcs), &tree, ".env"),
+            Err(Error::Refused(_))
+        ));
+    }
+
+    /// ATM-598, CR-3: a hidden file is read at a revision (a review's side) and from the working copy (the viewer)
+    #[test]
+    fn a_hidden_file_is_read_at_a_revision_and_from_the_working_copy() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        std::fs::create_dir_all(repo.0.join(".github/workflows")).unwrap();
+        repo.commit(".github/workflows/ci.yml", "on: push\n");
+        let side = read_document_at(Some(&vcs), "HEAD", ".github/workflows/ci.yml").unwrap();
+        assert_eq!(side["text"], "on: push\n");
+        let now = read_document(Some(&vcs), ".github/workflows/ci.yml").unwrap();
+        assert_eq!(now["text"], "on: push\n");
+        // A hidden file git ignores stays refused in the working copy
+        repo.commit(".gitignore", ".cache/\n");
+        std::fs::create_dir_all(repo.0.join(".cache")).unwrap();
+        std::fs::write(repo.0.join(".cache/x.md"), "x\n").unwrap();
+        assert!(matches!(
+            read_document(Some(&vcs), ".cache/x.md"),
+            Err(Error::Refused(_))
+        ));
+        // An environment file committed by mistake stays refused at a revision too
+        repo.commit(".env", "TOKEN=x\n");
+        assert!(matches!(
+            read_document_at(Some(&vcs), "HEAD", ".env"),
             Err(Error::Refused(_))
         ));
     }
@@ -659,6 +1032,223 @@ mod tests {
             read_document(Some(&vcs), "local.md"),
             Err(Error::Refused(_))
         ));
+    }
+
+    #[test]
+    fn without_a_working_copy_nothing_is_read_but_a_bad_path_is_still_named() {
+        assert!(matches!(
+            read_document(None, "a.md"),
+            Err(Error::NotFound(_))
+        ));
+        assert!(matches!(
+            document_stamp(None, "a.md"),
+            Err(Error::NotFound(_))
+        ));
+        assert!(matches!(read_image(None, "a.png"), Err(Error::NotFound(_))));
+        assert!(matches!(
+            read_document_at(None, "HEAD", "a.md"),
+            Err(Error::NotFound(_))
+        ));
+        // The path's checks come first
+        assert!(matches!(
+            read_document(None, ".env"),
+            Err(Error::Refused(_))
+        ));
+        assert!(matches!(
+            read_document_at(None, "HEAD", "../a"),
+            Err(Error::Invalid(_))
+        ));
+    }
+
+    #[test]
+    fn a_working_copy_file_is_read_with_its_size_time_tracking_and_commit() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        let tracked = read_document(Some(&vcs), "a.md").unwrap();
+        assert_eq!(tracked["bytes"], 6);
+        assert_eq!(tracked["tracked"], true);
+        assert_eq!(tracked["commit"], json!(vcs.head()));
+        assert_eq!(tracked["submodule"], Value::Null);
+        assert!(
+            tracked["modified_at"]
+                .as_str()
+                .is_some_and(|t| t.starts_with("20")),
+            "{}",
+            tracked["modified_at"]
+        );
+        std::fs::write(repo.0.join("new.txt"), "n\n").unwrap();
+        let untracked = read_document(Some(&vcs), "new.txt").unwrap();
+        assert_eq!(untracked["tracked"], false);
+        assert_eq!(untracked["kind"], "text");
+        // The stamp is the file's size, from the same checks
+        assert_eq!(document_stamp(Some(&vcs), "new.txt").unwrap().0, 2);
+        assert!(matches!(
+            document_stamp(Some(&vcs), ".env"),
+            Err(Error::Refused(_))
+        ));
+    }
+
+    #[test]
+    fn a_working_copy_path_that_isnt_a_file_there_is_not_found() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        std::fs::create_dir_all(repo.0.join("docs")).unwrap();
+        for missing in ["b.md", "docs", "docs/none.md"] {
+            assert!(
+                matches!(read_document(Some(&vcs), missing), Err(Error::NotFound(_))),
+                "{missing}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_git_ignores_is_refused_from_the_working_copy() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        std::fs::write(repo.0.join(".gitignore"), "build/\n").unwrap();
+        std::fs::create_dir_all(repo.0.join("build")).unwrap();
+        std::fs::write(repo.0.join("build/out.txt"), "o\n").unwrap();
+        assert!(matches!(
+            read_document(Some(&vcs), "build/out.txt"),
+            Err(Error::Refused(_))
+        ));
+        assert!(matches!(
+            document_stamp(Some(&vcs), "build/out.txt"),
+            Err(Error::Refused(_))
+        ));
+    }
+
+    #[test]
+    fn a_document_up_to_1_mb_and_an_image_up_to_5_mb_are_read_and_larger_ones_refused() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        let limit = usize::try_from(DOC_MAX_BYTES).unwrap();
+        let image_limit = usize::try_from(DOC_MAX_IMAGE_BYTES).unwrap();
+        std::fs::write(repo.0.join("at.txt"), vec![b'a'; limit]).unwrap();
+        std::fs::write(repo.0.join("past.txt"), vec![b'a'; limit + 1]).unwrap();
+        assert!(read_document(Some(&vcs), "at.txt").is_ok());
+        assert!(matches!(
+            read_document(Some(&vcs), "past.txt"),
+            Err(Error::TooLarge(_))
+        ));
+        assert!(matches!(
+            document_stamp(Some(&vcs), "past.txt"),
+            Err(Error::TooLarge(_))
+        ));
+        // An image has a limit of its own
+        let png = |len: usize| {
+            let mut data = b"\x89PNG\r\n\x1a\n".to_vec();
+            data.resize(len, 0);
+            data
+        };
+        std::fs::write(repo.0.join("big.png"), png(limit + 1)).unwrap();
+        std::fs::write(repo.0.join("at.png"), png(image_limit)).unwrap();
+        std::fs::write(repo.0.join("past.png"), png(image_limit + 1)).unwrap();
+        assert_eq!(
+            read_document(Some(&vcs), "big.png").unwrap()["kind"],
+            "image"
+        );
+        assert!(read_image(Some(&vcs), "at.png").is_ok());
+        assert!(matches!(
+            read_image(Some(&vcs), "past.png"),
+            Err(Error::TooLarge(_))
+        ));
+        // As at a revision
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "large"]);
+        assert!(matches!(
+            read_document_at(Some(&vcs), "HEAD", "past.txt"),
+            Err(Error::TooLarge(_))
+        ));
+        assert!(matches!(
+            read_document_at(Some(&vcs), "HEAD", "past.png"),
+            Err(Error::TooLarge(_))
+        ));
+        assert!(read_document_at(Some(&vcs), "HEAD", "big.png").is_ok());
+    }
+
+    #[test]
+    fn an_image_file_is_served_only_when_its_bytes_are_the_image_its_name_says() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        std::fs::write(repo.0.join("a.gif"), b"GIF89a....").unwrap();
+        std::fs::write(repo.0.join("fake.png"), b"<script>").unwrap();
+        assert_eq!(
+            read_image(Some(&vcs), "a.gif").unwrap(),
+            (b"GIF89a....".to_vec(), "image/gif")
+        );
+        assert!(matches!(
+            read_image(Some(&vcs), "fake.png"),
+            Err(Error::Refused(_))
+        ));
+        // Anything but an image, even one the viewer shows, isn't served as a file
+        assert!(matches!(
+            read_image(Some(&vcs), "a.md"),
+            Err(Error::Refused(_))
+        ));
+        assert!(matches!(
+            read_image(Some(&vcs), "none.png"),
+            Err(Error::NotFound(_))
+        ));
+        // Inside git's own folder, refused before anything is read (a hidden image elsewhere is shown, CR-3)
+        assert!(matches!(
+            read_image(Some(&vcs), ".git/x.png"),
+            Err(Error::Refused(_))
+        ));
+    }
+
+    #[test]
+    fn outside_git_a_file_is_read_with_no_tracking_and_no_commit() {
+        let dir = std::env::temp_dir().join(format!("atm-docs-plain-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.md"), "# A\n").unwrap();
+        let vcs = GitVcs::new(&dir);
+        let read = read_document(Some(&vcs), "a.md");
+        let _ = std::fs::remove_dir_all(&dir);
+        let read = read.unwrap();
+        assert_eq!(read["document"], "# A\n");
+        assert_eq!(
+            (&read["tracked"], &read["commit"]),
+            (&Value::Null, &Value::Null)
+        );
+    }
+
+    #[test]
+    fn a_revision_with_a_nul_is_invalid_and_a_binary_file_in_a_commit_says_so() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        assert!(matches!(
+            read_document_at(Some(&vcs), "HEAD\0", "a.md"),
+            Err(Error::Invalid(_))
+        ));
+        std::fs::write(repo.0.join("data.txt"), b"a\0b").unwrap();
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "binary"]);
+        let binary = read_document_at(Some(&vcs), "HEAD", "data.txt").unwrap();
+        assert_eq!(binary["kind"], "binary");
+        assert_eq!(binary["text"], Value::Null);
+        assert_eq!(binary["bytes"], 3);
+        assert_eq!(binary["tracked"], true);
+        assert_eq!(binary["modified_at"], Value::Null);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_in_the_working_copy_is_not_a_file_nor_a_folder_on_the_way_to_one() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        std::os::unix::fs::symlink(repo.0.join("a.md"), repo.0.join("link.md")).unwrap();
+        std::fs::create_dir_all(repo.0.join("real")).unwrap();
+        std::fs::write(repo.0.join("real/b.md"), "b\n").unwrap();
+        std::os::unix::fs::symlink(repo.0.join("real"), repo.0.join("via")).unwrap();
+        for linked in ["link.md", "via/b.md"] {
+            assert!(
+                matches!(read_document(Some(&vcs), linked), Err(Error::NotFound(_))),
+                "{linked}"
+            );
+        }
+        assert!(read_document(Some(&vcs), "real/b.md").is_ok());
     }
 
     #[cfg(unix)]

@@ -7,9 +7,11 @@ use std::sync::Arc;
 use atm_common::{Error, Result};
 use atm_lib::Project;
 use atm_lib::query::Filters;
+use atm_lib::review_drafts::{self, Draft, DraftUpdate, NewDraft};
 use atm_lib::review_pages::ReviewQuery;
 use atm_lib::review_requests::{
-    self, CommentUpdate, Decision, NewComment, NewReply, ReviewClosing, ReviewOpening, ReviewTasks,
+    self, CommentUpdate, Decision, NewComment, NewPoke, NewReply, ReviewClosing, ReviewOpening,
+    ReviewTasks,
 };
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewRef};
 use atm_lib::workspaces::{Member, Workspace, Workspaces, file_stamp};
@@ -102,6 +104,17 @@ pub trait ProjectSource {
     /// No such review or round; a round's tree that can't be had here.
     fn review(&self, review: &ReviewRef, round: Option<u32>, against: Option<u32>)
     -> Result<Value>;
+    /// What a live review's page of its working copy now is made from, cheap to read (ATM-607): its `ETag`'s parts.
+    /// None for any other page, which isn't tagged.
+    ///
+    /// # Errors
+    /// No such review; the project isn't in git.
+    fn live_review_stamp(
+        &self,
+        review: &ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Option<Value>>;
     /// Its reviews, to change as the user at the machine (never an agent's identity).
     ///
     /// # Errors
@@ -158,6 +171,36 @@ pub trait ReviewChanges {
         comment: &CommentId,
         reply: &NewReply,
     ) -> Result<CommentId>;
+    /// A poke (ATM-611): its ID.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId>;
+    /// The user's drafts on the review (ATM-612), the oldest first.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn list_drafts(&self, review: &ReviewRef) -> Result<Vec<Draft>>;
+    /// A new draft of the user's.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn add_draft(&mut self, review: &ReviewRef, draft: NewDraft) -> Result<Draft>;
+    /// A draft's text.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn update_draft(
+        &mut self,
+        review: &ReviewRef,
+        draft: &str,
+        update: &DraftUpdate,
+    ) -> Result<Draft>;
+    /// A draft thrown away.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn remove_draft(&mut self, review: &ReviewRef, draft: &str) -> Result<()>;
 }
 
 /// atm-lib's answers: the server's.
@@ -285,6 +328,15 @@ impl ProjectSource for Member {
         Member::review(self, review, round, against)
     }
 
+    fn live_review_stamp(
+        &self,
+        review: &ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Option<Value>> {
+        Member::live_review_stamp(self, review, round, against)
+    }
+
     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>> {
         Ok(Box::new(self.project_as_user()?))
     }
@@ -335,5 +387,30 @@ impl ReviewChanges for Project {
         reply: &NewReply,
     ) -> Result<CommentId> {
         review_requests::reply_to_comment(self, review, comment, reply)
+    }
+
+    fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
+        review_requests::poke_review(self, review, poke)
+    }
+
+    fn list_drafts(&self, review: &ReviewRef) -> Result<Vec<Draft>> {
+        review_drafts::list_drafts(self, review)
+    }
+
+    fn add_draft(&mut self, review: &ReviewRef, draft: NewDraft) -> Result<Draft> {
+        review_drafts::add_draft(self, review, draft)
+    }
+
+    fn update_draft(
+        &mut self,
+        review: &ReviewRef,
+        draft: &str,
+        update: &DraftUpdate,
+    ) -> Result<Draft> {
+        review_drafts::update_draft(self, review, draft, update)
+    }
+
+    fn remove_draft(&mut self, review: &ReviewRef, draft: &str) -> Result<()> {
+        review_drafts::remove_draft(self, review, draft)
     }
 }

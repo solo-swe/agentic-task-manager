@@ -9,7 +9,28 @@ vi.mock('@tauri-apps/api/core', () => ({
   },
 }));
 
-const { installAppUpdate, restartApp } = await import('../../src/lib/api/updates');
+const { checkAppUpdate, installAppUpdate, restartApp } = await import('../../src/lib/api/updates');
+
+describe('the app’s update check (T-483)', () => {
+  beforeEach(() => invoke.mockReset());
+
+  it('a newer version is the app’s answer; up to date is null', async () => {
+    const update = { version: '0.42.0', current_version: '0.41.0', notes: 'New things' };
+    invoke.mockResolvedValueOnce(update);
+    expect(await checkAppUpdate()).toEqual(update);
+    expect(invoke).toHaveBeenLastCalledWith('check_update');
+    invoke.mockResolvedValueOnce(null);
+    expect(await checkAppUpdate()).toBeNull();
+  });
+
+  it('a failed check is null, only logged', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    invoke.mockRejectedValueOnce({ kind: 'failed', message: 'offline' });
+    expect(await checkAppUpdate()).toBeNull();
+    expect(log).toHaveBeenCalledTimes(1);
+    log.mockRestore();
+  });
+});
 
 describe('the app’s update install (T-526)', () => {
   beforeEach(() => invoke.mockReset());

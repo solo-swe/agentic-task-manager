@@ -5,7 +5,16 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { initSync, OpenDocument, process } from '@compmd/processor';
 import { request as base } from 'virtual:compmd';
-import { compmdRequest, documentRequest, FRONTMATTER_LINES, packComponents, safeTree } from '../../src/lib/compmd';
+import {
+  blocksIn,
+  compmdRequest,
+  documentRequest,
+  FRONTMATTER_LINES,
+  packComponents,
+  safeTree,
+  taskOfHref,
+  topBlocks,
+} from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
 import compmdConfig from '../../compmd.config.json';
 
@@ -56,6 +65,56 @@ describe('a document’s source lines (T-406: CompMD places each line from its o
 
   it('task text is processed without them', () => {
     expect(firstLines(run('# Title\n\nText.').expanded)).toEqual([undefined, undefined]);
+  });
+
+  // ATM-593: task keys in a project's text link to their tasks, only those that are tasks
+  it('a task key links to its task when it names one; another, inside a link or in code stays as written', () => {
+    const tree = run('See ATM-12 and ZZZ-9, `ATM-12` in code, [ATM-12 here](https://x.example) and ~ATM-13.').expanded;
+    const known = (key: string) => key === 'ATM-12' || key === '~ATM-13';
+    const links: { url: string; text: string }[] = [];
+    const walk = (node: unknown) => {
+      const n = node as { type?: string; url?: string; children?: unknown[] };
+      if (n.type === 'link') links.push({ url: n.url ?? '', text: textOf(n) });
+      n.children?.forEach(walk);
+    };
+    walk(safeTree(tree, { taskKnown: known }));
+    expect(links).toEqual([
+      { url: '#task=ATM-12', text: 'ATM-12' },
+      { url: 'https://x.example', text: 'ATM-12 here' },
+      { url: '#task=~ATM-13', text: '~ATM-13' },
+    ]);
+    // The text reads the same
+    expect(textOf(safeTree(tree, { taskKnown: known }))).toBe(textOf(tree));
+    // Without taskKnown, no key is a link
+    links.length = 0;
+    walk(safeTree(tree));
+    expect(links.map((l) => l.url)).toEqual(['https://x.example']);
+    expect(taskOfHref('#task=ATM-12')).toBe('ATM-12');
+    expect(taskOfHref('#doc=docs/x.md')).toBeNull();
+  });
+
+  // ATM-591: the rendered diff folds whole blocks: each one's lines, and a tree of only those reaching into a range
+  it('its top-level blocks are their lines; a range keeps the blocks reaching into it, and every definition', () => {
+    const text =
+      '---\ntitle: X\n---\n# Title\n\nA paragraph\nover two lines, [a link][d].\n\n- one\n- two\n\n```ts\nconst a = 1;\n```\n\n[d]: https://example.com\n';
+    const tree = new OpenDocument(documentRequest(base, 'docs/x.md', text, NOW, 'UTC')).expanded;
+    expect(topBlocks(tree)).toEqual([
+      { from: 4, to: 4 },
+      { from: 6, to: 7 },
+      { from: 9, to: 10 },
+      { from: 12, to: 14 },
+    ]);
+    // Line 7 is in the paragraph: it whole, never part of it; and the definition it needs
+    const kept = blocksIn(tree, [7, 7]) as { children: { type: string }[] };
+    expect(kept.children.map((n) => n.type).filter((t) => t !== 'definition')).toEqual(['paragraph']);
+    expect(kept.children.some((n) => n.type === 'definition')).toBe(true);
+    expect(topBlocks(blocksIn(tree, [10, 12]))).toEqual([
+      { from: 9, to: 10 },
+      { from: 12, to: 14 },
+    ]);
+    expect(topBlocks(blocksIn(tree, [20, 30]))).toEqual([]);
+    // Task text has no lines: no blocks
+    expect(topBlocks(run('# Title\n\nText.').expanded)).toEqual([]);
   });
 });
 

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentResult } from '../../src/lib/documents';
 import type { DocumentSource } from '../../src/lib/documents/source';
-import ReviewFile, { MARGIN, holdNearCards, inView, whenIdle } from '../../src/lib/reviews/ReviewFile.svelte';
+import ReviewFile, { FAR, MARGIN, holdNearCards, inView, whenIdle } from '../../src/lib/reviews/ReviewFile.svelte';
 import type { PlacedChain, ViewFile } from '../../src/lib/reviews/types';
 
 // A file's card on a review's Diffs tab (lib/reviews/ReviewFile.svelte, ATM-574): its header, its fold, and its diff,
@@ -183,6 +183,90 @@ describe('ReviewFile: the header', () => {
   });
 });
 
+describe('ReviewFile: a submodule’s move (ATM-583)', () => {
+  const moved = (from: string | null, to: string | null, repository: string | null = null) =>
+    file({
+      path: 'lib',
+      old_path: 'lib',
+      status: from && to ? 'modified' : to ? 'added' : 'deleted',
+      patch: '@@ -1 +1 @@\n-Subproject commit x\n+Subproject commit y\n',
+      submodule: { from, to, repository },
+    });
+
+  it.each([
+    ['moved', moved('1111111aaaa', '2222222bbbb'), 'The submodule moved from 1111111 to 2222222.'],
+    ['added', moved(null, '3333333cccc'), 'The submodule was added, at 3333333.'],
+    ['removed', moved('4444444dddd', null), 'The submodule was removed; it was at 4444444.'],
+    // ATM-599: only its folder moved, its commit the same
+    [
+      'its folder moved',
+      { ...moved('5555555eeee', '5555555eeee'), path: 'crates/lib', status: 'renamed' as const, patch: '' },
+      'The submodule moved from lib; it stays at 5555555.',
+    ],
+  ])('%s: says so with its commits, no diff and no lines loaded', (_, entry, says) => {
+    const load = vi.fn();
+    const { container } = show({ file: entry, before: { ...side(''), load }, after: { ...side(''), load } });
+    expect(container.querySelector('.review-submodule-move')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(says);
+    expect(container.querySelector('.review-file-counts')?.textContent?.trim()).toBe('submodule');
+    expect(container.querySelector('.diff-view')).toBeNull();
+    expect(container.querySelector('.review-file-card')).not.toHaveAttribute('data-pending');
+    expect(load).not.toHaveBeenCalled();
+    expect(container.querySelector('.review-submodule-move a')).toBeNull();
+  });
+
+  it('its commits link to its repository when it has a web address', () => {
+    const { container } = show({ file: moved('1111111aaaa', '2222222bbbb', 'https://github.com/o/lib') });
+    const links = [...container.querySelectorAll('.review-submodule-move a')].map((a) => a.getAttribute('href'));
+    expect(links).toEqual([
+      'https://github.com/o/lib/commit/1111111aaaa',
+      'https://github.com/o/lib/commit/2222222bbbb',
+    ]);
+  });
+
+  it('a comment on it is on the entry as a whole; its comments show under it', async () => {
+    const chain = {
+      id: 't1',
+      anchor: { round: 1, path: 'lib', side: 'new', lines: null, quote: null },
+      comments: [
+        {
+          id: 'c1',
+          author: 'Hakan Serce',
+          at: '2026-11-18T10:00:00Z',
+          body: 'Why this version?',
+          resolved: false,
+          replies: [],
+        },
+      ],
+    } as unknown as PlacedChain;
+    const { container, oncomment } = show({ file: moved('1111111aaaa', '2222222bbbb'), chains: [chain] });
+    // The chain, as a whole file's (its body is CompMD's to render, not loaded here)
+    expect(container.querySelector('.review-submodule')?.textContent).toMatch(/The file[\s\S]*Hakan Serce/);
+    await fireEvent.click(screen.getByText('Comment on this submodule'));
+    const box = screen.getByLabelText('Comment on lib') as HTMLTextAreaElement;
+    expect(screen.getByText('Comment')).toBeDisabled();
+    await fireEvent.input(box, { target: { value: '  Pin it.  ' } });
+    await fireEvent.click(screen.getByText('Comment'));
+    expect(oncomment).toHaveBeenCalledWith(null, 'Pin it.');
+    expect(screen.queryByLabelText('Comment on lib')).toBeNull();
+  });
+
+  it('a comment refused stays, saying why; Cancel and Escape close the box', async () => {
+    const oncomment = vi.fn(async () => 'the review is closed');
+    show({ file: moved('1111111aaaa', '2222222bbbb'), oncomment });
+    await fireEvent.click(screen.getByText('Comment on this submodule'));
+    const box = screen.getByLabelText('Comment on lib') as HTMLTextAreaElement;
+    await fireEvent.input(box, { target: { value: 'Pin it.' } });
+    await fireEvent.keyDown(box, { key: 'Enter', metaKey: true });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not saved: the review is closed');
+    expect(box.value).toBe('Pin it.');
+    await fireEvent.keyDown(box, { key: 'Escape' });
+    expect(screen.queryByLabelText('Comment on lib')).toBeNull();
+    await fireEvent.click(screen.getByText('Comment on this submodule'));
+    await fireEvent.click(screen.getByText('Cancel'));
+    expect(screen.queryByLabelText('Comment on lib')).toBeNull();
+  });
+});
+
 describe('ReviewFile: folding', () => {
   it('folded: the header alone, the fold says Show; open: the diff, the fold says Hide', async () => {
     const { container, onfold, rerender } = show({ folded: true, viewed: true });
@@ -225,6 +309,14 @@ describe('ReviewFile: its diff, made when near the view', () => {
     expect(io.disconnect).toHaveBeenCalled();
   });
 
+  // CompMD's CR-1: a long file stood shorter than its lines, so the end moved away once it was drawn (ATM-587)
+  it('a long file waits as tall as all its lines, however many', () => {
+    observer();
+    const lines = Array.from({ length: 600 }, (_, i) => `+line ${i}`).join('\n');
+    const { container } = show({ file: file({ patch: `@@ -0,0 +1,600 @@\n${lines}\n` }) });
+    expect(container.querySelector('.review-file-later')).toHaveStyle({ height: `${(600 + 8) * 20}px` });
+  });
+
   it('a card only near the view waits for the page to be idle; one that comes into view meanwhile is made at once', async () => {
     const io = observer();
     let idle: (() => void) | null = null;
@@ -238,13 +330,66 @@ describe('ReviewFile: its diff, made when near the view', () => {
     expect(container.querySelector('.diff-view')).toBeNull();
     idle!();
     await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
-    // Another card: near, then in view before the page is idle
+    // Another card: near, then in view before the page is idle (its observer is the second making one: a made card
+    // has one of its own for when it is far, FAR)
     const other = show();
     const view = { ...near, boundingClientRect: rect(900, 1000) };
-    io.watched[1].callback([near as unknown as IntersectionObserverEntry], {} as never);
-    io.watched[1].callback([view as unknown as IntersectionObserverEntry], {} as never);
+    const making = io.watched.filter((w) => w.options?.rootMargin === `${MARGIN}px 0px`);
+    making[1].callback([near as unknown as IntersectionObserverEntry], {} as never);
+    making[1].callback([view as unknown as IntersectionObserverEntry], {} as never);
     expect(cancelIdleCallback).toHaveBeenCalledWith(7);
     await vi.waitFor(() => expect(other.container.querySelector('.diff-view')).not.toBeNull());
+  });
+
+  describe('a made card far from the view (ATM-587)', () => {
+    const far = (io: ReturnType<typeof observer>) => io.watched.filter((w) => w.options?.rootMargin === `${FAR}px 0px`);
+    const leave = (io: ReturnType<typeof observer>) =>
+      far(io).forEach((w) => w.callback([{ isIntersecting: false } as IntersectionObserverEntry], {} as never));
+
+    it('gives back its diff, stands at the height it had, and is made again when it comes near', async () => {
+      const io = observer();
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(1234);
+      const { container } = show();
+      io.seen();
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+      expect(far(io)).toHaveLength(1);
+      // Still within FAR: kept
+      far(io)[0].callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as never);
+      expect(container.querySelector('.diff-view')).not.toBeNull();
+      leave(io);
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).toBeNull());
+      expect(container.querySelector('.review-file-later')).toHaveStyle({ height: '1234px' });
+      expect(container.querySelector('.review-file-card')).toHaveAttribute('data-pending');
+      io.seen();
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+    });
+
+    it.each([
+      ['a comment is being written in it', (card: Element) => card.append(document.createElement('textarea'))],
+      [
+        'the focus is in it',
+        (card: Element) => {
+          const button = card.querySelector('button')!;
+          button.focus();
+        },
+      ],
+    ])('is kept while %s', async (_, act) => {
+      const io = observer();
+      const { container } = show();
+      io.seen();
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+      act(container.querySelector('.review-file-card')!);
+      leave(io);
+      await Promise.resolve();
+      expect(container.querySelector('.diff-view')).not.toBeNull();
+    });
+
+    it('the file gone to (wanted) is never given back', async () => {
+      const io = observer();
+      const { container } = show({ wanted: true });
+      await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+      expect(far(io)).toHaveLength(0);
+    });
   });
 
   it('right after a jump, a card in view waits too; the file gone to (wanted) is made at once', async () => {

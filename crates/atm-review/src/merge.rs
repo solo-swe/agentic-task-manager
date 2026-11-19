@@ -257,6 +257,7 @@ mod tests {
             at: at.into(),
             body: body.into(),
             resolved,
+            poke: false,
             replies: Vec::new(),
         }
     }
@@ -408,9 +409,10 @@ mod tests {
 
     #[test]
     fn the_header_takes_each_sides_change_and_on_both_the_later() {
-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
+        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
         // Ours retitled it (earlier); theirs decided it (later) and changed the summary
-        let ours = review_md::write(&header(Status::Open, "Better title", T2), "Summary.").unwrap();
+        let ours =
+            review_md::write(&header(Status::Waiting, "Better title", T2), "Summary.").unwrap();
         let theirs =
             review_md::write(&header(Status::Approved, "Title", T3), "Summary, theirs.").unwrap();
         let (merged, summary) =
@@ -430,5 +432,291 @@ mod tests {
         let (merged, _) = review_md::read(&merge_review(&base, &ours, &theirs).unwrap()).unwrap();
         assert_eq!(merged.status, Status::Approved);
         assert!(merge_review(&base, "no header", &theirs).is_err());
+    }
+
+    /// Each chain's ID with its comments' IDs and texts, depth first.
+    fn shape(text: &str) -> Vec<(String, Vec<(String, String)>)> {
+        comments_md::read(text)
+            .chains
+            .iter()
+            .map(|c| {
+                (
+                    c.id.0.clone(),
+                    c.comments
+                        .iter()
+                        .flat_map(Comment::all)
+                        .map(|x| (x.id.0.clone(), x.body.clone()))
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    fn with_replies(mut comment: Comment, replies: Vec<Comment>) -> Comment {
+        comment.replies = replies;
+        comment
+    }
+
+    #[test]
+    fn what_ours_deleted_since_the_base_stays_deleted() {
+        let first = comment("c1", "Hakan", T1, "Why?", Some(false));
+        let reply = comment("c3", "Ana", T2, "Because.", None);
+        let base = file(vec![
+            chain(
+                "t1",
+                Some("a.rs"),
+                vec![with_replies(first.clone(), vec![reply.clone()])],
+            ),
+            chain(
+                "t2",
+                None,
+                vec![comment("c2", "Hakan", T1, "Overall.", Some(false))],
+            ),
+        ]);
+        // Ours deleted the chain t2 and the reply c3 by hand; theirs kept both, and edited them
+        let ours = file(vec![chain("t1", Some("a.rs"), vec![first.clone()])]);
+        let mut edited_reply = reply;
+        edited_reply.body = "Because, edited.".into();
+        let theirs = file(vec![
+            chain(
+                "t1",
+                Some("a.rs"),
+                vec![with_replies(first, vec![edited_reply])],
+            ),
+            chain(
+                "t2",
+                None,
+                vec![comment("c2", "Hakan", T1, "Overall, edited.", Some(false))],
+            ),
+        ]);
+        let (text, conflicts) = merge_comments(&base, &ours, &theirs);
+        assert!(conflicts.is_empty(), "{conflicts:?}");
+        assert_eq!(
+            shape(&text),
+            [("t1".into(), vec![("c1".into(), "Why?".into())])]
+        );
+    }
+
+    #[test]
+    fn a_text_edited_on_one_side_only_is_taken_from_that_side() {
+        let base = file(vec![chain(
+            "t1",
+            None,
+            vec![
+                comment("c1", "Hakan", T1, "One.", Some(false)),
+                comment("c2", "Ana", T2, "Two.", Some(false)),
+            ],
+        )]);
+        // Ours edited c1, theirs edited c2
+        let ours = file(vec![chain(
+            "t1",
+            None,
+            vec![
+                comment("c1", "Hakan", T1, "One, ours.", Some(false)),
+                comment("c2", "Ana", T2, "Two.", Some(false)),
+            ],
+        )]);
+        let theirs = file(vec![chain(
+            "t1",
+            None,
+            vec![
+                comment("c1", "Hakan", T1, "One.", Some(false)),
+                comment("c2", "Ana", T2, "Two, theirs.", Some(false)),
+            ],
+        )]);
+        let (text, conflicts) = merge_comments(&base, &ours, &theirs);
+        assert!(conflicts.is_empty(), "{conflicts:?}");
+        assert_eq!(
+            shape(&text),
+            [(
+                "t1".into(),
+                vec![
+                    ("c1".into(), "One, ours.".into()),
+                    ("c2".into(), "Two, theirs.".into())
+                ]
+            )]
+        );
+    }
+
+    #[test]
+    fn lines_atm_could_not_read_on_theirs_are_added_once() {
+        let unread = |texts: &[&str]| {
+            texts
+                .iter()
+                .enumerate()
+                .map(|(i, t)| comments_md::Unread {
+                    after: None,
+                    line: i + 1,
+                    text: (*t).into(),
+                })
+                .collect()
+        };
+        let chains = vec![chain(
+            "t1",
+            None,
+            vec![comment("c1", "Hakan", T1, "One.", Some(false))],
+        )];
+        let side = |texts: &[&str]| {
+            comments_md::write(&CommentsFile {
+                chains: chains.clone(),
+                unread: unread(texts),
+            })
+        };
+        let base = side(&["stray A"]);
+        let ours = side(&["stray A"]);
+        let theirs = side(&["stray A", "stray B"]);
+        let (text, _) = merge_comments(&base, &ours, &theirs);
+        let texts: Vec<String> = comments_md::read(&text)
+            .unread
+            .into_iter()
+            .map(|u| u.text)
+            .collect();
+        assert_eq!(texts, ["stray A", "stray B"], "{text}");
+        assert_eq!(shape(&text).len(), 1);
+    }
+
+    #[test]
+    fn a_chain_new_on_both_with_the_same_id_anchor_and_first_comment_is_one_chain() {
+        let first = comment("c1", "Hakan", T1, "Hi.", Some(false));
+        let ours = file(vec![chain("t1", Some("a.rs"), vec![first.clone()])]);
+        let theirs = file(vec![chain(
+            "t1",
+            Some("a.rs"),
+            vec![with_replies(
+                first,
+                vec![comment("c2", "Ana", T2, "Hello.", None)],
+            )],
+        )]);
+        let (text, conflicts) = merge_comments("", &ours, &theirs);
+        assert!(conflicts.is_empty(), "{conflicts:?}");
+        assert_eq!(
+            shape(&text),
+            [(
+                "t1".into(),
+                vec![("c1".into(), "Hi.".into()), ("c2".into(), "Hello.".into())]
+            )]
+        );
+    }
+
+    #[test]
+    fn comments_are_kept_oldest_first() {
+        let first = comment("c1", "Hakan", T1, "One.", Some(false));
+        let base = file(vec![chain("t1", None, vec![first.clone()])]);
+        // Ours added c2 later than theirs added its c2, which is renumbered c3
+        let ours = file(vec![chain(
+            "t1",
+            None,
+            vec![
+                first.clone(),
+                comment("c2", "Hakan", T3, "Late.", Some(false)),
+            ],
+        )]);
+        let theirs = file(vec![chain(
+            "t1",
+            None,
+            vec![first, comment("c2", "Ana", T2, "Early.", Some(false))],
+        )]);
+        let (text, _) = merge_comments(&base, &ours, &theirs);
+        assert_eq!(
+            shape(&text),
+            [(
+                "t1".into(),
+                vec![
+                    ("c1".into(), "One.".into()),
+                    ("c3".into(), "Early.".into()),
+                    ("c2".into(), "Late.".into())
+                ]
+            )]
+        );
+    }
+
+    #[test]
+    fn with_no_base_both_sides_chains_are_kept() {
+        assert_eq!(merge_comments("", "", ""), (String::new(), Vec::new()));
+        let ours = file(vec![chain(
+            "t1",
+            Some("a.rs"),
+            vec![comment("c1", "Hakan", T1, "Ours.", Some(false))],
+        )]);
+        let theirs = file(vec![chain(
+            "t1",
+            Some("a.rs"),
+            vec![comment("c1", "Ana", T2, "Theirs.", Some(false))],
+        )]);
+        let (text, conflicts) = merge_comments("", &ours, &theirs);
+        assert!(conflicts.is_empty(), "{conflicts:?}");
+        assert_eq!(
+            shape(&text),
+            [
+                ("t1".into(), vec![("c1".into(), "Ours.".into())]),
+                ("t2".into(), vec![("c2".into(), "Theirs.".into())]),
+            ]
+        );
+        // Only one side has a file
+        assert_eq!(shape(&merge_comments("", "", &theirs).0), shape(&theirs));
+        assert_eq!(shape(&merge_comments("", &ours, "").0), shape(&ours));
+    }
+
+    fn merged(base: &str, ours: &str, theirs: &str) -> (ReviewHeader, String) {
+        review_md::read(&merge_review(base, ours, theirs).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn with_an_unreadable_base_both_changed_and_the_later_side_wins() {
+        let ours = review_md::write(&header(Status::Waiting, "Ours", T2), "Ours.").unwrap();
+        let theirs = review_md::write(&header(Status::Approved, "Theirs", T3), "Theirs.").unwrap();
+        let (h, s) = merged("not a review", &ours, &theirs);
+        assert_eq!(
+            (h.title.as_str(), h.status, h.updated.as_str(), s.as_str()),
+            ("Theirs", Status::Approved, T3, "Theirs.")
+        );
+        // Ours later: ours wins
+        let ours = review_md::write(
+            &header(Status::Waiting, "Ours", "2026-11-17T13:00:00Z"),
+            "Ours.",
+        )
+        .unwrap();
+        let (h, s) = merged("", &ours, &theirs);
+        assert_eq!(
+            (h.title.as_str(), h.status, s.as_str()),
+            ("Ours", Status::Waiting, "Ours.")
+        );
+    }
+
+    #[test]
+    fn both_changed_and_updated_at_the_same_time_keeps_ours() {
+        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
+        let ours =
+            review_md::write(&header(Status::ChangesRequested, "Title", T2), "Summary.").unwrap();
+        let theirs = review_md::write(&header(Status::Approved, "Title", T2), "Summary.").unwrap();
+        let (h, _) = merged(&base, &ours, &theirs);
+        assert_eq!(
+            (h.status, h.updated.as_str()),
+            (Status::ChangesRequested, T2)
+        );
+    }
+
+    #[test]
+    fn tasks_reviewers_and_summary_are_merged_field_by_field() {
+        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
+        // Ours changed the tasks and the summary (earlier); theirs changed the reviewers and the title (later)
+        let mut our_header = header(Status::Waiting, "Title", T2);
+        our_header.tasks = vec!["ATM-1".into(), "ATM-2".into()];
+        let ours = review_md::write(&our_header, "Summary, ours.").unwrap();
+        let mut their_header = header(Status::Waiting, "Retitled", T3);
+        their_header.reviewers = vec![Actor("Ana".into())];
+        let theirs = review_md::write(&their_header, "Summary.").unwrap();
+        let (h, s) = merged(&base, &ours, &theirs);
+        assert_eq!(h.tasks, ["ATM-1", "ATM-2"]);
+        assert_eq!(h.reviewers, [Actor("Ana".into())]);
+        assert_eq!(h.title, "Retitled");
+        assert_eq!(s, "Summary, ours.");
+        assert_eq!(h.updated, T3);
+    }
+
+    #[test]
+    fn an_unreadable_theirs_is_an_error() {
+        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
+        assert!(merge_review(&base, &base, "no header").is_err());
     }
 }

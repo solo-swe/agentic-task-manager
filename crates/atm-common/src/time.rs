@@ -153,6 +153,40 @@ mod tests {
     }
 
     #[test]
+    fn a_time_is_read_up_to_each_fields_limit_and_refused_past_it() {
+        for (text, read) in [
+            ("2026-01-01T23:59:59Z", true),
+            ("2026-01-01T24:00:00Z", false),
+            ("2026-01-01T00:60:00Z", false),
+            // Python's strptime takes leap seconds up to 61
+            ("2026-01-01T00:00:61Z", true),
+            ("2026-01-01T00:00:62Z", false),
+            ("2026-01-00T00:00:00Z", false),
+            ("2026-04-30T00:00:00Z", true),
+            ("2026-04-31T00:00:00Z", false),
+            ("2026-00-01T00:00:00Z", false),
+            ("2000-02-29T00:00:00Z", true),
+            ("1900-02-29T00:00:00Z", false),
+            ("2026-05-01 08:30:00Z", false),
+            ("2026-05-01T08:30:00z", false),
+            ("2026-05-01T08:30:00Z ", false),
+            ("+026-05-01T08:30:00Z", false),
+        ] {
+            assert_eq!(parse_iso(text).is_some(), read, "{text}");
+        }
+    }
+
+    #[test]
+    fn civil_fields_and_written_times_count_back_before_1970() {
+        assert_eq!(civil(-60), (1969, 12, 31, 23, 59));
+        assert_eq!(civil(0), (1970, 1, 1, 0, 0));
+        assert_eq!(
+            parse_iso("1960-03-01T12:00:00Z").map(format_iso).as_deref(),
+            Some("1960-03-01T12:00:00Z")
+        );
+    }
+
+    #[test]
     fn local_time_is_now_shifted_by_a_zone_offset() {
         // local_now reads the clock itself, so the second may turn between the reads: its shift from one of the
         // instants around it is the zone's offset (CI's Windows runner saw -1 once)

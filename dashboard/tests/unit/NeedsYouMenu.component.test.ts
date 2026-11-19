@@ -94,6 +94,45 @@ describe('NeedsYouMenu', () => {
     expect(menu()).toHaveClass('align-right');
   });
 
+  // ATM-575: the reviews waiting on the user, counted in the same chip, listed after the tasks
+  describe('with reviews', () => {
+    const REVIEWS = [
+      { id: 'r7', reference: 'CR-7', title: 'The editor', why: 'review' as const },
+      { id: 'r9', reference: 'CR-9', title: 'Search', why: 'answered' as const },
+    ];
+
+    it('counted with the tasks and listed after them, with why; a row opens that review', async () => {
+      const onreview = vi.fn();
+      const { chip, menu, rows, onopen } = setup(ITEMS.slice(0, 1), { reviews: REVIEWS, onreview });
+      expect(chip).toHaveTextContent('3 need you');
+      expect(chip).toHaveAttribute('title', 'Show what needs you');
+      await fireEvent.click(chip!);
+      expect(menu()).toHaveAttribute('aria-label', 'What needs you');
+      expect(rows().map((r) => r.dataset.id ?? r.dataset.review)).toEqual(['T-005', 'CR-7', 'CR-9']);
+      expect(rows()[1]).toHaveTextContent('CR-7 The editor waits for your review');
+      expect(rows()[2]).toHaveTextContent('CR-9 Search answered since you wrote');
+      await settled();
+      await fireEvent.click(rows()[2]);
+      expect(onreview).toHaveBeenCalledWith('CR-9');
+      expect(onopen).not.toHaveBeenCalled();
+    });
+
+    it('one review and no task: the chip opens it', async () => {
+      const onreview = vi.fn();
+      const { chip, menu } = setup([], { reviews: REVIEWS.slice(0, 1), onreview });
+      expect(chip).toHaveTextContent('1 needs you');
+      await fireEvent.click(chip!);
+      expect(menu()).toBeNull();
+      expect(onreview).toHaveBeenCalledWith('CR-7');
+    });
+
+    it('without a way to open them, reviews are neither counted nor listed', () => {
+      const { chip } = setup(ITEMS.slice(0, 1), { reviews: REVIEWS });
+      expect(chip).toHaveTextContent('1 needs you');
+      expect(setup([], { reviews: REVIEWS }).chip).toBeNull();
+    });
+  });
+
   it('closes when fewer than two tasks are left to list', async () => {
     const { chip, menu, rerender } = setup(ITEMS.slice(0, 2));
     await fireEvent.click(chip!);

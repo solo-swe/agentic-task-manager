@@ -3,7 +3,8 @@ import { expect, loadFixture, openDashboard, test } from './helpers';
 
 // NFR-2: with 500 tasks, switching tabs and refreshing data render within 200 ms. Measured inside the page from the
 // action until two animation frames later (so layout and paint are included). Shared CI runners are slower and
-// noisier, so the budget is doubled there.
+// noisier, so the budget is doubled there. Timed (@timed): in a project of their own, after the others
+// (playwright.config.ts, ATM-641)
 const BUDGET_MS = 200 * (process.env.CI ? 2 : 1);
 
 /** Click `selector`, then wait until `done()` holds and two frames have been painted; returns elapsed ms. */
@@ -59,7 +60,7 @@ function sinceStarted(page: Page, done: string) {
   }, done);
 }
 
-test.describe('performance in the app: its tabs (T-525)', () => {
+test.describe('performance in the app: its tabs (T-525)', { tag: '@timed' }, () => {
   // The large project's Kanban, List and Graph, and a small second project, in the window's tabs (T-514), as the app
   // brings them back at its start (T-518)
   const LARGE = 'Performance Project';
@@ -122,7 +123,7 @@ test.describe('performance in the app: its tabs (T-525)', () => {
   });
 });
 
-test.describe('performance with 500 tasks and a large archive', () => {
+test.describe('performance with 500 tasks and a large archive', { tag: '@timed' }, () => {
   test.beforeEach(async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
     const data = loadFixture('large-500');
@@ -152,7 +153,7 @@ test.describe('performance with 500 tasks and a large archive', () => {
   });
 });
 
-test.describe('performance with 500 tasks', () => {
+test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
   test.beforeEach(async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
     await openDashboard(page, tasksServer, 'large-500');
@@ -165,7 +166,8 @@ test.describe('performance with 500 tasks', () => {
       progress: await timeAction(page, '#tab-progress', "document.querySelector('#burndown svg')?.isConnected"),
       // Mounted when selected: the timeline is built from scratch
       agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
-      // Drawn when selected (T-525): its nodes, as the List's rows
+      // Drawn when selected (T-525): its nodes, as the List's rows; fitted, 500 tasks are at 10%, where a node's labels
+      // are too small to read and aren't drawn (ATM-629: shaping their text was half of it)
       graph: await timeAction(
         page,
         '#tab-graph',
@@ -175,6 +177,25 @@ test.describe('performance with 500 tasks', () => {
     };
     console.log('tab switch (ms):', JSON.stringify(timings));
     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
+  });
+
+  // ATM-629: a node's labels are drawn only where they can be read; below that, it names its task on hover
+  test('the graph of 500 tasks, fitted, draws its nodes without labels; zoomed to 100%, with them', async ({
+    page,
+  }) => {
+    await page.locator('#tab-graph').click();
+    const nodes = page.locator('#panel-graph #dep-graph .graph-node');
+    await expect(nodes).toHaveCount(500);
+    await expect(page.locator('.graph-zoom-level')).toHaveText('10%');
+    await expect(nodes.locator('text')).toHaveCount(0);
+    await expect(nodes.first().locator('title')).not.toBeEmpty();
+    await page
+      .locator('.graph-controls button')
+      .and(page.getByTitle(/^Actual size/))
+      .click();
+    await expect(page.locator('.graph-zoom-level')).toHaveText('100%');
+    await expect(page.locator('#panel-graph .graph-node[data-labelled]')).toHaveCount(500);
+    await expect(nodes.first().locator('text')).toHaveCount(2);
   });
 
   test('a reload that changes the data, on every tab', async ({ page, tasksServer }) => {

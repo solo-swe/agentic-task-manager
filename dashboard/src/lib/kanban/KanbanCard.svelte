@@ -1,5 +1,6 @@
 <script lang="ts">
   import { claimSummary } from '../claims';
+  import ReviewLink from '../details/ReviewLink.svelte';
   import type { KanbanCard } from '../kanban';
   import { dashboard } from '../state.svelte';
   import { phaseColor, typeStyle } from '../theme';
@@ -36,7 +37,12 @@
       : '',
   );
 
+  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
+  const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
+
   function onKeydown(e: KeyboardEvent) {
+    // A key on a link inside it (its review's) is the link's
+    if (e.target !== e.currentTarget) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       dashboard.showDetail(task.id);
@@ -88,6 +94,16 @@
   {#if review}
     <div class="kanban-waiting review-wait" title={review.note && markdownPlainText(review.note.text)}>
       {reviewSummary(review)}
+    </div>
+  {/if}
+  {#if codeReview && dashboard.projectId}
+    <div class="card-review">
+      <ReviewLink
+        project={dashboard.projectId}
+        reference={codeReview.ref}
+        status={task.derived?.review_statuses?.[codeReview.id]}
+        prominent
+      />
     </div>
   {/if}
   {#if block}

@@ -98,6 +98,52 @@ mod tests {
     }
 
     #[test]
+    fn a_head_outside_refs_heads_is_its_whole_reference_and_an_empty_one_is_none() {
+        let dir = crate::test_dir::TestDir::new();
+        for (head, branch) in [
+            (
+                "ref: refs/remotes/origin/main\n",
+                Some("refs/remotes/origin/main"),
+            ),
+            ("  ref: refs/heads/main  \r\n", Some("main")),
+            ("\n", None),
+            ("", None),
+        ] {
+            std::fs::write(dir.path().join("HEAD"), head).unwrap();
+            assert_eq!(
+                super::head_branch(dir.path()).as_deref(),
+                branch,
+                "{head:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_linked_worktrees_branch_is_read_from_the_git_folder_its_dot_git_file_names() {
+        let dir = crate::test_dir::TestDir::new();
+        let admin = dir.path().join("repo/.git/worktrees/wt");
+        std::fs::create_dir_all(&admin).unwrap();
+        std::fs::write(admin.join("HEAD"), "ref: refs/heads/feature\n").unwrap();
+        let worktree = dir.path().join("wt");
+        std::fs::create_dir(&worktree).unwrap();
+        // Relative to the worktree, as `git worktree add --relative-paths` writes it, or absolute
+        for line in [
+            "gitdir: ../repo/.git/worktrees/wt\n".to_string(),
+            format!("gitdir: {}\n", admin.display()),
+        ] {
+            std::fs::write(worktree.join(".git"), &line).unwrap();
+            assert_eq!(
+                checked_out_branch(&worktree).as_deref(),
+                Some("feature"),
+                "{line}"
+            );
+        }
+        // A `.git` file that names no git folder: none
+        std::fs::write(worktree.join(".git"), "not a gitdir line\n").unwrap();
+        assert_eq!(checked_out_branch(&worktree), None);
+    }
+
+    #[test]
     fn where_in_git_answers_as_git_does_and_none_outside_it() {
         let dir = crate::test_dir::TestDir::new();
         assert_eq!(super::where_in_git("--git-common-dir", dir.path()), None);

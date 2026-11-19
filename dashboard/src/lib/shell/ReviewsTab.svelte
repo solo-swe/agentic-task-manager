@@ -2,15 +2,47 @@
   import { page as router } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
   import { addressOf, reviewOf, withReview } from '../address';
+  import { watchWorkingCopy } from '../api/changes';
   import { inApp } from '../api/http';
   import { setWindowTitle } from '../api/shell';
-  import { addComment, replyTo, resolveComment, submitDecision, type ChangeResult } from '../api/review-changes';
+  import {
+    addComment,
+    addDraft,
+    closeReview,
+    editComment,
+    openReview,
+    pokeReview,
+    removeDraft,
+    replyTo,
+    resolveComment,
+    submitDecision,
+    updateDraft,
+    type ChangeResult,
+  } from '../api/review-changes';
   import { currentAddress, navigate } from '../navigation';
-  import { isViewed, loadReview, loadReviews, revisionDocuments, toggleViewed, viewedKeys } from '../review-data';
+  import {
+    LIVE_MS,
+    isViewed,
+    loadReview,
+    loadReviews,
+    revisionDocuments,
+    toggleViewed,
+    viewedKeys,
+  } from '../review-data';
+  import { keepFilter, keptFilter } from '../review-filter';
+  import type { TaskLinks } from '../compmd';
+  import { learnReviews, learnUnreadable } from '../reviews/known.svelte';
   import ReviewList from '../reviews/ReviewList.svelte';
   import ReviewPage from '../reviews/ReviewPage.svelte';
   import { reviewTitle } from '../reviews/page';
-  import { NO_QUERY, type ListQuery, type ReviewEntry, type ReviewPageData, type ViewFile } from '../reviews/types';
+  import {
+    NO_QUERY,
+    type ListQuery,
+    type ReviewEntry,
+    type ReviewPageData,
+    type UnreadableReview,
+    type ViewFile,
+  } from '../reviews/types';
   import { reviewWindow } from '../reviews/window.svelte';
   import { withTask } from '../routes';
   import { tabActions } from '../tab-actions';
@@ -27,7 +59,23 @@
 
   // The list
   let query = $state<ListQuery>({ ...NO_QUERY });
+  // Opened with the project's last filter, kept in this browser (ATM-604), and again on going to another project
+  let queryOf: string | null = null;
+  $effect.pre(() => {
+    const id = project;
+    untrack(() => {
+      if (!id || id === queryOf) return;
+      queryOf = id;
+      query = keptFilter(id);
+    });
+  });
+  function chooseQuery(next: ListQuery) {
+    query = next;
+    if (project) keepFilter(project, next);
+  }
   let entries = $state.raw<ReviewEntry[]>([]);
+  // The reviews atm can't read (ATM-617), listed after them
+  let unreadable = $state.raw<UnreadableReview[]>([]);
   // The review shown
   let shown = $state.raw<ReviewPageData | null>(null);
   let loading = $state(false);
@@ -50,6 +98,7 @@
     try {
       if (at.review) {
         const page = await loadReview(id, at.review, at.round, at.against);
+        learnReviews(id, [page.review]);
         const text = JSON.stringify(page);
         if (ask === asked && text !== shownText) {
           shownText = text;
@@ -57,10 +106,15 @@
         }
       } else {
         const listed = await loadReviews(id, query);
-        const text = JSON.stringify(listed.reviews);
+        learnReviews(
+          id,
+          listed.reviews.map((e) => e.review),
+        );
+        learnUnreadable(id, listed.unreadable ?? []);
+        const text = JSON.stringify([listed.reviews, listed.unreadable]);
         if (ask === asked && text !== entriesText) {
           entriesText = text;
-          entries = listed.reviews;
+          [entries, unreadable] = [listed.reviews, listed.unreadable ?? []];
         }
       }
       if (ask === asked) problem = null;
@@ -91,10 +145,21 @@
     });
   });
 
-  // The server pushes nothing about reviews yet: ask again now and then while the tab is in view, and on coming back
+  // The server pushes nothing about reviews yet: ask again now and then while the tab is in view, and on coming back.
+  // A live review follows its working copy (ATM-576): in the app, asked again when the app says a file of the work
+  // changed (ATM-607); in the browser, every LIVE_MS while it is shown, a 304 while nothing changed. The rest every 10 s
+  const followingLive = $derived(!!at.review && shown?.review.status === 'live');
+  $effect(() => {
+    const id = project;
+    if (!inApp || !followingLive || !id) return;
+    return watchWorkingCopy(dashboard.workspace, id, () => void load());
+  });
+  let ticks = 0;
   const timer = setInterval(() => {
-    if (document.visibilityState === 'visible') void load();
-  }, 10_000);
+    if (document.visibilityState !== 'visible') return;
+    ticks += 1;
+    if ((followingLive && !inApp) || ticks % (10_000 / LIVE_MS) === 0) void load();
+  }, LIVE_MS);
   onDestroy(() => clearInterval(timer));
 
   // The window's title: the project's short name, the review's reference and title
@@ -140,8 +205,45 @@
     return null;
   }
 
+  /** A live review opened from the list (ATM-576), then shown; or why it was refused */
+  async function startLive(live: { title: string; base: string; task: string }): Promise<string | null> {
+    if (!project) return 'No project is open.';
+    const result = await openReview(project, {
+      title: live.title,
+      start: 'live',
+      change: live.base ? { base: live.base } : {},
+      ...(live.task ? { tasks: [live.task] } : {}),
+    });
+    if (!result.ok) return result.message;
+    const reference = result.body.reference;
+    if (typeof reference === 'string') open(reference);
+    return null;
+  }
+
   const review = $derived(shown?.review.reference ?? at.review ?? '');
   const listAddress = $derived(withReview(currentAddress(), { review: null }));
+
+  // A task named in a review (ATM-593): this project's opens its details over the review (the review's own address,
+  // with `?task=`), closed back to the review as it was; another project's opens at its project's page. ⌘, Ctrl or a
+  // middle click: a tab of its own, at its project's page with its details. A key naming no task the page knows
+  // isn't a link
+  const foreign = (key: string) => (dashboard.findTask(key) ? null : (dashboard.refOf(key).address ?? null));
+  /** A task's own page: its project's list with its details, for a link's address and a tab of its own */
+  function taskPage(key: string): string {
+    return foreign(key) ?? withTask(withView(listAddress, 'list'), key);
+  }
+  const taskLinks: TaskLinks = {
+    known: (key) => !!dashboard.findTask(key) || !!foreign(key),
+    open(key, newTab) {
+      const elsewhere = foreign(key);
+      if (newTab || (elsewhere && inApp)) {
+        const address = taskPage(key);
+        if (inApp) tabActions().open(address);
+        else window.open(address, '_blank', 'noopener');
+      } else if (elsewhere) go(elsewhere);
+      else go(withTask(currentAddress(), key));
+    },
+  };
 </script>
 
 <svelte:window onfocus={() => void load()} />
@@ -156,7 +258,8 @@
         file={at.file}
         side={(revision) => revisionDocuments(project, revision)}
         isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
-        taskHref={(key) => withTask(withView(listAddress, 'list'), key)}
+        taskHref={taskPage}
+        tasks={taskLinks}
         backHref={listAddress}
         onback={() => go(listAddress)}
         {busy}
@@ -178,7 +281,27 @@
           )}
         onreply={(to, body) => change(replyTo(project, review, to, body))}
         onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
+        onedit={(comment, body) => change(editComment(project, review, comment, body))}
         onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
+        onclose={(reason) => change(closeReview(project, review, reason))}
+        onpoke={(body) => change(pokeReview(project, review, body))}
+        ondrafts={{
+          comment: (path, picked, body) =>
+            change(
+              addDraft(project, review, {
+                path,
+                lines: picked?.lines ?? null,
+                side: picked?.side ?? 'new',
+                quote: picked?.quote ?? null,
+                round: path ? page.view.round : null,
+                body,
+              }),
+            ),
+          reply: (to, body) => change(addDraft(project, review, { reply_to: to, body })),
+          edit: (id, body) => change(updateDraft(project, review, id, body)),
+          remove: (id) => change(removeDraft(project, review, id)),
+        }}
+        ondocument={(ref) => dashboard.openDocument(ref)}
       />
     {:else if problem}
       <p class="reviews-problem" role="alert">{problem}</p>
@@ -205,12 +328,17 @@
   {:else}
     <ReviewList
       {entries}
+      {unreadable}
       {query}
       {loading}
       {problem}
       href={(reference) => withReview(currentAddress(), { review: reference })}
-      onquery={(next) => (query = next)}
+      onquery={chooseQuery}
       onopen={(reference, newTab) => open(reference, newTab)}
+      onpoke={project ? (entry) => change(pokeReview(project, entry.review.reference)) : undefined}
+      onlive={startLive}
+      taskHref={taskPage}
+      {taskLinks}
     />
   {/if}
 </div>

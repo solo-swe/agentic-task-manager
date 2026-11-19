@@ -345,6 +345,86 @@ fn migrate_phases(paths: &Paths) -> Result<Option<Vec<Value>>> {
     Ok(Some(written.1))
 }
 
+/// What a merge renumbered (ADR-009: a clash moved a task to the next free number, `meta.renumbered`), said once:
+/// taken out of `tasks.json`, the list given back. None when nothing moved.
+fn take_renumbered(paths: &Paths) -> Result<Vec<Value>> {
+    let listed = |document: &Value| {
+        document
+            .pointer("/meta/renumbered")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    // A file that can't be read: nothing to say here (the command the skill runs next reports the problem)
+    if load_tasks(paths).map_or(true, |loaded| listed(&loaded.document).is_empty()) {
+        return Ok(Vec::new());
+    }
+    let moved = {
+        let _lock = lock(&paths.dir, None)?;
+        let mut document = load_tasks(paths)?.document;
+        let moved = listed(&document);
+        if let Some(meta) = document.get_mut("meta").and_then(Value::as_object_mut) {
+            meta.shift_remove("renumbered");
+        }
+        write_json(&paths.tasks, &document)?;
+        moved
+    };
+    if in_git(&paths.root) {
+        stage(&paths.root, &[&paths.tasks]);
+    }
+    Ok(moved)
+}
+
+/// How many tasks of the list carry `key_final` (ADR-007's provisional keys, gone with ADR-009).
+fn with_key_final(tasks: &[Value]) -> usize {
+    tasks
+        .iter()
+        .filter(|t| t.get("key_final").is_some())
+        .count()
+}
+
+/// ADR-009: keys are plain from creation, so `key_final` leaves every task of `tasks.json` and the archive, once (a file
+/// without it is left as it is). How many tasks it was dropped from.
+fn drop_key_final(paths: &Paths) -> Result<usize> {
+    let count = |document: &Value| {
+        with_key_final(document["tasks"].as_array().map_or(&[][..], Vec::as_slice))
+    };
+    let precheck = || -> Result<usize> {
+        Ok(count(&load_tasks(paths)?.document) + count(&archive_document(paths)?))
+    };
+    if precheck().unwrap_or(0) == 0 {
+        return Ok(0);
+    }
+    let archive = paths.archive();
+    let (written, dropped) = {
+        let _lock = lock(&paths.dir, None)?;
+        let mut document = load_tasks(paths)?.document;
+        let mut archived = archive_document(paths)?;
+        let dropped = count(&document) + count(&archived);
+        let strip = |tasks: &mut [Value]| {
+            for task in tasks.iter_mut().filter_map(Value::as_object_mut) {
+                task.shift_remove("key_final");
+            }
+        };
+        if let Some(tasks) = document["tasks"].as_array_mut() {
+            strip(tasks);
+        }
+        strip(tasks_mut(&mut archived));
+        write_json(&paths.tasks, &document)?;
+        let mut written = vec![paths.tasks.clone()];
+        if archive.is_file() {
+            write_json(&archive, &archived)?;
+            written.push(archive.clone());
+        }
+        (written, dropped)
+    };
+    if in_git(&paths.root) {
+        let files: Vec<&Path> = written.iter().map(std::path::PathBuf::as_path).collect();
+        stage(&paths.root, &files);
+    }
+    Ok(dropped)
+}
+
 /// The unfinished tasks labelled `interactive` without a `with`, unless the migration ran already.
 fn interactive_tasks(document: &Value, vocab: &Vocabulary) -> Vec<usize> {
     let done = document
@@ -440,7 +520,8 @@ fn ensure_gitignore(task_dir: &Path) -> Result<bool> {
 
 /// Move a legacy `tasks.json` into the task folder (staged with `git mv` when git tracks it), set the folder up, and
 /// bring the task data up to date. What it did: `{moved, removed_dashboard, warning, gitignore_updated,
-/// merge_driver_updated, cleaned_up, finish_times_filled, sprints_from_phases, with_user_from_label[, suggest]}`.
+/// merge_driver_updated, cleaned_up, finish_times_filled, sprints_from_phases, with_user_from_label,
+/// key_final_dropped, renumbered[, suggest]}`.
 ///
 /// # Errors
 /// When a file can't be moved, read or written.
@@ -456,6 +537,8 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
         "finish_times_filled": 0,
         "sprints_from_phases": null,
         "with_user_from_label": 0,
+        "key_final_dropped": 0,
+        "renumbered": [],
     })
     .as_object()
     .cloned()
@@ -527,6 +610,8 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
         "with_user_from_label".into(),
         json!(migrate_interactive(paths)?),
     );
+    result.insert("key_final_dropped".into(), json!(drop_key_final(paths)?));
+    result.insert("renumbered".into(), Value::Array(take_renumbered(paths)?));
     // An unreadable file: the command the skill runs next reports the problem
     if let Ok(loaded) = load_tasks(paths) {
         let size = std::fs::metadata(&paths.tasks).map_or(0, |m| m.len());
@@ -596,6 +681,31 @@ pub fn describe_migration(r: &Map<String, Value>, paths: &Paths) -> Vec<String> 
         };
         lines.push(format!(
             "Gave {tasks} labelled interactive `with: user` (done together with you; unattended loops skip them)."
+        ));
+    }
+    let plain = count("key_final_dropped");
+    if plain > 0 {
+        let tasks = if plain == 1 {
+            "1 task".to_string()
+        } else {
+            format!("{plain} tasks")
+        };
+        lines.push(format!(
+            "Task keys are plain now (ADR-009): dropped key_final from {tasks} (staged, not committed)."
+        ));
+    }
+    for moved in r
+        .get("renumbered")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let (from, to) = (
+            atm_common::py::py_str_opt(moved.get("from")),
+            atm_common::py::py_str_opt(moved.get("to")),
+        );
+        lines.push(format!(
+            "{from} is now {to} (both branches made {from}); {from} still finds it."
         ));
     }
     if lines.is_empty() {

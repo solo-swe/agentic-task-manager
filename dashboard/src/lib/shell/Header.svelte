@@ -13,6 +13,7 @@
   import SettingsMenu from './SettingsMenu.svelte';
   import WorkspaceSelector from './WorkspaceSelector.svelte';
   import { inApp } from '../api/http';
+  import { openReviewPage } from '../reviews/open';
 
   const onProject = $derived(dashboard.route.page === 'project');
   // A project's page is titled by its name alone (T-271); while loading, the name it had (kept, or as the workspace
@@ -39,7 +40,14 @@
   );
   // Tasks that need the user: in review, or blocked on a question for the user (D-3.3)
   // With you: only the active sprint's, ready to start (T-347), as atm's summary counts them
-  const needYou = $derived(needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints }));
+  // And the project's reviews waiting on the user (ATM-575), from its summary: in the same chip, after the tasks; a
+  // task in review through one of them is listed once, as its review (ATM-640)
+  const reviewsNeedingYou = $derived(
+    dashboard.projects.find((p) => p.id === dashboard.projectId)?.summary?.needs_you_reviews ?? [],
+  );
+  const needYou = $derived(
+    needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints }, reviewsNeedingYou),
+  );
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 
@@ -109,6 +117,8 @@
         <NeedsYouMenu
           items={needYou}
           onopen={(id) => dashboard.showDetail(id)}
+          reviews={reviewsNeedingYou}
+          onreview={(reference) => dashboard.projectId && openReviewPage(dashboard.projectId, reference)}
           chipId="attention-count"
           menuId="needs-you-menu"
         />

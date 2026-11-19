@@ -4,7 +4,7 @@
   // WAI-ARIA combobox pattern): typing filters, the arrows, Home and End move, Enter opens. It opens in Bits UI's
   // popover (T-431): focus moves to the field, Escape or a click outside closes it, and focus goes back to the button.
   import { Popover } from 'bits-ui';
-  import type { ProjectEntry } from '../load';
+  import { needsYou } from '../projects';
   import { dashboard } from '../state.svelte';
   import Icon from '../ui/Icon.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
@@ -20,9 +20,7 @@
   let active = $state(OVERVIEW);
 
   const current = $derived(dashboard.route.page === 'project' ? dashboard.route.id : OVERVIEW);
-  const needsYou = (p: ProjectEntry) =>
-    p.summary ? p.summary.needs_you.review + p.summary.needs_you.blocked_on_user : 0;
-  /** What needs the user in the other projects: the badge on the button */
+  /** What needs the user in the other projects: the badge on the button (tasks and code reviews, ATM-606) */
   const othersNeed = $derived(
     badge ? dashboard.projects.filter((p) => p.id !== current && !p.missing).reduce((n, p) => n + needsYou(p), 0) : 0,
   );

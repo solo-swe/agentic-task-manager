@@ -141,16 +141,17 @@ A review goes through these statuses:
 ```mermaid
 stateDiagram-v2
     [*] --> draft: create --draft
-    [*] --> open: create
+    [*] --> waiting: create
     [*] --> live: live
-    draft --> open: the author asks for review
-    open --> changes_requested: a reviewer submits "request changes"
-    changes_requested --> open: the author adds a round
-    open --> approved: a reviewer approves (every top-level comment resolved)
+    draft --> waiting: the author asks for review
+    waiting --> changes_requested: a reviewer submits "request changes"
+    changes_requested --> waiting: the author adds a round
+    waiting --> approved: a reviewer approves (every top-level comment resolved)
     live --> approved: a reviewer approves (every top-level comment resolved)
-    live --> open: the author ends the live review with a round
+    changes_requested --> approved: a reviewer approves after all (every top-level comment resolved; ATM-609)
+    live --> waiting: the author ends the live review with a round
     draft --> closed
-    open --> closed
+    waiting --> closed
     changes_requested --> closed
     live --> closed
     approved --> [*]
@@ -160,11 +161,15 @@ stateDiagram-v2
 | Status | Means | Who moves it there |
 |---|---|---|
 | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
-| `open` | waiting on the reviewers | the author, with a round |
+| `waiting` | *Waiting for review*: waiting on the reviewers (ATM-613: `open` until 0.41.0). `review.md` still writes it `open`, so an app or a clone on an older atm sees the review (reading `waiting` too) | the author, with a round |
 | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
-| `changes_requested` | sent back for fixes | a reviewer, when submitting |
+| `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words, as a comment (the page's *Publish comments*; ATM-597): it isn't sent back again (CR-2); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
 | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
 | `closed` | ended without approval (abandoned, replaced) | the author, or a reviewer |
+
+An **open** review is one not decided yet: draft, waiting, live or changes requested (ATM-613). `open` names that
+group wherever statuses are filtered (`atm review list --status open`, the list's `status=open`, its *Open* button);
+it is no status of its own.
 
 **How it relates to its tasks** (the review's decisions are its tasks', §3.8). A review names **one task or several**,
 and the names can be given at three points, marked ① ② ③ below:
@@ -313,6 +318,18 @@ headings, boxes and IDs. If someone edits it by hand into something atm can't re
 without an author), atm doesn't throw that text away: it keeps it, shows it as it is, and `atm doctor` names the
 review and the lines, as it does for a task it can't read.
 
+**Drafts (ATM-612, from CR-2).** A reviewer may write comments and replies as **drafts** and send them together, as
+GitHub's *start a review*: a box that writes a comment or a reply offers *Add to my review* (a draft), *Comment now*
+(sent at once) and Cancel; while they have drafts, adding one more is its main action. Drafts are the person's alone:
+kept in their own atm state folder (`drafts/`, a file per project, review and person), **never in `comments.md` or
+the review's folder**, which is committed to git, so no one else, no agent's watch and no commit sees them. A draft
+comment is anchored as a comment is, on its round, and the review's page places it in later rounds as it places that
+round's comments; one on what a live review is now is anchored when it is sent. Its decision sends them first, every
+check made before any is sent: *Comment*, *Request changes* or *Approve* (an approval refused while a drafted comment
+would be open once sent); on a review sent back, *Publish comments* (a comment with no words of its own) sends only
+them. An agent drafts nothing: it comments at once. `atm review draft add|list|edit|remove`, and for the window and
+the browser the drafts routes (§3.12).
+
 ### 3.5 Live reviews
 
 A **live review** watches a change while it is being made, so the reviewer can comment as it grows, closer to pair
@@ -340,14 +357,14 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
   an approval still needs every top-level comment resolved. An agent never uses it on its own: no skill pre-approves
   `atm review submit`, so its harness asks the user each time.
 - **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author
-  ends it with a round, which makes it an ordinary `open` review; or it is closed.
+  ends it with a round, which makes it an ordinary `waiting` review; or it is closed.
 - **When the task is finished**, the agent asks for its review as its review mode says, and atm sees which case it is:
 
   | During the task | At the end |
   |---|---|
   | no live review, no comments | the agent creates the CR (`atm review create --task ATM-482 …`) and the task goes in review, as today |
   | a live review, approved, the task's change unchanged since the approved checkpoint | **no other CR**: the live review's approval is the task's (`review_state = approved`, with the CR's link) |
-  | a live review, not approved (or changed since its approval) | no new CR: the agent ends the live review with a round on the final change (`atm review round CR-9`), which makes it `open`, and the task goes in review on it |
+  | a live review, not approved (or changed since its approval) | no new CR: the agent ends the live review with a round on the final change (`atm review round CR-9`), which makes it `waiting`, and the task goes in review on it |
 
 ### 3.6 Rounds, anchors and drift
 

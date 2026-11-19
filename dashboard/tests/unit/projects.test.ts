@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
-import { idHash, isActive, monogram, needsYou, openTasks, orderProjects, statsLine } from '../../src/lib/projects';
+import {
+  idHash,
+  isActive,
+  monogram,
+  needsYou,
+  openTasks,
+  orderProjects,
+  reviewsWaiting,
+  statsLine,
+} from '../../src/lib/projects';
 import { summary } from './summary.helpers';
 
 describe('statsLine (T-255)', () => {
@@ -56,10 +65,18 @@ function project(id: string, fields: Partial<ProjectSummary> | null = {}, missin
 
 describe('needsYou and openTasks', () => {
   it('count reviews and questions for the user; open work is neither done nor skipped', () => {
-    const needs_you = { review: 2, blocked_on_user: 1, together: 0 };
+    const needs_you = { review: 2, blocked_on_user: 1, together: 0, code_reviews: 0 };
     const p = project('a', { total: 10, done: 4, skipped: 3, needs_you });
     expect([needsYou(p), openTasks(p)]).toEqual([3, 3]);
     expect([needsYou(project('b', null)), openTasks(project('b', null))]).toEqual([0, 0]);
+  });
+
+  // ATM-606: code reviews waiting on the user count with the tasks (the server counts a task through its review once)
+  it('count the code reviews waiting on the user too, and reviewsWaiting those alone', () => {
+    const p = project('a', { needs_you: { review: 1, blocked_on_user: 0, together: 2, code_reviews: 3 } });
+    expect([needsYou(p), reviewsWaiting(p)]).toEqual([6, 3]);
+    expect(reviewsWaiting(project('b', null))).toBe(0);
+    expect(reviewsWaiting(undefined)).toBe(0);
   });
 });
 

@@ -53,7 +53,7 @@ test('migrate --keys: UUIDs, numbers, references and claims; the same in every c
     const one = archived.tasks[0];
     for (const t of [seven, odd, one]) {
       assert.match(t.id, UUID);
-      assert.equal(t.key_final, true);
+      assert.equal(t.key_final, undefined, 'plain keys (ADR-009)');
     }
     assert.deepEqual([seven.number, odd.number, one.number], [7, 9, 1]);
     assert.deepEqual(odd.aliases, ['T-P1-03']);
@@ -89,7 +89,7 @@ test('migrate --keys: UUIDs, numbers, references and claims; the same in every c
   }
 });
 
-test('commands take a key, an earlier prefix or a UUID, and show keys, provisional ones with a ~', () => {
+test('commands take a key (with an old ~ too), an earlier prefix or a UUID, and show keys plain (ADR-009)', () => {
   const root = makeProject({
     files: {
       [FILE]: {
@@ -111,33 +111,36 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
   try {
     ok(['project', 'key', 'set', 'ATM']);
     const two = read(root, FILE).tasks[1];
-    // A new task: a UUID, the next number, provisional
+    // A new task: a UUID, the next number, its key plain from the start
     const dir = path.join(root, '..', `${path.basename(root)}-new`);
     fs.mkdirSync(dir);
     fs.writeFileSync(
       path.join(dir, 'new.json'),
       JSON.stringify([{ name: 'three', type: 'feature', dependencies: ['ATM-2'] }]),
     );
-    assert.match(ok(['task', 'add', '--json-file', path.join(dir, 'new.json')]), /^Added ~ATM-3 three$/m);
+    assert.match(ok(['task', 'add', '--json-file', path.join(dir, 'new.json')]), /^Added ATM-3 three$/m);
     removeDir(dir);
     const three = read(root, FILE).tasks[2];
     assert.equal(three.number, 3);
-    assert.equal(three.key_final, false);
+    assert.equal(three.key_final, undefined);
     assert.deepEqual(three.dependencies, [two.id], 'stored by UUID');
 
-    // The list shows keys, the provisional one marked
+    // The list shows keys, all plain
     const list = ok(['task', 'list']);
     assert.match(list, /^ATM-1 +done/m);
-    assert.match(list, /^~ATM-3 +todo/m);
+    assert.match(list, /^ATM-3 +todo/m);
+    assert.doesNotMatch(list, /~/);
     const rows = JSON.parse(ok(['task', 'list', '--json']));
     assert.deepEqual(
       rows.map((r) => [r.key, r.key_final, r.label]),
       [
-        ['ATM-1', true, 'ATM-1'],
-        ['ATM-2', true, 'ATM-2'],
-        ['ATM-3', false, '~ATM-3'],
+        ['ATM-1', undefined, 'ATM-1'],
+        ['ATM-2', undefined, 'ATM-2'],
+        ['ATM-3', undefined, 'ATM-3'],
       ],
     );
+    // A key written with the old ~ still finds its task
+    assert.match(ok(['task', 'details', '~ATM-3']), /^ATM-3  three$/m);
     assert.equal(rows[1].id, two.id, 'the UUID too');
 
     // Details by key, by the old prefix, by UUID: the same task, its dependency by key
@@ -150,11 +153,11 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
 
     // A refusal names tasks by key: ATM-3 waits for ATM-2
     const waiting = runAtm(['task', 'state', 'ATM-3', 'in_progress'], root);
-    assert.match(waiting.stderr, /can't start ~ATM-3: waiting on ATM-2 \(todo\)/);
+    assert.match(waiting.stderr, /can't start ATM-3: waiting on ATM-2 \(todo\)/);
     // A state change and an edit by key
     assert.match(ok(['task', 'state', 'ATM-2', 'in_progress']), /^ATM-2: todo -> in_progress$/m);
     assert.match(ok(['task', 'note', 'ATM-2', 'a note']), /^ATM-2: note added \(1 in all\)$/m);
-    assert.match(ok(['task', 'deps', 'ATM-3']), /^~ATM-3 waits for: ATM-2 \(in_progress\)$/m);
+    assert.match(ok(['task', 'deps', 'ATM-3']), /^ATM-3 waits for: ATM-2 \(in_progress\)$/m);
     assert.equal(read(root, FILE).tasks[1].status, 'in_progress');
     ok(['task', 'edit', 'T-002', '--add-related', 'ATM-1']);
     assert.deepEqual(read(root, FILE).tasks[1].related, [read(root, FILE).tasks[0].id]);
@@ -234,8 +237,9 @@ test('every line for people names tasks by key, never by UUID; --json has the ke
   }
 });
 
-test('a key becomes final once its task is on origin’s base branch, read from git (T-542)', () => {
-  const remote = tempDir('atm-remote-');
+// ADR-009 (ATM-635): a key is plain from creation, on a branch as on main; an old file's key_final is dropped once by
+// migrate; a direct push records nothing (`atm vcs pushed` without --pr stays, for skills installed before)
+test('a key is plain from creation; migrate drops an old key_final once; a direct push changes no task', () => {
   const root = makeProject({
     files: { [FILE]: { meta: { id: '3f2a9c1e', project: 'Fig' }, tasks: [] } },
     git: true,
@@ -250,32 +254,29 @@ test('a key becomes final once its task is on origin’s base branch, read from 
       removeDir(dir);
     }
   };
-  const task = (name) => read(root, FILE).tasks.find((t) => t.name === name);
   try {
-    git(['init', '-q', '--bare', remote], root);
-    git(['branch', '-M', 'main'], root);
-    git(['remote', 'add', 'origin', remote], root);
     assert.equal(runAtm(['project', 'key', 'set', 'FIG'], root).code, 0);
-    git(['commit', '-q', '-am', 'keys'], root);
-    git(['push', '-q', '-u', 'origin', 'main'], root);
-    // Added on a branch: provisional, and migrate leaves it so (it isn't on origin/main)
     git(['switch', '-q', '-c', 'work'], root);
     add('on a branch');
-    git(['commit', '-q', '-am', 'work'], root);
-    runAtm(['db', 'migrate'], root);
-    assert.equal(task('on a branch').key_final, false);
-    // Merged and pushed: final on the next migrate, never from what anyone says
-    git(['switch', '-q', 'main'], root);
-    git(['merge', '-q', '--no-edit', 'work'], root);
-    git(['push', '-q', 'origin', 'main'], root);
+    assert.match(runAtm(['task', 'list'], root).stdout, /^FIG-1 /m, 'plain on a branch');
+    // A file an earlier atm wrote, with key_final on its tasks: dropped once, and said
+    const doc = read(root, FILE);
+    doc.tasks[0].key_final = false;
+    fs.writeFileSync(path.join(root, FILE), JSON.stringify(doc, null, 2));
     const r = runAtm(['db', 'migrate', '--json'], root);
     assert.equal(r.code, 0, r.stderr);
-    assert.deepEqual(JSON.parse(r.stdout).keys_final, ['FIG-1']);
-    assert.equal(task('on a branch').key_final, true);
-    assert.match(runAtm(['task', 'list'], root).stdout, /^FIG-1 /m, 'no ~ any more');
+    assert.equal(JSON.parse(r.stdout).key_final_dropped, 1);
+    assert.equal(read(root, FILE).tasks[0].key_final, undefined);
+    assert.match(runAtm(['db', 'migrate'], root).stdout, /^Nothing to migrate\.$/m);
+    // A direct push records nothing
+    const before = fs.readFileSync(path.join(root, FILE), 'utf8');
+    const pushed = runAtm(['vcs', 'pushed'], root);
+    assert.equal(pushed.code, 0, pushed.stderr);
+    assert.equal(pushed.stdout, 'Nothing to record without --pr: a direct push changes no task.\n');
+    assert.deepEqual(JSON.parse(runAtm(['vcs', 'pushed', '--json'], root).stdout), { tasks: [] });
+    assert.equal(fs.readFileSync(path.join(root, FILE), 'utf8'), before);
   } finally {
     removeDir(root);
-    removeDir(remote);
   }
 });
 
@@ -361,7 +362,6 @@ test('the task views and the summary show another project’s task by its key, s
       archived: false,
       kind: 'todo',
       key: 'ATM-1',
-      key_final: true,
       ambiguous: false,
     });
     assert.equal(foreign[gone].found, false);
@@ -371,7 +371,7 @@ test('the task views and the summary show another project’s task by its key, s
     // The summary's board names what LFB-1 waits for by its key there, and gives LFB-1's own
     const card = JSON.parse(run(blog, ['project', 'summary']).stdout).board.todo.cards[0];
     assert.equal(card.key, 'LFB-1');
-    assert.equal(card.key_final, true);
+    assert.equal(card.key_final, undefined);
     assert.deepEqual(card.waiting_for, [ref]);
     assert.deepEqual(card.waiting_for_labels, ['ATM-1']);
     // Done there: done here too
@@ -492,7 +492,7 @@ test('migrate --keys on a copy of this repository’s own task files loses nothi
     after.forEach((t, i) => {
       const old = before[i];
       assert.match(t.id, UUID, old.id);
-      assert.equal(t.key_final, true);
+      assert.equal(t.key_final, undefined);
       assert.ok(!numbers.has(t.number), `${old.id}: number ${t.number} given once`);
       numbers.add(t.number);
       // T-527 keeps 527 (the file's prefix is T-)

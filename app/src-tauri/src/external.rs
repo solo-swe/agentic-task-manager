@@ -90,4 +90,24 @@ mod tests {
             assert!(external_url(url).is_err(), "{url}");
         }
     }
+
+    /// The scheme is read as the URL standard reads it, in any case; what opens is the URL as parsed
+    #[test]
+    fn a_scheme_in_capitals_is_the_same_scheme() {
+        let opened = external_url("HTTPS://Example.com/Path").expect("a web link");
+        assert_eq!(opened.as_str(), "https://example.com/Path");
+        assert!(matches!(
+            external_url("FILE:///etc/passwd"),
+            Err(AppError::Refused(_))
+        ));
+    }
+
+    /// The refusal says which scheme, so the page's note can
+    #[test]
+    fn a_refusal_names_the_scheme() {
+        let Err(AppError::Refused(why)) = external_url("vscode://file/x") else {
+            panic!("refused");
+        };
+        assert!(why.contains("vscode:"), "{why}");
+    }
 }

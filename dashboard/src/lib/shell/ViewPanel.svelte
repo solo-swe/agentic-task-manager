@@ -1,5 +1,6 @@
 <script lang="ts">
   import { adjacentView, GROUP_END, VIEW_ICONS, VIEW_LABELS, VIEWS, type ViewId } from '../tabs';
+  import { reviewsWaiting } from '../projects';
   import { dashboard } from '../state.svelte';
   import AgentsTab from '../agents/AgentsTab.svelte';
   import DepGraph from '../graph/DepGraph.svelte';
@@ -12,6 +13,8 @@
   import TaskGrid from '../tasks/TaskGrid.svelte';
 
   const view = $derived(dashboard.tab);
+  /** The project's code reviews waiting on the user (ATM-606), from its summary: the Reviews tab's badge */
+  const reviewsForYou = $derived(reviewsWaiting(dashboard.projects.find((p) => p.id === dashboard.projectId)));
   // The tab buttons, for moving the focus with the arrow keys. `$state`, as `bind:this` into an object's property
   // needs (Svelte's binding_property_non_reactive); elements aren't proxied, only the object holding them
   const tabs: Partial<Record<ViewId, HTMLButtonElement>> = $state({});
@@ -44,7 +47,15 @@
           aria-controls="panel-{id}"
           tabindex={view === id ? 0 : -1}
           onclick={() => select(id)}
-          onkeydown={onTabKeydown}><Icon name={VIEW_ICONS[id]} size={15} />{VIEW_LABELS[id]}</button
+          aria-label={id === 'reviews' && reviewsForYou
+            ? `${VIEW_LABELS[id]}, ${reviewsForYou} waiting for you`
+            : undefined}
+          onkeydown={onTabKeydown}
+          ><Icon name={VIEW_ICONS[id]} size={15} />{VIEW_LABELS[id]}{#if id === 'reviews' && reviewsForYou}<span
+              class="view-tab-badge"
+              id="reviews-waiting"
+              title="{reviewsForYou} waiting for you: a decision, a round, or an answer to read">{reviewsForYou}</span
+            >{/if}</button
         >
         {#if id === GROUP_END}<span class="view-tab-divider" aria-hidden="true"></span>{/if}
       {/each}

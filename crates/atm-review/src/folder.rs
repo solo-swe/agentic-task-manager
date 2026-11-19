@@ -47,6 +47,17 @@ struct Held {
     comments: CommentsFile,
 }
 
+/// A review's folder atm can't read (ATM-617): listed as such, never left out without a word.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Unreadable {
+    /// The folder's name (`CR-13-3b8e`).
+    pub folder: String,
+    /// The review it is, by its folder's number (`CR-13`).
+    pub reference: String,
+    /// Why it can't be read.
+    pub problem: String,
+}
+
 /// A project's reviews in its task folder.
 #[derive(Debug, Clone)]
 pub struct FileStore {
@@ -150,6 +161,28 @@ impl FileStore {
         &self.reviews_dir
     }
 
+    /// The folder of the review `header` is of, in [`FileStore::folder`] (whether or not it exists).
+    #[must_use]
+    pub fn folder_of(&self, header: &ReviewHeader) -> PathBuf {
+        self.reviews_dir
+            .join(folder_name(header.number, &header.id))
+    }
+
+    /// The first round of the review `header` is of, as its folder has it; none when it has no readable one (ATM-630:
+    /// the commit it was made at says which task its keys meant then).
+    #[must_use]
+    pub fn first_round(&self, header: &ReviewHeader) -> Option<Round> {
+        let rounds = self.folder_of(header).join(ROUNDS_DIR);
+        if is_symlink(&rounds) {
+            return None;
+        }
+        let path = rounds.join("1.json");
+        let text = read_file(&path).ok()??;
+        serde_json::from_str::<Round>(&text)
+            .ok()
+            .filter(|r| r.number == 1)
+    }
+
     /// One review's folder, read: its header, summary, comments and rounds.
     fn read_review(folder: &Path) -> Result<Held> {
         if is_symlink(folder) {
@@ -208,20 +241,23 @@ impl FileStore {
         })
     }
 
-    /// Every review, with its reference given, and what couldn't be read (a line each).
-    fn read_all(&self) -> Result<(Vec<Held>, Vec<String>)> {
+    /// Every review, with its reference given, what couldn't be read (a line each), and the reviews that couldn't.
+    fn read_all(&self) -> Result<(Vec<Held>, Vec<String>, Vec<Unreadable>)> {
         let mut held = Vec::new();
         let mut problems = Vec::new();
+        let mut unreadable = Vec::new();
         let entries = match std::fs::read_dir(&self.reviews_dir) {
             Ok(entries) => entries,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((held, problems)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok((held, problems, unreadable));
+            }
             Err(e) => return Err(io(&self.reviews_dir)(e)),
         };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if folder_number(&name).is_none() {
+            let Some(number) = folder_number(&name) else {
                 continue;
-            }
+            };
             match Self::read_review(&entry.path()) {
                 Ok(review) => {
                     problems.extend(
@@ -233,11 +269,27 @@ impl FileStore {
                     );
                     held.push(review);
                 }
-                Err(e) => problems.push(format!("{name}: {e}")),
+                Err(e) => {
+                    problems.push(format!("{name}: {e}"));
+                    unreadable.push(Unreadable {
+                        folder: name,
+                        reference: format!("CR-{number}"),
+                        problem: e.to_string(),
+                    });
+                }
             }
         }
         number_references(&mut held);
-        Ok((held, problems))
+        unreadable.sort_by(|a, b| a.folder.cmp(&b.folder));
+        Ok((held, problems, unreadable))
+    }
+
+    /// The reviews' folders atm can't read, by folder (ATM-617: `atm review list` and the Reviews tab list them).
+    ///
+    /// # Errors
+    /// The reviews' folder can't be read.
+    pub fn unreadable(&self) -> Result<Vec<Unreadable>> {
+        Ok(self.read_all()?.2)
     }
 
     /// What the reviews' files hold that atm can't read: for `atm doctor`.
@@ -248,9 +300,50 @@ impl FileStore {
         Ok(self.read_all()?.1)
     }
 
+    /// Every review the folder can read, whole, with its comments (ATM-606: what waits on the user, in one read
+    /// rather than a read per review).
+    ///
+    /// # Errors
+    /// The reviews' folder can't be read.
+    pub fn reviews(&self) -> Result<Vec<Review>> {
+        Ok(self.read_all()?.0.into_iter().map(|h| h.review).collect())
+    }
+
+    /// What changes when any review does, without reading one (ATM-606, for a summary's cache and its `ETag`): how
+    /// many files the reviews' folders hold, and the latest modification among them in nanoseconds. Every change to a
+    /// review writes one of its files (`review.md`, `comments.md`, a round's), so a change moves one or the other.
+    #[must_use]
+    pub fn stamp(&self) -> (u64, u128) {
+        let (mut files, mut latest) = (0u64, 0u128);
+        let mut look = |dir: &Path| {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let Ok(meta) = entry.metadata() else { continue };
+                files += 1;
+                let at = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_nanos());
+                latest = latest.max(at);
+            }
+        };
+        for entry in std::fs::read_dir(&self.reviews_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                look(&path);
+                look(&path.join("rounds"));
+            }
+        }
+        (files, latest)
+    }
+
     /// The review a reference names, as the folder holds it.
     fn find(&self, reference: &ReviewRef) -> Result<Held> {
-        let (held, _) = self.read_all()?;
+        let (held, ..) = self.read_all()?;
         if let Some(found) = held.iter().find(|h| {
             h.review.header.reference == *reference || h.review.header.id.0 == reference.0
         }) {
@@ -341,7 +434,7 @@ impl FileStore {
 
 impl ReviewStore for FileStore {
     fn list_reviews(&self, filter: &ReviewFilter) -> Result<Vec<ReviewHeader>> {
-        let (held, _) = self.read_all()?;
+        let (held, ..) = self.read_all()?;
         let mut headers: Vec<ReviewHeader> = held
             .into_iter()
             .map(|h| h.review.header)
@@ -458,6 +551,18 @@ impl ReviewStore for FileStore {
         })
     }
 
+    fn add_poke(
+        &mut self,
+        id: &ReviewId,
+        anchor: Anchor,
+        body: &str,
+        by: &Actor,
+    ) -> Result<CommentId> {
+        self.change(id, |review| {
+            Ok(review.push_poke(anchor, body, by, &now_iso()))
+        })
+    }
+
     fn reply(
         &mut self,
         id: &ReviewId,
@@ -560,12 +665,13 @@ mod tests {
             tasks: vec!["ATM-482".into()],
             author: Some(agent()),
             reviewers: vec![hakan()],
-            status: Status::Open,
+            status: Status::Waiting,
             first: NewRound {
                 kind: RoundKind::Range {
                     base: "a1".into(),
                     head: "b2".into(),
                 },
+                submodule: None,
                 files: Vec::new(),
                 patch: Patch("diff --git a/x b/x\n+one\n".into()),
                 by: agent(),
@@ -622,7 +728,7 @@ mod tests {
         // Another store (another process) reads the same
         let again = FileStore::open(&task_dir).unwrap();
         let review = again.get_review(&cr).unwrap();
-        assert_eq!(review.header.status, Status::Open);
+        assert_eq!(review.header.status, Status::Waiting);
         assert_eq!(review.rounds.len(), 2);
         assert_eq!(review.chains[0].comments[0].replies[0].body, "Because.");
         assert_eq!(
@@ -691,7 +797,7 @@ mod tests {
             reference: ReviewRef::numbered(number),
             number,
             title: title.into(),
-            status: Status::Open,
+            status: Status::Waiting,
             tasks: Vec::new(),
             author: Some(agent()),
             reviewers: Vec::new(),
@@ -794,6 +900,364 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("symlink")
+        );
+    }
+
+    /// A store on a fresh task folder outside git, and the folder (kept while the store is used).
+    fn fresh() -> (TestDir, FileStore) {
+        let dir = TestDir::new();
+        let store = FileStore::open(&dir.path().join(".agentic-task-manager")).unwrap();
+        (dir, store)
+    }
+
+    /// Every store's promises (`store_contract`), kept by the folder's
+    mod contract {
+        use super::fresh;
+        use crate::store_contract as contract;
+
+        #[test]
+        fn an_empty_store_lists_and_finds_nothing() {
+            contract::an_empty_store_lists_and_finds_nothing(&mut fresh().1);
+        }
+
+        #[test]
+        fn a_new_review_is_kept_numbered_with_its_first_round() {
+            let (_dir, mut store) = fresh();
+            contract::a_new_review_is_kept_numbered_with_its_first_round(&mut store);
+        }
+
+        #[test]
+        fn reviews_are_listed_newest_first_and_filtered() {
+            let (_dir, mut store) = fresh();
+            contract::reviews_are_listed_newest_first_and_filtered(&mut store);
+        }
+
+        #[test]
+        fn a_reviews_header_and_rounds_are_changed_as_asked() {
+            let (_dir, mut store) = fresh();
+            contract::a_reviews_header_and_rounds_are_changed_as_asked(&mut store);
+        }
+
+        #[test]
+        fn comments_are_kept_replied_to_edited_and_resolved() {
+            let (_dir, mut store) = fresh();
+            contract::comments_are_kept_replied_to_edited_and_resolved(&mut store);
+        }
+
+        #[test]
+        fn every_method_on_a_review_it_hasnt_is_not_found() {
+            let (_dir, mut store) = fresh();
+            contract::every_method_on_a_review_it_hasnt_is_not_found(&mut store);
+        }
+    }
+
+    #[test]
+    fn a_folder_is_a_reviews_only_when_named_cr_its_number_and_four_lowercase_hex_digits() {
+        for (name, number) in [
+            ("CR-7-3fa1", Some(7)),
+            ("CR-12-0000", Some(12)),
+            ("CR-7-3FA1", None),
+            ("CR-7-3fa", None),
+            ("CR-7-3fa12", None),
+            ("CR-7-3fg1", None),
+            ("CR-x-3fa1", None),
+            ("CR--3fa1", None),
+            ("CR-7", None),
+            ("cr-7-3fa1", None),
+            ("counter.json", None),
+            ("notes", None),
+        ] {
+            assert_eq!(super::folder_number(name), number, "{name}");
+        }
+        // A new folder's name is one of them: the number and the UUID's last four hex digits
+        let id = ReviewId("0193a8f2-0000-7000-8000-000000003fa1".into());
+        assert_eq!(folder_name(7, &id), "CR-7-3fa1");
+        assert_eq!(super::folder_number(&folder_name(7, &id)), Some(7));
+    }
+
+    #[test]
+    fn reviews_sharing_a_number_and_a_time_are_ordered_by_their_ids() {
+        let dir = TestDir::new();
+        let task_dir = dir.path().join(".agentic-task-manager");
+        let a = plant(&task_dir, 4, "A", "2026-11-17T03:00:00Z");
+        let b = plant(&task_dir, 4, "B", "2026-11-17T03:00:00Z");
+        let (low, high) = if a.id < b.id { (a, b) } else { (b, a) };
+        let store = FileStore::open(&task_dir).unwrap();
+        let reference = |n: &str| store.get_review(&ReviewRef(n.into())).unwrap().header.id;
+        assert_eq!(
+            (reference("CR-4.1"), reference("CR-4.2")),
+            (low.id, high.id)
+        );
+        assert!(matches!(
+            store.get_review(&ReviewRef("CR-4.3".into())),
+            Err(atm_common::Error::NotFound(_))
+        ));
+        assert!(matches!(
+            store.get_review(&ReviewRef("CR-4".into())),
+            Err(atm_common::Error::Invalid(_))
+        ));
+    }
+
+    #[test]
+    fn other_entries_in_the_reviews_folder_are_left_alone() {
+        let dir = TestDir::new();
+        let task_dir = dir.path().join(".agentic-task-manager");
+        plant(&task_dir, 1, "One", "2026-11-17T03:00:00Z");
+        std::fs::create_dir_all(task_dir.join("reviews/notes")).unwrap();
+        std::fs::write(task_dir.join("reviews/README.md"), "hi").unwrap();
+        std::fs::write(task_dir.join("reviews/CR-2-abcd"), "a file, not a folder").unwrap();
+        let store = FileStore::open(&task_dir).unwrap();
+        assert_eq!(
+            store.list_reviews(&ReviewFilter::default()).unwrap().len(),
+            1
+        );
+        // A file named like a review's folder can't be read as one, and is reported
+        let problems = store.problems().unwrap();
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].starts_with("CR-2-abcd: "), "{problems:?}");
+    }
+
+    #[test]
+    fn a_review_atm_cant_read_is_kept_with_its_folder_its_reference_and_why() {
+        let dir = TestDir::new();
+        let task_dir = dir.path().join(".agentic-task-manager");
+        plant(&task_dir, 1, "Fine", "2026-11-17T03:00:00Z");
+        // A status a newer atm wrote, and a review.md that isn't one
+        let newer = plant(&task_dir, 13, "Newer", "2026-11-17T03:00:00Z");
+        let newer_md = task_dir
+            .join("reviews")
+            .join(folder_name(13, &newer.id))
+            .join("review.md");
+        let text = std::fs::read_to_string(&newer_md).unwrap();
+        assert_eq!(text.matches("open").count(), 1, "{text}");
+        std::fs::write(&newer_md, text.replace("open", "frozen")).unwrap();
+        let broken = task_dir.join("reviews/CR-14-abcd");
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(broken.join("review.md"), "no header").unwrap();
+        let store = FileStore::open(&task_dir).unwrap();
+        let unreadable = store.unreadable().unwrap();
+        let named: Vec<(&str, &str)> = unreadable
+            .iter()
+            .map(|u| (u.folder.as_str(), u.reference.as_str()))
+            .collect();
+        assert_eq!(
+            named,
+            [
+                (folder_name(13, &newer.id).as_str(), "CR-13"),
+                ("CR-14-abcd", "CR-14")
+            ]
+        );
+        assert!(unreadable[0].problem.contains("frozen"), "{unreadable:?}");
+        assert_ne!(unreadable[1].problem, "");
+        // The readable one is still listed; a store with none unreadable has none
+        assert_eq!(
+            store.list_reviews(&ReviewFilter::default()).unwrap().len(),
+            1
+        );
+        let empty = TestDir::new();
+        let none = FileStore::open(&empty.path().join(".agentic-task-manager")).unwrap();
+        assert_eq!(none.unreadable().unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn a_review_folder_without_review_md_or_with_a_bad_round_is_reported() {
+        let dir = TestDir::new();
+        let task_dir = dir.path().join(".agentic-task-manager");
+        let reviews = task_dir.join("reviews");
+        std::fs::create_dir_all(reviews.join("CR-1-aaaa")).unwrap();
+        let wrong = plant(&task_dir, 2, "Wrong round", "2026-11-17T03:00:00Z");
+        let wrong_rounds = reviews.join(folder_name(2, &wrong.id)).join("rounds");
+        std::fs::create_dir_all(&wrong_rounds).unwrap();
+        std::fs::write(
+            wrong_rounds.join("1.json"),
+            r#"{"number":2,"kind":{"kind":"files"},"files":[],"by":"a","at":"t"}"#,
+        )
+        .unwrap();
+        let broken = plant(&task_dir, 3, "Broken round", "2026-11-17T03:00:00Z");
+        let broken_rounds = reviews.join(folder_name(3, &broken.id)).join("rounds");
+        std::fs::create_dir_all(&broken_rounds).unwrap();
+        std::fs::write(broken_rounds.join("1.json"), "{").unwrap();
+        // Files there that aren't a round's are no round
+        let fine = plant(&task_dir, 4, "Fine", "2026-11-17T03:00:00Z");
+        let fine_rounds = reviews.join(folder_name(4, &fine.id)).join("rounds");
+        std::fs::create_dir_all(&fine_rounds).unwrap();
+        std::fs::write(fine_rounds.join("1.diff"), "").unwrap();
+        std::fs::write(fine_rounds.join("notes.json"), "{").unwrap();
+        let store = FileStore::open(&task_dir).unwrap();
+        let listed: Vec<String> = store
+            .list_reviews(&ReviewFilter::default())
+            .unwrap()
+            .into_iter()
+            .map(|h| h.title)
+            .collect();
+        assert_eq!(listed, ["Fine"]);
+        let problems = store.problems().unwrap();
+        assert_eq!(problems.len(), 3, "{problems:?}");
+        assert!(
+            problems.iter().any(|p| p.contains("has no review.md")),
+            "{problems:?}"
+        );
+        assert!(
+            problems.iter().any(|p| p.contains("says it is round 2")),
+            "{problems:?}"
+        );
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.starts_with(&format!("{}: ", folder_name(3, &broken.id)))),
+            "{problems:?}"
+        );
+    }
+
+    #[test]
+    fn rounds_are_read_in_their_numbers_order_not_the_folders() {
+        let (_dir, mut store) = fresh();
+        let id = store.create_review(new_review("Rounds")).unwrap().id;
+        for _ in 0..10 {
+            store.add_round(&id, new_review("").first).unwrap();
+        }
+        let numbers: Vec<u32> = store
+            .get_review(&ReviewRef::numbered(1))
+            .unwrap()
+            .rounds
+            .iter()
+            .map(|r| r.number)
+            .collect();
+        assert_eq!(numbers, (1..=11).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn comments_md_lines_atm_cant_read_are_reported_and_kept_through_a_change() {
+        let (dir, mut store) = fresh();
+        let header = store.create_review(new_review("Kept")).unwrap();
+        let comments = dir
+            .path()
+            .join(".agentic-task-manager/reviews")
+            .join(folder_name(1, &header.id))
+            .join("comments.md");
+        std::fs::write(&comments, "A note by hand.\n").unwrap();
+        let problems = store.problems().unwrap();
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(
+            problems[0].starts_with(&format!(
+                "{}: comments.md line 1",
+                folder_name(1, &header.id)
+            )),
+            "{problems:?}"
+        );
+        store
+            .add_comment(&header.id, Anchor::default(), "Fine.", &hakan())
+            .unwrap();
+        let text = std::fs::read_to_string(&comments).unwrap();
+        assert!(
+            text.starts_with("A note by hand.\n") && text.contains("Fine."),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn the_counter_is_never_behind_the_folder_nor_the_folder_behind_the_counter() {
+        let (dir, mut store) = fresh();
+        let reviews = dir.path().join(".agentic-task-manager/reviews");
+        std::fs::create_dir_all(&reviews).unwrap();
+        // A counter ahead of the folders (a review made in another worktree): its number is taken
+        std::fs::write(reviews.join("counter.json"), "{\"next_number\": 5}\n").unwrap();
+        assert_eq!(store.create_review(new_review("five")).unwrap().number, 5);
+        // A counter that can't be read counts from the folders
+        std::fs::write(reviews.join("counter.json"), "not json").unwrap();
+        assert_eq!(store.create_review(new_review("six")).unwrap().number, 6);
+        let counter = std::fs::read_to_string(reviews.join("counter.json")).unwrap();
+        assert!(counter.contains("\"next_number\":7"), "{counter}");
+    }
+
+    #[test]
+    fn a_review_made_in_a_worktree_merged_into_main_is_listed_once_from_main() {
+        let dir = TestDir::new();
+        let main = dir.path().join("main");
+        std::fs::create_dir(&main).unwrap();
+        git(&["init", "-q", "-b", "main"], &main);
+        git(&["commit", "-q", "--allow-empty", "-m", "start"], &main);
+        let mut store = FileStore::open(&main.join(".agentic-task-manager")).unwrap();
+        store.create_review(new_review("shared")).unwrap();
+        git(&["add", "-A"], &main);
+        git(&["commit", "-q", "-m", "review"], &main);
+        git(&["worktree", "add", "-q", "-b", "agent-2", "../wt"], &main);
+        // The worktree has the same review, committed
+        let found = list_everywhere(&main, &ReviewFilter::default()).unwrap();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].branch.as_deref(), Some("main"));
+        // A filter is the stores'
+        let none = list_everywhere(
+            &main,
+            &ReviewFilter {
+                statuses: vec![Status::Closed],
+                task: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(none.len(), 0);
+    }
+
+    #[test]
+    fn outside_git_only_the_folders_own_reviews_are_listed_with_no_branch() {
+        let dir = TestDir::new();
+        let mut store = FileStore::open(&dir.path().join(".agentic-task-manager")).unwrap();
+        store.create_review(new_review("alone")).unwrap();
+        let found = list_everywhere(dir.path(), &ReviewFilter::default()).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].branch, None);
+        assert_eq!(found[0].working_copy, dir.path());
+        // No reviews folder yet: nothing, not an error
+        let empty = TestDir::new();
+        assert_eq!(
+            list_everywhere(empty.path(), &ReviewFilter::default())
+                .unwrap()
+                .len(),
+            0
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_task_folder_or_file_of_a_review_is_refused() {
+        let dir = TestDir::new();
+        let real = dir.path().join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        let linked = dir.path().join(".agentic-task-manager");
+        std::os::unix::fs::symlink(&real, &linked).unwrap();
+        assert!(matches!(
+            FileStore::open(&linked),
+            Err(atm_common::Error::Refused(_))
+        ));
+
+        // A review whose review.md, or whose rounds folder, is a symlink: reported, not read
+        let task_dir = dir.path().join("project/.agentic-task-manager");
+        let outside = dir.path().join("outside.md");
+        let header = plant(&task_dir, 1, "Linked file", "2026-11-17T03:00:00Z");
+        let folder = task_dir.join("reviews").join(folder_name(1, &header.id));
+        std::fs::rename(folder.join("review.md"), &outside).unwrap();
+        std::os::unix::fs::symlink(&outside, folder.join("review.md")).unwrap();
+        let rounds = plant(&task_dir, 2, "Linked rounds", "2026-11-17T03:00:00Z");
+        let elsewhere = dir.path().join("rounds");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::os::unix::fs::symlink(
+            &elsewhere,
+            task_dir
+                .join("reviews")
+                .join(folder_name(2, &rounds.id))
+                .join("rounds"),
+        )
+        .unwrap();
+        let store = FileStore::open(&task_dir).unwrap();
+        assert_eq!(
+            store.list_reviews(&ReviewFilter::default()).unwrap().len(),
+            0
+        );
+        let problems = store.problems().unwrap();
+        assert_eq!(problems.len(), 2, "{problems:?}");
+        assert!(
+            problems.iter().all(|p| p.contains("symlink")),
+            "{problems:?}"
         );
     }
 

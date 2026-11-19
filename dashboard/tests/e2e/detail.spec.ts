@@ -80,6 +80,43 @@ test.describe('detail panel', () => {
     await expect(panel(page).locator('h3')).toHaveText('T-004 User login');
   });
 
+  // ATM-585: a task in review links to its code review: a click opens the review's page, ⌘-click a browser tab
+  test('a task in review links to its code review; the click opens its page, ⌘-click a tab of its own', async ({
+    page,
+    tasksServer,
+  }) => {
+    const data = loadFixture('standard');
+    Object.assign(
+      data.tasks.find((t) => t.id === 'T-004')!,
+      {
+        status: 'in_review',
+        code_reviews: [
+          { id: 'u1', ref: 'CR-1' },
+          { id: 'u2', ref: 'CR-2' },
+        ],
+      },
+    );
+    tasksServer.use(data);
+    await page.locator('#reload-btn').click();
+    await openFromCard(page, 'T-004');
+    const latest = page.locator('#detail-review .review-link.prominent');
+    await expect(latest).toHaveAttribute('data-review', 'CR-2');
+    await expect(page.locator('#detail-review .review-link:not(.prominent)')).toHaveAttribute('data-review', 'CR-1');
+    const reviews = `/projects/${tasksServer.projectId}/reviews`;
+    // ⌘-click (Ctrl elsewhere): the browser's own new tab, this page stays as it is
+    const [tab] = await Promise.all([
+      page.context().waitForEvent('page'),
+      latest.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] }),
+    ]);
+    await expect.poll(() => new URL(tab.url()).pathname).toBe(`${reviews}/CR-2`);
+    await tab.close();
+    await expect(overlay(page)).toHaveClass(/open/);
+    // A click: the review's page here, the details closed
+    await latest.click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe(`${reviews}/CR-2`);
+    expect(new URL(page.url()).searchParams.get('task')).toBeNull();
+  });
+
   test('placeholders for missing optional fields', async ({ page }) => {
     await openFromCard(page, 'T-009');
     await expect(section(page, 'Use Cases').locator('.detail-refs')).toHaveText('None');

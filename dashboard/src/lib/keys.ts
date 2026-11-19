@@ -8,11 +8,8 @@ import { formatAddress } from './address';
 import type { Task } from './types';
 import { KINDS, type StatusKind } from './vocab';
 
-/** What a provisional key's mark says when pointed at (ADR-007 §3) */
-export const PROVISIONAL_TIP = 'Provisional until merged into main: the number may change if another branch took it';
-
 /** The fields a task is shown and ordered by */
-export type Keyed = Pick<Task, 'id' | 'key' | 'number' | 'key_final'>;
+export type Keyed = Pick<Task, 'id' | 'key' | 'number'>;
 
 /** The project fields a key is resolved against: its short name and the ones it had */
 export interface KeyMeta {
@@ -31,9 +28,13 @@ export function keyOf(task: Pick<Task, 'key'>): { key?: string } {
   return typeof task.key === 'string' && task.key ? { key: task.key } : {};
 }
 
-/** Whether a task's key may still change (ADR-007 §3): it has a key, not yet final. An ID never is */
-export function isProvisional(task: Pick<Task, 'key' | 'key_final'>): boolean {
-  return typeof task.key === 'string' && task.key !== '' && task.key_final !== true;
+/** The keys a task had in this project before its number moved (ADR-009: two branches gave the same number, a merge
+ * moved it): its aliases under the project's current key, as the details show them ("was ATM-538"). Aliases of other
+ * prefixes (an ID from before task keys, an earlier project key) aren't moves */
+export function movedFrom(task: Pick<Task, 'aliases'>, projectKey: string | undefined): string[] {
+  if (!projectKey || !Array.isArray(task.aliases)) return [];
+  const own = new RegExp(`^${projectKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d+$`, 'i');
+  return task.aliases.map(String).filter((a) => own.test(a));
 }
 
 /** The order of tasks by their place in the project: by number when both have one (ATM-2 before ATM-10), else by ID
@@ -70,7 +71,8 @@ export function findTask(
   tasks: readonly ReadonlyMap<string, Task>[],
   meta: KeyMeta | undefined,
 ): Task | undefined {
-  const text = ref.trim();
+  // `~ATM-12`, as an older atm printed a key before ADR-009, is `ATM-12`
+  const text = ref.trim().replace(/^~(?=.)/, '');
   if (!text) return undefined;
   const exact = isUuid(text) ? text.toLowerCase() : text;
   for (const map of tasks) {
@@ -102,11 +104,10 @@ export interface OtherProject {
   tasks?: readonly Task[];
 }
 
-/** How a dependency or related task shows: its label, whether it is provisional, the task when it is known, and for
- * another project's task, that project and a tooltip */
+/** How a dependency or related task shows: its label, the task when it is known, and for another project's task, that
+ * project and a tooltip */
 export interface RefView {
   label: string;
-  provisional: boolean;
   /** The task, when it is loaded (this project's, or another's from the overview) */
   task?: Task;
   /** Another project's task: the project's id */
@@ -145,7 +146,6 @@ function foundView(found: ForeignTask, project: string, id: string, workspace: s
       found.reason === 'missing' ? `no such task in ${name}` : "its project isn't in your workspaces (or is gone)";
     return {
       label: `${name}:${id.slice(0, 8)}`,
-      provisional: false,
       project,
       missing,
       tip: `A task of ${name}: ${missing}`,
@@ -157,7 +157,6 @@ function foundView(found: ForeignTask, project: string, id: string, workspace: s
   const address = foreignAddress(found, key ?? id, workspace);
   return {
     label,
-    provisional: key !== null && found.key_final !== true,
     project,
     tip: `${found.name ?? ''} (a task of ${name})`,
     found: { name: found.name ?? '', status: found.status ?? null, kind: asKind(found.kind) },
@@ -180,9 +179,7 @@ export function refView(
   const { project, id } = parseRef(ref);
   if (project === null) {
     const task = own(ref);
-    return task
-      ? { label: taskLabel(task), provisional: isProvisional(task), task }
-      : { label: shortId(ref), provisional: false };
+    return task ? { label: taskLabel(task), task } : { label: shortId(ref) };
   }
   const found = foreign?.(ref);
   if (found) return foundView(found, project, id, workspace);
@@ -192,14 +189,12 @@ export function refView(
   if (task)
     return {
       label: taskLabel(task),
-      provisional: isProvisional(task),
       task,
       project,
       tip: `${task.name} (a task of ${name})`,
     };
   return {
     label: `${name}:${id.slice(0, 8)}`,
-    provisional: false,
     project,
     tip: `A task of another project (${name}) that isn't loaded here`,
   };

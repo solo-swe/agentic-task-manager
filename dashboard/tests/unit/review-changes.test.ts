@@ -1,6 +1,20 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { addComment, replyTo, resolveComment, sessionToken, submitDecision } from '../../src/lib/api/review-changes';
+import {
+  addComment,
+  addDraft,
+  closeReview,
+  editComment,
+  listDrafts,
+  openReview,
+  pokeReview,
+  removeDraft,
+  replyTo,
+  resolveComment,
+  sessionToken,
+  submitDecision,
+  updateDraft,
+} from '../../src/lib/api/review-changes';
 import { setApiWorkspace } from '../../src/lib/api/workspace';
 
 // A review's changes from the page (lib/api/review-changes.ts, ATM-574): the REST routes with the page's session token
@@ -67,6 +81,26 @@ describe('in the browser', () => {
         `${reviews}/CR-7/comments/c4/replies`,
         { body: 'Because.' },
       ],
+      // ATM-611: a poke, with a message or without one (a blank one is none)
+      [() => pokeReview('p1', 'CR-7', 'Where are we?'), 'POST', `${reviews}/CR-7/pokes`, { body: 'Where are we?' }],
+      [() => pokeReview('p1', 'CR-7', '  '), 'POST', `${reviews}/CR-7/pokes`, {}],
+      // ATM-612: a draft comment, a draft reply, a draft's text, a draft removed (with an empty body)
+      [
+        () => addDraft('p1', 'CR-7', { path: 'a.md', lines: [1, 1], side: 'new', round: 2, body: 'Why?' }),
+        'POST',
+        `${reviews}/CR-7/drafts`,
+        { path: 'a.md', lines: [1, 1], side: 'new', round: 2, body: 'Why?' },
+      ],
+      [
+        () => addDraft('p1', 'CR-7', { reply_to: 'c4', body: 'No.' }),
+        'POST',
+        `${reviews}/CR-7/drafts`,
+        { reply_to: 'c4', body: 'No.' },
+      ],
+      [() => updateDraft('p1', 'CR-7', 'd2', 'Why not?'), 'PATCH', `${reviews}/CR-7/drafts/d2`, { body: 'Why not?' }],
+      [() => removeDraft('p1', 'CR-7', 'd2'), 'DELETE', `${reviews}/CR-7/drafts/d2`, {}],
+      // ATM-638: one's own comment's text
+      [() => editComment('p1', 'CR-7', 'c4', 'Why not?'), 'PATCH', `${reviews}/CR-7/comments/c4`, { body: 'Why not?' }],
       [() => resolveComment('p1', 'CR-7', 'c4', true), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: true }],
       [() => resolveComment('p1', 'CR-7', 'c4', false), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: false }],
       [
@@ -80,6 +114,19 @@ describe('in the browser', () => {
         'POST',
         `${reviews}/CR-7/decisions`,
         { decision: 'approve' },
+      ],
+      // ATM-576: a live review opened, and a review closed
+      [
+        () => openReview('p1', { title: 'Live', tasks: ['ATM-1'], start: 'live', change: { base: 'main' } }),
+        'POST',
+        reviews,
+        { title: 'Live', tasks: ['ATM-1'], start: 'live', change: { base: 'main' } },
+      ],
+      [
+        () => closeReview('p1', 'CR-7', 'Wrong turn.'),
+        'PATCH',
+        `${reviews}/CR-7`,
+        { status: 'closed', reason: 'Wrong turn.' },
       ],
     ] as const;
     for (const [change, method, url, body] of cases) {
@@ -121,6 +168,36 @@ describe('in the browser', () => {
     expect(await replyTo('p1', 'CR-7', 'c1', 'x')).toEqual({ ok: false, message: 'network down' });
   });
 
+  it('a refusal whose JSON names no error is its status; a success that isn’t JSON, an empty body', async () => {
+    answering(409, { review: 'CR-7' });
+    expect(await resolveComment('p1', 'CR-7', 'c1', true)).toEqual({ ok: false, message: 'HTTP 409' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+    expect(await resolveComment('p1', 'CR-7', 'c1', true)).toEqual({ ok: true, body: {} });
+  });
+
+  it('the drafts are read with a GET, no token needed; a refusal or a failed request is its message', async () => {
+    const drafts = [{ id: 'd1', at: 't', body: 'x', kind: 'reply', to: 'c1' }];
+    const fetch = answering(200, { review: 'CR-7', drafts });
+    withToken(null);
+    expect(await listDrafts('p1', 'CR-7')).toEqual({ ok: true, drafts });
+    expect(fetch.mock.calls[0][0]).toBe(`${reviews}/CR-7/drafts`);
+    expect(fetch.mock.calls[0][1]?.method).toBeUndefined();
+    answering(400, { error: 'a person drafts a review’s comments' });
+    expect(await listDrafts('p1', 'CR-7')).toEqual({ ok: false, message: 'a person drafts a review’s comments' });
+    answering(200, {});
+    expect(await listDrafts('p1', 'CR-7')).toEqual({ ok: true, drafts: [] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down');
+      }),
+    );
+    expect(await listDrafts('p1', 'CR-7')).toEqual({ ok: false, message: 'network down' });
+  });
+
   it('the token is the page’s meta tag; none, none', () => {
     expect(sessionToken()).toBe(TOKEN);
     withToken('');
@@ -140,7 +217,14 @@ describe('in the browser', () => {
     expect((await replyTo('p1', 'CR-7', 'c1', 'x')).ok).toBe(true);
     expect(fetch.mock.calls[1][1]?.headers).toMatchObject({ 'X-Atm-Session': 'd'.repeat(64) });
 
-    for (const devAnswer of [() => new Response(JSON.stringify({ token: null })), () => new Response('not json')]) {
+    for (const devAnswer of [
+      () => new Response(JSON.stringify({ token: null })),
+      () => new Response(JSON.stringify({})),
+      () => new Response('not json'),
+      () => {
+        throw new Error('no dev server');
+      },
+    ]) {
       const none = vi.fn(async () => devAnswer());
       vi.stubGlobal('fetch', none);
       expect(await replyTo('p1', 'CR-7', 'c1', 'x')).toEqual({
@@ -169,12 +253,30 @@ describe('in the app', () => {
     await replyTo('p1', 'CR-7', 'c4', 'Because.');
     await resolveComment('p1', 'CR-7', 'c4', true);
     await submitDecision('p1', 'CR-7', { decision: 'comment', body: 'Fine.' });
+    await openReview('p1', { title: 'Live', start: 'live', change: {} });
+    await closeReview('p1', 'CR-7', 'Done elsewhere.');
+    await pokeReview('p1', 'CR-7', 'Hello?');
+    await pokeReview('p1', 'CR-7');
+    await addDraft('p1', 'CR-7', { reply_to: 'c4', body: 'No.' });
+    await updateDraft('p1', 'CR-7', 'd1', 'Yes.');
+    await removeDraft('p1', 'CR-7', 'd1');
+    await listDrafts('p1', 'CR-7');
+    await editComment('p1', 'CR-7', 'c4', 'Better.');
     const at = { workspace: 'w', project: 'p1', review: 'CR-7' };
     expect(calls).toEqual([
       ['add_review_comment', { ...at, comment: { body: 'On the review.' } }],
       ['reply_to_review_comment', { ...at, comment: 'c4', body: 'Because.' }],
       ['update_review_comment', { ...at, comment: 'c4', update: { resolved: true } }],
       ['submit_review_decision', { ...at, decision: { decision: 'comment', body: 'Fine.' } }],
+      ['create_review', { workspace: 'w', project: 'p1', opening: { title: 'Live', start: 'live', change: {} } }],
+      ['close_review', { ...at, closing: { status: 'closed', reason: 'Done elsewhere.' } }],
+      ['poke_review', { ...at, body: 'Hello?' }],
+      ['poke_review', { ...at, body: null }],
+      ['add_review_draft', { ...at, draft: { reply_to: 'c4', body: 'No.' } }],
+      ['update_review_draft', { ...at, draft: 'd1', body: 'Yes.' }],
+      ['remove_review_draft', { ...at, draft: 'd1' }],
+      ['list_review_drafts', at],
+      ['update_review_comment', { ...at, comment: 'c4', update: { body: 'Better.' } }],
     ]);
     expect(fetch).not.toHaveBeenCalled();
   });

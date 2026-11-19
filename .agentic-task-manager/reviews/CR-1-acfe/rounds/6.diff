@@ -1,0 +1,1001 @@
+diff --git a/.gitignore b/.gitignore
+index 360f3bd5..a7740c3a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -30,6 +30,8 @@ dashboard/node_modules/
+ dashboard/dist/
+ dashboard/test-results/
+ dashboard/playwright-report/
++# Which review of which project real-review.spec.ts measures, on this machine (ATM-587)
++dashboard/tests/e2e/real-review.local.json
+ dashboard/coverage/
+ # SvelteKit's generated files and its static adapter's output (build/finish-page.ts ships the page from there)
+ dashboard/.svelte-kit/
+diff --git a/dashboard/src/lib/documents/CompMd.svelte b/dashboard/src/lib/documents/CompMd.svelte
+index d78caf07..21b72773 100644
+--- a/dashboard/src/lib/documents/CompMd.svelte
++++ b/dashboard/src/lib/documents/CompMd.svelte
+@@ -14,6 +14,7 @@
+   } from '../compmd';
+   import { docOf, referenceTo, viewerLink, type DocumentRef } from '../documents';
+   import { navigate } from '../navigation';
++  import { takeTurn } from '../render-turns';
+   import { scrollBehavior } from '../scroll';
+ 
+   /** The data a task text is rendered with, as CompMD's processing takes it (the viewer knows no task model) */
+@@ -36,6 +37,7 @@
+     path,
+     localImage,
+     inline = false,
++    plain,
+     onlines,
+     onopen,
+   }: {
+@@ -44,10 +46,20 @@
+     path?: string;
+     localImage?: (url: string) => string | null;
+     inline?: boolean;
++    /** Code shown as written until CompMD has drawn the text, which then waits its turn among the page's other such
++     * renders, the one nearest the view first (ATM-587: a review's runs of code, `render-turns.ts`) */
++    plain?: string;
+     onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
+     onopen?: (ref: DocumentRef) => void;
+   } = $props();
+ 
++  /** The turn this render waits for, cancelled when the text changes or it is gone */
++  let cancelTurn: (() => void) | null = null;
++  /** The turn's render, done once CompMD has drawn */
++  let turnDone: (() => void) | null = null;
++  /** How long a turn waits for CompMD to say it has drawn before the next one goes anyway */
++  const TURN_LIMIT_MS = 3000;
++
+   /** A project's text (a task's, or a document's): a relative link in it opens the document viewer (V1a–V1c), resolved
+    * from the project's root for task text and from the document's folder in a document. Help and What's new come with
+    * the plugin, not the project: their relative links stay text. */
+@@ -97,53 +109,81 @@
+     const target = host;
+     if (!target || key === rendered) return;
+     rendered = key;
++    cancelTurn?.();
++    cancelTurn = null;
++    const paced = plain !== undefined;
+     loadCompmd()
+       .then(async (compmd) => {
+         if (key !== rendered) return; // a newer text came in while CompMD loaded
+-        const { tree, components } = processText(compmd, text, task, path, { localImage, docLink });
+-        if (!view) {
+-          // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
+-          // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
+-          // app, under the origin CompMD's plugin gives the page, ADR-006)
+-          view = compmd.createSandbox(sandboxOptions(compmd)).open(target, { components });
+-          view.on('rendered', () => {
+-            secureLinks(target);
+-            drawn = true;
+-          });
+-          // A component that shows its fallback says why. One that threw shows its code in its frame; one whose frame
+-          // never answered, or whose module is missing, shows nothing at all, so the text says so (T-503)
+-          view.on('error', ({ component, reason, message }) => {
+-            const nothing = reason === 'failed' || reason === 'missing';
+-            const log = nothing ? console.error : console.warn;
+-            log(
+-              `CompMD: ${component} shows ${nothing ? 'nothing' : 'its fallback'} (${reason}): ${message}` +
+-                (reason === 'failed'
+-                  ? '. A frame that never answers is almost always refused by a policy: are the frames’ origin ' +
+-                    'and folder allowed in the page’s script-src, frame-src and connect-src, and the frames served ' +
+-                    'with no policy but their own?'
+-                  : ''),
+-            );
+-            if (nothing && !undrawn.includes(component)) undrawn = [...undrawn, component];
+-          });
+-          const shown = view;
+-          // After a render is painted, when the page or a block in it changes size, when fonts load
+-          view.on('layout', () => void measureLines(shown, target));
+-          // The dashboard switches theme and mode by attributes on <html> (its color-scheme follows): the frames,
+-          // and a diagram's light or dark theme, follow when told
+-          schemes = new MutationObserver(() => view?.scheme());
+-          schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
+-        }
+-        view.render(tree);
+-        failed = false;
++        if (!paced) return draw(compmd, target);
++        cancelTurn = takeTurn(
++          () => target,
++          () =>
++            new Promise<void>((done) => {
++              if (key !== rendered) return done();
++              turnDone = done;
++              setTimeout(done, TURN_LIMIT_MS);
++              try {
++                draw(compmd, target);
++              } catch (e) {
++                fail(e);
++                done();
++              }
++            }),
++        );
+       })
+-      .catch((e: unknown) => {
+-        console.error('CompMD could not render a text:', e);
+-        loadError = e instanceof Error ? e.message : String(e);
+-        failed = true;
+-      });
++      .catch(fail);
++
++    function fail(e: unknown) {
++      console.error('CompMD could not render a text:', e);
++      loadError = e instanceof Error ? e.message : String(e);
++      failed = true;
++    }
++
++    function draw(compmd: CompmdModule, target: HTMLElement) {
++      const { tree, components } = processText(compmd, text, task, path, { localImage, docLink });
++      if (!view) {
++        // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
++        // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
++        // app, under the origin CompMD's plugin gives the page, ADR-006)
++        view = compmd.createSandbox(sandboxOptions(compmd)).open(target, { components });
++        view.on('rendered', () => {
++          secureLinks(target);
++          drawn = true;
++          turnDone?.();
++          turnDone = null;
++        });
++        // A component that shows its fallback says why. One that threw shows its code in its frame; one whose frame
++        // never answered, or whose module is missing, shows nothing at all, so the text says so (T-503)
++        view.on('error', ({ component, reason, message }) => {
++          const nothing = reason === 'failed' || reason === 'missing';
++          const log = nothing ? console.error : console.warn;
++          log(
++            `CompMD: ${component} shows ${nothing ? 'nothing' : 'its fallback'} (${reason}): ${message}` +
++              (reason === 'failed'
++                ? '. A frame that never answers is almost always refused by a policy: are the frames’ origin ' +
++                  'and folder allowed in the page’s script-src, frame-src and connect-src, and the frames served ' +
++                  'with no policy but their own?'
++                : ''),
++          );
++          if (nothing && !undrawn.includes(component)) undrawn = [...undrawn, component];
++        });
++        const shown = view;
++        // After a render is painted, when the page or a block in it changes size, when fonts load
++        view.on('layout', () => void measureLines(shown, target));
++        // The dashboard switches theme and mode by attributes on <html> (its color-scheme follows): the frames,
++        // and a diagram's light or dark theme, follow when told
++        schemes = new MutationObserver(() => view?.scheme());
++        schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
++      }
++      view.render(tree);
++      failed = false;
++    }
+   });
+ 
+   onDestroy(() => {
++    cancelTurn?.();
++    turnDone?.();
+     schemes?.disconnect();
+     view?.destroy();
+   });
+@@ -197,8 +237,20 @@
+     <p class="compmd-note" role="note">Shown as written: the formatting couldn’t load ({loadError}).</p>
+   {/if}
+   <div class="compmd-page" hidden={failed} bind:this={host}></div>
++  {#if plain !== undefined && !drawn && !failed}
++    <!-- Its turn not come yet: the code as written, where CompMD will draw it (ATM-587). Hidden by the style below as
++         soon as CompMD has drawn anything, before it says so: both at once made the run twice as tall for a moment -->
++    <div class="compmd-page compmd-waiting"><pre><code>{plain}</code></pre></div>
++  {/if}
+   {#if failed}<div class="compmd-plain">{text}</div>{/if}
+   {#each undrawn as component (component)}
+     <p class="compmd-note" role="note">A {component} here couldn’t be drawn; the console says why.</p>
+   {/each}
+ </div>
++
++<style>
++  /* The code as written gives way the moment CompMD has drawn the text (ATM-587) */
++  .compmd-page:not(:empty) + .compmd-waiting {
++    display: none;
++  }
++</style>
+diff --git a/dashboard/src/lib/render-turns.ts b/dashboard/src/lib/render-turns.ts
+new file mode 100644
+index 00000000..0998fc89
+--- /dev/null
++++ b/dashboard/src/lib/render-turns.ts
+@@ -0,0 +1,96 @@
++// Renders that take turns (ATM-587, measured on CompMD's CR-1 in WebKit: a review's runs of code, each highlighted by
++// CompMD, all rendered in one task once its grammars had loaded, made frames of 0.5 to 1.5 s). A render waiting its
++// turn shows its text plain; the turns go one at a time, the one nearest the view first, each when the page is idle
++// after the one before it has drawn, so scrolling and reading never wait for the highlighting.
++
++/** One render waiting: where it is on the page, and the render itself, done when it has drawn */
++interface Turn {
++  where: () => Element | undefined;
++  render: () => Promise<void>;
++}
++
++const waiting = new Set<Turn>();
++let running = false;
++/** A mouse button held down (a drag picking lines, a text selection): no turn starts, so nothing is redrawn under the
++ * pointer (a drag over runs whose highlighting came in meanwhile lost its lines); the turns go on once it is let go */
++let pressed = false;
++let listening = false;
++
++function listen() {
++  if (listening || typeof window === 'undefined') return;
++  listening = true;
++  window.addEventListener('mousedown', () => (pressed = true), true);
++  window.addEventListener(
++    'mouseup',
++    () => {
++      pressed = false;
++      next();
++    },
++    true,
++  );
++}
++
++/** How far a box is from the view: 0 inside it, else the distance to its nearer edge; nowhere (no element), last */
++function distance(el: Element | undefined): number {
++  if (!el?.isConnected) return Number.POSITIVE_INFINITY;
++  const box = el.getBoundingClientRect();
++  const height = window.innerHeight || document.documentElement.clientHeight;
++  if (box.bottom >= 0 && box.top <= height) return 0;
++  return box.top > height ? box.top - height : -box.bottom;
++}
++
++/** When the page is idle (or soon, where there is no idle callback): the next turn never waits long */
++function whenIdle(act: () => void) {
++  if (typeof requestIdleCallback === 'function') requestIdleCallback(act, { timeout: 150 });
++  else setTimeout(act, 0);
++}
++
++function next() {
++  if (running || pressed || !waiting.size) return;
++  let nearest: Turn | null = null;
++  let best = Number.POSITIVE_INFINITY;
++  for (const turn of waiting) {
++    const d = distance(turn.where());
++    if (nearest === null || d < best) [nearest, best] = [turn, d];
++  }
++  const turn = nearest as Turn;
++  waiting.delete(turn);
++  running = true;
++  whenIdle(() => {
++    // Pressed meanwhile: back in the line, to go once it is let go
++    if (pressed) {
++      running = false;
++      waiting.add(turn);
++      return;
++    }
++    turn
++      .render()
++      .catch(() => {})
++      .finally(() => {
++        running = false;
++        next();
++      });
++  });
++}
++
++/** `render` when its turn comes (`where` says where it is, for which goes first). Cancel it (it isn't needed any more:
++ * its text changed, or it is gone) with what this returns; one that started finishes. */
++export function takeTurn(where: () => Element | undefined, render: () => Promise<void>): () => void {
++  listen();
++  const turn = { where, render };
++  waiting.add(turn);
++  next();
++  return () => waiting.delete(turn);
++}
++
++/** For tests: the turns waiting, and whether one is running */
++export function turnsWaiting(): { waiting: number; running: boolean } {
++  return { waiting: waiting.size, running };
++}
++
++/** For tests: forget every turn */
++export function resetTurns() {
++  waiting.clear();
++  running = false;
++  pressed = false;
++}
+diff --git a/dashboard/src/lib/review-data.ts b/dashboard/src/lib/review-data.ts
+index 52aa23b0..82958017 100644
+--- a/dashboard/src/lib/review-data.ts
++++ b/dashboard/src/lib/review-data.ts
+@@ -41,8 +41,37 @@ const sources = new WeakMap<Fetch, Map<string, DocumentSource>>();
+ /** At most this many sides are kept per client; the oldest go first */
+ export const SOURCES_CAP = 64;
+ 
++/** How many sides are asked for at once (ATM-587, measured on CompMD's CR-1: scrolled to its end, the 160 sides of the
++ * files passed were asked for at once, so the last file's waited behind all of them, in the browser's queue, almost
++ * 2 s). The rest wait, the one asked for last first: the one nearest where the reader is now. */
++export const LOADS_AT_ONCE = 4;
++const queued: (() => void)[] = [];
++let loading = 0;
++
++/** `load` when fewer than LOADS_AT_ONCE are being asked for; else after them, the latest asked first */
++function inTurn<T>(load: () => Promise<T>): Promise<T> {
++  return new Promise<T>((resolve, reject) => {
++    const go = () => {
++      loading += 1;
++      load()
++        .then(resolve, reject)
++        .finally(() => {
++          loading -= 1;
++          queued.pop()?.();
++        });
++    };
++    if (loading < LOADS_AT_ONCE) go();
++    else queued.push(go);
++  });
++}
++
++/** For tests: how many sides are being asked for, and how many wait */
++export function sideLoads(): { loading: number; waiting: number } {
++  return { loading, waiting: queued.length };
++}
++
+ /** A round's side: the project's files as commit or tree `revision` has them; never changing, so each file is loaded
+- * once (a failed load is asked again next time) */
++ * once (a failed load is asked again next time), LOADS_AT_ONCE at a time */
+ export function revisionDocuments(project: string, revision: string, fetchFn: Fetch = browserFetch): DocumentSource {
+   const id = `${project}@${revision}`;
+   let made = sources.get(fetchFn);
+@@ -55,7 +84,7 @@ export function revisionDocuments(project: string, revision: string, fetchFn: Fe
+     load: (path) => {
+       let loading = files.get(path);
+       if (!loading) {
+-        loading = loadDocument(project, path, fetchFn, undefined, revision);
++        loading = inTurn(() => loadDocument(project, path, fetchFn, undefined, revision));
+         files.set(path, loading);
+         loading.then(
+           (result) => 'error' in result && files.delete(path),
+diff --git a/dashboard/src/lib/reviews/DiffCode.svelte b/dashboard/src/lib/reviews/DiffCode.svelte
+index 5e57149d..349ea966 100644
+--- a/dashboard/src/lib/reviews/DiffCode.svelte
++++ b/dashboard/src/lib/reviews/DiffCode.svelte
+@@ -48,7 +48,8 @@
+     onover?: (index: number) => void;
+   } = $props();
+ 
+-  const text = $derived(fenced(lines.map((l) => l.text).join('\n'), language));
++  const source = $derived(lines.map((l) => l.text).join('\n'));
++  const text = $derived(fenced(source, language));
+ 
+   let el = $state<HTMLElement>();
+   let layout = $state<{ top: number; lineHeight: number } | null>(null);
+@@ -155,7 +156,8 @@
+       </div>
+     {/each}
+   {/if}
+-  <CompMd {text} />
++  <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
++  <CompMd {text} plain={source} />
+ </div>
+ 
+ <style>
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index 14f5bc50..93779e0a 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -176,7 +176,9 @@
+     return () => far.disconnect();
+   });
+   /** How tall a diff not made yet stands: the height it had, else about its lines, so the scroll bar is about right */
+-  const estimate = $derived(measured || Math.min(4000, (counts.added + counts.removed + 8) * 20));
++  // No cap (ATM-587, CompMD's CR-1): a 600-line file stood at 4,000 px and grew to 12,000 once drawn, so the end of the
++  // review moved away from a reader who had just scrolled to it
++  const estimate = $derived(measured || (counts.added + counts.removed + 8) * 20);
+ </script>
+ 
+ <section
+diff --git a/dashboard/tests/e2e/real-review.spec.ts b/dashboard/tests/e2e/real-review.spec.ts
+new file mode 100644
+index 00000000..477105cf
+--- /dev/null
++++ b/dashboard/tests/e2e/real-review.spec.ts
+@@ -0,0 +1,238 @@
++import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
++import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import path from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { chromium, expect, test, webkit, type Browser, type Page } from '@playwright/test';
++
++// A real review, measured as a reader meets it (ATM-587, Hakan on CR-1: the mocked test's numbers aren't what the app
++// feels like): a project's own review served by this checkout's atm (`atm _serve` on a private state folder, so the
++// developer's own server is untouched), in Chromium and in WebKit (the app's engine on macOS), CompMD's highlighting
++// and rendering included. Not part of the suite: it runs only when given a project and a review,
++//
++//   ATM_MEASURE_PROJECT=<a project's folder> ATM_MEASURE_REVIEW=CR-1 pnpm exec playwright test real-review
++//
++// and prints what it measured (docs/review-performance.md). It imports Playwright's own `test`, not helpers.ts': the
++// helpers' fixture plays atm serve, and this measures the real one.
++
++// Or in `tests/e2e/real-review.local.json` (git ignores it): `{"project": "<folder>", "review": "CR-1"}`
++const LOCAL = fileURLToPath(new URL('./real-review.local.json', import.meta.url));
++const local = (existsSync(LOCAL) ? JSON.parse(readFileSync(LOCAL, 'utf8')) : {}) as {
++  project?: string;
++  review?: string;
++};
++const PROJECT = process.env.ATM_MEASURE_PROJECT ?? local.project ?? '';
++const REVIEW = process.env.ATM_MEASURE_REVIEW ?? local.review ?? 'CR-1';
++const ATM = fileURLToPath(new URL('../../../target/debug/atm', import.meta.url));
++
++test.skip(!PROJECT, 'measures a real review: give ATM_MEASURE_PROJECT (and ATM_MEASURE_REVIEW)');
++test.describe.configure({ mode: 'serial', timeout: 300_000 });
++
++let home = '';
++let server: ChildProcess | null = null;
++let base = '';
++
++test.beforeAll(async () => {
++  home = mkdtempSync(path.join(tmpdir(), 'atm-measure-home-'));
++  const env = { ...process.env, ATM_STATE_DIR: home };
++  execFileSync(ATM, ['workspace', 'add-project', 'default', PROJECT], { env, stdio: 'pipe' });
++  server = spawn(ATM, ['_serve', home, '8960'], { env, stdio: 'ignore' });
++  const record = path.join(home, 'server.json');
++  await expect.poll(() => existsSync(record), { timeout: 20_000 }).toBe(true);
++  const port = JSON.parse(readFileSync(record, 'utf8')).port as number;
++  base = `http://localhost:${port}`;
++});
++
++test.afterAll(() => {
++  server?.kill('SIGTERM');
++  if (home) rmSync(home, { recursive: true, force: true });
++});
++
++/** The review's page in the browser: its project's ID from atm's list */
++async function openReview(page: Page) {
++  const listed = (await (await page.request.get(`${base}/api/projects`)).json()) as { projects?: { id: string }[] };
++  const id = (Array.isArray(listed) ? listed : (listed.projects ?? []))[0]?.id;
++  expect(id, 'the project is listed').toBeTruthy();
++  await page.goto(`${base}/projects/${id}/reviews/${REVIEW}`);
++  await expect(page.locator('#review-tab-diffs')).toBeVisible({ timeout: 30_000 });
++}
++
++/** In the page: the frames from now for `ms`, each frame's length; and what is busy (frames over 50 ms) */
++const FRAMES = `(ms) => new Promise((done) => {
++  const frames = [];
++  const start = performance.now();
++  let last = start;
++  const tick = (now) => {
++    frames.push(now - last);
++    last = now;
++    if (now - start < ms) requestAnimationFrame(tick);
++    else done(frames);
++  };
++  requestAnimationFrame(tick);
++})`;
++
++function summary(frames: number[]) {
++  const long = frames.filter((f) => f > 50);
++  let at = 0;
++  let busyUntil = 0;
++  for (const f of frames) {
++    at += f;
++    if (f > 50) busyUntil = at;
++  }
++  const sorted = [...frames].sort((a, b) => b - a);
++  return {
++    longFrames: long.length,
++    blockedMs: Math.round(long.reduce((s, f) => s + f, 0)),
++    slowest: sorted.slice(0, 3).map(Math.round),
++    busyUntilMs: Math.round(busyUntil),
++  };
++}
++
++async function measure(browser: Browser, engine: string) {
++  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
++  await openReview(page);
++  // Opening the Diffs tab: the first file's lines, then how long the page stays busy (5 s watched)
++  const opened = await page.evaluate(async (framesSource) => {
++    const frames = eval(framesSource) as (ms: number) => Promise<number[]>;
++    const start = performance.now();
++    (document.querySelector('#review-tab-diffs') as HTMLElement).click();
++    const watching = frames(5000);
++    while (!document.querySelector('.diff-view .diff-line')) await new Promise((r) => requestAnimationFrame(r));
++    const firstDrawn = performance.now() - start;
++    const all = await watching;
++    // When each long frame ended, from the click, and when CompMD's runtime arrived: what the long frames line up with
++    let at = 0;
++    const longAt: [number, number][] = [];
++    for (const f of all) {
++      at += f;
++      if (f > 50) longAt.push([Math.round(at), Math.round(f)]);
++    }
++    const compmd = performance
++      .getEntriesByType('resource')
++      .filter((e) => e.name.includes('/compmd'))
++      .map((e) => {
++        const timing = e as PerformanceResourceTiming;
++        return [e.name.split('/').pop(), Math.round(timing.startTime - start), Math.round(timing.responseEnd - start)];
++      });
++    const first = (document.querySelector('.review-file-card') as HTMLElement | null)?.dataset.file;
++    const measures = performance
++      .getEntriesByType('measure')
++      .filter((m) => m.duration > 20)
++      .sort((a, b) => b.duration - a.duration)
++      .slice(0, 8)
++      .map((m) => [m.name, Math.round(m.startTime - start), Math.round(m.duration)]);
++    return { firstDrawn: Math.round(firstDrawn), frames: all, longAt, compmd, first, measures };
++  }, FRAMES);
++  console.log(
++    `opening (${engine}):`,
++    JSON.stringify({ longAt: opened.longAt, compmd: opened.compmd, first: opened.first, measures: opened.measures }),
++  );
++  // Scrolled to the bottom a screen a step, as a reader does, each step after its frame; then the last file drawn
++  const scrolled = await page.evaluate(async () => {
++    const pane = document.querySelector('.review-diffs') as HTMLElement;
++    const frame = () => new Promise<number>((r) => requestAnimationFrame(r));
++    const frames: number[] = [];
++    const start = performance.now();
++    let last = start;
++    let steps = 0;
++    for (; steps < 3000 && pane.scrollTop + pane.clientHeight < pane.scrollHeight - 2; steps++) {
++      pane.scrollTop += pane.clientHeight;
++      const now = await frame();
++      frames.push(now - last);
++      last = now;
++    }
++    const reached = performance.now() - start;
++    const cards = [...document.querySelectorAll('.review-file-card')];
++    const lastCard = cards[cards.length - 1];
++    // Then kept at the end, as a reader stays there, until the last file is drawn (20 s at most: one never drawn says
++    // what it shows instead); how far the end moved away meanwhile, as the files above it were drawn
++    const waitedFrom = performance.now();
++    const endAt = pane.scrollHeight;
++    while (
++      lastCard &&
++      !lastCard.querySelector('.diff-line, .review-file-binary, .review-file-moved') &&
++      performance.now() - waitedFrom < 20_000
++    ) {
++      pane.scrollTop = pane.scrollHeight;
++      await frame();
++    }
++    const endMoved = pane.scrollHeight - endAt;
++    const lastShows = lastCard?.querySelector('.diff-line')
++      ? 'lines'
++      : `${lastCard?.getAttribute('data-file')}: ${(lastCard?.outerHTML ?? '')
++          .replace(/\s+/g, ' ')
++          .replace(/<svg.*?<\/svg>/g, '')
++          .slice(0, 1500)}`;
++    return {
++      steps,
++      files: cards.length,
++      reachedMs: Math.round(reached),
++      lastDrawnMs: Math.round(performance.now() - start),
++      lastShows,
++      endMoved,
++      frames,
++      rows: document.querySelectorAll('.diff-line').length,
++      elements: document.querySelectorAll('*').length,
++    };
++  });
++  // Back to the top in one jump, then to the bottom in one: how long until the page answers again
++  const jumps = await page.evaluate(async (framesSource) => {
++    const frames = eval(framesSource) as (ms: number) => Promise<number[]>;
++    const pane = document.querySelector('.review-diffs') as HTMLElement;
++    pane.scrollTop = 0;
++    const top = await frames(3000);
++    pane.scrollTop = pane.scrollHeight;
++    const bottom = await frames(3000);
++    return { top, bottom };
++  }, FRAMES);
++  const sides = await page.evaluate(() =>
++    performance
++      .getEntriesByType('resource')
++      .filter((e) => e.name.includes('/documents?'))
++      .map((e) => ({
++        ms: (e as PerformanceResourceTiming).duration,
++        bytes: (e as PerformanceResourceTiming).transferSize,
++      })),
++  );
++  const result = {
++    engine,
++    open: { firstDrawnMs: opened.firstDrawn, ...summary(opened.frames) },
++    scroll: {
++      steps: scrolled.steps,
++      files: scrolled.files,
++      reachedMs: scrolled.reachedMs,
++      lastDrawnMs: scrolled.lastDrawnMs,
++      lastShows: scrolled.lastShows,
++      endMovedPx: scrolled.endMoved,
++      ...summary(scrolled.frames),
++      rows: scrolled.rows,
++      elements: scrolled.elements,
++    },
++    jumpTop: summary(jumps.top),
++    jumpBottom: summary(jumps.bottom),
++    sides: {
++      count: sides.length,
++      totalMs: Math.round(sides.reduce((s, e) => s + e.ms, 0)),
++      slowestMs: Math.round(Math.max(0, ...sides.map((e) => e.ms))),
++    },
++  };
++  console.log(`real review ${REVIEW} (${engine}):`, JSON.stringify(result));
++  await page.close();
++  return result;
++}
++
++for (const [engine, type] of [
++  ['chromium', chromium],
++  ['webkit', webkit],
++] as const) {
++  test(`${REVIEW} in ${engine}: the Diffs tab opened, scrolled to the bottom, jumped`, async () => {
++    const browser = await type.launch();
++    try {
++      const result = await measure(browser, engine);
++      expect(result.scroll.files).toBeGreaterThan(0);
++      expect(result.scroll.lastShows, 'the last file is drawn').toBe('lines');
++    } finally {
++      await browser.close();
++    }
++  });
++}
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 7ded3dd2..1f7688bc 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -913,6 +913,16 @@ test.describe('performance', () => {
+         longTasks: long.length,
+         longest: Math.round(Math.max(0, ...long)),
+         rows: document.querySelectorAll('.diff-line').length,
++        // Rows drawn more than FAR (3,200 px) and a screen away from the view: the page keeps none
++        farRows: (() => {
++          const view = pane.getBoundingClientRect();
++          const reach = 3200 + view.height;
++          return [...document.querySelectorAll('.review-file-card')].filter((card) => {
++            const box = card.getBoundingClientRect();
++            const far = box.bottom < view.top - reach || box.top > view.bottom + reach;
++            return far && card.querySelector('.diff-line');
++          }).length;
++        })(),
+         nodes: document.querySelectorAll('*').length,
+       };
+     });
+@@ -925,6 +935,7 @@ test.describe('performance', () => {
+     expect(opened.firstDrawn).toBeLessThan(BUDGET_MS);
+     expect(scrolled.settling).toBeLessThan(BUDGET_MS);
+     expect(scrolled.afterSettled).toBeLessThan(BUDGET_MS / 2);
+-    expect(scrolled.rows).toBeLessThan(1500);
++    // Rows bounded by where the view is, not by a count: a 600-line file in view is 1,200 rows in split
++    expect(scrolled.farRows).toBe(0);
+   });
+ });
+diff --git a/dashboard/tests/unit/CompMd.component.test.ts b/dashboard/tests/unit/CompMd.component.test.ts
+index 5284ce7f..fae708c1 100644
+--- a/dashboard/tests/unit/CompMd.component.test.ts
++++ b/dashboard/tests/unit/CompMd.component.test.ts
+@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/svelte';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import CompMd from '../../src/lib/documents/CompMd.svelte';
+ import type { CompmdModule } from '../../src/lib/compmd';
++import { resetTurns, turnsWaiting } from '../../src/lib/render-turns';
+ import { realCompmd } from './compmd.helpers';
+ 
+ // Nothing fails silently (ADR-004, docs/tauri-compmd-design.md §4.3): when CompMD can't load, or a component draws
+@@ -81,4 +82,44 @@ describe('CompMd', () => {
+     await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(expect.stringContaining('its fallback (threw)')));
+     expect(screen.queryByRole('note')).toBeNull();
+   });
++
++  describe('with `plain` (ATM-587: a review’s runs of code)', () => {
++    afterEach(() => {
++      resetTurns();
++      vi.unstubAllGlobals();
++    });
++
++    it('shows the code as written, then waits its turn among such renders; drawn, CompMD’s page is all there is', async () => {
++      const idle: (() => void)[] = [];
++      vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));
++      const { raise, createSandbox } = await compmdWithView();
++      const { container } = render(CompMd, { text: '```ts\nlet a = 1;\n```', plain: 'let a = 1;' });
++      const waiting = () => container.querySelector('.compmd-waiting');
++      expect(waiting()).toHaveTextContent('let a = 1;');
++      // Its turn when the page is idle: only then made and rendered
++      await vi.waitFor(() => expect(idle).toHaveLength(1));
++      expect(createSandbox).not.toHaveBeenCalled();
++      idle.shift()!();
++      expect(createSandbox).toHaveBeenCalled();
++      expect(turnsWaiting().running).toBe(true);
++      raise('rendered', {} as never);
++      await vi.waitFor(() => expect(waiting()).toBeNull());
++      await vi.waitFor(() => expect(turnsWaiting().running).toBe(false));
++      expect(container.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready');
++    });
++
++    it('gone before its turn, it never renders', async () => {
++      const idle: (() => void)[] = [];
++      vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));
++      const { createSandbox } = await compmdWithView();
++      const first = render(CompMd, { text: 'one', plain: 'one' });
++      const second = render(CompMd, { text: 'two', plain: 'two' });
++      await vi.waitFor(() => expect(turnsWaiting().waiting + idle.length).toBe(2));
++      second.unmount();
++      expect(turnsWaiting().waiting).toBe(0);
++      idle.shift()!();
++      expect(createSandbox).toHaveBeenCalledTimes(1);
++      first.unmount();
++    });
++  });
+ });
+diff --git a/dashboard/tests/unit/ReviewFile.component.test.ts b/dashboard/tests/unit/ReviewFile.component.test.ts
+index 504e140a..4ad8007e 100644
+--- a/dashboard/tests/unit/ReviewFile.component.test.ts
++++ b/dashboard/tests/unit/ReviewFile.component.test.ts
+@@ -303,6 +303,14 @@ describe('ReviewFile: its diff, made when near the view', () => {
+     expect(io.disconnect).toHaveBeenCalled();
+   });
+ 
++  // CompMD's CR-1: a long file stood shorter than its lines, so the end moved away once it was drawn (ATM-587)
++  it('a long file waits as tall as all its lines, however many', () => {
++    observer();
++    const lines = Array.from({ length: 600 }, (_, i) => `+line ${i}`).join('\n');
++    const { container } = show({ file: file({ patch: `@@ -0,0 +1,600 @@\n${lines}\n` }) });
++    expect(container.querySelector('.review-file-later')).toHaveStyle({ height: `${(600 + 8) * 20}px` });
++  });
++
+   it('a card only near the view waits for the page to be idle; one that comes into view meanwhile is made at once', async () => {
+     const io = observer();
+     let idle: (() => void) | null = null;
+diff --git a/dashboard/tests/unit/render-turns.test.ts b/dashboard/tests/unit/render-turns.test.ts
+new file mode 100644
+index 00000000..a37540d8
+--- /dev/null
++++ b/dashboard/tests/unit/render-turns.test.ts
+@@ -0,0 +1,148 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { resetTurns, takeTurn, turnsWaiting } from '../../src/lib/render-turns';
++
++// Renders that take turns (lib/render-turns.ts, ATM-587): one at a time, the one nearest the view first, each when
++// the page is idle after the one before has drawn
++
++/** An element at `top`..`bottom` in a window 800 high */
++function at(top: number, bottom = top + 100): Element {
++  const el = document.createElement('div');
++  document.body.append(el);
++  el.getBoundingClientRect = () => ({ top, bottom }) as DOMRect;
++  return el;
++}
++
++/** A render that is done when told */
++function render(name: string, log: string[]) {
++  let done: () => void = () => {};
++  const fn = vi.fn(
++    () =>
++      new Promise<void>((resolve) => {
++        log.push(name);
++        done = resolve;
++      }),
++  );
++  return { fn, finish: () => done() };
++}
++
++let idle: (() => void)[] = [];
++const runIdle = async () => {
++  const waiting = idle;
++  idle = [];
++  waiting.forEach((act) => act());
++  await Promise.resolve();
++};
++
++beforeEach(() => {
++  resetTurns();
++  idle = [];
++  vi.stubGlobal('innerHeight', 800);
++  vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));
++});
++
++afterEach(() => {
++  vi.unstubAllGlobals();
++  document.body.innerHTML = '';
++});
++
++describe('takeTurn', () => {
++  it('one at a time, each when the page is idle after the one before has drawn', async () => {
++    const log: string[] = [];
++    const a = render('a', log);
++    const b = render('b', log);
++    takeTurn(() => at(0), a.fn);
++    takeTurn(() => at(100), b.fn);
++    expect(log).toEqual([]);
++    await runIdle();
++    expect(log).toEqual(['a']);
++    expect(turnsWaiting()).toEqual({ waiting: 1, running: true });
++    // b waits for a to have drawn
++    await runIdle();
++    expect(log).toEqual(['a']);
++    a.finish();
++    await vi.waitFor(() => expect(idle).toHaveLength(1));
++    await runIdle();
++    expect(log).toEqual(['a', 'b']);
++    b.finish();
++    await vi.waitFor(() => expect(turnsWaiting()).toEqual({ waiting: 0, running: false }));
++  });
++
++  it('the one nearest the view goes first: in it, then by distance, above or below; one not on the page last', async () => {
++    const log: string[] = [];
++    const first = render('first', log);
++    takeTurn(() => at(0), first.fn);
++    await runIdle();
++    // While the first runs, more come: far below, gone, just above, in view
++    const turns = [
++      ['far below', at(5000)],
++      ['gone', undefined],
++      ['just above', at(-300, -200)],
++      ['in view', at(400)],
++    ] as const;
++    const made = turns.map(([name, el]) => {
++      const r = render(name, log);
++      takeTurn(() => el, r.fn);
++      return r;
++    });
++    // Each one finished lets the nearest of those left go
++    for (const r of [first, made[3], made[2], made[0]]) {
++      r.finish();
++      await vi.waitFor(() => expect(idle).toHaveLength(1));
++      await runIdle();
++    }
++    expect(log).toEqual(['first', 'in view', 'just above', 'far below', 'gone']);
++  });
++
++  it('a turn cancelled never runs; one whose render fails lets the next go', async () => {
++    const log: string[] = [];
++    const failing = vi.fn(() => {
++      log.push('failing');
++      return Promise.reject(new Error('no'));
++    });
++    const cancelled = render('cancelled', log);
++    const next = render('next', log);
++    takeTurn(() => at(0), failing);
++    const cancel = takeTurn(() => at(0), cancelled.fn);
++    takeTurn(() => at(50), next.fn);
++    cancel();
++    await runIdle();
++    await vi.waitFor(() => expect(idle).toHaveLength(1));
++    await runIdle();
++    expect(log).toEqual(['failing', 'next']);
++  });
++
++  it('while a mouse button is held (a drag picking lines), no turn starts; let go, they go on', async () => {
++    const log: string[] = [];
++    window.dispatchEvent(new MouseEvent('mousedown'));
++    takeTurn(() => at(0), render('a', log).fn);
++    expect(idle).toHaveLength(0);
++    window.dispatchEvent(new MouseEvent('mouseup'));
++    await runIdle();
++    expect(log).toEqual(['a']);
++    // Pressed after its turn was given, before the page was idle: back in line until let go
++    const b = render('b', log);
++    resetTurns();
++    takeTurn(() => at(0), b.fn);
++    window.dispatchEvent(new MouseEvent('mousedown'));
++    await runIdle();
++    expect(log).toEqual(['a']);
++    expect(turnsWaiting()).toEqual({ waiting: 1, running: false });
++    window.dispatchEvent(new MouseEvent('mouseup'));
++    await runIdle();
++    expect(log).toEqual(['a', 'b']);
++  });
++
++  it('without an idle callback, a turn goes after a moment', async () => {
++    vi.stubGlobal('requestIdleCallback', undefined);
++    vi.useFakeTimers();
++    try {
++      const log: string[] = [];
++      takeTurn(() => at(0), render('a', log).fn);
++      expect(log).toEqual([]);
++      vi.advanceTimersByTime(1);
++      expect(log).toEqual(['a']);
++    } finally {
++      vi.useRealTimers();
++    }
++  });
++});
+diff --git a/dashboard/tests/unit/review-data.test.ts b/dashboard/tests/unit/review-data.test.ts
+index 50a90996..9d97fae5 100644
+--- a/dashboard/tests/unit/review-data.test.ts
++++ b/dashboard/tests/unit/review-data.test.ts
+@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import type { Fetch } from '../../src/lib/api/http';
+ import { writeStored } from '../../src/lib/prefs';
+ import {
++  LOADS_AT_ONCE,
+   SOURCES_CAP,
++  sideLoads,
+   VIEWED_CAP,
+   VIEWED_KEY,
+   isViewed,
+@@ -136,6 +138,34 @@ describe('a round’s side', () => {
+         (await revisionDocuments('p1', 't', fetching(status, '{"error":"no"}')).load('a.md')) as object,
+       ).toMatchObject({ error: 'refused' });
+   });
++
++  it(`asks for ${LOADS_AT_ONCE} files at a time; the rest wait, the one asked for last first (ATM-587)`, async () => {
++    // Each answer held until let go, to see what is asked for when
++    const held: { url: string; answer: () => void }[] = [];
++    const fetch = vi.fn(
++      (url: string) =>
++        new Promise<Response>((resolve) => held.push({ url, answer: () => resolve(new Response('{}')) })),
++    ) as unknown as Fetch;
++    const side = revisionDocuments('p1', 'queue', fetch);
++    const names = Array.from({ length: LOADS_AT_ONCE + 3 }, (_, i) => `f${i}.md`);
++    const loads = names.map((name) => side.load(name));
++    const asked = () => held.map((h) => new URL(h.url, 'http://x').searchParams.get('path'));
++    expect(asked()).toEqual(names.slice(0, LOADS_AT_ONCE));
++    expect(sideLoads()).toEqual({ loading: LOADS_AT_ONCE, waiting: 3 });
++    // One answered: the last asked for goes next, then the one before it
++    held[0].answer();
++    await vi.waitFor(() => expect(asked()).toHaveLength(LOADS_AT_ONCE + 1));
++    expect(asked().at(-1)).toBe(names.at(-1));
++    held[1].answer();
++    await vi.waitFor(() => expect(asked()).toHaveLength(LOADS_AT_ONCE + 2));
++    expect(asked().at(-1)).toBe(names.at(-2));
++    for (let i = 2; i < names.length; i++) {
++      await vi.waitFor(() => expect(held.length).toBeGreaterThan(i));
++      held[i].answer();
++    }
++    await Promise.all(loads);
++    expect(sideLoads()).toEqual({ loading: 0, waiting: 0 });
++  });
+ });
+ 
+ describe('the viewed ticks', () => {
+diff --git a/docs/review-performance.md b/docs/review-performance.md
+index 0b9d6b87..17b0bac8 100644
+--- a/docs/review-performance.md
++++ b/docs/review-performance.md
+@@ -125,5 +125,51 @@ for: the first file and that settling under 200 ms, every step after the first t
+ (measured: about 30 on its own, up to 97 while the whole e2e suite runs on five workers), and fewer than 1,500 rows.
+ 50 ms would fail on a loaded machine without the page being any slower. Twice each in CI.
+ 
+-**Next:** CR-1 in the app, to see whether 5 (highlighting only what is shown) is still needed; 6 and 7 as backlog
+-tasks.
++## CR-1 itself, measured as it feels (round 6)
++
++Hakan, on round 5: the numbers above are too small for how it feels (opening "like 2 seconds", scrolling to the end
++"more like 10"). Right: the test draws plain text in Chromium from a mocked server, and the app draws CompMD's
++highlighted sides, each from atm, in WebKit (the app is a WKWebView). `tests/e2e/real-review.spec.ts` measures a real
++review instead: this checkout's atm serving the project on a private state folder, in Chromium and in WebKit, the
++Diffs tab opened (and watched for 5 s), scrolled to the end a screen at a time until the last file is drawn, then a
++jump to the top and one to the end (each watched 3 s). It runs only when given a project:
++`pnpm exec playwright test real-review`, with `tests/e2e/real-review.local.json` saying which (git ignores it).
++
++**What it found** (CR-1, before this round, WebKit):
++
++- **Opening:** the first lines in 0.3 s, then the page **blocked for 2 to 3.6 s** in frames of up to 1.5 s: every run
++  of code highlighted by CompMD at once, as soon as its grammars had loaded.
++- **Scrolling to the end:** reached in 1.4 s, but the **last file drawn at 4.9 s**: the 160 sides of the files passed
++  were all asked for at once, and the browser asks atm six at a time, in order, so the last file's waited behind all
++  of them (each about 75 ms at atm; up to 1.8 s in the queue).
++- **Jumps** (Chromium): a jump to the top or the end blocked the page for 3 s.
++
++**What this round changes:**
++
++5. **Highlighting takes turns** (`render-turns.ts`, `CompMd.svelte`'s `plain`): a run of code shows as written at
++   once and is highlighted by CompMD when its turn comes, one at a time, the one nearest the view first, each when the
++   page is idle after the one before has drawn. The plain lines give way the moment CompMD has drawn (both at once
++   made the run twice as tall for a frame, which moved the lines under a drag), and no turn starts while a mouse
++   button is held.
++8. **Sides asked for four at a time, the latest first** (`review-data.ts`, `LOADS_AT_ONCE`): what the reader is
++   looking at now goes before the files already passed.
++9. **A long file waits as tall as its lines** (`ReviewFile.svelte`, the estimate no longer capped at 4,000 px):
++   measuring showed the end of the review moving away from a reader who had just scrolled to it, by up to 3,400 px,
++   as a 600-line file near the end grew from 4,000 px to 12,000 once drawn; the last file was then far again, and in 3
++   runs of 4 not drawn until the reader scrolled on.
++
++**Measured again** (the same review, 3 to 4 runs; Chromium / WebKit):
++
++| | Before | After |
++|---|---|---|
++| Opening: blocked in its first 5 s | 0.1 s / 2–3.6 s | 0 s / 1.4 s (one frame, below) |
++| Scrolled to the end: the last file drawn | 2.9 s / 4.9 s | 1.0–1.8 s / 1.4–3.0 s |
++| A jump to the top, then the end: blocked | 3.0 s / 1.0 s | under 0.1 s / 0.1–0.3 s |
++| The slowest side, in the queue | 1.3 s / 1.8 s | 0.16 s / 0.09–0.11 s |
++
++**What is left: one frame of 1.5 s in WebKit**, the first TypeScript run highlighted on the page. Timed alone, it is
++CompMD's highlighter (Shiki) readying the TypeScript grammar, once per page, in WebKit (Chromium: a few ms). That is
++CompMD's to fix, not atm's (it draws the code; atm shows it): proposed as a CompMD task, with these numbers.
++
++**Next:** that CompMD task; atm's own cost per side (about 75 ms, five git processes and the project opened per
++request; 6 and 7 above, as backlog tasks).

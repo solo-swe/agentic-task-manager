@@ -52,6 +52,13 @@ describe('the project in the address (T-429)', () => {
     expect(withProject('/projects/abc?task=T-1', null)).toBe('/projects');
     expect(withProject('/projects/abc?task=T-1', 'abc')).toBe('/projects/abc?task=T-1');
   });
+
+  // ATM-581: from a review's page, another project opened its own review of the same number
+  it("a review open on its page is its project's: another project opens at its Reviews list, the same one stays", () => {
+    expect(withProject('/projects/abc/reviews/CR-2?round=3&against=1&file=a.rs', 'def')).toBe('/projects/def/reviews');
+    expect(withProject('/projects/abc/reviews/CR-2', null)).toBe('/projects');
+    expect(withProject('/projects/abc/reviews/CR-2?file=a.rs', 'abc')).toBe('/projects/abc/reviews/CR-2?file=a.rs');
+  });
 });
 
 describe('the task in the address (T-429)', () => {

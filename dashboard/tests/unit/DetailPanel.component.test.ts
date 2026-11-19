@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DetailPanel from '../../src/lib/details/DetailPanel.svelte';
 import { compmdSettled } from './compmd.helpers';
 import { dashboard } from '../../src/lib/state.svelte';
@@ -351,6 +351,93 @@ describe('DetailPanel', () => {
     expect(question.querySelector('code')).toHaveTextContent('--force');
     expect(question.querySelector('a')).toBeNull(); // only links atm would follow
     expect(question).toHaveTextContent('Keep --force? why');
+  });
+
+  // ATM-585: a task's code reviews, the latest to open where its review is shown
+  describe('its code reviews', () => {
+    const links = (container: HTMLElement, section: string) =>
+      [...container.querySelectorAll<HTMLAnchorElement>(`${section} .review-link`)].map((a) => [
+        a.dataset.review,
+        a.classList.contains('prominent'),
+        a.getAttribute('href'),
+      ]);
+    const reviews = [
+      { id: 'u1', ref: 'CR-3' },
+      { id: 'u2', ref: 'CR-7' },
+    ];
+    beforeEach(() => {
+      dashboard.projectId = 'p1';
+    });
+    afterEach(() => {
+      dashboard.projectId = null;
+    });
+
+    it('in review with one: it, prominent, linking to its page; with two, the latest first and the other after it', () => {
+      const one = open({ status: 'in_review', code_reviews: reviews.slice(1) });
+      expect(links(one, '#detail-review')).toEqual([['CR-7', true, '/projects/p1/reviews/CR-7']]);
+      const two = open({ status: 'in_review', code_reviews: reviews });
+      expect(links(two, '#detail-review')).toEqual([
+        ['CR-7', true, '/projects/p1/reviews/CR-7'],
+        ['CR-3', false, '/projects/p1/reviews/CR-3'],
+      ]);
+      expect(two.querySelector('#detail-code-reviews')).toBeNull();
+    });
+
+    it('in review without one: no link, as before', () => {
+      const container = open({ status: 'in_review' });
+      expect(container.querySelector('#detail-review')).not.toBeNull();
+      expect(container.querySelector('.review-link')).toBeNull();
+    });
+
+    it('not in review: its reviews in a section of their own, none prominent, oldest first', () => {
+      const container = open({ status: 'done', code_reviews: reviews });
+      expect(container.querySelector('#detail-review')).toBeNull();
+      expect(links(container, '#detail-code-reviews')).toEqual([
+        ['CR-3', false, '/projects/p1/reviews/CR-3'],
+        ['CR-7', false, '/projects/p1/reviews/CR-7'],
+      ]);
+      expect(open({ status: 'done' }).querySelector('#detail-code-reviews')).toBeNull();
+    });
+
+    it('the status the page knows, never asked for; needs you when the project’s summary says so', async () => {
+      const { learnReviews } = await import('../../src/lib/reviews/known.svelte');
+      const container = open({ status: 'in_review', code_reviews: reviews });
+      const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
+      expect(latest().textContent).toBe('CR-7');
+      learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
+      flushSync();
+      expect(latest().textContent).toBe('CR-7Waiting for review');
+      dashboard.projects = [
+        {
+          id: 'p1',
+          name: 'P',
+          path: '/p',
+          missing: false,
+          summary: { needs_you_reviews: [{ reference: 'CR-7', title: 'T', why: 'review' }] } as never,
+        },
+      ];
+      flushSync();
+      expect(latest().querySelector('.review-link-needs')).toHaveTextContent('needs you');
+      dashboard.projects = [];
+    });
+
+    // ATM-617: a review the list said atm can't read says so in the details, with why, until a list says otherwise
+    it('a review atm can’t read says so, with why, instead of its status; readable again, its status', async () => {
+      const { learnReviews, learnUnreadable } = await import('../../src/lib/reviews/known.svelte');
+      learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
+      const container = open({ status: 'in_review', code_reviews: reviews });
+      const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
+      learnUnreadable('p1', [{ reference: 'CR-7', problem: 'no status frozen' }]);
+      learnUnreadable('p2', [{ reference: 'CR-3', problem: 'another project’s' }]);
+      flushSync();
+      expect(latest().textContent).toBe("CR-7can't be read");
+      expect(latest().querySelector('.review-link-unreadable')).toHaveAttribute('title', 'no status frozen');
+      expect(container.querySelector('[data-review="CR-3"] .review-link-unreadable')).toBeNull();
+      learnUnreadable('p1', []);
+      flushSync();
+      expect(latest().textContent).toBe('CR-7Waiting for review');
+      learnUnreadable('p2', []);
+    });
   });
 
   it('a plain description is one paragraph, as before', async () => {

@@ -155,7 +155,9 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain 
   few dozen differing pixels pass (anti-aliasing), a real change doesn't.
 - A test that waits in real time is a slow test: the tests reduce motion (`reducedMotion`), so scrolls and fits are
   instant, and a timer is skipped with `page.clock` (`cards.spec.ts`). More workers than Playwright's default don't
-  help here (the machine is saturated at 5) and break the timing budgets. Traces are recorded only on CI's retry;
+  help here (the machine is saturated at 5) and break the timing budgets. A test measured against a budget is tagged
+  `@timed` (`test.describe('…', { tag: '@timed' }, …)`): it runs in the `timed` project, once every other test has
+  passed, so no heavy test shares the machine with it (`playwright.config.ts`, ATM-641). Traces are recorded only on CI's retry;
   locally, `--trace on` while looking into a failure.
 
 ## CI

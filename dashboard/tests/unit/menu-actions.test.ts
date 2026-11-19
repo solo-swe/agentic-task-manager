@@ -206,4 +206,27 @@ describe('the app’s menu on the page (T-512)', () => {
     expect(logged).toHaveBeenCalled();
     logged.mockRestore();
   });
+
+  it('runs each action the channel brings, and nothing for a message that isn’t one', async () => {
+    let channel = -1;
+    mockIPC((command, args) => {
+      if (command === 'subscribe_menu') channel = (args as { channel: { id: number } }).channel.id;
+    });
+    const ran: MenuAction[] = [];
+    await listenForMenu((action) => ran.push(action));
+    const internals = (window as unknown as { __TAURI_INTERNALS__: { runCallback: (id: number, m: unknown) => void } })
+      .__TAURI_INTERNALS__;
+    const messages = [{ kind: 'about' }, null, 'about', { kind: 3 }, {}, { kind: 'project', id: 'p1' }];
+    messages.forEach((message, index) => internals.runCallback(channel, { index, message }));
+    expect(ran).toEqual([{ kind: 'about' }, { kind: 'project', id: 'p1' }]);
+  });
+
+  it('shows every key the menus name as Windows and Linux write it', () => {
+    expect(shortcutLabel('CmdOrCtrl+Slash')).toBe('Ctrl+/');
+    expect(shortcutLabel('CmdOrCtrl+Shift+BracketLeft')).toBe('Ctrl+Shift+[');
+    expect(shortcutLabel('CmdOrCtrl+Shift+BracketRight')).toBe('Ctrl+Shift+]');
+    expect(shortcutLabel('Alt+ArrowRight')).toBe('Alt+→');
+    expect(shortcutLabel('F5')).toBe('F5');
+    expect(shortcutLabel('')).toBe('');
+  });
 });

@@ -430,6 +430,80 @@ mod tests {
     }
 
     #[test]
+    fn a_fresh_lock_of_another_machine_is_respected_whatever_its_pid() {
+        let dir = TestDir::new();
+        let planted = dir.path().join(LOCK_DIR);
+        fs::create_dir(&planted).unwrap();
+        let owner = json!({"host": "elsewhere", "pid": 999_999, "acquired_at": now_iso()});
+        fs::write(planted.join(LOCK_OWNER), owner.to_string()).unwrap();
+        assert!(!lock_is_stale(&planted, Some(&owner)));
+        let error = lock(dir.path(), Some(0.0)).unwrap_err().to_string();
+        assert!(
+            error.contains("(held by pid 999999 on elsewhere since "),
+            "{error}"
+        );
+        assert!(planted.exists(), "left in place");
+    }
+
+    #[test]
+    fn a_lock_older_than_the_stale_age_is_stale_and_one_at_an_unreadable_time_is_not() {
+        let dir = TestDir::new();
+        let planted = dir.path().join(LOCK_DIR);
+        fs::create_dir(&planted).unwrap();
+        let since = |at: &str| json!({"host": "elsewhere", "acquired_at": at});
+        // (acquired at, stale)
+        for (at, stale) in [
+            (atm_common::time::format_iso(real_now() - 3600), true),
+            (now_iso(), false),
+            ("yesterday".to_string(), false),
+        ] {
+            assert_eq!(lock_is_stale(&planted, Some(&since(&at))), stale, "{at}");
+        }
+    }
+
+    #[test]
+    fn breaking_a_lock_puts_back_one_that_changed_hands_since_it_was_judged() {
+        let dir = TestDir::new();
+        let path = dir.path().join(LOCK_DIR);
+        plant(&path, "new holder");
+        let judged = json!({"token": "old holder"});
+        assert!(!break_lock(&path, Some(&judged)));
+        assert_eq!(owner_of(&path).unwrap()["token"], json!("new holder"));
+        // The one judged: moved aside and removed
+        let owner = owner_of(&path);
+        assert!(break_lock(&path, owner.as_ref()));
+        assert!(!path.exists());
+        let left: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
+        assert!(left.is_empty(), "nothing left aside");
+        // Nothing to break
+        assert!(!break_lock(&path, None));
+    }
+
+    #[test]
+    fn a_holding_is_its_token_else_the_whole_owner_an_older_atm_wrote() {
+        assert_eq!(holding(None), None);
+        assert_eq!(
+            holding(Some(&json!({"pid": 1, "token": "t"}))),
+            Some(json!("t"))
+        );
+        let older = json!({"pid": 1, "host": "h"});
+        assert_eq!(holding(Some(&older)), Some(older.clone()));
+        assert_ne!(new_token(), new_token());
+    }
+
+    #[test]
+    fn the_lock_makes_its_folder_and_an_owner_without_fields_reads_as_none() {
+        let dir = TestDir::new();
+        let folder = dir.path().join("a/b");
+        drop(lock(&folder, Some(0.0)).unwrap());
+        assert!(folder.is_dir());
+        assert_eq!(
+            describe_owner(Some(&json!({}))),
+            "pid None on None since None"
+        );
+    }
+
+    #[test]
     fn this_process_is_alive_and_a_made_up_one_isnt() {
         assert!(pid_alive(std::process::id()));
         assert!(!pid_alive(999_999));

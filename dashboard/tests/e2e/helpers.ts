@@ -298,6 +298,13 @@ export class TasksServer {
     return this;
   }
 
+  /** Another project's reviews list (ATM-575, the overview's Reviews over every project); one without is a 404 */
+  private projectReviewLists = new Map<string, unknown>();
+  setProjectReviews(project: string, list: unknown) {
+    this.projectReviewLists.set(project, list);
+    return this;
+  }
+
   /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round */
   setReview(reference: string, page: unknown) {
     this.reviewPages.set(reference, page);
@@ -334,6 +341,13 @@ export class TasksServer {
     return typeof this.meta.id === 'string' && this.meta.id ? this.meta.id : FIXTURE_PROJECT;
   }
 
+  /** A summary of the default project chosen by the test (summary() makes one), over atm's own or none */
+  private ownSummary: Record<string, unknown> | null = null;
+  withOwnSummary(summary: Record<string, unknown>) {
+    this.ownSummary = summary;
+    return this;
+  }
+
   /** The project list api/projects answers with (summaries are null until a test needs them) */
   projectList() {
     if (!this.listed) return [];
@@ -345,7 +359,7 @@ export class TasksServer {
       summary,
       logo: this.logos.has(id) ? `p/${id}/logo` : null,
     });
-    const own = this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null;
+    const own = this.ownSummary ?? (this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null);
     return [
       project(this.projectId, typeof this.meta.project === 'string' ? this.meta.project : this.projectId, own),
       ...[...this.others].map(([id, p]) => project(id, p.name, p.summary)),
@@ -429,7 +443,9 @@ export class TasksServer {
             });
       }
       return answerTasks(route, V1_TASKS, (body) =>
-        body === this.body ? asTaskViews(body, this.archiveBody, false, this.registeredBodies) : asTaskViews(body),
+        body === this.body
+          ? this.withReviewStatuses(asTaskViews(body, this.archiveBody, false, this.registeredBodies))
+          : asTaskViews(body),
       );
     });
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
@@ -458,6 +474,11 @@ export class TasksServer {
     await this.page.route(V1_REVIEWS, (route) => {
       const url = new URL(route.request().url());
       const [, id, review] = V1_REVIEWS.exec(route.request().url())!;
+      const other = this.projectReviewLists.get(decodeURIComponent(id));
+      if (decodeURIComponent(id) !== this.projectId && other && !review) {
+        this.reviewRequests.push(`${decodeURIComponent(id)}:${url.search}`);
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(other) });
+      }
       if (decodeURIComponent(id) !== this.projectId)
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
       this.reviewRequests.push(`${review ? decodeURIComponent(review) : ''}${url.search}`);
@@ -483,7 +504,7 @@ export class TasksServer {
     });
     await this.page.route(V2_REVIEW_CHANGES, (route) => {
       const request = route.request();
-      if (!['POST', 'PATCH', 'PUT'].includes(request.method())) return route.fallback();
+      if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method())) return route.fallback();
       this.reviewChanges.push({
         method: request.method(),
         path: V2_REVIEW_CHANGES.exec(request.url())![2] ?? '',
@@ -781,6 +802,27 @@ export class TasksServer {
     return { ok: true };
   }
 
+  /** Where the default project's code reviews stand, by review ID (ATM-621): what atm reads from its reviews folder
+   * into each task's `derived.review_statuses`. The fixture's views come from atm run outside git, with no reviews
+   * folder, so a test sets them here; atm's own reading is tested by atm-lib and the CLI suite */
+  reviewStatuses: Record<string, string> = {};
+
+  /** Task views (as text) with the statuses of the reviews each task links, as atm serves them */
+  private withReviewStatuses(text: string): string {
+    if (!Object.keys(this.reviewStatuses).length) return text;
+    const parsed = JSON.parse(text) as {
+      tasks?: { task: Record<string, unknown>; derived: Record<string, unknown> }[];
+    };
+    for (const view of parsed.tasks ?? []) {
+      const links = (view.task.code_reviews ?? []) as { id: string }[];
+      const known = Object.fromEntries(
+        links.filter((l) => l.id in this.reviewStatuses).map((l) => [l.id, this.reviewStatuses[l.id]]),
+      );
+      if (Object.keys(known).length) view.derived = { ...view.derived, review_statuses: known };
+    }
+    return JSON.stringify(parsed);
+  }
+
   /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */
   private answerCommand(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
     const unknown = { error: { kind: 'not_found', message: 'unknown project' } };
@@ -809,7 +851,7 @@ export class TasksServer {
         return {
           ok: views(
             project === this.projectId
-              ? asTaskViews(body, this.archiveBody, false, this.registeredBodies)
+              ? this.withReviewStatuses(asTaskViews(body, this.archiveBody, false, this.registeredBodies))
               : asTaskViews(body),
           ),
         };
@@ -914,6 +956,13 @@ export class TasksServer {
       }
       case 'save_tabs':
         this.savedTabs = args.tabs as { addresses: string[]; active: number };
+        return { ok: null };
+      // A Reload (ATM-584): as the app, the window's tabs come back and its page loads again from the app's page (here
+      // the test server's root, which serves the same page), never from the route it was at
+      case 'reload_window':
+        this.windowCalls.push(command);
+        this.restoredTabs = this.savedTabs;
+        setTimeout(() => void this.page.evaluate(() => location.assign('/')).catch(() => {}), 0);
         return { ok: null };
       case 'needs_you':
         this.needsYouCalls.push(args as { workspace: string; badge: boolean; notify: boolean });

@@ -13,8 +13,8 @@ use serde_json::Value;
 
 // atm-common's, shared with the review store (atm-review, ATM-561), so atm-lib can merge the two
 pub use atm_common::subscription::{OnChange, Subscription};
-// The folder watcher is atm-fs's, shared with the review store (ATM-563)
-pub use atm_fs::watch::{SETTLE, watch};
+// The folder watcher is atm-fs's, shared with the review store (ATM-563); a working copy's, filtered (ATM-607)
+pub use atm_fs::watch::{Keep, SETTLE, watch, watch_tree_where};
 
 /// Poll a store's stamp (`stamp`, a value that changes when the data does, as [`crate::Store::stamp`]) every `every`,
 /// calling `on_change` when it differs from the one before, on the poller's own thread: for a store that can't push.

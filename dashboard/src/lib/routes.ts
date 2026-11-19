@@ -43,8 +43,12 @@ export function withProject(address: string, id: string | null, overviewTab?: Ov
   params.delete('project');
   params.delete('overview');
   if (view !== null && projectView !== (id !== null)) params.delete('view');
-  // A task's details are its project's
-  if (id !== projectOf(address)) params.delete('task');
+  // A task's details are its project's, and so is a review open on its page (ATM-581: from a review, another project
+  // opened its CR of the same number); that project opens at its Reviews list
+  if (id !== projectOf(address)) {
+    params.delete('task');
+    for (const key of ['review', 'round', 'against', 'file']) params.delete(key);
+  }
   if (id === null) {
     params.set('overview', '');
     if (overviewTab) params.set('view', overviewTab);

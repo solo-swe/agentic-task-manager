@@ -399,6 +399,19 @@ impl Member {
         crate::review_pages::review_page(&self.project_as_user()?, review, round, against)
     }
 
+    /// What a live review's page of its working copy now is made from (ATM-607); none for any other page.
+    ///
+    /// # Errors
+    /// As [`crate::review_pages::live_page_stamp`].
+    pub fn live_review_stamp(
+        &self,
+        review: &crate::reviews::ReviewRef,
+        round: Option<u32>,
+        against: Option<u32>,
+    ) -> Result<Option<Value>> {
+        crate::review_pages::live_page_stamp(&self.project_as_user()?, review, round, against)
+    }
+
     /// The image at `path` in its working copy, and its content type.
     ///
     /// # Errors
@@ -415,6 +428,14 @@ impl Member {
     pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
         self.project()?.store().subscribe(on_change)
     }
+
+    /// Be told when its working copy changes as a live review shows it (ATM-607), until the subscription is dropped.
+    ///
+    /// # Errors
+    /// As [`crate::reviews::subscribe_working_copy`].
+    pub fn subscribe_working_copy(&self, on_change: OnChange) -> Result<Subscription> {
+        crate::reviews::subscribe_working_copy(&self.project()?, on_change)
+    }
 }
 
 /// A project entry's folder.
@@ -429,7 +450,8 @@ fn summary_stamp(stamp: &Value) -> Value {
         stamp["tasks"],
         stamp["claims"],
         &format_iso(now())[..10],
-        stamp["head"]
+        stamp["head"],
+        stamp["reviews"]
     ])
 }
 
@@ -516,12 +538,22 @@ impl Workspace {
         Project::open_tolerant(&folder(entry))
     }
 
-    /// The project's store stamp (`{tasks, archive, claims, head, copies}`), or none when it is missing or refused.
+    /// The project's store stamp (`{tasks, archive, claims, head, copies}`) and its reviews' (`reviews`, ATM-606: what
+    /// waits on the user is in its summary), or none when it is missing or refused.
     #[must_use]
     pub fn data_stamp(entry: &Value) -> Option<Value> {
         let project = Self::project(entry).ok()?;
-        let stamp = project_stamp(&project);
-        (!stamp["tasks"].is_null()).then_some(stamp)
+        let mut stamp = project_stamp(&project);
+        if stamp["tasks"].is_null() {
+            return None;
+        }
+        if let Some(map) = stamp.as_object_mut() {
+            map.insert(
+                "reviews".into(),
+                crate::review_pages::reviews_stamp(&project),
+            );
+        }
+        Some(stamp)
     }
 
     /// The file and content type of a project's logo (`meta.logo`, or one found), if it has one.
@@ -556,6 +588,15 @@ impl Workspace {
         for entry in self.entries() {
             if let Ok(project) = Self::project(&entry) {
                 parts.push(project.store().subscribe(Arc::clone(&on_change))?);
+                // Its reviews too, when it has some (ATM-606: what waits on the user is in its summary); a project
+                // without a reviews folder isn't given one
+                let has_reviews = project
+                    .root()
+                    .is_some_and(|r| r.join(atm_common::TASK_DIR).join("reviews").is_dir());
+                if has_reviews && let Ok(store) = crate::reviews::store(&project) {
+                    use crate::reviews::ReviewStore as _;
+                    parts.push(store.subscribe(Arc::clone(&on_change))?);
+                }
             }
         }
         parts.push(self.registry.subscribe(on_change)?);
@@ -819,6 +860,88 @@ mod tests {
         assert_eq!(projects[0]["worktrees"], json!([]));
         assert!(workspace.search("anything").is_empty());
         assert!(workspace.find("gone").is_some() && workspace.find("x").is_none());
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn task_data_is_too_large_to_show_only_past_the_limit() {
+        for (stamp, expected) in [
+            (json!({"tasks": [MAX_SERVED_BYTES, "1"]}), false),
+            (json!({"tasks": [MAX_SERVED_BYTES + 1, "1"]}), true),
+            (json!({"tasks": null}), false),
+            (json!({}), false),
+            (json!({"tasks": ["big", "1"]}), false),
+        ] {
+            assert_eq!(too_large(&stamp), expected, "{stamp}");
+        }
+    }
+
+    #[test]
+    fn a_files_stamp_is_its_size_and_time_or_null_when_it_isnt_there() {
+        let home = state("stamp");
+        let file = home.join("f.txt");
+        assert_eq!(file_stamp(&file), Value::Null);
+        std::fs::write(&file, "abc").unwrap();
+        let stamp = file_stamp(&file);
+        assert_eq!(stamp[0], json!(3));
+        assert!(stamp[1].as_str().is_some_and(|t| t.parse::<u128>().is_ok()));
+        assert_eq!(
+            folder(&json!({})),
+            PathBuf::new(),
+            "an entry without a path"
+        );
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn a_logo_is_served_at_the_v1_address_in_default_and_the_v2_one_elsewhere() {
+        let home = state("logo");
+        let workspaces = Workspaces::at(&home);
+        workspaces.create("work").unwrap();
+        assert_eq!(workspaces.default_workspace().logo_route("p1"), "p/p1/logo");
+        assert_eq!(
+            workspaces.get("work").unwrap().logo_route("p1"),
+            "api/v2/workspaces/work/projects/p1/logo"
+        );
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn a_workspace_search_finds_each_projects_tasks_and_ignores_a_blank_query() {
+        let home = state("search");
+        let project = home.join("project");
+        let tasks = project.join(atm_common::TASK_DIR).join("tasks.json");
+        std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
+        std::fs::write(
+            &tasks,
+            r#"{"meta": {"id": "one"}, "tasks": [{"id": "T-1", "name": "Parse config"}, {"id": "T-2", "name": "Other"}]}"#,
+        )
+        .unwrap();
+        let workspaces = Workspaces::at(&home);
+        let workspace = workspaces.default_workspace();
+        workspace
+            .add_project(Some(&project.to_string_lossy()), &home)
+            .unwrap();
+        assert_eq!(
+            Value::Object(workspace.search("CONFIG")),
+            json!({"one": ["T-1"]})
+        );
+        assert!(workspace.search("   ").is_empty());
+        assert!(workspace.search("nothing-matches").is_empty());
+        // past the query's cap, the rest doesn't count
+        let long = format!("config{}", " ".repeat(SEARCH_QUERY_CAP)) + "nothing-matches";
+        assert_eq!(
+            Value::Object(workspace.search(&long)),
+            json!({"one": ["T-1"]})
+        );
+        assert_eq!(
+            workspaces.summary()["workspaces"],
+            json!([{"id": "default", "projects": 1}])
+        );
+        assert!(
+            matches!(workspace.member("nope"), Err(Error::NotFound(m)) if m == "unknown project")
+        );
+        assert!(workspace.member("one").is_ok());
         std::fs::remove_dir_all(&home).unwrap();
     }
 

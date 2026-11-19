@@ -1,0 +1,15 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "files"
+  },
+  "files": [
+    {
+      "path": "docs/review-performance.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T00:48:06Z"
+}

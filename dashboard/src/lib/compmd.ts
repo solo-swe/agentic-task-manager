@@ -133,12 +133,13 @@ export interface GutterRow {
 export function gutterRows(
   drawn: readonly DrawnLine[],
   total: number,
-  { top = 0, bottom }: { top?: number; bottom: number },
+  { top = 0, bottom, first: start = 1 }: { top?: number; bottom: number; first?: number },
 ): GutterRow[] {
+  // `first`: the lines numbered start there (a rendered diff's part, ATM-591), the document's first by default
   const placed = new Map<number, readonly LineRect[]>();
   for (const d of drawn) {
     const rects = d.rects.filter((r) => r.height > 0);
-    if (d.line >= 1 && d.line <= total && rects.length && !placed.has(d.line)) placed.set(d.line, rects);
+    if (d.line >= start && d.line <= total && rects.length && !placed.has(d.line)) placed.set(d.line, rects);
   }
   const heights = [...placed.values()].map((r) => r[0].height).sort((a, b) => a - b);
   const typical = heights.length ? heights[Math.floor(heights.length / 2)] : 20;
@@ -152,7 +153,7 @@ export function gutterRows(
     gap = [];
   };
   let last: GutterRow | null = null;
-  for (let line = 1; line <= total; line++) {
+  for (let line = start; line <= total; line++) {
     const rects = placed.get(line);
     if (!rects) {
       gap.push(line);
@@ -306,6 +307,25 @@ export function resetCompmd() {
 export interface ProjectLinks {
   localImage?: (url: string) => string | null;
   docLink?: (url: string) => string | null;
+  /** A task key written in the text (ATM-593: `ATM-12`, `LFB-5`): whether it names a task the page knows, which then
+   * links to it (`#task=<key>`); a key naming nothing stays text */
+  taskKnown?: (key: string) => boolean;
+}
+
+/** What task keys in a text link to (ATM-593): which ones name a task, and what opening one does */
+export interface TaskLinks {
+  known: (key: string) => boolean;
+  open: (key: string, newTab: boolean) => void;
+}
+
+/** A task key as people write one: a project's key, a dash, a number (`ATM-12`; `~ATM-12` as an older atm printed it,
+ * before ADR-009; `T-7`, an ID from before task keys); whether it names a task is `taskKnown`'s to say */
+const TASK_KEY = /~?\b[A-Z][A-Z0-9]{0,9}-\d+\b/g;
+
+/** The link a task key in a text is made (ATM-593), and the key back from one */
+export const taskHref = (key: string) => `#task=${encodeURIComponent(key)}`;
+export function taskOfHref(href: string): string | null {
+  return href.startsWith('#task=') ? decodeURIComponent(href.slice('#task='.length)) || null : null;
 }
 
 /** A node of CompMD's expanded tree, as far as safeTree reads it (mdast's fields) */
@@ -316,6 +336,47 @@ interface TreeNode {
   identifier?: string;
   value?: unknown;
   children?: TreeNode[];
+  /** Where it is in the source: a document's tree has it (T-406), task text's hasn't */
+  origin?: { start?: { line?: number }; end?: { line?: number; column?: number } };
+}
+
+/** A top-level block of a document (a paragraph, a list, a table, a diagram): the source lines it spans */
+export interface Block {
+  from: number;
+  to: number;
+}
+
+/** What a block's lines are, if the tree says (its `origin`; a block ending with a newline ends on the line before) */
+const spanOf = (node: TreeNode): Block | null => {
+  const from = node.origin?.start?.line;
+  if (typeof from !== 'number') return null;
+  const end = node.origin?.end;
+  let to = typeof end?.line === 'number' && end.line >= from ? end.line : from;
+  // An end at the very start of a line (a list takes its last newline) is the end of the line before
+  if (to > from && (end?.column === 0 || end?.column === 1)) to -= 1;
+  return { from, to };
+};
+
+/** A document's top-level blocks, in order, from its expanded tree (ATM-591: the rendered diff folds whole blocks).
+ * Definitions render nothing, so they aren't blocks */
+export function topBlocks<T>(tree: T): Block[] {
+  const root = tree as TreeNode;
+  return (root.children ?? [])
+    .filter((n) => n.type !== 'definition' && n.type !== 'footnoteDefinition' && n.type !== 'yaml')
+    .map(spanOf)
+    .filter((b): b is Block => b !== null);
+}
+
+/** The tree with only the top-level blocks that reach into `from`–`to` (ATM-591: a rendered diff's segment), and every
+ * definition, so a reference, an image's or a footnote's, still finds what it names wherever it is in the document */
+export function blocksIn<T>(tree: T, [from, to]: readonly [number, number]): T {
+  const root = tree as TreeNode;
+  const kept = (root.children ?? []).filter((n) => {
+    if (n.type === 'definition' || n.type === 'footnoteDefinition' || n.type === 'yaml') return true;
+    const span = spanOf(n);
+    return !!span && span.to >= from && span.from <= to;
+  });
+  return { ...root, children: kept } as T;
 }
 
 const DATA_IMAGE = /^\s*data:image\//i;
@@ -330,7 +391,7 @@ const RAW_IMAGE = /<\s*img\b/i;
  * (the files route), so it loads from there (V5); `docLink` gives a relative link's viewer link (`#doc=…`), which opens the
  * document viewer (V1a–V1c), so the browser never follows a relative URL itself. Null from either: as without it.
  */
-export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {}): T {
+export function safeTree<T>(tree: T, { localImage, docLink, taskKnown }: ProjectLinks = {}): T {
   const root = tree as TreeNode;
   const definitions = new Map<string, string>();
   const collect = (node: TreeNode) => {
@@ -339,8 +400,29 @@ export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {})
   };
   collect(root);
   const asText = (value: unknown): TreeNode[] => (value ? [{ type: 'text', value: String(value) }] : []);
-  const visit = (node: TreeNode): TreeNode[] => {
+  /** A text's task keys that name a task the page knows, as links to it; the rest as it was (ATM-593) */
+  const withKeys = (node: TreeNode): TreeNode[] => {
+    const text = String(node.value ?? '');
+    if (!taskKnown || !TASK_KEY.test(text)) return [node];
+    TASK_KEY.lastIndex = 0;
+    const parts: TreeNode[] = [];
+    let at = 0;
+    for (const match of text.matchAll(TASK_KEY)) {
+      const key = match[0];
+      if (!taskKnown(key)) continue;
+      if (match.index > at) parts.push({ type: 'text', value: text.slice(at, match.index) });
+      parts.push({ type: 'link', url: taskHref(key), children: [{ type: 'text', value: key }] });
+      at = match.index + key.length;
+    }
+    if (!parts.length) return [node];
+    if (at < text.length) parts.push({ type: 'text', value: text.slice(at) });
+    return parts;
+  };
+  /** `inLink`: inside a link already, where a key stays text */
+  const visit = (node: TreeNode, inLink = false): TreeNode[] => {
     switch (node.type) {
+      case 'text':
+        return inLink ? [node] : withKeys(node);
       case 'image': {
         if (DATA_IMAGE.test(node.url ?? '')) return [node];
         const local = localImage?.(node.url ?? '');
@@ -352,20 +434,22 @@ export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {})
         const local = localImage?.(url);
         return local ? [{ type: 'image', url: local, alt: node.alt }] : asText(node.alt);
       }
-      case 'link':
+      case 'link': {
+        const inside = (node.children ?? []).flatMap((c) => visit(c, true));
         if (!safeHref(node.url ?? '')) {
           const viewer = docLink?.(node.url ?? '');
-          if (viewer) return [{ ...node, url: viewer, children: (node.children ?? []).flatMap(visit) }];
-          return (node.children ?? []).flatMap(visit);
+          if (viewer) return [{ ...node, url: viewer, children: inside }];
+          return (node.children ?? []).flatMap((c) => visit(c, inLink));
         }
-        break;
+        return [{ ...node, children: inside }];
+      }
       case 'html':
         if (RAW_IMAGE.test(String(node.value))) return asText(node.value);
         break;
     }
-    return node.children ? [{ ...node, children: node.children.flatMap(visit) }] : [node];
+    return node.children ? [{ ...node, children: node.children.flatMap((c) => visit(c, inLink)) }] : [node];
   };
-  return { ...root, children: (root.children ?? []).flatMap(visit) } as T;
+  return { ...root, children: (root.children ?? []).flatMap((c) => visit(c)) } as T;
 }
 
 /** The address of a web link to this dashboard itself (one of its pages on this server, T-429, or an old `#…` link to

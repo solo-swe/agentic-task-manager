@@ -1,43 +1,33 @@
 import { addressOf, expect, follow, loadFixture, openDashboard, test } from './helpers';
 
-// Task keys (ADR-007, T-546): a project in the keys format stores its tasks by UUID and shows them by key (ATM-10),
-// a provisional key lighter, in italics, with an ⓘ its tooltip explains; ?task= takes a key, an earlier prefix's key,
-// an alias or the UUID,
-// and the address then shows the key. A project from before task keys shows its IDs as it always has.
+// Task keys (ADR-007, T-546; plain from creation, ADR-009): a project in the keys format stores its tasks by UUID and
+// shows them by key (ATM-10), every key the same, no draft mark; a task a merge moved says the key it had ("was
+// ATM-9"); ?task= takes a key, an earlier prefix's key, an alias or the UUID, and the address then shows the key. A
+// project from before task keys shows its IDs as it always has.
 
 const SETUP = '0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8001';
 const LOGIN = '0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8002';
 const ONBOARDING = '0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8003';
 const FOREIGN = '3f2a9c1e:0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8f99';
-const TIP = 'Provisional until merged into main: the number may change if another branch took it';
 
 test.describe('task keys', () => {
-  test('the dependency graph shows a provisional key in italics, its tooltip saying why; no DRAFT label', async ({
-    page,
-    tasksServer,
-  }) => {
+  test('the dependency graph shows every key plain: no draft mark, no DRAFT label', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'keys', { tab: 'graph' });
-    const key = page.locator('#dep-graph .graph-provisional');
-    await expect(key).toHaveCount(1);
-    await expect(key).toHaveAttribute('font-style', 'italic');
-    await expect(key.locator('title')).toHaveText(TIP);
+    await expect(page.locator('#dep-graph .graph-node')).toHaveCount(3);
+    await expect(page.locator('#dep-graph [font-style="italic"], #dep-graph title')).toHaveCount(0);
+    await expect(page.locator(`#dep-graph .graph-node[data-id="${ONBOARDING}"]`)).toContainText('ATM-11');
     await expect(page.locator('#dep-graph')).not.toContainText('DRAFT');
   });
 
-  test('cards and list rows show keys, a provisional one in italics with its ⓘ', async ({ page, tasksServer }) => {
+  test('cards and list rows show keys, all plain (ADR-009)', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'keys', { tab: 'kanban' });
     await expect(page.locator(`.kanban-card[data-id="${LOGIN}"] .kanban-card-id`)).toHaveText('ATM-10');
-    const draft = page.locator(`.kanban-card[data-id="${ONBOARDING}"] .kanban-card-id .provisional`);
-    await expect(draft).toHaveText('ATM-11');
-    await expect(draft).toHaveAttribute('title', TIP);
-    // Italic, with an ⓘ the key's tooltip explains; no badge
-    await expect(draft).toHaveCSS('font-style', 'italic');
-    await expect(draft.locator('.draft-info .icon-info')).toHaveCount(1);
-    await expect(page.locator(`.kanban-card[data-id="${LOGIN}"] .draft-info`)).toHaveCount(0);
+    await expect(page.locator(`.kanban-card[data-id="${ONBOARDING}"] .kanban-card-id`)).toHaveText('ATM-11');
+    await expect(page.locator('.provisional, .draft-info')).toHaveCount(0);
 
     await follow(page, `/projects/${tasksServer.projectId}/list`);
     await expect(page.locator(`.task-card[data-id="${SETUP}"] .task-id`)).toHaveText('ATM-2');
-    await expect(page.locator('.task-card .task-id')).toHaveText(['ATM-2', 'ATM-10', /^ATM-11/]);
+    await expect(page.locator('.task-card .task-id')).toHaveText(['ATM-2', 'ATM-10', 'ATM-11']);
     // A dependency by the other task's key, another project's in short
     const deps = page.locator(`.task-card[data-id="${ONBOARDING}"] .dep-link`);
     await expect(deps.nth(0)).toHaveText('ATM-10');
@@ -56,9 +46,14 @@ test.describe('task keys', () => {
     expect(addressOf(page)).toBe(`/projects/${tasksServer.projectId}/list?task=ATM-10`);
     await expect(page.locator('#detail-panel .detail-dep-item').first()).toContainText('ATM-2');
     await expect(page.locator('#detail-related .detail-dep-item')).toContainText('ATM-11');
-    // The provisional task: its heading marked, the other project's dependency said to be not loaded here
+    // LOGIN's number never moved: nothing said
+    await expect(page.locator('#detail-moved')).toHaveCount(0);
+    // The task a merge moved (ATM-9 became ATM-11): its heading plain, the key it had said (not its old ID, T-P1-03),
+    // the other project's dependency said to be not loaded here
     await page.locator('#detail-related .detail-dep-item').click();
-    await expect(page.locator('#detail-key .provisional')).toHaveAttribute('title', TIP);
+    await expect(page.locator('#detail-key')).toHaveText('ATM-11');
+    await expect(page.locator('#detail-key .provisional')).toHaveCount(0);
+    await expect(page.locator('#detail-moved')).toHaveText('was ATM-9');
     expect(addressOf(page)).toBe(`/projects/${tasksServer.projectId}/list?task=ATM-11`);
     await expect(page.locator('#detail-panel .detail-dep-item.foreign')).toContainText('3f2a9c1e:0193a5b2');
   });
@@ -73,11 +68,12 @@ test.describe('task keys', () => {
     await expect(page.locator('#detail-overlay.open')).toBeVisible();
     await expect(page.locator('#detail-key')).toHaveText('ATM-10');
     await expect.poll(() => addressOf(page)).toBe(`/projects/${tasksServer.projectId}/list?task=ATM-10`);
-    // Followed links: the UUID, an alias, a key in lower case
+    // Followed links: the UUID, an alias (the key a merge moved it off), a key in lower case, one with an old ~
     for (const [ref, key] of [
       [SETUP, 'ATM-2'],
       ['ATM-9', 'ATM-11'],
       ['atm-10', 'ATM-10'],
+      ['~ATM-10', 'ATM-10'],
     ]) {
       await follow(page, `/projects/${tasksServer.projectId}/list?task=${ref}`);
       await expect(page.locator('#detail-key')).toHaveText(key === 'ATM-11' ? 'ATM-11' : key);
@@ -95,7 +91,8 @@ test.describe('task keys', () => {
     await openDashboard(page, tasksServer, 'keys', { tab: 'list' });
     await page.locator(`.task-card[data-id="${ONBOARDING}"] .task-name`).click();
     const other = page.locator(`#detail-panel a.detail-dep-item.foreign[data-foreign="${FOREIGN}"]`);
-    await expect(other.locator('.provisional')).toHaveText('LFB-5');
+    await expect(other).toContainText('LFB-5');
+    await expect(other.locator('.provisional')).toHaveCount(0);
     await expect(other.locator('.detail-dep-name')).toHaveText('Write the post about the onboarding');
     await expect(other.locator('.badge')).toHaveText('in progress');
     await expect(other).toHaveAttribute('href', '/projects/3f2a9c1e?task=LFB-5');
@@ -147,7 +144,7 @@ test.describe('task keys', () => {
     await expect(page.locator('#detail-key')).toHaveText('LFB-5');
   });
 
-  test('the overview’s cards and the All projects board show keys, a provisional one marked (T-549)', async ({
+  test('the overview’s cards and the All projects board show keys, all plain (T-549, ADR-009)', async ({
     page,
     tasksServer,
   }) => {
@@ -164,10 +161,10 @@ test.describe('task keys', () => {
     await page.getByRole('button', { name: 'All tasks' }).click();
     const board = page.locator('#all-board');
     await expect(board.locator(`.board-card[data-id="${LOGIN}"] .kanban-card-id`)).toHaveText('ATM-10');
-    const draft = board.locator(`.board-card[data-id="${ONBOARDING}"]`);
-    await expect(draft.locator('.kanban-card-id .provisional')).toHaveText('ATM-11');
-    await expect(draft.locator('.kanban-card-id .provisional')).toHaveAttribute('title', TIP);
-    await expect(draft.locator('.board-card-status')).toHaveText('Waits on ATM-10, 3f2a9c1e:0193a5b2');
+    const moved = board.locator(`.board-card[data-id="${ONBOARDING}"]`);
+    await expect(moved.locator('.kanban-card-id')).toHaveText('ATM-11');
+    await expect(board.locator('.provisional, .draft-info')).toHaveCount(0);
+    await expect(moved.locator('.board-card-status')).toHaveText('Waits on ATM-10, 3f2a9c1e:0193a5b2');
   });
 
   test('a project from before task keys still shows its IDs', async ({ page, tasksServer }) => {

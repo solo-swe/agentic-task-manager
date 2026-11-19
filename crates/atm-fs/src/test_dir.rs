@@ -19,7 +19,8 @@ impl TestDir {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&path).expect("the system's temporary folder is writable");
-        Self(std::fs::canonicalize(&path).expect("the folder was just made"))
+        // Without Windows' `\\?\` prefix, as atm and git name the folder
+        Self(atm_common::pathtext::canonical(&path).expect("the folder was just made"))
     }
 
     pub(crate) fn path(&self) -> &Path {

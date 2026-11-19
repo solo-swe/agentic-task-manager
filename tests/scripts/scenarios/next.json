@@ -223,7 +223,8 @@
           "dependencies": []
         },
         "claim": null,
-        "reason": null
+        "reason": null,
+        "watch": { "running": false, "open": [], "since_last_watch": [] }
       }
     },
     "env": {
@@ -480,7 +481,8 @@
           "claimed_at": "2026-05-01T10:00:00Z",
           "lease_expires_at": "2026-05-01T12:00:00Z"
         },
-        "reason": null
+        "reason": null,
+        "watch": { "running": false, "open": [], "since_last_watch": [] }
       },
       "files": {
         ".agentic-task-manager/tasks.json": {
