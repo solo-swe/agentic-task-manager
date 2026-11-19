@@ -266,6 +266,9 @@
        of its gutter, stays inside the run, off the fold row after it */
     overflow: clip;
     overflow-clip-margin: 2px;
+    /* Never the pane's scroll anchor (ATM-655): a run's text is replaced when its turn to be highlighted comes, and
+       WebKit, anchored on that text, scrolled the pane by the whole run's height (1,600 px after a comment box opened) */
+    overflow-anchor: none;
   }
   .diff-code.both {
     --gutter: calc(var(--space-10) * 2);

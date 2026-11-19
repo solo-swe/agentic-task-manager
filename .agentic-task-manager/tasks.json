@@ -17197,14 +17197,14 @@
       "description": "Found in ATM-652 (CR-62): in the full e2e run, the long review's first draw took 208 ms against its 200 ms budget. Measured, not rerun: alone it is 50 to 100 ms; with the other `@timed` tests running beside it, 83 to 143 ms with ATM-652's change and 98 to **443 ms without it**. ATM-641 kept the timed tests away from the functional ones, not from each other: the `timed` project still runs on five workers.\n\n## Change\nThe `timed` project runs on one worker (`playwright.config.ts`: `workers` per project, or `fullyParallel: false` and one worker for it), so each measurement has the machine to itself. Note how long the project then takes, locally and in CI, and say so in `AGENTS.md`'s testing conventions next to ATM-641's note.\n\n## Tests\nThe full run (`--project svelte --project timed`) three times: the timed tests within their budgets each time; their medians recorded in the CR.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/playwright.config.ts",
         "AGENTS.md"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-19T19:46:46Z",
+      "updated_at": "2026-11-19T19:55:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17219,7 +17219,24 @@
         "dashboard"
       ],
       "started_at": "2026-11-19T19:46:46Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "97bdb2d935f31d12aa08aafcdb036b9cec1a899f",
+      "code_reviews": [
+        {
+          "id": "01a1f561-325f-748a-a5a5-04a5e2baf6b0",
+          "ref": "CR-64"
+        }
+      ],
+      "review_requested_at": "2026-11-19T19:55:50Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T19:55:50Z",
+          "kind": "review",
+          "text": "CR-64: The timed e2e tests one at a time",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e632884fe3f",
@@ -17233,7 +17250,7 @@
       "description": "Found in ATM-652 (CR-62): the e2e test *+ on a line wrapped opens the comment box where it is; the pane stays* (`reviews.spec.ts`, ATM-625) passes in Chromium and fails in WebKit, the app's engine on macOS, with and without ATM-652's change: the pane moves from about 1,230 to 2,860 px when the comment box opens. The suite runs Chromium only, so nothing caught it.\n\n## Look into\nWhy WebKit scrolls the pane: the comment box's focus (`focusOnShow`) scrolling it into view before it is placed, a run being cut where the pick ends (the segments are drawn again) and the scroll anchoring WebKit lacks, or the rows measured again after a wrap.\n\n## Fix and tests\nThe pane stays where it is in WebKit too. Run the reviews specs in WebKit: either a WebKit project for the reviews specs in `playwright.config.ts` (its cost measured), or at least this test in WebKit as well.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffView.svelte",
@@ -17241,7 +17258,7 @@
         "dashboard/playwright.config.ts"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-19T19:46:39Z",
+      "updated_at": "2026-11-19T19:55:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17254,7 +17271,9 @@
       "number": 655,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-19T19:55:53Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e642f23672e",

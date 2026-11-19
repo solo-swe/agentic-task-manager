@@ -7,6 +7,10 @@ import { E2E_SESSION } from './session.mjs';
 // revision) and records the changes the page sends. A review's page is a window of its own: the list opens it in a
 // browser tab, with its Overview, Diffs and Comments tabs.
 
+/** A test that runs in WebKit too (the `webkit` project, ATM-655): the app's engine on macOS, where the diff viewer's
+ * layout and scrolling have differed from Chromium's */
+const WEBKIT_TOO = { tag: '@webkit' };
+
 const lines = (n: number, change: (i: number) => string | null = () => null) =>
   Array.from({ length: n }, (_, i) => change(i + 1) ?? `line ${i + 1}`).join('\n') + '\n';
 
@@ -507,180 +511,186 @@ test.describe('a review’s page', () => {
 
   // ATM-588: Wrap, in Unified: a long line wraps at the column's width, its row as tall as it, its number on its first
   // visual line, the next line's row right under it; no sideways scroll. In Split it waits, saying why
-  test('Wrap: a long line wraps in Unified, the next line level with its text; in Split the button says why it waits', async ({
-    page,
-    tasksServer,
-  }) => {
-    const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
-    const text = `fn a() {}\n${long}\nfn b() {}\n`;
-    const patch =
-      'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,3 @@\n' +
-      text
-        .trimEnd()
-        .split('\n')
-        .map((l) => `+${l}`)
-        .join('\n') +
-      '\n';
-    tasksServer.setRevisionDocument(
-      'head3',
-      projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
-    );
-    await openReviews(page, tasksServer);
-    tasksServer.setReview(
-      'CR-2',
-      reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
-    );
-    await page.goto(reviewPath(tasksServer, '/CR-2'));
-    await page.getByRole('tab', { name: /^Diffs/ }).click();
-    const wrap = page.getByRole('button', { name: 'Wrap' });
-    // Split: Wrap waits, saying why
-    await page.getByRole('button', { name: 'Split' }).click();
-    await expect(wrap).toBeDisabled();
-    await expect(wrap).toHaveAttribute('title', /Unified for now/);
-    // Unified, wrapped
-    await page.getByRole('button', { name: 'Unified' }).click();
-    await wrap.click();
-    await expect(wrap).toHaveAttribute('aria-pressed', 'true');
-    const diff = diffOf(page, 'src/long.rs');
-    await expect(diff.locator('.diff-code.wrap')).toBeVisible();
-    await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
-    const rows = () =>
-      diff.locator('.diff-code.wrap').evaluate((code) => {
-        const lines = [...code.querySelectorAll<HTMLElement>('.diff-line')].map((l) => ({
-          top: parseFloat(l.style.top),
-          height: parseFloat(l.style.height),
-        }));
-        const pre = code.querySelector('.compmd-page pre') as HTMLElement | null;
-        return { lines, sideways: pre ? pre.scrollWidth > pre.clientWidth + 1 : true };
-      });
-    await expect.poll(async () => (await rows()).lines[1]?.height ?? 0).toBeGreaterThan(40);
-    const { lines, sideways } = await rows();
-    expect(lines).toHaveLength(3);
-    // The long line is several of the others tall; the next line's row starts where it ends
-    expect(lines[1].height).toBeGreaterThan(lines[0].height * 2);
-    expect(Math.abs(lines[2].top - (lines[1].top + lines[1].height))).toBeLessThan(2);
-    expect(sideways).toBe(false);
-    // Kept for the next page
-    await page.reload();
-    await page.getByRole('tab', { name: /^Diffs/ }).click();
-    await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
-  });
+  test(
+    'Wrap: a long line wraps in Unified, the next line level with its text; in Split the button says why it waits',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+      const text = `fn a() {}\n${long}\nfn b() {}\n`;
+      const patch =
+        'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,3 @@\n' +
+        text
+          .trimEnd()
+          .split('\n')
+          .map((l) => `+${l}`)
+          .join('\n') +
+        '\n';
+      tasksServer.setRevisionDocument(
+        'head3',
+        projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
+      );
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      // Split: Wrap waits, saying why
+      await page.getByRole('button', { name: 'Split' }).click();
+      await expect(wrap).toBeDisabled();
+      await expect(wrap).toHaveAttribute('title', /Unified for now/);
+      // Unified, wrapped
+      await page.getByRole('button', { name: 'Unified' }).click();
+      await wrap.click();
+      await expect(wrap).toHaveAttribute('aria-pressed', 'true');
+      const diff = diffOf(page, 'src/long.rs');
+      await expect(diff.locator('.diff-code.wrap')).toBeVisible();
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      const rows = () =>
+        diff.locator('.diff-code.wrap').evaluate((code) => {
+          const lines = [...code.querySelectorAll<HTMLElement>('.diff-line')].map((l) => ({
+            top: parseFloat(l.style.top),
+            height: parseFloat(l.style.height),
+          }));
+          const pre = code.querySelector('.compmd-page pre') as HTMLElement | null;
+          return { lines, sideways: pre ? pre.scrollWidth > pre.clientWidth + 1 : true };
+        });
+      await expect.poll(async () => (await rows()).lines[1]?.height ?? 0).toBeGreaterThan(40);
+      const { lines, sideways } = await rows();
+      expect(lines).toHaveLength(3);
+      // The long line is several of the others tall; the next line's row starts where it ends
+      expect(lines[1].height).toBeGreaterThan(lines[0].height * 2);
+      expect(Math.abs(lines[2].top - (lines[1].top + lines[1].height))).toBeLessThan(2);
+      expect(sideways).toBe(false);
+      // Kept for the next page
+      await page.reload();
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
+    },
+  );
 
   // ATM-652 (Hakan): the numbers weren't level with their lines, and Wrap moved them up or down. Each number's text is
   // centred on its line's first visual line, within 1 px, wrapped or not, in Unified and Split
-  test('every line number is level with its line’s text, and Wrap doesn’t move it', async ({ page, tasksServer }) => {
-    const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
-    const text = `fn a() {}\n${long}\nfn b() {}\n\n// done\n`;
-    const patch =
-      'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,5 @@\n' +
-      text
-        .slice(0, -1)
-        .split('\n')
-        .map((l) => `+${l}`)
-        .join('\n') +
-      '\n';
-    tasksServer.setRevisionDocument(
-      'head3',
-      projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
-    );
-    await openReviews(page, tasksServer);
-    tasksServer.setReview(
-      'CR-2',
-      reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
-    );
-    await page.goto(reviewPath(tasksServer, '/CR-2'));
-    await page.getByRole('tab', { name: /^Diffs/ }).click();
-    const diff = diffOf(page, 'src/long.rs');
-    await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
-    /** Each numbered line: its number's text centre less its text's (the first character of its first visual line) */
-    const offsets = () =>
-      diff.evaluate((view) =>
-        [...view.querySelectorAll<HTMLElement>('.diff-code')].flatMap((run) => {
-          const code = run.querySelector<HTMLElement>('.compmd-page pre > code');
-          if (!code) return [];
-          // Where each line starts in the code's text
-          const starts: { node: Text; offset: number }[] = [];
-          const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
-          let atStart = true;
-          for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null)
-            for (let at = 0; at <= node.data.length; at++) {
-              if (atStart && at < node.data.length) {
-                starts.push({ node, offset: at });
-                atStart = false;
-              }
-              if (node.data[at] === '\n') atStart = true;
-            }
-          const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
-          const range = document.createRange();
-          return [...run.querySelectorAll<HTMLElement>('.diff-line')].flatMap((line, i) => {
-            const number = line.querySelector('.diff-number span:last-child')?.firstChild;
-            const start = starts[i];
-            if (!number || !start || start.node.data[start.offset] === '\n') return [];
-            range.selectNodeContents(number);
-            const n = centre(range.getBoundingClientRect());
-            range.setStart(start.node, start.offset);
-            range.setEnd(start.node, start.offset + 1);
-            return [Math.round((n - centre(range.getClientRects()[0])) * 10) / 10];
-          });
-        }),
+  test(
+    'every line number is level with its line’s text, and Wrap doesn’t move it',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+      const text = `fn a() {}\n${long}\nfn b() {}\n\n// done\n`;
+      const patch =
+        'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,5 @@\n' +
+        text
+          .slice(0, -1)
+          .split('\n')
+          .map((l) => `+${l}`)
+          .join('\n') +
+        '\n';
+      tasksServer.setRevisionDocument(
+        'head3',
+        projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
       );
-    const level = async (what: string) => {
-      const found = await offsets();
-      expect(found.length, what).toBeGreaterThanOrEqual(4);
-      for (const d of found) expect(Math.abs(d), `${what}: ${JSON.stringify(found)}`).toBeLessThanOrEqual(1);
-      return found;
-    };
-    await page.getByRole('button', { name: 'Split' }).click();
-    await level('split');
-    await page.getByRole('button', { name: 'Unified' }).click();
-    const plain = await level('unified');
-    const wrap = page.getByRole('button', { name: 'Wrap' });
-    await wrap.click();
-    await expect(diff.locator('.diff-code.wrap')).toBeVisible();
-    await expect.poll(async () => (await offsets()).length).toBe(plain.length);
-    const wrapped = await level('unified, wrapped');
-    // Wrap moves no number against its text (it was 4 px: 1.5 above it, then 2.5 below)
-    wrapped.forEach((d, i) =>
-      expect(Math.abs(d - plain[i]), JSON.stringify({ plain, wrapped })).toBeLessThanOrEqual(1),
-    );
-  });
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      const diff = diffOf(page, 'src/long.rs');
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      /** Each numbered line: its number's text centre less its text's (the first character of its first visual line) */
+      const offsets = () =>
+        diff.evaluate((view) =>
+          [...view.querySelectorAll<HTMLElement>('.diff-code')].flatMap((run) => {
+            const code = run.querySelector<HTMLElement>('.compmd-page pre > code');
+            if (!code) return [];
+            // Where each line starts in the code's text
+            const starts: { node: Text; offset: number }[] = [];
+            const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+            let atStart = true;
+            for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null)
+              for (let at = 0; at <= node.data.length; at++) {
+                if (atStart && at < node.data.length) {
+                  starts.push({ node, offset: at });
+                  atStart = false;
+                }
+                if (node.data[at] === '\n') atStart = true;
+              }
+            const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
+            const range = document.createRange();
+            return [...run.querySelectorAll<HTMLElement>('.diff-line')].flatMap((line, i) => {
+              const number = line.querySelector('.diff-number span:last-child')?.firstChild;
+              const start = starts[i];
+              if (!number || !start || start.node.data[start.offset] === '\n') return [];
+              range.selectNodeContents(number);
+              const n = centre(range.getBoundingClientRect());
+              range.setStart(start.node, start.offset);
+              range.setEnd(start.node, start.offset + 1);
+              return [Math.round((n - centre(range.getClientRects()[0])) * 10) / 10];
+            });
+          }),
+        );
+      const level = async (what: string) => {
+        const found = await offsets();
+        expect(found.length, what).toBeGreaterThanOrEqual(4);
+        for (const d of found) expect(Math.abs(d), `${what}: ${JSON.stringify(found)}`).toBeLessThanOrEqual(1);
+        return found;
+      };
+      await page.getByRole('button', { name: 'Split' }).click();
+      await level('split');
+      await page.getByRole('button', { name: 'Unified' }).click();
+      const plain = await level('unified');
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      await wrap.click();
+      await expect(diff.locator('.diff-code.wrap')).toBeVisible();
+      await expect.poll(async () => (await offsets()).length).toBe(plain.length);
+      const wrapped = await level('unified, wrapped');
+      // Wrap moves no number against its text (it was 4 px: 1.5 above it, then 2.5 below)
+      wrapped.forEach((d, i) =>
+        expect(Math.abs(d - plain[i]), JSON.stringify({ plain, wrapped })).toBeLessThanOrEqual(1),
+      );
+    },
+  );
 
-  test('Rendered: every line number is level with its text, a heading’s and a paragraph’s', async ({
-    page,
-    tasksServer,
-  }) => {
-    await openReviews(page, tasksServer);
-    tasksServer.setReview(
-      'CR-2',
-      reviewPage({ view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
-    );
-    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
-    const view = diffOf(page, 'docs/plan.md');
-    await expect(view.locator('.diff-line').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Rendered' }).click();
-    const newSide = view.locator('.diff-pane.diff-new');
-    await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
-    await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
-    // Each number's text centre less its block's first line of text's (the text, not the block's box)
-    const offsets = await newSide.evaluate((side) => {
-      const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
-      const range = document.createRange();
-      return (
-        [
-          [1, 'h1'],
-          [3, 'p:nth-of-type(1)'],
-          [5, 'p:nth-of-type(2)'],
-        ] as const
-      ).map(([line, block]) => {
-        const number = side.querySelector(`.doc-gutter-lines [data-line="${line}"]`)!.firstChild!;
-        range.selectNodeContents(number);
-        const n = centre(range.getBoundingClientRect());
-        range.selectNodeContents(side.querySelector(`.compmd-page ${block}`)!);
-        return Math.round((n - centre(range.getClientRects()[0])) * 10) / 10;
+  test(
+    'Rendered: every line number is level with its text, a heading’s and a paragraph’s',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+      const view = diffOf(page, 'docs/plan.md');
+      await expect(view.locator('.diff-line').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Rendered' }).click();
+      const newSide = view.locator('.diff-pane.diff-new');
+      await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+      await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+      // Each number's text centre less its block's first line of text's (the text, not the block's box)
+      const offsets = await newSide.evaluate((side) => {
+        const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
+        const range = document.createRange();
+        return (
+          [
+            [1, 'h1'],
+            [3, 'p:nth-of-type(1)'],
+            [5, 'p:nth-of-type(2)'],
+          ] as const
+        ).map(([line, block]) => {
+          const number = side.querySelector(`.doc-gutter-lines [data-line="${line}"]`)!.firstChild!;
+          range.selectNodeContents(number);
+          const n = centre(range.getBoundingClientRect());
+          range.selectNodeContents(side.querySelector(`.compmd-page ${block}`)!);
+          return Math.round((n - centre(range.getClientRects()[0])) * 10) / 10;
+        });
       });
-    });
-    for (const d of offsets) expect(Math.abs(d), JSON.stringify(offsets)).toBeLessThanOrEqual(1);
-  });
+      for (const d of offsets) expect(Math.abs(d), JSON.stringify(offsets)).toBeLessThanOrEqual(1);
+    },
+  );
 
   // ATM-626 (Hakan, the app): the Rendered view of a new Markdown document showed only about its first page
   for (const added of [true, false])
@@ -734,65 +744,68 @@ test.describe('a review’s page', () => {
 
   // ATM-625 (Hakan, the app): + on a wrapped long line of a Markdown file sent the pane to near the end of the review
   for (const wrapped of [true, false])
-    test(`+ on a line ${wrapped ? 'wrapped' : 'not wrapped'} opens the comment box where it is; the pane stays`, async ({
-      page,
-      tasksServer,
-    }) => {
-      const long = (n: number) => `Line ${n}: ${'a long sentence of the plan, '.repeat(12)}`;
-      const texts = ['docs/a.md', 'docs/b.md', 'docs/c.md'].map(
-        (path, k) => [path, Array.from({ length: 40 }, (_, n) => long(k * 100 + n)).join('\n') + '\n'] as const,
-      );
-      const patchOf = (path: string, text: string) =>
-        `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1,40 @@\n` +
-        text
-          .trimEnd()
-          .split('\n')
-          .map((l) => `+${l}`)
-          .join('\n') +
-        '\n';
-      for (const [path, text] of texts)
-        tasksServer.setRevisionDocument('head3', projectDocument(path, text, { kind: 'markdown', line_offset: 1 }));
-      await openReviews(page, tasksServer);
-      tasksServer.setReview(
-        'CR-2',
-        reviewPage({
-          view: {
-            round: 3,
-            against: null,
-            files: texts.map(([path, text]) => file(path, patchOf(path, text), 'added', null)),
-          },
-        }),
-      );
-      await page.goto(reviewPath(tasksServer, '/CR-2'));
-      await page.getByRole('tab', { name: /^Diffs/ }).click();
-      await page.getByRole('button', { name: 'Unified' }).click();
-      const wrap = page.getByRole('button', { name: 'Wrap' });
-      if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
-      const diff = diffOf(page, 'docs/a.md');
-      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
-      // A line in the middle of the first file, in the middle of the pane
-      const line = diff.locator('.diff-line').nth(20);
-      await line.evaluate((l) => l.scrollIntoView({ block: 'center' }));
-      const pane = page.locator('.review-diffs');
-      const before = await pane.evaluate((p) => p.scrollTop);
-      // Over the line's text (CompMD's code lies over the rows; the run finds the line from the pointer's height)
-      await line.hover({ force: true });
-      await diff.locator('.diff-plus').click();
-      const box = page.getByRole('textbox', { name: /Comment/ }).first();
-      await expect(box).toBeFocused();
-      // The comment box opens under the line, in view; the pane stays (it moved 444 px, 1,564 wrapped: the run's old
-      // drawing, still all 40 lines while the box under its first half took the focus)
-      await page.waitForTimeout(300);
-      const after = await pane.evaluate((p) => p.scrollTop);
-      expect(Math.abs(after - before), `the pane moved from ${before} to ${after}`).toBeLessThan(40);
-      await expect(box).toBeInViewport();
-      const below = await box.evaluate(
-        (b, l) => b.getBoundingClientRect().top - (l as HTMLElement).getBoundingClientRect().bottom,
-        await line.elementHandle(),
-      );
-      expect(below).toBeGreaterThanOrEqual(-1);
-      expect(below).toBeLessThan(120);
-    });
+    test(
+      `+ on a line ${wrapped ? 'wrapped' : 'not wrapped'} opens the comment box where it is; the pane stays`,
+      WEBKIT_TOO,
+      async ({ page, tasksServer }) => {
+        const long = (n: number) => `Line ${n}: ${'a long sentence of the plan, '.repeat(12)}`;
+        const texts = ['docs/a.md', 'docs/b.md', 'docs/c.md'].map(
+          (path, k) => [path, Array.from({ length: 40 }, (_, n) => long(k * 100 + n)).join('\n') + '\n'] as const,
+        );
+        const patchOf = (path: string, text: string) =>
+          `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1,40 @@\n` +
+          text
+            .trimEnd()
+            .split('\n')
+            .map((l) => `+${l}`)
+            .join('\n') +
+          '\n';
+        for (const [path, text] of texts)
+          tasksServer.setRevisionDocument('head3', projectDocument(path, text, { kind: 'markdown', line_offset: 1 }));
+        await openReviews(page, tasksServer);
+        tasksServer.setReview(
+          'CR-2',
+          reviewPage({
+            view: {
+              round: 3,
+              against: null,
+              files: texts.map(([path, text]) => file(path, patchOf(path, text), 'added', null)),
+            },
+          }),
+        );
+        await page.goto(reviewPath(tasksServer, '/CR-2'));
+        await page.getByRole('tab', { name: /^Diffs/ }).click();
+        await page.getByRole('button', { name: 'Unified' }).click();
+        const wrap = page.getByRole('button', { name: 'Wrap' });
+        if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
+        const diff = diffOf(page, 'docs/a.md');
+        await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+        // A line in the middle of the first file, in the middle of the pane
+        const line = diff.locator('.diff-line').nth(20);
+        await line.evaluate((l) => l.scrollIntoView({ block: 'center' }));
+        const pane = page.locator('.review-diffs');
+        const before = await pane.evaluate((p) => p.scrollTop);
+        // Over the line's text (CompMD's code lies over the rows; the run finds the line from the pointer's height)
+        await line.hover({ force: true });
+        await diff.locator('.diff-plus').click();
+        const box = page.getByRole('textbox', { name: /Comment/ }).first();
+        await expect(box).toBeFocused();
+        // The comment box opens under the line, in view; the pane stays (it moved 444 px, 1,564 wrapped: the run's old
+        // drawing, still all 40 lines while the box under its first half took the focus). In WebKit (ATM-655) it moved
+        // by the run's height a few frames later, the run's text replaced by its highlighted text: WebKit's scroll
+        // anchoring, anchored inside the run
+        await page.waitForTimeout(300);
+        const after = await pane.evaluate((p) => p.scrollTop);
+        expect(Math.abs(after - before), `the pane moved from ${before} to ${after}`).toBeLessThan(40);
+        await expect(box).toBeInViewport();
+        const below = await box.evaluate(
+          (b, l) => b.getBoundingClientRect().top - (l as HTMLElement).getBoundingClientRect().bottom,
+          await line.elementHandle(),
+        );
+        expect(below).toBeGreaterThanOrEqual(-1);
+        expect(below).toBeLessThan(120);
+      },
+    );
 
   // ATM-589: a run that ends with an empty line, before the fold that ends the file: the empty line is drawn, its
   // number beside it, and nothing over the fold
@@ -1537,13 +1550,51 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(
       conversation.locator('[data-comment="c1"] > .chain-meta').getByRole('button', { name: 'Edit comment' }),
     ).toHaveCount(0);
-    await mine.getByRole('button', { name: 'Edit comment' }).click();
+    // Pressed until its box opens: on a busy machine a press while the page is still settling was lost once (WebKit,
+    // the whole spec on five workers; never alone, and a refresh while editing keeps the edit: the test below)
+    await expect(async () => {
+      if (!(await mine.getByLabel('Edit your comment').count()))
+        await mine.getByRole('button', { name: 'Edit comment' }).click({ timeout: 1000 });
+      await expect(mine.getByLabel('Edit your comment')).toBeVisible({ timeout: 1000 });
+    }).toPass();
     await mine.getByLabel('Edit your comment').fill('Because of the style guide.');
     await mine.getByRole('button', { name: 'Save' }).click();
     await expect
       .poll(() => tasksServer.reviewChanges.at(-1))
       .toMatchObject({ method: 'PATCH', path: '/CR-2/comments/c9', body: { body: 'Because of the style guide.' } });
     await expect(mine.getByLabel('Edit your comment')).toHaveCount(0);
+  });
+
+  test('a refresh of the review while you edit your reply keeps the edit', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    const theirs = {
+      ...comment('c1', 'Why upper case?'),
+      author: 'claude:a',
+      replies: [comment('c9', 'Because.', null)],
+    };
+    const page_ = reviewPage({
+      chains: [
+        {
+          id: 't1',
+          anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
+          comments: [theirs],
+          placed: null,
+          drifted: null,
+        },
+      ],
+    });
+    tasksServer.setReview('CR-2', page_);
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    const mine = page.locator('.review-conversation [data-comment="c9"]');
+    await mine.getByRole('button', { name: 'Edit comment' }).click();
+    await mine.getByLabel('Edit your comment').fill('Half written');
+    const asked = tasksServer.reviewRequests.filter((r) => r === 'CR-2').length;
+    // The review changed elsewhere (another comment), and the page reads it again
+    tasksServer.setReview('CR-2', { ...page_, review: { ...page_.review, title: 'Review 2, retitled' } });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect.poll(() => tasksServer.reviewRequests.filter((r) => r === 'CR-2').length).toBeGreaterThan(asked);
+    await expect(page.getByText('Review 2, retitled').first()).toBeVisible();
+    await expect(mine.getByLabel('Edit your comment')).toHaveValue('Half written');
   });
 
   // ATM-612: drafts, only the user's, sent together with their decision
