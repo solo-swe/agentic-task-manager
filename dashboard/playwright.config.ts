@@ -39,7 +39,8 @@ export default defineConfig({
   // them miss it (the long review's settle, 104 to 110 ms for 100, beside a review of 5,000 lines and a WebKit page
   // busy for seconds; alone, 26 to 61).
   // - `svelte`: every other test;
-  // - `timed`: the @timed tests, once `svelte` is done;
+  // - `timed`: the @timed tests, once `svelte` is done, one at a time (ATM-654: beside each other they missed their
+  //   budgets too, the long review's first draw 443 ms for 200; alone, 50 to 100);
   // - `measure`: a real review measured in Chromium and WebKit (real-review.spec.ts), last; it runs only when given a
   //   review (a developer's real-review.local.json, or the environment).
   // A project runs only once the one before it passed: with a functional test failing, the timed ones wait for its fix.
@@ -56,6 +57,7 @@ export default defineConfig({
       testIgnore: /real-review\.spec\.ts/,
       grep: /@timed/,
       dependencies: ['svelte'],
+      workers: 1,
       use: { baseURL: `http://localhost:${PORT}/` },
     },
     { name: 'measure', testMatch: /real-review\.spec\.ts/, dependencies: ['timed'] },

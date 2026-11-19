@@ -17197,14 +17197,14 @@
       "description": "Found in ATM-652 (CR-62): in the full e2e run, the long review's first draw took 208 ms against its 200 ms budget. Measured, not rerun: alone it is 50 to 100 ms; with the other `@timed` tests running beside it, 83 to 143 ms with ATM-652's change and 98 to **443 ms without it**. ATM-641 kept the timed tests away from the functional ones, not from each other: the `timed` project still runs on five workers.\n\n## Change\nThe `timed` project runs on one worker (`playwright.config.ts`: `workers` per project, or `fullyParallel: false` and one worker for it), so each measurement has the machine to itself. Note how long the project then takes, locally and in CI, and say so in `AGENTS.md`'s testing conventions next to ATM-641's note.\n\n## Tests\nThe full run (`--project svelte --project timed`) three times: the timed tests within their budgets each time; their medians recorded in the CR.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/playwright.config.ts",
         "AGENTS.md"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-19T19:46:39Z",
+      "updated_at": "2026-11-19T19:46:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17217,7 +17217,9 @@
       "number": 654,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-19T19:46:46Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e632884fe3f",
