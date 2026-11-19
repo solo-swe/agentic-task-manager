@@ -18238,7 +18238,7 @@
       "description": "Asked by Hakan (2026-11-18): the CR badge of a task (`CR-7`) also says the review's status (*Waiting for review*, *Changes requested*, *Approved*, *Closed*, …), on the task's card (ATM-619's badge) and in its details. So it is clear at a glance whether the review is approved.\n\n## Today\n`details/ReviewLink.svelte` shows a status only for the prominent link, and only when the page already knows it: `reviews/known.svelte.ts` learns statuses when the Reviews tab lists or shows reviews. A board opened without visiting the Reviews tab shows no status at all.\n\n## Change\n- **The status comes with the task, from atm.** The task views atm serves (the task's `code_reviews` entries) carry each review's status, read from the project's reviews in the same pass that builds the views. The page never asks once per task, and the status is right from the first load. Cache it with the task views' stamp, which already includes the reviews' files (ATM-606), so a decision shows on the next refresh. A review atm can't read says so (ATM-617's *can't be read*).\n- `ReviewLink.svelte` shows the status on every link, prominent or not, coloured as the Reviews list colours it: approved green, changes requested red, waiting and live the accent, closed and draft muted. On a card it stays compact: a short label or a coloured dot with the status as its title and accessible name.\n- `known.svelte.ts` stays for what the page learns between refreshes; the task's own status is the default.\n- The schema (`crates/atm-common/schema/`) and the generated TypeScript get the field; an older atm's views without it show the badge as today.\n\n## Tests\n- atm-lib: a task's view carries each review's status, and `can't be read` for one atm can't read.\n- Units: `ReviewLink` shows each status with its label and colour class, prominent or not; without one, the badge as today.\n- E2e: a card in review shows *Approved* on its badge once its review is approved, and the details show it too.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f008-9a9f-714f-8e7b-93ac77245ac5"
       ],
@@ -18251,7 +18251,7 @@
         "dashboard/tests/e2e/kanban.spec.ts"
       ],
       "created_at": "2026-11-18T19:41:06Z",
-      "updated_at": "2026-11-19T08:16:42Z",
+      "updated_at": "2026-11-19T08:59:27Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18275,15 +18275,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T08:16:42Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T08:16:42Z",
           "kind": "review",
           "text": "CR-56: A task's CR badge says where its review stands",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T08:59:02Z",
+          "kind": "note",
+          "text": "Approved: in CR-56 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T08:59:27Z",
+          "kind": "outcome",
+          "text": "Approved in CR-56: the CR badge shows the review status (derived.review_statuses), coloured, on cards and in details. Screenshots regenerate in the release task.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T08:16:42Z",
+          "to": "2026-11-19T08:59:02Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T08:59:27Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f04e-91ae-724a-82c2-0301f423f175",
@@ -18883,7 +18903,7 @@
       "description": "Reported by Hakan (2026-11-19), from an agent closing a task in CompMD: CR-6 was opened while the task's key was provisional (`~CMD-250`); once the key was final (`CMD-250`), atm no longer matched CR-6's approval to the task, and the agent recorded the approval by hand.\n\nADR-009 (ATM-634) removes provisional keys (ATM-635), so the `~` mismatch goes with them. What remains is the same class of bug for a task whose number **moves at a merge** (ATM-636): its reviews name it by the key it had.\n\n## Change\nWherever atm goes from a review to its task, or from a task to its reviews, it resolves the review's key the way every command does (ADR-007 §5): a current key, an alias, an earlier prefix, or a leading `~` from an old review file. This covers the approval check in `atm task state … done`, `atm task review approve`, `atm loop next` handing tasks back from review, the review list and pages, and `atm review watch`'s `task`. Reviews keep storing keys (as decided: no UUIDs in `review.md`).\n\n## Tests\n- Unit: a review naming `X-5` finds the task now `X-9` with alias `X-5`; a review naming `~X-5` (an old file) finds `X-5`.\n- CLI scenario: a review is opened on a task, the task's number moves at a merge, the review is approved, and `atm task state <new key> done` is accepted with no manual approval.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-239abe8c0ea5",
         "01a1f0b9-f451-744a-956a-239bff26047e"
@@ -18894,7 +18914,7 @@
         "tests/scripts/scenarios"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-19T08:02:14Z",
+      "updated_at": "2026-11-19T08:59:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18910,7 +18930,7 @@
       ],
       "started_at": "2026-11-19T07:55:18Z",
       "started_by": "claude:0f56a916",
-      "commit": "204e834a68ac2de32abe691a74b5d67236cc4245",
+      "commit": "a648ce59d4598af2cf6b6e5ba5b8656e043d62ab",
       "code_reviews": [
         {
           "id": "01a1f2d3-e127-739a-97dd-087e520440a8",
@@ -18918,15 +18938,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T08:02:14Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T08:02:14Z",
           "kind": "review",
           "text": "CR-55: A review finds its task by the key it was written with",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T08:57:37Z",
+          "kind": "note",
+          "text": "Approved: in CR-55 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T08:59:03Z",
+          "kind": "outcome",
+          "text": "Approved in CR-55 (round 2): an ambiguous key a review stores is told apart by tasks.json at the review’s own commit; tested with a real clash both ways.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T08:02:14Z",
+          "to": "2026-11-19T08:57:37Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T08:59:03Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
@@ -19069,7 +19109,7 @@
       "description": "Hakan (2026-11-19): the rules for how a task's status and its reviews change together are spread across commands and keep breaking. Today's three bugs: a review's approval lost when the task's key changed (ATM-630), a review opened beside a task that didn't move (ATM-631), and a lapsed claim leaving a task half in review (ATM-632). They should be one explicit state machine.\n\nDesigned **with Hakan**: propose it, agree on it, then build it.\n\n## Design (a document in `docs/`, reviewed with Hakan as a CR)\n- **States:** a task's status kinds (`todo`, `active`, `review`, `blocked`, `done`, `skipped`), each with its claim (none, held, lapsed) and its reviews (none, open, rounds, changes requested, approved, closed, live).\n- **Events:** claim, a claim lapsing, release, commit, review created, a round added, a comment, request changes, approve, reject, close, push or merge, the task's number moved at a merge (ADR-009: its old key an alias), and a user's answer.\n- **The table:** for each state and event, the next state or a refusal with its message. No event leaves a task and its review disagreeing.\n- A diagram of it (Mermaid), and where it lives in the layers: one module in `atm-lib` that every command and the dashboard's API go through.\n- Today's rules mapped onto it: what changes, and what an existing project's tasks and reviews look like after the move (a migration if any).\n\n## Build (after the design is agreed)\n- One module holds the transitions; the CLI commands, the REST routes and the app call it, and none sets a status on its own.\n- Unit tests: a table of every state × event, each with its expected next state or refusal, including the three bugs above as cases.\n- The agent docs (`atm docs states`, `atm docs reviews`) are written from the same table.\n\nMay be split into design and build tasks once the design is agreed.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
         "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
@@ -19083,7 +19123,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-18T22:15:06Z",
+      "updated_at": "2026-11-19T09:04:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19097,7 +19137,9 @@
       "number": 633,
       "components": [
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-19T09:04:16Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-23995623df35",
@@ -19650,13 +19692,13 @@
       "description": "In the full functional e2e run (2026-11-19), *a long review (94 files, ~3,000 lines)* in `reviews.spec.ts` failed on `afterSettled`: 107 ms against its budget of 100 (`BUDGET_MS / 2`), with one long task of 50 ms. An earlier run measured 98.\n\nRun alone it measures 25 to 34 ms (three runs, one worker). In the failing run, the *real review CR-1 (webkit)* test was running at the same time, blocking for 3.5 s while it opened.\n\n## To do\nFind why the settle step is that sensitive to a concurrent test. Then either fix the cause in the diff viewer or keep the WebKit measurement from sharing the machine with timed Chromium tests. Never raise the budget or just re-run (AGENTS.md). Measure before and after.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T05:43:56Z",
-      "updated_at": "2026-11-19T08:36:05Z",
+      "updated_at": "2026-11-19T08:59:58Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19682,6 +19724,18 @@
           "kind": "review",
           "text": "CR-57: Timed e2e tests run on a machine of their own",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T08:59:35Z",
+          "kind": "note",
+          "text": "Approved: in CR-57 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T08:59:58Z",
+          "kind": "outcome",
+          "text": "Approved in CR-57: @timed tests run in a Playwright project of their own after the rest; the long review settles in 59 to 69 ms in full runs (was 104 to 110 for 100). Also fixed: a link to the open task written another way puts its key in the address, keeping the entry state.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-19T08:16:55Z",
@@ -19694,7 +19748,15 @@
         }
       ],
       "review_requested_at": "2026-11-19T08:36:05Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-19T08:36:05Z",
+          "to": "2026-11-19T08:59:35Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T08:59:58Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f25c-3e45-7582-a10d-fb5cad19398e",
