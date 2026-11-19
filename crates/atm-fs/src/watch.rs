@@ -106,6 +106,17 @@ mod tests {
         (on_change, receive)
     }
 
+    /// Once the watch is quiet: what was written just before it began may still come in late (FSEvents on macOS,
+    /// inotify's first events on Linux), a few bursts at most; one that never goes quiet (a watch waking itself) fails
+    fn quiet_after(received: &mpsc::Receiver<()>, what: &str) {
+        for _ in 0..10 {
+            if received.recv_timeout(SETTLE * 2).is_err() {
+                return;
+            }
+        }
+        panic!("{what}: never quiet");
+    }
+
     #[test]
     fn a_folder_that_isnt_there_is_skipped_and_nothing_is_told() {
         let dir = crate::test_dir::TestDir::new();
@@ -150,6 +161,7 @@ mod tests {
         });
         let subscription = watch_tree_where(&[dir.path().to_path_buf()], keep, on_change).unwrap();
         std::thread::sleep(Duration::from_millis(200));
+        quiet_after(&received, "the start");
         std::fs::write(dir.path().join(".git/index"), "i").unwrap();
         assert!(
             received.recv_timeout(SETTLE * 4).is_err(),
@@ -177,18 +189,8 @@ mod tests {
         });
         let tree = watch_tree_where(&[dir.path().to_path_buf()], keep, on_change.clone()).unwrap();
         let flat = watch(&[dir.path().to_path_buf()], on_change).unwrap();
-        // What was written before the watches began may still come in late (Linux): let it pass, a few bursts at most
-        // (a watch waking itself would never go quiet)
-        let quiet_after = |what: &str| {
-            for _ in 0..10 {
-                if received.recv_timeout(SETTLE * 2).is_err() {
-                    return;
-                }
-            }
-            panic!("{what}: never quiet");
-        };
         std::thread::sleep(Duration::from_millis(200));
-        quiet_after("the start");
+        quiet_after(&received, "the start");
         for _ in 0..3 {
             let _ = std::fs::read_to_string(&file).unwrap();
         }
@@ -201,7 +203,7 @@ mod tests {
             .recv_timeout(Duration::from_secs(10))
             .expect("a write is told");
         // Told for the write by each watch, then quiet: the keep's own read doesn't start another round
-        quiet_after("after the write");
+        quiet_after(&received, "after the write");
         drop((tree, flat));
     }
 
