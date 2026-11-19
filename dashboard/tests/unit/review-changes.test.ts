@@ -4,6 +4,7 @@ import {
   addComment,
   addDraft,
   closeReview,
+  editComment,
   listDrafts,
   openReview,
   pokeReview,
@@ -98,6 +99,8 @@ describe('in the browser', () => {
       ],
       [() => updateDraft('p1', 'CR-7', 'd2', 'Why not?'), 'PATCH', `${reviews}/CR-7/drafts/d2`, { body: 'Why not?' }],
       [() => removeDraft('p1', 'CR-7', 'd2'), 'DELETE', `${reviews}/CR-7/drafts/d2`, {}],
+      // ATM-638: one's own comment's text
+      [() => editComment('p1', 'CR-7', 'c4', 'Why not?'), 'PATCH', `${reviews}/CR-7/comments/c4`, { body: 'Why not?' }],
       [() => resolveComment('p1', 'CR-7', 'c4', true), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: true }],
       [() => resolveComment('p1', 'CR-7', 'c4', false), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: false }],
       [
@@ -258,6 +261,7 @@ describe('in the app', () => {
     await updateDraft('p1', 'CR-7', 'd1', 'Yes.');
     await removeDraft('p1', 'CR-7', 'd1');
     await listDrafts('p1', 'CR-7');
+    await editComment('p1', 'CR-7', 'c4', 'Better.');
     const at = { workspace: 'w', project: 'p1', review: 'CR-7' };
     expect(calls).toEqual([
       ['add_review_comment', { ...at, comment: { body: 'On the review.' } }],
@@ -272,6 +276,7 @@ describe('in the app', () => {
       ['update_review_draft', { ...at, draft: 'd1', body: 'Yes.' }],
       ['remove_review_draft', { ...at, draft: 'd1' }],
       ['list_review_drafts', at],
+      ['update_review_comment', { ...at, comment: 'c4', update: { body: 'Better.' } }],
     ]);
     expect(fetch).not.toHaveBeenCalled();
   });

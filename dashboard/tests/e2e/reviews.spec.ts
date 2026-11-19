@@ -1255,6 +1255,43 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(view.locator('[data-chain="tw"]')).toBeVisible();
   });
 
+  // ATM-638: your own comments and replies are edited in place; another's have no Edit
+  test('edit your own reply in place; another’s comment has no Edit', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    const theirs = {
+      ...comment('c1', 'Why upper case?'),
+      author: 'claude:a',
+      replies: [comment('c9', 'Because.', null)],
+    };
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        chains: [
+          {
+            id: 't1',
+            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
+            comments: [theirs],
+            placed: null,
+            drifted: null,
+          },
+        ],
+      }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    const conversation = page.locator('.review-conversation');
+    await expect(conversation.locator('[data-comment="c1"]').getByRole('button', { name: 'Edit comment' })).toHaveCount(
+      0,
+    );
+    const mine = conversation.locator('[data-comment="c9"]');
+    await mine.getByRole('button', { name: 'Edit comment' }).click();
+    await mine.getByLabel('Edit your comment').fill('Because of the style guide.');
+    await mine.getByRole('button', { name: 'Save' }).click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'PATCH', path: '/CR-2/comments/c9', body: { body: 'Because of the style guide.' } });
+    await expect(mine.getByLabel('Edit your comment')).toHaveCount(0);
+  });
+
   // ATM-612: drafts, only the user's, sent together with their decision
   test('drafts: one added from a diff’s lines; shown marked and counted; edited, removed, and sent with Comment', async ({
     page,

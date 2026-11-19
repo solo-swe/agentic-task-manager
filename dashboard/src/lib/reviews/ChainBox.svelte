@@ -5,7 +5,7 @@
   import ComposerActions from './ComposerActions.svelte';
   import { draftActions } from './drafts';
   import { focusOnShow } from './focus';
-  import { documentLinks, taskLinks } from './links';
+  import { commentEdits, documentLinks, taskLinks } from './links';
   import type { Chain, ReviewComment } from './types';
 
   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
@@ -68,14 +68,28 @@
   /** The form's submit, and ⌘ Enter: the main action, adding a draft while the user has some */
   const submitReply = () => void send(!!drafts && drafts.pending > 0);
 
-  // A draft's text changed in place (ATM-612)
+  /** Editing one's own comment (ATM-638); none on an ended review or a page that can't */
+  const edits = commentEdits();
+  /** A comment whose text you may change here: a draft of yours, or one you wrote */
+  const editable = (c: ReviewComment) => (c.draft ? !!drafts : !!edits && c.author === edits.you && !c.poke);
+
+  // A draft's text, or one's own comment's, changed in place (ATM-612, ATM-638)
   let editing = $state<string | null>(null);
+  let editingDraft = false;
   let editText = $state('');
   let editRefused = $state<string | null>(null);
+  function startEdit(c: ReviewComment) {
+    editing = c.id;
+    editingDraft = !!c.draft;
+    editText = c.body;
+    editRefused = null;
+  }
   async function saveEdit() {
     const body = editText.trim();
-    if (!body || !editing || !drafts) return;
-    editRefused = await drafts.edit(editing, body);
+    if (!body || !editing) return;
+    const by = editingDraft ? drafts?.edit : edits?.edit;
+    if (!by) return;
+    editRefused = await by(editing, body);
     if (editRefused === null) editing = null;
   }
 
@@ -140,26 +154,24 @@
           ><Icon name="pencil" size={12} /> Draft</span
         >{/if}
       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
-      {#if c.draft && drafts && editing !== c.id}
+      {#if editable(c) && editing !== c.id}
         <span class="chain-draft-actions">
           <button
             class="chain-button chain-draft-edit"
-            aria-label="Edit draft"
-            onclick={() => {
-              editing = c.id;
-              editText = c.body;
-              editRefused = null;
-            }}><Icon name="pencil" size={13} /> Edit</button
+            aria-label={c.draft ? 'Edit draft' : 'Edit comment'}
+            onclick={() => startEdit(c)}><Icon name="pencil" size={13} /> Edit</button
           >
-          <button
-            class="chain-button chain-draft-remove"
-            aria-label="Remove draft"
-            onclick={() => void drafts.remove(c.id)}><Icon name="trash-2" size={13} /> Remove</button
-          >
+          {#if c.draft && drafts}
+            <button
+              class="chain-button chain-draft-remove"
+              aria-label="Remove draft"
+              onclick={() => void drafts.remove(c.id)}><Icon name="trash-2" size={13} /> Remove</button
+            >
+          {/if}
         </span>
       {/if}
     </div>
-    {#if c.draft && editing === c.id}
+    {#if editing === c.id}
       <form
         class="chain-reply chain-draft-editor"
         onsubmit={(e) => {
@@ -168,7 +180,7 @@
         }}
       >
         <textarea
-          aria-label="Edit your draft"
+          aria-label={c.draft ? 'Edit your draft' : 'Edit your comment'}
           bind:value={editText}
           rows="3"
           {@attach focusOnShow}

@@ -8,6 +8,14 @@ import type { Chain, ReviewComment } from '../../src/lib/reviews/types';
 // resolved, folded until shown, Reopen at hand either way), replies, and selecting it. CompMD doesn't load here.
 const loadCompmd = vi.hoisted(() => vi.fn());
 vi.mock('../../src/lib/compmd', async (actual) => ({ ...(await actual()), loadCompmd }));
+// Editing one's own comments (ATM-638): none unless a test sets it
+const edits = vi.hoisted(() => ({ current: undefined as undefined | Record<string, unknown> }));
+vi.mock('../../src/lib/reviews/links', async (actual) => ({ ...(await actual()), commentEdits: () => edits.current }));
+function editing(you: string, refused: string | null = null) {
+  const actions = { you, edit: vi.fn(async () => refused) };
+  edits.current = actions;
+  return actions;
+}
 // What drafting does on the page (ATM-612): none unless a test sets it
 const page = vi.hoisted(() => ({ drafts: undefined as undefined | Record<string, unknown> }));
 vi.mock('../../src/lib/reviews/drafts', async (actual) => ({ ...(await actual()), draftActions: () => page.drafts }));
@@ -53,6 +61,56 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   page.drafts = undefined;
+  edits.current = undefined;
+});
+
+describe('ChainBox: editing your own comment (ATM-638)', () => {
+  it('Edit only on your own comment and reply, not on others’ or a poke', () => {
+    editing('Ana');
+    show(
+      chain([
+        comment('c1', {
+          replies: [comment('r1', { resolved: null }), comment('r2', { resolved: null, author: 'Bo' })],
+        }),
+        comment('c2', { author: 'Bo' }),
+        comment('c3', { poke: true, resolved: null }),
+      ]),
+    );
+    expect(screen.getAllByRole('button', { name: 'Edit comment' })).toHaveLength(2);
+    const ids = [...document.querySelectorAll('[aria-label="Edit comment"]')].map((b) =>
+      b.closest('[data-comment]')?.getAttribute('data-comment'),
+    );
+    expect(ids).toEqual(['c1', 'r1']);
+  });
+
+  it('Edit, change, Save sends it; Cancel and Escape keep the old text; a refusal keeps the box with why', async () => {
+    const actions = editing('Ana', 'not yours');
+    show(chain([comment('c1', { body: 'Old.' })]));
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
+    const box = screen.getByRole('textbox', { name: 'Edit your comment' });
+    expect(box).toHaveValue('Old.');
+    await fireEvent.input(box, { target: { value: ' New. ' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(actions.edit).toHaveBeenCalledWith('c1', 'New.');
+    await vi.waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Not saved: not yours'));
+    await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByText('Old.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('saved, the box closes; on an ended review (no one is you there) there is no Edit', async () => {
+    editing('Ana');
+    show(chain([comment('c1')]));
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
+    await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', metaKey: true });
+    await vi.waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+    editing('');
+    const ended = show(chain([comment('c2')]));
+    expect(ended.container.querySelector('[aria-label="Edit comment"]')).toBeNull();
+  });
 });
 
 describe('ChainBox: where it is', () => {

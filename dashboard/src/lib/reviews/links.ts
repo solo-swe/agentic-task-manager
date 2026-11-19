@@ -28,3 +28,21 @@ export function setTaskLinks(tasks: TaskLinks | undefined): void {
 export function taskLinks(): TaskLinks | undefined {
   return getContext<TaskLinks | undefined>(TASKS);
 }
+
+const EDITS = Symbol('review-comment-edits');
+
+/** Editing one's own comments on the page (ATM-638): who you are, and what a change does (why it was refused, or
+ * null). None on a review that has ended, or a page that can't change one */
+export interface CommentEdits {
+  readonly you: string;
+  edit(comment: string, body: string): Promise<string | null>;
+}
+
+export function setCommentEdits(edits: CommentEdits | undefined): void {
+  setContext(EDITS, edits);
+}
+
+/** What editing one's own comment does here; none where it can't be done */
+export function commentEdits(): CommentEdits | undefined {
+  return getContext<CommentEdits | undefined>(EDITS);
+}

@@ -18752,14 +18752,14 @@
       "description": "Found on 2026-11-19 (ATM-625's full functional run): `performance.spec.ts` › *performance with 500 tasks* › *switching tabs* failed once, the Graph tab at **247 ms** against the 200 ms budget, while the whole suite ran on its workers. Alone, three runs in a row: Graph 111, 142 and 124 ms; the other tabs 27 to 111 ms. The change being tested (ATM-625, `CompMd.svelte`) doesn't touch the Graph tab.\n\nDon't raise the budget or just rerun it (AGENTS.md). As ATM-615 did for the long review:\n- Reproduce it with the CPU slowed (`Emulation.setCPUThrottlingRate`, 2× and 4×) or with the suite's workers.\n- Find what the Graph switch spends its time on with 500 tasks (layout, the minimap, drawing the edges, the auto-fit), with a trace or long animation frames.\n- Fix the cause, and say in the test what it now measures.\n\n## Tests\nThe spec passes 10 times in a row with the CPU slowed 2×, and in the full functional run.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/graph/DepGraph.svelte",
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T21:33:36Z",
-      "updated_at": "2026-11-19T00:53:54Z",
+      "updated_at": "2026-11-19T00:58:46Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18810,6 +18810,12 @@
           "kind": "answer",
           "text": "A fix changes what the Graph draws or keeps (see the last note). Which: (a) keep it built while another tab shows, so only the first visit pays (partly undoes T-525); (b) below a zoom where labels are unreadable, draw nodes without text (the fitted view of 500 tasks is that small); (c) both; or (d) none: run the timing specs alone, after the functional run, with one worker? → b: below a zoom where labels are too small to read, draw the nodes without text, so the text is shaped only when zoomed in (Hakan, 2026-11-19).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T00:58:46Z",
+          "kind": "review",
+          "text": "CR-42: The Graph draws labels only where they can be read",
+          "by": "claude:0f56a916"
         }
       ],
       "blocks": [
@@ -18820,7 +18826,16 @@
         }
       ],
       "started_at": "2026-11-19T00:53:54Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "22a6a551fdb460b25a2a8d9e4e04ef695bed550f",
+      "code_reviews": [
+        {
+          "id": "01a1f150-2d3f-7405-a376-099d7407912a",
+          "ref": "CR-42"
+        }
+      ],
+      "review_requested_at": "2026-11-19T00:58:46Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
@@ -19212,7 +19227,7 @@
       "description": "Asked by Hakan (2026-11-19): comments and replies on a review should be editable, with an edit button.\n\natm already lets a comment's author change its text: `PATCH …/reviews/<CR>/comments/<c>` with `{body}` (docs/multi-project-api.md §2.9; `edit`, the comment author's own), the app's `update_review_comment`, and `atm review edit`. The dashboard has neither the call nor a button.\n\n## Change\n- `dashboard/src/lib/api/review-changes.ts`: `editComment(project, review, comment, body)`, as `resolveComment` does it (the REST route with the page's token, or the app's command).\n- `ChainBox.svelte`: on each comment and reply **you wrote** (its `author` is you, the page's `you`), an *Edit* button. It turns the text into a box with the text in it, *Save* and *Cancel* (Escape cancels, ⌘ Enter saves); saved, the page shows the new text; refused, the box stays with the reason, as the comment box does. Others' comments have no button. Not on an ended review (approved or closed), which takes no change.\n- Show that a comment was edited (\"edited\", with when, as the title) if the review's data says so; if it doesn't, say so in the task's outcome rather than adding a field here.\n- Wired through `ReviewPage`, `ReviewFile` and `DiffView` (`onedit`) as `onreply` and `onresolve` are, and in the Comments tab.\n\n## Tests\n- Unit: `editComment`'s request (route, method, body, token) and a refusal's message.\n- Component (`ChainBox`): the button only on your own comment and reply; Edit, change, Save sends it; Cancel and Escape keep the old text; a refusal keeps the box with why; none on an ended review.\n- E2e in `reviews.spec.ts`: edit your own reply in place; another's comment has no Edit.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/review-changes.ts",
@@ -19222,7 +19237,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T23:03:01Z",
-      "updated_at": "2026-11-18T23:03:04Z",
+      "updated_at": "2026-11-19T00:58:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19236,7 +19251,9 @@
       "key_final": false,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-19T00:58:59Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

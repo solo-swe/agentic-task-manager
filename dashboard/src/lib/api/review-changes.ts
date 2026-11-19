@@ -122,6 +122,17 @@ export function resolveComment(
   });
 }
 
+/** One's own comment's text changed (ATM-638; atm refuses another's) */
+export function editComment(project: string, review: string, comment: string, body: string): Promise<ChangeResult> {
+  return send(project, {
+    method: 'PATCH',
+    resource: `${ref(review)}/comments/${encodeURIComponent(comment)}`,
+    body: { body },
+    command: 'update_review_comment',
+    args: { review, comment, update: { body } },
+  });
+}
+
 /** A review opened from the page: a live one follows the working copy against `base` (HEAD by default; ATM-576) */
 export interface Opening {
   title: string;

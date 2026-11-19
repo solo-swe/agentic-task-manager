@@ -10,7 +10,7 @@
   import ComposerActions from './ComposerActions.svelte';
   import { draftedComments, setDraftActions, withDrafts, type DraftActions } from './drafts';
   import { focusOnShow } from './focus';
-  import { setDocumentLinks, setTaskLinks } from './links';
+  import { setCommentEdits, setDocumentLinks, setTaskLinks } from './links';
   import type { TaskLinks } from '../compmd';
   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
   import {
@@ -64,6 +64,7 @@
     onclose,
     onpoke,
     ondrafts,
+    onedit,
     ondocument,
   }: {
     page: ReviewPageData;
@@ -102,6 +103,8 @@
     /** What writing, changing and removing a draft does (ATM-612): every box that writes a comment or a reply then
      * offers *Add to my review*; without it, they send at once */
     ondrafts?: Omit<DraftActions, 'pending'>;
+    /** One's own comment's text changed (ATM-638); why it wasn't, if it wasn't (its box keeps it) */
+    onedit?: (comment: string, body: string) => Promise<string | null>;
     /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
      * manager opens its document viewer (ATM-586) */
     ondocument?: (ref: DocumentRef) => void;
@@ -113,6 +116,14 @@
   // be an open comment once sent, which an approval can't be made with)
   const allChains = $derived(withDrafts(page.chains, page.drafts, page.you, view.round));
   const pendingDrafts = $derived(page.drafts?.length ?? 0);
+  // Editing one's own comments (ATM-638): none on an ended review, which takes no change (no one is "you" there)
+  if (untrack(() => onedit))
+    setCommentEdits({
+      get you() {
+        return ended ? '' : page.you;
+      },
+      edit: (comment, body) => onedit?.(comment, body) ?? Promise.resolve('Comments can’t be changed here.'),
+    });
   // Set once, for the boxes under the page: each calls the handlers as they are then (a round shown since, say)
   const refusedHere = 'Drafts can’t be kept here.';
   if (untrack(() => ondrafts))

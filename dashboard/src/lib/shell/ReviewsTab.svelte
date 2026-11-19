@@ -9,6 +9,7 @@
     addComment,
     addDraft,
     closeReview,
+    editComment,
     openReview,
     pokeReview,
     removeDraft,
@@ -280,6 +281,7 @@
           )}
         onreply={(to, body) => change(replyTo(project, review, to, body))}
         onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
+        onedit={(comment, body) => change(editComment(project, review, comment, body))}
         onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
         onclose={(reason) => change(closeReview(project, review, reason))}
         onpoke={(body) => change(pokeReview(project, review, body))}
