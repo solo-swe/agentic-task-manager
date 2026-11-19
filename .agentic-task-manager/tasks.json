@@ -17694,7 +17694,7 @@
       "description": "From CR-2 (Hakan, 2026-11-18, c1 and the step 2 agreed there): a reviewer writes comments and replies as drafts, and sends them together, as GitHub's *start a review*.\n\n## Change\n- **Writing a comment or a reply** offers **Add to my review** (a draft only you see), **Comment now** (sent at once, as today) and **Cancel**.\n- **The top button** counts your drafts and sends them with the summary: on an open review, *Comment*, *Request changes* or *Approve*; on a review sent back, *Publish comments*.\n- **Agents** (`atm review watch`, `wait`) hear nothing until the drafts are sent, so an agent never acts on half a review.\n- **Where drafts live:** in the user's own atm state (`ATM_STATE_DIR`), never in the review's folder, which is committed to git. Drafts are anchored like any comment and move with the code across rounds. Replies are drafts too.\n- Pending drafts show on the page, editable and removable; leaving the page keeps them.\n\n## Tests\n- atm-lib: a draft stored outside the review, sent with a decision (each kind), anchored after a new round, and never seen by the watch until it is sent.\n- REST and CLI: the drafts routes and commands; one user's drafts never shown to another.\n- Component and e2e: *Add to my review*, the count on the button, sending, and *Comment now* unchanged.\n- Update `docs/code-review-design.md`, `docs/multi-project-api.md` and `docs/security-architecture.md` (the new routes, and drafts kept out of the repository).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/",
@@ -17702,7 +17702,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T06:37:37Z",
-      "updated_at": "2026-11-19T00:49:28Z",
+      "updated_at": "2026-11-19T00:50:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17726,9 +17726,15 @@
           "kind": "answer",
           "text": "Drafts are built and committed (6e75ac5); every suite passes but one: the page is now 1,054,578 bytes against the 1 MiB guardrail (drafts added about 7 KB; the build was about 1 KB under before). Every raise so far was yours. Raise it (to 1.1 MiB, say, recorded in guardrails.spec.ts as before), or have me trim about 6 KB elsewhere first (ATM-342-style: find what grew) before I open the review? → Raise it to 1.5 MiB (Hakan, 2026-11-19).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T00:50:08Z",
+          "kind": "review",
+          "text": "CR-40: Drafts: comments and replies sent together with your decision",
+          "by": "claude:0f56a916"
         }
       ],
-      "commit": "6e75ac511fde7d6e1adb8b4716895275cde416a9",
+      "commit": "b072e1d255e3375453bad58256df5e46f6eb5ffc",
       "blocks": [
         {
           "from": "2026-11-19T00:43:16Z",
@@ -17737,7 +17743,15 @@
         }
       ],
       "started_at": "2026-11-19T00:49:28Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "code_reviews": [
+        {
+          "id": "01a1f148-4653-73fd-a3f6-edaecebf0d9b",
+          "ref": "CR-40"
+        }
+      ],
+      "review_requested_at": "2026-11-19T00:50:08Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1ed60-9f24-779f-97fd-ef0f481b8965",
@@ -18101,7 +18115,7 @@
       "description": "Asked by Hakan (2026-11-18): on a task in review, the card itself gets its code review as a clickable badge (`CR-7`), so the review opens straight from the board or the list, without opening the task first and clicking the link in its details.\n\n## Change\n- `tasks/TaskCard.svelte`: a task with a review (its latest, as the details panel's `#detail-review` shows since ATM-585) shows a CR badge, its review's key and status (*Waiting for review*, *Changes requested*, …), in the card's badges or beside the review wait line (`.review-wait`).\n- Reuse `details/ReviewLink.svelte` and `reviews/known.svelte.ts` (`knownStatus`) rather than a second way of naming a review; the link's `href` is the review's page (`address.ts` `reviewPageOf`), so hovering or copying shows where it goes.\n- A click opens the review and does **not** open the task's details (stop the card's own click). ⌘-click, Ctrl-click or a middle click opens it in a tab of its own, as other links do (`new-tab-clicks.ts`).\n- Keyboard: the badge is a link in the card's tab order, Enter opens it.\n- Only tasks with a review show it; a task in review with no CR (a review without a change) shows nothing new.\n\n## Tests\n- `TaskCard.component.test.ts`: a task with a review shows its badge with the review's address; a click opens the review and not the task; a task without one shows none.\n- An e2e in the kanban spec: the badge on a card in review opens `CR-N`, and ⌘-click opens a new tab.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/tasks/TaskCard.svelte",
@@ -18109,7 +18123,7 @@
         "dashboard/tests/e2e/kanban.spec.ts"
       ],
       "created_at": "2026-11-18T19:00:58Z",
-      "updated_at": "2026-11-18T19:01:01Z",
+      "updated_at": "2026-11-19T00:50:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18123,7 +18137,9 @@
       "key_final": false,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-19T00:50:14Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f023-1636-76de-9795-f0ebcbfffafd",
@@ -18719,14 +18735,14 @@
       "description": "Found on 2026-11-19 (ATM-625's full functional run): `performance.spec.ts` › *performance with 500 tasks* › *switching tabs* failed once, the Graph tab at **247 ms** against the 200 ms budget, while the whole suite ran on its workers. Alone, three runs in a row: Graph 111, 142 and 124 ms; the other tabs 27 to 111 ms. The change being tested (ATM-625, `CompMd.svelte`) doesn't touch the Graph tab.\n\nDon't raise the budget or just rerun it (AGENTS.md). As ATM-615 did for the long review:\n- Reproduce it with the CPU slowed (`Emulation.setCPUThrottlingRate`, 2× and 4×) or with the suite's workers.\n- Find what the Graph switch spends its time on with 500 tasks (layout, the minimap, drawing the edges, the auto-fit), with a trace or long animation frames.\n- Fix the cause, and say in the test what it now measures.\n\n## Tests\nThe spec passes 10 times in a row with the CPU slowed 2×, and in the full functional run.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/graph/DepGraph.svelte",
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T21:33:36Z",
-      "updated_at": "2026-11-19T00:07:08Z",
+      "updated_at": "2026-11-19T00:52:43Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18771,15 +18787,21 @@
           "kind": "note",
           "text": "Traced the Graph switch (500 tasks): 87-94 ms alone, 128-199 ms with the CPU slowed 2x. About 85 ms is the browser laying out the 500 nodes, 42 ms of it shaping their SVG text (two labels, two emoji a node). No script to cut: the layout is done once. text-rendering: optimizeSpeed changed nothing (reverted). The full suite pushes it to 204-247 ms because its 5 workers saturate the machine.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T00:52:43Z",
+          "kind": "answer",
+          "text": "A fix changes what the Graph draws or keeps (see the last note). Which: (a) keep it built while another tab shows, so only the first visit pays (partly undoes T-525); (b) below a zoom where labels are unreadable, draw nodes without text (the fitted view of 500 tasks is that small); (c) both; or (d) none: run the timing specs alone, after the functional run, with one worker? → b: below a zoom where labels are too small to read, draw the nodes without text, so the text is shaped only when zoomed in (Hakan, 2026-11-19).",
+          "by": "claude:0f56a916"
         }
       ],
-      "started_at": "2026-11-19T00:03:27Z",
-      "started_by": "claude:0f56a916",
-      "waiting_on": "user",
-      "questions": [
-        "A fix changes what the Graph draws or keeps (see the last note). Which: (a) keep it built while another tab shows, so only the first visit pays (partly undoes T-525); (b) below a zoom where labels are unreadable, draw nodes without text (the fitted view of 500 tasks is that small); (c) both; or (d) none: run the timing specs alone, after the functional run, with one worker?"
-      ],
-      "blocked_at": "2026-11-19T00:07:08Z"
+      "blocks": [
+        {
+          "from": "2026-11-19T00:07:08Z",
+          "to": "2026-11-19T00:52:43Z",
+          "on": "user"
+        }
+      ]
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542bbe43b428",

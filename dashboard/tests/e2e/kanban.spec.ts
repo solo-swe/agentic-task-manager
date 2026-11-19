@@ -189,6 +189,37 @@ test.describe('Kanban board', () => {
     await expect(page.locator('#detail-panel h3')).toHaveText('T-025 Build the board');
   });
 
+  // ATM-619: a card in review shows its code review, a link that opens it from the board, not the task
+  test('a card in review links to its code review: Enter or a click opens it; ⌘-click a tab of its own', async ({
+    page,
+    tasksServer,
+  }) => {
+    const data = loadFixture('standard');
+    Object.assign(
+      data.tasks.find((t) => t.id === 'T-004')!,
+      {
+        status: 'in_review',
+        code_reviews: [{ id: 'u2', ref: 'CR-2' }],
+      },
+    );
+    await openKanban(page, tasksServer, data);
+    const link = card(page, 'T-004').locator('.card-review .review-link');
+    await expect(link).toHaveAttribute('data-review', 'CR-2');
+    const reviews = `/projects/${tasksServer.projectId}/reviews`;
+    const [tab] = await Promise.all([
+      page.context().waitForEvent('page'),
+      link.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] }),
+    ]);
+    await expect.poll(() => new URL(tab.url()).pathname).toBe(`${reviews}/CR-2`);
+    await tab.close();
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+    // Enter on the link (in the card's tab order) opens the review, not the task's details
+    await link.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => new URL(page.url()).pathname).toBe(`${reviews}/CR-2`);
+    expect(new URL(page.url()).searchParams.get('task')).toBeNull();
+  });
+
   test('skipped tasks are hidden behind a toggle', async ({ page, tasksServer }) => {
     await openKanban(page, tasksServer, 'kanban');
     await expect(column(page, 'skipped')).toHaveCount(0);

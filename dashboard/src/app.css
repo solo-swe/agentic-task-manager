@@ -3997,6 +3997,10 @@ svg.graph-minimap.hidden {
 .review-wait::before {
   content: '◷ ';
 }
+/* A card's code review, while in review (ATM-619): a link that opens it */
+.card-review {
+  margin-top: var(--space-3);
+}
 .review-note {
   margin-top: var(--space-2);
 }

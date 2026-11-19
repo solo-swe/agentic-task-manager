@@ -1,5 +1,6 @@
 <script lang="ts">
   import { claimSummary } from '../claims';
+  import ReviewLink from '../details/ReviewLink.svelte';
   import { scrollToTask } from '../scroll';
   import { dashboard } from '../state.svelte';
   import { kindStyle, phaseColor, typeStyle } from '../theme';
@@ -32,6 +33,8 @@
   const deps = $derived(task.dependencies ?? []);
   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
   const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
+  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
+  const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
   const block = $derived(blockWait(task, dashboard.loadedAt, dashboard.vocab));
   // The row's width (T-338): the description's start and the latest note on the left, who and when on the right
   const excerpt = $derived(task.description ? markdownPlainText(task.description) : '');
@@ -86,6 +89,9 @@
       <div class="task-waiting review-wait" title={review.note && markdownPlainText(review.note.text)}>
         {reviewSummary(review)}
       </div>
+    {/if}
+    {#if codeReview && dashboard.projectId}
+      <div class="card-review"><ReviewLink project={dashboard.projectId} reference={codeReview.ref} prominent /></div>
     {/if}
     {#if block}
       <div

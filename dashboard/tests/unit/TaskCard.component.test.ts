@@ -8,6 +8,8 @@ import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';
 
 vi.mock('../../src/lib/scroll', () => ({ scrollToTask: vi.fn() }));
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock('../../src/lib/navigation', async (actual) => ({ ...(await actual()), navigate }));
 
 const task = (id: string) => dashboard.taskMap.get(id) as Task;
 
@@ -35,6 +37,38 @@ describe('TaskCard', () => {
       'FR-1.1',
       'FR-1.2',
     ]);
+  });
+
+  // ATM-619: a task in review shows its code review, a link that opens it and not the task
+  it('in review with a code review: its latest as a link to its page; a click opens it, not the task', async () => {
+    dashboard.projectId = 'p1';
+    const show = vi.spyOn(dashboard, 'showDetail');
+    const reviewed = {
+      ...task('T-004'),
+      status: 'in_review',
+      code_reviews: [
+        { id: 'u1', ref: 'CR-3' },
+        { id: 'u2', ref: 'CR-7' },
+      ],
+    };
+    const { container } = render(TaskCard, { task: reviewed });
+    const links = container.querySelectorAll<HTMLAnchorElement>('.card-review .review-link');
+    expect([...links].map((a) => [a.dataset.review, a.getAttribute('href')])).toEqual([
+      ['CR-7', '/projects/p1/reviews/CR-7'],
+    ]);
+    await fireEvent.click(links[0]);
+    expect(navigate).toHaveBeenCalledWith('/projects/p1/reviews/CR-7');
+    expect(show).not.toHaveBeenCalled();
+    dashboard.projectId = null;
+  });
+
+  it('no link without a code review, nor once the task is out of review', () => {
+    dashboard.projectId = 'p1';
+    const inReview = render(TaskCard, { task: { ...task('T-004'), status: 'in_review' } });
+    expect(inReview.container.querySelector('.card-review')).toBeNull();
+    const done = render(TaskCard, { task: { ...task('T-004'), code_reviews: [{ id: 'u2', ref: 'CR-7' }] } });
+    expect(done.container.querySelector('.card-review')).toBeNull();
+    dashboard.projectId = null;
   });
 
   it('dependency links show the target name and scroll to it', async () => {

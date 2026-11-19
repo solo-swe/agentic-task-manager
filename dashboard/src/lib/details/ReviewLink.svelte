@@ -34,9 +34,10 @@
   const tabs = tabActions();
 
   function open(e: MouseEvent) {
+    // The link's own, a new tab's too: never the card's or row's it is on (ATM-619), which would open the task
+    e.stopPropagation();
     if (!inApp && wantsNewTab(e)) return;
     e.preventDefault();
-    e.stopPropagation();
     if (inApp) tabs.open(href);
     else navigate(href);
   }
