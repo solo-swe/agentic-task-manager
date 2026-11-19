@@ -69,4 +69,51 @@ test.describe('"need you" chip', () => {
     await page.keyboard.press('Enter');
     await expectDetail(page, 'T-005');
   });
+
+  test('a long list scrolls in a small popup, without a scroll bar: "▼ N more", the arrows reach every row (ATM-640)', async ({
+    page,
+    tasksServer,
+  }) => {
+    const data = v4({ 'T-005': 'user', 'T-006': 'user' });
+    const inReview = data.tasks.find((t) => t.id === 'T-004')!;
+    for (let n = 100; n < 120; n++)
+      data.tasks.push({ ...inReview, id: `T-${n}`, name: `Review ${n}`, dependencies: [] });
+    await openDashboard(page, tasksServer, data, { tab: 'list' });
+    const chip = page.locator('#attention-count');
+    await expect(chip).toHaveText('23 need you');
+    await chip.click();
+    const menu = page.locator('#needs-you-menu');
+    const list = menu.locator('.needs-you-list');
+    const rows = menu.locator('.needs-you-row');
+    await expect(rows).toHaveCount(23);
+    // Small: well under the window, the list cut off, with no scroll bar of its own
+    const box = (await menu.boundingBox())!;
+    expect(box.height).toBeLessThan(400);
+    expect(box.y + box.height).toBeLessThan(page.viewportSize()!.height);
+    const scroller = await list.evaluate((el: HTMLElement) => ({
+      cut: el.scrollHeight > el.clientHeight,
+      bar: el.offsetWidth - el.clientWidth,
+      overflow: getComputedStyle(el).overflowY,
+    }));
+    expect(scroller).toEqual({ cut: true, bar: 0, overflow: 'auto' });
+    await expect(menu.locator('.kanban-more.bottom')).toHaveText(/^▼ \d+ more$/);
+    await expect(menu.locator('.kanban-more.top')).toHaveCount(0);
+
+    // The arrows go to the last row, scrolled into view; "▲ N more" then, and no "▼"
+    await expect(rows.first()).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(rows.last()).toBeFocused();
+    await expect(rows.last()).toBeInViewport();
+    await expect(menu.locator('.kanban-more.top')).toHaveText(/^▲ \d+ more$/);
+    await expect(menu.locator('.kanban-more.bottom')).toHaveCount(0);
+    await page.keyboard.press('Enter');
+    await expectDetail(page, 'T-119');
+  });
+
+  test('a short list has no hints', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, v4({ 'T-005': 'user', 'T-006': 'user' }), { tab: 'list' });
+    await page.locator('#attention-count').click();
+    await expect(page.locator('#needs-you-menu .needs-you-row')).toHaveCount(3);
+    await expect(page.locator('#needs-you-menu .kanban-more')).toHaveCount(0);
+  });
 });

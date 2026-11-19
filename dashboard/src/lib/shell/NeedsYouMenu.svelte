@@ -9,6 +9,7 @@
   import type { NeedsYouReview } from '$generated/types';
   import type { NeedsYouItem } from '../waiting';
   import { taskLabel } from '../keys';
+  import HintScroll from '../ui/HintScroll.svelte';
   import TaskKey from '../ui/TaskKey.svelte';
 
   let {
@@ -105,28 +106,38 @@
             id={menuId}
             style:translate={shift ? `${shift}px 0` : undefined}
           >
-            {#each items as task (task.id)}
-              <DropdownMenu.Item onSelect={() => onopen(task.id)}>
-                {#snippet child({ props })}
-                  <button {...props} class="needs-you-row" data-id={task.id}>
-                    <span class="needs-you-id"><TaskKey {task} /></span>
-                    <span class="needs-you-name">{task.name}</span>
-                    <span class="needs-you-reason">{REASONS[task.reason]}</span>
-                  </button>
-                {/snippet}
-              </DropdownMenu.Item>
-            {/each}
-            {#each listed as review (review.reference)}
-              <DropdownMenu.Item onSelect={() => onreview?.(review.reference)}>
-                {#snippet child({ props })}
-                  <button {...props} class="needs-you-row" data-review={review.reference}>
-                    <span class="needs-you-id">{review.reference}</span>
-                    <span class="needs-you-name">{review.title}</span>
-                    <span class="needs-you-reason">{REVIEW_REASONS[review.why]}</span>
-                  </button>
-                {/snippet}
-              </DropdownMenu.Item>
-            {/each}
+            <!-- A long list scrolls in the popup, without a scroll bar: "▲ N more" / "▼ N more" at the cut edges, as the
+                 dashboard's other lists (ATM-640); the arrows bring the row they move to into view -->
+            <HintScroll
+              tag="span"
+              item=".needs-you-row"
+              outer="needs-you-scroll"
+              body="needs-you-list"
+              tabbable={false}
+            >
+              {#each items as task (task.id)}
+                <DropdownMenu.Item onSelect={() => onopen(task.id)}>
+                  {#snippet child({ props })}
+                    <button {...props} class="needs-you-row" data-id={task.id}>
+                      <span class="needs-you-id"><TaskKey {task} /></span>
+                      <span class="needs-you-name">{task.name}</span>
+                      <span class="needs-you-reason">{REASONS[task.reason]}</span>
+                    </button>
+                  {/snippet}
+                </DropdownMenu.Item>
+              {/each}
+              {#each listed as review (review.reference)}
+                <DropdownMenu.Item onSelect={() => onreview?.(review.reference)}>
+                  {#snippet child({ props })}
+                    <button {...props} class="needs-you-row" data-review={review.reference}>
+                      <span class="needs-you-id">{review.reference}</span>
+                      <span class="needs-you-name">{review.title}</span>
+                      <span class="needs-you-reason">{REVIEW_REASONS[review.why]}</span>
+                    </button>
+                  {/snippet}
+                </DropdownMenu.Item>
+              {/each}
+            </HintScroll>
           </span>
         {/snippet}
       </DropdownMenu.ContentStatic>

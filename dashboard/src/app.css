@@ -4103,6 +4103,15 @@ svg.graph-minimap.hidden {
   padding: var(--space-3);
   gap: var(--space-1);
 }
+/* A long list scrolls, the popup kept small (ATM-640): about eight rows, less on a short window */
+.needs-you-scroll {
+  max-height: min(320px, 60vh);
+}
+.needs-you-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
 .needs-you-menu.align-right {
   left: auto;
   right: 0;

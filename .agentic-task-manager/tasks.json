@@ -15145,9 +15145,9 @@
         "dashboard/src/lib/details/ReviewLink.svelte"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T23:48:29Z",
+      "updated_at": "2026-11-19T05:37:50Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "number": 575,
       "components": [
         "dashboard"
@@ -15177,6 +15177,12 @@
           "kind": "review",
           "text": "CR-36: Every project's reviews on the overview; reviews in the needs-you chip",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T05:37:50Z",
+          "kind": "note",
+          "text": "Approved: in CR-36 (round 1)",
+          "by": "Hakan Serce"
         }
       ],
       "blocks": [
@@ -15196,7 +15202,8 @@
         }
       ],
       "review_requested_at": "2026-11-18T23:48:29Z",
-      "review_state": "waiting"
+      "review_state": "approved",
+      "reviewed_at": "2026-11-19T05:37:50Z"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
@@ -16488,9 +16495,9 @@
         "dashboard/tests/unit/page.test.ts"
       ],
       "created_at": "2026-11-18T00:33:32Z",
-      "updated_at": "2026-11-18T22:34:59Z",
+      "updated_at": "2026-11-19T05:43:33Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -16515,15 +16522,22 @@
         }
       ],
       "review_requested_at": "2026-11-18T22:34:59Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-18T22:34:59Z",
           "kind": "review",
           "text": "CR-31: The diffs follow the file tree's order",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T05:43:33Z",
+          "kind": "note",
+          "text": "Approved: in CR-31 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-19T05:43:33Z"
     },
     {
       "id": "01a1ec2c-e2f8-7691-a51b-917d14a06947",
@@ -19141,14 +19155,14 @@
       "description": "Hakan (2026-11-19): when the title bar's tabs are scrolled to the right and some are closed, the scrollable part gets smaller.\n\n## Cause\nWebKit (the app's webview) sizes the strip from its content:\n- the scroller by its tabs less what is scrolled off;\n- the box around it by the arrows' and the + button's glyphs, not their flex basis.\n\nSo with tabs closed while scrolled, the strip was narrower than the room it has, and two tabs that fit still showed ‹ ›. Chromium uses the flex basis, so the e2e suite never saw it.\n\n## Fix\nIn `ui/TitleBarTabs.svelte`, the scroller fills a box of the tabs' own width (count × tab width) that shrinks to its room, and the arrows and + get real widths.\n\n## Tests\nThe ATM-605 e2e in `app.spec.ts` closes the last tabs one by one from the scrolled end. While they overflow, the strip keeps its room with the last tab at its end; once they fit, there are no arrows and nothing is scrolled. Run in WebKit by hand, since the suite is Chromium only.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/ui/TitleBarTabs.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-19T05:36:07Z",
-      "updated_at": "2026-11-19T05:36:14Z",
+      "updated_at": "2026-11-19T05:37:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19163,7 +19177,24 @@
       ],
       "number": 639,
       "started_at": "2026-11-19T05:36:14Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "d0db5ceeb6f8b42e003bc073bf3bebe8aae8c939",
+      "code_reviews": [
+        {
+          "id": "01a1f24f-0117-7449-be5e-6d34c7f6551f",
+          "ref": "CR-48"
+        }
+      ],
+      "review_requested_at": "2026-11-19T05:37:06Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T05:37:06Z",
+          "kind": "review",
+          "text": "CR-48: The tab strip keeps its room after tabs closed while scrolled (WebKit)",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f24e-19bc-7082-a5ba-c91d7da464ff",
@@ -19176,16 +19207,16 @@
       "description": "Hakan (2026-11-19): with many tasks and reviews needing you, the *N need you* popup grows without bound.\n\nIt should be a small popup that scrolls, with no scroll bar, like the dashboard's other scrolling lists (`HintScroll`: *▲ N more* / *▼ N more* at the cut edges).\n\n## Change\n`shell/NeedsYouMenu.svelte`:\n- its rows go in a `HintScroll`, the popup's height capped;\n- the keyboard (arrows) still moves through every row, scrolling the one with focus into view.\n\n## Tests\n- **e2e:** a long list is capped in height, shows *▼ N more*, scrolls, and keeps every row reachable.\n- **Unit:** a short list has no hints.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/NeedsYouMenu.svelte",
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-19T05:36:07Z",
-      "updated_at": "2026-11-19T05:36:07Z",
+      "updated_at": "2026-11-19T05:37:14Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19196,7 +19227,9 @@
       "components": [
         "dashboard"
       ],
-      "number": 640
+      "number": 640,
+      "started_at": "2026-11-19T05:37:14Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
