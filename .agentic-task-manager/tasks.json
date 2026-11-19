@@ -1760,7 +1760,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 654
+    "next_number": 657
   },
   "tasks": [
     {
@@ -17149,13 +17149,13 @@
       "description": "Hakan (2026-11-19): the way the app uses tabs is inconsistent. Overhaul it on a solid foundation.\n\n## Research (a document in `docs/`, reviewed as a CR)\nExisting tabbed windowing models: browsers (Chrome, Safari, Arc), editors (VS Code, Zed), Slack, Linear, Notion, Figma, macOS's document tabs. For each: what a tab represents (a document, a place, a session), what pop-ups (dialogs, panels, menus) are scoped to (the tab or the window), what Back and Forward walk (a tab's own history, across tabs), what ⌘/Ctrl-click and a middle click do, what a tab's context menu offers, and how a page's address is kept.\n\n## Define, for atm\n- **What a tab is**, and what it keeps (its address, its scroll, what is open over it).\n- **Pop-ups:** scoped to their tab or to the app? (Hakan: should switching tabs be possible without closing a pop-up opened on one tab?)\n- **Back and Forward:** each tab's own history, in the order the reader went. Today a review reached from a Kanban card, the task dialog or the Reviews list always goes Back to the Reviews list, not to where the reader came from.\n- **A proper address for every page and what is open over it** (a specific CR, its tab, its file and round; a task's details; a document), so Back, Forward, a reload and a new tab land where expected.\n- **Right-click** (today a browser-like menu with Back and Reload: does it do what it says?) and **⌘/Ctrl-click to a new tab**: what each should do, and check what they do now.\n- **Today, mapped:** every place that opens, closes or navigates (the title bar's tabs, `lib/navigation.ts`, `address.ts`, the app's windows and menus), what each does against the model, and what changes.\n\nThe design is agreed with Hakan before it is built; the build becomes tasks of its own.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/tabs-and-navigation-design.md"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:30:30Z",
+      "updated_at": "2026-11-19T18:36:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17167,7 +17167,127 @@
       "sprint": "Task&review state machine",
       "number": 653,
       "started_at": "2026-11-19T18:30:30Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "4d4e658d4b433384d6abff45ea9ab8e08fa468ed",
+      "code_reviews": [
+        {
+          "id": "01a1f518-c839-743d-ae42-916676fb6929",
+          "ref": "CR-63"
+        }
+      ],
+      "review_requested_at": "2026-11-19T18:36:44Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T18:36:44Z",
+          "kind": "review",
+          "text": "CR-63: Tabs, pop-ups, Back and Forward, and an address for every page: the design",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1f558-bc0a-762d-9c45-4e62a305cee6",
+      "name": "The timed e2e tests run one at a time, so they don't disturb each other's measurements",
+      "type": "test",
+      "priority": "P1",
+      "labels": [
+        "ux"
+      ],
+      "description": "Found in ATM-652 (CR-62): in the full e2e run, the long review's first draw took 208 ms against its 200 ms budget. Measured, not rerun: alone it is 50 to 100 ms; with the other `@timed` tests running beside it, 83 to 143 ms with ATM-652's change and 98 to **443 ms without it**. ATM-641 kept the timed tests away from the functional ones, not from each other: the `timed` project still runs on five workers.\n\n## Change\nThe `timed` project runs on one worker (`playwright.config.ts`: `workers` per project, or `fullyParallel: false` and one worker for it), so each measurement has the machine to itself. Note how long the project then takes, locally and in CI, and say so in `AGENTS.md`'s testing conventions next to ATM-641's note.\n\n## Tests\nThe full run (`--project svelte --project timed`) three times: the timed tests within their budgets each time; their medians recorded in the CR.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/playwright.config.ts",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-19T19:46:35Z",
+      "updated_at": "2026-11-19T19:46:39Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T19:46:35Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 654,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a1f558-bc0a-762d-9c45-4e632884fe3f",
+      "name": "WebKit: the + on a wrapped line sends the review pane about 1,600 px away (ATM-625 is still there in the app's engine)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Found in ATM-652 (CR-62): the e2e test *+ on a line wrapped opens the comment box where it is; the pane stays* (`reviews.spec.ts`, ATM-625) passes in Chromium and fails in WebKit, the app's engine on macOS, with and without ATM-652's change: the pane moves from about 1,230 to 2,860 px when the comment box opens. The suite runs Chromium only, so nothing caught it.\n\n## Look into\nWhy WebKit scrolls the pane: the comment box's focus (`focusOnShow`) scrolling it into view before it is placed, a run being cut where the pick ends (the segments are drawn again) and the scroll anchoring WebKit lacks, or the rows measured again after a wrap.\n\n## Fix and tests\nThe pane stays where it is in WebKit too. Run the reviews specs in WebKit: either a WebKit project for the reviews specs in `playwright.config.ts` (its cost measured), or at least this test in WebKit as well.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts",
+        "dashboard/playwright.config.ts"
+      ],
+      "created_at": "2026-11-19T19:46:35Z",
+      "updated_at": "2026-11-19T19:46:39Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T19:46:35Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 655,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a1f558-bc0a-762d-9c45-4e642f23672e",
+      "name": "A jump to a file (the last one, say) lands somewhere else: the files above it grow after the jump and push it out of view",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan (2026-11-19): jumping to a file in a review's diffs (the last file, say, from the file tree) sometimes ends somewhere else: right after the jump, the files above it are drawn and expand, and push the file below the screen.\n\n## Expected\nA jump lands with the file's header at the top of the pane, and it stays there while the files above it are drawn, measured or highlighted (ATM-587 draws long files a chunk at a time; CompMD renders runs one at a time).\n\n## Look into\n- What grows above the target after the jump: files not drawn yet (their placeholder height versus their real one), chunks added a frame at a time, CompMD's highlighting changing a run's height, folds.\n- Keep the target in place: scroll anchoring (Chromium has it, WebKit doesn't, and the app is WebKit), or hold the target's position while what is above it changes (measure its top before and after each change and scroll by the difference) until the page settles; or give the files above their real height before the jump.\n\n## Tests\ne2e on a long review (the performance fixture's 94 files): jump to the last file and to one in the middle; the file's header stays at the pane's top (within a few px) for a second after, in Chromium and WebKit.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-19T19:46:35Z",
+      "updated_at": "2026-11-19T19:46:39Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T19:46:35Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 656,
+      "components": [
+        "dashboard"
+      ]
     }
   ]
 }
