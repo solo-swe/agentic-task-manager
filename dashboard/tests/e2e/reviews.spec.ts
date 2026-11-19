@@ -1884,14 +1884,16 @@ test.describe('performance', () => {
     }
   });
 
-  // ATM-646: a review shaped as CompMD's CR-7 (15 files, one of 20,000 lines: ~500,000 px of cards not made yet). A
-  // jump to its last file must not restyle the whole page over and over: each CompMD page opened or closed set the
-  // document's adopted style sheets and forced a computed style, a full restyle each (~1 s in the app's WebKit)
-  test('a jump to the last file of a review half a million pixels long restyles the page a bounded number of times (measured)', async ({
+  // ATM-646: a review shaped as CompMD's CR-7 (15 files, one long: ~100,000 px of cards not made yet; CR-7's was 500,000,
+  // which only costs this test time). A jump to its last file must not restyle the whole page over and over: each
+  // CompMD page opened or closed sets the document's adopted style sheets and reads a computed style, a full restyle
+  // each (~1 s in the app's WebKit). Until CompMD shares those per document, the pages opened are what is in view, and
+  // the page itself forces none
+  test('a jump to the last file of a long review restyles the page only for the CompMD pages it shows (measured)', async ({
     page,
     tasksServer,
   }) => {
-    const sizes = Array.from({ length: 15 }, (_, i) => (i === 7 ? 20_000 : i % 3 === 0 ? 120 : 30));
+    const sizes = Array.from({ length: 15 }, (_, i) => (i === 7 ? 5_000 : i % 3 === 0 ? 120 : 30));
     const files = sizes.map((added, i) => {
       const path = `src/f${String(i).padStart(2, '0')}.rs`;
       const body = Array.from({ length: added }, (_, n) => `+let v${n} = ${n};`).join('\n');
@@ -1954,7 +1956,7 @@ test.describe('performance', () => {
     await page.getByRole('tab', { name: /^Diffs/ }).click();
     await expect(diffOf(page, files[0].path).locator('.diff-line').first()).toBeVisible();
     const height = await page.locator('.review-diffs').evaluate((el) => el.scrollHeight);
-    expect(height).toBeGreaterThan(300_000);
+    expect(height).toBeGreaterThan(100_000);
     await page.waitForTimeout(1500);
     const counts = () =>
       page.evaluate(() => ({ ...(window as unknown as { restyles: Record<string, number> }).restyles }));
@@ -1970,7 +1972,14 @@ test.describe('performance', () => {
       pages: after.pages - before.pages,
     };
     console.log('jump to the last file, restyle triggers:', JSON.stringify({ before, jump }));
+    // The cards in view and near it, a page a side of each run: no more (the cards passed over aren't made)
     expect(jump.pages).toBeGreaterThan(0);
+    expect(jump.pages).toBeLessThanOrEqual(8);
+    // Each page set the sheets once opening it, once closing it (a card given back once the page settled)
+    expect(jump.adopted).toBeLessThanOrEqual(2 * jump.pages);
+    // CompMD 0.7.1's own reads, four a page it opens and draws (its scheme, ATM-646's CompMD task); the review's
+    // own code forces none (it forced 68 more before: DiffCode measured every run on every change in it, ATM-644)
+    expect(jump.computed).toBeLessThanOrEqual(4 * jump.pages);
   });
 
   // ATM-587: a review shaped as CompMD's CR-1 (94 files, ~3,000 lines added: a few long files, most short, some long

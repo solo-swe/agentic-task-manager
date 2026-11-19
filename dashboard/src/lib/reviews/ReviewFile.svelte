@@ -168,26 +168,42 @@
   });
   // A card made and then far from the view gives back its diff (ATM-587: the page holds the rows near the view, not
   // every file's), standing in at the height it had, and is made again when it comes near; not while a comment is
-  // being written in it, nor the file gone to
+  // being written in it, nor the file gone to. Not while a jump is still being made (ATM-646): each CompMD page closed
+  // restyles the whole page (a second each in the app's WebKit on a long review), so those a jump scrolled away from
+  // wait until the page has settled, and stay made if they came near again meanwhile
   let body = $state<HTMLElement>();
   /** The height its diff had, when made: what it stands at once given back */
   let measured = $state(0);
   $effect(() => {
     const target = el;
     if (!target || !near || wanted || typeof IntersectionObserver === 'undefined') return;
+    let later: (() => void) | null = null;
+    const giveBack = () => {
+      later = null;
+      const writingHere = target.querySelector('textarea, [contenteditable="true"]') !== null;
+      if (writingHere || target.contains(document.activeElement)) return;
+      // Only a drawn diff's height (ATM-615): one still loading is a line high, and the card stood at that
+      if (body && !body.querySelector('.diff-loading')) measured = body.offsetHeight;
+      near = false;
+    };
     const far = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) return;
-        const writingHere = target.querySelector('textarea, [contenteditable="true"]') !== null;
-        if (writingHere || target.contains(document.activeElement)) return;
-        // Only a drawn diff's height (ATM-615): one still loading is a line high, and the card stood at that
-        if (body && !body.querySelector('.diff-loading')) measured = body.offsetHeight;
-        near = false;
+        if (entries.some((e) => e.isIntersecting)) {
+          later?.();
+          later = null;
+          return;
+        }
+        // At once, as the view moves; only right after a jump, once the page has settled
+        if (!holding()) giveBack();
+        else later ??= whenSettled(giveBack);
       },
       { root, rootMargin: `${FAR}px 0px` },
     );
     far.observe(target);
-    return () => far.disconnect();
+    return () => {
+      far.disconnect();
+      later?.();
+    };
   });
   /** How tall a diff not made yet stands: the height it had, else about its lines, so the scroll bar is about right */
   // No cap (ATM-587, CompMD's CR-1): a 600-line file stood at 4,000 px and grew to 12,000 once drawn, so the end of the
@@ -336,6 +352,12 @@
        layout, rows long given back, alive: up to 175 MB on CMD CR-1; the rows made are bounded by FAR and CHUNK, so
        laying out those near the view costs nothing measurable). Never shrunk (ATM-615) */
     flex: none;
+  }
+  /* A card not made yet stands at its estimate, an empty box (ATM-646): contained, so a restyle or repaint of the rest
+     of the review has nothing to do in it; a long review is mostly these (CMD CR-7: ~500,000 px). Empty, so none of
+     ATM-620's leak (that was content-visibility keeping made cards' old layout) */
+  .review-file-later {
+    contain: strict;
   }
   /* A diff still loading stands at its estimate (ATM-615), so the pane doesn't shrink under the reader while it
      loads */

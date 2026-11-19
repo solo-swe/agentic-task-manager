@@ -19663,9 +19663,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-19T05:51:33Z",
-      "updated_at": "2026-11-19T07:05:00Z",
+      "updated_at": "2026-11-19T07:14:10Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19687,15 +19687,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T07:05:00Z",
-      "review_state": "waiting",
+      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-19T07:05:00Z",
           "kind": "review",
           "text": "CR-51: Agents never miss review comments: atm knows whether a watch runs",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T07:14:10Z",
+          "kind": "rejection",
+          "text": "CR-51 round 1: 1 open comment",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-19T07:14:10Z"
     },
     {
       "id": "01a1f266-f839-7263-878e-7c8ccd46c600",
@@ -19781,16 +19788,16 @@
       "description": "Hakan (2026-11-19), in the app, on CompMD's CR-7 (a spike on code highlighting's cost in WebKit): click the last file in the file tree, then hover over the diff's left side. The highlight follows the pointer seconds late.\n\n## Measured so far (not reproduced)\nOn the current build, in Playwright's Chromium and WebKit, against a scratch server with CompMD added:\n- after the click, frames stay under 36 ms and the page goes quiet within 4 s;\n- a mouse sweep keeps up;\n- the + follows the pointer within two frames over a 600-line file (Split, and Unified wrapped).\n\nSo the difference is the app's webview, its build or its live-review watch.\n\n## To do\n- Profile in the app itself (Safari's Web Inspector on the app's webview).\n- Find what keeps the main thread busy after the jump, and fix it.\n- Keep the pointer-sweep performance test (`reviews.spec.ts`) as the guard.\n\nSuspect: `DiffCode`'s `MutationObserver` watches its whole subtree, so each hover's + button re-measures the run (a forced layout, and every line's top when wrapped).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T06:26:07Z",
-      "updated_at": "2026-11-19T07:09:16Z",
+      "updated_at": "2026-11-19T07:15:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19803,7 +19810,31 @@
       ],
       "number": 644,
       "started_at": "2026-11-19T07:09:16Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f57de5bd71f7918fbe405a404fff93f9f5c40eda",
+      "code_reviews": [
+        {
+          "id": "01a1f2a4-aa57-71ad-9752-cb131120d419",
+          "ref": "CR-52"
+        }
+      ],
+      "review_requested_at": "2026-11-19T07:10:40Z",
+      "review_state": "approved",
+      "notes": [
+        {
+          "at": "2026-11-19T07:10:40Z",
+          "kind": "review",
+          "text": "CR-52: The + follows the pointer at once on a long review in the app",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T07:15:59Z",
+          "kind": "note",
+          "text": "Approved: in CR-52 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviewed_at": "2026-11-19T07:15:59Z"
     },
     {
       "id": "01a1f27b-e1ea-7055-b85f-05c3a5615d43",

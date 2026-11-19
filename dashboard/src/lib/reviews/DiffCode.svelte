@@ -53,6 +53,8 @@
   } = $props();
 
   const source = $derived(lines.map((l) => l.text).join('\n'));
+  /** Nothing in it to highlight: padding rows and empty lines only */
+  const blank = $derived(lines.every((l) => l.kind === 'pad' || l.text.trim() === ''));
   const text = $derived(
     fenced(
       lines.map((l) => l.text),
@@ -239,8 +241,16 @@
       </div>
     {/each}
   {/if}
-  <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
-  <CompMd {text} plain={source} />
+  {#if blank}
+    <!-- Nothing to highlight (a side of added or removed lines only: its padding rows, ATM-646): no CompMD page, whose
+         opening and closing each restyle the whole page; the text as written, as a run waits for its turn below -->
+    <div class="compmd" data-compmd="ready">
+      <div class="compmd-page compmd-waiting"><pre><code>{source}</code></pre></div>
+    </div>
+  {:else}
+    <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
+    <CompMd {text} plain={source} />
+  {/if}
 </div>
 
 <style>

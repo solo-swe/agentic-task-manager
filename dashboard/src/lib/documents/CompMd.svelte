@@ -6,7 +6,6 @@
     loadCompmd,
     processText,
     safeHref,
-    sandboxOptions,
     secureLinks,
     slug,
     taskData,
@@ -15,6 +14,7 @@
     type TaskLinks,
     type DrawnLine,
   } from '../compmd';
+  import { followScheme, sandboxOf } from '../compmd-runtime';
   import { docOf, referenceTo, viewerLink, type DocumentRef } from '../documents';
   import { navigate } from '../navigation';
   import { takeTurn } from '../render-turns';
@@ -98,7 +98,8 @@
   /** Drawn, but for an earlier text: hidden, the new text as written shown in its place until its turn (ATM-625) */
   let stale = $state(false);
   let view: View | null = null;
-  let schemes: MutationObserver | null = null;
+  /** Stops this view following the dashboard's theme (the document's one observer, compmd-runtime) */
+  let unfollow: (() => void) | null = null;
   /** Destroyed (ATM-620): nothing is drawn any more. A draw after it made a view nothing would destroy, whose listeners
    * held the text's element and the card around it */
   let destroyed = false;
@@ -187,8 +188,8 @@
       if (!view) {
         // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
         // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
-        // app, under the origin CompMD's plugin gives the page, ADR-006)
-        view = compmd.createSandbox(sandboxOptions(compmd)).open(target, { components });
+        // app, under the origin CompMD's plugin gives the page, ADR-006). The document's one sandbox (ATM-646)
+        view = sandboxOf(compmd).open(target, { components });
         view.on('rendered', () => {
           secureLinks(target);
           drawn = true;
@@ -215,9 +216,8 @@
         // After a render is painted, when the page or a block in it changes size, when fonts load
         view.on('layout', () => void measureLines(shown, target));
         // The dashboard switches theme and mode by attributes on <html> (its color-scheme follows): the frames,
-        // and a diagram's light or dark theme, follow when told
-        schemes = new MutationObserver(() => view?.scheme());
-        schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
+        // and a diagram's light or dark theme, follow when told; one observer for every view (ATM-646)
+        unfollow = followScheme(shown);
       }
       view.render(tree);
       failed = false;
@@ -228,7 +228,7 @@
     destroyed = true;
     cancelTurn?.();
     turnDone?.();
-    schemes?.disconnect();
+    unfollow?.();
     view?.destroy();
   });
 
