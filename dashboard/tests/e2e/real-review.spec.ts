@@ -10,7 +10,10 @@ import { chromium, expect, test, webkit, type Browser, type Page } from '@playwr
 // developer's own server is untouched), in Chromium and in WebKit (the app's engine on macOS), CompMD's highlighting
 // and rendering included. Not part of the suite: it runs only when given a project and a review,
 //
-//   ATM_MEASURE_PROJECT=<a project's folder> ATM_MEASURE_REVIEW=CR-1 pnpm exec playwright test real-review
+//   ATM_MEASURE_PROJECT=<a project's folder> ATM_MEASURE_REVIEW=CR-1 pnpm exec playwright test --project measure --no-deps
+//
+// In a full run it is the `measure` project, after the others (ATM-641: beside the suite's timed tests it made them
+// miss their budgets), so it never shares the machine with them.
 //
 // and prints what it measured (docs/review-performance.md). It imports Playwright's own `test`, not helpers.ts': the
 // helpers' fixture plays atm serve, and this measures the real one.

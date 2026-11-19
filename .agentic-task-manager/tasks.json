@@ -15324,7 +15324,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-17T22:15:54Z",
+      "updated_at": "2026-11-19T08:19:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "with": "user",
@@ -15335,10 +15335,10 @@
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
-          "from": "2026-11-17T22:15:54Z"
+          "from": "2026-11-17T22:15:54Z",
+          "to": "2026-11-19T08:19:43Z"
         }
-      ],
-      "sprint": "Code reviews in the app"
+      ]
     },
     {
       "id": "01a1e849-7d18-70e6-a36e-15e5d46649df",
@@ -18238,7 +18238,7 @@
       "description": "Asked by Hakan (2026-11-18): the CR badge of a task (`CR-7`) also says the review's status (*Waiting for review*, *Changes requested*, *Approved*, *Closed*, …), on the task's card (ATM-619's badge) and in its details. So it is clear at a glance whether the review is approved.\n\n## Today\n`details/ReviewLink.svelte` shows a status only for the prominent link, and only when the page already knows it: `reviews/known.svelte.ts` learns statuses when the Reviews tab lists or shows reviews. A board opened without visiting the Reviews tab shows no status at all.\n\n## Change\n- **The status comes with the task, from atm.** The task views atm serves (the task's `code_reviews` entries) carry each review's status, read from the project's reviews in the same pass that builds the views. The page never asks once per task, and the status is right from the first load. Cache it with the task views' stamp, which already includes the reviews' files (ATM-606), so a decision shows on the next refresh. A review atm can't read says so (ATM-617's *can't be read*).\n- `ReviewLink.svelte` shows the status on every link, prominent or not, coloured as the Reviews list colours it: approved green, changes requested red, waiting and live the accent, closed and draft muted. On a card it stays compact: a short label or a coloured dot with the status as its title and accessible name.\n- `known.svelte.ts` stays for what the page learns between refreshes; the task's own status is the default.\n- The schema (`crates/atm-common/schema/`) and the generated TypeScript get the field; an older atm's views without it show the badge as today.\n\n## Tests\n- atm-lib: a task's view carries each review's status, and `can't be read` for one atm can't read.\n- Units: `ReviewLink` shows each status with its label and colour class, prominent or not; without one, the badge as today.\n- E2e: a card in review shows *Approved* on its badge once its review is approved, and the details show it too.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f008-9a9f-714f-8e7b-93ac77245ac5"
       ],
@@ -18251,7 +18251,7 @@
         "dashboard/tests/e2e/kanban.spec.ts"
       ],
       "created_at": "2026-11-18T19:41:06Z",
-      "updated_at": "2026-11-19T08:02:28Z",
+      "updated_at": "2026-11-19T08:16:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18266,7 +18266,24 @@
       ],
       "number": 621,
       "started_at": "2026-11-19T08:02:28Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "b214d57178e4cc3fb5d752f60c430161a61a6ad5",
+      "code_reviews": [
+        {
+          "id": "01a1f2e1-1f52-733c-a955-f3f8ee25c5bc",
+          "ref": "CR-56"
+        }
+      ],
+      "review_requested_at": "2026-11-19T08:16:42Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T08:16:42Z",
+          "kind": "review",
+          "text": "CR-56: A task's CR badge says where its review stands",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f04e-91ae-724a-82c2-0301f423f175",
@@ -19633,13 +19650,13 @@
       "description": "In the full functional e2e run (2026-11-19), *a long review (94 files, ~3,000 lines)* in `reviews.spec.ts` failed on `afterSettled`: 107 ms against its budget of 100 (`BUDGET_MS / 2`), with one long task of 50 ms. An earlier run measured 98.\n\nRun alone it measures 25 to 34 ms (three runs, one worker). In the failing run, the *real review CR-1 (webkit)* test was running at the same time, blocking for 3.5 s while it opened.\n\n## To do\nFind why the settle step is that sensitive to a concurrent test. Then either fix the cause in the diff viewer or keep the WebKit measurement from sharing the machine with timed Chromium tests. Never raise the budget or just re-run (AGENTS.md). Measure before and after.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T05:43:56Z",
-      "updated_at": "2026-11-19T07:09:16Z",
+      "updated_at": "2026-11-19T08:16:55Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19660,7 +19677,9 @@
           "text": "Seen again on 2026-11-19: 100 against its 100 ms budget in the reviews spec at 5 workers; alone, 27 to 44 ms (three runs). The new jump test on a review of half a million pixels (ATM-646, `reviews.spec.ts`) is heavy and runs beside it, so it makes the contention more likely: the fix should keep the timed tests off a machine shared with the heavy ones.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-19T08:16:55Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f25c-3e45-7582-a10d-fb5cad19398e",

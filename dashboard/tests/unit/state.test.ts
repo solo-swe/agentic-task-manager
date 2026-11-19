@@ -258,6 +258,9 @@ describe('DashboardState', () => {
         ['ATM-9', U2, 'ATM-2'],
         [U1, U1, 'ATM-1'],
         ['atm-2', U2, 'ATM-2'],
+        // The task already open, written another way: its key still in the address
+        ['~ATM-2', U2, 'ATM-2'],
+        ['ATM-9', U2, 'ATM-2'],
       ]) {
         history.replaceState(null, '', `/projects/p3/list?task=${ref}`);
         s.onNavigate();

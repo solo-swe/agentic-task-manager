@@ -3,7 +3,8 @@ import { expect, loadFixture, openDashboard, test } from './helpers';
 
 // NFR-2: with 500 tasks, switching tabs and refreshing data render within 200 ms. Measured inside the page from the
 // action until two animation frames later (so layout and paint are included). Shared CI runners are slower and
-// noisier, so the budget is doubled there.
+// noisier, so the budget is doubled there. Timed (@timed): in a project of their own, after the others
+// (playwright.config.ts, ATM-641)
 const BUDGET_MS = 200 * (process.env.CI ? 2 : 1);
 
 /** Click `selector`, then wait until `done()` holds and two frames have been painted; returns elapsed ms. */
@@ -59,7 +60,7 @@ function sinceStarted(page: Page, done: string) {
   }, done);
 }
 
-test.describe('performance in the app: its tabs (T-525)', () => {
+test.describe('performance in the app: its tabs (T-525)', { tag: '@timed' }, () => {
   // The large project's Kanban, List and Graph, and a small second project, in the window's tabs (T-514), as the app
   // brings them back at its start (T-518)
   const LARGE = 'Performance Project';
@@ -122,7 +123,7 @@ test.describe('performance in the app: its tabs (T-525)', () => {
   });
 });
 
-test.describe('performance with 500 tasks and a large archive', () => {
+test.describe('performance with 500 tasks and a large archive', { tag: '@timed' }, () => {
   test.beforeEach(async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
     const data = loadFixture('large-500');
@@ -152,7 +153,7 @@ test.describe('performance with 500 tasks and a large archive', () => {
   });
 });
 
-test.describe('performance with 500 tasks', () => {
+test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
   test.beforeEach(async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
     await openDashboard(page, tasksServer, 'large-500');

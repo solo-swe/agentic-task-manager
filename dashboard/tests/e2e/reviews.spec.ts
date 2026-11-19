@@ -1749,7 +1749,8 @@ test.describe('a live review (ATM-576)', () => {
   });
 });
 
-test.describe('performance', () => {
+// Timed (@timed): in a project of their own, after the others (playwright.config.ts, ATM-641)
+test.describe('performance', { tag: '@timed' }, () => {
   // As performance.spec.ts: inside the page, from the action until two frames after it is drawn
   const BUDGET_MS = 200 * (process.env.CI ? 2 : 1);
 
