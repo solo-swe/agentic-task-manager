@@ -106,7 +106,7 @@ mod tests {
         (on_change, receive)
     }
 
-    /// Once the watch is quiet: what was written just before it began may still come in late (FSEvents on macOS,
+    /// Once the watch is quiet: what was written just before it began may still come in late (`FSEvents` on macOS,
     /// inotify's first events on Linux), a few bursts at most; one that never goes quiet (a watch waking itself) fails
     fn quiet_after(received: &mpsc::Receiver<()>, what: &str) {
         for _ in 0..10 {
