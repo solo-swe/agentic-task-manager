@@ -110,6 +110,31 @@ fn key_final_is_dropped_from_the_tasks_and_the_archive_once() {
     assert_eq!(describe_migration(&again, &paths), ["Nothing to migrate."]);
 }
 
+/// ADR-009 (ATM-636): what a merge renumbered is said once by the next migrate, then forgotten
+#[test]
+fn what_a_merge_renumbered_is_said_once() {
+    let (_dir, paths) = project(
+        r#"{"meta": {"format": 2, "key": "ATM", "renumbered": [{"from": "ATM-5", "to": "ATM-9"}]}, "tasks": [
+            {"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8009", "number": 9, "aliases": ["ATM-5"], "status": "todo"}
+        ]}"#,
+    );
+    let result = migrate(&paths).unwrap();
+    assert_eq!(
+        result["renumbered"],
+        json!([{"from": "ATM-5", "to": "ATM-9"}])
+    );
+    assert!(describe_migration(&result, &paths).contains(
+        &"ATM-5 is now ATM-9 (both branches made ATM-5); ATM-5 still finds it.".to_string()
+    ));
+    assert_eq!(
+        read_json(&paths.tasks).unwrap()["meta"].get("renumbered"),
+        None
+    );
+    let again = migrate(&paths).unwrap();
+    assert_eq!(again["renumbered"], json!([]));
+    assert_eq!(describe_migration(&again, &paths), ["Nothing to migrate."]);
+}
+
 #[test]
 fn phases_become_sprints_named_after_them() {
     let mut document = json!({

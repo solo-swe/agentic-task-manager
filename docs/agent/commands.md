@@ -7,8 +7,10 @@ cut; `--color auto|always|never` only styles it for a terminal.
 
 `<id>` is a task's key (`ATM-527`, any case) in a project with task keys, or its old ID (`T-527`), an alias or its UUID;
 in a project without keys, its ID (`atm docs tasks`). Keys are plain from the moment a task is made: use them anywhere
-(commit messages too). If two branches gave the same number, the merge moves one task to the next free number and its
-old key keeps finding it. (A `~` before a key, as older atm printed it, is still taken and ignored.)
+(commit messages too). If two branches gave the same number, the merge moves one task to the next free number (the one
+not on the base branch; when both or neither are, the newer), the next `atm db migrate` says which ("ATM-538 is now
+ATM-541"), and its old key keeps finding it once no task holds that number. (A `~` before a key, as older atm printed
+it, is still taken and ignored.)
 
 ## Reading
 

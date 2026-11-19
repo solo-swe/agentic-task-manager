@@ -176,14 +176,11 @@ fn numbers(merged: &Value) -> Vec<(String, u64)> {
 }
 
 #[test]
-fn keyed_two_branches_adding_a_task_keep_both_and_theirs_takes_the_next_number() {
-    let base = keyed(json!([{"id": A, "number": 4, "key_final": true}]));
-    let ours = keyed(
-        json!([{"id": A, "number": 4, "key_final": true}, {"id": B, "number": 5, "key_final": false}]),
-    );
-    let theirs = keyed(
-        json!([{"id": A, "number": 4, "key_final": true}, {"id": C, "number": 5, "key_final": false}]),
-    );
+fn keyed_two_branches_adding_a_task_keep_both_and_the_newer_takes_the_next_number() {
+    let base = keyed(json!([{"id": A, "number": 4}]));
+    let ours = keyed(json!([{"id": A, "number": 4}, {"id": B, "number": 5}]));
+    // C is the newer (its UUIDv7's time is later): it moves
+    let theirs = keyed(json!([{"id": A, "number": 4}, {"id": C, "number": 5}]));
     let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
     assert!(conflicts.is_empty(), "{conflicts:?}");
     assert_eq!(
@@ -197,28 +194,83 @@ fn keyed_two_branches_adding_a_task_keep_both_and_theirs_takes_the_next_number()
     );
     assert_eq!(merged["tasks"][1].get("aliases"), None);
     assert_eq!(merged["meta"]["next_number"], json!(7));
+    // What moved, for the next atm db migrate to say
+    assert_eq!(
+        merged["meta"]["renumbered"],
+        json!([{"from": "ATM-5", "to": "ATM-6"}])
+    );
 }
 
+/// ADR-009: of two tasks with one number, the one not on the base branch moves, however new; both or neither on it,
+/// the newer; never a conflict
 #[test]
-fn keyed_a_final_number_never_moves_and_two_final_ones_are_a_conflict() {
+fn keyed_a_clash_moves_the_task_not_on_the_base_branch_else_the_newer_never_a_conflict() {
     let base = keyed(json!([]));
-    // Ours added B as 5 on a branch; theirs is main, where C is 5 for good
-    let ours = keyed(json!([{"id": B, "number": 5, "key_final": false}]));
-    let theirs = keyed(json!([{"id": C, "number": 5, "key_final": true}]));
-    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+    let ours = keyed(json!([{"id": B, "number": 5}]));
+    let theirs = keyed(json!([{"id": C, "number": 5}]));
+    let on = |ids: &'static [&'static str]| move |id: &str| ids.contains(&id);
+    // Theirs is main, where C (the newer) is 5: B moves
+    let (merged, conflicts) = merge_task_files_with(&base, &ours, &theirs, &on(&[C]));
     assert!(conflicts.is_empty(), "{conflicts:?}");
     assert_eq!(numbers(&merged), [("b2".into(), 6), ("c3".into(), 5)]);
     assert_eq!(merged["tasks"][0]["aliases"], json!(["ATM-5"]));
-
+    // B on main: C moves
+    let (merged, _) = merge_task_files_with(&base, &ours, &theirs, &on(&[B]));
+    assert_eq!(numbers(&merged), [("b2".into(), 5), ("c3".into(), 6)]);
+    // Both on it (each made it there): the newer, C, moves; which side is ours doesn't matter
+    for (o, t) in [(&ours, &theirs), (&theirs, &ours)] {
+        let (merged, conflicts) = merge_task_files_with(&base, o, t, &on(&[B, C]));
+        assert!(conflicts.is_empty(), "{conflicts:?}");
+        let mut got = numbers(&merged);
+        got.sort();
+        assert_eq!(got, [("b2".into(), 5), ("c3".into(), 6)]);
+    }
+    // An old file's key_final changes nothing: a clash is never a conflict
     let ours = keyed(json!([{"id": B, "number": 5, "key_final": true}]));
+    let theirs = keyed(json!([{"id": C, "number": 5, "key_final": true}]));
     let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
-    assert_eq!(
-        conflicts,
-        [format!(
-            "ATM-5: two final tasks have this number ({B} and {C}); both kept, give one another number by hand"
-        )]
+    assert!(conflicts.is_empty(), "{conflicts:?}");
+    assert_eq!(numbers(&merged), [("b2".into(), 5), ("c3".into(), 6)]);
+}
+
+#[test]
+fn keyed_tasks_migrated_from_ids_can_t_be_told_apart_by_age_theirs_moves() {
+    // Version 8 UUIDs (migrated from IDs): not time-ordered
+    const M: &str = "0193a5b2-7c1d-8e2f-8a3b-4c5d6e7f80f1";
+    const N: &str = "0193a5b2-7c1d-8e2f-8a3b-4c5d6e7f80e2";
+    let base = keyed(json!([]));
+    let (merged, _) = merge_task_files(
+        &base,
+        &keyed(json!([{"id": M, "number": 5}])),
+        &keyed(json!([{"id": N, "number": 5}])),
     );
-    assert_eq!(numbers(&merged), [("b2".into(), 5), ("c3".into(), 5)]);
+    assert_eq!(numbers(&merged), [("f1".into(), 5), ("e2".into(), 6)]);
+}
+
+/// Several clashes in one merge each move once, each to its own next number, all recorded
+#[test]
+fn keyed_several_clashes_in_one_merge_each_take_a_number_of_their_own() {
+    const D: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f80d4";
+    const E: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f80e5";
+    let base = keyed(json!([]));
+    let ours = keyed(json!([{"id": A, "number": 5}, {"id": B, "number": 6}]));
+    let theirs = keyed(json!([{"id": D, "number": 5}, {"id": E, "number": 6}]));
+    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+    assert!(conflicts.is_empty(), "{conflicts:?}");
+    assert_eq!(
+        numbers(&merged),
+        [
+            ("a1".into(), 5),
+            ("b2".into(), 6),
+            ("d4".into(), 7),
+            ("e5".into(), 8)
+        ]
+    );
+    assert_eq!(
+        merged["meta"]["renumbered"],
+        json!([{"from": "ATM-5", "to": "ATM-7"}, {"from": "ATM-6", "to": "ATM-8"}])
+    );
+    assert_eq!(merged["meta"]["next_number"], json!(9));
 }
 
 #[test]
@@ -748,9 +800,8 @@ fn a_project_migrated_to_sprints_on_either_side_has_no_phases_left() {
 #[test]
 fn keyed_a_renumbered_task_goes_above_either_sides_next_number_and_keeps_its_aliases() {
     let base = keyed(json!([]));
-    let ours = keyed(json!([{"id": B, "number": 5, "key_final": false}]));
-    let mut theirs =
-        keyed(json!([{"id": C, "number": 5, "key_final": false, "aliases": ["OLD-1"]}]));
+    let ours = keyed(json!([{"id": B, "number": 5}]));
+    let mut theirs = keyed(json!([{"id": C, "number": 5, "aliases": ["OLD-1"]}]));
     theirs["meta"]["next_number"] = json!(9);
     let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
     assert!(conflicts.is_empty(), "{conflicts:?}");
@@ -762,7 +813,7 @@ fn keyed_a_renumbered_task_goes_above_either_sides_next_number_and_keeps_its_ali
 #[test]
 fn keyed_the_next_number_is_never_below_the_highest_number_plus_one() {
     let file = |next: u64| {
-        let mut file = keyed(json!([{"id": A, "number": 7, "key_final": true}]));
+        let mut file = keyed(json!([{"id": A, "number": 7}]));
         file["meta"]["next_number"] = json!(next);
         file
     };

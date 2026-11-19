@@ -384,7 +384,9 @@ describe('merge driver: task keys', () => {
     }
   };
 
-  test('two branches each adding a task keep both; the incoming one takes the next number, its old key an alias', () => {
+  // ADR-009 (ATM-636): a clash never stops a merge; with neither task on the base branch (no remote here), the newer
+  // moves to the next free number, its old key an alias
+  test('two branches each adding a task keep both; with neither on the base branch, the newer takes the next number', () => {
     withRepo((root) => {
       assert.equal(runAtm(['project', 'key', 'set', 'MERGE'], root).code, 0);
       git(['commit', '-q', '-am', 'task keys'], root);
@@ -401,10 +403,58 @@ describe('merge driver: task keys', () => {
       const onMain = merged.tasks.find((t) => t.name === 'on main');
       const onOther = merged.tasks.find((t) => t.name === 'on other');
       assert.ok(onMain && onOther && onMain.id !== onOther.id, 'two tasks, two UUIDs');
-      assert.equal(onMain.number, next, 'ours keeps its number');
-      assert.equal(onOther.number, next + 1);
-      assert.deepEqual(onOther.aliases, [`MERGE-${next}`], 'the key from the name, Merge');
+      assert.equal(onOther.number, next, 'the older keeps its number');
+      assert.equal(onMain.number, next + 1, 'the newer moves');
+      assert.deepEqual(onMain.aliases, [`MERGE-${next}`], 'the key from the name, Merge');
       assert.equal(merged.meta.next_number, next + 2);
+    });
+  });
+
+  // ADR-009 (ATM-636): the task on the base branch (origin/main) keeps its number, whichever way the merge goes and
+  // however old the other is; the next atm db migrate says once what moved
+  test('a clash moves the task not on origin’s base branch, merging either way; migrate says so once', () => {
+    withRepo((root) => {
+      const remote = tempDir('atm-remote-');
+      try {
+        git(['init', '-q', '--bare', remote], root);
+        git(['remote', 'add', 'origin', remote], root);
+        assert.equal(runAtm(['project', 'key', 'set', 'MERGE'], root).code, 0);
+        git(['commit', '-q', '-am', 'task keys'], root);
+        git(['push', '-q', '-u', 'origin', 'main'], root);
+        git(['remote', 'set-head', 'origin', 'main'], root);
+        const next = read(root).meta.next_number;
+        // The older task, on a branch; the newer, on main and pushed
+        git(['switch', '-q', '-c', 'other'], root);
+        add(root, 'on other');
+        git(['commit', '-q', '-am', 'other'], root);
+        git(['switch', '-q', 'main'], root);
+        add(root, 'on main');
+        git(['commit', '-q', '-am', 'main'], root);
+        git(['push', '-q', 'origin', 'main'], root);
+        // main merged into the branch: the branch's own task moves, though it is the older
+        git(['switch', '-q', 'other'], root);
+        let r = spawnSync('git', ['merge', '--no-edit', 'main'], { cwd: root, encoding: 'utf8' });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        let merged = read(root);
+        const number = (name) => merged.tasks.find((t) => t.name === name).number;
+        assert.deepEqual([number('on main'), number('on other')], [next, next + 1]);
+        assert.deepEqual(merged.meta.renumbered, [{ from: `MERGE-${next}`, to: `MERGE-${next + 1}` }]);
+        const migrated = runAtm(['db', 'migrate'], root);
+        assert.match(
+          migrated.stdout,
+          new RegExp(`^MERGE-${next} is now MERGE-${next + 1} \\(both branches made MERGE-${next}\\)`, 'm'),
+        );
+        assert.equal(read(root).meta.renumbered, undefined, 'said once');
+        git(['commit', '-q', '-am', 'migrate'], root);
+        // And the branch merged back into main: nothing clashes any more, main's task kept its number
+        git(['switch', '-q', 'main'], root);
+        r = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root, encoding: 'utf8' });
+        assert.equal(r.status, 0, r.stdout + r.stderr);
+        merged = read(root);
+        assert.deepEqual([number('on main'), number('on other')], [next, next + 1]);
+      } finally {
+        removeDir(remote);
+      }
     });
   });
 
