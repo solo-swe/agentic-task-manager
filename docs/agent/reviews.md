@@ -61,6 +61,15 @@
     it). `--once` stops after the first time it prints something (exit code 3 if nothing came by the time up): for a
     harness that tells you of a background command only when it ends, run it so and start it again each time.
     `--since <time>` prints from that time, whatever was printed before.
+    **Run it as a plain background command**, not under a monitor that caps it at a few minutes: it lasts its
+    `--timeout` (8 h).
+    **atm knows whether it runs** (ATM-642). A running watch keeps a lease, so:
+    - `atm loop next --json` says `"watch": {"running": …, "open": [...], "since_last_watch": [...]}`: `open` is
+      your reviews not decided yet, and `since_last_watch` those changed since your last watch stopped. With
+      `running: false`, start the watch before anything else; it tells you first what changed.
+    - Any atm command you run without one, while a review of your work is open, ends with one line on stderr
+      saying so: at most every ten minutes, and at once when a review changed that it didn't name yet. Never on
+      stdout, and never for a person.
 - **A poke** (`kind: "poke"` on the watch's line; every other comment is `kind: "comment"`): a person nudging you
   about the review as a whole, with a message or none. Answer it by looking at where the review stands, and replying to
   the poke (`atm review reply CR-7 <its comment> --body '…'`) with what you did or what you are waiting for: the open

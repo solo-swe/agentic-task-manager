@@ -401,12 +401,15 @@ pub fn watch(
     let file = cursor_file(root.as_deref(), me);
     let (mut seen, mut statuses) = starting_point(&store, &file, options.since.as_deref())?;
     let (_subscription, told) = listen(&store)?;
+    // Known to be running while it does (ATM-642): renewed on every look, removed when it ends
+    let lease = Lease::take(lease_file(root.as_deref(), me));
     ready();
     let deadline = Instant::now() + timeout;
     let mut count = 0;
     // The first look is at once: what came while no watch ran
     let mut first = true;
     loop {
+        lease.renew();
         if !first {
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
@@ -498,6 +501,207 @@ fn decision(review: &ReviewHeader, task: Option<&str>) -> Value {
         "at": review.updated,
         "title": review.title,
     })
+}
+
+/// How long a watch's lease lasts unrenewed (ATM-642). A watch renews it on every look, at least every [`RECHECK`], so
+/// one that stopped, crashed or was killed is known to within this.
+const LEASE_SECS: i64 = 60;
+
+/// How long atm stays quiet after reminding an agent that it isn't watching, unless something new came meanwhile.
+const REMIND_EVERY_SECS: i64 = 600;
+
+/// The lease of `me`'s watch of the project at `root`: beside its cursor.
+fn lease_file(root: Option<&Path>, me: &str) -> PathBuf {
+    cursor_file(root, me).with_extension("live")
+}
+
+/// When atm last reminded `me` that it wasn't watching: beside its cursor.
+fn reminded_file(root: Option<&Path>, me: &str) -> PathBuf {
+    cursor_file(root, me).with_extension("reminded")
+}
+
+/// A running watch's lease (ATM-642): until when it is known to run, in seconds since 1970, written while it runs
+/// and removed when it ends. Several watches of one agent share it; the others renew it within [`RECHECK`].
+struct Lease(PathBuf);
+
+impl Lease {
+    fn take(file: PathBuf) -> Self {
+        let lease = Self(file);
+        lease.renew();
+        lease
+    }
+
+    /// A lease that can't be written only means atm may remind the agent that it isn't watching.
+    fn renew(&self) {
+        if let Some(dir) = self.0.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let until = atm_common::time::real_now() + LEASE_SECS;
+        let _ = atm_common::home::write_text_atomic(&self.0, &until.to_string());
+    }
+}
+
+impl Drop for Lease {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Whether a lease reading `text` still holds at `now`.
+fn holds(text: Option<&str>, now: i64) -> bool {
+    text.and_then(|t| t.trim().parse::<i64>().ok())
+        .is_some_and(|until| until > now)
+}
+
+/// Whether an agent's reviews are watched (ATM-642): what `atm loop next --json` says as `watch`, and what atm reminds
+/// an agent of when they aren't.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct WatchState {
+    /// A watch of the agent's runs now.
+    pub running: bool,
+    /// Without one: the reviews of its work not decided yet (its own, or naming a task it worked), what a watch would
+    /// tell it about, by number.
+    pub open: Vec<String>,
+    /// Of those, the ones changed since its last watch stopped: a comment or a decision it hasn't been told. None
+    /// before its first watch (that one starts from then).
+    pub since_last_watch: Vec<String>,
+}
+
+/// The open reviews of `me`'s work among `headers`, and those of them changed after `last_watch` (ISO 8601).
+fn open_and_changed(
+    headers: &[ReviewHeader],
+    mine: &HashSet<String>,
+    me: &str,
+    last_watch: Option<&str>,
+) -> (Vec<String>, Vec<String>) {
+    let mut open: Vec<&ReviewHeader> = headers
+        .iter()
+        .filter(|h| {
+            matches!(
+                h.status,
+                Status::Waiting | Status::Live | Status::ChangesRequested
+            )
+        })
+        .filter(|h| {
+            h.author.as_ref().is_some_and(|a| a.0 == me) || h.tasks.iter().any(|t| mine.contains(t))
+        })
+        .collect();
+    open.sort_by_key(|h| h.number);
+    let changed = open
+        .iter()
+        .filter(|h| last_watch.is_some_and(|at| h.updated.as_str() > at))
+        .map(|h| h.reference.0.clone())
+        .collect();
+    (
+        open.iter().map(|h| h.reference.0.clone()).collect(),
+        changed,
+    )
+}
+
+/// Whether `me`'s reviews are watched now, and if not, what is open and what changed since its last watch. Cheap
+/// enough for every command: the reviews' headers and the task list, no diffs.
+///
+/// # Errors
+/// The reviews or the tasks can't be read.
+pub fn watch_state(project: &Project, me: &str) -> Result<WatchState> {
+    let root = project.root().map(Path::to_path_buf);
+    let lease = std::fs::read_to_string(lease_file(root.as_deref(), me)).ok();
+    if holds(lease.as_deref(), atm_common::time::real_now()) {
+        return Ok(WatchState {
+            running: true,
+            ..WatchState::default()
+        });
+    }
+    let headers = reviews::store(project)?.list_reviews(&ReviewFilter::default())?;
+    let mine: HashSet<String> = project
+        .store()
+        .list_tasks()?
+        .iter()
+        .filter(|t| {
+            ["started_by", "completed_by"]
+                .iter()
+                .any(|f| t.get(*f).and_then(Value::as_str) == Some(me))
+        })
+        .map(|t| project.task_key(t))
+        .collect();
+    // The last watch stopped when it last wrote its cursor
+    let last_watch = std::fs::metadata(cursor_file(root.as_deref(), me))
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| atm_common::time::format_iso(i64::try_from(d.as_secs()).unwrap_or(i64::MAX)));
+    let (open, since_last_watch) = open_and_changed(&headers, &mine, me, last_watch.as_deref());
+    Ok(WatchState {
+        running: false,
+        open,
+        since_last_watch,
+    })
+}
+
+/// When atm last reminded the agent, and what had changed then.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+struct Reminded {
+    at: i64,
+    changed: Vec<String>,
+}
+
+/// The reminder for `state` at `now`, after the one `last`: none while a watch runs or nothing of the agent's is
+/// open; else once every [`REMIND_EVERY_SECS`], and at once when a review changed that the last one didn't name.
+fn reminder_for(state: &WatchState, last: Option<&Reminded>, now: i64) -> Option<String> {
+    if state.running || state.open.is_empty() {
+        return None;
+    }
+    let new = state
+        .since_last_watch
+        .iter()
+        .any(|r| last.is_none_or(|l| !l.changed.contains(r)));
+    if !new && last.is_some_and(|l| now - l.at < REMIND_EVERY_SECS) {
+        return None;
+    }
+    let n = state.open.len();
+    let open = if n <= 3 {
+        state.open.join(", ")
+    } else {
+        format!("{}, … {}", state.open[..2].join(", "), state.open[n - 1])
+    };
+    let changed = if state.since_last_watch.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "; changed since your last watch: {}",
+            state.since_last_watch.join(", ")
+        )
+    };
+    Some(format!(
+        "you aren't watching your reviews ({n} open: {open}{changed}). Start `atm review watch --json` as a \
+         background command and read what it prints (atm docs reviews)"
+    ))
+}
+
+/// What atm says on stderr when agent `me` runs a command with no watch of its reviews running and one of them open
+/// (ATM-642), at most every ten minutes unless one changed; none otherwise. Never in the way of the command: a state
+/// that can't be read says nothing.
+#[must_use]
+pub fn reminder(project: &Project, me: &str) -> Option<String> {
+    if !is_agent(Some(me)) {
+        return None;
+    }
+    let state = watch_state(project, me).ok()?;
+    let file = reminded_file(project.root(), me);
+    let last: Option<Reminded> = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok());
+    let now = atm_common::time::real_now();
+    let line = reminder_for(&state, last.as_ref(), now)?;
+    let reminded = Reminded {
+        at: now,
+        changed: state.since_last_watch,
+    };
+    if let (Some(dir), Ok(text)) = (file.parent(), serde_json::to_string(&reminded)) {
+        let _ = std::fs::create_dir_all(dir);
+        let _ = atm_common::home::write_text_atomic(&file, &text);
+    }
+    Some(line)
 }
 
 #[cfg(test)]
@@ -830,5 +1034,137 @@ mod tests {
             )],
         );
         assert_eq!(about(&batch, &own), NO_TASK);
+    }
+
+    #[test]
+    fn a_watch_lease_holds_until_its_time_and_a_missing_or_broken_one_never() {
+        for (text, holds_now) in [
+            (Some("1000"), true),
+            (Some(" 1000\n"), true),
+            (Some("999"), false),
+            (Some("500"), false),
+            (Some("soon"), false),
+            (Some(""), false),
+            (None, false),
+        ] {
+            assert_eq!(holds(text, 999), holds_now, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_watch_writes_its_lease_while_it_runs_and_removes_it_when_it_ends() {
+        let dir = std::env::temp_dir().join(format!("atm-lease-{}", std::process::id()));
+        let file = dir.join("w.live");
+        {
+            let lease = Lease::take(file.clone());
+            let now = atm_common::time::real_now();
+            let text = std::fs::read_to_string(&file).unwrap();
+            assert!(holds(Some(&text), now));
+            assert!(
+                !holds(Some(&text), now + LEASE_SECS + 1),
+                "it runs out unrenewed"
+            );
+            lease.renew();
+            assert!(file.exists());
+        }
+        assert!(!file.exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn header(n: u32, status: Status, author: &str, tasks: &[&str], updated: &str) -> ReviewHeader {
+        let mut h = review(status, tasks).header;
+        h.number = n;
+        h.reference = ReviewRef(format!("CR-{n}"));
+        h.author = Some(Actor::from(author));
+        h.updated = updated.into();
+        h
+    }
+
+    #[test]
+    fn open_reviews_are_the_agents_own_or_naming_its_tasks_not_yet_decided_and_changed_ones_after_its_last_watch()
+     {
+        let at = "2026-11-19T05:00:00Z";
+        let headers = [
+            header(4, Status::Waiting, "claude:me", &[], "2026-11-19T05:30:00Z"),
+            header(
+                2,
+                Status::ChangesRequested,
+                "Hakan",
+                &["ATM-1"],
+                "2026-11-19T04:00:00Z",
+            ),
+            header(3, Status::Live, "claude:me", &[], at),
+            header(
+                5,
+                Status::Waiting,
+                "claude:other",
+                &["ATM-9"],
+                "2026-11-19T06:00:00Z",
+            ),
+            header(
+                6,
+                Status::Approved,
+                "claude:me",
+                &["ATM-1"],
+                "2026-11-19T06:00:00Z",
+            ),
+            header(7, Status::Closed, "claude:me", &[], "2026-11-19T06:00:00Z"),
+            header(8, Status::Draft, "claude:me", &[], "2026-11-19T06:00:00Z"),
+        ];
+        let mine: HashSet<String> = ["ATM-1".to_string()].into();
+        let (open, changed) = open_and_changed(&headers, &mine, "claude:me", Some(at));
+        assert_eq!(open, ["CR-2", "CR-3", "CR-4"]);
+        // Changed after the last watch only: CR-3 at that very time was told
+        assert_eq!(changed, ["CR-4"]);
+        // Before any watch, nothing counts as changed since one
+        let (_, none) = open_and_changed(&headers, &mine, "claude:me", None);
+        assert_eq!(none, Vec::<String>::new());
+        let (theirs, _) = open_and_changed(&headers, &HashSet::new(), "claude:other", Some(at));
+        assert_eq!(theirs, ["CR-5"]);
+    }
+
+    #[test]
+    fn the_reminder_is_said_only_without_a_watch_with_reviews_open_and_again_after_ten_minutes_or_a_change()
+     {
+        let state = |running: bool, open: &[&str], changed: &[&str]| WatchState {
+            running,
+            open: open.iter().map(|r| (*r).to_string()).collect(),
+            since_last_watch: changed.iter().map(|r| (*r).to_string()).collect(),
+        };
+        let at = |at: i64, changed: &[&str]| Reminded {
+            at,
+            changed: changed.iter().map(|r| (*r).to_string()).collect(),
+        };
+        let now = 10_000;
+        // A watch runs, or nothing of its is open: nothing said
+        assert_eq!(reminder_for(&state(true, &["CR-1"], &[]), None, now), None);
+        assert_eq!(reminder_for(&state(false, &[], &[]), None, now), None);
+        // Open, never said: said, naming them
+        let said = reminder_for(&state(false, &["CR-1", "CR-2"], &[]), None, now).unwrap();
+        assert!(said.contains("(2 open: CR-1, CR-2)"), "{said}");
+        assert!(said.contains("atm review watch --json"), "{said}");
+        // Said a minute ago, nothing new: quiet; ten minutes on, said again
+        let quiet = state(false, &["CR-1"], &["CR-1"]);
+        assert_eq!(
+            reminder_for(&quiet, Some(&at(now - 60, &["CR-1"])), now),
+            None
+        );
+        assert!(reminder_for(&quiet, Some(&at(now - REMIND_EVERY_SECS, &["CR-1"])), now).is_some());
+        // A review changed that the last one didn't name: said at once, naming it
+        let new = reminder_for(
+            &state(false, &["CR-1", "CR-2"], &["CR-2"]),
+            Some(&at(now - 60, &[])),
+            now,
+        )
+        .unwrap();
+        assert!(new.contains("changed since your last watch: CR-2"), "{new}");
+        // Many open: the first two and the last
+        let many = reminder_for(
+            &state(false, &["CR-1", "CR-2", "CR-3", "CR-9"], &[]),
+            None,
+            now,
+        )
+        .unwrap();
+        assert!(many.contains("(4 open: CR-1, CR-2, … CR-9)"), "{many}");
     }
 }

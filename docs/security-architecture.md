@@ -1182,6 +1182,17 @@ checklist:
   Docker (84; four regenerated: the standard page in both modes, which shows the Reviews tab, and the update notice in
   both modes, which shows the version).
 
+**Release 0.41.0 (the sprint Code reviews in the app; in progress, completed by the release task).** So far:
+
+- **Output agents act on, and skills changed (ATM-642):**
+  - `atm loop next --json` gains `watch` (`running`, and the open reviews of the agent's work by reference);
+  - any atm command an agent runs without a running review watch, while a review of its work is open, adds one line on stderr saying so (at most every ten minutes, at once when a review changed);
+  - `atm-loop-tasks` and `atm-do-task` tell the agent to start its watch when either says so, and to run it as a plain background command.
+
+  Written review:
+  - The line and the field carry atm's own data only: review references, never review or task text. They tell the agent to run one fixed atm command (`atm review watch --json`), which runs nothing and fetches nothing. No skill instruction runs anything new or reads outside text.
+  - The watch's lease is a file in the state folder (`watches/<hash>.live`: a number, the time it lasts to), read only to say whether a watch runs. One that can't be read or written only means the agent is reminded.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 644
+    "next_number": 647
   },
   "tasks": [
     {
@@ -15480,7 +15480,7 @@
       "description": "In the atm app, a review opens in a tab of its own (ATM-574): `/projects/<id>/reviews/CR-7`, shown by `App.svelte` under the sidebar and the title bar, its tab labelled by the review (`AppTitleBar.svelte`). Clicking another project in the sidebar while that tab is active behaves oddly (Hakan, 2026-11-17).\n\n## Change\n- Reproduce it in the app: open a review in its tab, click another project in the sidebar; note what the tab, its label, the page and the address do.\n- Decide with Hakan what should happen (the review's tab becomes that project's page, or the project opens in a tab of its own and the review's tab stays), then make it so; ⌘-click keeps opening a new tab.\n\n## Tests\nAn e2e test in `dashboard/tests/e2e/app.spec.ts` (the app's mocked IPC answers the review commands): the tabs, their labels and the page after the click.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/App.svelte",
@@ -15489,7 +15489,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-17T20:40:40Z",
-      "updated_at": "2026-11-19T02:39:01Z",
+      "updated_at": "2026-11-19T06:18:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 581,
@@ -15519,6 +15519,18 @@
           "kind": "review",
           "text": "CR-47: From a review, another project opens in the same tab",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:13:11Z",
+          "kind": "note",
+          "text": "Approved: in CR-47 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:46Z",
+          "kind": "outcome",
+          "text": "CR-47 approved by Hakan: from a review, another project opens in the same tab",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-19T02:16:46Z",
@@ -15531,7 +15543,15 @@
         }
       ],
       "review_requested_at": "2026-11-19T02:39:01Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-19T02:39:01Z",
+          "to": "2026-11-19T06:13:11Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:46Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1eb3e-a0c9-724d-a9e9-0fa4e8823e4f",
@@ -17214,7 +17234,7 @@
       "description": "Asked by Hakan on CR-8 (c1, 2026-11-18): a live review's page asks for the working copy every 2 s. Watch for changes instead where we can.\n\n## Change\n- **The app:** while a live review's page is shown, a watcher on the project folder, recursive (`atm_fs::watch::watch_tree`), leaving out `.git/` and anything git ignores. A settled burst (`SETTLE`, 300 ms) is pushed to the page the way the task and review stores' changes are (T-506), and the page asks for `view.now` once. No 2 s poll in the app.\n- **The browser:** `atm serve` has no push channel, so it keeps polling, but cheaply. `GET …/reviews/<CR>` for a live review's now view answers with an `ETag` from the working tree's state (the `git status` porcelain and the changed files' mtimes), and `If-None-Match` gets a `304` with no diff made. The page sends it.\n\n## Tests\n- atm-api: the ETag changes with a file written, stays the same otherwise, and gives a `304`.\n- The app: a write in the folder pushes a change; one in `.git/` or an ignored path doesn't.\n- E2e: in the app, a page following a live review asks again on the push and not on a timer.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/commands.rs",
@@ -17222,7 +17242,7 @@
         "dashboard/src/lib/shell/ReviewsTab.svelte"
       ],
       "created_at": "2026-11-18T06:10:57Z",
-      "updated_at": "2026-11-18T23:00:31Z",
+      "updated_at": "2026-11-19T06:18:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17243,15 +17263,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T23:00:31Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T23:00:31Z",
           "kind": "review",
           "text": "CR-33: Live reviews follow the working copy: the app's watch, the browser's 304s",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:04:54Z",
+          "kind": "note",
+          "text": "Approved: in CR-33 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:38Z",
+          "kind": "outcome",
+          "text": "CR-33 approved by Hakan: live reviews follow the working copy",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T23:00:31Z",
+          "to": "2026-11-19T06:04:54Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:38Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed4a-f344-72a8-bd26-cda2b43df547",
@@ -17405,7 +17445,7 @@
       "description": "Asked by Hakan (2026-11-18): with no filter or search, the reviews list is grouped, each group under its heading with its count. Within a group the order is as listed:\n\n1. **Waiting for your review:** open or live, you a reviewer (`needs_you`). The longest waiting on top, each showing how long it has waited (\"3 days\"), counted from its latest round, when it began waiting on you.\n2. **With open comments:** the rest that still have open comments, the latest activity first.\n3. **Sent back by you:** `changes_requested`, waiting on their author, the latest first.\n4. **Recently decided:** approved or closed in the last 5 days, the latest first.\n5. **Older:** approved or closed before that, folded by default (the fold remembered in the browser), the latest first.\n\nAny filter or search shows the plain list, as now. A review is in one group only, the first it fits. The 5 days are a constant (`RECENT_DAYS`).\n\n## Change\n- `atm-lib` `review_pages.rs` (the list): each entry also gets `waiting_since`, its latest round's time (and `decided_at` for an approved or closed one, if `updated` doesn't serve).\n- `dashboard/src/lib/reviews/`: a `groupReviews(entries, you, now)` function in `page.ts`, and the groups' headings, ages and fold in `ReviewList.svelte`.\n\n## Tests\n- Unit tests of `groupReviews`: each group, a review fitting two going to the first, the order within each, the 5-day edge, empty groups left out, and an age's wording.\n- Component: the headings and counts, *Older* folded and opened, and a filter showing the plain list.\n- E2e: the list's groups with the fixture's reviews.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/page.ts",
@@ -17413,9 +17453,9 @@
         "crates/atm-lib/src/review_pages.rs"
       ],
       "created_at": "2026-11-18T06:27:52Z",
-      "updated_at": "2026-11-19T06:02:30Z",
+      "updated_at": "2026-11-19T06:18:35Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17434,7 +17474,6 @@
         }
       ],
       "review_requested_at": "2026-11-18T23:28:16Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-18T23:28:16Z",
@@ -17447,9 +17486,23 @@
           "kind": "note",
           "text": "Approved: in CR-34 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:35Z",
+          "kind": "outcome",
+          "text": "CR-34 approved by Hakan: the reviews list in groups",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-19T06:02:30Z"
+      "reviews": [
+        {
+          "from": "2026-11-18T23:28:16Z",
+          "to": "2026-11-19T06:02:30Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:35Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed5d-a3c2-727b-8133-da0a14731104",
@@ -17462,7 +17515,7 @@
       "description": "Asked by Hakan (2026-11-18): a *Poke* button on a review, on its row in the list and on its page. A poke adds a comment about the whole review (on no line), so it reaches the review's agent through its review watch, and the agent answers.\n\n## Change\n- `atm-review`: a comment can be a poke (`kind: poke`), on the review as a whole, with an optional message. A poke never counts as an open comment, so it never stands in the way of an approval.\n- `atm-lib`, REST and CLI: `POST reviews/<CR>/pokes` `{body?}` (the same atm-lib call as `atm review poke CR-7 [--body '…']`). Only a person may poke, as for other changes from the page. Update `docs/multi-project-api.md` and `docs/security-architecture.md` for the new route.\n- `atm review watch`: a poke is reported like a comment, with `kind: \"poke\"`, about the work of the review's author (or the agent whose task it names).\n- `docs/agent/reviews.md` and the loop and do-task skills: on a poke, the agent looks at where the review stands (open comments it hasn't answered, a round it owes, a question for the user) and replies to the poke saying what it did or what it is waiting for.\n- Dashboard: *Poke* on a review's row (`ReviewList.svelte`) and in its page's top bar (`ReviewPage.svelte`), with an optional message. Pokes show in the review's conversation, marked as pokes.\n\n## Tests\n- Rules: a poke is a review-level comment, never open, and doesn't block an approval.\n- atm-lib, the CLI suite and REST: a poke is added and refused on a closed or approved review.\n- The watch test: a poke is reported with its kind.\n- Component and e2e: *Poke* from the list and from the page sends it, and the poke shows marked.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rules.rs",
@@ -17473,9 +17526,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T06:34:59Z",
-      "updated_at": "2026-11-19T06:01:41Z",
+      "updated_at": "2026-11-19T06:18:34Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17494,7 +17547,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T00:03:16Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T00:03:16Z",
@@ -17507,9 +17559,23 @@
           "kind": "note",
           "text": "Approved: in CR-37 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:34Z",
+          "kind": "outcome",
+          "text": "CR-37 approved by Hakan: poke a review",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-19T06:01:41Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T00:03:16Z",
+          "to": "2026-11-19T06:01:41Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:34Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed60-0e8c-7024-980b-34c02d4b6ad4",
@@ -17522,7 +17588,7 @@
       "description": "From CR-2 (Hakan, 2026-11-18, c1 and the step 2 agreed there): a reviewer writes comments and replies as drafts, and sends them together, as GitHub's *start a review*.\n\n## Change\n- **Writing a comment or a reply** offers **Add to my review** (a draft only you see), **Comment now** (sent at once, as today) and **Cancel**.\n- **The top button** counts your drafts and sends them with the summary: on an open review, *Comment*, *Request changes* or *Approve*; on a review sent back, *Publish comments*.\n- **Agents** (`atm review watch`, `wait`) hear nothing until the drafts are sent, so an agent never acts on half a review.\n- **Where drafts live:** in the user's own atm state (`ATM_STATE_DIR`), never in the review's folder, which is committed to git. Drafts are anchored like any comment and move with the code across rounds. Replies are drafts too.\n- Pending drafts show on the page, editable and removable; leaving the page keeps them.\n\n## Tests\n- atm-lib: a draft stored outside the review, sent with a decision (each kind), anchored after a new round, and never seen by the watch until it is sent.\n- REST and CLI: the drafts routes and commands; one user's drafts never shown to another.\n- Component and e2e: *Add to my review*, the count on the button, sending, and *Comment now* unchanged.\n- Update `docs/code-review-design.md`, `docs/multi-project-api.md` and `docs/security-architecture.md` (the new routes, and drafts kept out of the repository).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/",
@@ -17530,7 +17596,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T06:37:37Z",
-      "updated_at": "2026-11-19T00:50:08Z",
+      "updated_at": "2026-11-19T06:18:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17559,6 +17625,18 @@
           "kind": "review",
           "text": "CR-40: Drafts: comments and replies sent together with your decision",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:09:26Z",
+          "kind": "note",
+          "text": "Approved: in CR-40 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:41Z",
+          "kind": "outcome",
+          "text": "CR-40 approved by Hakan: draft comments sent with the decision",
+          "by": "claude:0f56a916"
         }
       ],
       "commit": "b072e1d255e3375453bad58256df5e46f6eb5ffc",
@@ -17578,7 +17656,15 @@
         }
       ],
       "review_requested_at": "2026-11-19T00:50:08Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-19T00:50:08Z",
+          "to": "2026-11-19T06:09:26Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:41Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed60-9f24-779f-97fd-ef0f481b8965",
@@ -17663,14 +17749,14 @@
       "description": "Asked by Hakan (2026-11-18): in a review's header, the Comments tab's count shows all comments. Show the open ones separately, in parentheses: *Comments 7 (2 open)*. With none open it stays *Comments 7*.\n\n## Change\n`dashboard/src/lib/reviews/ReviewPage.svelte`: the tab's count, from `chainCounts.open`, as a second, quieter badge, named for screen readers (\"7 comments, 2 open\"). The same on a review's row in the list (`ReviewList.svelte`, its `chains` and `open`), if it doesn't show them already.\n\n## Tests\nA component test: the total with the open count, none open without it, and the accessible name.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T06:44:26Z",
-      "updated_at": "2026-11-19T00:45:13Z",
+      "updated_at": "2026-11-19T06:18:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17691,15 +17777,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T00:45:13Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T00:45:13Z",
           "kind": "review",
           "text": "CR-38: The Comments tab shows its open comments beside the total",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:05:13Z",
+          "kind": "note",
+          "text": "Approved: in CR-38 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:40Z",
+          "kind": "outcome",
+          "text": "CR-38 approved by Hakan: the Comments tab shows its open comments",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T00:45:13Z",
+          "to": "2026-11-19T06:05:13Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:40Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed75-8819-7764-9e22-5884544ad5c7",
@@ -17882,7 +17988,7 @@
       "description": "Reported by Hakan (2026-11-18): in the document viewer, some table columns get so narrow that their text is squished, practically one letter a line, while other columns take most of the width.\n\n## Likely cause\n`.compmd` sets `overflow-wrap: anywhere` ([app.css](dashboard/src/app.css#L184)). With `anywhere`, a word may break between any two letters, so a cell's least width (its min-content) is one character. The browser's automatic table layout then gives a column with long text plenty of room, and shrinks the others to that least width. `.compmd-page table` is also `display: block` with `overflow-x: auto`, so the table never has to fit the width the way a table would. Check this first, in the browser, on a table that shows it.\n\n## Change\n- In tables, words don't break mid-word: `overflow-wrap: normal` (or `break-word`, which doesn't lower min-content) on `th` and `td`, so a column is at least as wide as its longest word. A long unbreakable value (a URL, a path, a hash) may still break, rather than widen the table without end.\n- **Widths from all the column's values, not the heading alone.** Start from even widths, and let a column with more text take more, in proportion to its content (the browser's auto layout does this once the least widths are right). If CSS alone can't give it, measure the cells' text once after rendering and set `col` widths. Keep it simple: CSS first.\n- A table wider than the viewer still scrolls sideways within it, it doesn't widen the panel.\n- The same in every document style (GitHub, Docs, Magazine, `src/themes/doc-styles.css`) and in task text, which shares `.compmd`.\n\nThe page styles are atm's, not CompMD's: the fix is in atm's CSS.\n\n## Tests\n- An e2e in the document viewer spec: a table of three columns (a short one, a word-per-cell one, a long sentence) at the viewer's width. No column is narrower than its longest word, and the long column wraps at word boundaries.\n- The same table in a narrow viewer: it scrolls sideways rather than squeezing columns to a letter.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/app.css",
@@ -17890,7 +17996,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-18T18:59:29Z",
-      "updated_at": "2026-11-19T00:48:02Z",
+      "updated_at": "2026-11-19T06:18:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17914,15 +18020,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T00:48:02Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T00:48:02Z",
           "kind": "review",
           "text": "CR-39: Table columns as wide as their words, never a letter a line",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:08:49Z",
+          "kind": "note",
+          "text": "Approved: in CR-39 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:40Z",
+          "kind": "outcome",
+          "text": "CR-39 approved by Hakan: table columns as wide as their words",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T00:48:02Z",
+          "to": "2026-11-19T06:08:49Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:40Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f008-9a9f-714f-8e7b-93ac77245ac5",
@@ -18010,7 +18136,7 @@
       "description": "Asked by Hakan (2026-11-18). Measured on CompMD's CR-1 (94 files): the Diffs tab keeps 16 to 32 CompMD renderers alive, but makes about 410 in one pass to the end and back, and the heap grows to about 110 MB with 117,000 DOM nodes alive while the page has about 4,000 elements. Renderers that are gone stay in memory. What is measured so far, and how: [docs/diff-viewer-profile.md](docs/diff-viewer-profile.md).\n\n## What this task delivers, in order\n1. **The analysis** in `docs/diff-viewer-profile.md`, completed:\n   - what holds the destroyed renderers (a heap snapshot's retainers of the detached `.compmd` trees);\n   - CompMD's own share of a renderer's cost, against the diff rows';\n   - the latency of one renderer from mount to drawn;\n   - the rendered Markdown view (`RenderedSide`, the document processed once per part);\n   - the same in WebKit, the app's engine (`tests/e2e/real-review.spec.ts` measures a real review in both).\n2. **The options, agreed with Hakan.** Write them in the document with what each buys and costs, then block this task on the user (`blocked --on user`) until he chooses. Don't build before that.\n3. **The optimizations chosen,** in atm: the document viewer, `DiffView.svelte`, `RenderedSide.svelte`, `CompMd.svelte` (and `ReviewFile.svelte` where it decides what is made), each with the numbers before and after in the document.\n4. **What only CompMD can change,** as tasks in CompMD's project (`CMD-…`), with the numbers. Possibly a leak in its view, drawing one text in ranges with gaps (close to CMD-250), or a processed tree several views share. The CompMD boundary holds: atm shows, CompMD renders.\n\n## Tests\n- A check that keeps the memory bounded: the long-review spec (`reviews.spec.ts`) after passes to the end and back, the DOM nodes alive (DevTools' `Performance.getMetrics` after a forced garbage collection) within a bound set from the measurements, not every renderer ever made.\n- The long-review spec's budgets still met, and met 10 times in a row with the CPU slowed 4× (as ATM-615).\n- Each optimization's own unit or e2e tests.\n\nNo budget is raised to make a test pass (AGENTS.md).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/diff-viewer-profile.md",
@@ -18021,7 +18147,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T19:29:53Z",
-      "updated_at": "2026-11-18T23:36:39Z",
+      "updated_at": "2026-11-19T06:18:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18067,6 +18193,18 @@
           "kind": "review",
           "text": "CR-35: Diffs tab memory bounded: the leak fixed, content-visibility dropped, a bound in the spec",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:05:02Z",
+          "kind": "note",
+          "text": "Approved: in CR-35 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:39Z",
+          "kind": "outcome",
+          "text": "CR-35 approved by Hakan: the Diffs tab memory bounded",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-18T23:28:19Z",
@@ -18078,7 +18216,15 @@
         }
       ],
       "review_requested_at": "2026-11-18T23:36:39Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-18T23:36:39Z",
+          "to": "2026-11-19T06:05:02Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:39Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f02d-58a8-71cb-88c1-a94acbdbc50a",
@@ -18492,7 +18638,7 @@
       "description": "Reported by Hakan (2026-11-19, the app from `cargo tauri dev`): writing a comment on the **Rendered** view of a Markdown file, the comment box and the rendered document mix up: the document is drawn over the box.\n\n## Leads\n- Stacking: the rendered side's marks (`.diff-block-mark`, absolutely placed), the `doc-sheet`'s own stacking context, CompMD's page (`.compmd-page`, possibly positioned, or a frame for a component), the sticky card header (`z-index: 2`) and the fold rows (`z-index: 1`, ATM-590). The composer needs to sit above the document it comments on.\n- Where the composer is placed in the rendered view: inside the part, between parts, or absolutely at the picked block; a box placed in the flow of a part CompMD owns would be redrawn or overlapped by it.\n\nReproduce first: an e2e in `reviews.spec.ts` that picks a block in the Rendered view and checks that the composer is the topmost element at its centre (`document.elementFromPoint`).\n\n## Tests\nThat e2e, in a split and a single-side rendered view, light and dark.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
@@ -18500,7 +18646,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T21:09:58Z",
-      "updated_at": "2026-11-18T21:47:38Z",
+      "updated_at": "2026-11-19T06:18:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18524,15 +18670,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T21:47:38Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T21:47:38Z",
           "kind": "review",
           "text": "CR-29: Rendered view: the comment box opens under the text selected",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:04:11Z",
+          "kind": "note",
+          "text": "Approved: in CR-29 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:36Z",
+          "kind": "outcome",
+          "text": "CR-29 approved by Hakan: the comment box opens under the selected text",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T21:47:38Z",
+          "to": "2026-11-19T06:04:11Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:36Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f085-5db5-7457-84cd-64c4ee4ab844",
@@ -18583,14 +18749,14 @@
       "description": "Found on 2026-11-19 (ATM-625's full functional run): `performance.spec.ts` › *performance with 500 tasks* › *switching tabs* failed once, the Graph tab at **247 ms** against the 200 ms budget, while the whole suite ran on its workers. Alone, three runs in a row: Graph 111, 142 and 124 ms; the other tabs 27 to 111 ms. The change being tested (ATM-625, `CompMd.svelte`) doesn't touch the Graph tab.\n\nDon't raise the budget or just rerun it (AGENTS.md). As ATM-615 did for the long review:\n- Reproduce it with the CPU slowed (`Emulation.setCPUThrottlingRate`, 2× and 4×) or with the suite's workers.\n- Find what the Graph switch spends its time on with 500 tasks (layout, the minimap, drawing the edges, the auto-fit), with a trace or long animation frames.\n- Fix the cause, and say in the test what it now measures.\n\n## Tests\nThe spec passes 10 times in a row with the CPU slowed 2×, and in the full functional run.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/graph/DepGraph.svelte",
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T21:33:36Z",
-      "updated_at": "2026-11-19T00:58:46Z",
+      "updated_at": "2026-11-19T06:18:42Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18646,6 +18812,18 @@
           "kind": "review",
           "text": "CR-42: The Graph draws labels only where they can be read",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:09:49Z",
+          "kind": "note",
+          "text": "Approved: in CR-42 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:42Z",
+          "kind": "outcome",
+          "text": "CR-42 approved by Hakan: the Graph draws labels only where they can be read",
+          "by": "claude:0f56a916"
         }
       ],
       "blocks": [
@@ -18665,7 +18843,15 @@
         }
       ],
       "review_requested_at": "2026-11-19T00:58:46Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-19T00:58:46Z",
+          "to": "2026-11-19T06:09:49Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:42Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
@@ -18715,7 +18901,7 @@
       "description": "Reported by Hakan (2026-11-19), from an agent in CompMD: its claim lapsed while the checks ran, so the task went back to to do. `atm review create --task` then opened CR-6 without complaint, but the task stayed in to do. The review and the task disagreed, and the agent had to take the task to in progress, then into review by hand.\n\n## Change\nWhat `atm review create --task <key>` does for each state of the task:\n- **in progress, claimed by the author:** into review, as now;\n- **to do, after the author's own claim lapsed, and no one claimed it since:** into review too, with a note that the claim had lapsed;\n- **claimed by another agent, done, skipped, already in review with another open review, or blocked:** refuse and write nothing, saying why and what to run. No review is created.\n\nThe whole command succeeds or changes nothing: never a review on disk beside a task that didn't move. Update `atm docs reviews` with the rule.\n\n## Tests\nCLI scenarios for each row above, each checking both the review folder and the task's status.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/review.rs",
@@ -18723,7 +18909,7 @@
         "tests/scripts/scenarios"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-18T22:47:10Z",
+      "updated_at": "2026-11-19T06:18:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18748,15 +18934,35 @@
         }
       ],
       "review_requested_at": "2026-11-18T22:47:10Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-18T22:47:10Z",
           "kind": "review",
           "text": "CR-32: Opening a review moves its task into review, or refuses",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:04:31Z",
+          "kind": "note",
+          "text": "Approved: in CR-32 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:37Z",
+          "kind": "outcome",
+          "text": "CR-32 approved by Hakan: opening a review moves its task into review, or refuses",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-18T22:47:10Z",
+          "to": "2026-11-19T06:04:31Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:37Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542d0d2f9a0d",
@@ -19030,7 +19236,7 @@
       "description": "ADR-009 (approved in CR-30): without provisional keys, the merge driver can't tell a final number from a provisional one, and it no longer needs to.\n\n## Change (`crates/atm-db/src/jsongit/merge.rs`)\n- **Two different tasks (different UUIDs) with the same number:** one moves to the next free number (above both sides' numbers and `meta.next_number`) and keeps its old key in `aliases`. A clash never stops a merge; the case that stops it today (\"two final numbers\") goes.\n- **Which one moves (ADR-009):** the task **not on the base branch**, checked from git when the merge runs. When neither is, or git can't tell, the **newer** one (its UUIDv7's time) moves.\n- **`meta.next_number`** merges as the larger of the two, past the moved number.\n- **What moved is reported once:** the merge leaves a record that the next atm command prints (\"ATM-538 is now ATM-641 (both branches made ATM-538)\"), or `atm db migrate` does. Decide which in the task and write it in `atm docs tasks`.\n- References are UUIDs, so nothing else is rewritten. Text written outside the file (commits, notes, reviews) finds the task by its alias.\n\n## Tests (`merge/tests.rs`, and a CLI test with two branches)\n- Each side adds one task with the same number: both kept, the one not on the base branch moved, its alias set, `next_number` past both.\n- Neither on the base branch: the newer one moves.\n- Several clashes in one merge; a clash with an archived task's number; the same task (same UUID) changed on both sides, which isn't a clash.\n- After the merge, `atm task details ATM-538` finds the moved task by its alias and says it moved.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-23995623df35"
       ],
@@ -19041,9 +19247,9 @@
         "docs/agent/tasks.md"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-19T06:01:31Z",
+      "updated_at": "2026-11-19T06:18:33Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19065,7 +19271,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T02:03:48Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T02:03:48Z",
@@ -19078,9 +19283,23 @@
           "kind": "note",
           "text": "Approved: in CR-45 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:33Z",
+          "kind": "outcome",
+          "text": "CR-45 approved by Hakan: a number clash moves the task not on the base branch",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-19T06:01:31Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T02:03:48Z",
+          "to": "2026-11-19T06:01:31Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:33Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-239c2914aed8",
@@ -19173,7 +19392,7 @@
       "description": "Asked by Hakan (2026-11-19): comments and replies on a review should be editable, with an edit button.\n\natm already lets a comment's author change its text: `PATCH …/reviews/<CR>/comments/<c>` with `{body}` (docs/multi-project-api.md §2.9; `edit`, the comment author's own), the app's `update_review_comment`, and `atm review edit`. The dashboard has neither the call nor a button.\n\n## Change\n- `dashboard/src/lib/api/review-changes.ts`: `editComment(project, review, comment, body)`, as `resolveComment` does it (the REST route with the page's token, or the app's command).\n- `ChainBox.svelte`: on each comment and reply **you wrote** (its `author` is you, the page's `you`), an *Edit* button. It turns the text into a box with the text in it, *Save* and *Cancel* (Escape cancels, ⌘ Enter saves); saved, the page shows the new text; refused, the box stays with the reason, as the comment box does. Others' comments have no button. Not on an ended review (approved or closed), which takes no change.\n- Show that a comment was edited (\"edited\", with when, as the title) if the review's data says so; if it doesn't, say so in the task's outcome rather than adding a field here.\n- Wired through `ReviewPage`, `ReviewFile` and `DiffView` (`onedit`) as `onreply` and `onresolve` are, and in the Comments tab.\n\n## Tests\n- Unit: `editComment`'s request (route, method, body, token) and a refusal's message.\n- Component (`ChainBox`): the button only on your own comment and reply; Edit, change, Save sends it; Cancel and Escape keep the old text; a refusal keeps the box with why; none on an ended review.\n- E2e in `reviews.spec.ts`: edit your own reply in place; another's comment has no Edit.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/review-changes.ts",
@@ -19183,7 +19402,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-18T23:03:01Z",
-      "updated_at": "2026-11-19T01:02:20Z",
+      "updated_at": "2026-11-19T06:18:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19207,15 +19426,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T01:02:20Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T01:02:20Z",
           "kind": "review",
           "text": "CR-43: Edit your own comment or reply",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:10:00Z",
+          "kind": "note",
+          "text": "Approved: in CR-43 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:43Z",
+          "kind": "outcome",
+          "text": "CR-43 approved by Hakan: edit your own comment or reply",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T01:02:20Z",
+          "to": "2026-11-19T06:10:00Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:43Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f24e-19bc-7082-a5ba-c91cd59ed569",
@@ -19228,14 +19467,14 @@
       "description": "Hakan (2026-11-19): when the title bar's tabs are scrolled to the right and some are closed, the scrollable part gets smaller.\n\n## Cause\nWebKit (the app's webview) sizes the strip from its content:\n- the scroller by its tabs less what is scrolled off;\n- the box around it by the arrows' and the + button's glyphs, not their flex basis.\n\nSo with tabs closed while scrolled, the strip was narrower than the room it has, and two tabs that fit still showed ‹ ›. Chromium uses the flex basis, so the e2e suite never saw it.\n\n## Fix\nIn `ui/TitleBarTabs.svelte`, the scroller fills a box of the tabs' own width (count × tab width) that shrinks to its room, and the arrows and + get real widths.\n\n## Tests\nThe ATM-605 e2e in `app.spec.ts` closes the last tabs one by one from the scrolled end. While they overflow, the strip keeps its room with the last tab at its end; once they fit, there are no arrows and nothing is scrolled. Run in WebKit by hand, since the suite is Chromium only.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/ui/TitleBarTabs.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-19T05:36:07Z",
-      "updated_at": "2026-11-19T05:37:06Z",
+      "updated_at": "2026-11-19T06:18:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19259,15 +19498,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T05:37:06Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T05:37:06Z",
           "kind": "review",
           "text": "CR-48: The tab strip keeps its room after tabs closed while scrolled (WebKit)",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:12:09Z",
+          "kind": "note",
+          "text": "Approved: in CR-48 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:45Z",
+          "kind": "outcome",
+          "text": "CR-48 approved by Hakan: the tab strip keeps its room (WebKit)",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T05:37:06Z",
+          "to": "2026-11-19T06:12:09Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:45Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f24e-19bc-7082-a5ba-c91d7da464ff",
@@ -19280,16 +19539,16 @@
       "description": "Hakan (2026-11-19): with many tasks and reviews needing you, the *N need you* popup grows without bound.\n\nIt should be a small popup that scrolls, with no scroll bar, like the dashboard's other scrolling lists (`HintScroll`: *▲ N more* / *▼ N more* at the cut edges).\n\n## Change\n`shell/NeedsYouMenu.svelte`:\n- its rows go in a `HintScroll`, the popup's height capped;\n- the keyboard (arrows) still moves through every row, scrolling the one with focus into view.\n\n## Tests\n- **e2e:** a long list is capped in height, shows *▼ N more*, scrolls, and keeps every row reachable.\n- **Unit:** a short list has no hints.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/NeedsYouMenu.svelte",
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-19T05:36:07Z",
-      "updated_at": "2026-11-19T06:00:25Z",
+      "updated_at": "2026-11-19T06:18:33Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19311,7 +19570,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T05:43:45Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T05:43:45Z",
@@ -19324,9 +19582,23 @@
           "kind": "note",
           "text": "Approved: in CR-49 (round 2)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:33Z",
+          "kind": "outcome",
+          "text": "CR-49 approved by Hakan: a long need-you list scrolls in a small popup; a task in review through its CR is listed once",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-19T06:00:25Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T05:43:45Z",
+          "to": "2026-11-19T06:00:25Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:33Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f255-436f-729a-858d-8ae2e822b720",
@@ -19411,14 +19683,14 @@
       "description": "Hakan (2026-11-19): a poke shows as a comment with no Resolve button, which is right. But Approve was then disabled with *1 comment is still open*.\n\n## Cause\nThe dashboard's `isResolved` (`reviews/page.ts`) took a chain as resolved only when every top-level comment's `resolved` is `true`. A poke's is `null` (it has no box, ATM-611), so its chain counted as open. atm's own rule (`open_comments`: a box unticked) never counted it, so only the dashboard blocked.\n\n## Fix\n`isOpen`: a box unticked, as atm counts it. `isResolved`: a box ticked and none open. A chain of pokes is neither: it shows under *All* only, and Approve stays pressable.\n\n## Tests\n- **Unit:** a table of chains (open, resolved, a poke, a poke with an open or resolved comment, none); the filter, with a poke's chain in *All* only.\n- **e2e:** a review with a resolved comment and an answered poke: no Resolve on the poke, no open count, Approve pressable and sent.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/page.ts",
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-19T06:03:16Z",
-      "updated_at": "2026-11-19T06:03:21Z",
+      "updated_at": "2026-11-19T06:18:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19433,7 +19705,153 @@
       ],
       "number": 643,
       "started_at": "2026-11-19T06:03:21Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "41c67d0f46d257bc522c42f0ac3f19766163b6fd",
+      "code_reviews": [
+        {
+          "id": "01a1f267-543e-74c0-a057-1de50508c394",
+          "ref": "CR-50"
+        }
+      ],
+      "review_requested_at": "2026-11-19T06:03:40Z",
+      "notes": [
+        {
+          "at": "2026-11-19T06:03:40Z",
+          "kind": "review",
+          "text": "CR-50: A poke never keeps a review from an approval",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T06:10:21Z",
+          "kind": "note",
+          "text": "Approved: in CR-50 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T06:18:44Z",
+          "kind": "outcome",
+          "text": "CR-50 approved by Hakan: a poke never keeps a review from an approval",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T06:03:40Z",
+          "to": "2026-11-19T06:10:21Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T06:18:44Z",
+      "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f27b-e1ea-7055-b85f-05c2f70102e3",
+      "name": "Review page: after the last file in the tree is clicked, the hover highlight lags seconds behind the pointer",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "performance"
+      ],
+      "description": "Hakan (2026-11-19), in the app, on CompMD's CR-7 (a spike on code highlighting's cost in WebKit): click the last file in the file tree, then hover over the diff's left side. The highlight follows the pointer seconds late.\n\n## Measured so far (not reproduced)\nOn the current build, in Playwright's Chromium and WebKit, against a scratch server with CompMD added:\n- after the click, frames stay under 36 ms and the page goes quiet within 4 s;\n- a mouse sweep keeps up;\n- the + follows the pointer within two frames over a 600-line file (Split, and Unified wrapped).\n\nSo the difference is the app's webview, its build or its live-review watch.\n\n## To do\n- Profile in the app itself (Safari's Web Inspector on the app's webview).\n- Find what keeps the main thread busy after the jump, and fix it.\n- Keep the pointer-sweep performance test (`reviews.spec.ts`) as the guard.\n\nSuspect: `DiffCode`'s `MutationObserver` watches its whole subtree, so each hover's + button re-measures the run (a forced layout, and every line's top when wrapped).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/DiffCode.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-19T06:26:07Z",
+      "updated_at": "2026-11-19T06:26:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T06:26:07Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 644
+    },
+    {
+      "id": "01a1f27b-e1ea-7055-b85f-05c3a5615d43",
+      "name": "Rendered Markdown in a review: the Document Viewer's page reused, whole (not one page), as wide as the viewer's",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan (2026-11-19), in the app, on CompMD's CR-7 README.md, rendered:\n- it shows only the first page, with no way to scroll further;\n- the last line is drawn outside the page;\n- the page looks narrower than the viewer's.\n\nHe asks that it be the Document Viewer's own component, not a copy.\n\n## Found\n- **A copy:** `reviews/RenderedSide.svelte` re-creates the viewer's page from its CSS classes (`.doc-sheet`, `.doc-page`, the gutter) with its own placement code and height rule (`aspect-ratio` with `min-height: auto`, ATM-592).\n- **Narrower:** Split halves the room, and `RenderedSide` adds its own 52 px left margin for the gutter.\n- **Not reproduced:** on the current build in Playwright's WebKit and Chromium, the README renders whole (820 px by 3,466 px, the last line inside). So the app's build or webview differs.\n\n## Change\nTake the viewer's page out of `DocumentViewer.svelte` as one component: the page on its desk, its paper by the document style, its CompMD, its gutter and its line placement. The viewer and the review's rendered sides both use it; the review adds only its change marks, folds and selection. One height rule, one width, one gutter.\n\n## Tests\n- e2e in both views: a document of several pages is drawn whole, its last line inside the page, as wide as the viewer's page in Unified.\n- The viewer's own specs unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/documents/DocumentViewer.svelte",
+        "dashboard/src/lib/reviews/RenderedSide.svelte"
+      ],
+      "created_at": "2026-11-19T06:26:07Z",
+      "updated_at": "2026-11-19T06:26:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T06:26:07Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 645
+    },
+    {
+      "id": "01a1f294-fa17-77be-b5a2-8b151fd09746",
+      "name": "One CompMD runtime per document in the dashboard, and a review that restyles nothing while it is only scrolled past",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "performance"
+      ],
+      "description": "Hakan (2026-11-19). The cause of ATM-644's lag, found in his app recording on CompMD's CR-7:\n- each CompMD page assigns `document.adoptedStyleSheets` and forces `getComputedStyle` on open and on every render;\n- each assignment or forced read is a full restyle of the document (~1 s in WKWebView), then a repaint of every tile of the review's ~526,000 px.\n\nCounted in WebKit: opening CR-7 and jumping to its last file made 26 sheet assignments, 188 computed-style reads and 17 `replaceSync` calls. CompMD's side (a shared sheet, no forced reads, per-document listeners) is a CompMD task Hakan takes there. This is atm's side.\n\n## Change\n1. **One seam.** `lib/compmd-runtime.ts` owns CompMD for the document:\n   - one sandbox (`createSandbox` once, not per `<CompMd>`);\n   - one `MutationObserver` on `<html>` telling every view its scheme (today each `<CompMd>` has its own).\n   `CompMd.svelte` opens and destroys its view through it, so the shared sheet and `scheme` are passed in one place once CompMD takes them.\n2. **Jump hygiene.** A jump to a file (the tree, n / p, a link):\n   - doesn't make the cards it passes over;\n   - doesn't give back made cards it scrolls by;\n   - waits until the scroll has settled at the target before making anything but the file gone to.\n   (`ReviewFile.svelte`'s near and far observers, `holdNearCards`.)\n3. **Inert placeholders.** A card not made yet (its estimated height) isn't restyled or repainted with the rest of the review: it is contained (`contain` on the placeholder) without bringing back ATM-620's leak (`content-visibility` was dropped there).\n4. **Fewer opens per file**, where it is free: no CompMD page for a run whose card isn't made, and none re-opened for a run whose text didn't change.\n\n## Tests\n- **WebKit and Chromium performance e2e** on a review shaped as CR-7 (15 files, one very long, ~500,000 px of placeholders). During a jump to the last file, count `adoptedStyleSheets` assignments, `getComputedStyle` calls and CompMD pages opened, and assert each is bounded: at most the target's own runs. Frames stay under budget during and after the jump, and the pointer sweep (`the + follows the pointer…`) stays at two frames per step.\n- **Unit:** the runtime module (one sandbox; scheme changes reach every view; destroy).\n- **Existing:** the review and document specs unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/compmd-runtime.ts",
+        "dashboard/src/lib/documents/CompMd.svelte",
+        "dashboard/src/lib/reviews/ReviewFile.svelte",
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-19T06:53:32Z",
+      "updated_at": "2026-11-19T06:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T06:53:32Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "01a1f27b-e1ea-7055-b85f-05c2f70102e3",
+        "01a1f27b-e1ea-7055-b85f-05c3a5615d43"
+      ],
+      "number": 646
     }
   ]
 }

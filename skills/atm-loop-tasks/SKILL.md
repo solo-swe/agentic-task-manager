@@ -146,7 +146,9 @@ worked), with the review and the task (or `null`), and each decision on such a r
 `approved`, `changes_requested` or `closed`). Step 7 answers what it printed. **Whenever the watch ends** (its time is
 up, or your harness stopped it), start it again at once: it first prints what came while none ran, so nothing is
 missed. Where a background command reports only when it ends, run `atm review watch --json --once` instead, and start
-it again after each time it reports.
+it again after each time it reports. Run it as a plain background command, never under a monitor with a short cap.
+Every `atm loop next --json` says whether it runs (`watch.running`); when it is `false`, start the watch before
+the task. An atm line on stderr saying you aren't watching your reviews means the same.
 
 ```
 completed_count = 0

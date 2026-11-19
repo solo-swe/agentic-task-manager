@@ -1195,4 +1195,57 @@ describe('agents listening (ATM-567)', () => {
       removeDir(root);
     }
   });
+
+  // ATM-642 (Hakan): an agent's watch stopped and comments, a poke and approvals went unseen. atm knows whether a
+  // watch runs, says so in `loop next --json`, and reminds the agent on stderr while a review of its work is open
+  test('an agent not watching its open reviews is told so: on stderr, once a while; loop next says it; never a person', async () => {
+    const root = makeProject({
+      commit: true,
+      files: {
+        '.agentic-task-manager/tasks.json': {
+          meta: { project: 'Watch' },
+          tasks: [
+            {
+              id: 'T-1',
+              name: 'One',
+              type: 'feature',
+              status: 'in_progress',
+              started_by: AGENT.ATM_AGENT,
+              files: ['a.txt'],
+            },
+            { id: 'T-2', name: 'Two', type: 'feature', status: 'todo' },
+          ],
+        },
+        'a.txt': 'a\n',
+      },
+    });
+    const reminded = (r) => /you aren't watching your reviews/.test(r.stderr);
+    let watching;
+    try {
+      // Nothing of its open: nothing said
+      assert.equal(reminded(ok(['task', 'list'], root, AGENT)), false);
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      // Its review open (by the command itself), no watch: said at once, after the command's own output, on stderr
+      // only, naming it
+      const first = ok(['review', 'create', '--title', 'Watch me', '--task', 'T-1', '--uncommitted'], root, AGENT);
+      assert.ok(reminded(first), first.stderr);
+      assert.match(first.stderr, /1 open: CR-1/);
+      assert.doesNotMatch(first.stdout, /watching/);
+      // Said a moment ago, nothing new: quiet
+      assert.equal(reminded(ok(['task', 'list'], root, AGENT)), false);
+      // A person is never told; nor a command run as someone else
+      assert.equal(reminded(ok(['task', 'list'], root, HAKAN)), false);
+      // loop next --json says it, its JSON clean
+      const next = JSON.parse(ok(['loop', 'next', '--json'], root, AGENT).stdout);
+      assert.deepEqual(next.watch, { running: false, open: ['CR-1'], since_last_watch: [] });
+      // A watch running: loop next says so, and nothing is said
+      watching = background(['review', 'watch', '--json', '--timeout', '60s'], root, AGENT);
+      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
+      const live = JSON.parse(ok(['loop', 'next', '--json'], root, AGENT).stdout);
+      assert.deepEqual(live.watch, { running: true, open: [], since_last_watch: [] });
+    } finally {
+      watching?.stop();
+      removeDir(root);
+    }
+  });
 });
