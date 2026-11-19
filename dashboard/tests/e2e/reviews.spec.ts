@@ -1011,12 +1011,13 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toHaveCount(0);
     await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
-    // A page on a desk, as the document viewer's: at least a letter page's height for its width, all shown; the
-    // numbers in its margin, clear of the text
+    // The document viewer's own page on a desk (ATM-645: DocumentPage), all shown, its last text inside it; the numbers
+    // in its margin, clear of the text
     await expect(newSide).toHaveClass(/doc-sheet/);
-    await expect(newSide.locator('.rendered-fold')).toHaveCount(0);
+    await expect(newSide.locator('.doc-fold')).toHaveCount(0);
     const sheet = (await newSide.locator('.doc-page').boundingBox())!;
-    expect(sheet.height).toBeGreaterThanOrEqual(Math.floor((sheet.width * 11) / 8.5) - 1);
+    const last = (await newSide.locator('.compmd-page > :last-child').boundingBox())!;
+    expect(last.y + last.height).toBeLessThanOrEqual(sheet.y + sheet.height);
     const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
     const heading = (await newSide.locator('.compmd-page h1').boundingBox())!;
     expect(number.x + number.width).toBeLessThanOrEqual(heading.x);
@@ -1071,6 +1072,22 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(number).toHaveClass(/marked/);
     const numberBox = (await number.boundingBox())!;
     expect(Math.abs(numberBox.y - text.y)).toBeLessThan(text.height);
+    // ATM-645: in Unified, as wide as the document viewer's page (820 px where the desk has room), its margin the
+    // viewer's: one component
+    await page.getByRole('button', { name: 'Unified' }).click();
+    const one = view.locator('.diff-pane.diff-new');
+    const widths = await one.evaluate((desk) => {
+      const page = desk.querySelector<HTMLElement>('.doc-page')!;
+      const style = getComputedStyle(desk);
+      const room = desk.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      return {
+        page: Math.round(page.getBoundingClientRect().width),
+        room: Math.round(room),
+        max: getComputedStyle(page).maxWidth,
+      };
+    });
+    expect(widths.max).toBe('820px');
+    expect(widths.page).toBe(Math.min(820, widths.room));
   });
 
   // ATM-627 (Hakan, the app): writing a comment on the rendered view, the document was drawn over the comment box
@@ -1162,7 +1179,7 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(newSide.locator('.doc-gutter-lines [data-line="37"]')).toBeVisible();
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toHaveCount(0);
     // A fold before and one after, each saying how many lines it holds
-    const folds = newSide.locator('.rendered-fold');
+    const folds = newSide.locator('.doc-fold');
     // (the document's 79 lines: lines 1–36 before, 43–79 after)
     await expect(folds).toHaveText(['Show 36 unchanged lines', 'Show 37 unchanged lines']);
     // Opened, the fold's blocks join the change's, numbered from line 1
@@ -1170,9 +1187,9 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(paragraphs.first()).toHaveText('Paragraph 1.');
     await expect(paragraphs).toHaveCount(21);
     await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
-    await expect(newSide.locator('.rendered-fold')).toHaveText(['Show 37 unchanged lines']);
+    await expect(newSide.locator('.doc-fold')).toHaveText(['Show 37 unchanged lines']);
     // The other side folds the same way, on its own
-    await expect(view.locator('.diff-pane.diff-old .rendered-fold')).toHaveCount(2);
+    await expect(view.locator('.diff-pane.diff-old .doc-fold')).toHaveCount(2);
   });
 
   test('the + on a line, dragged over three lines, opens the comment under them; sent as the user with the page’s token', async ({
