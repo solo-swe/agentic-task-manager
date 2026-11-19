@@ -1270,6 +1270,10 @@
         "goal": "Reviews reach the sidebar, the tasks and the needs-you counts; live reviews; agents as reviewers designed; tests cover every case",
         "release": "0.41.0",
         "start": "2026-11-17T22:16:26Z"
+      },
+      {
+        "id": "Task&review state machine",
+        "state": "planned"
       }
     ],
     "releases": [
@@ -1612,7 +1616,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 647
+    "next_number": 648
   },
   "tasks": [
     {
@@ -18760,16 +18764,21 @@
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T21:17:14Z",
-      "updated_at": "2026-11-18T21:17:14Z",
+      "updated_at": "2026-11-19T10:01:16Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
-          "from": "2026-11-18T21:17:14Z"
+          "from": "2026-11-18T21:17:14Z",
+          "to": "2026-11-19T10:01:16Z"
+        },
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T10:01:16Z"
         }
       ],
-      "sprint": "Code reviews in the app",
+      "sprint": "Task&review state machine",
       "components": [
         "dashboard",
         "docs"
@@ -19109,7 +19118,7 @@
       "description": "Hakan (2026-11-19): the rules for how a task's status and its reviews change together are spread across commands and keep breaking. Today's three bugs: a review's approval lost when the task's key changed (ATM-630), a review opened beside a task that didn't move (ATM-631), and a lapsed claim leaving a task half in review (ATM-632). They should be one explicit state machine.\n\nDesigned **with Hakan**: propose it, agree on it, then build it.\n\n## Design (a document in `docs/`, reviewed with Hakan as a CR)\n- **States:** a task's status kinds (`todo`, `active`, `review`, `blocked`, `done`, `skipped`), each with its claim (none, held, lapsed) and its reviews (none, open, rounds, changes requested, approved, closed, live).\n- **Events:** claim, a claim lapsing, release, commit, review created, a round added, a comment, request changes, approve, reject, close, push or merge, the task's number moved at a merge (ADR-009: its old key an alias), and a user's answer.\n- **The table:** for each state and event, the next state or a refusal with its message. No event leaves a task and its review disagreeing.\n- A diagram of it (Mermaid), and where it lives in the layers: one module in `atm-lib` that every command and the dashboard's API go through.\n- Today's rules mapped onto it: what changes, and what an existing project's tasks and reviews look like after the move (a migration if any).\n\n## Build (after the design is agreed)\n- One module holds the transitions; the CLI commands, the REST routes and the app call it, and none sets a status on its own.\n- Unit tests: a table of every state × event, each with its expected next state or refusal, including the three bugs above as cases.\n- The agent docs (`atm docs states`, `atm docs reviews`) are written from the same table.\n\nMay be split into design and build tasks once the design is agreed.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
         "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
@@ -19123,23 +19132,45 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-19T09:04:16Z",
+      "updated_at": "2026-11-19T10:01:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
-          "from": "2026-11-18T21:55:02Z"
+          "from": "2026-11-18T21:55:02Z",
+          "to": "2026-11-19T10:01:16Z"
+        },
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T10:01:16Z"
         }
       ],
-      "sprint": "Code reviews in the app",
+      "sprint": "Task&review state machine",
       "with": "user",
       "number": 633,
       "components": [
         "docs"
       ],
       "started_at": "2026-11-19T09:04:16Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "5b7902a42ee5c423c80696780d718d36c4803949",
+      "code_reviews": [
+        {
+          "id": "01a1f314-9d5d-75ea-b4d4-1165e7bd350b",
+          "ref": "CR-58"
+        }
+      ],
+      "review_requested_at": "2026-11-19T09:12:57Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T09:12:57Z",
+          "kind": "review",
+          "text": "CR-58: One state machine for tasks and their reviews: the design",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f0b9-f451-744a-956a-23995623df35",
@@ -20148,6 +20179,42 @@
       ],
       "completed_at": "2026-11-19T07:55:03Z",
       "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f342-c952-756b-8edc-1a88366fa1cb",
+      "name": "Release 0.41.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "release"
+      ],
+      "description": "Ship the sprint *Code reviews in the app* as 0.41.0, as AGENTS.md's *Versions* and *CI* sections describe. Work is on `dev/0.41.0`.\n\n## Change\n- **The version:** `Cargo.toml`'s `[workspace.package]` to `0.41.0` (the dashboard's meta tag and the app follow it); `Cargo.lock` updated by the build.\n- **`CHANGELOG.md`:** the `[0.41.0]` entry, dated the release day, every change of the sprint's tasks with its commands, flags and fields (the reviews in the sidebar and needs-you counts, live reviews, drafts, pokes, the watch's lease and reminder, keys plain from creation and the merge driver's renumbering, reviews finding tasks by old keys, the review badge's status, the diff viewer's performance work, the timed e2e project, and the rest).\n- **`WHATS-NEW.md`:** 3–6 short plain-language bullets about what a user notices, from the changelog; no flags or file names.\n- **Screenshots:** regenerate the Linux baselines this sprint changed (`pnpm run test:e2e:visual:update`, Docker), delete any whose test is gone, look at one, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): finish the 0.41.0 entry. The skills changed (ATM-611, ATM-635, ATM-642): a written review of the skills' changes replaces the live sandbox run (no API key). Check the new entry points and fields are in it (pokes, drafts, the watch's lease file, `review_statuses`, reading a review's commit from git).\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPush with `/atm-push`: it opens the release PR from `dev/0.41.0` to `main` and watches CI. Merging, tagging and publishing are Hakan's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-19T10:03:22Z",
+      "updated_at": "2026-11-19T10:03:30Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T10:03:22Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "number": 647,
+      "started_at": "2026-11-19T10:03:30Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

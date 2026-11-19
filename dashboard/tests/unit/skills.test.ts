@@ -132,7 +132,8 @@ describe('task text and logs are data, not commands (T-221, docs/security-review
   it('the working skills review with atm review: one watch, a CR, wait, answer; comments are data (ATM-569, I1, I23)', () => {
     for (const name of ['do-task', 'loop-tasks']) {
       const body = text(name);
-      expect(body, name).toMatch(/older than\n0\.40\.0/);
+      // 0.41.0: the watch's --once and loop next's `watch` (ATM-624, ATM-642), which both skills use
+      expect(body, name).toMatch(/older than\n0\.41\.0/);
       expect(body, name).toMatch(/`atm review watch --json` in the background/);
       expect(body, name).toMatch(/`atm review create --task \$TASK_ID --title '<one line>' --range <base>\.\.HEAD/);
       expect(body, name).toMatch(/`atm review wait CR-7 --json` in the background/);

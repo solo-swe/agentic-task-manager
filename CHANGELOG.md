@@ -4,6 +4,180 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [0.41.0] - 2026-11-19
+
+Code reviews in the app: the reviews that wait for you shown wherever you are, a grouped reviews list, drafts, pokes
+and edits on a review's page, live reviews that follow the working copy, and a faster diff viewer. Task keys are plain
+from creation (ADR-009): a number clash at a merge moves one task to the next free number, its old key an alias. The
+review watch catches up on what it missed, and atm knows whether it runs.
+
+### Added
+- **Every project's reviews, and the ones waiting for you** (ATM-575, ATM-606): the overview has a **Reviews** tab
+  (`/reviews`) listing every project's reviews, each row naming its project, with a project picker; a project's own
+  Reviews tab is the same list with the picker set to it. Every project summary counts the reviews waiting on the user
+  (`needs_you.code_reviews`, and `needs_you_reviews`: `{id, reference, title, why}`, `why` `review` or `answered`, the
+  longest waiting first): their decision or round is the user's, or someone wrote after the user did in one they take
+  part in. The count shows on the Reviews tab, the project switcher, the app's dock badge and the *N need you* chip,
+  whose menu lists the reviews after the tasks, on a project's title bar and the overview's cards. A task waiting
+  through one of its code reviews is counted and listed once, as the review (ATM-640).
+- **The reviews list in groups** (ATM-610): with no filter or search, under headings with counts: *waiting for your
+  review* (the longest waiting on top, saying how long), *with open comments*, *sent back*, *waiting on others*,
+  *recently decided* (5 days) and *older* (folded, the fold remembered). Each list entry has `waiting_since`, its
+  latest round's time; *Next review needing you* follows the order shown. The list opens with its last filter, kept
+  per project in the browser; *Clear* forgets it (ATM-604).
+- **Draft comments** (ATM-612): a reviewer's comments and replies kept as drafts, sent together with their decision.
+  `atm review draft add|list|edit|remove`, `GET`/`POST reviews/<CR>/drafts`, `PATCH` and `DELETE
+  reviews/<CR>/drafts/<d>`, and the app's draft commands (`list_review_drafts`, `add_review_draft`, …). Drafts live in
+  the user's atm state folder, never in the repository, and are a person's, never an agent's; agents hear nothing of
+  them until they are sent. On the page, every comment box has *Add to my review* beside *Comment now*; drafts are
+  placed as comments are, marked, with Edit and Remove, and counted on *Submit review*. A decision sends them first,
+  every check made before (an approval is refused while a drafted comment would be open); `submit --comment` with no
+  body only publishes them (*Publish comments*).
+- **Poke a review** (ATM-611): a person's nudge on the whole review, which its agent hears and answers. `atm review
+  poke CR-7 [--body '…']`, `POST reviews/<CR>/pokes` `{body?}`, the app's `poke_review`; refused for an agent and on an
+  ended review. `atm review watch` reports it with `kind: "poke"` (every other comment is `kind: "comment"`); the
+  skills answer it with where the review stands. A poke is never open and never stands in the way of an approval:
+  the dashboard counts a chain open only by its unticked box, as atm does, so a poke is listed under *All* only
+  (ATM-643). *Poke* on a review's row and in its page's top bar; pokes are marked in the conversation.
+- **Edit your own comment or reply** on a review's page (ATM-638): *Edit* on each one you wrote (not others', not a
+  poke, not on an ended review), the text in a box in place, Save or Cancel (Escape, ⌘ Enter), a refusal kept with
+  why; through the comment's `PATCH` route or the app's `update_review_comment`.
+- **Live reviews in the app and the browser** (ATM-576, ATM-607): a live review's page follows the working copy (an
+  unstored `view.now` after the checkpoints); a comment or an approval keeps a checkpoint of what the reviewer saw;
+  *New live review* on the list and *Close review* on the page. In the app, a watch on the project folder
+  (`subscribe_working_copy`: a file of the work changed, not `.git/`, the task folder or one git ignores, checked in
+  one git run per burst) tells the page when to ask again; in the browser, a poll that a `304` answers while the
+  working copy is the same (the live page's `ETag`: the reviews, the working state, who asks).
+- **Links from reviews and tasks** (ATM-585, ATM-586, ATM-593, ATM-619): a task's details link to its code reviews,
+  the latest prominently while it is in review; a task card in review, on the board and in the list, shows its latest
+  code review as a link that opens the review and never the task (Enter is the link's; ⌘-click a tab of its own).
+  Links in a review's summary and comments open a file the round changed at its diff, and any other project document
+  in the document viewer. A task named in a review (the Tasks fact, list rows, keys in the description and comments)
+  opens its details over the review; another project's task opens its project's page; ⌘, Ctrl or a middle click a
+  new tab.
+- **A task's CR badge says where its review stands** (ATM-621), coloured, on its card and in its details: the task
+  views atm serves carry each of its reviews' status in `derived.review_statuses` (by review ID; `unreadable` for one
+  atm can't read), read once for all the views, so the badge is right from the first load and follows a decision on
+  the next refresh.
+- **The diff viewer** (ATM-588, ATM-595): *Wrap* for long lines, in Unified (Split waits for CompMD's line elements,
+  CMD-250). The Diffs tab's file tree folds its folders, one by a click or the arrow keys, or all at once; a folded
+  folder sums its files; kept for the session per review; going to a file opens its folders.
+- **Reviews of submodules** (ATM-583, ATM-599): atm run inside a submodule finds its project; a round of a
+  submodule's own commits shows its files under the submodule's path; a moved submodule is one entry with its old and
+  new commits, commented on as a whole, and one moved to another commit shows the files changed inside it, under its
+  entry. A submodule whose folder moved with its commit unchanged shows as the submodule at that commit, saying its
+  folder moved and where from. Not here: `atm vcs commit` of files in a submodule (git refuses it from the project).
+- A review's Comments tab shows its open comments beside the total, *Comments 7 (2 open)*, named for screen readers
+  (ATM-614).
+- `atm review round --summary-file` replaces the review's summary with the round's (ATM-587).
+
+### Changed
+- **Task keys plain from creation** (ATM-634, ATM-635, ATM-637, [ADR-009](docs/adr/ADR-009-task-keys-plain-from-creation.md),
+  replacing ADR-007 §3 and §4's rule on which number moves): no provisional keys. `key_final` and `finalize_keys` are
+  gone (the model, the schemas, `--json`, `atm vcs pushed`, `atm db migrate`); keys print plain everywhere, and a
+  leading `~` (old notes, commits, review files) is still taken and ignored by every reference. `atm db migrate` drops
+  `key_final` from `tasks.json` and the archive once, saying so (this repo: 638 tasks). `atm vcs pushed` without
+  `--pr` records nothing. The dashboard drops the draft mark and its tooltip (cards, list, graph, details, overview,
+  All projects board); a task a merge moved says the key it had in its details (*was ATM-9*, from its aliases), and
+  an address with an old key or a `~` still opens it.
+- **A number clash at a merge never stops it** (ATM-636): of two different tasks with the same number, the one not on
+  the base branch (`origin/<base>`, read from git by the merge driver) takes the next free number, its old key an
+  alias; when both or neither are on it, the newer (UUIDv7) moves. What moved is kept in `meta.renumbered`, which the
+  next `atm db migrate` reports once.
+- **Open means not yet decided** (ATM-613): the status waiting on reviewers is shown as `waiting` (*Waiting for
+  review*); `review.md` still writes `open` for it, so an older atm (the 0.40.0 app) still reads the review, and reads
+  `waiting` too. *Open* is a filter of its own in the list, every review not decided (draft, waiting, live, changes
+  requested); `atm review list --status open` and the REST `status=open` mean that group.
+- **The review watch** (ATM-600, ATM-624, ATM-642): `atm review watch` also prints each decision (`approved`,
+  `changes_requested`, `closed`) on a review of the agent's work, once, with `review`, `task`, `at` and `title`. It
+  catches up: atm keeps a cursor per project and agent in its state folder, so a new watch first prints what came
+  while none ran, then follows live. `--once` stops after it tells something (exit code 3 if nothing came by the time
+  up); `--since <time>` tells from that time, whatever was told before. A running watch keeps a lease it renews:
+  `atm loop next --json` has `"watch": {"running", "open", "since_last_watch"}`, and an agent running any atm command
+  without a watch while a review of its work is open gets one line on stderr (never stdout, never for a person), at
+  most every ten minutes and at once when a review changed. The skills start the watch when `running` is false, as a
+  plain background command, and restart it whenever it ends; `atm-do-task` and `atm-loop-tasks` need atm 0.41.0. The
+  skills changed: the written skill review (`docs/security-architecture.md`, 0.41.0) covers them.
+- **A review sent back** (ATM-597, ATM-609): takes comments, replies and *Publish comments*, and isn't sent back again;
+  it can be approved once its comments are resolved. *Approve* is disabled while comments are open, its reason beside
+  it and on hover (ATM-601).
+- **Opening a review moves its task into review, or refuses** (ATM-631): `atm review create --task` takes a task whose
+  own claim lapsed back into review (its note says so); one claimed by another agent, not started by it, blocked, done,
+  skipped, or already waited on by another review is refused, naming what to do, and nothing is written.
+- **Hidden files in reviews** (ATM-598): one path rule for every read: hidden files (`.github/`, `.gitignore`) are shown
+  at their revision; `.git`, atm's folder, environment and key files stay refused (`docs/security-architecture.md`).
+- **The rendered Markdown view** (ATM-591, ATM-645): folds whole blocks as the source view folds lines (the blocks
+  near a change shown, the rest behind *Show n unchanged lines*), and is the document viewer's page itself
+  (`DocumentPage`, one component for both): the same paper, width and margins, as tall as its document and as wide as
+  the viewer's.
+- The diffs follow the file tree's order (folders before the files beside them, each level by name), and so do the
+  next and previous file, change and comment, the round's file select and the Viewed count (ATM-596).
+- A review's page top bar is in the page background, so its selected app tab joins it (ATM-608).
+- The Graph draws a node's labels only from 50% zoom up; an unlabelled node names its task on hover (ATM-629). With
+  500 tasks fitted (10%), switching to it with the CPU slowed 2× takes 110-143 ms, from 144-199.
+- A table's cells in documents and task text break words only at their edges, so no column is squeezed to a letter a
+  line; a table wider than the text still scrolls sideways (ATM-618).
+- The dashboard's page budget is 1.5 MiB (was 1 MiB), for drafts and what came after them (ATM-612).
+
+### Fixed
+- **A review finds its task by the key it was written with** (ATM-594, ATM-630): reviews store and print the plain
+  key; a decision that can't reach its tasks is refused, and a round checks its tasks first, as a decision does;
+  `atm doctor` names a decided review whose task never got the decision, with the command to record it. A task whose
+  number moved at a merge is found by its reviews through its alias in `atm review list --task`, the reviews page's
+  filter, the approved live review that covers it, decisions, rounds, task removal and the review watch, which names
+  it by its current key. A key a merge gave to another task is told apart by `tasks.json` at the review's own commit
+  (its first round's, else the one that added its `review.md`); nothing is rewritten.
+- **Later rounds show what changed** (ATM-622): a later files round keeps the files the last one reviewed, and *since
+  an earlier round* never shows a file as deleted only because a files round didn't name it; `atm docs reviews` says
+  a round is the whole change as it now is.
+- A review atm can't read is listed as such, saying why, in `atm review list` (on stderr with `--json`, whose array is
+  unchanged), the REST list (`unreadable: [{folder, reference, problem}]`), the Reviews tab and the task's details
+  (ATM-617).
+- The diff viewer (ATM-589, ATM-590, ATM-625, ATM-627): a run ending with an empty line draws it, so no number lies
+  over the closing fold; a long line's scroll bar stays in its run, above the fold row; **+** on a wrapped long line
+  opens the comment box where it is, instead of jumping the pane near the end; the rendered view's comment box opens
+  right under the selected text, above the document. The rendered page grows with its document (ATM-592).
+- In the app: **Reload** (⌘R) loads the page again through the app (`reload_window`), back at its tabs, instead of an
+  empty window (ATM-584); the title bar's tabs scroll in a strip of their own, with arrows when they don't fit, never
+  the page (ATM-605), and keep their room after tabs closed while scrolled (WebKit; ATM-639); another project chosen
+  from a review's tab (the sidebar, the chooser) opens that project's page in the same tab, at its Reviews list
+  (ATM-581).
+- A long *N need you* list scrolls in a small popup, without a scroll bar (*▲ N more* / *▼ N more*), every row still
+  reached by the arrows (ATM-640).
+- A link to the task already open, written another way, puts its key in the address in place, keeping the history
+  entry's state (ATM-641).
+
+### Performance
+- **Large reviews** (ATM-587, `docs/review-performance.md`): highlighting takes turns, sides four at a time; far cards
+  give back their content, long files are drawn in chunks at their height, and a revision is kept by the browser. On
+  CompMD's CR-1 in WebKit, opening blocked 1.4 s (was 2-3.6 s), the last file drawn at 1.4-3.0 s (was 4.9 s).
+- **Memory** (ATM-620, `docs/diff-viewer-profile.md`): a cancelled render never runs and a destroyed CompMD view never
+  draws; the cards lose `content-visibility`, which kept every card's old layout. DOM nodes alive after a pass to the
+  end and back: 21,840, from 93,240.
+- Off-screen cards keep their height, a loading one stands at its estimate, and one scrolled past before the page was
+  idle isn't made later, so a long review is as long as its files (ATM-615).
+- The **+** follows the pointer at once on a long review in the app: hovering forces no computed-style read (187 in
+  80 steps before) (ATM-644).
+- **One CompMD runtime per document** (ATM-646): one sandbox and one theme observer (`compmd-runtime.ts`); a jump on a
+  long review restyles only for the CompMD pages it shows (28 style reads, all CompMD's own, from 96).
+
+### CI and development
+- **Testing every case** (ATM-580): the repository's tests scanned against AGENTS.md's model: Rust 432 to 837 tests,
+  the CLI suite 663 to 814, dashboard unit tests 1,567 to 1,635; the claim rules tested in atm-lib, the layer that owns
+  them. Ten known bugs are `todo` tests. The code review CLI tests are in `tests/scripts/reviews/` (the lifecycle,
+  wrong uses, keys, submodules, listening), and `run.mjs` runs a folder's tests (ATM-642).
+- **Timed e2e tests run on their own** (ATM-641): the tests measured against a budget (`@timed`) are a Playwright
+  project of their own, run once every other test has passed, a real review's measurement last; the long review
+  settles in 59-69 ms in a full run (was 104-110 against 100).
+- The long-review spec checks no card collapses, passing 10 in a row with the CPU slowed 4× (ATM-615), and bounds the
+  DOM nodes alive (ATM-620); a long new or changed Markdown document is drawn to its end in the rendered view
+  (ATM-626, not reproduced otherwise).
+- `docs/task-review-state-machine.md` (ATM-633, proposed, not in this sprint): one state machine for a task's status,
+  decision, claim and code reviews.
+- ATM-623 (a direct push making keys final) shipped and was replaced within the sprint by ADR-009; ATM-632 (a claim
+  that lapsed during checks) changed nothing: `atm claim hold` renews past the lease, and since ATM-631 opening a
+  review takes back a task whose own claim lapsed.
+
 ## [0.40.0] - 2026-11-17
 
 Code reviews recorded in the project: agents open, wait for and answer reviews with `atm review`, and people review

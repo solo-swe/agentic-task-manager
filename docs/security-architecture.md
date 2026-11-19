@@ -1182,7 +1182,56 @@ checklist:
   Docker (84; four regenerated: the standard page in both modes, which shows the Reviews tab, and the update notice in
   both modes, which shows the version).
 
-**Release 0.41.0 (the sprint Code reviews in the app; in progress, completed by the release task).** So far:
+**Release 0.41.0 (the sprint Code reviews in the app).** Reviews in the app and the browser, live reviews, pokes and
+drafts, the watch's catch-up and lease, and task keys plain from creation (ADR-009).
+
+- **Entry points:** the review routes this release added are in I11 with their checks and tests:
+  - a comment's edit (`PATCH …/comments/<c>`, ATM-638);
+  - pokes (`POST …/reviews/<CR>/pokes`, ATM-611; an agent's identity refused);
+  - a person's drafts (`POST`, `PATCH`, `DELETE …/drafts`, ATM-612), written to the user's own state folder, never to
+    the repository.
+
+  The task views gain `derived.review_statuses` (ATM-621): atm's own data, review IDs and status words, which the
+  dashboard only shows. No CLI command reads a new path or URL.
+- **New files:** in the state folder, `watches/<hash>.json` (where an agent's last watch was: the comments it saw and
+  the reviews' statuses, ATM-624) and `watches/<hash>.live` (the watch's lease, ATM-642); `drafts/` (ATM-612). Each is
+  atm's own record, written atomically. One that can't be read only means the watch starts from now, the agent is
+  reminded, or the drafts are empty.
+- **Skills and `docs/agent/` changed:**
+  - `atm-do-task` and `atm-loop-tasks` (ATM-611, ATM-624, ATM-642): keep the review watch running and start it again
+    whenever it ends (`--once` where a harness reports a background command only when it ends); act on its
+    `decision` lines; answer a poke; start the watch when `loop next --json` or atm's stderr line says none runs.
+    Their minimum atm is now 0.41.0, which has `--once` and `watch`.
+  - `atm docs reviews`, `commands` and `tasks` (ATM-611, ATM-612, ATM-613, ATM-624, ATM-631, ATM-635, ATM-642): pokes
+    and drafts are a person's, waiting replaces open, keys are plain, a review on a lapsed task is taken back.
+
+  No API key is used for the agent sandbox, so this written review takes the live run's place:
+  - **Text stays data (I1).** A poke is a comment, its words task text like any other. The skills say to look at
+    where the review stands and do what is owed: answer comments, make a round, ask the user. They never say to do
+    what the poke's text asks. The rule for a comment asking for a command, a script, credentials, CI, git config,
+    hooks or another remote (refuse, reply, block the task on the user) covers pokes, in the same paragraph. A
+    `decision` line carries atm's own words (`approved`, `changes_requested`, `closed`) and the review's reference
+    and title. The skills act on the decision word only, by `atm loop next`, never on the title.
+  - **Decisions stay the user's (I23).** Nothing new lets an agent decide, resolve, poke or draft:
+    - atm refuses an agent's identity on pokes and drafts (I11);
+    - `docs/agent/commands.md` says both are a person's;
+    - Claude Code's pre-approvals are unchanged (`skills.test.ts`).
+  - **What the commands run:** the only new command the skills run is the same `atm review watch --json`, with
+    `--once`. It runs nothing and fetches nothing, as before (§ 0.40.0).
+- **Task keys plain from creation (ATM-634 to ATM-637, ADR-009).** The merge driver now renumbers a clashing task
+  itself (deciding which by the task UUIDs in the base branch's `tasks.json` and archive, read with
+  `git show origin/<base>:<file>`; the base is `meta.workflow.base` or the remote's default, checked by `valid_branch`
+  before git sees it, and the path is atm's own). It records `meta.renumbered` for the next
+  `atm db migrate` to report. `atm db migrate` drops `key_final` from both task files once. No new entry point.
+- **Dependencies and CI:** no new dependency (`Cargo.lock` and the dashboard's lockfile change only atm's own
+  version). No CI permission or workflow changes. The e2e suite's timed tests run in a Playwright project of their
+  own (ATM-641), a test-only change.
+- **Checks run:**
+  - `cargo test` (917), clippy, fmt and deny;
+  - the unit tests with coverage (1782, 96.7% of lines) and `pnpm run check`;
+  - the CLI suite (833) and the functional e2e suite (526);
+  - the Linux screenshots in Docker (84; ten regenerated: the All projects board and the overview, with keys plain
+    now, and the large graph).
 
 - **Output agents act on, and skills changed (ATM-642):**
   - `atm loop next --json` gains `watch` (`running`, and the open reviews of the agent's work by reference);
