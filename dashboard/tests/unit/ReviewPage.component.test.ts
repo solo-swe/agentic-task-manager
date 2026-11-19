@@ -655,6 +655,19 @@ describe('ReviewPage: Comments', () => {
   });
 });
 
+describe('ReviewPage: the Comments tab’s counts (ATM-614)', () => {
+  it('the total, and the open ones beside it, named for screen readers; none open, the total alone', async () => {
+    const { rerender } = show(
+      data({ chains: [chain('t1', 'src/a.rs'), chain('t2', null), chain('t3', 'src/b.rs', {}, true)] }),
+    );
+    expect(tab('Comments: 3, 2 open')).toHaveTextContent(/Comments\s*3\s*\(2 open\)/);
+    await rerender({ page: data({ chains: [chain('t3', 'src/b.rs', {}, true)] }) });
+    const comments = tab(/Comments/);
+    expect(comments).not.toHaveAttribute('aria-label');
+    expect(comments).toHaveTextContent(/^Comments\s*1$/);
+  });
+});
+
 describe('ReviewPage: drafts (ATM-612)', () => {
   const drafted = (id: string, path: string | null = 'src/a.rs'): PlacedDraft => ({
     id,

@@ -511,9 +511,10 @@
   });
 
   const tabs = $derived([
-    { id: 'overview', label: 'Overview', icon: 'info', count: null },
-    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length },
-    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length },
+    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0 },
+    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length, open: 0 },
+    // The open ones beside the total (ATM-614): *Comments 7 (2 open)*
+    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length, open: chainCounts.open },
   ] as const);
 </script>
 
@@ -688,10 +689,15 @@
     <div class="review-top-row review-bar">
       <div class="review-tabs" role="tablist" aria-label="Review">
         {#each tabs as t (t.id)}
-          <button role="tab" id="review-tab-{t.id}" aria-selected={tab === t.id} onclick={() => (tab = t.id)}
+          <button
+            role="tab"
+            id="review-tab-{t.id}"
+            aria-selected={tab === t.id}
+            onclick={() => (tab = t.id)}
+            aria-label={t.open ? `${t.label}: ${t.count}, ${t.open} open` : undefined}
             ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
                 class="review-count">{t.count}</span
-              >{/if}</button
+              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}</button
           >
         {/each}
       </div>
@@ -1325,6 +1331,11 @@
     font-size: var(--text-xs);
     font-weight: 600;
     text-align: center;
+  }
+  /* The open comments beside the total, quieter (ATM-614) */
+  .review-count-open {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
   }
   /* The Diffs tab's tools */
   .review-tools {

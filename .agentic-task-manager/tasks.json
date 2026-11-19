@@ -17694,7 +17694,7 @@
       "description": "From CR-2 (Hakan, 2026-11-18, c1 and the step 2 agreed there): a reviewer writes comments and replies as drafts, and sends them together, as GitHub's *start a review*.\n\n## Change\n- **Writing a comment or a reply** offers **Add to my review** (a draft only you see), **Comment now** (sent at once, as today) and **Cancel**.\n- **The top button** counts your drafts and sends them with the summary: on an open review, *Comment*, *Request changes* or *Approve*; on a review sent back, *Publish comments*.\n- **Agents** (`atm review watch`, `wait`) hear nothing until the drafts are sent, so an agent never acts on half a review.\n- **Where drafts live:** in the user's own atm state (`ATM_STATE_DIR`), never in the review's folder, which is committed to git. Drafts are anchored like any comment and move with the code across rounds. Replies are drafts too.\n- Pending drafts show on the page, editable and removable; leaving the page keeps them.\n\n## Tests\n- atm-lib: a draft stored outside the review, sent with a decision (each kind), anchored after a new round, and never seen by the watch until it is sent.\n- REST and CLI: the drafts routes and commands; one user's drafts never shown to another.\n- Component and e2e: *Add to my review*, the count on the button, sending, and *Comment now* unchanged.\n- Update `docs/code-review-design.md`, `docs/multi-project-api.md` and `docs/security-architecture.md` (the new routes, and drafts kept out of the repository).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/",
@@ -17702,7 +17702,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T06:37:37Z",
-      "updated_at": "2026-11-19T00:07:21Z",
+      "updated_at": "2026-11-19T00:43:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17723,7 +17723,13 @@
         }
       ],
       "started_at": "2026-11-19T00:07:21Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "6e75ac511fde7d6e1adb8b4716895275cde416a9",
+      "waiting_on": "user",
+      "questions": [
+        "Drafts are built and committed (6e75ac5); every suite passes but one: the page is now 1,054,578 bytes against the 1 MiB guardrail (drafts added about 7 KB; the build was about 1 KB under before). Every raise so far was yours. Raise it (to 1.1 MiB, say, recorded in guardrails.spec.ts as before), or have me trim about 6 KB elsewhere first (ATM-342-style: find what grew) before I open the review?"
+      ],
+      "blocked_at": "2026-11-19T00:43:16Z"
     },
     {
       "id": "01a1ed60-9f24-779f-97fd-ef0f481b8965",
@@ -17809,16 +17815,16 @@
       "description": "Asked by Hakan (2026-11-18): in a review's header, the Comments tab's count shows all comments. Show the open ones separately, in parentheses: *Comments 7 (2 open)*. With none open it stays *Comments 7*.\n\n## Change\n`dashboard/src/lib/reviews/ReviewPage.svelte`: the tab's count, from `chainCounts.open`, as a second, quieter badge, named for screen readers (\"7 comments, 2 open\"). The same on a review's row in the list (`ReviewList.svelte`, its `chains` and `open`), if it doesn't show them already.\n\n## Tests\nA component test: the total with the open count, none open without it, and the accessible name.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T06:44:26Z",
-      "updated_at": "2026-11-18T06:44:26Z",
+      "updated_at": "2026-11-19T00:43:20Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17827,7 +17833,9 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 614,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-19T00:43:20Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed75-8819-7764-9e22-5884544ad5c7",
