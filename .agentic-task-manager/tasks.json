@@ -1406,7 +1406,9 @@
       {
         "id": "Task&review state machine",
         "state": "active",
-        "start": "2026-11-19T16:18:53Z"
+        "start": "2026-11-19T16:18:53Z",
+        "goal": "One state machine for tasks, claims and reviews, live reviews included, in atm-lib; the CLI, the API and the dashboard ask it",
+        "release": "0.42.0"
       }
     ],
     "releases": [
@@ -1676,6 +1678,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/56"
         },
         "released_at": "2026-11-19T14:50:42Z"
+      },
+      {
+        "id": "0.42.0",
+        "state": "planned"
       }
     ],
     "migrations": [
