@@ -1147,6 +1147,124 @@ test.describe('the diff viewer on a review’s page', () => {
       expect(centre.y - (text.y + text.height)).toBeLessThan(200);
     });
 
+  // ATM-650 (Hakan): the rendered view takes comments as the source view does: the + of the line under the pointer
+  test('Rendered: the + of a block under the pointer, clicked, opens the comment box under it, on its lines', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+    const view = diffOf(page, 'docs/plan.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    // No + until the pointer is over a block; then the + of that block's line, beside its number
+    await expect(newSide.locator('.diff-plus')).toHaveCount(0);
+    const heading = newSide.locator('.compmd-page h1');
+    const text = (await heading.boundingBox())!;
+    await page.mouse.move(text.x + 20, text.y + text.height / 2);
+    const plus = newSide.getByRole('button', { name: 'Comment on line 1' });
+    await expect(plus).toBeVisible();
+    await expect(newSide.locator('.diff-plus')).toHaveCount(1);
+    const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
+    const plusBox = (await plus.boundingBox())!;
+    expect(plusBox.x).toBeGreaterThanOrEqual(number.x + number.width);
+    expect(plusBox.x + plusBox.width).toBeLessThanOrEqual(text.x);
+    expect(Math.abs(plusBox.y + plusBox.height / 2 - (number.y + number.height / 2))).toBeLessThan(2);
+    // A blank line between blocks has no +
+    const blank = (await newSide.locator('.doc-gutter-lines [data-line="2"]').boundingBox())!;
+    await page.mouse.move(text.x + 20, blank.y + blank.height / 2);
+    await expect(newSide.locator('.diff-plus')).toHaveCount(0);
+    // Clicked: the box, on line 1, right under the heading; the + stays while the comment is written
+    await page.mouse.move(text.x + 20, text.y + text.height / 2);
+    await plus.click();
+    const composer = view.locator('.diff-composer');
+    await expect(composer).toContainText('Line 1');
+    await expect(page.getByRole('textbox', { name: 'Comment on line 1' })).toBeFocused();
+    const box = (await composer.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(text.y + text.height - 1);
+    expect(box.y - (text.y + text.height)).toBeLessThan(40);
+    await page.mouse.move(0, 0);
+    await expect(newSide.locator('.diff-plus.held')).toHaveCount(1);
+    await expect(newSide.locator('.diff-block-mark.diff-picked')).not.toHaveCount(0);
+    // Its number, pressed, picks it too
+    await composer.getByRole('button', { name: 'Cancel' }).click();
+    await expect(composer).toHaveCount(0);
+    await newSide.locator('.doc-gutter-lines [data-line="3"]').click();
+    await expect(view.locator('.diff-composer')).toContainText('Line 3');
+  });
+
+  test('Rendered: the + dragged over two blocks picks their lines; the comment is sent on them and shows in the source view', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+    const view = diffOf(page, 'docs/plan.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    const first = (await newSide.locator('.compmd-page p', { hasText: 'First step.' }).boundingBox())!;
+    const last = (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!;
+    await page.mouse.move(first.x + 10, first.y + first.height / 2);
+    const plus = (await newSide.getByRole('button', { name: 'Comment on line 3' }).boundingBox())!;
+    await page.mouse.move(plus.x + plus.width / 2, plus.y + plus.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(plus.x + plus.width / 2, last.y + last.height / 2, { steps: 4 });
+    await page.mouse.up();
+    const composer = view.locator('.diff-composer');
+    await expect(composer).toContainText('Lines 3–5');
+    // The two blocks keep their + (the blank line between them draws nothing)
+    await expect(newSide.locator('.diff-plus.held')).toHaveCount(2);
+    await composer.getByRole('textbox').fill('Both steps.');
+    await composer.getByRole('button', { name: 'Comment' }).click();
+    await expect.poll(() => tasksServer.reviewChanges.length).toBe(1);
+    expect(tasksServer.reviewChanges[0]).toMatchObject({
+      method: 'POST',
+      path: '/CR-2/comments',
+      body: {
+        path: 'docs/plan.md',
+        lines: [3, 5],
+        side: 'new',
+        quote: 'First step.\n\nNew ending.',
+        round: 3,
+        body: 'Both steps.',
+      },
+    });
+    // The page shows it again: in the source view, under the same lines
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] },
+        chains: [
+          {
+            id: 'tr',
+            anchor: { round: 3, path: 'docs/plan.md', side: 'new', lines: [3, 5], quote: 'First step.' },
+            comments: [comment('cr', 'Both steps.')],
+            placed: [3, 5],
+            drifted: null,
+          },
+        ],
+      }),
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.getByRole('button', { name: 'Source' }).click();
+    const chain = view.locator('[data-chain="tr"]');
+    await expect(chain).toBeVisible();
+    const lineFive = (await view.locator('.diff-new [data-row]').last().boundingBox())!;
+    expect((await chain.boundingBox())!.y).toBeGreaterThanOrEqual(lineFive.y + lineFive.height - 1);
+  });
+
   // ATM-591: the rendered view folds as the source view does: whole blocks near the change, the rest folded
   test('Rendered folds: the blocks near a change, with their own line numbers; the rest folded, each fold opened by a click', async ({
     page,

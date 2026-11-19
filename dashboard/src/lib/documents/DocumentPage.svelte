@@ -11,6 +11,7 @@
   import type { Snippet } from 'svelte';
   import { gutterRows, type DrawnLine, type GutterRow } from '../compmd';
   import type { DocumentRef } from '../documents';
+  import LinePlus from '../ui/LinePlus.svelte';
   import CompMd from './CompMd.svelte';
 
   // A document's page (ATM-645): what the document viewer shows and a review's rendered Markdown shows, one component,
@@ -31,9 +32,19 @@
     onopen,
     onplaced,
     onunfold,
+    onpress,
+    onover,
+    held = null,
     overlay,
     page = $bindable(),
   }: {
+    /** A row of the margin pressed (its + or its number), as the source lines it numbers (ATM-650): the rows take a +
+     * under the pointer only with it */
+    onpress?: (lines: [number, number], extend: boolean) => void;
+    /** The pointer over a row, as its lines */
+    onover?: (lines: [number, number]) => void;
+    /** The lines picked: their rows keep their + */
+    held?: [number, number] | null;
     text: string;
     path: string;
     kind: string;
@@ -104,23 +115,68 @@
     if (JSON.stringify(was) === JSON.stringify({ drawn: moved, rows: next })) return;
     placed = { ...placed, [part.from]: { drawn: moved, rows: next } };
   }
+
+  // Commenting (ATM-650), as the source view's gutter does: the row under the pointer (one that draws text) shows its
+  // +; pressing it or its number picks its lines, Shift extends the pick; the host follows a drag with `onover`
+  /** The row under the pointer, by its first line */
+  let hover = $state<number | null>(null);
+  function rowAt(e: MouseEvent): GutterRow | null {
+    const el = page;
+    if (!el) return null;
+    const y = e.clientY - el.getBoundingClientRect().top;
+    return rows.find((r) => r.drawn && y >= r.top && y < r.top + r.height) ?? null;
+  }
+  function move(e: MouseEvent) {
+    if (!onpress) return;
+    const row = rowAt(e);
+    const at = row?.from ?? null;
+    if (at !== hover) hover = at;
+    if (row) onover?.([row.from, row.to]);
+  }
+  function press(e: MouseEvent, row: GutterRow) {
+    if (e.button !== 0) return;
+    // A drag picks lines, not text
+    e.preventDefault();
+    onpress?.([row.from, row.to], e.shiftKey);
+  }
+  const isHeld = (row: GutterRow) => !!held && row.from <= held[1] && row.to >= held[0];
 </script>
 
 <!-- A page on the desk: each theme may give it its own paper (--doc-page-*, themes/*.css) -->
-<article class="doc-page" class:folded data-kind={kind} bind:this={page}>
+<!-- svelte-ignore a11y_no_static_element_interactions (the pointer over a line shows its +; the + is the button) -->
+<article
+  class="doc-page"
+  class:folded
+  class:pickable={!!onpress}
+  data-kind={kind}
+  bind:this={page}
+  onmousemove={move}
+  onmouseleave={() => (hover = null)}
+>
   {#if markdown && rows.length}
     <!-- A Markdown document's line numbers (T-406): each line beside its text, where CompMD drew it; lines that draw
-         nothing in the gaps -->
-    <div class="doc-gutter doc-gutter-lines" id="doc-gutter" aria-hidden="true">
+         nothing in the gaps. In a review, each row that draws text takes a + under the pointer (ATM-650) -->
+    <div class="doc-gutter doc-gutter-lines" id="doc-gutter" aria-hidden={onpress ? undefined : 'true'}>
       {#each rows as row (row.from)}
+        <!-- svelte-ignore a11y_no_static_element_interactions (pressing a number picks its lines, as its + does) -->
         <div
           class:marked={marked?.(row.from, row.to) ?? false}
           class:blank={!row.drawn}
+          class:picked={isHeld(row)}
           data-line={row.from}
           style:top="{row.top}px"
           style:height="{row.height}px"
+          onmousedown={onpress && row.drawn ? (e) => press(e, row) : undefined}
         >
           {row.from === row.to ? row.from : `${row.from}–${row.to}`}
+          {#if onpress && row.drawn && (hover === row.from || isHeld(row))}
+            <LinePlus
+              line={row.from === row.to ? row.from : `${row.from}–${row.to}`}
+              held={isHeld(row)}
+              left="calc(100% + var(--space-2))"
+              onpress={(e) => press(e, row)}
+            />
+          {/if}
         </div>
       {/each}
     </div>

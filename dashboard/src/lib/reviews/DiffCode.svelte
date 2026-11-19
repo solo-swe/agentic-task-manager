@@ -11,6 +11,7 @@
 
 <script lang="ts">
   import CompMd from '../documents/CompMd.svelte';
+  import LinePlus from '../ui/LinePlus.svelte';
   import { fenced } from './diff';
 
   // A run of a file's lines in the diff viewer (docs/code-review-design.md §3.7, ATM-573): one fenced block of the
@@ -229,13 +230,13 @@
             >{#each label(line) as n, k (k)}<span>{n}</span>{/each}</button
           >
           {#if onpick && (hover === i || isPicked(i))}
-            <button
-              class="diff-plus"
-              class:held={isPicked(i)}
-              tabindex="-1"
-              aria-label="Comment on line {line.new ?? line.old}"
-              onmousedown={(e) => press(e, i)}>+</button
-            >
+            <LinePlus
+              line={line.new ?? line.old ?? ''}
+              held={isPicked(i)}
+              left="calc(var(--gutter) + var(--space-1))"
+              top={wrap ? 'calc(var(--line-height) / 2)' : '50%'}
+              onpress={(e) => press(e, i)}
+            />
           {/if}
         {/if}
       </div>
@@ -290,9 +291,6 @@
   .diff-code.wrap .diff-number {
     align-items: flex-start;
     line-height: var(--line-height);
-  }
-  .diff-code.wrap .diff-plus {
-    top: calc(var(--line-height) / 2);
   }
   .diff-line {
     position: absolute;
@@ -355,33 +353,5 @@
   .diff-number:hover,
   .picked .diff-number {
     color: var(--accent);
-  }
-  /* The + of the line under the pointer, and of the lines picked while their comment is written */
-  .diff-plus {
-    pointer-events: auto;
-    position: absolute;
-    top: 50%;
-    left: calc(var(--gutter) + var(--space-1));
-    transform: translateY(-50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--space-7);
-    height: var(--space-7);
-    max-height: 100%;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: var(--accent);
-    color: var(--on-accent);
-    font: inherit;
-    font-weight: 700;
-    font-size: var(--text-sm);
-    line-height: 1;
-    cursor: pointer;
-    user-select: none;
-  }
-  .diff-plus:not(.held) {
-    opacity: 0.85;
   }
 </style>

@@ -8,13 +8,15 @@
   // One side of a Markdown file in the diff viewer's rendered view (docs/code-review-design.md §3.7, ATM-574): the
   // document viewer's own page (ATM-645: `DocumentPage`, the same paper, width, height and margin numbers), on its
   // desk (`.doc-sheet`: the viewer's page variables and the document style picked in Settings), with the lines this
-  // side changed marked on their text and the selected chain's lines too. Selecting text offers a comment on the lines
-  // under it (`onpick`).
+  // side changed marked on their text and the selected chain's lines too. A comment starts as on code (ATM-650): the
+  // + of the line under the pointer, pressed (or its number), dragged over more lines or Shift-pressed; or text
+  // selected, the lines under it. Either way `onpick` says which source lines, and where their text ends on screen.
   let {
     doc,
     side,
     changed,
     selected = null,
+    picking = null,
     label,
     docStyle = null,
     onpick,
@@ -25,9 +27,12 @@
     changed: ReadonlySet<number>;
     /** The selected chain's lines on this side */
     selected?: [number, number] | null;
+    /** The lines of this side whose comment is being written: their + stays, their text marked */
+    picking?: [number, number] | null;
     label: string;
     docStyle?: string | null;
-    onpick?: (picked: Picked) => void;
+    /** Lines picked, and the bottom of their text on screen (a client y), where the comment box goes */
+    onpick?: (picked: Picked, below: number) => void;
   } = $props();
 
   let pageEl = $state<HTMLElement>();
@@ -70,15 +75,58 @@
     opened = new Set([...opened, fold.from]);
   }
 
-  const inSelected = (n: number) => !!selected && n >= selected[0] && n <= selected[1];
-  /** The boxes to mark: changed lines (the first of each run starts a change: n / p go to it), and the chain's */
+  // Lines picked by their + (ATM-650): pressed on a row, the pick runs from it to the row under the pointer while the
+  // button is held; let go, it is offered for a comment
+  let dragged = $state<{ at: [number, number]; lines: [number, number] } | null>(null);
+  function press(lines: [number, number], extend: boolean) {
+    // Text selected before is not what this pick is about (letting go would offer it too)
+    window.getSelection()?.removeAllRanges();
+    const from = extend && picking ? picking : lines;
+    dragged = { at: from, lines: [Math.min(from[0], lines[0]), Math.max(from[1], lines[1])] };
+  }
+  function over(lines: [number, number]) {
+    const d = dragged;
+    if (!d) return;
+    const next: [number, number] = [Math.min(d.at[0], lines[0]), Math.max(d.at[1], lines[1])];
+    if (next[0] !== d.lines[0] || next[1] !== d.lines[1]) dragged = { ...d, lines: next };
+  }
+  function letGo() {
+    const d = dragged;
+    if (!d) return;
+    dragged = null;
+    const el = pageEl;
+    if (!el || !onpick) return;
+    const [from, to] = d.lines;
+    // The source lines as written, as the source view quotes them
+    const quote = text
+      .split('\n')
+      .slice(from - 1, to)
+      .join('\n');
+    // Under the last line's text: its lowest box drawn, else its row in the margin
+    const boxes = drawn.filter((l) => l.line >= from && l.line <= to).flatMap((l) => l.rects);
+    const bottom = boxes.length ? Math.max(...boxes.map((r) => r.y + r.height)) : 0;
+    onpick({ side, lines: [from, to], quote }, el.getBoundingClientRect().top + bottom);
+  }
+  /** The lines whose + stays: those being dragged over, else those whose comment is being written */
+  const held = $derived(dragged?.lines ?? picking);
+
+  const within = (range: [number, number] | null, n: number) => !!range && n >= range[0] && n <= range[1];
+  const inSelected = (n: number) => within(selected, n);
+  /** The boxes to mark: changed lines (the first of each run starts a change: n / p go to it), the chain's, and the
+   * lines picked for a comment */
   const marks = $derived(
     drawn
-      .filter((l) => changed.has(l.line) || inSelected(l.line))
+      .filter((l) => changed.has(l.line) || inSelected(l.line) || within(held, l.line))
       .flatMap((l) =>
         l.rects.map((rect, i) => ({
           rect,
-          kind: inSelected(l.line) ? 'commented' : side === 'old' ? 'removed' : 'added',
+          kind: within(held, l.line)
+            ? 'picked'
+            : inSelected(l.line)
+              ? 'commented'
+              : side === 'old'
+                ? 'removed'
+                : 'added',
           start: changed.has(l.line) && i === 0 && !changed.has(l.line - 1),
         })),
       ),
@@ -94,14 +142,17 @@
     const selection = window.getSelection();
     if (!el || !selection || selection.isCollapsed || !onpick) return;
     const box = el.getBoundingClientRect();
-    const rects = [...selection.getRangeAt(0).getClientRects()].map((r) => ({
+    const range = selection.getRangeAt(0);
+    const rects = [...range.getClientRects()].map((r) => ({
       top: r.top - box.top,
       bottom: r.bottom - box.top,
     }));
     const lines = linesUnder(drawn, rects);
-    if (lines) onpick({ side, lines, quote: selection.toString() });
+    if (lines) onpick({ side, lines, quote: selection.toString() }, range.getBoundingClientRect().bottom);
   }
 </script>
+
+<svelte:window onmouseup={letGo} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions (a selection, made with the mouse, offers a comment) -->
 <div class="diff-pane diff-{side} doc-sheet" data-doc-style={docStyle} onmouseup={select}>
@@ -116,6 +167,9 @@
       marked={rowMarked}
       onplaced={placedOn}
       onunfold={unfold}
+      onpress={onpick ? press : undefined}
+      onover={over}
+      {held}
       bind:page={pageEl}
     >
       {#snippet overlay()}
@@ -170,6 +224,10 @@
   }
   .diff-added {
     background: color-mix(in srgb, var(--green) 16%, transparent);
+  }
+  .diff-picked {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    box-shadow: inset 3px 0 0 var(--accent);
   }
   .diff-commented {
     background: color-mix(in srgb, var(--yellow) 24%, transparent);

@@ -284,21 +284,18 @@
     return { side: s, lines: [same[0].n, same.at(-1)!.n], quote: same.map((r) => r.text).join('\n') };
   });
 
-  // The rendered view's pick: the lines under the text selected
+  // The rendered view's pick: the lines picked by their + (ATM-650) or under the text selected
   let renderedPick = $state<Picked | null>(null);
-  // Where its comment box goes (ATM-627): right under the text selected, over the side it was selected on, in the
-  // rendered view's coordinates. Not after the document: a comment on its first lines was written a document away
+  // Where its comment box goes (ATM-627): right under the text picked (`below`, a client y), over the side it was
+  // picked on, in the rendered view's coordinates. Not after the document: a comment on its first lines was written a
+  // document away
   let renderedEl = $state<HTMLElement>();
   let pickAt = $state<{ top: number; left: number; width: number } | null>(null);
-  function placePick() {
-    const selection = window.getSelection();
+  function placePick(s: Side, below: number) {
     const within = renderedEl?.getBoundingClientRect();
-    if (!within || !selection || !selection.rangeCount) return (pickAt = null);
-    const text = selection.getRangeAt(0).getBoundingClientRect();
-    const start = selection.anchorNode;
-    const pane = (start instanceof Element ? start : start?.parentElement)?.closest('.diff-pane');
-    const side = pane?.getBoundingClientRect() ?? within;
-    pickAt = { top: text.bottom - within.top, left: side.left - within.left, width: side.width };
+    if (!within) return (pickAt = null);
+    const pane = renderedEl?.querySelector(`.diff-pane.diff-${s}`)?.getBoundingClientRect() ?? within;
+    pickAt = { top: below - within.top, left: pane.left - within.left, width: pane.width };
   }
   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
 
@@ -538,6 +535,7 @@
             side={s}
             changed={s === 'old' ? changed.old : changed.new}
             selected={selectedChain?.anchor.side === s ? selectedChain.anchor.lines : null}
+            picking={renderedPick?.side === s ? renderedPick.lines : null}
             {docStyle}
             label={sides.length < 2
               ? s === 'old'
@@ -547,8 +545,8 @@
                 ? 'Before'
                 : 'After'}
             onpick={oncomment
-              ? (p) => {
-                  placePick();
+              ? (p, below) => {
+                  placePick(s, below);
                   renderedPick = p;
                   draft = '';
                 }

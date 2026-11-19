@@ -16964,13 +16964,13 @@
       "description": "Hakan (2026-11-19): a review's rendered Markdown looks very dark. It should simply look right, as a top-level document editor shows a document (Microsoft Word, Google Docs, Apple Pages, Notion): a page you read and comment on, not a dark panel.\n\n## Research\nWrite `docs/rendered-document-research.md`, reviewed as a CR:\n- **How editors show a document:** the page (its colour in light and dark modes, its paper, margins, width and shadow), the canvas around it, the text's type and size, headings, tables, code, images; how each handles dark mode (Word's and Docs' dark canvas with a light page, or a dark page; Pages; Notion's in-canvas text). Screenshots or precise descriptions, each sourced.\n- **What atm shows now:** the review's rendered side and the document viewer's page (`DocumentPage.svelte`, ATM-645), in each theme and mode, with screenshots; why it looks dark (the page's colours, the theme tokens, CompMD's styles: atm's own CSS, per the boundary).\n- **The gap:** what is missing to get there, as a list of concrete changes with where each lives (atm's CSS and components, the theme tokens; anything that would be CompMD's, named as such and not built here).\n- **A recommendation**, and the follow-up tasks it implies.\n\nThe diff's own marks (added, removed, changed blocks) and the comments must still read on the page.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/rendered-document-research.md"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:10:04Z",
+      "updated_at": "2026-11-19T18:14:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16982,7 +16982,24 @@
       "sprint": "Task&review state machine",
       "number": 649,
       "started_at": "2026-11-19T18:10:04Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "bd75d5a173e5d0d7dbf0e3b87f93b6e9159b4426",
+      "code_reviews": [
+        {
+          "id": "01a1f504-664d-74a9-8860-04a6080c9fd4",
+          "ref": "CR-60"
+        }
+      ],
+      "review_requested_at": "2026-11-19T18:14:28Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T18:14:28Z",
+          "kind": "review",
+          "text": "CR-60: Rendered Markdown as a document editor shows it: research",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848990a501dd",
@@ -16996,7 +17013,7 @@
       "description": "Hakan (2026-11-19): commenting on a review's rendered Markdown doesn't work as on code: there is no **+** button, and so on.\n\n## Expected\nThe rendered view takes comments the way the source view does: hovering a block (or a line of it) shows the **+** at its line number in the gutter; a click opens the comment box under it; a drag over several lines' + picks them; a text selection may start one too. The comment anchors to the source lines the block came from (CompMD's source-line map, as the gutter uses it), so it shows in the source view as well and moves with the code across rounds.\n\n## Check\n- Where the source view's + and drag live (`DiffCode.svelte`, `DiffView.svelte`) and what the rendered side (`RenderedSide.svelte`, `DocumentPage.svelte`) lacks; reuse the same component, not a copy.\n- Tests: e2e on a rendered Markdown file: the + appears on hover, a click opens the box anchored to the block's lines, a drag over two blocks anchors to their lines, the comment shows in the source view on the same lines.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
@@ -17004,9 +17021,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:06:40Z",
+      "updated_at": "2026-11-19T18:14:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17014,7 +17031,9 @@
         }
       ],
       "sprint": "Task&review state machine",
-      "number": 650
+      "number": 650,
+      "started_at": "2026-11-19T18:14:31Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848aa5d26e23",

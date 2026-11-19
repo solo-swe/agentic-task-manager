@@ -2634,6 +2634,22 @@ button.repo-ref {
 .doc-gutter-lines div.blank:not(.marked) {
   opacity: 0.55;
 }
+/* A page that takes comments (a review's rendered side, ATM-650): room between the numbers and the text for the + of
+   the line under the pointer; a number that draws text is pressed as its + is; the picked lines' numbers in the accent */
+.doc-page.pickable[data-kind='markdown'] {
+  padding-left: 64px;
+}
+.doc-page.pickable .doc-gutter {
+  opacity: 1;
+}
+.doc-page.pickable .doc-gutter-lines div:not(.blank) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.doc-page.pickable .doc-gutter-lines div:hover,
+.doc-gutter-lines div.picked {
+  color: var(--accent);
+}
 /* A link's lines in a Markdown document: on the boxes of their text, not across the page */
 .doc-line-mark.doc-text-mark {
   right: auto;
