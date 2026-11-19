@@ -466,11 +466,27 @@ fn labelled(message: &str, cwd: &Path) -> String {
     commands::labelled(cwd, message)
 }
 
+/// atm's own stack: 8 MiB, what Linux and macOS give a main thread. Windows gives one 1 MiB, which a debug build's
+/// commands outgrew in 0.41.0 (every command overflowed it, in CI's Windows suite); the same everywhere, so no platform
+/// runs out first.
+const STACK: usize = 8 * 1024 * 1024;
+
 fn main() -> ExitCode {
-    // `COMPLETE=<shell> atm …`: the shell asks for completions (`atm completion <shell>` prints the line that does)
-    clap_complete::CompleteEnv::with_factory(cli_command).complete();
-    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
-    ExitCode::from(run(&args))
+    let work = std::thread::Builder::new()
+        .name("atm".into())
+        .stack_size(STACK)
+        .spawn(|| {
+            // `COMPLETE=<shell> atm …`: the shell asks for completions (`atm completion <shell>` prints the line that
+            // does)
+            clap_complete::CompleteEnv::with_factory(cli_command).complete();
+            let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+            run(&args)
+        });
+    // A panic was told on stderr by the hook, as before; it fails the command
+    match work.map(std::thread::JoinHandle::join) {
+        Ok(Ok(code)) => ExitCode::from(code),
+        _ => ExitCode::FAILURE,
+    }
 }
 
 #[cfg(test)]
