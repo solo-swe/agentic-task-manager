@@ -1760,7 +1760,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 648
+    "next_number": 649
   },
   "tasks": [
     {
@@ -16897,6 +16897,41 @@
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/56"
       },
       "merged_at": "2026-11-19T14:50:42Z"
+    },
+    {
+      "id": "01a1f49d-a9cd-7229-8a16-02140f1cdeca",
+      "name": "Upgrade to CompMD 0.8.0",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Move atm from CompMD 0.7.1 to 0.8.0 (asked by Hakan, 2026-11-19), everywhere it is pinned, and adapt what 0.8.0 changes.\n\n## The pins\n- **Rust** (the workspace `Cargo.toml`): `tauri-plugin-compmd` and `compmd-host`, both `=0.7.1`. `Cargo.lock` follows with `cargo build`.\n- **Dashboard** (`dashboard/package.json`): `@compmd/processor`, `@compmd/render`, `@compmd/sandbox`, `@compmd/vite`, all `0.7.1`. Update the lockfile on purpose (`pnpm install`, then commit `pnpm-lock.yaml`), never by a plain install elsewhere.\n- **CompMD's runtime** the dashboard builds into `dist/assets/compmd/<version>/` (`vite.compmd.config.ts`): the version folder moves to `0.8.0`; check what names it (the server's `/assets/` routes, the CSP, the tests that load it).\n- **CompMD's guide for agents**, `docs/agent/compmd-llms.txt` (`atm docs compmd`): replace it with 0.8.0's.\n\n## Adapt\nRead 0.8.0's changelog first, from the package itself (not the web), and list what changed for a host. In particular:\n- **The runtime per document** (ATM-646): atm keeps one CompMD runtime per document in `dashboard/src/lib/compmd-runtime.ts`, working around 0.7.1's per-page restyles. If 0.8.0 has CompMD's own fix (the proposal from ATM-646), use it and drop atm's workaround; keep the e2e bound on restyles (`reviews.spec.ts`, the jump test) passing.\n- **Line elements** (CMD-250): if 0.8.0 has them, the diff viewer's Wrap can work in Split too (ATM-588 waits for them).\n- Any API, option or output that changed: the processor's frontmatter and data (`md.data.task`), the sandbox's messages, the render's source-line map the document viewer's gutter and the rendered diff use.\n\n## Checks\n- `pnpm run verify` (the screenshots included: rendering may move pixels; regenerate only the ones that changed on purpose, and look at them), `cargo test`, clippy, `cargo deny check`.\n- `pnpm run size`: the page budget (1.5 MiB) still holds.\n- `docs/security-architecture.md`: the CompMD runtime and its sandbox are in the threat model (I1, the `/assets/` route); note the upgrade and anything that changes what the sandbox allows.\n- The CHANGELOG and WHATS-NEW entries of the release that ships it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "dashboard/package.json",
+        "dashboard/pnpm-lock.yaml",
+        "dashboard/src/lib/compmd-runtime.ts",
+        "docs/agent/compmd-llms.txt",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-19T16:22:15Z",
+      "updated_at": "2026-11-19T16:22:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-19T16:22:15Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 648
     }
   ]
 }
