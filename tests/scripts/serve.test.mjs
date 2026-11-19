@@ -1040,7 +1040,7 @@ describe('serve', () => {
     for (const method of ['POST', 'PUT', 'DELETE'])
       assert.deepEqual(await get('/api/projects', { method }), [
         405,
-        'only GET and HEAD, and POST, PATCH or PUT on reviews',
+        'only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews',
       ]);
     atm(['service', 'stop'], root);
   });
@@ -1159,6 +1159,44 @@ describe('serve', () => {
     r = await send('PATCH', `${reviews}/CR-2`, { status: 'closed', reason: 'Not needed.' });
     assert.equal(r.status, 200, await r.clone().text());
     assert.equal((await r.json()).status, 'closed');
+
+    // ATM-612: drafts, the user's alone, kept in atm's state folder and never in the repository, sent together
+    r = await send('POST', reviews, { title: 'Drafted', change: { files: ['a.txt'] } });
+    assert.equal(r.status, 201, await r.clone().text());
+    const drafts = `${reviews}/CR-3/drafts`;
+    r = await send('POST', drafts, { path: 'a.txt', lines: [2, 2], body: 'Two?' });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).id, 'd1');
+    r = await send('POST', drafts, { body: 'Overall fine.' });
+    assert.equal((await r.json()).id, 'd2');
+    r = await send('PATCH', `${drafts}/d1`, { body: 'Why two?' });
+    assert.equal(r.status, 200, await r.clone().text());
+    // Removing one needs the token like any change
+    assert.equal((await send('DELETE', `${drafts}/d2`, {}, { 'X-Atm-Session': '' })).status, 403);
+    r = await send('DELETE', `${drafts}/d2`, {});
+    assert.equal(r.status, 200, await r.clone().text());
+    const listed = await (await fetch(drafts)).json();
+    assert.deepEqual(
+      listed.drafts.map((d) => [d.id, d.kind, d.path, d.body]),
+      [['d1', 'comment', 'a.txt', 'Why two?']],
+    );
+    assert.equal(JSON.parse(atm(['review', 'comments', 'CR-3', '--json'], root).stdout).length, 0, 'not sent yet');
+    // The review's page shows them, placed in the round shown as a comment is, apart from its chains
+    const shownPage = await (await fetch(`${reviews}/CR-3`)).json();
+    assert.deepEqual(shownPage.chains, []);
+    assert.deepEqual(
+      shownPage.drafts.map((d) => [d.id, d.placed, d.drifted]),
+      [['d1', [2, 2], null]],
+    );
+    const kept = fs.readdirSync(path.join(atmHome, 'drafts'));
+    assert.equal(kept.length, 1, 'kept in the state folder');
+    assert.ok(!git(['status', '--porcelain', '--untracked-files=all'], root).includes('draft'), 'nothing in the repo');
+    // Publish comments: a comment with no words of its own sends them
+    r = await send('POST', `${reviews}/CR-3/decisions`, { decision: 'comment' });
+    assert.equal(r.status, 201, await r.clone().text());
+    const [sent] = JSON.parse(atm(['review', 'comments', 'CR-3', '--json'], root).stdout);
+    assert.deepEqual([sent.comments[0].body, sent.anchor.path], ['Why two?', 'a.txt']);
+    assert.deepEqual((await (await fetch(drafts)).json()).drafts, []);
     atm(['service', 'stop'], root);
   });
 

@@ -301,6 +301,36 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         overriding: Option<&str>,
         by: &Actor,
     ) -> Result<()> {
+        let (review, overridden, next) = self.decision(reference, verdict, overriding, by, &[])?;
+        self.record_decision(&review, verdict, body, overridden, next, by)
+    }
+
+    /// Whether `by`'s decision would be taken, with `also_open` more top-level comments open by then (a reviewer's
+    /// drafts, sent with it: ATM-612), without making it: what [`submit`](Self::submit) refuses, it refuses.
+    ///
+    /// # Errors
+    /// As [`submit`](Self::submit)'s checks, `also_open` named among the open comments on approving.
+    pub fn check_submit(
+        &self,
+        reference: &ReviewRef,
+        verdict: Verdict,
+        overriding: Option<&str>,
+        by: &Actor,
+        also_open: &[String],
+    ) -> Result<()> {
+        self.decision(reference, verdict, overriding, by, also_open)
+            .map(|_| ())
+    }
+
+    /// A decision's checks: the review, whether an override is needed (its reason, then), and the status it leads to.
+    fn decision<'o>(
+        &self,
+        reference: &ReviewRef,
+        verdict: Verdict,
+        overriding: Option<&'o str>,
+        by: &Actor,
+        also_open: &[String],
+    ) -> Result<(Review, Option<&'o str>, Option<Status>)> {
         let review = self.not_ended(reference, "be submitted on")?;
         let overridden = match overriding {
             Some(reason) if reason.trim().is_empty() => {
@@ -333,7 +363,11 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
                 ) {
                     return Err(not_now(&review, "be approved"));
                 }
-                let open: Vec<String> = review.open_comments().map(|c| c.id.0.clone()).collect();
+                let open: Vec<String> = review
+                    .open_comments()
+                    .map(|c| c.id.0.clone())
+                    .chain(also_open.iter().cloned())
+                    .collect();
                 if !open.is_empty() {
                     return Err(Error::failed(format!(
                         "{} can't be approved while comments are open: {}",
@@ -353,6 +387,19 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
             }
             Verdict::Comment => None,
         };
+        Ok((review, overridden, next))
+    }
+
+    /// A decision taken: the override on the record, its words, the status.
+    fn record_decision(
+        &mut self,
+        review: &Review,
+        verdict: Verdict,
+        body: Option<&str>,
+        overridden: Option<&str>,
+        next: Option<Status>,
+        by: &Actor,
+    ) -> Result<()> {
         // The override, on the record: who, why they may not decide otherwise, and their reason
         if let Some(reason) = overridden {
             let anchor = Anchor {
@@ -987,6 +1034,56 @@ mod tests {
             let review = store.get_review(&reference).unwrap();
             assert_eq!((review.header.status, review.chains.len()), (ended, 0));
         }
+    }
+
+    /// ATM-612: a decision checked before a reviewer's drafts are sent with it, refusing what `submit` would, with the
+    /// drafts counted as open, and writing nothing.
+    #[test]
+    fn a_decision_is_checked_with_drafts_counted_and_nothing_written() {
+        let drafts = ["d1".to_string(), "d2".to_string()];
+        let mut store = MemoryStore::new();
+        let reference = at(&mut store, Status::Waiting);
+        let reviews = Reviews::new(&mut store);
+        // Approving with drafts that would be open comments: refused, naming them
+        let message = reviews
+            .check_submit(&reference, Verdict::Approve, None, &hakan(), &drafts)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            message,
+            "CR-1 can't be approved while comments are open: d1, d2"
+        );
+        // Without them, or a decision drafts don't stand in the way of: taken
+        for verdict in [Verdict::RequestChanges, Verdict::Comment] {
+            reviews
+                .check_submit(&reference, verdict, None, &hakan(), &drafts)
+                .unwrap();
+        }
+        reviews
+            .check_submit(&reference, Verdict::Approve, None, &hakan(), &[])
+            .unwrap();
+        // What submit refuses: its author deciding without an override, a sent-back review sent back again
+        assert!(is_refused(&reviews.check_submit(
+            &reference,
+            Verdict::Comment,
+            None,
+            &agent(),
+            &[]
+        )));
+        let review = store.get_review(&reference).unwrap();
+        assert_eq!(
+            (review.header.status, review.chains.len()),
+            (Status::Waiting, 0)
+        );
+        let mut store = MemoryStore::new();
+        let sent_back = at(&mut store, Status::ChangesRequested);
+        assert!(is_not_now(&Reviews::new(&mut store).check_submit(
+            &sent_back,
+            Verdict::RequestChanges,
+            None,
+            &hakan(),
+            &[]
+        )));
     }
 
     #[test]

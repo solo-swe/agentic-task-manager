@@ -21,6 +21,8 @@ export interface ReviewComment {
   resolved: boolean | null;
   /** A poke (ATM-611): the user's nudge on the whole review, never open; absent for any other comment */
   poke?: boolean;
+  /** One of the user's drafts (ATM-612), not sent yet: only they see it; absent for any other comment */
+  draft?: boolean;
   replies: ReviewComment[];
 }
 
@@ -126,6 +128,23 @@ export interface PlacedChain extends Chain {
   drifted: { round: number; lines: [number, number] | null } | null;
 }
 
+/** One of the user's drafts on the review (ATM-612), as the page has it: a comment placed in the round shown as a chain
+ * is, or a reply */
+export type PlacedDraft = { id: string; at: string; body: string } & (
+  | {
+      kind: 'comment';
+      path: string | null;
+      lines: [number, number] | null;
+      side: Side;
+      quote: string | null;
+      /** None: on what a live review is when it is sent */
+      round: number | null;
+      placed?: [number, number] | null;
+      drifted?: { round: number; lines: [number, number] | null } | null;
+    }
+  | { kind: 'reply'; to: string }
+);
+
 /** A review's page for one view (`GET …/reviews/<CR>?round=&against=`) */
 export interface ReviewPageData {
   review: ReviewHeader;
@@ -133,6 +152,8 @@ export interface ReviewPageData {
   branch: string | null;
   rounds: Round[];
   chains: PlacedChain[];
+  /** The user's drafts on it (ATM-612). Optional, for an older atm's pages */
+  drafts?: PlacedDraft[];
   /** `now`: a live review's working copy as it is now (ATM-576); its `round` is the one after `rounds` when it changed
    * since the last checkpoint (a comment on it makes it one) */
   view: { round: number; against: number | null; now?: boolean; files: ViewFile[] };

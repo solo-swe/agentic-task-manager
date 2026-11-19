@@ -135,6 +135,8 @@ enum ProjectRead<'a> {
     Logo,
     Reviews,
     Review(&'a str),
+    /// The user's drafts on a review (ATM-612)
+    Drafts(&'a str),
 }
 
 impl<'a> ProjectRead<'a> {
@@ -150,6 +152,7 @@ impl<'a> ProjectRead<'a> {
             ["logo"] => Self::Logo,
             ["reviews"] => Self::Reviews,
             ["reviews", review] if !review.is_empty() => Self::Review(review),
+            ["reviews", review, "drafts"] if !review.is_empty() => Self::Drafts(review),
             _ => return None,
         })
     }
@@ -177,6 +180,7 @@ fn serve_project_read(
         ProjectRead::Claims => claims::get_claims(project, request),
         ProjectRead::Reviews => reviews::get_reviews(project, query),
         ProjectRead::Review(review) => reviews::get_review(project, review, query, request),
+        ProjectRead::Drafts(review) => reviews::get_drafts(project, review),
     }
 }
 

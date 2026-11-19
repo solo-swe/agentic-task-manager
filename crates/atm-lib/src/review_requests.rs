@@ -165,6 +165,11 @@ pub fn request_from<T: for<'de> Deserialize<'de>>(body: serde_json::Value) -> Re
     serde_json::from_value(body).map_err(|e| Error::Invalid(format!("not this request: {e}")))
 }
 
+/// A request's text, checked: not empty, at most [`MAX_TEXT`] characters.
+pub(crate) fn checked_text<'t>(what: &str, text: &'t str) -> Result<&'t str> {
+    self::text(what, text)
+}
+
 fn text<'t>(what: &str, text: &'t str) -> Result<&'t str> {
     if text.trim().is_empty() {
         return Err(Error::Invalid(format!("{what} is empty")));
@@ -331,14 +336,35 @@ pub fn update_comment(
     }
 }
 
-/// A reviewer's decision (`atm review submit`), which becomes the review's tasks'.
+/// A reviewer's decision (`atm review submit`), which becomes the review's tasks', sent with the person's drafts on the
+/// review (ATM-612): every check first, then the drafts, then the decision. A comment with no words of its own and
+/// drafts to send only sends them (the page's *Publish comments*), which anyone may.
 ///
 /// # Errors
-/// A comment without its text, or what the review's rules refuse (the author deciding, open comments on approval).
+/// A comment with neither its text nor drafts, what the review's rules refuse (the author deciding, open comments on
+/// approval, the drafts counted), or a draft that can't be sent (it and those after it kept).
 pub fn submit_decision(
     project: &mut Project,
     review: &ReviewRef,
     decision: &Decision,
+) -> Result<ReviewHeader> {
+    submit_decision_with(
+        project,
+        review,
+        decision,
+        &crate::review_drafts::Drafts::of_user(),
+    )
+}
+
+/// [`submit_decision`], with the drafts kept in `drafts`.
+///
+/// # Errors
+/// As [`submit_decision`].
+pub fn submit_decision_with(
+    project: &mut Project,
+    review: &ReviewRef,
+    decision: &Decision,
+    drafts: &crate::review_drafts::Drafts,
 ) -> Result<ReviewHeader> {
     let verdict = match decision.decision {
         DecisionKind::Approve => Verdict::Approve,
@@ -350,17 +376,40 @@ pub fn submit_decision(
         .as_deref()
         .map(|b| text("the comment", b))
         .transpose()?;
-    if verdict == Verdict::Comment && body.is_none() {
-        return Err(Error::Invalid(
-            "a comment on the review needs its text".into(),
-        ));
-    }
     let overriding = decision
         .override_rules
         .as_ref()
         .map(|o| text("the reason for the override", &o.reason))
         .transpose()?;
-    reviews::submit(project, review, verdict, body, overriding)?;
+    // A person's drafts go with it; an agent has none (it comments at once)
+    let by = actor_of(project);
+    let pending = if atm_common::edits::is_agent(Some(&by.0)) {
+        Vec::new()
+    } else {
+        crate::review_drafts::list_drafts_in(project, review, drafts)?
+    };
+    let publish_only = verdict == Verdict::Comment && body.is_none();
+    if publish_only && pending.is_empty() {
+        return Err(Error::Invalid(
+            "a comment on the review needs its text, or drafts to send".into(),
+        ));
+    }
+    if !publish_only {
+        // Taken, with the drafts open by then, before any is sent
+        let also_open: Vec<String> = pending
+            .iter()
+            .filter(|d| d.is_top_level())
+            .map(|d| format!("{} (your draft)", d.id))
+            .collect();
+        Reviews::new(&mut reviews::store(project)?)
+            .check_submit(review, verdict, overriding, &by, &also_open)?;
+    }
+    if !pending.is_empty() {
+        crate::review_drafts::send_drafts_in(project, review, drafts)?;
+    }
+    if !publish_only {
+        reviews::submit(project, review, verdict, body, overriding)?;
+    }
     Ok(reviews::store(project)?.get_review(review)?.header)
 }
 
@@ -508,10 +557,6 @@ mod tests {
             .unwrap_err()
             .to_string()
         };
-        assert_eq!(
-            decide(DecisionKind::Comment, None, None),
-            "a comment on the review needs its text"
-        );
         assert_eq!(
             decide(DecisionKind::Approve, Some(" "), None),
             "the comment is empty"

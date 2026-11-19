@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentResult } from '../../src/lib/documents';
 import type { DocumentSource } from '../../src/lib/documents/source';
 import ReviewPage from '../../src/lib/reviews/ReviewPage.svelte';
-import type { PlacedChain, ReviewPageData, ViewFile } from '../../src/lib/reviews/types';
+import type { PlacedChain, PlacedDraft, ReviewPageData, ViewFile } from '../../src/lib/reviews/types';
 
 // A review's page (lib/reviews/ReviewPage.svelte, ATM-574): its data and its sides are given, what the user does is
 // reported through the handlers (stubs). CompMD doesn't load in these tests (its fallback text shows, 20 px a line);
@@ -652,6 +652,75 @@ describe('ReviewPage: Comments', () => {
     await fireEvent.input(within(t1).getByRole('textbox'), { target: { value: 'Done.' } });
     await fireEvent.click(within(t1.querySelector('form') as HTMLElement).getByRole('button', { name: 'Reply' }));
     expect(onreply).toHaveBeenCalledWith('c-t1', 'Done.');
+  });
+});
+
+describe('ReviewPage: drafts (ATM-612)', () => {
+  const drafted = (id: string, path: string | null = 'src/a.rs'): PlacedDraft => ({
+    id,
+    at: '2026-11-19T10:00:00Z',
+    body: `Draft ${id}`,
+    kind: 'comment',
+    path,
+    lines: path ? [2, 2] : null,
+    side: 'new',
+    quote: null,
+    round: 3,
+    placed: path ? [2, 2] : null,
+    drifted: null,
+  });
+  const handlers = () => ({
+    comment: vi.fn(async () => null),
+    reply: vi.fn(async () => null),
+    edit: vi.fn(async () => null),
+    remove: vi.fn(async () => null),
+  });
+
+  it('the drafts show among the comments, marked, counted on Submit review, and said in its box', async () => {
+    const { container } = show(data({ drafts: [drafted('d1'), drafted('d2', null)] }), { ondrafts: handlers() });
+    expect(screen.getByRole('button', { name: /Submit review/ })).toHaveTextContent('2');
+    expect(container.querySelector('#review-pending')).toHaveTextContent('2');
+    // On the review, in the conversation; the other on its file's lines
+    expect(container.querySelector('.review-conversation [data-comment="d2"] .chain-draft')).toBeTruthy();
+    await fireEvent.click(tab(/Comments/));
+    expect(tab(/Comments/)).toHaveTextContent('2');
+    await fireEvent.click(screen.getByRole('button', { name: /Submit review/ }));
+    expect(container.querySelector('#review-pending-note')).toHaveTextContent('2 drafts will be sent with it');
+  });
+
+  it('with drafts, Comment needs no summary: it sends them; Approve is blocked by drafted comments, saying so', async () => {
+    const { onsubmit } = show(data({ drafts: [drafted('d1')] }), { ondrafts: handlers() });
+    await fireEvent.click(screen.getByRole('button', { name: /Submit review/ }));
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeDisabled();
+    expect(approve).toHaveAccessibleDescription(
+      'Your draft comment would be open once sent: send it with Comment or Request changes, or remove it',
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+    expect(onsubmit.mock.calls).toEqual([['comment', '']]);
+  });
+
+  it('sent back with drafts: the top button publishes them', () => {
+    const page = data({ drafts: [drafted('d1')] });
+    show({ ...page, review: { ...page.review, status: 'changes_requested' } }, { ondrafts: handlers() });
+    expect(screen.getByRole('button', { name: /Publish comments/ })).toHaveTextContent('1');
+  });
+
+  it('a comment on the review offers Add to my review, which drafts it with no file', async () => {
+    const ondrafts = handlers();
+    const { oncomment } = show(data(), { ondrafts });
+    await fireEvent.click(screen.getByRole('button', { name: /Comment on the review/ }));
+    await fireEvent.input(screen.getByLabelText('Comment'), { target: { value: ' Overall fine. ' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to my review' }));
+    expect(ondrafts.comment).toHaveBeenCalledWith(null, null, 'Overall fine.');
+    expect(oncomment).not.toHaveBeenCalled();
+  });
+
+  it('a page with drafts but no way to keep them (an older atm) shows none of the draft actions', async () => {
+    show(data());
+    await fireEvent.click(screen.getByRole('button', { name: /Comment on the review/ }));
+    expect(screen.queryByRole('button', { name: 'Add to my review' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Comment' })).toBeTruthy();
   });
 });
 

@@ -318,6 +318,18 @@ headings, boxes and IDs. If someone edits it by hand into something atm can't re
 without an author), atm doesn't throw that text away: it keeps it, shows it as it is, and `atm doctor` names the
 review and the lines, as it does for a task it can't read.
 
+**Drafts (ATM-612, from CR-2).** A reviewer may write comments and replies as **drafts** and send them together, as
+GitHub's *start a review*: a box that writes a comment or a reply offers *Add to my review* (a draft), *Comment now*
+(sent at once) and Cancel; while they have drafts, adding one more is its main action. Drafts are the person's alone:
+kept in their own atm state folder (`drafts/`, a file per project, review and person), **never in `comments.md` or
+the review's folder**, which is committed to git, so no one else, no agent's watch and no commit sees them. A draft
+comment is anchored as a comment is, on its round, and the review's page places it in later rounds as it places that
+round's comments; one on what a live review is now is anchored when it is sent. Its decision sends them first, every
+check made before any is sent: *Comment*, *Request changes* or *Approve* (an approval refused while a drafted comment
+would be open once sent); on a review sent back, *Publish comments* (a comment with no words of its own) sends only
+them. An agent drafts nothing: it comments at once. `atm review draft add|list|edit|remove`, and for the window and
+the browser the drafts routes (§3.12).
+
 ### 3.5 Live reviews
 
 A **live review** watches a change while it is being made, so the reviewer can comment as it grows, closer to pair

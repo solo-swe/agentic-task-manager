@@ -502,7 +502,7 @@ export class TasksServer {
     });
     await this.page.route(V2_REVIEW_CHANGES, (route) => {
       const request = route.request();
-      if (!['POST', 'PATCH', 'PUT'].includes(request.method())) return route.fallback();
+      if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method())) return route.fallback();
       this.reviewChanges.push({
         method: request.method(),
         path: V2_REVIEW_CHANGES.exec(request.url())![2] ?? '',

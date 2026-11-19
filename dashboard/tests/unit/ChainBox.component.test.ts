@@ -8,6 +8,20 @@ import type { Chain, ReviewComment } from '../../src/lib/reviews/types';
 // resolved, folded until shown, Reopen at hand either way), replies, and selecting it. CompMD doesn't load here.
 const loadCompmd = vi.hoisted(() => vi.fn());
 vi.mock('../../src/lib/compmd', async (actual) => ({ ...(await actual()), loadCompmd }));
+// What drafting does on the page (ATM-612): none unless a test sets it
+const page = vi.hoisted(() => ({ drafts: undefined as undefined | Record<string, unknown> }));
+vi.mock('../../src/lib/reviews/drafts', async (actual) => ({ ...(await actual()), draftActions: () => page.drafts }));
+function drafting(pending: number, refused: string | null = null) {
+  const actions = {
+    pending,
+    comment: vi.fn(async () => refused),
+    reply: vi.fn(async () => refused),
+    edit: vi.fn(async () => refused),
+    remove: vi.fn(async () => refused),
+  };
+  page.drafts = actions;
+  return actions;
+}
 
 const comment = (id: string, more: Partial<ReviewComment> = {}): ReviewComment => ({
   id,
@@ -36,7 +50,10 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   loadCompmd.mockRejectedValue(new Error('no CompMD in these tests'));
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  page.drafts = undefined;
+});
 
 describe('ChainBox: where it is', () => {
   it.each([
@@ -134,6 +151,79 @@ describe('ChainBox: where it stands', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Show' }));
     expect(container.querySelectorAll('.chain-state.resolved')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /Resolve|Reopen|Reply/ })).toBeNull();
+  });
+});
+
+describe('ChainBox: drafts (ATM-612)', () => {
+  it('a reply box offers Add to my review beside Reply now; with no drafts yet, Reply now is the main one', async () => {
+    const actions = drafting(0);
+    const { container, onreply } = show(chain([comment('c1')]));
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await fireEvent.input(screen.getByRole('textbox'), { target: { value: ' Later. ' } });
+    expect(container.querySelector('form button[type="submit"]')).toHaveTextContent('Reply now');
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to my review' }));
+    expect(actions.reply).toHaveBeenCalledWith('c1', 'Later.');
+    expect(onreply).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(container.querySelector('form')).toBeNull());
+  });
+
+  it('with drafts already, the main action (submit, ⌘ Enter) adds one more; Reply now still sends at once', async () => {
+    const actions = drafting(2);
+    const { container, onreply } = show(chain([comment('c1')]));
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    expect(container.querySelector('form button[type="submit"]')).toHaveTextContent('Add to my review');
+    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'One.' } });
+    await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', metaKey: true });
+    expect(actions.reply).toHaveBeenCalledWith('c1', 'One.');
+    await vi.waitFor(() => expect(container.querySelector('form')).toBeNull());
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'Two.' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply now' }));
+    expect(onreply).toHaveBeenCalledWith('c1', 'Two.');
+    expect(actions.reply).toHaveBeenCalledTimes(1);
+  });
+
+  it('a draft refused keeps the box, with what was written and why', async () => {
+    drafting(0, 'CR-1 is approved: it can’t take drafts');
+    const { container } = show(chain([comment('c1')]));
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'Late.' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add to my review' }));
+    await vi.waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Not saved: CR-1 is approved'));
+    expect(container.querySelector('textarea')).toHaveValue('Late.');
+  });
+
+  it('a draft is marked, has no Resolve or Reply, and is edited in place or removed', async () => {
+    const actions = drafting(1);
+    const draft = comment('d1', { resolved: null, draft: true, body: 'Rename it.' });
+    const { container } = show(chain([draft]));
+    expect(container.querySelector('.chain-draft')).toHaveTextContent('Draft');
+    expect(screen.queryByRole('button', { name: /Resolve|^Reply$/ })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove draft' }));
+    expect(actions.remove).toHaveBeenCalledWith('d1');
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit draft' }));
+    const box = screen.getByRole('textbox', { name: 'Edit your draft' });
+    expect(box).toHaveValue('Rename it.');
+    await fireEvent.input(box, { target: { value: ' Rename it to x. ' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(actions.edit).toHaveBeenCalledWith('d1', 'Rename it to x.');
+    await vi.waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+  });
+
+  it('a draft reply under a comment is marked; the comment keeps its Reply', () => {
+    drafting(1);
+    show(chain([comment('c1', { replies: [comment('d2', { resolved: null, draft: true })] })]));
+    expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Edit draft' })).toBeTruthy();
+  });
+
+  it('where drafts can’t be kept, the box sends at once as before: Cancel and Reply only', async () => {
+    const { container } = show(chain([comment('c1')]));
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    expect([...container.querySelectorAll('form button')].map((b) => b.textContent?.trim())).toEqual([
+      'Cancel',
+      'Reply',
+    ]);
   });
 });
 

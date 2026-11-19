@@ -50,7 +50,9 @@
   import type { DocumentSource } from '../documents/source';
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
+  import ComposerActions from './ComposerActions.svelte';
   import DiffView from './DiffView.svelte';
+  import { draftActions } from './drafts';
   import { focusOnShow } from './focus';
   import { lineCounts } from './page';
   import type { Chain, PlacedChain, Picked, ViewFile } from './types';
@@ -118,15 +120,18 @@
   let writing = $state(false);
   let draft = $state('');
   let problem = $state<string | null>(null);
-  async function save() {
+  async function save(asDraft = false) {
     const body = draft.trim();
     if (!body) return;
-    problem = (await oncomment(null, body)) ?? null;
+    problem = (asDraft && drafts ? await drafts.comment(file.path, null, body) : await oncomment(null, body)) ?? null;
     if (!problem) {
       draft = '';
       writing = false;
     }
   }
+  /** What drafting does on this page (ATM-612); none where drafts can't be kept */
+  const drafts = draftActions();
+  const drafting = $derived(!!drafts && drafts.pending > 0);
 
   // A card in view is made at once; one only near it (within MARGIN), once the page is idle. Right after a jump, only
   // the file gone to (`wanted`) is made at once, the others a moment later: its sides load first
@@ -259,21 +264,32 @@
             <ChainBox {chain} {onreply} {onresolve} />
           {/each}
           {#if writing}
-            <div class="review-submodule-composer">
+            <form
+              class="review-submodule-composer"
+              onsubmit={(e) => {
+                e.preventDefault();
+                void save(drafting);
+              }}
+            >
               <textarea
                 aria-label="Comment on {file.path}"
                 bind:value={draft}
                 {@attach focusOnShow}
                 onkeydown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save();
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save(drafting);
                   if (e.key === 'Escape') writing = false;
                 }}></textarea>
               {#if problem}<p class="review-submodule-problem" role="alert">Not saved: {problem}</p>{/if}
               <div class="review-submodule-actions">
-                <button onclick={() => (writing = false)}>Cancel</button>
-                <button class="primary" disabled={busy || !draft.trim()} onclick={() => void save()}>Comment</button>
+                <ComposerActions
+                  ready={!busy && !!draft.trim()}
+                  {drafting}
+                  now={() => void save(false)}
+                  oncancel={() => (writing = false)}
+                  ondraft={drafts ? () => void save(true) : undefined}
+                />
               </div>
-            </div>
+            </form>
           {:else}
             <button class="review-submodule-comment" onclick={() => (writing = true)}>
               <Icon name="message-square" size={13} /> Comment on this submodule
@@ -482,7 +498,11 @@
     justify-content: flex-end;
     gap: var(--space-3);
   }
-  .review-submodule-actions button {
+  /* Its buttons are ComposerActions' (ATM-612) */
+  .review-submodule-actions :global(button) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
     padding: var(--space-1) var(--space-5);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -492,7 +512,7 @@
     font-size: var(--text-xs);
     cursor: pointer;
   }
-  .review-submodule-actions button.primary {
+  .review-submodule-actions :global(button.primary) {
     border-color: var(--accent);
     background: var(--accent);
     color: var(--bg);

@@ -7,12 +7,15 @@
   import { setWindowTitle } from '../api/shell';
   import {
     addComment,
+    addDraft,
     closeReview,
     openReview,
     pokeReview,
+    removeDraft,
     replyTo,
     resolveComment,
     submitDecision,
+    updateDraft,
     type ChangeResult,
   } from '../api/review-changes';
   import { currentAddress, navigate } from '../navigation';
@@ -280,6 +283,22 @@
         onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
         onclose={(reason) => change(closeReview(project, review, reason))}
         onpoke={(body) => change(pokeReview(project, review, body))}
+        ondrafts={{
+          comment: (path, picked, body) =>
+            change(
+              addDraft(project, review, {
+                path,
+                lines: picked?.lines ?? null,
+                side: picked?.side ?? 'new',
+                quote: picked?.quote ?? null,
+                round: path ? page.view.round : null,
+                body,
+              }),
+            ),
+          reply: (to, body) => change(addDraft(project, review, { reply_to: to, body })),
+          edit: (id, body) => change(updateDraft(project, review, id, body)),
+          remove: (id) => change(removeDraft(project, review, id)),
+        }}
         ondocument={(ref) => dashboard.openDocument(ref)}
       />
     {:else if problem}

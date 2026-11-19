@@ -293,11 +293,17 @@ that copy (or nobody yet).
 | `POST reviews` | `{title, summary?, tasks?, reviewers?, start?: open\|draft\|live, change: {range?: "BASE..HEAD", uncommitted?, base?, files?}}` | opens a review (`atm review create`, `live`) | `201`, its header |
 | `PATCH reviews/<CR>` | `{status: "closed", reason, reject_tasks?}` | closes it (`close`) | `200`, its header |
 | `PUT reviews/<CR>/tasks` | `{tasks: [<key>, …]}` | the tasks it reviews, as a whole (`tasks`) | `200`, its header |
-| `POST reviews/<CR>/decisions` | `{decision: approve\|request_changes\|comment, body?, override_rules?: {reason}}` | a reviewer's decision (`submit`); with `override_rules`, the user's decision over the rule on who decides (their own review, say), recorded in the review with the reason | `201`, its header |
+| `POST reviews/<CR>/decisions` | `{decision: approve\|request_changes\|comment, body?, override_rules?: {reason}}` | a reviewer's decision (`submit`), sent with the user's drafts (ATM-612; every check first, an approval refused while a drafted comment would be open); `comment` with no `body` only sends the drafts (*Publish comments*); with `override_rules`, the user's decision over the rule on who decides (their own review, say), recorded in the review with the reason | `201`, its header |
 | `POST reviews/<CR>/comments` | `{path?, lines?: [a, b], side?: new\|old, quote?, round?, body}` | a new chain (`comment`) | `201`, `{review, comment}` |
 | `PATCH reviews/<CR>/comments/<c>` | `{body}` or `{resolved}` | one's own text, or a top-level comment's box (`edit`, `resolve`) | `200`, `{review, comment}` |
 | `POST reviews/<CR>/comments/<c>/replies` | `{body}` | a reply (`reply`) | `201`, `{review, comment, reply_to}` |
 | `POST reviews/<CR>/pokes` | `{body?}` | a poke (`poke`, ATM-611): the user's nudge on the whole review, which its agent hears through its watch (`kind: "poke"`) and answers; never open; refused for an agent and on an ended review | `201`, `{review, poke}` |
+| `POST reviews/<CR>/drafts` | a comment's `{path?, lines?, side?, quote?, round?, body}`, or `{reply_to, body}` | a draft of the user's (`draft add`, ATM-612), kept in their state folder, never in the repository; sent with their next decision; refused for an agent and on an ended review | `201`, the draft: `{id: d1, at, body, kind: comment\|reply, …}` |
+| `PATCH reviews/<CR>/drafts/<d>` | `{body}` | a draft's text (`draft edit`) | `200`, the draft |
+| `DELETE reviews/<CR>/drafts/<d>` | `{}` | a draft thrown away (`draft remove`) | `200`, `{review, draft, removed}` |
+
+`GET reviews/<CR>/drafts` reads the user's drafts on the review (`{review, drafts}`), never another's; a review's
+page has them as `drafts` too, a draft comment placed in the round shown (`placed`, `drifted`) as a chain is.
 
 - **Only from atm's own page.** Besides the Host check (§1): an `Origin` that is the server's own
   (`http://localhost:<port>` or `http://127.0.0.1:<port>`), this start's session token in `X-Atm-Session` (random, in
@@ -310,7 +316,8 @@ that copy (or nobody yet).
   review's rules refuse `403`, `404` or `400`.
 - The app's commands do the same, one each (no session token: the app's own IPC, I25): `create_review`,
   `close_review`, `set_review_tasks`, `submit_review_decision`, `add_review_comment`, `update_review_comment`,
-  `reply_to_review_comment`.
+  `reply_to_review_comment`, `poke_review`, and the drafts' `list_review_drafts`, `add_review_draft`,
+  `update_review_draft` and `remove_review_draft`.
 
 ## 3. `GET /api/projects`
 

@@ -3,7 +3,9 @@
   import type { ProjectDocument } from '../documents';
   import type { DocumentSource } from '../documents/source';
   import ChainBox from './ChainBox.svelte';
+  import ComposerActions from './ComposerActions.svelte';
   import DiffCode, { type CodeLine } from './DiffCode.svelte';
+  import { draftActions } from './drafts';
   import { focusOnShow } from './focus';
   import RenderedSide from './RenderedSide.svelte';
   import {
@@ -311,16 +313,22 @@
   // Sent: the box stays, with what was written, until the page says it is saved; a refusal shows in it
   let saving = $state(false);
   let refused = $state<string | null>(null);
-  async function save() {
+  async function save(asDraft = false) {
     const body = draft.trim();
     if (!body || !composing || saving) return;
     saving = true;
     refused = null;
-    const problem = await oncomment?.(composing, body);
+    const problem =
+      asDraft && drafts ? await drafts.comment(path, composing, body) : await oncomment?.(composing, body);
     saving = false;
     if (typeof problem === 'string') refused = problem;
     else cancel();
   }
+  /** What drafting does on this page (ATM-612); none where drafts can't be kept */
+  const drafts = draftActions();
+  /** The form's submit and ⌘ Enter: the main action, adding a draft while the user has some */
+  const drafting = $derived(!!drafts && drafts.pending > 0);
+  const submit = () => void save(drafting);
 
   // The chain selected (hovered, focused, or clicked to keep it): its lines are marked
   let hovered = $state<string | null>(null);
@@ -404,7 +412,7 @@
     class="diff-composer"
     onsubmit={(e) => {
       e.preventDefault();
-      void save();
+      submit();
     }}
   >
     <div class="diff-composer-where">
@@ -420,13 +428,18 @@
       {@attach focusOnShow}
       onkeydown={(e) => {
         if (e.key === 'Escape') cancel();
-        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save();
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
       }}></textarea>
     {#if refused}<p class="diff-composer-problem" role="alert">Not saved: {refused}</p>{/if}
     <div class="diff-composer-actions">
-      <span class="diff-composer-hint">⌘ Enter to comment</span>
-      <button type="button" onclick={cancel}>Cancel</button>
-      <button type="submit" class="primary" disabled={!draft.trim() || busy || saving}>Comment</button>
+      <span class="diff-composer-hint">⌘ Enter to {drafting ? 'add to your review' : 'comment'}</span>
+      <ComposerActions
+        ready={!!draft.trim() && !busy && !saving}
+        {drafting}
+        now={() => void save(false)}
+        oncancel={cancel}
+        ondraft={drafts ? () => void save(true) : undefined}
+      />
     </div>
   </form>
 {/snippet}
@@ -709,7 +722,11 @@
     justify-content: flex-end;
     gap: var(--space-3);
   }
-  .diff-composer-actions button {
+  /* Its buttons are ComposerActions' (ATM-612) */
+  .diff-composer-actions :global(button) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
     padding: var(--space-2) var(--space-6);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -719,12 +736,12 @@
     font: inherit;
     cursor: pointer;
   }
-  .diff-composer-actions button.primary {
+  .diff-composer-actions :global(button.primary) {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
   }
-  .diff-composer-actions button:disabled {
+  .diff-composer-actions :global(button:disabled) {
     opacity: 0.5;
     cursor: default;
   }

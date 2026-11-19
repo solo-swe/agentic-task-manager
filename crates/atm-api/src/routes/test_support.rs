@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use atm_common::{Error, Result};
 use atm_lib::query::Filters;
+use atm_lib::review_drafts::{Draft, DraftUpdate, NewDraft, Place};
 use atm_lib::review_pages::ReviewQuery;
 use atm_lib::review_requests::{
     CommentUpdate, Decision, NewComment, NewPoke, NewReply, ReviewClosing, ReviewOpening,
@@ -48,6 +49,10 @@ pub(super) enum Call {
     UpdateComment(ReviewRef, CommentId, CommentUpdate),
     Reply(ReviewRef, CommentId, NewReply),
     Poke(ReviewRef, NewPoke),
+    Drafts(ReviewRef),
+    AddDraft(ReviewRef, NewDraft),
+    UpdateDraft(ReviewRef, String, DraftUpdate),
+    RemoveDraft(ReviewRef, String),
 }
 
 impl PartialEq for Call {
@@ -86,6 +91,7 @@ pub(super) struct FakeReviews {
     pub header: Result<ReviewHeader>,
     pub comment: Result<CommentId>,
     pub updated: Result<()>,
+    pub draft: Result<Draft>,
 }
 
 /// A review's header, `CR-1`, open.
@@ -110,6 +116,7 @@ impl Default for FakeReviews {
             header: Ok(header()),
             comment: Ok(CommentId("c1".into())),
             updated: Ok(()),
+            draft: Ok(draft()),
         }
     }
 }
@@ -459,6 +466,52 @@ impl ReviewChanges for Bound<FakeReviews> {
     fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
         self.calls.note(Call::Poke(review.clone(), poke.clone()));
         self.fake.comment.clone()
+    }
+
+    fn list_drafts(&self, review: &ReviewRef) -> Result<Vec<Draft>> {
+        self.calls.note(Call::Drafts(review.clone()));
+        self.fake.draft.clone().map(|d| vec![d])
+    }
+
+    fn add_draft(&mut self, review: &ReviewRef, draft: NewDraft) -> Result<Draft> {
+        self.calls.note(Call::AddDraft(review.clone(), draft));
+        self.fake.draft.clone()
+    }
+
+    fn update_draft(
+        &mut self,
+        review: &ReviewRef,
+        draft: &str,
+        update: &DraftUpdate,
+    ) -> Result<Draft> {
+        self.calls.note(Call::UpdateDraft(
+            review.clone(),
+            draft.to_string(),
+            update.clone(),
+        ));
+        self.fake.draft.clone()
+    }
+
+    fn remove_draft(&mut self, review: &ReviewRef, draft: &str) -> Result<()> {
+        self.calls
+            .note(Call::RemoveDraft(review.clone(), draft.to_string()));
+        self.fake.updated.clone()
+    }
+}
+
+/// A draft, `d1`, on the review as a whole.
+pub(super) fn draft() -> Draft {
+    Draft {
+        id: "d1".into(),
+        at: "2026-11-19T10:00:00Z".into(),
+        body: "Why?".into(),
+        place: Place::Comment {
+            path: None,
+            lines: None,
+            side: atm_lib::reviews::Side::New,
+            quote: None,
+            round: Some(1),
+        },
     }
 }
 

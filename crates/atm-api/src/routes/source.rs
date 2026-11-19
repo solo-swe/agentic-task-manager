@@ -7,6 +7,7 @@ use std::sync::Arc;
 use atm_common::{Error, Result};
 use atm_lib::Project;
 use atm_lib::query::Filters;
+use atm_lib::review_drafts::{self, Draft, DraftUpdate, NewDraft};
 use atm_lib::review_pages::ReviewQuery;
 use atm_lib::review_requests::{
     self, CommentUpdate, Decision, NewComment, NewPoke, NewReply, ReviewClosing, ReviewOpening,
@@ -175,6 +176,31 @@ pub trait ReviewChanges {
     /// # Errors
     /// What atm-lib refuses.
     fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId>;
+    /// The user's drafts on the review (ATM-612), the oldest first.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn list_drafts(&self, review: &ReviewRef) -> Result<Vec<Draft>>;
+    /// A new draft of the user's.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn add_draft(&mut self, review: &ReviewRef, draft: NewDraft) -> Result<Draft>;
+    /// A draft's text.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn update_draft(
+        &mut self,
+        review: &ReviewRef,
+        draft: &str,
+        update: &DraftUpdate,
+    ) -> Result<Draft>;
+    /// A draft thrown away.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn remove_draft(&mut self, review: &ReviewRef, draft: &str) -> Result<()>;
 }
 
 /// atm-lib's answers: the server's.
@@ -365,5 +391,26 @@ impl ReviewChanges for Project {
 
     fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
         review_requests::poke_review(self, review, poke)
+    }
+
+    fn list_drafts(&self, review: &ReviewRef) -> Result<Vec<Draft>> {
+        review_drafts::list_drafts(self, review)
+    }
+
+    fn add_draft(&mut self, review: &ReviewRef, draft: NewDraft) -> Result<Draft> {
+        review_drafts::add_draft(self, review, draft)
+    }
+
+    fn update_draft(
+        &mut self,
+        review: &ReviewRef,
+        draft: &str,
+        update: &DraftUpdate,
+    ) -> Result<Draft> {
+        review_drafts::update_draft(self, review, draft, update)
+    }
+
+    fn remove_draft(&mut self, review: &ReviewRef, draft: &str) -> Result<()> {
+        review_drafts::remove_draft(self, review, draft)
     }
 }

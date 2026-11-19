@@ -344,7 +344,7 @@ describe('atm review', () => {
         [['review', 'comment', 'CR-9', '--body', 'x'], 1, /no review CR-9/],
         [['review', 'reply', 'CR-1', 'c9', '--body', 'x'], 1, /c9/],
         [['review', 'submit', 'CR-1'], 2, /submit with --approve, --request-changes or --comment/],
-        [['review', 'submit', 'CR-1', '--comment'], 2, /--comment needs its text/],
+        [['review', 'submit', 'CR-1', '--comment'], 2, /needs its text, or drafts to send/],
         [['review', 'submit', 'CR-1', '--approve', '--request-changes'], 2, /cannot be used with/],
         [['review', 'wait', 'CR-1', '--timeout', '0'], 2, /--timeout takes 90s, 30m, 2h or seconds, not 0/],
         [['review', 'wait', 'CR-1', '--timeout', 'soon'], 2, /--timeout takes/],
@@ -660,6 +660,78 @@ describe('atm review', () => {
       assert.equal(late.code, 1);
       assert.match(late.stderr, /CR-1 is approved: it can't be poked/);
       assert.equal(ok(['review', 'poke', 'CR-1', '-n'], root, HAKAN).stdout, '[dry-run] would poke CR-1\n');
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  // ATM-612: a person's drafts, sent together with their next decision; an agent comments at once
+  test('draft: a person drafts comments and replies, sees only theirs, and sends them with a decision', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(
+        ['review', 'create', '--title', 'Drafted', '--task', 'T-1', '--uncommitted', '--reviewer', 'Hakan Serce'],
+        root,
+        AGENT,
+      );
+      ok(['review', 'comment', 'CR-1', '--body', 'Done, I think.'], root, AGENT);
+      const added = ok(
+        ['review', 'draft', 'add', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why?'],
+        root,
+        HAKAN,
+      );
+      assert.equal(added.stdout, 'CR-1: drafted d1 (a.txt:1-1): Why?\n');
+      assert.deepEqual(
+        ok(['review', 'draft', 'add', 'CR-1', '--reply-to', 'c1', '--body', 'Not yet.', '--json'], root, HAKAN).json()
+          .kind,
+        'reply',
+      );
+      ok(['review', 'draft', 'add', 'CR-1', '--body', 'Gone soon.'], root, HAKAN);
+      assert.equal(ok(['review', 'draft', 'remove', 'CR-1', 'd3'], root, HAKAN).stdout, 'CR-1: removed d3\n');
+      assert.equal(
+        ok(['review', 'draft', 'edit', 'CR-1', 'd1', '--body', 'Why this line?'], root, HAKAN).stdout,
+        'CR-1: changed d1 (a.txt:1-1): Why this line?\n',
+      );
+      assert.equal(
+        ok(['review', 'draft', 'list', 'CR-1'], root, HAKAN).stdout,
+        'd1 (a.txt:1-1): Why this line?\nd2 (reply to c1): Not yet.\n',
+      );
+      // Only theirs: another person has none; an agent drafts nothing; a reply has no place of its own
+      assert.equal(ok(['review', 'draft', 'list', 'CR-1'], root, { ATM_AGENT: 'Ana' }).stdout, 'CR-1: no drafts\n');
+      const refused = atm(['review', 'draft', 'add', 'CR-1', '--body', 'x'], root, AGENT);
+      assert.equal(refused.code, 2);
+      assert.match(refused.stderr, /a person drafts a review's comments: an agent comments at once/);
+      assert.equal(
+        atm(['review', 'draft', 'add', 'CR-1', '--reply-to', 'c1', '--file', 'a.txt', '--body', 'x'], root, HAKAN).code,
+        2,
+      );
+      assert.equal(
+        ok(['review', 'draft', 'add', 'CR-1', '--body', 'x', '-n'], root, HAKAN).stdout,
+        '[dry-run] would draft on CR-1\n',
+      );
+      // Not sent yet: the review has only the agent's comment
+      assert.equal(ok(['review', 'comments', 'CR-1', '--json'], root, HAKAN).json().length, 1);
+      // Approving with a drafted comment that would be open: refused, nothing sent
+      const approve = atm(['review', 'submit', 'CR-1', '--approve'], root, HAKAN);
+      assert.equal(approve.code, 1);
+      assert.match(approve.stderr, /can't be approved while comments are open: c1, d1 \(your draft\)/);
+      assert.equal(ok(['review', 'draft', 'list', 'CR-1', '--json'], root, HAKAN).json().drafts.length, 2);
+      // Sent back, with them
+      ok(['review', 'submit', 'CR-1', '--request-changes', '--body', 'Two things.'], root, HAKAN);
+      const chains = ok(['review', 'comments', 'CR-1', '--json'], root, HAKAN).json();
+      const bodies = chains.flatMap((c) => c.comments.flatMap((x) => [x.body, ...x.replies.map((r) => r.body)]));
+      assert.deepEqual(bodies.sort(), ['Done, I think.', 'Not yet.', 'Two things.', 'Why this line?']);
+      assert.equal(ok(['review', 'draft', 'list', 'CR-1'], root, HAKAN).stdout, 'CR-1: no drafts\n');
+      // Sent back already: --comment alone publishes new drafts, and it stays sent back
+      ok(['review', 'draft', 'add', 'CR-1', '--body', 'One more.'], root, HAKAN);
+      const published = ok(['review', 'submit', 'CR-1', '--comment', '--json'], root, HAKAN).json();
+      assert.equal(published.status, 'changes_requested');
+      assert.ok(
+        ok(['review', 'comments', 'CR-1', '--json'], root, HAKAN)
+          .json()
+          .some((c) => c.comments[0].body === 'One more.'),
+      );
     } finally {
       removeDir(root);
     }

@@ -9,9 +9,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::project::Project;
+use crate::review_drafts::{Draft, Place};
 use crate::reviews::{
-    self, Actor, Chain, FileStore, Found, Patch, Review, ReviewFilter, ReviewHeader, ReviewId,
-    ReviewRef, ReviewStore, Round, RoundKind, Status, list_everywhere, rounds,
+    self, Actor, Anchor, Chain, FileStore, Found, Patch, Review, ReviewFilter, ReviewHeader,
+    ReviewId, ReviewRef, ReviewStore, Round, RoundKind, Status, list_everywhere, rounds,
 };
 use atm_review::rounds::RoundDiffs;
 
@@ -506,8 +507,19 @@ fn placed<S: RoundDiffs + ?Sized>(
     chain: &Chain,
     shown: u32,
 ) -> Value {
-    let mut out = serde_json::to_value(chain).unwrap_or(Value::Null);
-    let anchor = &chain.anchor;
+    let out = serde_json::to_value(chain).unwrap_or(Value::Null);
+    with_placement(vcs, store, review, &chain.anchor, shown, out)
+}
+
+/// `out` with where `anchor` shows in round `shown`: `placed`, and `drifted`.
+fn with_placement<S: RoundDiffs + ?Sized>(
+    vcs: &atm_vcs::GitVcs,
+    store: &S,
+    review: &Review,
+    anchor: &Anchor,
+    shown: u32,
+    mut out: Value,
+) -> Value {
     let made = || json!({ "round": anchor.round, "lines": anchor.lines });
     let (at, drifted) = match rounds::place(vcs, store, review, anchor, shown) {
         Ok(rounds::Placement::Whole) => (Value::Null, Value::Null),
@@ -544,21 +556,55 @@ impl RoundDiffs for WithNow<'_> {
     }
 }
 
-/// A view and its chains placed in it.
+/// A view, its chains placed in it, and the user's drafts (ATM-612): a draft comment placed as a chain on its anchor
+/// is (one on what is there now, on the round shown, the newest), a reply as it is.
 fn shown_with<S: RoundDiffs + ?Sized>(
     vcs: &atm_vcs::GitVcs,
     diffs: &S,
     review: &Review,
     shown: u32,
     against: Option<u32>,
-) -> Result<(Value, Vec<Value>)> {
+    drafts: &[Draft],
+) -> Result<(Value, Vec<Value>, Vec<Value>)> {
     let view = view(vcs, diffs, review, shown, against)?;
     let chains = review
         .chains
         .iter()
         .map(|c| placed(vcs, diffs, review, c, shown))
         .collect();
-    Ok((view, chains))
+    let newest = review.rounds.last().map_or(shown, |r| r.number);
+    let drafts = drafts
+        .iter()
+        .map(|d| {
+            let out = serde_json::to_value(d).unwrap_or(Value::Null);
+            match &d.place {
+                Place::Comment {
+                    path,
+                    lines,
+                    side,
+                    quote,
+                    round,
+                } => {
+                    let anchor = Anchor {
+                        round: round.unwrap_or(newest),
+                        path: path.clone(),
+                        side: *side,
+                        lines: *lines,
+                        quote: quote.clone(),
+                    };
+                    with_placement(vcs, diffs, review, &anchor, shown, out)
+                }
+                Place::Reply { .. } => out,
+            }
+        })
+        .collect();
+    Ok((view, chains, drafts))
+}
+
+/// The user's drafts on `review` (ATM-612); none for an agent, or when they can't be read (the page shows the review
+/// as it is either way).
+fn drafts_of(project: &Project, review: &Review) -> Vec<Draft> {
+    crate::review_drafts::list_drafts(project, &review.header.reference).unwrap_or_default()
 }
 
 /// What a live review's page of its working copy now (`round` none) is made from, cheap to read (ATM-607): the
@@ -591,6 +637,8 @@ pub fn live_page_stamp(
         reviews_stamp(project),
         state,
         project.actor(),
+        // The user's drafts, which the page shows (ATM-612)
+        serde_json::to_value(drafts_of(project, &review)).unwrap_or(Value::Null),
     ])))
 }
 
@@ -622,7 +670,8 @@ pub fn review_page(
     } else {
         None
     };
-    let (mut view, chains) = match working {
+    let drafts = drafts_of(project, &review);
+    let (mut view, chains, drafts) = match working {
         Some(new) => {
             let number = latest + 1;
             let (unstored, patch) = rounds::unstored(number, new, atm_common::time::now_iso());
@@ -632,9 +681,16 @@ pub fn review_page(
                 number,
                 patch,
             };
-            shown_with(&vcs, &diffs, &review, number, against)?
+            shown_with(&vcs, &diffs, &review, number, against, &drafts)?
         }
-        None => shown_with(&vcs, &store, &review, round.unwrap_or(latest), against)?,
+        None => shown_with(
+            &vcs,
+            &store,
+            &review,
+            round.unwrap_or(latest),
+            against,
+            &drafts,
+        )?,
     };
     if let Some(map) = view.as_object_mut() {
         map.insert("now".into(), json!(now));
@@ -651,6 +707,7 @@ pub fn review_page(
         "branch": branch,
         "rounds": stored,
         "chains": chains,
+        "drafts": drafts,
         "view": view,
         "needs_you": needs(&review.header, &me),
         "you": me.0,

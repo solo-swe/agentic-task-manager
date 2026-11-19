@@ -1255,6 +1255,70 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(view.locator('[data-chain="tw"]')).toBeVisible();
   });
 
+  // ATM-612: drafts, only the user's, sent together with their decision
+  test('drafts: one added from a diff’s lines; shown marked and counted; edited, removed, and sent with Comment', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=src/a.rs'));
+    const view = diffOf(page, 'src/a.rs');
+    await view.locator('.diff-new').getByRole('button', { name: 'Line 2', exact: true }).first().click();
+    await page.locator('.diff-composer textarea').fill('Later, maybe.');
+    await page.locator('.diff-composer').getByRole('button', { name: 'Add to my review' }).click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({
+        method: 'POST',
+        path: '/CR-2/drafts',
+        body: { path: 'src/a.rs', lines: [2, 2], side: 'new', round: 3, body: 'Later, maybe.' },
+      });
+    // The page as atm then serves it: the draft among its comments, placed on its line
+    const draft = {
+      id: 'd1',
+      at: '2026-11-19T10:00:00Z',
+      body: 'Later, maybe.',
+      kind: 'comment',
+      path: 'src/a.rs',
+      lines: [2, 2],
+      side: 'new',
+      quote: 'line 2',
+      round: 3,
+      placed: [2, 2],
+      drifted: null,
+    };
+    tasksServer.setReview('CR-2', reviewPage({ drafts: [draft] }));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    const box = view.locator('[data-chain="draft-d1"]');
+    await expect(box.locator('.chain-draft')).toHaveText('Draft');
+    await expect(page.locator('#review-pending')).toHaveText('1');
+    // With a draft, a new comment's box adds one more by default (⌘ Enter)
+    await view.locator('.diff-new').getByRole('button', { name: 'Line 4', exact: true }).first().click();
+    await page.locator('.diff-composer textarea').fill('And this.');
+    await page.locator('.diff-composer textarea').press('ControlOrMeta+Enter');
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ path: '/CR-2/drafts', body: { lines: [4, 4] } });
+    // Edited in place, and removed
+    await box.getByRole('button', { name: 'Edit draft' }).click();
+    await box.getByLabel('Edit your draft').fill('Later.');
+    await box.getByRole('button', { name: 'Save' }).click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'PATCH', path: '/CR-2/drafts/d1', body: { body: 'Later.' } });
+    await box.getByRole('button', { name: 'Remove draft' }).click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'DELETE', path: '/CR-2/drafts/d1', body: {} });
+    // Sent with Comment, no summary needed
+    await page.locator('.review-submit-toggle').click();
+    await expect(page.locator('#review-pending-note')).toHaveText(/1 draft will be sent with it/);
+    await page.locator('[data-decision="comment"]').click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'POST', path: '/CR-2/decisions', body: { decision: 'comment' } });
+  });
+
   test('a press on a line number picks it, Shift-press extends the pick; Escape drops it', async ({
     page,
     tasksServer,

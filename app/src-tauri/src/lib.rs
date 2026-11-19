@@ -24,8 +24,9 @@ use commands::{
     subscribe_working_copy, subscribe_workspace, unsubscribe, version, worktrees,
 };
 use commands::{
-    add_review_comment, close_review, create_review, poke_review, project_review, project_reviews,
-    reply_to_review_comment, set_review_tasks, submit_review_decision, update_review_comment,
+    add_review_comment, add_review_draft, close_review, create_review, list_review_drafts,
+    poke_review, project_review, project_reviews, remove_review_draft, reply_to_review_comment,
+    set_review_tasks, submit_review_decision, update_review_comment, update_review_draft,
 };
 use external::open_url;
 use menu::{menu, menu_state, subscribe_menu};
@@ -68,6 +69,10 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         update_review_comment,
         reply_to_review_comment,
         poke_review,
+        list_review_drafts,
+        add_review_draft,
+        update_review_draft,
+        remove_review_draft,
         subscribe_links::<tauri::Wry>,
         check_update,
         install_update,
@@ -1224,6 +1229,72 @@ mod integration_tests {
         )
         .expect_err("not an opening");
         assert_eq!(wrong["kind"], json!("invalid"), "{wrong}");
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// ATM-612: the user's drafts on a review, as atm-lib answers: listed (none here, so the test writes nothing to the
+    /// state folder, which it doesn't pick), and each change refused as atm-lib refuses it, before it keeps anything
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn the_draft_commands_answer_as_atm_lib_does() {
+        let home = a_state_with_a_project("review-drafts");
+        let (_app, windows) = mock_app(
+            &home,
+            tauri::generate_handler![
+                create_review,
+                list_review_drafts,
+                add_review_draft,
+                update_review_draft,
+                remove_review_draft,
+            ],
+            &["main"],
+        );
+        let window = &windows[0];
+        let on = |extra: Value| {
+            let mut args = json!({"workspace": "work", "project": "abcd1234", "review": "CR-1"});
+            args.as_object_mut()
+                .expect("an object")
+                .extend(extra.as_object().expect("an object").clone());
+            args
+        };
+        call(
+            window,
+            "create_review",
+            &on(json!({"opening": {"title": "The README", "change": {"files": ["README.md"]}}})),
+        )
+        .expect("a review");
+        assert_eq!(
+            call(window, "list_review_drafts", &on(json!({}))),
+            Ok(json!({"review": "CR-1", "drafts": []}))
+        );
+        let empty = call(
+            window,
+            "add_review_draft",
+            &on(json!({"draft": {"body": " "}})),
+        )
+        .expect_err("an empty draft");
+        assert_eq!(empty["message"], json!("the draft is empty"), "{empty}");
+        let shape = call(
+            window,
+            "add_review_draft",
+            &on(json!({"draft": {"body": "x", "author": "claude:x"}})),
+        )
+        .expect_err("not a draft");
+        assert_eq!(shape["kind"], json!("invalid"), "{shape}");
+        for (command, args) in [
+            ("update_review_draft", json!({"draft": "d9", "body": "x"})),
+            ("remove_review_draft", json!({"draft": "d9"})),
+        ] {
+            let none = call(window, command, &on(args)).expect_err("no such draft");
+            assert_eq!(
+                none["message"],
+                json!("you have no draft d9 on CR-1"),
+                "{command}: {none}"
+            );
+        }
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 

@@ -2,6 +2,8 @@
   import CompMd from '../documents/CompMd.svelte';
   import { formatWhen } from '../format';
   import Icon from '../ui/Icon.svelte';
+  import ComposerActions from './ComposerActions.svelte';
+  import { draftActions } from './drafts';
   import { focusOnShow } from './focus';
   import { documentLinks, taskLinks } from './links';
   import type { Chain, ReviewComment } from './types';
@@ -37,15 +39,44 @@
   /** A task's key in a comment: a link to it, for a task the page knows (ATM-593) */
   const tasks = taskLinks();
 
+  /** What drafting does on this page (ATM-612); none where drafts can't be kept */
+  const drafts = draftActions();
+
   let replyingTo = $state<string | null>(null);
   let draft = $state('');
+  let refused = $state<string | null>(null);
 
-  function send() {
-    const body = draft.trim();
-    if (!body || !replyingTo) return;
-    onreply?.(replyingTo, body);
-    draft = '';
+  function closeReply() {
     replyingTo = null;
+    draft = '';
+    refused = null;
+  }
+
+  /** The reply sent at once, or kept as a draft (`asDraft`); a draft refused keeps the box with why */
+  async function send(asDraft = false) {
+    const body = draft.trim();
+    const to = replyingTo;
+    if (!body || !to) return;
+    if (asDraft && drafts) {
+      refused = await drafts.reply(to, body);
+      if (refused === null) closeReply();
+      return;
+    }
+    onreply?.(to, body);
+    closeReply();
+  }
+  /** The form's submit, and ⌘ Enter: the main action, adding a draft while the user has some */
+  const submitReply = () => void send(!!drafts && drafts.pending > 0);
+
+  // A draft's text changed in place (ATM-612)
+  let editing = $state<string | null>(null);
+  let editText = $state('');
+  let editRefused = $state<string | null>(null);
+  async function saveEdit() {
+    const body = editText.trim();
+    if (!body || !editing || !drafts) return;
+    editRefused = await drafts.edit(editing, body);
+    if (editRefused === null) editing = null;
   }
 
   const a = $derived(chain.anchor);
@@ -105,20 +136,64 @@
       {#if c.poke}<span class="chain-poke" title="A nudge its agent answers, saying where the review stands"
           ><Icon name="bell" size={12} /> Poke</span
         >{/if}
+      {#if c.draft}<span class="chain-draft" title="Only you see it: sent with your review"
+          ><Icon name="pencil" size={12} /> Draft</span
+        >{/if}
       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
+      {#if c.draft && drafts && editing !== c.id}
+        <span class="chain-draft-actions">
+          <button
+            class="chain-button chain-draft-edit"
+            aria-label="Edit draft"
+            onclick={() => {
+              editing = c.id;
+              editText = c.body;
+              editRefused = null;
+            }}><Icon name="pencil" size={13} /> Edit</button
+          >
+          <button
+            class="chain-button chain-draft-remove"
+            aria-label="Remove draft"
+            onclick={() => void drafts.remove(c.id)}><Icon name="trash-2" size={13} /> Remove</button
+          >
+        </span>
+      {/if}
     </div>
-    {#if c.body.trim()}
+    {#if c.draft && editing === c.id}
+      <form
+        class="chain-reply chain-draft-editor"
+        onsubmit={(e) => {
+          e.preventDefault();
+          void saveEdit();
+        }}
+      >
+        <textarea
+          aria-label="Edit your draft"
+          bind:value={editText}
+          rows="3"
+          {@attach focusOnShow}
+          onkeydown={(e) => {
+            if (e.key === 'Escape') editing = null;
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void saveEdit();
+          }}></textarea>
+        {#if editRefused}<p class="chain-problem" role="alert">Not saved: {editRefused}</p>{/if}
+        <div class="chain-actions">
+          <button type="button" class="chain-button" onclick={() => (editing = null)}>Cancel</button>
+          <button type="submit" class="chain-button primary" disabled={!editText.trim()}>Save</button>
+        </div>
+      </form>
+    {:else if c.body.trim()}
       <div class="chain-body"><CompMd text={c.body} onopen={openLink} {tasks} /></div>
     {:else if c.poke}
       <div class="chain-body chain-poke-empty">Poked</div>
     {/if}
-    {#if onreply}
+    {#if onreply && !c.draft}
       {#if replyingTo === c.id}
         <form
           class="chain-reply"
           onsubmit={(e) => {
             e.preventDefault();
-            send();
+            submitReply();
           }}
         >
           <textarea
@@ -128,14 +203,20 @@
             placeholder="Reply…"
             {@attach focusOnShow}
             onkeydown={(e) => {
-              if (e.key === 'Escape') replyingTo = null;
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send();
+              if (e.key === 'Escape') closeReply();
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitReply();
             }}></textarea>
+          {#if refused}<p class="chain-problem" role="alert">Not saved: {refused}</p>{/if}
           <div class="chain-actions">
-            <button type="button" class="chain-button" onclick={() => (replyingTo = null)}>Cancel</button>
-            <button type="submit" class="chain-button primary" disabled={!draft.trim()}
-              ><Icon name="send" size={13} /> Reply</button
-            >
+            <ComposerActions
+              reply
+              buttonClass="chain-button"
+              ready={!!draft.trim()}
+              drafting={!!drafts && drafts.pending > 0}
+              now={() => void send(false)}
+              oncancel={closeReply}
+              ondraft={drafts ? () => void send(true) : undefined}
+            />
           </div>
         </form>
       {:else}
@@ -321,6 +402,28 @@
     font-size: var(--text-xs);
     font-weight: 600;
   }
+  /* A draft (ATM-612): only its author sees it, until they send their review */
+  .chain-draft {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--yellow) 18%, transparent);
+    color: var(--yellow);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+  .chain-draft-actions {
+    display: inline-flex;
+    gap: var(--space-2);
+    margin-left: auto;
+  }
+  .chain-problem {
+    margin: var(--space-2) 0 0;
+    color: var(--red);
+    font-size: var(--text-xs);
+  }
   .chain-poke-empty {
     color: var(--text-muted);
     font-style: italic;
@@ -356,7 +459,8 @@
     gap: var(--space-3);
     margin-top: var(--space-3);
   }
-  .chain-button {
+  /* A reply box's buttons are ComposerActions' (ATM-612): the chain's button style reaches them */
+  .chain :global(.chain-button) {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
@@ -370,16 +474,16 @@
     font-weight: 500;
     cursor: pointer;
   }
-  .chain-button:hover {
+  .chain :global(.chain-button:hover) {
     color: var(--text);
     border-color: color-mix(in srgb, var(--text-muted) 60%, var(--border));
   }
-  .chain-button.primary {
+  .chain :global(.chain-button.primary) {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
   }
-  .chain-button:disabled {
+  .chain :global(.chain-button:disabled) {
     opacity: 0.5;
     cursor: default;
   }

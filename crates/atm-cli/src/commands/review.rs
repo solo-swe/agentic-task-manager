@@ -10,7 +10,7 @@ use atm_lib::actor::agent_identity;
 use atm_lib::reviews::comments_md::{self, CommentsFile};
 use atm_lib::reviews::{
     self, Actor, CommentFilter, CommentId, FileStore, NewReview, NewRound, ReviewFilter,
-    ReviewHeader, ReviewRef, ReviewStore, Reviews, Round, RoundKind, Side, Status, Verdict, rounds,
+    ReviewHeader, ReviewRef, ReviewStore, Reviews, Round, RoundKind, Side, Status, rounds,
     vcs as vcs_of,
 };
 use clap::{Args, Subcommand};
@@ -188,6 +188,13 @@ pub enum ReviewCommand {
         /// Who pokes (a person)
         #[arg(long)]
         agent: Option<String>,
+    },
+    /// Your drafts on a review: comments and replies only you see, sent together with your next `atm review submit`
+    /// (`--comment` alone sends them). Kept in your atm state folder, never in the repository; a person's, not an
+    /// agent's.
+    Draft {
+        #[command(subcommand)]
+        command: DraftCommand,
     },
     /// Reply to a comment.
     Reply {
@@ -406,6 +413,178 @@ macro_rules! as_json {
     ($value:expr) => {
         serde_json::to_value($value).unwrap_or(Value::Null)
     };
+}
+
+/// `atm review draft …` (ATM-612).
+#[derive(Debug, Subcommand)]
+pub enum DraftCommand {
+    /// Draft a comment (on a file's lines, a whole file, or the review as a whole), or with --reply-to, a reply.
+    Add {
+        /// The review (CR-7)
+        review: String,
+        /// The comment it answers (c9): a reply
+        #[arg(long, value_name = "ID", conflicts_with_all = ["file", "lines", "quote", "old", "round"])]
+        reply_to: Option<String>,
+        /// The file it is about
+        #[arg(long, value_name = "PATH")]
+        file: Option<String>,
+        /// Its lines, A-B (or A)
+        #[arg(long, value_name = "A-B", requires = "file")]
+        lines: Option<String>,
+        /// The text it is about
+        #[arg(long)]
+        quote: Option<String>,
+        /// On the old side of the change
+        #[arg(long)]
+        old: bool,
+        /// The round it is on (the latest by default)
+        #[arg(long, value_name = "N")]
+        round: Option<u32>,
+        #[command(flatten)]
+        body: Body,
+        /// Who drafts (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Your drafts on a review, the oldest first.
+    List {
+        /// The review (CR-7)
+        review: String,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Change a draft's text.
+    Edit {
+        /// The review (CR-7)
+        review: String,
+        /// The draft (d2)
+        draft: String,
+        #[command(flatten)]
+        body: Body,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Throw a draft away.
+    Remove {
+        /// The review (CR-7)
+        review: String,
+        /// The draft (d2)
+        draft: String,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
+/// A draft, for people: its ID, where it goes, its text.
+fn draft_line(draft: &atm_lib::review_drafts::Draft) -> String {
+    use atm_lib::review_drafts::Place;
+    let place = match &draft.place {
+        Place::Reply { to } => format!("reply to {to}"),
+        Place::Comment {
+            path: Some(path),
+            lines: Some((a, b)),
+            ..
+        } => format!("{path}:{a}-{b}"),
+        Place::Comment {
+            path: Some(path), ..
+        } => path.clone(),
+        Place::Comment { .. } => "the review".into(),
+    };
+    format!("{} ({place}): {}", draft.id, draft.body.replace('\n', " "))
+}
+
+/// Run a draft command.
+fn run_draft(command: DraftCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+    use atm_lib::review_drafts::{self as drafts, DraftUpdate, NewDraft};
+    match command {
+        DraftCommand::Add {
+            review,
+            reply_to,
+            file,
+            lines,
+            quote,
+            old,
+            round,
+            body,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let new = NewDraft {
+                reply_to,
+                path: file,
+                lines: lines.as_deref().map(parse_lines).transpose()?,
+                side: if old { Side::Old } else { Side::New },
+                quote,
+                round,
+                body: text_of(body, cwd)?,
+            };
+            if ctx.dry_run {
+                println!("[dry-run] would draft on {review}");
+                return Ok(0);
+            }
+            let draft = drafts::add_draft(&project, &reference(&review), new)?;
+            if ctx.json {
+                print_json(&as_json!(&draft));
+            } else {
+                println!("{review}: drafted {}", draft_line(&draft));
+            }
+        }
+        DraftCommand::List { review, agent } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let listed = drafts::list_drafts(&project, &reference(&review))?;
+            if ctx.json {
+                print_json(&json!({ "review": review, "drafts": as_json!(&listed) }));
+            } else if listed.is_empty() {
+                println!("{review}: no drafts");
+            } else {
+                for draft in &listed {
+                    println!("{}", draft_line(draft));
+                }
+            }
+        }
+        DraftCommand::Edit {
+            review,
+            draft,
+            body,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let update = DraftUpdate {
+                body: text_of(body, cwd)?,
+            };
+            if ctx.dry_run {
+                println!("[dry-run] would change {draft} on {review}");
+                return Ok(0);
+            }
+            let changed = drafts::update_draft(&project, &reference(&review), &draft, &update)?;
+            if ctx.json {
+                print_json(&as_json!(&changed));
+            } else {
+                println!("{review}: changed {}", draft_line(&changed));
+            }
+        }
+        DraftCommand::Remove {
+            review,
+            draft,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            if ctx.dry_run {
+                println!("[dry-run] would remove {draft} from {review}");
+                return Ok(0);
+            }
+            drafts::remove_draft(&project, &reference(&review), &draft)?;
+            if ctx.json {
+                print_json(&json!({ "review": review, "draft": draft, "removed": true }));
+            } else {
+                println!("{review}: removed {draft}");
+            }
+        }
+    }
+    Ok(0)
 }
 
 fn parse_lines(lines: &str) -> Result<(u32, u32)> {
@@ -958,6 +1137,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("{review}: poked ({id})");
             }
         }
+        ReviewCommand::Draft { command } => return run_draft(command, ctx, cwd),
         ReviewCommand::Reply {
             review,
             comment,
@@ -1047,10 +1227,11 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             override_rules,
             agent,
         } => {
-            let verdict = match (approve, request_changes, comment) {
-                (true, _, _) => Verdict::Approve,
-                (_, true, _) => Verdict::RequestChanges,
-                (_, _, true) => Verdict::Comment,
+            use atm_lib::review_requests::{Decision, DecisionKind, RulesOverride};
+            let decision = match (approve, request_changes, comment) {
+                (true, _, _) => DecisionKind::Approve,
+                (_, true, _) => DecisionKind::RequestChanges,
+                (_, _, true) => DecisionKind::Comment,
                 _ => {
                     return Err(Error::Invalid(
                         "submit with --approve, --request-changes or --comment".into(),
@@ -1063,25 +1244,20 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             } else {
                 None
             };
-            if verdict == Verdict::Comment && text.is_none() {
-                return Err(Error::Invalid(
-                    "--comment needs its text: --body or --body-file".into(),
-                ));
-            }
             if ctx.dry_run {
                 println!("[dry-run] would submit on {review}");
                 return Ok(0);
             }
-            reviews::submit(
+            // With the person's drafts on it (ATM-612): `--comment` without a text only sends them
+            let header = atm_lib::review_requests::submit_decision(
                 &mut project,
                 &reference(&review),
-                verdict,
-                text.as_deref(),
-                override_rules.as_deref(),
+                &Decision {
+                    decision,
+                    body: text,
+                    override_rules: override_rules.map(|reason| RulesOverride { reason }),
+                },
             )?;
-            let header = reviews::store(&project)?
-                .get_review(&reference(&review))?
-                .header;
             if ctx.json {
                 print_json(&as_json!(&header));
             } else {

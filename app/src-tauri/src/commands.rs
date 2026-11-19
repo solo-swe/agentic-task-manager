@@ -13,9 +13,9 @@ use crate::links::Links;
 use crate::menu::Menus;
 use crate::session::Session;
 use atm_lib::query::Filters;
-use atm_lib::review_requests;
 use atm_lib::workspaces::{Member, Workspace};
 use atm_lib::{OnChange, Subscription, Workspaces};
+use atm_lib::{review_drafts, review_requests};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use specta::Type;
@@ -701,6 +701,93 @@ pub async fn poke_review(
     let poke = review_requests::NewPoke { body };
     let id = review_requests::poke_review(&project, &review_ref(&review), &poke)?;
     Ok(Json(json!({ "review": review, "poke": id })))
+}
+
+fn draft_json(value: &impl serde::Serialize) -> Result<serde_json::Value, AppError> {
+    serde_json::to_value(value)
+        .map_err(|e| AppError::from(atm_common::Error::failed(e.to_string())))
+}
+
+/// `GET …/reviews/<CR>/drafts` (ATM-612): the user's drafts on the review.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn list_review_drafts(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let drafts = review_drafts::list_drafts(&project, &review_ref(&review))?;
+    Ok(Json(
+        json!({ "review": review, "drafts": draft_json(&drafts)? }),
+    ))
+}
+
+/// `POST …/reviews/<CR>/drafts`: a draft of the user's.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn add_review_draft(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    draft: ReviewRequest,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let draft = review_requests::request_from(draft.0)?;
+    let made = review_drafts::add_draft(&project, &review_ref(&review), draft)?;
+    Ok(Json(draft_json(&made)?))
+}
+
+/// `PATCH …/reviews/<CR>/drafts/<d>`: a draft's text.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn update_review_draft(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    draft: String,
+    body: String,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let changed = review_drafts::update_draft(
+        &project,
+        &review_ref(&review),
+        &draft,
+        &review_drafts::DraftUpdate { body },
+    )?;
+    Ok(Json(draft_json(&changed)?))
+}
+
+/// `DELETE …/reviews/<CR>/drafts/<d>`: a draft thrown away.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn remove_review_draft(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    draft: String,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    review_drafts::remove_draft(&project, &review_ref(&review), &draft)?;
+    Ok(Json(
+        json!({ "review": review, "draft": draft, "removed": true }),
+    ))
 }
 
 /// atm's version.

@@ -7,6 +7,8 @@
   import { readStored, writeStored } from '../prefs';
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
+  import ComposerActions from './ComposerActions.svelte';
+  import { draftedComments, setDraftActions, withDrafts, type DraftActions } from './drafts';
   import { focusOnShow } from './focus';
   import { setDocumentLinks, setTaskLinks } from './links';
   import type { TaskLinks } from '../compmd';
@@ -61,6 +63,7 @@
     onsubmit,
     onclose,
     onpoke,
+    ondrafts,
     ondocument,
   }: {
     page: ReviewPageData;
@@ -96,6 +99,9 @@
     onclose?: (reason: string) => void;
     /** A poke sent, with its message (ATM-611); why it wasn't, if it wasn't (its box keeps it) */
     onpoke?: (body: string) => Promise<string | null> | void;
+    /** What writing, changing and removing a draft does (ATM-612): every box that writes a comment or a reply then
+     * offers *Add to my review*; without it, they send at once */
+    ondrafts?: Omit<DraftActions, 'pending'>;
     /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
      * manager opens its document viewer (ATM-586) */
     ondocument?: (ref: DocumentRef) => void;
@@ -103,6 +109,22 @@
 
   const review = $derived(page.review);
   const view = $derived(page.view);
+  // The user's drafts among the chains (ATM-612): placed where the server placed them, marked, counted open (each would
+  // be an open comment once sent, which an approval can't be made with)
+  const allChains = $derived(withDrafts(page.chains, page.drafts, page.you, view.round));
+  const pendingDrafts = $derived(page.drafts?.length ?? 0);
+  // Set once, for the boxes under the page: each calls the handlers as they are then (a round shown since, say)
+  const refusedHere = 'Drafts can’t be kept here.';
+  if (untrack(() => ondrafts))
+    setDraftActions({
+      get pending() {
+        return pendingDrafts;
+      },
+      comment: (path, picked, body) => ondrafts?.comment(path, picked, body) ?? Promise.resolve(refusedHere),
+      reply: (to, body) => ondrafts?.reply(to, body) ?? Promise.resolve(refusedHere),
+      edit: (id, body) => ondrafts?.edit(id, body) ?? Promise.resolve(refusedHere),
+      remove: (id) => ondrafts?.remove(id) ?? Promise.resolve(refusedHere),
+    });
   // In the tree's order (ATM-596): the diffs, moving between files, the round's select and the Viewed count follow it
   const files = $derived(treeOrder(view.files));
   const tree = $derived(fileTree(files));
@@ -203,7 +225,7 @@
   /** A folded folder's sum: its files, those with comments, those not viewed yet */
   function folderSum(path: string) {
     const inIt = filesIn(tree, path);
-    const commented = inIt.filter((f) => chainsOf(page.chains, f).length).length;
+    const commented = inIt.filter((f) => chainsOf(allChains, f).length).length;
     const unviewed = inIt.filter((f) => !isViewed(f)).length;
     return [
       `${inIt.length} ${inIt.length === 1 ? 'file' : 'files'}`,
@@ -412,11 +434,15 @@
   let composing = $state(false);
   let draft = $state('');
   let refused = $state<string | null>(null);
-  async function saveComment() {
+  /** Sent at once, or kept as a draft (`asDraft`, ATM-612) */
+  async function saveComment(asDraft = false) {
     const body = draft.trim();
     if (!body) return;
     refused = null;
-    const problem = await oncomment({ path: null, picked: null, body });
+    const problem =
+      asDraft && ondrafts
+        ? await ondrafts.comment(null, null, body)
+        : await oncomment({ path: null, picked: null, body });
     if (typeof problem === 'string') {
       refused = problem;
       return;
@@ -457,20 +483,27 @@
   // The Comments tab
   let filter = $state<ChainFilter>('all');
   const chainCounts = $derived({
-    all: page.chains.length,
-    open: page.chains.filter((c) => !isResolved(c)).length,
-    resolved: page.chains.filter((c) => isResolved(c)).length,
+    all: allChains.length,
+    open: allChains.filter((c) => !isResolved(c)).length,
+    resolved: allChains.filter((c) => isResolved(c)).length,
   });
   /** Nothing left open: the decision at hand is to approve */
   const settled = $derived(chainCounts.open === 0);
   /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can. A review
    * sent back can be approved too (ATM-609) */
   const approveBlocked = $derived.by(() => {
-    const open = chainCounts.open;
+    const drafted = draftedComments(page.drafts);
+    const open = chainCounts.open - drafted;
     if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
+    if (drafted > 0)
+      return `Your ${drafted === 1 ? 'draft comment' : `${drafted} draft comments`} would be open once sent: send ${drafted === 1 ? 'it' : 'them'} with Comment or Request changes, or remove ${drafted === 1 ? 'it' : 'them'}`;
     return null;
   });
-  const listed = $derived(filterChains(page.chains, filter));
+  /** What a decision sends with it (ATM-612): the user's drafts */
+  const pendingLabel = $derived(
+    pendingDrafts ? `${pendingDrafts} ${pendingDrafts === 1 ? 'draft' : 'drafts'} will be sent with it` : null,
+  );
+  const listed = $derived(filterChains(allChains, filter));
   /** A chain as the Comments tab shows it: where it was made (a drifted one at its own lines) */
   const asMade = (c: PlacedChain) => ({
     ...c,
@@ -480,7 +513,7 @@
   const tabs = $derived([
     { id: 'overview', label: 'Overview', icon: 'info', count: null },
     { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length },
-    { id: 'comments', label: 'Comments', icon: 'message-square', count: page.chains.length },
+    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length },
   ] as const);
 </script>
 
@@ -574,24 +607,36 @@
             <button
               class="review-button primary review-submit-toggle"
               aria-expanded={submitting}
-              onclick={() => (submitting = !submitting)}>Submit review <Icon name="chevron-down" size={15} /></button
+              onclick={() => (submitting = !submitting)}
+              >{sentBack && pendingDrafts ? 'Publish comments' : 'Submit review'}{#if pendingDrafts}<span
+                  class="review-pending"
+                  id="review-pending"
+                  title="Your drafts, sent with your review">{pendingDrafts}</span
+                >{/if}
+              <Icon name="chevron-down" size={15} /></button
             >
           {/if}
           {#if submitting}
             <section class="review-submit" aria-label="Submit">
               <h2 class="review-submit-title">Finish your review</h2>
+              {#if pendingLabel}<p class="review-pending-note" id="review-pending-note">
+                  <Icon name="pencil" size={13} />
+                  {pendingLabel}
+                </p>{/if}
               <textarea
                 id="review-summary-body"
                 bind:value={summary}
                 rows="4"
-                placeholder="A summary of your review (needed to comment)"
+                placeholder={pendingDrafts
+                  ? 'A summary of your review (optional)'
+                  : 'A summary of your review (needed to comment)'}
                 aria-label="Summary"
                 {@attach focusOnShow}></textarea>
               <div class="review-actions">
                 <button
                   class="review-button"
                   data-decision="comment"
-                  disabled={busy || !summary.trim()}
+                  disabled={busy || (!summary.trim() && !pendingDrafts)}
                   onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
                 >
                 {#if live}
@@ -849,12 +894,18 @@
 
         <aside class="review-conversation" aria-label="Comments on the review">
           <h2 class="review-card-title">Conversation</h2>
-          {#each reviewChains(page.chains) as chain (chain.id)}<ChainBox {chain} {onreply} {onresolve} />{/each}
-          {#if !reviewChains(page.chains).length && !composing}
+          {#each reviewChains(allChains) as chain (chain.id)}<ChainBox {chain} {onreply} {onresolve} />{/each}
+          {#if !reviewChains(allChains).length && !composing}
             <p class="review-empty">No comments on the review as a whole yet.</p>
           {/if}
           {#if composing}
-            <div class="review-composer">
+            <form
+              class="review-composer"
+              onsubmit={(e) => {
+                e.preventDefault();
+                void saveComment(!!ondrafts && pendingDrafts > 0);
+              }}
+            >
               <textarea
                 id="review-comment-body"
                 bind:value={draft}
@@ -864,12 +915,16 @@
                 {@attach focusOnShow}></textarea>
               {#if refused}<p class="review-refused" role="alert">Not saved: {refused}</p>{/if}
               <div class="review-actions">
-                <button class="review-button" onclick={() => (composing = false)}>Cancel</button>
-                <button class="review-button primary" disabled={!draft.trim() || busy} onclick={saveComment}
-                  >Comment</button
-                >
+                <ComposerActions
+                  buttonClass="review-button"
+                  ready={!!draft.trim() && !busy}
+                  drafting={!!ondrafts && pendingDrafts > 0}
+                  now={() => void saveComment(false)}
+                  oncancel={() => (composing = false)}
+                  ondraft={ondrafts ? () => void saveComment(true) : undefined}
+                />
               </div>
-            </div>
+            </form>
           {:else}
             <button class="review-button review-add-comment" onclick={() => (composing = true)}
               ><Icon name="message-square" size={14} /> Comment on the review</button
@@ -984,8 +1039,8 @@
         {#each files as f (f.path)}
           <ReviewFile
             file={f}
-            chains={chainsOf(page.chains, f)}
-            drifted={driftedOf(page.chains, f)}
+            chains={chainsOf(allChains, f)}
+            drifted={driftedOf(allChains, f)}
             before={sideOf(f.before)}
             after={sideOf(f.after)}
             viewed={isViewed(f)}
@@ -1141,8 +1196,8 @@
     color: var(--text-muted);
     white-space: nowrap;
   }
-  /* Buttons, as the dashboard's dialogs draw theirs */
-  .review-button {
+  /* Buttons, as the dashboard's dialogs draw theirs; a comment box's are ComposerActions' (ATM-612), which these reach */
+  .review-page :global(.review-button) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1158,10 +1213,10 @@
     white-space: nowrap;
     cursor: pointer;
   }
-  .review-button:hover:not(:disabled) {
+  .review-page :global(.review-button:hover:not(:disabled)) {
     border-color: color-mix(in srgb, var(--text-muted) 60%, var(--border));
   }
-  .review-button.primary {
+  .review-page :global(.review-button.primary) {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
@@ -1173,9 +1228,26 @@
   .review-button.danger {
     color: var(--red);
   }
-  .review-button:disabled {
+  .review-page :global(.review-button:disabled) {
     opacity: 0.5;
     cursor: default;
+  }
+  /* The drafts a decision sends (ATM-612): counted on the button, said in its box */
+  .review-pending {
+    min-width: var(--space-8);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--on-accent) 25%, transparent);
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+  .review-pending-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
   .review-submit-anchor {
     position: relative;

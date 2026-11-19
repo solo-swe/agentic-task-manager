@@ -2,13 +2,17 @@ import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addComment,
+  addDraft,
   closeReview,
+  listDrafts,
   openReview,
   pokeReview,
+  removeDraft,
   replyTo,
   resolveComment,
   sessionToken,
   submitDecision,
+  updateDraft,
 } from '../../src/lib/api/review-changes';
 import { setApiWorkspace } from '../../src/lib/api/workspace';
 
@@ -79,6 +83,21 @@ describe('in the browser', () => {
       // ATM-611: a poke, with a message or without one (a blank one is none)
       [() => pokeReview('p1', 'CR-7', 'Where are we?'), 'POST', `${reviews}/CR-7/pokes`, { body: 'Where are we?' }],
       [() => pokeReview('p1', 'CR-7', '  '), 'POST', `${reviews}/CR-7/pokes`, {}],
+      // ATM-612: a draft comment, a draft reply, a draft's text, a draft removed (with an empty body)
+      [
+        () => addDraft('p1', 'CR-7', { path: 'a.md', lines: [1, 1], side: 'new', round: 2, body: 'Why?' }),
+        'POST',
+        `${reviews}/CR-7/drafts`,
+        { path: 'a.md', lines: [1, 1], side: 'new', round: 2, body: 'Why?' },
+      ],
+      [
+        () => addDraft('p1', 'CR-7', { reply_to: 'c4', body: 'No.' }),
+        'POST',
+        `${reviews}/CR-7/drafts`,
+        { reply_to: 'c4', body: 'No.' },
+      ],
+      [() => updateDraft('p1', 'CR-7', 'd2', 'Why not?'), 'PATCH', `${reviews}/CR-7/drafts/d2`, { body: 'Why not?' }],
+      [() => removeDraft('p1', 'CR-7', 'd2'), 'DELETE', `${reviews}/CR-7/drafts/d2`, {}],
       [() => resolveComment('p1', 'CR-7', 'c4', true), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: true }],
       [() => resolveComment('p1', 'CR-7', 'c4', false), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: false }],
       [
@@ -156,6 +175,26 @@ describe('in the browser', () => {
     expect(await resolveComment('p1', 'CR-7', 'c1', true)).toEqual({ ok: true, body: {} });
   });
 
+  it('the drafts are read with a GET, no token needed; a refusal or a failed request is its message', async () => {
+    const drafts = [{ id: 'd1', at: 't', body: 'x', kind: 'reply', to: 'c1' }];
+    const fetch = answering(200, { review: 'CR-7', drafts });
+    withToken(null);
+    expect(await listDrafts('p1', 'CR-7')).toEqual({ ok: true, drafts });
+    expect(fetch.mock.calls[0][0]).toBe(`${reviews}/CR-7/drafts`);
+    expect(fetch.mock.calls[0][1]?.method).toBeUndefined();
+    answering(400, { error: 'a person drafts a review’s comments' });
+    expect(await listDrafts('p1', 'CR-7')).toEqual({ ok: false, message: 'a person drafts a review’s comments' });
+    answering(200, {});
+    expect(await listDrafts('p1', 'CR-7')).toEqual({ ok: true, drafts: [] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down');
+      }),
+    );
+    expect(await listDrafts('p1', 'CR-7')).toEqual({ ok: false, message: 'network down' });
+  });
+
   it('the token is the page’s meta tag; none, none', () => {
     expect(sessionToken()).toBe(TOKEN);
     withToken('');
@@ -215,6 +254,10 @@ describe('in the app', () => {
     await closeReview('p1', 'CR-7', 'Done elsewhere.');
     await pokeReview('p1', 'CR-7', 'Hello?');
     await pokeReview('p1', 'CR-7');
+    await addDraft('p1', 'CR-7', { reply_to: 'c4', body: 'No.' });
+    await updateDraft('p1', 'CR-7', 'd1', 'Yes.');
+    await removeDraft('p1', 'CR-7', 'd1');
+    await listDrafts('p1', 'CR-7');
     const at = { workspace: 'w', project: 'p1', review: 'CR-7' };
     expect(calls).toEqual([
       ['add_review_comment', { ...at, comment: { body: 'On the review.' } }],
@@ -225,6 +268,10 @@ describe('in the app', () => {
       ['close_review', { ...at, closing: { status: 'closed', reason: 'Done elsewhere.' } }],
       ['poke_review', { ...at, body: 'Hello?' }],
       ['poke_review', { ...at, body: null }],
+      ['add_review_draft', { ...at, draft: { reply_to: 'c4', body: 'No.' } }],
+      ['update_review_draft', { ...at, draft: 'd1', body: 'Yes.' }],
+      ['remove_review_draft', { ...at, draft: 'd1' }],
+      ['list_review_drafts', at],
     ]);
     expect(fetch).not.toHaveBeenCalled();
   });
