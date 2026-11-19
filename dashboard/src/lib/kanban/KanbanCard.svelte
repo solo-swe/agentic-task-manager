@@ -97,7 +97,14 @@
     </div>
   {/if}
   {#if codeReview && dashboard.projectId}
-    <div class="card-review"><ReviewLink project={dashboard.projectId} reference={codeReview.ref} prominent /></div>
+    <div class="card-review">
+      <ReviewLink
+        project={dashboard.projectId}
+        reference={codeReview.ref}
+        status={task.derived?.review_statuses?.[codeReview.id]}
+        prominent
+      />
+    </div>
   {/if}
   {#if block}
     <div

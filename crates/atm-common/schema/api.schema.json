@@ -78,6 +78,13 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/ForeignTask" },
           "description": "The other projects' tasks it names (<project id>:<UUID> in dependencies, related or duplicate_of), by reference, as they are there (ADR-007 §7); absent when it names none"
+        },
+        "review_statuses": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": ["draft", "waiting", "live", "changes_requested", "approved", "closed", "unreadable"]
+          },
+          "description": "Where each of its code reviews stands (ATM-621), by the review's ID as its code_reviews link it: the review's status, or unreadable for one atm can't read (ATM-617); one this working copy doesn't have is left out, and the field is absent when it has none"
         }
       }
     },

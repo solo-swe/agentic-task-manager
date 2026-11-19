@@ -143,6 +143,12 @@ typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/ge
 task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
 `in_pr`, `merged`) and `archived`; what doesn't apply is left out.
 
+- **Its code reviews' statuses** (ATM-621): a task with code reviews (`code_reviews`) has `derived.review_statuses`,
+  by review ID: each review's status (`draft`, `waiting`, `live`, `changes_requested`, `approved`, `closed`), or
+  `unreadable` for one atm can't read (ATM-617). They're read from the project's reviews once for all the views. A
+  review this working copy doesn't have is left out. The tasks' `ETag` already moves with the reviews' files
+  (ATM-606), so a decision shows on the next refresh. The task cards' and the details' review badges show them.
+
 - **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
   `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,
   found }`, and when found, the project's `project_name` and `places` (`[{ workspace, project }]`, where it is

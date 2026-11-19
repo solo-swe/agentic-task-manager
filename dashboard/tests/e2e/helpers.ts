@@ -443,7 +443,9 @@ export class TasksServer {
             });
       }
       return answerTasks(route, V1_TASKS, (body) =>
-        body === this.body ? asTaskViews(body, this.archiveBody, false, this.registeredBodies) : asTaskViews(body),
+        body === this.body
+          ? this.withReviewStatuses(asTaskViews(body, this.archiveBody, false, this.registeredBodies))
+          : asTaskViews(body),
       );
     });
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
@@ -800,6 +802,27 @@ export class TasksServer {
     return { ok: true };
   }
 
+  /** Where the default project's code reviews stand, by review ID (ATM-621): what atm reads from its reviews folder
+   * into each task's `derived.review_statuses`. The fixture's views come from atm run outside git, with no reviews
+   * folder, so a test sets them here; atm's own reading is tested by atm-lib and the CLI suite */
+  reviewStatuses: Record<string, string> = {};
+
+  /** Task views (as text) with the statuses of the reviews each task links, as atm serves them */
+  private withReviewStatuses(text: string): string {
+    if (!Object.keys(this.reviewStatuses).length) return text;
+    const parsed = JSON.parse(text) as {
+      tasks?: { task: Record<string, unknown>; derived: Record<string, unknown> }[];
+    };
+    for (const view of parsed.tasks ?? []) {
+      const links = (view.task.code_reviews ?? []) as { id: string }[];
+      const known = Object.fromEntries(
+        links.filter((l) => l.id in this.reviewStatuses).map((l) => [l.id, this.reviewStatuses[l.id]]),
+      );
+      if (Object.keys(known).length) view.derived = { ...view.derived, review_statuses: known };
+    }
+    return JSON.stringify(parsed);
+  }
+
   /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */
   private answerCommand(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
     const unknown = { error: { kind: 'not_found', message: 'unknown project' } };
@@ -828,7 +851,7 @@ export class TasksServer {
         return {
           ok: views(
             project === this.projectId
-              ? asTaskViews(body, this.archiveBody, false, this.registeredBodies)
+              ? this.withReviewStatuses(asTaskViews(body, this.archiveBody, false, this.registeredBodies))
               : asTaskViews(body),
           ),
         };

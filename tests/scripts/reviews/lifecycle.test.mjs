@@ -629,4 +629,38 @@ describe('atm review', () => {
       removeDir(root);
     }
   });
+
+  // ATM-621: the task views atm serves carry where each of a task's code reviews stands (its badge says it from the
+  // first load); one atm can't read says so; a task without reviews has no such field
+  test('a task view says where each of its code reviews stands, unreadable for one atm can’t read', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'First', '--task', 'T-1', '--uncommitted'], root, AGENT);
+      const statuses = () =>
+        Object.fromEntries(
+          ok(['task', 'list', '--derived'], root, HAKAN)
+            .json()
+            .map((v) => [v.task.id, v.derived.review_statuses ?? null]),
+        );
+      const id = (n) => ok(['review', 'show', `CR-${n}`, '--json'], root, HAKAN).json().header.id;
+      const first = id(1);
+      assert.deepEqual(statuses(), { 'T-1': { [first]: 'waiting' }, 'T-2': null });
+      ok(['review', 'submit', 'CR-1', '--approve'], root, HAKAN);
+      assert.deepEqual(statuses()['T-1'], { [first]: 'approved' });
+      // A second review of T-2, then its file made unreadable (ATM-617): its link says so
+      ok(['review', 'create', '--title', 'Second', '--task', 'T-2', '--uncommitted'], root, AGENT);
+      const second = id(2);
+      const reviews = path.join(root, '.agentic-task-manager', 'reviews');
+      const file = path.join(
+        reviews,
+        fs.readdirSync(reviews).find((n) => n.startsWith('CR-2-')),
+        'review.md',
+      );
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('open', 'frozen'));
+      assert.deepEqual(statuses()['T-2'], { [second]: 'unreadable' });
+    } finally {
+      removeDir(root);
+    }
+  });
 });

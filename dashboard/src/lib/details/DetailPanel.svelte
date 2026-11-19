@@ -79,6 +79,8 @@
   const codeReviews = $derived(task?.code_reviews ?? []);
   const latestReview = $derived(codeReviews.at(-1) ?? null);
   const earlierReviews = $derived(codeReviews.slice(0, -1).reverse());
+  /** Where a review of the task stands, as its view from atm says (ATM-621) */
+  const reviewStatusOf = (id: string) => task?.derived?.review_statuses?.[id];
   const reviewProject = $derived(dashboard.projectId);
   const actors = $derived(task ? actorsLine(task) : '');
   const attempts = $derived(task ? earlierAttempts(task) : []);
@@ -500,8 +502,17 @@
         {#if latestReview && reviewProject}
           <!-- Its code review, the latest it names, to open (ATM-585); the earlier ones after it -->
           <div class="detail-review-links">
-            <ReviewLink project={reviewProject} reference={latestReview.ref} prominent />
-            {#each earlierReviews as r (r.id)}<ReviewLink project={reviewProject} reference={r.ref} />{/each}
+            <ReviewLink
+              project={reviewProject}
+              reference={latestReview.ref}
+              status={reviewStatusOf(latestReview.id)}
+              prominent
+            />
+            {#each earlierReviews as r (r.id)}<ReviewLink
+                project={reviewProject}
+                reference={r.ref}
+                status={reviewStatusOf(r.id)}
+              />{/each}
           </div>
         {/if}
         <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
@@ -518,6 +529,7 @@
         {#each [...earlierReviews, latestReview] as r (r.id)}<ReviewLink
             project={reviewProject}
             reference={r.ref}
+            status={reviewStatusOf(r.id)}
           />{/each}
       </div>
     </div>
