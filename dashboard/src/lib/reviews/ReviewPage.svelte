@@ -305,12 +305,20 @@
   let wanted = $state<string | null>(null);
   const cardOf = (path: string) =>
     list?.querySelector<HTMLElement>(`.review-file-card[data-file="${CSS.escape(path)}"]`) ?? null;
+  /** `card` at the list's top, as near as it scrolls: the list scrolled by the difference, and nothing else (ATM-656:
+   * `scrollIntoView` also scrolls what holds the list, and in WebKit landed a few px off one time in two) */
+  function toTop(card: HTMLElement | null) {
+    const el = list;
+    if (!el || !card) return;
+    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    if (Math.abs(off) >= 1) el.scrollTop += off;
+  }
   async function showFile(path: string, address = true) {
     tab = 'diffs';
     holdNearCards();
     wanted = path;
     await tick();
-    cardOf(path)?.scrollIntoView({ block: 'start' });
+    toTop(cardOf(path));
     atFile = chosen = pinned = path;
     // The address follows once the page is idle: the file is drawn first (a navigation re-renders the layout)
     writing?.();
@@ -326,7 +334,7 @@
     if (!el) return;
     const unpin = () => (pinned = null);
     const settle = new ResizeObserver(() => {
-      if (pinned) cardOf(pinned)?.scrollIntoView({ block: 'start' });
+      if (pinned) toTop(cardOf(pinned));
     });
     for (const card of el.querySelectorAll('.review-file-card')) settle.observe(card);
     const events = ['wheel', 'touchstart', 'mousedown', 'keydown'] as const;

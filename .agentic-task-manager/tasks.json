@@ -17250,7 +17250,7 @@
       "description": "Found in ATM-652 (CR-62): the e2e test *+ on a line wrapped opens the comment box where it is; the pane stays* (`reviews.spec.ts`, ATM-625) passes in Chromium and fails in WebKit, the app's engine on macOS, with and without ATM-652's change: the pane moves from about 1,230 to 2,860 px when the comment box opens. The suite runs Chromium only, so nothing caught it.\n\n## Look into\nWhy WebKit scrolls the pane: the comment box's focus (`focusOnShow`) scrolling it into view before it is placed, a run being cut where the pick ends (the segments are drawn again) and the scroll anchoring WebKit lacks, or the rows measured again after a wrap.\n\n## Fix and tests\nThe pane stays where it is in WebKit too. Run the reviews specs in WebKit: either a WebKit project for the reviews specs in `playwright.config.ts` (its cost measured), or at least this test in WebKit as well.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffView.svelte",
@@ -17258,7 +17258,7 @@
         "dashboard/playwright.config.ts"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-19T19:55:53Z",
+      "updated_at": "2026-11-19T21:19:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17273,7 +17273,24 @@
         "dashboard"
       ],
       "started_at": "2026-11-19T19:55:53Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "9527f05be274379a215a85aff877a4138c0b2475",
+      "code_reviews": [
+        {
+          "id": "01a1f5ad-db67-7610-962f-33fbf7a14853",
+          "ref": "CR-65"
+        }
+      ],
+      "review_requested_at": "2026-11-19T21:19:34Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T21:19:34Z",
+          "kind": "review",
+          "text": "CR-65: WebKit: the + on a wrapped line keeps the pane where it is; tests in WebKit",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e642f23672e",
@@ -17287,7 +17304,7 @@
       "description": "Hakan (2026-11-19): jumping to a file in a review's diffs (the last file, say, from the file tree) sometimes ends somewhere else: right after the jump, the files above it are drawn and expand, and push the file below the screen.\n\n## Expected\nA jump lands with the file's header at the top of the pane, and it stays there while the files above it are drawn, measured or highlighted (ATM-587 draws long files a chunk at a time; CompMD renders runs one at a time).\n\n## Look into\n- What grows above the target after the jump: files not drawn yet (their placeholder height versus their real one), chunks added a frame at a time, CompMD's highlighting changing a run's height, folds.\n- Keep the target in place: scroll anchoring (Chromium has it, WebKit doesn't, and the app is WebKit), or hold the target's position while what is above it changes (measure its top before and after each change and scroll by the difference) until the page settles; or give the files above their real height before the jump.\n\n## Tests\ne2e on a long review (the performance fixture's 94 files): jump to the last file and to one in the middle; the file's header stays at the pane's top (within a few px) for a second after, in Chromium and WebKit.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -17295,7 +17312,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-19T19:46:39Z",
+      "updated_at": "2026-11-19T21:19:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17308,7 +17325,9 @@
       "number": 656,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-19T21:19:45Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

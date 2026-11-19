@@ -692,6 +692,107 @@ test.describe('a review’s page', () => {
     },
   );
 
+  // ATM-656 (Hakan): a jump to a file from the tree sometimes ended elsewhere: the files above it drawn after the jump
+  // grew and pushed it out of view. The file's header stays where the jump put it (the pane's top, or as near as the
+  // pane can scroll), frame after frame, while the files around it are drawn
+  test(
+    'a jump to a file stays on it while the files above it are drawn: one in the middle, the last, one scrolled at once',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      // Shaped as the long review of the performance tests (94 files, a few long ones, some long lines)
+      const sizes = Array.from({ length: 94 }, (_, i) => (i % 31 === 0 ? 600 : i % 7 === 0 ? 120 : 12));
+      const files = sizes.map((added, i) => {
+        const path = `src/d${String(Math.floor(i / 10)).padStart(2, '0')}/f${String(i).padStart(3, '0')}.rs`;
+        const body = Array.from(
+          { length: added },
+          (_, n) => `+let value_${n} = "${'x'.repeat(n % 5 === 0 ? 240 : 30)}";`,
+        ).join('\n');
+        return {
+          path,
+          old_path: path,
+          status: 'modified',
+          binary: false,
+          patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,${added + 3} @@\n line 1\n line 2\n line 3\n${body}\n`,
+          before: `b${i}`,
+          after: `a${i}`,
+        };
+      });
+      await openReviews(page, tasksServer);
+      files.forEach((f, i) => {
+        const head = ['line 1', 'line 2', 'line 3'];
+        const added = f.patch
+          .split('\n')
+          .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+          .map((l) => l.slice(1));
+        const doc = (text: string) => projectDocument(f.path, text, { kind: 'code', language: 'rust', line_offset: 1 });
+        tasksServer
+          .setRevisionDocument(`b${i}`, doc(head.join('\n') + '\n'))
+          .setRevisionDocument(`a${i}`, doc([...head, ...added].join('\n') + '\n'));
+      });
+      tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files } }));
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await expect(diffOf(page, files[0].path).locator('.diff-line').first()).toBeVisible();
+      /** The file's card top against the pane's, as each frame was drawn (read right after it: a read in the frame's own
+       * callback comes before the page holds the file in place for it), for 1.5 s from when the jump brought it in */
+      const followed = (path: string) =>
+        page.evaluate(
+          (p) =>
+            new Promise<number[]>((done) => {
+              const pane = document.querySelector<HTMLElement>('.review-diffs')!;
+              const tops: number[] = [];
+              let start: number | null = null;
+              const after = new MessageChannel();
+              after.port1.onmessage = () => read();
+              const frame = () => after.port2.postMessage(null);
+              const read = () => {
+                const card = document.querySelector(`.review-file-card[data-file="${CSS.escape(p)}"]`);
+                const top = card
+                  ? Math.round(card.getBoundingClientRect().top - pane.getBoundingClientRect().top)
+                  : null;
+                if (start === null && top !== null && top > -40 && top < pane.clientHeight) start = performance.now();
+                if (start !== null && top !== null) tops.push(top);
+                if (start === null || performance.now() - start < 1500) requestAnimationFrame(frame);
+                else done(tops);
+              };
+              requestAnimationFrame(frame);
+            }),
+          path,
+        );
+      // A file in the middle, the last file, and one scrolled a little at once (the reader's own scroll ends the jump's
+      // hold: what is in view stays put all the same while the cards above it are drawn)
+      for (const [target, scrolled] of [
+        [files[47], false],
+        [files.at(-1)!, false],
+        [files[70], true],
+      ] as const) {
+        const name = target.path.split('/').at(-1)!;
+        const tops = followed(target.path);
+        await page.locator('.review-file-name', { hasText: name }).first().click();
+        if (scrolled) {
+          const box = (await page.locator('.review-diffs').boundingBox())!;
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await page.mouse.wheel(0, 30);
+        }
+        // From the frame it reached the place it ends at (the first frames may catch it on its way there, or the wheel's
+        // own scroll still landing)
+        const all = await tops;
+        const last = all.at(-1)!;
+        const seen = all.slice(all.findIndex((t) => Math.abs(t - last) < 4));
+        const pane = (await page.locator('.review-diffs').boundingBox())!;
+        expect(last, `${name}: ${JSON.stringify(seen)}`).toBeLessThan(pane.height / 2);
+        // At the top (scrolled: as far below it as the wheel went, when WebKit took the wheel in time)
+        if (target !== files.at(-1)) {
+          expect(last, `${name}: ${JSON.stringify(seen)}`).toBeLessThan(16);
+          expect(last, `${name}: ${JSON.stringify(seen)}`).toBeGreaterThan(scrolled ? -60 : -16);
+        }
+        // Once there, it stays: no frame after it arrived moves it (it moved 400 px for a frame in WebKit, or for good)
+        for (const top of seen) expect(Math.abs(top - last), `${name}: ${JSON.stringify(seen)}`).toBeLessThan(4);
+        await expect(diffOf(page, target.path)).toBeInViewport();
+      }
+    },
+  );
+
   // ATM-626 (Hakan, the app): the Rendered view of a new Markdown document showed only about its first page
   for (const added of [true, false])
     test(`Rendered: a long ${added ? 'new' : 'changed'} document is drawn to its end`, async ({
