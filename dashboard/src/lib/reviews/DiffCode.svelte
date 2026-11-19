@@ -139,21 +139,23 @@
     const range = document.createRange();
     // Where nothing is laid out (a test's page), there is nothing to measure: the lines keep one height
     if (typeof range.getClientRects !== 'function') return;
+    const lineHeight = layout?.lineHeight ?? FALLBACK_LINE;
+    // A character's box is its glyphs' (the font's height), centred in its line's box: the line starts half a line
+    // height above that centre (ATM-652: taking the character's top put every row half the leading low)
     const tops = starts.map(({ node, offset }) => {
       range.setStart(node, offset);
       range.collapse(true);
       const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
-      return rect.top - origin;
+      return (rect.top + rect.bottom) / 2 - lineHeight / 2 - origin;
     });
     const bottom = code.getBoundingClientRect().bottom - origin;
     // Empty lines at the end have no character to measure: one line height each, up from the code's end
-    const lineHeight = layout?.lineHeight ?? FALLBACK_LINE;
     const missing = lines.length - tops.length;
     for (let k = missing; k > 0; k--) tops.push(bottom - k * lineHeight);
     const rows = lines.map((_, i) => {
       const top = tops[i];
       const next = i + 1 < lines.length ? tops[i + 1] : bottom;
-      return { top, height: Math.max(next - top, layout?.lineHeight ?? FALLBACK_LINE) };
+      return { top, height: Math.max(next - top, lineHeight) };
     });
     if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
   }
@@ -287,11 +289,6 @@
     overflow-wrap: anywhere;
     overflow-x: hidden;
   }
-  /* A wrapped line's number stays on its first visual line, the gutter as tall as all of them */
-  .diff-code.wrap .diff-number {
-    align-items: flex-start;
-    line-height: var(--line-height);
-  }
   .diff-line {
     position: absolute;
     left: 0;
@@ -342,6 +339,10 @@
     font-family: 'SF Mono', Menlo, Consolas, monospace;
     font-size: var(--text-xs);
     user-select: none;
+    /* Its text centred in one line of the code, as the code's text is in its line (ATM-652): level with it, and on a
+       wrapped line's first visual line, so Wrap moves no number */
+    align-items: flex-start;
+    line-height: var(--line-height);
   }
   .pickable .diff-number {
     cursor: pointer;

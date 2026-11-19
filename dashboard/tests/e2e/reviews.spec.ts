@@ -566,6 +566,122 @@ test.describe('a review’s page', () => {
     await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // ATM-652 (Hakan): the numbers weren't level with their lines, and Wrap moved them up or down. Each number's text is
+  // centred on its line's first visual line, within 1 px, wrapped or not, in Unified and Split
+  test('every line number is level with its line’s text, and Wrap doesn’t move it', async ({ page, tasksServer }) => {
+    const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+    const text = `fn a() {}\n${long}\nfn b() {}\n\n// done\n`;
+    const patch =
+      'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,5 @@\n' +
+      text
+        .slice(0, -1)
+        .split('\n')
+        .map((l) => `+${l}`)
+        .join('\n') +
+      '\n';
+    tasksServer.setRevisionDocument(
+      'head3',
+      projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
+    );
+    await openReviews(page, tasksServer);
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    const diff = diffOf(page, 'src/long.rs');
+    await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+    /** Each numbered line: its number's text centre less its text's (the first character of its first visual line) */
+    const offsets = () =>
+      diff.evaluate((view) =>
+        [...view.querySelectorAll<HTMLElement>('.diff-code')].flatMap((run) => {
+          const code = run.querySelector<HTMLElement>('.compmd-page pre > code');
+          if (!code) return [];
+          // Where each line starts in the code's text
+          const starts: { node: Text; offset: number }[] = [];
+          const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+          let atStart = true;
+          for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null)
+            for (let at = 0; at <= node.data.length; at++) {
+              if (atStart && at < node.data.length) {
+                starts.push({ node, offset: at });
+                atStart = false;
+              }
+              if (node.data[at] === '\n') atStart = true;
+            }
+          const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
+          const range = document.createRange();
+          return [...run.querySelectorAll<HTMLElement>('.diff-line')].flatMap((line, i) => {
+            const number = line.querySelector('.diff-number span:last-child')?.firstChild;
+            const start = starts[i];
+            if (!number || !start || start.node.data[start.offset] === '\n') return [];
+            range.selectNodeContents(number);
+            const n = centre(range.getBoundingClientRect());
+            range.setStart(start.node, start.offset);
+            range.setEnd(start.node, start.offset + 1);
+            return [Math.round((n - centre(range.getClientRects()[0])) * 10) / 10];
+          });
+        }),
+      );
+    const level = async (what: string) => {
+      const found = await offsets();
+      expect(found.length, what).toBeGreaterThanOrEqual(4);
+      for (const d of found) expect(Math.abs(d), `${what}: ${JSON.stringify(found)}`).toBeLessThanOrEqual(1);
+      return found;
+    };
+    await page.getByRole('button', { name: 'Split' }).click();
+    await level('split');
+    await page.getByRole('button', { name: 'Unified' }).click();
+    const plain = await level('unified');
+    const wrap = page.getByRole('button', { name: 'Wrap' });
+    await wrap.click();
+    await expect(diff.locator('.diff-code.wrap')).toBeVisible();
+    await expect.poll(async () => (await offsets()).length).toBe(plain.length);
+    const wrapped = await level('unified, wrapped');
+    // Wrap moves no number against its text (it was 4 px: 1.5 above it, then 2.5 below)
+    wrapped.forEach((d, i) =>
+      expect(Math.abs(d - plain[i]), JSON.stringify({ plain, wrapped })).toBeLessThanOrEqual(1),
+    );
+  });
+
+  test('Rendered: every line number is level with its text, a heading’s and a paragraph’s', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+    const view = diffOf(page, 'docs/plan.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+    // Each number's text centre less its block's first line of text's (the text, not the block's box)
+    const offsets = await newSide.evaluate((side) => {
+      const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
+      const range = document.createRange();
+      return (
+        [
+          [1, 'h1'],
+          [3, 'p:nth-of-type(1)'],
+          [5, 'p:nth-of-type(2)'],
+        ] as const
+      ).map(([line, block]) => {
+        const number = side.querySelector(`.doc-gutter-lines [data-line="${line}"]`)!.firstChild!;
+        range.selectNodeContents(number);
+        const n = centre(range.getBoundingClientRect());
+        range.selectNodeContents(side.querySelector(`.compmd-page ${block}`)!);
+        return Math.round((n - centre(range.getClientRects()[0])) * 10) / 10;
+      });
+    });
+    for (const d of offsets) expect(Math.abs(d), JSON.stringify(offsets)).toBeLessThanOrEqual(1);
+  });
+
   // ATM-626 (Hakan, the app): the Rendered view of a new Markdown document showed only about its first page
   for (const added of [true, false])
     test(`Rendered: a long ${added ? 'new' : 'changed'} document is drawn to its end`, async ({

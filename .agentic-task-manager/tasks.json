@@ -17013,7 +17013,7 @@
       "description": "Hakan (2026-11-19): commenting on a review's rendered Markdown doesn't work as on code: there is no **+** button, and so on.\n\n## Expected\nThe rendered view takes comments the way the source view does: hovering a block (or a line of it) shows the **+** at its line number in the gutter; a click opens the comment box under it; a drag over several lines' + picks them; a text selection may start one too. The comment anchors to the source lines the block came from (CompMD's source-line map, as the gutter uses it), so it shows in the source view as well and moves with the code across rounds.\n\n## Check\n- Where the source view's + and drag live (`DiffCode.svelte`, `DiffView.svelte`) and what the rendered side (`RenderedSide.svelte`, `DocumentPage.svelte`) lacks; reuse the same component, not a copy.\n- Tests: e2e on a rendered Markdown file: the + appears on hover, a click opens the box anchored to the block's lines, a drag over two blocks anchors to their lines, the comment shows in the source view on the same lines.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
@@ -17021,7 +17021,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:14:31Z",
+      "updated_at": "2026-11-19T18:22:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17033,7 +17033,24 @@
       "sprint": "Task&review state machine",
       "number": 650,
       "started_at": "2026-11-19T18:14:31Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "67df0d662fdb9fe71023ffe9fbc3df3cce27c057",
+      "code_reviews": [
+        {
+          "id": "01a1f50b-4e82-7076-bd22-7d813b70a7d4",
+          "ref": "CR-61"
+        }
+      ],
+      "review_requested_at": "2026-11-19T18:22:01Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T18:22:01Z",
+          "kind": "review",
+          "text": "CR-61: Rendered Markdown: comment with the + on a line, or a drag over lines",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848aa5d26e23",
@@ -17081,7 +17098,7 @@
       "description": "Hakan (2026-11-19): the line numbers are not perfectly aligned with their lines, and toggling **Wrap** moves the numbers up and down although the lines stay the same.\n\n## Look into\n- Measure each number's box against its line's (top and baseline) in the source and rendered views, Unified and Split, wrapped and not, in Chromium and WebKit; find where they drift (font metrics of the gutter versus the code, a line's height CompMD draws versus the gutter's row, wrapped lines' heights).\n- CompMD 0.8.0 (ATM-648) gives a code block's lines through `view.lines()` and sizes them with `view.lineHeights()`: the gutter can place each number where CompMD draws its line, and the two sides of Split be kept level, instead of atm's own estimate. This also lets Wrap work in Split (ATM-588).\n\n## Tests\nAn e2e that measures every number's top against its line's (within 1 px), before and after toggling Wrap, in both views; the screenshots of the diff viewer regenerated if they change on purpose.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -17089,9 +17106,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:06:40Z",
+      "updated_at": "2026-11-19T18:22:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17099,7 +17116,9 @@
         }
       ],
       "sprint": "Task&review state machine",
-      "number": 652
+      "number": 652,
+      "started_at": "2026-11-19T18:22:06Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848c3c638fe6",
