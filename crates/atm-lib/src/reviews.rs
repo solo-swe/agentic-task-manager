@@ -1240,7 +1240,12 @@ mod tests {
             }),
         )
         .unwrap();
+        // What was written just before the watch began (the .gitignore, git's own files) may still be told on Linux,
+        // where the first events come late: let them pass, a few bursts at most (a watch waking itself, as reading
+        // the ignore rules once did there, would never go quiet)
         std::thread::sleep(Duration::from_millis(300));
+        let settled = (0..10).any(|_| received.recv_timeout(Duration::from_millis(600)).is_err());
+        assert!(settled, "the watch never went quiet");
         let quiet = |what: &str| {
             assert!(
                 received.recv_timeout(Duration::from_millis(1200)).is_err(),

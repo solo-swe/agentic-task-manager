@@ -49,6 +49,7 @@ pub fn watch_tree_where(
         };
         let paths: Vec<PathBuf> = events
             .iter()
+            .filter(|e| is_change(e))
             .flat_map(|e| e.paths.iter().cloned())
             .collect();
         if !paths.is_empty() && keep(&paths) {
@@ -71,7 +72,7 @@ fn watch_with(
 ) -> Result<Subscription> {
     let failed = |e: notify::Error| Error::failed(format!("watching for changes: {e}"));
     let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
-        if result.is_ok_and(|events| !events.is_empty()) {
+        if result.is_ok_and(|events| events.iter().any(|e| is_change(e))) {
             on_change();
         }
     })
@@ -80,6 +81,13 @@ fn watch_with(
         watcher.watch(folder, mode).map_err(failed)?;
     }
     Ok(Subscription::new(watcher))
+}
+
+/// Whether an event changed something. Linux reports a file opened, read or closed unwritten as an event too (access),
+/// and what is told reads files: git checking the ignore rules reads `.gitignore` and `.git/`, a store reads its own
+/// files. Counting those, a watch would wake itself, again and again.
+fn is_change(event: &notify::Event) -> bool {
+    !event.kind.is_access()
 }
 
 #[cfg(test)]
@@ -152,6 +160,49 @@ mod tests {
             .recv_timeout(Duration::from_secs(10))
             .expect("told of a change it keeps");
         drop(subscription);
+    }
+
+    /// Linux reports a read as an event (access): a watch tells changes only, so reading a watched file tells nothing,
+    /// and a `keep` that reads files (git checking its ignore rules) doesn't wake its own watch again and again
+    #[test]
+    fn reading_a_watched_file_tells_nothing_and_a_keep_that_reads_never_wakes_itself() {
+        let dir = crate::test_dir::TestDir::new();
+        let file = dir.path().join("a.txt");
+        std::fs::write(&file, "a").unwrap();
+        let read = file.clone();
+        let (on_change, received) = told();
+        let keep: Keep = Arc::new(move |_: &[PathBuf]| {
+            let _ = std::fs::read_to_string(&read);
+            true
+        });
+        let tree = watch_tree_where(&[dir.path().to_path_buf()], keep, on_change.clone()).unwrap();
+        let flat = watch(&[dir.path().to_path_buf()], on_change).unwrap();
+        // What was written before the watches began may still come in late (Linux): let it pass, a few bursts at most
+        // (a watch waking itself would never go quiet)
+        let quiet_after = |what: &str| {
+            for _ in 0..10 {
+                if received.recv_timeout(SETTLE * 2).is_err() {
+                    return;
+                }
+            }
+            panic!("{what}: never quiet");
+        };
+        std::thread::sleep(Duration::from_millis(200));
+        quiet_after("the start");
+        for _ in 0..3 {
+            let _ = std::fs::read_to_string(&file).unwrap();
+        }
+        assert!(
+            received.recv_timeout(SETTLE * 4).is_err(),
+            "a read is no change"
+        );
+        std::fs::write(&file, "b").unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("a write is told");
+        // Told for the write by each watch, then quiet: the keep's own read doesn't start another round
+        quiet_after("after the write");
+        drop((tree, flat));
     }
 
     #[test]
