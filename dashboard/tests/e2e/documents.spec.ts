@@ -769,3 +769,60 @@ test.describe('the document viewer: contents', () => {
     await expect(page.locator('#doc-toc-button')).toHaveCount(0);
   });
 });
+
+// ATM-618: a table's columns as wide as their words, never squeezed to a letter a line while another takes the space
+test.describe('the document viewer: tables', () => {
+  const SENTENCE =
+    'A long sentence that goes on and on about what the row means, so that its column wants most of the width there is.';
+  const TABLE =
+    '# Words\n\n| ID | Word | Meaning |\n|---|---|---|\n' +
+    ['Supercalifragilistic', 'Antidisestablishment', 'Pneumonoultramicroscopicsilicovolcanoconiosis']
+      .map((word, i) => `| ${i + 1} | ${word} | ${SENTENCE} |`)
+      .join('\n') +
+    '\n';
+
+  /** Per column, how many lines each of its cells' text takes */
+  const linesPerColumn = (page: Page) =>
+    viewer(page)
+      .locator('.compmd-page table')
+      .evaluate((table) =>
+        [0, 1, 2].map((col) =>
+          [...table.querySelectorAll('tbody tr')].map((row) => {
+            const cell = row.children[col];
+            const range = document.createRange();
+            range.selectNodeContents(cell);
+            const tops = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+            return tops.size;
+          }),
+        ),
+      );
+
+  test('each word stays whole on one line; the long column wraps at its words', async ({ page, tasksServer }) => {
+    tasksServer.setDocument(projectDocument('docs/words.md', TABLE));
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await follow(page, '/projects/fixture/list?doc=docs/words.md');
+    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    const [ids, words, meanings] = await linesPerColumn(page);
+    expect(ids).toEqual([1, 1, 1]);
+    expect(words).toEqual([1, 1, 1]);
+    // The sentence takes the rest, wrapped
+    expect(Math.min(...meanings)).toBeGreaterThan(1);
+  });
+
+  test('a viewer too narrow for its words: the table scrolls sideways, the words still whole', async ({
+    page,
+    tasksServer,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 700 });
+    tasksServer.setDocument(projectDocument('docs/words.md', TABLE));
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await follow(page, '/projects/fixture/list?doc=docs/words.md');
+    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    const [, words] = await linesPerColumn(page);
+    expect(words).toEqual([1, 1, 1]);
+    const table = viewer(page).locator('.compmd-page table');
+    expect(await table.evaluate((t) => t.scrollWidth > t.clientWidth)).toBe(true);
+    // The viewer itself is no wider than the window
+    expect((await viewer(page).boundingBox())!.width).toBeLessThanOrEqual(360);
+  });
+});

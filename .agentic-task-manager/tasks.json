@@ -17815,14 +17815,14 @@
       "description": "Asked by Hakan (2026-11-18): in a review's header, the Comments tab's count shows all comments. Show the open ones separately, in parentheses: *Comments 7 (2 open)*. With none open it stays *Comments 7*.\n\n## Change\n`dashboard/src/lib/reviews/ReviewPage.svelte`: the tab's count, from `chainCounts.open`, as a second, quieter badge, named for screen readers (\"7 comments, 2 open\"). The same on a review's row in the list (`ReviewList.svelte`, its `chains` and `open`), if it doesn't show them already.\n\n## Tests\nA component test: the total with the open count, none open without it, and the accessible name.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T06:44:26Z",
-      "updated_at": "2026-11-19T00:43:20Z",
+      "updated_at": "2026-11-19T00:45:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17835,7 +17835,24 @@
       "number": 614,
       "key_final": false,
       "started_at": "2026-11-19T00:43:20Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "05b4ccf9d7a56a32d504e5d75c55cd06003d5e8b",
+      "code_reviews": [
+        {
+          "id": "01a1f143-c6af-77a7-a20a-000088b73ffe",
+          "ref": "CR-38"
+        }
+      ],
+      "review_requested_at": "2026-11-19T00:45:13Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T00:45:13Z",
+          "kind": "review",
+          "text": "CR-38: The Comments tab shows its open comments beside the total",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1ed75-8819-7764-9e22-5884544ad5c7",
@@ -18021,7 +18038,7 @@
       "description": "Reported by Hakan (2026-11-18): in the document viewer, some table columns get so narrow that their text is squished, practically one letter a line, while other columns take most of the width.\n\n## Likely cause\n`.compmd` sets `overflow-wrap: anywhere` ([app.css](dashboard/src/app.css#L184)). With `anywhere`, a word may break between any two letters, so a cell's least width (its min-content) is one character. The browser's automatic table layout then gives a column with long text plenty of room, and shrinks the others to that least width. `.compmd-page table` is also `display: block` with `overflow-x: auto`, so the table never has to fit the width the way a table would. Check this first, in the browser, on a table that shows it.\n\n## Change\n- In tables, words don't break mid-word: `overflow-wrap: normal` (or `break-word`, which doesn't lower min-content) on `th` and `td`, so a column is at least as wide as its longest word. A long unbreakable value (a URL, a path, a hash) may still break, rather than widen the table without end.\n- **Widths from all the column's values, not the heading alone.** Start from even widths, and let a column with more text take more, in proportion to its content (the browser's auto layout does this once the least widths are right). If CSS alone can't give it, measure the cells' text once after rendering and set `col` widths. Keep it simple: CSS first.\n- A table wider than the viewer still scrolls sideways within it, it doesn't widen the panel.\n- The same in every document style (GitHub, Docs, Magazine, `src/themes/doc-styles.css`) and in task text, which shares `.compmd`.\n\nThe page styles are atm's, not CompMD's: the fix is in atm's CSS.\n\n## Tests\n- An e2e in the document viewer spec: a table of three columns (a short one, a word-per-cell one, a long sentence) at the viewer's width. No column is narrower than its longest word, and the long column wraps at word boundaries.\n- The same table in a narrow viewer: it scrolls sideways rather than squeezing columns to a letter.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/app.css",
@@ -18029,7 +18046,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-18T18:59:29Z",
-      "updated_at": "2026-11-18T19:01:02Z",
+      "updated_at": "2026-11-19T00:45:23Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18043,7 +18060,9 @@
       "key_final": false,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-19T00:45:23Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f008-9a9f-714f-8e7b-93ac77245ac5",

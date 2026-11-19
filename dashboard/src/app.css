@@ -252,6 +252,13 @@ body {
   border: 1px solid var(--border);
   padding: var(--space-1) var(--space-4);
 }
+/* A cell's words aren't broken mid-word (ATM-618): with .compmd's `anywhere`, a column's least width was one letter,
+   so the table's layout squeezed some columns to a letter a line while one took the space. `break-word` keeps each
+   column at least as wide as its longest word, the rest shared by how much each holds; a table wider than the text
+   scrolls sideways in it (above). In every document style, and in task text */
+.compmd :is(th, td) {
+  overflow-wrap: break-word;
+}
 .compmd-page th {
   background: var(--surface2);
   font-weight: 600;
