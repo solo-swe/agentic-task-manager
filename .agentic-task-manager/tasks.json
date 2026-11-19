@@ -20191,7 +20191,7 @@
       "description": "Ship the sprint *Code reviews in the app* as 0.41.0, as AGENTS.md's *Versions* and *CI* sections describe. Work is on `dev/0.41.0`.\n\n## Change\n- **The version:** `Cargo.toml`'s `[workspace.package]` to `0.41.0` (the dashboard's meta tag and the app follow it); `Cargo.lock` updated by the build.\n- **`CHANGELOG.md`:** the `[0.41.0]` entry, dated the release day, every change of the sprint's tasks with its commands, flags and fields (the reviews in the sidebar and needs-you counts, live reviews, drafts, pokes, the watch's lease and reminder, keys plain from creation and the merge driver's renumbering, reviews finding tasks by old keys, the review badge's status, the diff viewer's performance work, the timed e2e project, and the rest).\n- **`WHATS-NEW.md`:** 3–6 short plain-language bullets about what a user notices, from the changelog; no flags or file names.\n- **Screenshots:** regenerate the Linux baselines this sprint changed (`pnpm run test:e2e:visual:update`, Docker), delete any whose test is gone, look at one, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): finish the 0.41.0 entry. The skills changed (ATM-611, ATM-635, ATM-642): a written review of the skills' changes replaces the live sandbox run (no API key). Check the new entry points and fields are in it (pokes, drafts, the watch's lease file, `review_statuses`, reading a review's commit from git).\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPush with `/atm-push`: it opens the release PR from `dev/0.41.0` to `main` and watches CI. Merging, tagging and publishing are Hakan's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -20202,7 +20202,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-19T10:03:22Z",
-      "updated_at": "2026-11-19T10:03:30Z",
+      "updated_at": "2026-11-19T10:14:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20214,7 +20214,18 @@
       "sprint": "Code reviews in the app",
       "number": 647,
       "started_at": "2026-11-19T10:03:30Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "900140bb0c6b4f7baa227dcdaeac1b4cc114f7fb",
+      "completed_at": "2026-11-19T10:14:08Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-19T10:14:08Z",
+          "kind": "outcome",
+          "text": "Version 0.41.0, CHANGELOG and WHATS-NEW entries, the security doc’s 0.41.0 entry with the written skill review, skills need atm 0.41.0, ten Linux screenshots regenerated. Checks green: cargo test 917, clippy, deny, unit 1782, CLI 833, e2e 526, screenshots 84.",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
