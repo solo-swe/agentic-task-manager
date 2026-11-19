@@ -1612,7 +1612,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 641
+    "next_number": 642
   },
   "tasks": [
     {
@@ -19207,14 +19207,14 @@
       "description": "Hakan (2026-11-19): with many tasks and reviews needing you, the *N need you* popup grows without bound.\n\nIt should be a small popup that scrolls, with no scroll bar, like the dashboard's other scrolling lists (`HintScroll`: *▲ N more* / *▼ N more* at the cut edges).\n\n## Change\n`shell/NeedsYouMenu.svelte`:\n- its rows go in a `HintScroll`, the popup's height capped;\n- the keyboard (arrows) still moves through every row, scrolling the one with focus into view.\n\n## Tests\n- **e2e:** a long list is capped in height, shows *▼ N more*, scrolls, and keeps every row reachable.\n- **Unit:** a short list has no hints.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/NeedsYouMenu.svelte",
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-19T05:36:07Z",
-      "updated_at": "2026-11-19T05:37:14Z",
+      "updated_at": "2026-11-19T05:43:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19229,7 +19229,57 @@
       ],
       "number": 640,
       "started_at": "2026-11-19T05:37:14Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "d351da046574b362757bd4e02527a9f61681f02e",
+      "code_reviews": [
+        {
+          "id": "01a1f255-18f1-77ce-baa0-187b8e51ad9f",
+          "ref": "CR-49"
+        }
+      ],
+      "review_requested_at": "2026-11-19T05:43:45Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T05:43:45Z",
+          "kind": "review",
+          "text": "CR-49: A long N need you list scrolls in a small popup",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1f255-436f-729a-858d-8ae2e822b720",
+      "name": "The long review's settle budget fails in the full e2e run while the WebKit review test runs beside it",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "reviews",
+        "performance"
+      ],
+      "description": "In the full functional e2e run (2026-11-19), *a long review (94 files, ~3,000 lines)* in `reviews.spec.ts` failed on `afterSettled`: 107 ms against its budget of 100 (`BUDGET_MS / 2`), with one long task of 50 ms. An earlier run measured 98.\n\nRun alone it measures 25 to 34 ms (three runs, one worker). In the failing run, the *real review CR-1 (webkit)* test was running at the same time, blocking for 3.5 s while it opened.\n\n## To do\nFind why the settle step is that sensitive to a concurrent test. Then either fix the cause in the diff viewer or keep the WebKit measurement from sharing the machine with timed Chromium tests. Never raise the budget or just re-run (AGENTS.md). Measure before and after.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-19T05:43:56Z",
+      "updated_at": "2026-11-19T05:43:56Z",
+      "created_by": "claude:0f56a916",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Code reviews in the app",
+          "from": "2026-11-19T05:43:56Z"
+        }
+      ],
+      "sprint": "Code reviews in the app",
+      "components": [
+        "dashboard"
+      ],
+      "number": 641
     }
   ]
 }
