@@ -55,6 +55,9 @@ Two different tasks (different UUIDs) with the same number, one from each side:
   then merges as the larger of the two, past it.
 - **Its old key stays an alias** (`aliases`), so a commit message, a note or a review written with it still finds
   the task. References in the files are UUIDs: nothing is rewritten.
+- **A review written with the old key still means the task that moved** (ATM-630). Its key is ambiguous: the task
+  that kept the number holds it now. So atm reads `tasks.json` at the review's own commit (its first round's, else
+  the one that added its `review.md`) to see which task held that number then. Nothing is rewritten here either.
 - **atm says what moved, once**: "ATM-538 is now ATM-641 (both branches made ATM-538)", from a record the merge
   leaves for the next atm command.
 - **A clash never stops a merge.** (ADR-007 stopped on two final numbers; with the base-branch check, two tasks on the

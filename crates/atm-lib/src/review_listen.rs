@@ -427,7 +427,7 @@ pub fn watch(
         // Told in the order they were written, oldest first, whichever review they are in
         let mut news: Vec<(String, u32, Value)> = Vec::new();
         for mut review in all(&store)? {
-            keyed_now(now, &mut review.header);
+            keyed_now(now, &store, &mut review.header);
             for chain in &review.chains {
                 for (comment, parent) in with_parents(chain) {
                     if !seen.insert(format!("{}/{}", review.header.id.0, comment.id.0)) {
@@ -459,7 +459,7 @@ pub fn watch(
         }
         // Then the decisions on reviews of its work, after the words that came with them
         for mut review in all(&store)? {
-            keyed_now(now, &mut review.header);
+            keyed_now(now, &store, &mut review.header);
             let status = review.header.status;
             let was = statuses.insert(review.header.id.0.clone(), status);
             if was == Some(status) || !decided(status) {
@@ -479,12 +479,13 @@ pub fn watch(
 
 /// A review's tasks as they are keyed now (ATM-630): a review written before a task's number moved at a merge names
 /// the key it had (an alias now), an older one `~KEY` or an earlier prefix's; each resolved as every command resolves
-/// one, so the agent's work is found whatever key its review was written with. One the project doesn't have stays.
-fn keyed_now(project: &Project, header: &mut ReviewHeader) {
+/// one, so the agent's work is found whatever key its review was written with; an old key another task holds now as
+/// the review in `store` meant it ([`reviews::key_now`]). One the project doesn't have stays.
+fn keyed_now(project: &Project, store: &FileStore, header: &mut ReviewHeader) {
     header.tasks = header
         .tasks
         .iter()
-        .map(|key| reviews::task_reference(project, key))
+        .map(|key| reviews::key_now(project, Some(store), header, key))
         .collect();
 }
 
@@ -626,9 +627,10 @@ pub fn watch_state(project: &Project, me: &str) -> Result<WatchState> {
             ..WatchState::default()
         });
     }
-    let mut headers = reviews::store(project)?.list_reviews(&ReviewFilter::default())?;
+    let store = reviews::store(project)?;
+    let mut headers = store.list_reviews(&ReviewFilter::default())?;
     for header in &mut headers {
-        keyed_now(project, header);
+        keyed_now(project, &store, header);
     }
     let mine: HashSet<String> = project
         .store()

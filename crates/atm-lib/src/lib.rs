@@ -21,6 +21,7 @@ pub mod project;
 pub mod query;
 pub mod releases;
 pub mod review_drafts;
+pub mod review_keys;
 pub mod review_listen;
 pub mod review_pages;
 pub mod review_requests;

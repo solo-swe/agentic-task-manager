@@ -1192,6 +1192,9 @@ checklist:
   Written review:
   - The line and the field carry atm's own data only: review references, never review or task text. They tell the agent to run one fixed atm command (`atm review watch --json`), which runs nothing and fetches nothing. No skill instruction runs anything new or reads outside text.
   - The watch's lease is a file in the state folder (`watches/<hash>.live`: a number, the time it lasts to), read only to say whether a watch runs. One that can't be read or written only means the agent is reminded.
+- **A review's commit, read from git (ATM-630).** When a key a review stores is ambiguous (a merge moved a task off a number another task holds now, ADR-009), atm reads `tasks.json` at the review's first round's commit, or at the commit that added its `review.md`, to see which task held it then.
+  - That commit comes from the round's file, which anyone who can change the review wrote. atm passes git only a full SHA (40 or 64 hex digits), so the text can never be taken for an option or a revision expression; anything else is ignored, and the key resolves as every command resolves it. A test (`review_keys.rs`) writes `HEAD`, `main` and `--output=x` there.
+  - It reads with `git ls-tree` and `git cat-file blob`, in the working copy the review is in, and only parses the result as JSON to find a task's UUID. It writes nothing and runs nothing else.
 
 ## 4. Keeping it current
 

@@ -161,6 +161,28 @@ impl FileStore {
         &self.reviews_dir
     }
 
+    /// The folder of the review `header` is of, in [`FileStore::folder`] (whether or not it exists).
+    #[must_use]
+    pub fn folder_of(&self, header: &ReviewHeader) -> PathBuf {
+        self.reviews_dir
+            .join(folder_name(header.number, &header.id))
+    }
+
+    /// The first round of the review `header` is of, as its folder has it; none when it has no readable one (ATM-630:
+    /// the commit it was made at says which task its keys meant then).
+    #[must_use]
+    pub fn first_round(&self, header: &ReviewHeader) -> Option<Round> {
+        let rounds = self.folder_of(header).join(ROUNDS_DIR);
+        if is_symlink(&rounds) {
+            return None;
+        }
+        let path = rounds.join("1.json");
+        let text = read_file(&path).ok()??;
+        serde_json::from_str::<Round>(&text)
+            .ok()
+            .filter(|r| r.number == 1)
+    }
+
     /// One review's folder, read: its header, summary, comments and rounds.
     fn read_review(folder: &Path) -> Result<Held> {
         if is_symlink(folder) {

@@ -93,6 +93,28 @@ fn a_current_key_wins_over_an_alias_that_moved_off_it() {
     assert_eq!((f.task["id"].as_str().unwrap(), f.via), (C, Via::Alias));
 }
 
+/// ATM-630: who moved off a number, whoever holds it now; working and archived, any case, a `~` ignored
+#[test]
+fn the_tasks_holding_a_reference_as_an_alias() {
+    let (document, mut archive) = project();
+    archive.push(task(
+        json!({"id": OLD, "number": 3, "aliases": ["ATM-538"]}),
+    ));
+    let holders = |reference: &str| -> Vec<String> {
+        alias_holders(&document, &archive, reference)
+            .iter()
+            .map(|t| t["id"].as_str().unwrap().to_string())
+            .collect()
+    };
+    for reference in ["ATM-538", "atm-538", "~ATM-538"] {
+        assert_eq!(holders(reference), [C, OLD], "{reference}");
+    }
+    assert_eq!(holders("T-P1-03"), [A]);
+    for none in ["ATM-527", "ATM-999", "", B] {
+        assert!(holders(none).is_empty(), "{none}");
+    }
+}
+
 #[test]
 fn what_finds_nothing_says_why() {
     assert_eq!(not_found("ATM-999"), "no task 'ATM-999' in this project");

@@ -200,6 +200,28 @@ fn one<'a>(found: &[(&'a Task, bool)], reference: &str, via: Via) -> Result<Opti
     }
 }
 
+/// The tasks that have `reference` among their aliases (any case, a leading `~` ignored), working and archived: the
+/// tasks a merge moved off a number (ADR-009) that another task may hold now (ATM-630).
+#[must_use]
+pub fn alias_holders<'a>(
+    document: &'a Value,
+    archive: &'a [Task],
+    reference: &str,
+) -> Vec<&'a Task> {
+    let reference = without_draft_mark(reference);
+    let has = |t: &&Task| {
+        t.get("aliases").and_then(Value::as_array).is_some_and(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .any(|x| x.eq_ignore_ascii_case(reference))
+        })
+    };
+    tasks_of(document)
+        .filter(has)
+        .chain(archive.iter().filter(has))
+        .collect()
+}
+
 /// The task a reference names (ADR-007 §5). In a keys-format document, in this order: the UUID; the current key
 /// (`ATM-527`, any case); a key with an earlier prefix (`T-527`, from `meta.key_history`); a task's own alias (a key
 /// that moved, an ID from before task keys). A current key wins over an alias: when a provisional number moved, the

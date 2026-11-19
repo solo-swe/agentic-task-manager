@@ -532,6 +532,34 @@ impl GitVcs {
         Ok(output.stdout)
     }
 
+    /// The commit that first added the file `relative` to the history of `HEAD` (the oldest, when it was removed and
+    /// added again); none when the history doesn't have it, or git can't tell (ATM-630: a review's `review.md`, the
+    /// commit its task's number is read at).
+    #[must_use]
+    pub fn first_commit_adding(&self, relative: &str) -> Option<String> {
+        if relative.starts_with('-') {
+            return None;
+        }
+        let listed = ask(
+            &[
+                LITERAL,
+                "log",
+                "--diff-filter=A",
+                "--reverse",
+                "--format=%H",
+                "HEAD",
+                "--",
+                relative,
+            ],
+            &self.root,
+        )?;
+        listed
+            .lines()
+            .next()
+            .map(str::to_string)
+            .filter(|s| !s.is_empty())
+    }
+
     /// The submodule `relative` is in, nearest the root, as (its folder, the path inside it), or none. A submodule is a
     /// folder this repository records as a commit (mode 160000) with a checkout of its own (`.git`); git answers
     /// nothing about the files in it from here, only from its own repository (T-408).
@@ -1069,6 +1097,27 @@ mod tests {
             vcs.blob_bytes(&unknown).unwrap_err(),
             Error::NotFound(format!("{unknown}: no such blob"))
         );
+    }
+
+    #[test]
+    fn the_commit_first_adding_a_file_is_the_oldest_in_heads_history() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        assert_eq!(vcs.first_commit_adding("a.md"), None, "no commit yet");
+        write(&vcs, "a.md", "one");
+        let added = commit_all(&vcs, "add");
+        write(&vcs, "a.md", "two");
+        commit_all(&vcs, "change");
+        assert_eq!(vcs.first_commit_adding("a.md"), Some(added.clone()));
+        // Removed and added again: still the first
+        git(&dir.0, &["rm", "-q", "a.md"]);
+        commit_all(&vcs, "remove");
+        write(&vcs, "a.md", "three");
+        commit_all(&vcs, "again");
+        assert_eq!(vcs.first_commit_adding("a.md"), Some(added));
+        for other in ["missing.md", "-a.md", "*.md"] {
+            assert_eq!(vcs.first_commit_adding(other), None, "{other}");
+        }
     }
 
     #[test]

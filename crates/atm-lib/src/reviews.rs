@@ -84,6 +84,7 @@ pub use atm_review::{
 
 use crate::changes::change_task_status;
 use crate::project::Project;
+use crate::review_keys;
 use crate::state::{Command, Options};
 
 /// The project's reviews, in its task folder.
@@ -281,9 +282,29 @@ fn resolve(project: &Project, keys: &[String]) -> Result<Vec<String>> {
     keys.iter().map(|k| project.resolve_task(k)).collect()
 }
 
-/// The task IDs a review names.
-fn named(project: &Project, header: &ReviewHeader) -> Result<Vec<String>> {
-    resolve(project, &header.tasks)
+/// The task IDs a review in `reviews` names: each key as the review meant it (ATM-630, [`review_keys::task_of`]), so
+/// a decision reaches the task it was about even when a merge gave its old number to another.
+fn named(project: &Project, reviews: &FileStore, header: &ReviewHeader) -> Result<Vec<String>> {
+    header
+        .tasks
+        .iter()
+        .map(|key| review_keys::task_of(project, Some(reviews), header, key))
+        .collect()
+}
+
+/// How the review `header` (in `reviews`, when known) names the task it means by `key`, by its key now
+/// ([`review_keys::task_of`]); a key the project doesn't have is kept, without a leading `~`.
+#[must_use]
+pub fn key_now(
+    project: &Project,
+    reviews: Option<&FileStore>,
+    header: &ReviewHeader,
+    key: &str,
+) -> String {
+    review_keys::task_of(project, reviews, header, key).map_or_else(
+        |_| atm_common::keys::without_draft_mark(key).to_string(),
+        |id| key_of_id(project, &id),
+    )
 }
 
 /// The task a filter names (`--task`, `?task=`: a key with or without its `~`, an older ID, the UUID), as reviews name
@@ -298,18 +319,26 @@ pub fn task_reference(project: &Project, reference: &str) -> String {
 
 /// Whether a review names the task `wanted` (its key now, as [`task_reference`] gives it), by whatever key the review
 /// was written with (ATM-630): a task whose number moved at a merge (ADR-009) is named by the key it had, its alias
-/// now, and an older review by `~KEY` or an earlier prefix's key. Each is resolved as every command resolves one.
+/// now, and an older review by `~KEY` or an earlier prefix's key. Each is resolved as every command resolves one,
+/// except an old key another task holds now: the review in `reviews` says which it meant ([`key_now`]).
 #[must_use]
-pub fn names_task(project: &Project, header: &ReviewHeader, wanted: &str) -> bool {
+pub fn names_task(
+    project: &Project,
+    reviews: Option<&FileStore>,
+    header: &ReviewHeader,
+    wanted: &str,
+) -> bool {
     header
         .tasks
         .iter()
-        .any(|key| task_reference(project, key) == wanted)
+        .any(|key| key_now(project, reviews, header, key) == wanted)
 }
 
-/// The reviews among `headers` that name the task `wanted` (a key now), whatever key they were written with
+/// The reviews among `headers` (in `reviews`) that name the task `wanted` (a key now), whatever key they were written
+/// with
 fn naming(
     project: &Project,
+    reviews: &FileStore,
     headers: Vec<ReviewHeader>,
     wanted: Option<&str>,
 ) -> Vec<ReviewHeader> {
@@ -317,7 +346,7 @@ fn naming(
         None => headers,
         Some(key) => headers
             .into_iter()
-            .filter(|h| names_task(project, h, key))
+            .filter(|h| names_task(project, Some(reviews), h, key))
             .collect(),
     }
 }
@@ -340,9 +369,11 @@ pub fn list_naming(
     Ok(list_everywhere(root, &every)?
         .into_iter()
         .filter(|f| {
-            wanted
-                .as_deref()
-                .is_none_or(|key| names_task(project, &f.header, key))
+            wanted.as_deref().is_none_or(|key| {
+                // Read from the working copy it was found in: a review in another worktree is that copy's
+                let reviews = FileStore::open(&f.working_copy.join(TASK_DIR)).ok();
+                names_task(project, reviews.as_ref(), &f.header, key)
+            })
         })
         .collect())
 }
@@ -565,7 +596,7 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
 pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) -> Result<u32> {
     let mut reviews = store(project)?;
     // Its tasks found first (ATM-594): a round is never kept without its tasks going back in review
-    let ids = named(project, &reviews.get_review(reference)?.header).map_err(|e| {
+    let ids = named(project, &reviews, &reviews.get_review(reference)?.header).map_err(|e| {
         Error::failed(format!(
             "{}'s round can't reach its tasks, so it isn't added: {e}",
             reference.0
@@ -604,7 +635,7 @@ pub fn submit(
     let by = actor_of(project);
     let mut reviews = store(project)?;
     // Every task it names found first (ATM-594): a decision is never kept without reaching its tasks
-    let tasks = named(project, &reviews.get_review(reference)?.header).map_err(|e| {
+    let tasks = named(project, &reviews, &reviews.get_review(reference)?.header).map_err(|e| {
         Error::failed(format!(
             "{reference}'s decision can't reach its tasks, so it isn't recorded: {e}",
             reference = reference.0
@@ -665,7 +696,7 @@ pub fn close(
             reason: Some(format!("{} closed: {reason}", header.reference)),
             ..Options::default()
         };
-        for id in named(project, &header)? {
+        for id in named(project, &reviews, &header)? {
             if kind_of(project, &id)?.is_some_and(|(kind, _)| kind == Kind::Review) {
                 change_task_status(project, Command::Reject, &id, &options)?;
             }
@@ -689,11 +720,16 @@ pub fn set_tasks(
     let mut reviews = store(project)?;
     let header = reviews.get_review(reference)?.header;
     let (added, removed) = (resolve(project, add)?, resolve(project, remove)?);
-    let removed_keys: Vec<String> = removed.iter().map(|id| key_of_id(project, id)).collect();
+    // A key stays unless the task the review meant by it is removed (ATM-630: an old key may mean the task that moved)
     let mut tasks: Vec<String> = header
         .tasks
         .iter()
-        .filter(|t| !removed_keys.contains(t) && !remove.contains(t))
+        .filter(|t| {
+            !remove.contains(t)
+                && review_keys::task_of(project, Some(&reviews), &header, t)
+                    .ok()
+                    .is_none_or(|id| !removed.contains(&id))
+        })
         .cloned()
         .collect();
     for id in &added {
@@ -744,7 +780,12 @@ pub fn live_approval_for(project: &Project, task: &str) -> Result<Option<ReviewH
         statuses: vec![Status::Approved],
         task: None,
     };
-    for header in naming(project, reviews.list_reviews(&filter)?, Some(&key)) {
+    for header in naming(
+        project,
+        &reviews,
+        reviews.list_reviews(&filter)?,
+        Some(&key),
+    ) {
         let review = reviews.get_review(&header.reference)?;
         let Some(last) = review.rounds.last() else {
             continue;
@@ -2057,8 +2098,9 @@ mod tests {
             created: String::new(),
             updated: String::new(),
         };
+        // Without its review's folder to read (review_keys' tests read one), a key resolves as every command's does
         let names =
-            |keys: &[&str], wanted: &str| super::names_task(&project, &header(keys), wanted);
+            |keys: &[&str], wanted: &str| super::names_task(&project, None, &header(keys), wanted);
         // Its key then, an alias now: the task, by its key now; with an old review's mark too
         assert!(names(&["ATM-9"], "ATM-14"));
         assert!(names(&["~ATM-9"], "ATM-14"));

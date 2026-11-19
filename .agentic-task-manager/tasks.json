@@ -19650,13 +19650,13 @@
       "description": "In the full functional e2e run (2026-11-19), *a long review (94 files, ~3,000 lines)* in `reviews.spec.ts` failed on `afterSettled`: 107 ms against its budget of 100 (`BUDGET_MS / 2`), with one long task of 50 ms. An earlier run measured 98.\n\nRun alone it measures 25 to 34 ms (three runs, one worker). In the failing run, the *real review CR-1 (webkit)* test was running at the same time, blocking for 3.5 s while it opened.\n\n## To do\nFind why the settle step is that sensitive to a concurrent test. Then either fix the cause in the diff viewer or keep the WebKit measurement from sharing the machine with timed Chromium tests. Never raise the budget or just re-run (AGENTS.md). Measure before and after.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T05:43:56Z",
-      "updated_at": "2026-11-19T08:16:55Z",
+      "updated_at": "2026-11-19T08:36:05Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19676,10 +19676,25 @@
           "kind": "note",
           "text": "Seen again on 2026-11-19: 100 against its 100 ms budget in the reviews spec at 5 workers; alone, 27 to 44 ms (three runs). The new jump test on a review of half a million pixels (ATM-646, `reviews.spec.ts`) is heavy and runs beside it, so it makes the contention more likely: the fix should keep the timed tests off a machine shared with the heavy ones.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T08:36:05Z",
+          "kind": "review",
+          "text": "CR-57: Timed e2e tests run on a machine of their own",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-19T08:16:55Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "33f63fb8801811955b846188c1041657d01db7cc",
+      "code_reviews": [
+        {
+          "id": "01a1f2f2-da6a-72b1-b6df-4a08b501a89c",
+          "ref": "CR-57"
+        }
+      ],
+      "review_requested_at": "2026-11-19T08:36:05Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f25c-3e45-7582-a10d-fb5cad19398e",

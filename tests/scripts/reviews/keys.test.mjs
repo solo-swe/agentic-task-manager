@@ -1,6 +1,8 @@
 // Task keys in code reviews (ATM-594): a review names its task by its key.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { git, makeProject, removeDir } from '../helpers.mjs';
@@ -144,4 +146,117 @@ describe('a provisional task key in reviews (ATM-594)', () => {
       removeDir(root);
     }
   });
+});
+
+// ATM-630, CR-55 round 2: a real clash (ADR-009 §3). Two branches each made ATM-12, each with a review on it; the merge
+// driver moved one to ATM-13, its old key an alias, while the other still holds ATM-12. Both reviews say ATM-12, and
+// each still finds its own task, read from tasks.json at the review's own commit.
+describe('two branches made ATM-12, each reviewed; a merge moved one (ATM-630)', () => {
+  const OLDER = '0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8012';
+  const NEWER = '0193a5b3-7c1d-7e2f-8a3b-4c5d6e7f8012';
+  const OTHER = { ATM_AGENT: 'claude:other' };
+  const FILE = '.agentic-task-manager/tasks.json';
+
+  /** `name`'s task, ATM-12 in progress by `by`, on the branch checked out, with its change and its review, committed */
+  function reviewedTask(root, { id, name, file, by }) {
+    const data = JSON.parse(fs.readFileSync(path.join(root, FILE), 'utf8'));
+    data.meta.next_number = 13;
+    data.tasks.push({ id, number: 12, name, type: 'feature', status: 'in_progress', started_by: by.ATM_AGENT });
+    fs.writeFileSync(path.join(root, FILE), JSON.stringify(data, null, 2) + '\n');
+    commitFile(root, file, 'one\ntwo\n', `feat(ATM-12): ${name}`);
+    ok(['review', 'create', '--title', name, '--task', 'ATM-12', '--range', 'HEAD~1..HEAD'], root, by);
+    // As an agent commits it: the tasks and the review, not atm's runtime files (claims)
+    git(['add', FILE, '.agentic-task-manager/reviews'], root);
+    git(['commit', '-q', '-m', `review ${name}`], root);
+  }
+
+  /**
+   * The older task ("On a branch", the agent's) on branch `a`, the newer ("On main", another agent's) on main, main
+   * merged into `a` through atm's driver. With a remote, main pushed: the task not on it moves (the older). Without
+   * one, the newer moves. The project's folder.
+   */
+  function clash({ remote }) {
+    const root = makeProject({
+      commit: true,
+      files: {
+        [FILE]: { meta: { project: 'Clash', format: 2, key: 'ATM', next_number: 12, review: 'blocker' }, tasks: [] },
+      },
+    });
+    ok(['db', 'init'], root, HAKAN);
+    git(['add', '-A'], root);
+    git(['commit', '-q', '-m', 'atm init'], root);
+    if (remote) {
+      fs.mkdirSync(remote);
+      git(['init', '-q', '--bare', remote], root);
+      git(['remote', 'add', 'origin', remote], root);
+      git(['push', '-q', '-u', 'origin', 'main'], root);
+      git(['remote', 'set-head', 'origin', 'main'], root);
+    }
+    git(['switch', '-q', '-c', 'a'], root);
+    reviewedTask(root, { id: OLDER, name: 'On a branch', file: 'a.txt', by: AGENT });
+    git(['switch', '-q', 'main'], root);
+    reviewedTask(root, { id: NEWER, name: 'On main', file: 'b.txt', by: OTHER });
+    if (remote) git(['push', '-q', 'origin', 'main'], root);
+    git(['switch', '-q', 'a'], root);
+    const merged = spawnSync('git', ['merge', '--no-edit', 'main'], { cwd: root, encoding: 'utf8' });
+    assert.equal(merged.status, 0, merged.stdout + merged.stderr);
+    return root;
+  }
+
+  /** The reference of the review titled `title` */
+  const reference = (root, title) =>
+    ok(['review', 'list', '--json'], root, HAKAN)
+      .json()
+      .find((r) => r.review.title === title).review.reference;
+
+  /** The titles of the reviews `review list --task <key>` lists */
+  const listed = (root, key) =>
+    ok(['review', 'list', '--task', key, '--json'], root, HAKAN)
+      .json()
+      .map((r) => r.review.title)
+      .sort();
+
+  for (const [how, remote, moved, stayed] of [
+    ['main pushed: the task not on it moves', true, 'On a branch', 'On main'],
+    ['no remote: the newer task moves', false, 'On main', 'On a branch'],
+  ]) {
+    test(`${how}; each review still finds its own task: listed, heard, approved`, () => {
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'atm-clash-'));
+      const root = clash({ remote: remote && path.join(scratch, 'remote.git') });
+      try {
+        const keyOf = (name) =>
+          ok(['task', 'list', '--json'], root, HAKAN)
+            .json()
+            .find((t) => t.name === name).key;
+        // The merge moved one: ATM-13, its old key ATM-12 an alias; both reviews still say ATM-12
+        assert.deepEqual([keyOf(moved), keyOf(stayed)], ['ATM-13', 'ATM-12']);
+        for (const title of [moved, stayed])
+          assert.deepEqual(ok(['review', 'show', reference(root, title), '--json'], root, HAKAN).json().header.tasks, [
+            'ATM-12',
+          ]);
+        // Listed under its own task, by either key it answers to, and never under the other
+        assert.deepEqual(listed(root, 'ATM-13'), [moved]);
+        assert.deepEqual(listed(root, 'ATM-12'), [stayed]);
+        // A comment on the moved task's review reaches its agent, about its key now
+        const agent = moved === 'On a branch' ? AGENT : OTHER;
+        assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, agent).code, 3);
+        const review = reference(root, moved);
+        const file = moved === 'On a branch' ? 'a.txt' : 'b.txt';
+        ok(['review', 'comment', review, '--file', file, '--lines', '2', '--body', 'Why two?'], root, HAKAN);
+        const heard = atm(['review', 'watch', '--once', '--json', '--timeout', '10s'], root, agent);
+        assert.equal(heard.code, 0, heard.stderr);
+        const told = JSON.parse(heard.stdout.trim().split('\n')[0]);
+        assert.deepEqual([told.review, told.body, told.task], [review, 'Why two?', 'ATM-13']);
+        // Its approval reaches the moved task, not the one holding ATM-12 now
+        const comment = ok(['review', 'comments', review, '--json'], root, HAKAN).json()[0].comments[0].id;
+        ok(['review', 'resolve', review, comment], root, HAKAN);
+        ok(['review', 'submit', review, '--approve'], root, HAKAN);
+        assert.equal(task(root, 'ATM-13').review_state, 'approved');
+        assert.notEqual(task(root, 'ATM-12').review_state, 'approved');
+      } finally {
+        removeDir(root);
+        removeDir(scratch);
+      }
+    });
+  }
 });
