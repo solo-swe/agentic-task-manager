@@ -3,11 +3,10 @@ import {
   compareTasks,
   findTask,
   foreignAddress,
-  isProvisional,
   isUuid,
   keyOf,
+  movedFrom,
   parseRef,
-  PROVISIONAL_TIP,
   refView,
   shortId,
   taskLabel,
@@ -22,28 +21,29 @@ function task(fields: Partial<Task> & { id: string }): Task {
   return { name: fields.id, type: 'feature', status: 'todo', phase: 1, description: '', ...fields } as Task;
 }
 
-const a = task({ id: UUID_A, key: 'ATM-2', number: 2, key_final: true, name: 'Two' });
-const b = task({ id: UUID_B, key: 'ATM-10', number: 10, key_final: false, name: 'Ten', aliases: ['ATM-7'] });
-const c = task({ id: UUID_C, key: 'ATM-3', number: 3, key_final: true, name: 'Three' });
+const a = task({ id: UUID_A, key: 'ATM-2', number: 2, name: 'Two' });
+const b = task({ id: UUID_B, key: 'ATM-10', number: 10, name: 'Ten', aliases: ['ATM-7'] });
+const c = task({ id: UUID_C, key: 'ATM-3', number: 3, name: 'Three' });
 const META = { key: 'ATM', key_history: ['T'] };
 const maps = (...tasks: Task[]) => [new Map(tasks.map((t) => [t.id, t]))];
 
-describe('taskLabel and isProvisional', () => {
-  it('shows the key when there is one, else the ID', () => {
+describe('taskLabel and movedFrom', () => {
+  it('shows the key when there is one, else the ID: plain (ADR-009)', () => {
     expect(taskLabel(a)).toBe('ATM-2');
+    expect(taskLabel(b)).toBe('ATM-10');
     expect(taskLabel(task({ id: 'T-001' }))).toBe('T-001');
     expect(taskLabel({ id: 'T-1', key: '' })).toBe('T-1');
   });
 
-  it('calls a key provisional until it is final; an ID never', () => {
-    expect(isProvisional(a)).toBe(false);
-    expect(isProvisional(b)).toBe(true);
-    expect(isProvisional({ key: 'ATM-4' })).toBe(true);
-    expect(isProvisional({ key_final: false })).toBe(false);
-  });
-
-  it('says why a provisional key may change', () => {
-    expect(PROVISIONAL_TIP).toBe('Provisional until merged into main: the number may change if another branch took it');
+  it('the keys a task had before a merge moved its number: its aliases under the project’s key, any case', () => {
+    expect(movedFrom(b, 'ATM')).toEqual(['ATM-7']);
+    expect(movedFrom({ aliases: ['atm-4', 'T-P1-03', 'T-12', 'ATMX-1', 'ATM-'] }, 'ATM')).toEqual(['atm-4']);
+    expect(movedFrom(a, 'ATM')).toEqual([]);
+    // No project key: no moves
+    expect(movedFrom(b, undefined)).toEqual([]);
+    // The key is matched as text, not as a pattern
+    expect(movedFrom({ aliases: ['A.B-3'] }, 'A.B')).toEqual(['A.B-3']);
+    expect(movedFrom({ aliases: ['AxB-3'] }, 'A.B')).toEqual([]);
   });
 
   it('spreads a key only when there is one', () => {
@@ -77,6 +77,12 @@ describe('findTask', () => {
     expect(findTask(' ATM-2 ', tasks, META)).toBe(a);
   });
 
+  it('a key with the ~ an older atm printed finds its task; a ~ alone, nothing', () => {
+    expect(findTask('~ATM-10', tasks, META)).toBe(b);
+    expect(findTask(' ~atm-3 ', tasks, META)).toBe(c);
+    expect(findTask('~', tasks, META)).toBeUndefined();
+  });
+
   it('finds a task by a key with an earlier prefix', () => {
     expect(findTask('T-3', tasks, META)).toBe(c);
     expect(findTask('t-10', tasks, META)).toBe(b);
@@ -95,7 +101,7 @@ describe('findTask', () => {
   });
 
   it('looks in the archive after the working tasks', () => {
-    const old = task({ id: '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60', key: 'ATM-1', number: 1, key_final: true });
+    const old = task({ id: '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a60', key: 'ATM-1', number: 1 });
     expect(findTask('ATM-1', [new Map([[a.id, a]]), new Map([[old.id, old]])], META)).toBe(old);
   });
 
@@ -122,19 +128,18 @@ describe('references', () => {
 
   const own = (id: string) => [a, b, c].find((t) => t.id === id);
 
-  it('shows this project’s task by its key, provisional or not', () => {
-    expect(refView(UUID_A, own)).toEqual({ label: 'ATM-2', provisional: false, task: a });
-    expect(refView(UUID_B, own)).toMatchObject({ label: 'ATM-10', provisional: true });
-    expect(refView('T-009', own)).toEqual({ label: 'T-009', provisional: false });
+  it('shows this project’s task by its key', () => {
+    expect(refView(UUID_A, own)).toEqual({ label: 'ATM-2', task: a });
+    expect(refView(UUID_B, own)).toEqual({ label: 'ATM-10', task: b });
+    expect(refView('T-009', own)).toEqual({ label: 'T-009' });
     expect(refView('0190a1b2-0000-7000-8000-000000000000', own).label).toBe('0190a1b2');
   });
 
   it('shows another project’s task by its key once its tasks are loaded', () => {
-    const lfb = task({ id: UUID_C, key: 'LFB-5', number: 5, key_final: false, name: 'Library' });
+    const lfb = task({ id: UUID_C, key: 'LFB-5', number: 5, name: 'Library' });
     const view = refView(`3f2a9c1e:${UUID_C}`, own, [{ id: '3f2a9c1e', name: 'Lib', tasks: [lfb] }]);
     expect(view).toEqual({
       label: 'LFB-5',
-      provisional: true,
       task: lfb,
       project: '3f2a9c1e',
       tip: 'Library (a task of Lib)',
@@ -157,7 +162,6 @@ describe('references', () => {
       kind: 'active',
       archived: false,
       key: 'LFB-5',
-      key_final: false,
       ambiguous: false,
     };
     const view = (f: object | undefined, workspace?: string) =>
@@ -166,7 +170,6 @@ describe('references', () => {
     it('by its key, status and kind there, with the address that opens it in its project', () => {
       expect(view(found)).toEqual({
         label: 'LFB-5',
-        provisional: true,
         project: '3f2a9c1e',
         tip: 'Library (a task of Lib)',
         found: { name: 'Library', status: 'in_progress', kind: 'active' },
@@ -174,18 +177,16 @@ describe('references', () => {
       });
       // In another workspace that lists it, there
       expect(view(found, 'work').address).toBe('/w/work/projects/lib-w?task=LFB-5');
-      expect(view({ ...found, key_final: true }).provisional).toBe(false);
     });
 
     it('by its UUID when its key is ambiguous, or its project has no keys; an unknown kind is none', () => {
       const ambiguous = view({ ...found, ambiguous: true, kind: 'odd' });
       expect(ambiguous).toMatchObject({
         label: '0190a1b2',
-        provisional: false,
         address: `/projects/3f2a9c1e?task=${UUID_C}`,
       });
       expect(ambiguous.found?.kind).toBeUndefined();
-      expect(view({ ...found, key: undefined, key_final: undefined }).label).toBe('Lib:0190a1b2');
+      expect(view({ ...found, key: undefined }).label).toBe('Lib:0190a1b2');
       expect(view({ ...found, places: [] }).address).toBeUndefined();
     });
 
@@ -210,7 +211,6 @@ describe('references', () => {
   it('shows another project’s task in short when it isn’t loaded, and says so', () => {
     expect(refView(`3f2a9c1e:${UUID_C}`, own, [{ id: '3f2a9c1e', name: 'Lib' }])).toEqual({
       label: 'Lib:0190a1b2',
-      provisional: false,
       project: '3f2a9c1e',
       tip: "A task of another project (Lib) that isn't loaded here",
     });

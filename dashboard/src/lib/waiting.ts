@@ -110,7 +110,7 @@ export function needingUser(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULAR
 /** A task that needs the user, and why: what the "need you" chips list (also atm serve's `needs_you_tasks`) */
 /** A task that needs the user, as the chips list it: with its key when it has one (ADR-007), as a project's own tasks
  * and a summary's (the overview's cards, T-549) do */
-export type NeedsYouItem = NeedsYouEntry & Partial<Pick<Task, 'key' | 'key_final'>>;
+export type NeedsYouItem = NeedsYouEntry & Partial<Pick<Task, 'key'>>;
 
 /** needingUser as the chips list it */
 export function needsYouItems(
@@ -121,10 +121,6 @@ export function needsYouItems(
   return tasks.flatMap((t) => {
     const reason = needsYouReason(t, vocab, scope);
     if (!reason) return [];
-    return [
-      t.key
-        ? { id: t.id, key: t.key, key_final: t.key_final, name: t.name, reason }
-        : { id: t.id, name: t.name, reason },
-    ];
+    return [t.key ? { id: t.id, key: t.key, name: t.name, reason } : { id: t.id, name: t.name, reason }];
   });
 }

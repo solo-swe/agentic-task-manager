@@ -77,7 +77,7 @@
             class="dep-link"
             data-dep={dep}
             title={ref.tip ?? (ref.task?.name || dep)}
-            onclick={() => scrollToTask(dep)}><TaskKey label={ref.label} provisional={ref.provisional} /></button
+            onclick={() => scrollToTask(dep)}><TaskKey label={ref.label} /></button
           >
         {/each}
       {/if}

@@ -19128,7 +19128,7 @@
       "description": "ADR-009 (the task before this): keys are plain from creation.\n\n## Change\n- **Model and schema:** `key_final` leaves `task.schema.json`, `api.schema.json` and the Rust model; `--json` no longer carries it.\n- **Gone:** `finalize_keys` and every caller: `atm vcs pushed` (with and without `--pr`: it still records merges and releases, it no longer touches keys), `atm db migrate`'s key check, `atm task add`'s output. The direct-push step ATM-623 added to `/atm-push` (`atm vcs pushed` after a direct push) stays only if it still records something; otherwise it goes from the skill.\n- **The `~`:** never printed (`atm-common`'s `keys.rs`, the CLI's task, review and summary output, review files written by `atm-review`, commit messages). Input still accepts a leading `~` (old notes, old commits, old review files) and ignores it, so nothing written before breaks.\n- **Migration:** `atm db migrate` drops `key_final` from `tasks.json` and `tasks-archive.json`, once, and says so.\n- **Docs and skills:** `atm docs tasks`, `atm docs commands`, `atm docs reviews` and the skills say nothing of provisional keys; agents write keys plain.\n\n## Tests\n- Unit: keys print plain; `~ATM-5` and `ATM-5` find the same task.\n- Migration: a file with `key_final` true and false loads, migrates once, and is stable after.\n- CLI scenarios: `atm task add` prints the plain key; `atm vcs pushed` without `--pr` changes no task; the commands that took `~KEY` still do.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-23995623df35"
       ],
@@ -19154,7 +19154,7 @@
         "skills/atm-push/SKILL.md"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-19T01:53:49Z",
+      "updated_at": "2026-11-19T02:10:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19180,15 +19180,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T01:53:49Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T01:53:49Z",
           "kind": "review",
           "text": "CR-44: No provisional keys: plain from creation",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T02:09:36Z",
+          "kind": "note",
+          "text": "Approved: in CR-44 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T02:10:12Z",
+          "kind": "outcome",
+          "text": "Approved in CR-44 (Hakan, 2026-11-19).",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T01:53:49Z",
+          "to": "2026-11-19T02:09:36Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T02:10:12Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-239bff26047e",
@@ -19201,7 +19221,7 @@
       "description": "ADR-009 (approved in CR-30): without provisional keys, the merge driver can't tell a final number from a provisional one, and it no longer needs to.\n\n## Change (`crates/atm-db/src/jsongit/merge.rs`)\n- **Two different tasks (different UUIDs) with the same number:** one moves to the next free number (above both sides' numbers and `meta.next_number`) and keeps its old key in `aliases`. A clash never stops a merge; the case that stops it today (\"two final numbers\") goes.\n- **Which one moves (ADR-009):** the task **not on the base branch**, checked from git when the merge runs. When neither is, or git can't tell, the **newer** one (its UUIDv7's time) moves.\n- **`meta.next_number`** merges as the larger of the two, past the moved number.\n- **What moved is reported once:** the merge leaves a record that the next atm command prints (\"ATM-538 is now ATM-641 (both branches made ATM-538)\"), or `atm db migrate` does. Decide which in the task and write it in `atm docs tasks`.\n- References are UUIDs, so nothing else is rewritten. Text written outside the file (commits, notes, reviews) finds the task by its alias.\n\n## Tests (`merge/tests.rs`, and a CLI test with two branches)\n- Each side adds one task with the same number: both kept, the one not on the base branch moved, its alias set, `next_number` past both.\n- Neither on the base branch: the newer one moves.\n- Several clashes in one merge; a clash with an archived task's number; the same task (same UUID) changed on both sides, which isn't a clash.\n- After the merge, `atm task details ATM-538` finds the moved task by its alias and says it moved.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-23995623df35"
       ],
@@ -19212,7 +19232,7 @@
         "docs/agent/tasks.md"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-19T01:54:25Z",
+      "updated_at": "2026-11-19T02:03:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19228,7 +19248,24 @@
         "docs"
       ],
       "started_at": "2026-11-19T01:54:25Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "061e8805a7505be4d39dd1e7713e5efb4e4779f5",
+      "code_reviews": [
+        {
+          "id": "01a1f18b-b79e-70b2-8f8e-769b5b6c632d",
+          "ref": "CR-45"
+        }
+      ],
+      "review_requested_at": "2026-11-19T02:03:48Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T02:03:48Z",
+          "kind": "review",
+          "text": "CR-45: A number clash moves the task not on the base branch",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f0b9-f451-744a-956a-239c2914aed8",
@@ -19241,7 +19278,7 @@
       "description": "ADR-009: the dashboard and the app show every key plain.\n\n## Change\n- The draft mark, its tooltip and its lighter style go (`ui/TaskKey.svelte`, `keys.ts`, and where they are used: `TaskCard`, `DetailPanel`, `DepGraph`, `ProjectCard`, `waiting.ts`, `compmd.ts`'s task data).\n- A task whose number moved at a merge says so in its details (\"was ATM-538\"), from its `aliases`; an address or link with the old key (`?task=ATM-538`) opens it.\n- The generated types follow the schema (no `key_final`).\n\n## Tests\nUnit tests of `keys.ts` and `TaskKey`; an e2e that a task's key shows plain on its card and in its details, and that `?task=<alias>` opens the moved task. Screenshots that showed a draft mark are regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f0b9-f451-744a-956a-239abe8c0ea5"
       ],
@@ -19256,7 +19293,7 @@
         "dashboard/src/lib/compmd.ts"
       ],
       "created_at": "2026-11-18T22:14:40Z",
-      "updated_at": "2026-11-18T22:14:54Z",
+      "updated_at": "2026-11-19T02:10:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19270,7 +19307,9 @@
       "key_final": false,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-19T02:10:19Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0e6-3843-7611-b898-c8d11a743991",

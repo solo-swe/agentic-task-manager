@@ -18,7 +18,7 @@
   import { dashboard } from '../state.svelte';
   import { graphNodeBg, KIND_EMOJI, TYPE_EMOJI, typeStyle } from '../theme';
   import { kindOf } from '../vocab';
-  import { isProvisional, PROVISIONAL_TIP, taskLabel } from '../keys';
+  import { taskLabel } from '../keys';
   import GraphControls from './GraphControls.svelte';
   import Minimap from './Minimap.svelte';
 
@@ -351,11 +351,7 @@
             />
             {#if labelled}
               <text x={node.x + 8} y={node.y + 18} fill={ts.color} font-weight="700" font-size="12"
-                >{`${statusEmoji(t.status)} `}{#if isProvisional(t)}<tspan
-                    class="graph-provisional"
-                    opacity="0.7"
-                    font-style="italic"><title>{PROVISIONAL_TIP}</title>{taskLabel(t)}</tspan
-                  >{:else}{taskLabel(t)}{/if}{` ${TYPE_EMOJI[t.type] ?? ''}`}</text
+                >{`${statusEmoji(t.status)} ${taskLabel(t)} ${TYPE_EMOJI[t.type] ?? ''}`}</text
               >
               <text x={node.x + 8} y={node.y + 36} fill="var(--text-muted)" font-size="10" font-weight="400"
                 >{node.label}</text

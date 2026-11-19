@@ -23,7 +23,7 @@
   import StageChip from '../ui/StageChip.svelte';
   import Icon from '../ui/Icon.svelte';
   import TaskKey from '../ui/TaskKey.svelte';
-  import { parseRef, taskLabel, type RefView } from '../keys';
+  import { movedFrom, parseRef, taskLabel, type RefView } from '../keys';
   import { inApp } from '../api/http';
   import { navigate } from '../navigation';
   import { tabActions, wantsNewTab } from '../tab-actions';
@@ -211,6 +211,13 @@
         </h3>
         <button class="detail-close" aria-label="Close" onclick={() => dashboard.closeDetail()}>&times;</button>
       </div>
+      {@const was = movedFrom(task, typeof dashboard.meta?.key === 'string' ? dashboard.meta.key : undefined)}
+      {#if was.length}
+        <!-- Its number moved when two branches gave the same one (ADR-009): its old key still finds it -->
+        <p class="detail-moved" id="detail-moved" title="Two branches gave this number; the merge moved this task">
+          was {was.join(', ')}
+        </p>
+      {/if}
       {#if task.derived?.problems?.length}
         <!-- A malformed task, shown as far as atm could read it (T-377) -->
         <ul class="archive-notice" id="detail-problems" aria-label="What atm check finds wrong with this task">
@@ -564,7 +571,7 @@
     {@const ref = dashboard.refOf(id)}
     <div class="detail-dep-item archived" data-archived={id} title={old?.name ?? ''}>
       <span class="detail-dep-arrow">{arrow}</span>
-      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      <strong><TaskKey label={ref.label} /></strong>
       <span style="color:var(--text-muted)">· {old ? 'archived' : 'not found'}</span>
     </div>
   {/if}
@@ -584,14 +591,14 @@
       onclick={(e) => openForeign(e, ref.address!)}
     >
       <span class="detail-dep-arrow">{arrow}</span>
-      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      <strong><TaskKey label={ref.label} /></strong>
       <span class="detail-dep-name">{ref.found.name}</span>
       {@render foreignStatus(ref.found)}
     </a>
   {:else}
     <div class="detail-dep-item foreign" data-foreign={id} title={ref.tip}>
       <span class="detail-dep-arrow">{arrow}</span>
-      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      <strong><TaskKey label={ref.label} /></strong>
       {#if ref.found}
         <span class="detail-dep-name">{ref.found.name}</span>
         {@render foreignStatus(ref.found)}
@@ -619,7 +626,7 @@
   {@const ref = dashboard.refOf(id)}
   <button type="button" class="detail-dep-item" onclick={() => dashboard.showDetail(id)} title={name}>
     <span class="detail-dep-arrow">{arrow}</span>
-    <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+    <strong><TaskKey label={ref.label} /></strong>
     <span class="detail-dep-name">{name}</span>
     {#if status !== undefined}
       {@const ds = statusStyle(status)}

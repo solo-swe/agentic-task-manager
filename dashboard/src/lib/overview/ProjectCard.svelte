@@ -233,7 +233,7 @@
         {/each}
         {#if top}
           {@const id = 'task' in top ? top.task : top.id}
-          {@const shown = { id, key: top.key, key_final: top.key_final }}
+          {@const shown = { id, key: top.key }}
           {@const who = 'agent' in top ? [top.agent, top.branch].filter(Boolean).join(' · ') : 'next up'}
           <li class="project-card-work-line project-card-task" title="{taskLabel(shown)} {top.name} — {who}">
             <div class="project-card-task-top">

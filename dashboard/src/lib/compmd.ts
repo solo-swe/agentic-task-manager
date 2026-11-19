@@ -318,8 +318,8 @@ export interface TaskLinks {
   open: (key: string, newTab: boolean) => void;
 }
 
-/** A task key as people write one: a project's key, a dash, a number (`ATM-12`, `~ATM-12` a provisional one; `T-7`,
- * an ID from before task keys); whether it names a task is `taskKnown`'s to say */
+/** A task key as people write one: a project's key, a dash, a number (`ATM-12`; `~ATM-12` as an older atm printed it,
+ * before ADR-009; `T-7`, an ID from before task keys); whether it names a task is `taskKnown`'s to say */
 const TASK_KEY = /~?\b[A-Z][A-Z0-9]{0,9}-\d+\b/g;
 
 /** The link a task key in a text is made (ATM-593), and the key back from one */

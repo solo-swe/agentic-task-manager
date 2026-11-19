@@ -241,24 +241,20 @@ describe('ProjectCard: the git line and the task finished last (T-208)', () => {
     expect(container.querySelector('.project-card-last-when')).toHaveClass('project-card-label');
   });
 
-  it('with task keys (T-549): the key, a provisional one marked, for the task at work and the one finished last', () => {
+  it('with task keys (T-549): the key, plain (ADR-009), for the task at work and the one finished last', () => {
     const uuid = (n: number) => `0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f800${n}`;
     const { container } = render(ProjectCard, {
       project: withFields({
         next: [],
-        working: [
-          { task: uuid(1), key: 'ATM-11', key_final: false, name: 'Draft', agent: 'claude:e5ea9db0', branch: null },
-        ],
-        last_done: { id: uuid(2), key: 'ATM-2', key_final: true, name: 'Setup', completed_at: '2020-01-01T00:00:00Z' },
+        working: [{ task: uuid(1), key: 'ATM-11', name: 'Draft', agent: 'claude:e5ea9db0', branch: null }],
+        last_done: { id: uuid(2), key: 'ATM-2', name: 'Setup', completed_at: '2020-01-01T00:00:00Z' },
       }),
     });
     const now = container.querySelector('.project-card-work-line')!;
-    const provisional = now.querySelector('.project-card-work-id .provisional');
-    expect(provisional?.textContent?.trim()).toBe('ATM-11');
-    expect(provisional?.querySelector('.draft-info .icon-info')).not.toBeNull();
+    expect(now.querySelector('.project-card-work-id')?.textContent?.trim()).toBe('ATM-11');
+    expect(container.querySelector('.provisional, .draft-info')).toBeNull();
     expect(now).toHaveAttribute('title', 'ATM-11 Draft — claude:e5ea9db0');
     expect(text(container.querySelector('.project-card-last'))).toMatch(/ ATM-2 Setup$/);
-    expect(container.querySelector('.project-card-last .draft-info')).toBeNull();
     expect(container.querySelector('.project-card-last')?.getAttribute('title')).toMatch(/^Last finished: ATM-2 Setup/);
   });
 
