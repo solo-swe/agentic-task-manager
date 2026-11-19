@@ -173,3 +173,46 @@ CompMD's to fix, not atm's (it draws the code; atm shows it): proposed as a Comp
 
 **Next:** that CompMD task; atm's own cost per side (about 75 ms, five git processes and the project opened per
 request; 6 and 7 above, as backlog tasks).
+
+## CompMD 0.8.0 (ATM-648)
+
+CompMD 0.8.0 has both fixes the review's pages waited for:
+- in WebKit, Oniguruma's WebAssembly highlights, where Shiki's JavaScript engine compiled each regex the first time it
+  ran: the 1.5 s frame above;
+- the CompMD pages of one document share one style sheet, and read the colour scheme only for a frame or a component
+  (ATM-646's proposal): opening or closing a page no longer restyles the whole document.
+
+Measured the same way on 0.7.1 and on 0.8.0, on this Mac, atm 0.41.0 otherwise unchanged:
+- the timed e2e tests, one worker, three runs each, medians;
+- the real review (CompMD's CR-1, 94 files), one run per engine.
+
+**The real review** (`real-review.spec.ts`; 0.7.1 → 0.8.0):
+
+| | Chromium | WebKit |
+|---|---|---|
+| Opening: blocked (its slowest frame) | 167 → 83 ms (167 → 83) | **1,712 → 92 ms (1,509 → 92)** |
+| Opening: busy until | 781 → 454 ms | 1,953 → 286 ms |
+| Opening: the first lines | 517 → 271 ms | 135 → 127 ms |
+| Scrolled to the end: the last file drawn | 2,264 → 1,978 ms | 2,188 → 2,013 ms |
+| Scrolling: blocked | 183 → 133 ms | 144 → 0 ms |
+| A jump to the top: blocked | 0 → 0 ms | **1,594 → 78 ms** |
+| A jump to the end: blocked (long frames) | 0 → 0 ms | 715 → 59 ms (10 → 1) |
+| The sides: their time at atm in all (the slowest) | 26.7 → 13.4 s (492 → 240 ms) | 2.2 → 1.3 s (239 → 109 ms) |
+
+**The timed e2e tests** (`reviews.spec.ts`, `performance.spec.ts`; Chromium, medians of three):
+
+| | 0.7.1 | 0.8.0 |
+|---|---|---|
+| A jump to a long review's last file: sheets set / styles read | 10 / 28 | **0 / 0** |
+| The long review: the first file drawn / settled | 54 / 101 ms | 38 / 68 ms |
+| The long review: the slowest frame after it settled | 43 ms | 23 ms |
+| The long review: DOM nodes alive after down and back | 21,347 | 22,051 |
+| A file far down a large review: total | 62 ms | 55 ms |
+| The + following the pointer: median / slowest frame | 33 / 34 ms | 33 / 34 ms |
+
+The jump test now holds the restyles at none (`reviews.spec.ts`). The tab switches and reloads of
+`performance.spec.ts` render no CompMD, and are within their run-to-run spread: a first 0.8.0 run measured them as
+0.7.1 had (the agents tab 98 ms, the graph 110, the list 124), a later quieter one lower (67, 79, 78).
+
+**Sizes:** CompMD's WebAssembly 2,812,614 → 2,960,440 bytes (+5%); `compmd.js` 82,744 → 98,690 bytes; the frames'
+runtime 71,941 → 81,004 bytes; the dashboard's page unchanged (1,058,092 bytes).

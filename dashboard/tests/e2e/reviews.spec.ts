@@ -1903,10 +1903,10 @@ test.describe('performance', { tag: '@timed' }, () => {
   });
 
   // ATM-646: a review shaped as CompMD's CR-7 (15 files, one long: ~100,000 px of cards not made yet; CR-7's was 500,000,
-  // which only costs this test time). A jump to its last file must not restyle the whole page over and over: each
-  // CompMD page opened or closed sets the document's adopted style sheets and reads a computed style, a full restyle
-  // each (~1 s in the app's WebKit). Until CompMD shares those per document, the pages opened are what is in view, and
-  // the page itself forces none
+  // which only costs this test time). A jump to its last file must not restyle the whole page over and over: with
+  // CompMD 0.7.1 each CompMD page opened or closed set the document's adopted style sheets and read a computed style,
+  // a full restyle each (~1 s in the app's WebKit). CompMD 0.8.0 shares one style sheet per document and reads the
+  // colour scheme only for a frame or a component (ATM-648): the jump restyles nothing, and the page itself forces none
   test('a jump to the last file of a long review restyles the page only for the CompMD pages it shows (measured)', async ({
     page,
     tasksServer,
@@ -1993,11 +1993,11 @@ test.describe('performance', { tag: '@timed' }, () => {
     // The cards in view and near it, a page a side of each run: no more (the cards passed over aren't made)
     expect(jump.pages).toBeGreaterThan(0);
     expect(jump.pages).toBeLessThanOrEqual(8);
-    // Each page set the sheets once opening it, once closing it (a card given back once the page settled)
-    expect(jump.adopted).toBeLessThanOrEqual(2 * jump.pages);
-    // CompMD 0.7.1's own reads, four a page it opens and draws (its scheme, ATM-646's CompMD task); the review's
-    // own code forces none (it forced 68 more before: DiffCode measured every run on every change in it, ATM-644)
-    expect(jump.computed).toBeLessThanOrEqual(4 * jump.pages);
+    // No page sets the document's sheets as it opens or closes (CompMD 0.8.0's one sheet a document; with 0.7.1, 10 for
+    // 7 pages), and nothing reads a computed style (0.7.1 read 28: its scheme, four a page; the review's own code forced
+    // 68 more before ATM-644)
+    expect(jump.adopted).toBe(0);
+    expect(jump.computed).toBe(0);
   });
 
   // ATM-587: a review shaped as CompMD's CR-1 (94 files, ~3,000 lines added: a few long files, most short, some long

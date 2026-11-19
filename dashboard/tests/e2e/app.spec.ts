@@ -655,8 +655,11 @@ test.describe('the dashboard in the atm app', () => {
     await page.evaluate(() => ((window as unknown as { beforeReload: boolean }).beforeReload = true));
     await tasksServer.chooseMenu({ kind: 'reload' });
     await expect.poll(() => tasksServer.windowCalls).toContain('reload_window');
+    // A look that lands while the page is going away (its context destroyed) is no answer yet: look again
     await expect
-      .poll(() => page.evaluate(() => (window as unknown as { beforeReload?: boolean }).beforeReload ?? false))
+      .poll(() =>
+        page.evaluate(() => (window as unknown as { beforeReload?: boolean }).beforeReload ?? false).catch(() => true),
+      )
       .toBe(false);
     // Loaded again: the same tabs, the same one shown, its page drawn
     await page.waitForLoadState('load');

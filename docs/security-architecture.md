@@ -1245,6 +1245,16 @@ drafts, the watch's catch-up and lease, and task keys plain from creation (ADR-0
   - That commit comes from the round's file, which anyone who can change the review wrote. atm passes git only a full SHA (40 or 64 hex digits), so the text can never be taken for an option or a revision expression; anything else is ignored, and the key resolves as every command resolves it. A test (`review_keys.rs`) writes `HEAD`, `main` and `--output=x` there.
   - It reads with `git ls-tree` and `git cat-file blob`, in the working copy the review is in, and only parses the result as JSON to find a task's UUID. It writes nothing and runs nothing else.
 
+**Release 0.42.0 (the sprint Task&review state machine; in progress, completed by the release task).** So far:
+
+- **CompMD 0.8.0 (ATM-648).** The dashboard, `atm serve` and the app render with CompMD 0.8.0: `@compmd/processor`, `render`, `sandbox` and `vite` 0.8.0, and the crates `tauri-plugin-compmd` and `compmd-host` `=0.8.0` (`compmd-pack` 0.8.0 with them). Where it differs from 0.7:
+  - **One new package, `@compmd/host` 0.8.0** (CompMD's own, MIT, by its author), which `@compmd/vite` uses to serve its bundle in development with the same contract as `compmd-host` (its WebAssembly). It serves nothing in the page atm ships.
+  - **The frames speak protocol version 5**; the page and the frame documents come from the same build, as before.
+  - **Code is highlighted with Oniguruma's WebAssembly outside Chromium** (WebKit, so the app): the host page's policy must allow `'wasm-unsafe-eval'`, which every policy atm sets already does (the dev server's, `atm serve`'s and the app's), for CompMD's processor. No policy changes.
+  - **The frames' policies, the hosting contract (`GET` only, the bundle's frames and packs, `sandbox allow-scripts`, CORS `*`, `nosniff`) and I26 are unchanged.**
+  - `minimumReleaseAgeExclude` names the `@compmd/*` packages at 0.8.0 too, and `@compmd/host@0.8.0`: released the same day, by CompMD's author, as for 0.7.
+  - **CompMD's guide for agents** (`docs/agent/compmd-llms.txt`, `atm docs compmd`) is its `spec/llms.txt` at `v0.8.0`, taken from the public repository; it differs from the copy before only by one link, so what agents read about rendering is unchanged.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

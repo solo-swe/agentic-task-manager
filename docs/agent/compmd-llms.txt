@@ -1,4 +1,4 @@
-<!-- CompMD's llms.txt, version 0.5.0 (github.com/comp-markdown/compmd, tag v0.5.0, commit 1faa072494f9; unchanged since v0.4.0), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
+<!-- CompMD's llms.txt, version 0.8.0 (github.com/comp-markdown/compmd, spec/llms.txt at tag v0.8.0, commit 89b8fb54938c; unchanged since v0.4.0 but for one link), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
 # CompMD
 
 > CompMD (Component Markdown) is CommonMark + GFM with components, containers, named slots, typed params, data, inputs and CSS-like layout. Files end in `.comp.md`. Every construct is one line, so a document stays readable in any plain Markdown renderer. This file is everything you need to write valid CompMD; the normative spec is compmd-spec-v1.md.
@@ -509,4 +509,4 @@ F codes are errors, W codes warnings. Each line: what it means → how to fix it
 
 - [The specification](compmd-spec-v1.md): normative; this file summarizes it.
 - [A complete example](examples/complete/release.comp.md) using every construct, with its data files.
-- [The conformance set](conformance/README.md): test cases for implementations.
+- [The conformance set](../conformance/README.md): test cases for implementations.

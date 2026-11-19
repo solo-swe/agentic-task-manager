@@ -787,9 +787,9 @@ dependencies = [
 
 [[package]]
 name = "compmd-host"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f58e714c07b70ba4e0148e2bc8a9085105b0cc59e812b6391d5dc85188642da9"
+checksum = "7aedf1c34e4a4a294c4131ecbdbc5edccc59ca4887a1b3ec06cf7404a39161bd"
 dependencies = [
  "compmd-pack",
  "http",
@@ -801,9 +801,9 @@ dependencies = [
 
 [[package]]
 name = "compmd-pack"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c89292c2bb76605fe2310e89cb5a38c13d33aa2070b0cd67ba0656667dabbad1"
+checksum = "177af57652ec46c5daee71ff66ec06f51bbeff9d3bdf0ea46c0af2562b5a6475"
 dependencies = [
  "semver",
  "serde",
@@ -4349,9 +4349,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-compmd"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a433dc38ed75d00293d0f453646358d861f66a5fb471d1e3d4e112870a6ded"
+checksum = "a50f7783921128dfc3031ca5351b921650f36269852fc5988bf7513c158e228d"
 dependencies = [
  "compmd-host",
  "serde_json",
