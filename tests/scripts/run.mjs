@@ -14,12 +14,23 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-// `run.mjs merge.test.mjs serve.test.mjs`: only those files
+// `run.mjs merge.test.mjs serve.test.mjs`: only those files (one in a folder by its path, `reviews/watch.test.mjs`,
+// or its name)
 const only = process.argv.slice(2).filter((a) => a.endsWith('.test.mjs'));
+// The tests here, and in the folders here, one level down (an area's tests together, `reviews/`, ATM-642)
 const files = fs
-  .readdirSync(dir)
-  .filter((f) => f.endsWith('.test.mjs'))
-  .filter((f) => !only.length || only.includes(f))
+  .readdirSync(dir, { withFileTypes: true })
+  .flatMap((e) =>
+    e.isDirectory()
+      ? fs
+          .readdirSync(path.join(dir, e.name))
+          .filter((f) => f.endsWith('.test.mjs'))
+          .map((f) => `${e.name}/${f}`)
+      : e.name.endsWith('.test.mjs')
+        ? [e.name]
+        : [],
+  )
+  .filter((f) => !only.length || only.includes(f) || only.includes(path.basename(f)))
   .sort();
 
 const limitArg = process.argv.find((a) => a.startsWith('--file-limit='));

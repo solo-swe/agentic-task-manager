@@ -19653,7 +19653,7 @@
       "description": "Hakan (2026-11-19): an agent's review watch stopped, under a harness that caps background monitors at 5 minutes. Comments, a poke and four approvals went unseen until he asked. Agents must not be able to fail to watch, without making atm noisy.\n\n## Change\n1. **A live watch is known.** `atm review watch` keeps a lease file per agent in the state folder. It is renewed while the watch runs and removed when it stops (a crashed watch's lease runs out), as a claim's lease does.\n2. **One line, only when something is at stake.** When an agent (not a person) runs an atm command without a live watch, and a review of its work is still open, atm adds one line on stderr. The line names the open reviews and what came since the watch last told (from the watch's catch-up position, ATM-624), and says how to start the watch.\n   - It is silent when nothing of the agent's is out for review.\n   - It never touches stdout, so `--json` stays clean.\n   - It shows at most once every ~10 minutes, unless something new was missed.\n3. **The loop gets it as data.**\n   - `atm loop next --json` has a `watch` field (`{\"running\": bool, \"missed\": n}`).\n   - It hands back missed comments before new tasks, as it already hands back approved tasks.\n4. **Skills and docs.**\n   - `atm-loop-tasks` and `atm-do-task`: a `running: false` means start the watch first.\n   - Run the watch as a plain background command (it lasts its `--timeout`, 8h), not under a monitor with a short cap.\n   - `atm docs reviews` says all of this.\n\n## Tests\n- **Unit:** the lease (renewed, removed, run out); when the line shows (no open reviews, a live watch, a person, the rate limit, missed events always shown).\n- **CLI suite:** a scenario with an open review and no watch prints the line on stderr only; with a watch, nothing.\n- `loop next --json`'s `watch` field.\n\n## Release\nSkills change, so the written skill review (`docs/security-architecture.md` §3.3) covers it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -19663,9 +19663,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-19T05:51:33Z",
-      "updated_at": "2026-11-19T07:14:10Z",
+      "updated_at": "2026-11-19T07:25:00Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19677,7 +19677,7 @@
         "docs"
       ],
       "number": 642,
-      "started_at": "2026-11-19T05:54:54Z",
+      "started_at": "2026-11-19T07:25:00Z",
       "started_by": "claude:0f56a916",
       "commit": "f7687957848019a461354248ea66c86c7b8ca656",
       "code_reviews": [
@@ -19686,8 +19686,6 @@
           "ref": "CR-51"
         }
       ],
-      "review_requested_at": "2026-11-19T07:05:00Z",
-      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-19T07:05:00Z",
@@ -19702,7 +19700,13 @@
           "by": "Hakan Serce"
         }
       ],
-      "reviewed_at": "2026-11-19T07:14:10Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T07:05:00Z",
+          "to": "2026-11-19T07:14:10Z",
+          "outcome": "changes_requested"
+        }
+      ]
     },
     {
       "id": "01a1f266-f839-7263-878e-7c8ccd46c600",
@@ -19788,16 +19792,16 @@
       "description": "Hakan (2026-11-19), in the app, on CompMD's CR-7 (a spike on code highlighting's cost in WebKit): click the last file in the file tree, then hover over the diff's left side. The highlight follows the pointer seconds late.\n\n## Measured so far (not reproduced)\nOn the current build, in Playwright's Chromium and WebKit, against a scratch server with CompMD added:\n- after the click, frames stay under 36 ms and the page goes quiet within 4 s;\n- a mouse sweep keeps up;\n- the + follows the pointer within two frames over a 600-line file (Split, and Unified wrapped).\n\nSo the difference is the app's webview, its build or its live-review watch.\n\n## To do\n- Profile in the app itself (Safari's Web Inspector on the app's webview).\n- Find what keeps the main thread busy after the jump, and fix it.\n- Keep the pointer-sweep performance test (`reviews.spec.ts`) as the guard.\n\nSuspect: `DiffCode`'s `MutationObserver` watches its whole subtree, so each hover's + button re-measures the run (a forced layout, and every line's top when wrapped).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T06:26:07Z",
-      "updated_at": "2026-11-19T07:15:59Z",
+      "updated_at": "2026-11-19T07:25:00Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -19819,7 +19823,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T07:10:40Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T07:10:40Z",
@@ -19832,9 +19835,23 @@
           "kind": "note",
           "text": "Approved: in CR-52 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-19T07:25:00Z",
+          "kind": "outcome",
+          "text": "CR-52 approved by Hakan: the + follows the pointer at once; hovering forces no computed-style read (187 in 80 steps before)",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-19T07:15:59Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T07:10:40Z",
+          "to": "2026-11-19T07:15:59Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-19T07:25:00Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f27b-e1ea-7055-b85f-05c3a5615d43",
@@ -19882,7 +19899,7 @@
       "description": "Hakan (2026-11-19). The cause of ATM-644's lag, found in his app recording on CompMD's CR-7:\n- each CompMD page assigns `document.adoptedStyleSheets` and forces `getComputedStyle` on open and on every render;\n- each assignment or forced read is a full restyle of the document (~1 s in WKWebView), then a repaint of every tile of the review's ~526,000 px.\n\nCounted in WebKit: opening CR-7 and jumping to its last file made 26 sheet assignments, 188 computed-style reads and 17 `replaceSync` calls. CompMD's side (a shared sheet, no forced reads, per-document listeners) is a CompMD task Hakan takes there. This is atm's side.\n\n## Change\n1. **One seam.** `lib/compmd-runtime.ts` owns CompMD for the document:\n   - one sandbox (`createSandbox` once, not per `<CompMd>`);\n   - one `MutationObserver` on `<html>` telling every view its scheme (today each `<CompMd>` has its own).\n   `CompMd.svelte` opens and destroys its view through it, so the shared sheet and `scheme` are passed in one place once CompMD takes them.\n2. **Jump hygiene.** A jump to a file (the tree, n / p, a link):\n   - doesn't make the cards it passes over;\n   - doesn't give back made cards it scrolls by;\n   - waits until the scroll has settled at the target before making anything but the file gone to.\n   (`ReviewFile.svelte`'s near and far observers, `holdNearCards`.)\n3. **Inert placeholders.** A card not made yet (its estimated height) isn't restyled or repainted with the rest of the review: it is contained (`contain` on the placeholder) without bringing back ATM-620's leak (`content-visibility` was dropped there).\n4. **Fewer opens per file**, where it is free: no CompMD page for a run whose card isn't made, and none re-opened for a run whose text didn't change.\n\n## Tests\n- **WebKit and Chromium performance e2e** on a review shaped as CR-7 (15 files, one very long, ~500,000 px of placeholders). During a jump to the last file, count `adoptedStyleSheets` assignments, `getComputedStyle` calls and CompMD pages opened, and assert each is bounded: at most the target's own runs. Frames stay under budget during and after the jump, and the pointer sweep (`the + follows the pointer…`) stays at two frames per step.\n- **Unit:** the runtime module (one sandbox; scheme changes reach every view; destroy).\n- **Existing:** the review and document specs unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/compmd-runtime.ts",
@@ -19892,7 +19909,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T06:53:32Z",
-      "updated_at": "2026-11-19T07:05:01Z",
+      "updated_at": "2026-11-19T07:24:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19911,7 +19928,24 @@
       ],
       "number": 646,
       "started_at": "2026-11-19T07:05:01Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "093a6f9be3da0a3fdeeab939347ecab1679af20b",
+      "code_reviews": [
+        {
+          "id": "01a1f2b1-8743-73e8-a41a-056baf0d1672",
+          "ref": "CR-53"
+        }
+      ],
+      "review_requested_at": "2026-11-19T07:24:43Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T07:24:43Z",
+          "kind": "review",
+          "text": "CR-53: One CompMD runtime per document; a long review restyles only for what it shows",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
