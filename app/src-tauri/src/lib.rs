@@ -24,7 +24,7 @@ use commands::{
     subscribe_working_copy, subscribe_workspace, unsubscribe, version, worktrees,
 };
 use commands::{
-    add_review_comment, close_review, create_review, project_review, project_reviews,
+    add_review_comment, close_review, create_review, poke_review, project_review, project_reviews,
     reply_to_review_comment, set_review_tasks, submit_review_decision, update_review_comment,
 };
 use external::open_url;
@@ -67,6 +67,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         add_review_comment,
         update_review_comment,
         reply_to_review_comment,
+        poke_review,
         subscribe_links::<tauri::Wry>,
         check_update,
         install_update,
@@ -1136,6 +1137,7 @@ mod integration_tests {
                 add_review_comment,
                 update_review_comment,
                 reply_to_review_comment,
+                poke_review,
             ],
             &["main"],
         );
@@ -1182,6 +1184,15 @@ mod integration_tests {
             replied,
             json!({"review": "CR-1", "comment": reply, "reply_to": comment})
         );
+        // ATM-611: a poke, as the user at the machine
+        let poked = call(
+            window,
+            "poke_review",
+            &review(json!({"body": "Where are we?"})),
+        )
+        .expect("a poke");
+        assert_eq!(poked["review"], json!("CR-1"), "{poked}");
+        assert!(poked["poke"].is_string(), "{poked}");
         assert_eq!(
             call(
                 window,

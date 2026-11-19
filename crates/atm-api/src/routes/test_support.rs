@@ -8,7 +8,8 @@ use atm_common::{Error, Result};
 use atm_lib::query::Filters;
 use atm_lib::review_pages::ReviewQuery;
 use atm_lib::review_requests::{
-    CommentUpdate, Decision, NewComment, NewReply, ReviewClosing, ReviewOpening, ReviewTasks,
+    CommentUpdate, Decision, NewComment, NewPoke, NewReply, ReviewClosing, ReviewOpening,
+    ReviewTasks,
 };
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewId, ReviewRef, Status};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -46,6 +47,7 @@ pub(super) enum Call {
     Comment(ReviewRef, NewComment),
     UpdateComment(ReviewRef, CommentId, CommentUpdate),
     Reply(ReviewRef, CommentId, NewReply),
+    Poke(ReviewRef, NewPoke),
 }
 
 impl PartialEq for Call {
@@ -451,6 +453,11 @@ impl ReviewChanges for Bound<FakeReviews> {
     ) -> Result<CommentId> {
         self.calls
             .note(Call::Reply(review.clone(), comment.clone(), reply.clone()));
+        self.fake.comment.clone()
+    }
+
+    fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
+        self.calls.note(Call::Poke(review.clone(), poke.clone()));
         self.fake.comment.clone()
     }
 }

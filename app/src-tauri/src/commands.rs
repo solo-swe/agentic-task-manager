@@ -684,6 +684,25 @@ pub async fn reply_to_review_comment(
     ))
 }
 
+/// `POST …/reviews/<CR>/pokes` (ATM-611): a poke, with an optional message.
+///
+/// # Errors
+/// As [`create_review`].
+#[tauri::command]
+#[specta::specta]
+pub async fn poke_review(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    review: String,
+    body: Option<String>,
+) -> Result<Json, AppError> {
+    let project = as_user(&state.workspaces, &workspace, &project)?;
+    let poke = review_requests::NewPoke { body };
+    let id = review_requests::poke_review(&project, &review_ref(&review), &poke)?;
+    Ok(Json(json!({ "review": review, "poke": id })))
+}
+
 /// atm's version.
 #[tauri::command]
 #[specta::specta]

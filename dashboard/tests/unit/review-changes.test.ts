@@ -4,6 +4,7 @@ import {
   addComment,
   closeReview,
   openReview,
+  pokeReview,
   replyTo,
   resolveComment,
   sessionToken,
@@ -75,6 +76,9 @@ describe('in the browser', () => {
         `${reviews}/CR-7/comments/c4/replies`,
         { body: 'Because.' },
       ],
+      // ATM-611: a poke, with a message or without one (a blank one is none)
+      [() => pokeReview('p1', 'CR-7', 'Where are we?'), 'POST', `${reviews}/CR-7/pokes`, { body: 'Where are we?' }],
+      [() => pokeReview('p1', 'CR-7', '  '), 'POST', `${reviews}/CR-7/pokes`, {}],
       [() => resolveComment('p1', 'CR-7', 'c4', true), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: true }],
       [() => resolveComment('p1', 'CR-7', 'c4', false), 'PATCH', `${reviews}/CR-7/comments/c4`, { resolved: false }],
       [
@@ -209,6 +213,8 @@ describe('in the app', () => {
     await submitDecision('p1', 'CR-7', { decision: 'comment', body: 'Fine.' });
     await openReview('p1', { title: 'Live', start: 'live', change: {} });
     await closeReview('p1', 'CR-7', 'Done elsewhere.');
+    await pokeReview('p1', 'CR-7', 'Hello?');
+    await pokeReview('p1', 'CR-7');
     const at = { workspace: 'w', project: 'p1', review: 'CR-7' };
     expect(calls).toEqual([
       ['add_review_comment', { ...at, comment: { body: 'On the review.' } }],
@@ -217,6 +223,8 @@ describe('in the app', () => {
       ['submit_review_decision', { ...at, decision: { decision: 'comment', body: 'Fine.' } }],
       ['create_review', { workspace: 'w', project: 'p1', opening: { title: 'Live', start: 'live', change: {} } }],
       ['close_review', { ...at, closing: { status: 'closed', reason: 'Done elsewhere.' } }],
+      ['poke_review', { ...at, body: 'Hello?' }],
+      ['poke_review', { ...at, body: null }],
     ]);
     expect(fetch).not.toHaveBeenCalled();
   });

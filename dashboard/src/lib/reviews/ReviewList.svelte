@@ -27,6 +27,7 @@
     onquery,
     onopen,
     onlive,
+    onpoke,
     taskHref,
     taskLinks,
     unreadable = [],
@@ -42,6 +43,8 @@
     onopen: (reference: string, newTab: boolean, entry?: ReviewEntry) => void;
     /** A live review opened (ATM-576): why it was refused, or null once it is open */
     onlive?: (live: { title: string; base: string; task: string }) => Promise<string | null>;
+    /** A row's review poked (ATM-611): a nudge its agent answers; why it wasn't, if it wasn't */
+    onpoke?: (entry: ReviewEntry) => Promise<string | null>;
     /** A row's tasks (ATM-593): each key that names a task a link (`taskHref` its address, `taskLinks.open` what a
      * click does: its details here, or with ⌘, Ctrl or a middle click a tab of its own); without them, keys as text */
     taskHref?: (key: string) => string;
@@ -115,6 +118,15 @@
       ? query.status.filter((s) => s !== status)
       : [...query.status, status];
     onquery({ ...query, status: status_ });
+  }
+
+  /** Each row's poke (ATM-611), by review: being sent, sent, or why it wasn't */
+  let poked = $state<Record<string, string>>({});
+  async function poke(entry: ReviewEntry) {
+    const id = entry.review.id;
+    poked = { ...poked, [id]: 'sending' };
+    const refused = await onpoke?.(entry);
+    poked = { ...poked, [id]: refused ?? 'sent' };
   }
 
   function open(e: MouseEvent, entry: ReviewEntry) {
@@ -291,6 +303,19 @@
     {#if waited && entry.waiting_since}<span class="review-waited" title="Waiting since {entry.waiting_since}"
         >Waited {waitedFor(entry.waiting_since, Date.now())}</span
       >{/if}
+    {#if onpoke && r.status !== 'approved' && r.status !== 'closed'}
+      <!-- A poke (ATM-611): its agent hears it and answers, saying where the review stands -->
+      <button
+        class="review-poke"
+        data-review={r.reference}
+        disabled={poked[r.id] === 'sending'}
+        title={poked[r.id] && poked[r.id] !== 'sent' && poked[r.id] !== 'sending'
+          ? `Not poked: ${poked[r.id]}`
+          : 'Nudge its agent: it answers, saying where the review stands'}
+        onclick={() => void poke(entry)}
+        ><Icon name="bell" size={12} />{poked[r.id] === 'sent' ? 'Poked' : 'Poke'}</button
+      >
+    {/if}
     <span class="review-meta">
       {#if entry.project}<span class="review-project" data-project={entry.project.id}
           ><Icon name="folder" size={12} />{entry.project.name}</span
@@ -600,6 +625,23 @@
     border-radius: var(--radius-pill);
     background: var(--surface2);
     font-weight: 600;
+  }
+  .review-poke {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+  .review-poke:hover:not(:disabled) {
+    color: var(--purple);
+    border-color: color-mix(in srgb, var(--purple) 50%, transparent);
   }
   .review-waited {
     color: var(--purple);

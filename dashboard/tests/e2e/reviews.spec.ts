@@ -1459,6 +1459,28 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(page.getByRole('separator', { name: 'Resize the files' })).toHaveAttribute('aria-valuenow', width!);
   });
 
+  // ATM-611: a poke, from the review's page with a message, and from its row on the list
+  test('poke: from the page with a message, and from the list; each is sent as the user', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer, 'CR-2');
+    await page.locator('#review-poke').click();
+    await page.getByLabel('Poke message').fill('Where are we?');
+    await page.getByRole('form', { name: 'Poke' }).getByRole('button', { name: 'Poke', exact: true }).click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'POST', path: '/CR-2/pokes', body: { body: 'Where are we?' } });
+    await expect(page.getByLabel('Poke message')).toHaveCount(0);
+    // From the list, with no message
+    await page.goto(reviewPath(tasksServer, ''));
+    await page.locator('.review-poke[data-review="CR-2"]').click();
+    await expect
+      .poll(() => tasksServer.reviewChanges.at(-1))
+      .toMatchObject({ method: 'POST', path: '/CR-2/pokes', body: {} });
+    await expect(page.locator('.review-poke[data-review="CR-2"]')).toHaveText('Poked');
+  });
+
   test('submit: a decision is sent; a refusal is shown, and nothing else changes', async ({ page, tasksServer }) => {
     await openReviews(page, tasksServer, 'CR-2');
     await page.getByRole('button', { name: 'Submit review' }).click();

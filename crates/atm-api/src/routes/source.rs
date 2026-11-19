@@ -9,7 +9,8 @@ use atm_lib::Project;
 use atm_lib::query::Filters;
 use atm_lib::review_pages::ReviewQuery;
 use atm_lib::review_requests::{
-    self, CommentUpdate, Decision, NewComment, NewReply, ReviewClosing, ReviewOpening, ReviewTasks,
+    self, CommentUpdate, Decision, NewComment, NewPoke, NewReply, ReviewClosing, ReviewOpening,
+    ReviewTasks,
 };
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewRef};
 use atm_lib::workspaces::{Member, Workspace, Workspaces, file_stamp};
@@ -169,6 +170,11 @@ pub trait ReviewChanges {
         comment: &CommentId,
         reply: &NewReply,
     ) -> Result<CommentId>;
+    /// A poke (ATM-611): its ID.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId>;
 }
 
 /// atm-lib's answers: the server's.
@@ -355,5 +361,9 @@ impl ReviewChanges for Project {
         reply: &NewReply,
     ) -> Result<CommentId> {
         review_requests::reply_to_comment(self, review, comment, reply)
+    }
+
+    fn poke_review(&mut self, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
+        review_requests::poke_review(self, review, poke)
     }
 }

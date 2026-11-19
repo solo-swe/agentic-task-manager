@@ -79,6 +79,16 @@ describe('ChainBox: where it is', () => {
 });
 
 describe('ChainBox: where it stands', () => {
+  // ATM-611: a poke is marked by its author, with nothing to resolve; one with no message says it was a poke
+  it('a poke: marked, no Resolve, never folded; an empty one reads Poked', () => {
+    const poke = (id: string, body: string) => comment(id, { resolved: null, poke: true, body });
+    const { container } = show(chain([poke('c1', 'Where are we?'), poke('c2', '')], { path: null, lines: null }));
+    expect(container.querySelectorAll('.chain-poke')).toHaveLength(2);
+    expect(container.querySelector('.chain-resolve')).toBeNull();
+    expect(container.querySelector('.chain')).not.toHaveAttribute('data-resolved');
+    expect(container.querySelector('[data-comment="c2"] .chain-poke-empty')).toHaveTextContent('Poked');
+  });
+
   it('open: a Resolve button above the comment', async () => {
     const { container, onresolve } = show(chain([comment('c1')]));
     const state = container.querySelector('[data-comment="c1"] > .chain-state') as HTMLElement;

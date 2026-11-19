@@ -609,7 +609,10 @@ describe('atm review', () => {
       delete data.meta.lease_minutes;
       fs.writeFileSync(
         tasksFile,
-        JSON.stringify({ ...JSON.parse(fs.readFileSync(tasksFile, 'utf8')), meta: data.meta }),
+        JSON.stringify({
+          ...JSON.parse(fs.readFileSync(tasksFile, 'utf8')),
+          meta: data.meta,
+        }),
       );
       const opened = ok(
         ['review', 'create', '--title', 'Mine', '--task', 'T-1', '--uncommitted', '--json'],
@@ -620,6 +623,43 @@ describe('atm review', () => {
       const t1 = task(root, 'T-1');
       assert.equal(t1.status, 'in_review');
       assert.match(JSON.stringify(t1.notes), /CR-1: Mine \(its claim had lapsed: taken back to open this review\)/);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  // ATM-611: a poke is a person's nudge on the whole review, never open; an agent answers it, never makes one
+  test('poke: a person nudges the review, with a message or none; an agent can’t; it never blocks an approval', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(
+        ['review', 'create', '--title', 'Pokeable', '--task', 'T-1', '--uncommitted', '--reviewer', 'Hakan Serce'],
+        root,
+        AGENT,
+      );
+      assert.equal(ok(['review', 'poke', 'CR-1', '--body', 'Where are we?'], root, HAKAN).stdout, 'CR-1: poked (c1)\n');
+      assert.deepEqual(ok(['review', 'poke', 'CR-1', '--json'], root, HAKAN).json(), { review: 'CR-1', poke: 'c2' });
+      const refused = atm(['review', 'poke', 'CR-1'], root, AGENT);
+      assert.equal(refused.code, 2);
+      assert.match(refused.stderr, /a person pokes a review: an agent answers a poke/);
+      // Pokes are review-level, marked, and never open
+      const chains = ok(['review', 'comments', 'CR-1', '--json'], root, HAKAN).json();
+      assert.deepEqual(
+        chains.map((c) => [c.anchor.path, c.comments[0].poke, c.comments[0].resolved, c.comments[0].body]),
+        [
+          [null, true, null, 'Where are we?'],
+          [null, true, null, ''],
+        ],
+      );
+      assert.equal(ok(['review', 'comments', 'CR-1', '--open', '--json'], root, HAKAN).json().length, 0);
+      // The agent answers with a reply; the reviewer approves with the pokes there
+      ok(['review', 'reply', 'CR-1', 'c1', '--body', 'Round 2 is coming.'], root, AGENT);
+      ok(['review', 'submit', 'CR-1', '--approve'], root, HAKAN);
+      const late = atm(['review', 'poke', 'CR-1'], root, HAKAN);
+      assert.equal(late.code, 1);
+      assert.match(late.stderr, /CR-1 is approved: it can't be poked/);
+      assert.equal(ok(['review', 'poke', 'CR-1', '-n'], root, HAKAN).stdout, '[dry-run] would poke CR-1\n');
     } finally {
       removeDir(root);
     }
@@ -665,7 +705,10 @@ function projectWithSubmodule() {
 function roundOf(root, review, number) {
   const shown = ok(['review', 'show', review, '--json'], root, HAKAN).json();
   const round = shown.rounds.find((r) => r.number === number);
-  return { submodule: round.submodule ?? null, files: round.files.map((f) => f.path) };
+  return {
+    submodule: round.submodule ?? null,
+    files: round.files.map((f) => f.path),
+  };
 }
 
 describe('a provisional task key in reviews (ATM-594)', () => {
@@ -677,7 +720,13 @@ describe('a provisional task key in reviews (ATM-594)', () => {
       commit: true,
       files: {
         '.agentic-task-manager/tasks.json': {
-          meta: { project: 'Keyed', format: 2, key: 'ATM', next_number: 13, review: 'blocker' },
+          meta: {
+            project: 'Keyed',
+            format: 2,
+            key: 'ATM',
+            next_number: 13,
+            review: 'blocker',
+          },
           tasks: [
             {
               id: PROVISIONAL,
@@ -759,7 +808,10 @@ describe('reviews in a project with submodules (ATM-583)', () => {
       git(['add', 'lib'], root);
       commitFile(root, 'a.txt', 'one\nTWO\nthree\n', 'move lib');
       ok(['review', 'create', '--title', 'Move lib', '--task', 'T-1', '--range', 'HEAD~1..HEAD'], root, AGENT);
-      assert.deepEqual(roundOf(root, 'CR-1', 1), { submodule: null, files: ['a.txt', 'lib'] });
+      assert.deepEqual(roundOf(root, 'CR-1', 1), {
+        submodule: null,
+        files: ['a.txt', 'lib'],
+      });
       assert.match(ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout, /\+Subproject commit [0-9a-f]+/);
       // A comment on the move as a whole
       ok(['review', 'comment', 'CR-1', '--file', 'lib', '--body', 'Why this version?'], root, HAKAN);
@@ -780,7 +832,10 @@ describe('reviews in a project with submodules (ATM-583)', () => {
       assert.equal(task(root, 'T-1').status, 'in_review');
       assert.ok(fs.existsSync(path.join(root, '.agentic-task-manager/reviews')), 'kept in the project');
       assert.ok(!fs.existsSync(path.join(lib, '.agentic-task-manager')), 'nothing written in the submodule');
-      assert.deepEqual(roundOf(root, 'CR-1', 1), { submodule: 'lib', files: ['lib/b.txt'] });
+      assert.deepEqual(roundOf(root, 'CR-1', 1), {
+        submodule: 'lib',
+        files: ['lib/b.txt'],
+      });
       const diff = ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout;
       assert.match(diff, /diff --git a\/lib\/b\.txt b\/lib\/b\.txt[\s\S]*\+two/);
 
@@ -794,7 +849,10 @@ describe('reviews in a project with submodules (ATM-583)', () => {
       ok(['task', 'state', 'T-1', 'in_progress'], root, AGENT);
       commitFile(lib, 'b.txt', 'zero\none\ntwo\n', 'a line above');
       ok(['review', 'round', 'CR-1', '--range', 'HEAD~2..HEAD'], lib, AGENT);
-      assert.deepEqual(roundOf(root, 'CR-1', 2), { submodule: 'lib', files: ['lib/b.txt'] });
+      assert.deepEqual(roundOf(root, 'CR-1', 2), {
+        submodule: 'lib',
+        files: ['lib/b.txt'],
+      });
       const between = ok(['review', 'show', 'CR-1', '--round', '2', '--against', '1'], root, HAKAN).stdout;
       assert.match(between, /\+zero/);
       assert.doesNotMatch(between, /\+two/);
@@ -817,7 +875,10 @@ describe('reviews in a project with submodules (ATM-583)', () => {
       const lib = path.join(root, 'lib');
       fs.writeFileSync(path.join(lib, 'b.txt'), 'one\nnot committed\n');
       ok(['review', 'create', '--title', 'Working', '--task', 'T-1', '--uncommitted'], lib, AGENT);
-      assert.deepEqual(roundOf(root, 'CR-1', 1), { submodule: 'lib', files: ['lib/b.txt'] });
+      assert.deepEqual(roundOf(root, 'CR-1', 1), {
+        submodule: 'lib',
+        files: ['lib/b.txt'],
+      });
       assert.match(ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout, /\+not committed/);
       // From the project's folder, the project's own changes: the dirty submodule is one entry
       fs.writeFileSync(path.join(root, 'a.txt'), 'one\nchanged\n');
@@ -825,7 +886,10 @@ describe('reviews in a project with submodules (ATM-583)', () => {
       assert.equal(roundOf(root, 'CR-2', 1).submodule, null);
       // Files reviewed whole: a submodule's from its repository; with the project's, refused
       ok(['review', 'create', '--title', 'A file', '--file', 'lib/b.txt', '--draft'], root, AGENT);
-      assert.deepEqual(roundOf(root, 'CR-3', 1), { submodule: 'lib', files: ['lib/b.txt'] });
+      assert.deepEqual(roundOf(root, 'CR-3', 1), {
+        submodule: 'lib',
+        files: ['lib/b.txt'],
+      });
       const mixed = atm(
         ['review', 'create', '--title', 'Both', '--file', 'lib/b.txt', '--file', 'a.txt', '--draft'],
         root,
@@ -848,7 +912,14 @@ describe('reviews in a project with submodules (ATM-583)', () => {
         path.join(lib, '.agentic-task-manager/tasks.json'),
         JSON.stringify({
           meta: { project: 'Lib' },
-          tasks: [{ id: 'L-1', name: 'Its own', type: 'feature', status: 'in_progress' }],
+          tasks: [
+            {
+              id: 'L-1',
+              name: 'Its own',
+              type: 'feature',
+              status: 'in_progress',
+            },
+          ],
         }),
       );
       const listed = ok(['task', 'list', '--json'], lib, HAKAN).json();

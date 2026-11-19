@@ -30,7 +30,7 @@ is only how it reads: commands take the key with or without it, and `--json` giv
 - `atm claim hold <id> && <command>`: keep your claim alive while a long command runs
 - `atm vcs commit <id> --file F …`: commit the task's files (`atm docs rules`)
 - `atm review create|show|comments|reply|round|wait|watch …`: a code review of your task's change, and listening to
-  it (`atm docs reviews`)
+  it (`atm docs reviews`); `atm review poke` is a person's nudge, which you answer, never make
 
 ## Pushing
 

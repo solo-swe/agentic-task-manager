@@ -29,6 +29,7 @@
     "allow-add-review-comment",
     "allow-update-review-comment",
     "allow-reply-to-review-comment",
+    "allow-poke-review",
     "allow-subscribe-links",
     "allow-check-update",
     "allow-install-update",

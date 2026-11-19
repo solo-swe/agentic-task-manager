@@ -9,6 +9,7 @@
     addComment,
     closeReview,
     openReview,
+    pokeReview,
     replyTo,
     resolveComment,
     submitDecision,
@@ -278,6 +279,7 @@
         onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
         onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
         onclose={(reason) => change(closeReview(project, review, reason))}
+        onpoke={(body) => change(pokeReview(project, review, body))}
         ondocument={(ref) => dashboard.openDocument(ref)}
       />
     {:else if problem}
@@ -312,6 +314,7 @@
       href={(reference) => withReview(currentAddress(), { review: reference })}
       onquery={chooseQuery}
       onopen={(reference, newTab) => open(reference, newTab)}
+      onpoke={project ? (entry) => change(pokeReview(project, entry.review.reference)) : undefined}
       onlive={startLive}
       taskHref={taskPage}
       {taskLinks}

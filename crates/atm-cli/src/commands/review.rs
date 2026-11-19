@@ -178,6 +178,17 @@ pub enum ReviewCommand {
         #[arg(long)]
         agent: Option<String>,
     },
+    /// Poke a review: a person's nudge to its agent, which hears it through its review watch and answers it.
+    Poke {
+        /// The review (CR-7)
+        review: String,
+        /// What to say with it (optional)
+        #[arg(long)]
+        body: Option<String>,
+        /// Who pokes (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
     /// Reply to a comment.
     Reply {
         /// The review (CR-7)
@@ -924,6 +935,27 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 print_json(&json!({ "review": found.header.reference, "comment": id }));
             } else {
                 println!("{}: {id}", found.header.reference);
+            }
+        }
+        ReviewCommand::Poke {
+            review,
+            body,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            if ctx.dry_run {
+                println!("[dry-run] would poke {review}");
+                return Ok(0);
+            }
+            let id = atm_lib::review_requests::poke_review(
+                &project,
+                &reference(&review),
+                &atm_lib::review_requests::NewPoke { body },
+            )?;
+            if ctx.json {
+                print_json(&json!({ "review": review, "poke": id }));
+            } else {
+                println!("{review}: poked ({id})");
             }
         }
         ReviewCommand::Reply {

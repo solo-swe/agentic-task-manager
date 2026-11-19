@@ -60,6 +60,7 @@
     onresolve,
     onsubmit,
     onclose,
+    onpoke,
     ondocument,
   }: {
     page: ReviewPageData;
@@ -93,6 +94,8 @@
     onsubmit: (decision: 'approve' | 'request_changes' | 'comment', body: string) => void;
     /** The review closed, ended without approval, the summary its reason (ATM-576: how a live review ends unapproved) */
     onclose?: (reason: string) => void;
+    /** A poke sent, with its message (ATM-611); why it wasn't, if it wasn't (its box keeps it) */
+    onpoke?: (body: string) => Promise<string | null> | void;
     /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
      * manager opens its document viewer (ATM-586) */
     ondocument?: (ref: DocumentRef) => void;
@@ -422,6 +425,18 @@
     draft = '';
   }
 
+  // Poke (ATM-611): a nudge with an optional message; the box closes once it is sent, and keeps it with why if not
+  let poking = $state(false);
+  let pokeText = $state('');
+  let pokeRefused = $state<string | null>(null);
+  async function poke() {
+    pokeRefused = (await onpoke?.(pokeText.trim())) ?? null;
+    if (!pokeRefused) {
+      poking = false;
+      pokeText = '';
+    }
+  }
+
   // Submit: a summary and a decision
   let submitting = $state(false);
   let summary = $state('');
@@ -502,6 +517,41 @@
           title="The change as it is being made; a comment keeps what you saw as a checkpoint"
           >Following the working copy</span
         >{/if}
+      {#if !ended && onpoke}
+        <!-- A poke (ATM-611): a nudge its agent hears and answers, saying where the review stands -->
+        <div class="review-submit-anchor">
+          <button
+            class="review-button"
+            id="review-poke"
+            aria-expanded={poking}
+            title="Nudge its agent: it answers, saying where the review stands"
+            onclick={() => (poking = !poking)}><Icon name="bell" size={15} /> Poke</button
+          >
+          {#if poking}
+            <form
+              class="review-submit review-poke"
+              aria-label="Poke"
+              onsubmit={(e) => {
+                e.preventDefault();
+                void poke();
+              }}
+            >
+              <textarea
+                id="review-poke-body"
+                bind:value={pokeText}
+                rows="2"
+                placeholder="A message (optional)"
+                aria-label="Poke message"
+                {@attach focusOnShow}></textarea>
+              {#if pokeRefused}<p class="review-poke-problem" role="alert">{pokeRefused}</p>{/if}
+              <div class="review-actions">
+                <button type="button" class="review-button" onclick={() => (poking = false)}>Cancel</button>
+                <button type="submit" class="review-button primary" disabled={busy}>Poke</button>
+              </div>
+            </form>
+          {/if}
+        </div>
+      {/if}
       {#if !ended}
         <div class="review-submit-anchor">
           {#if settled && !approveBlocked}

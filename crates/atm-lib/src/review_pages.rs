@@ -686,6 +686,7 @@ mod tests {
             at: format!("2026-11-18T10:{id:02}:00Z"),
             body: "x".into(),
             resolved: None,
+            poke: false,
             replies: Vec::new(),
         };
         let mut first = comment(0, top);

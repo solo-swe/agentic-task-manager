@@ -179,6 +179,8 @@ pub mod comments_md {
 
     const SEP: &str = " · ";
     const THE_REVIEW: &str = "(the review)";
+    /// A poke's mark, where a top-level comment has its resolved box (ATM-611)
+    const POKE: &str = "[poke] ";
     const OLD_SIDE: &str = "old side";
 
     fn heading(chain: &Chain) -> String {
@@ -207,6 +209,7 @@ pub mod comments_md {
         let resolved = match comment.resolved {
             Some(true) => "[x] ",
             Some(false) => "[ ] ",
+            None if comment.poke => POKE,
             None => "",
         };
         out.push(format!(
@@ -311,12 +314,14 @@ pub mod comments_md {
             return None;
         }
         let rest = line[spaces..].strip_prefix("- ")?;
-        let (resolved, rest) = if let Some(rest) = rest.strip_prefix("[ ] ") {
-            (Some(false), rest)
+        let (resolved, poke, rest) = if let Some(rest) = rest.strip_prefix("[ ] ") {
+            (Some(false), false, rest)
         } else if let Some(rest) = rest.strip_prefix("[x] ") {
-            (Some(true), rest)
+            (Some(true), false, rest)
+        } else if let Some(rest) = rest.strip_prefix(POKE) {
+            (None, true, rest)
         } else {
-            (None, rest)
+            (None, false, rest)
         };
         let (author, rest) = rest.strip_prefix("**")?.split_once(&format!("**{SEP}"))?;
         let (at, id) = rest.rsplit_once(SEP)?;
@@ -335,6 +340,7 @@ pub mod comments_md {
                 at: at.to_string(),
                 body: String::new(),
                 resolved,
+                poke,
                 replies: Vec::new(),
             },
         ))
@@ -432,8 +438,9 @@ pub mod comments_md {
                     None => depth == 0,
                     Some(previous) => depth <= previous + 1,
                 };
-                // A top-level comment has its box, a reply none
-                if fits && (depth == 0) == comment.resolved.is_some() {
+                // A top-level comment has its box (a poke, its mark instead), a reply neither
+                let top_level = comment.resolved.is_some() || comment.poke;
+                if fits && (depth == 0) == top_level {
                     chain.items.push((depth, comment));
                     continue;
                 }
@@ -527,6 +534,32 @@ mod tests {
         assert_eq!(file.chains[1].anchor.lines, None);
         assert_eq!(file.chains[2].anchor.path, None);
         assert_eq!(comments_md::write(&file), COMMENTS);
+    }
+
+    /// ATM-611: a poke is marked where a top-level comment has its box, and read back as a poke, with its replies
+    #[test]
+    fn a_poke_is_written_marked_and_read_back_as_one() {
+        let text = "\
+## (the review) · round 2 · t3
+- [poke] **Hakan Serce** · 2026-11-19T10:00:00Z · c7
+  Where are we?
+  - **claude:0f56a916** · 2026-11-19T10:05:00Z · c8
+    Round 3 is coming: two comments left.
+- [poke] **Hakan Serce** · 2026-11-19T11:00:00Z · c9
+";
+        let file = comments_md::read(text);
+        assert!(file.unread.is_empty(), "{:?}", file.unread);
+        let [first, second] = &file.chains[0].comments[..] else {
+            panic!("two pokes")
+        };
+        assert!(first.poke && second.poke);
+        assert_eq!(
+            (first.resolved, first.body.as_str()),
+            (None, "Where are we?")
+        );
+        assert!(!first.replies[0].poke);
+        assert_eq!(second.body, "");
+        assert_eq!(comments_md::write(&file), text);
     }
 
     #[test]

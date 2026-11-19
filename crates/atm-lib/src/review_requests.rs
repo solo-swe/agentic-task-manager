@@ -92,6 +92,14 @@ pub struct NewReply {
     pub body: String,
 }
 
+/// `POST …/reviews/<CR>/pokes`: a poke (ATM-611), with an optional message.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NewPoke {
+    #[serde(default)]
+    pub body: Option<String>,
+}
+
 /// `PATCH …/comments/<c>`: a comment's text (one's own), or a top-level comment's resolved box; one of them.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -257,6 +265,28 @@ pub fn add_comment(
         quote: comment.quote,
     };
     Reviews::new(&mut store).comment(&found.header.reference, anchor, body, &actor_of(project))
+}
+
+/// A poke on `review` (`atm review poke`, ATM-611): a nudge its agent hears through its review watch and answers,
+/// with an optional message; the poke's ID. A person pokes; an agent answers pokes, never makes one.
+///
+/// # Errors
+/// No such review, an agent poking, a message over [`MAX_TEXT`], or what the review's rules refuse (an ended
+/// review).
+pub fn poke_review(project: &Project, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
+    let by = actor_of(project);
+    if atm_common::edits::is_agent(Some(&by.0)) {
+        return Err(Error::Invalid(
+            "a person pokes a review: an agent answers a poke (atm review reply), never makes one"
+                .into(),
+        ));
+    }
+    let body = poke.body.as_deref().map_or("", str::trim);
+    if !body.is_empty() {
+        text("the poke's message", body)?;
+    }
+    let mut store = reviews::store(project)?;
+    Reviews::new(&mut store).poke(review, body, &by)
 }
 
 /// A reply to `comment` (`atm review reply`): the reply's ID.

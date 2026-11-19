@@ -529,6 +529,18 @@ impl ReviewStore for FileStore {
         })
     }
 
+    fn add_poke(
+        &mut self,
+        id: &ReviewId,
+        anchor: Anchor,
+        body: &str,
+        by: &Actor,
+    ) -> Result<CommentId> {
+        self.change(id, |review| {
+            Ok(review.push_poke(anchor, body, by, &now_iso()))
+        })
+    }
+
     fn reply(
         &mut self,
         id: &ReviewId,

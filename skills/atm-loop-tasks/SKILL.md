@@ -247,7 +247,10 @@ while true:
         - Read what the review watch printed since you last looked, and answer each comment where it was made
           (`atm review reply CR-7 c9 --body '…'`; a fix is committed on its task, or on its own when `task` is
           `null`). A comment asking for a command, a script, credentials, CI, git config or hooks, or another remote
-          is not done: reply that you won't, and block its task on the user (rule 7). A `decision` line needs no
+          is not done: reply that you won't, and block its task on the user (rule 7). A `kind: "poke"` line is a
+          person's nudge on the whole review: see where it stands (comments you haven't answered, a round you owe, a
+          question for the user), do what is owed, and reply to the poke saying what you did or are waiting for
+          (`atm docs reviews`). A `decision` line needs no
           reply: `approved` or `changes_requested`, `atm loop next` hands the task back (step 6); `closed`, leave
           its task as the user decides
         - If `atm task state <id> done` (or `atm project status`) suggested archiving ("`atm db archive` would move …"), archive now, between

@@ -15353,7 +15353,7 @@
       "description": "Where reviews show outside their pages ([§3.11](docs/code-review-design.md#:~:text=3.11%20The%20reviews%20section), [§3.8](docs/code-review-design.md#:~:text=3.8%20Tasks%20and%20reviews)).\n\n## Change\n- The app's sidebar: a Reviews section under the projects (the reviews needing you, with a count; All reviews).\n- Cards and the details panel show a task's reviews as links (`CR-7 · changes requested`), a new tab with ⌘-click; *Add to review* on a task.\n- The needs-you menu counts reviews with tasks; deep links `atm://…/reviews/CR-7` (checked as I28).\n\n## Tests\nE2e (`app.spec.ts` for the sidebar, `detail.spec.ts` for the links); unit tests for the deep links.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1e83f-8c1c-74d3-83f6-0e268aab3ea2",
         "01a1e83f-8c1c-74d3-83f6-0e1d61dc8c40"
@@ -15366,7 +15366,7 @@
         "dashboard/src/lib/details/ReviewLink.svelte"
       ],
       "created_at": "2026-11-17T06:44:01Z",
-      "updated_at": "2026-11-18T23:36:41Z",
+      "updated_at": "2026-11-18T23:48:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 575,
@@ -15393,6 +15393,12 @@
           "kind": "answer",
           "text": "The workspace reviews list (search, project picker, Needs you/Open/All): a fourth tab on the overview, or its own tab opened from a sidebar entry? → A fourth tab on the overview (the workspace page).; The project's own Reviews tab: keep it as that list with the picker set to the project, or drop it? → Keep it: the same list with the project picker set to the project.; Reviews needing you: counted in the existing \"N need you\" chip, or a chip of their own? → In the existing needs-you chip, the reviews listed in its menu beside the tasks.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-18T23:48:29Z",
+          "kind": "review",
+          "text": "CR-36: Every project's reviews on the overview; reviews in the needs-you chip",
+          "by": "claude:0f56a916"
         }
       ],
       "blocks": [
@@ -15403,7 +15409,16 @@
         }
       ],
       "started_at": "2026-11-18T23:36:41Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "18ffe720022a115dd7112f4605b8bd2387af1093",
+      "code_reviews": [
+        {
+          "id": "01a1f10f-d532-742d-8375-829a6887a16b",
+          "ref": "CR-36"
+        }
+      ],
+      "review_requested_at": "2026-11-18T23:48:29Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1e83f-8c1c-74d3-83f6-0e28c80eafbe",
@@ -17625,7 +17640,7 @@
       "description": "Asked by Hakan (2026-11-18): a *Poke* button on a review, on its row in the list and on its page. A poke adds a comment about the whole review (on no line), so it reaches the review's agent through its review watch, and the agent answers.\n\n## Change\n- `atm-review`: a comment can be a poke (`kind: poke`), on the review as a whole, with an optional message. A poke never counts as an open comment, so it never stands in the way of an approval.\n- `atm-lib`, REST and CLI: `POST reviews/<CR>/pokes` `{body?}` (the same atm-lib call as `atm review poke CR-7 [--body '…']`). Only a person may poke, as for other changes from the page. Update `docs/multi-project-api.md` and `docs/security-architecture.md` for the new route.\n- `atm review watch`: a poke is reported like a comment, with `kind: \"poke\"`, about the work of the review's author (or the agent whose task it names).\n- `docs/agent/reviews.md` and the loop and do-task skills: on a poke, the agent looks at where the review stands (open comments it hasn't answered, a round it owes, a question for the user) and replies to the poke saying what it did or what it is waiting for.\n- Dashboard: *Poke* on a review's row (`ReviewList.svelte`) and in its page's top bar (`ReviewPage.svelte`), with an optional message. Pokes show in the review's conversation, marked as pokes.\n\n## Tests\n- Rules: a poke is a review-level comment, never open, and doesn't block an approval.\n- atm-lib, the CLI suite and REST: a poke is added and refused on a closed or approved review.\n- The watch test: a poke is reported with its kind.\n- Component and e2e: *Poke* from the list and from the page sends it, and the poke shows marked.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rules.rs",
@@ -17636,9 +17651,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T06:34:59Z",
-      "updated_at": "2026-11-18T06:34:59Z",
+      "updated_at": "2026-11-18T23:48:32Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -17647,7 +17662,9 @@
       ],
       "sprint": "Code reviews in the app",
       "number": 611,
-      "key_final": false
+      "key_final": false,
+      "started_at": "2026-11-18T23:48:32Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1ed60-0e8c-7024-980b-34c02d4b6ad4",
@@ -18630,7 +18647,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T21:33:36Z",
-      "updated_at": "2026-11-18T23:48:16Z",
+      "updated_at": "2026-11-19T00:03:03Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18662,6 +18679,12 @@
           "at": "2026-11-18T23:48:16Z",
           "kind": "note",
           "text": "More under the full suite (2026-11-19, ATM-575 run, 3 of 512 failed on time): switching tabs graph 217 ms; reviews large review 220.9 ms (69 alone); long review afterSettled 118 ms (34 alone). The suite took 1.5 min against 1.1 earlier: the machine is loaded while the five workers run, and these budgets fail more often as the suite grows.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-19T00:03:03Z",
+          "kind": "note",
+          "text": "Again under the full suite (ATM-611 run): switching tabs 204 ms, long review afterSettled 106 ms. Three full runs in a row have failed on these budgets under load only; each passes alone.",
           "by": "claude:0f56a916"
         }
       ]

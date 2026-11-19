@@ -109,6 +109,29 @@ describe('ReviewList', () => {
     expect(onopen).toHaveBeenCalledWith('CR-1', false, expect.objectContaining({ needs_you: true }));
   });
 
+  // ATM-611: Poke on a review not decided yet sends a poke; sent, it says so; refused, it says why
+  it('a row’s Poke sends a poke for its review, on a review not decided yet only', async () => {
+    const onpoke = vi.fn(async (e: ReviewEntry) => (e.review.reference === 'CR-2' ? 'CR-2 is closed' : null));
+    const { container } = show(
+      [entry(1, 'waiting'), entry(2, 'live'), entry(3, 'approved'), entry(4, 'closed')],
+      { ...NO_QUERY },
+      { onpoke },
+    );
+    const pokes = () => [...container.querySelectorAll<HTMLButtonElement>('.review-poke')];
+    expect(pokes().map((b) => b.dataset.review)).toEqual(['CR-1', 'CR-2']);
+    await fireEvent.click(pokes()[0]);
+    await vi.waitFor(() => expect(pokes()[0]).toHaveTextContent('Poked'));
+    expect(onpoke).toHaveBeenCalledWith(expect.objectContaining({ review: expect.objectContaining({ id: 'r1' }) }));
+    await fireEvent.click(pokes()[1]);
+    await vi.waitFor(() => expect(pokes()[1]).toHaveAttribute('title', 'Not poked: CR-2 is closed'));
+    expect(pokes()[1]).toHaveTextContent('Poke');
+  });
+
+  it('no Poke without a way to send one', () => {
+    const { container } = show([entry(1, 'waiting')]);
+    expect(container.querySelector('.review-poke')).toBeNull();
+  });
+
   // ATM-575: on the overview's list of every project's reviews, each row says its project, and its link is its own
   it('a row of another project’s list says its project, and its link and opening carry the row', async () => {
     const theirs = { ...entry(1, 'waiting'), project: { id: 'p2', name: 'CompMD' } };

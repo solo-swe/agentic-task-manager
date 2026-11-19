@@ -297,6 +297,7 @@ that copy (or nobody yet).
 | `POST reviews/<CR>/comments` | `{path?, lines?: [a, b], side?: new\|old, quote?, round?, body}` | a new chain (`comment`) | `201`, `{review, comment}` |
 | `PATCH reviews/<CR>/comments/<c>` | `{body}` or `{resolved}` | one's own text, or a top-level comment's box (`edit`, `resolve`) | `200`, `{review, comment}` |
 | `POST reviews/<CR>/comments/<c>/replies` | `{body}` | a reply (`reply`) | `201`, `{review, comment, reply_to}` |
+| `POST reviews/<CR>/pokes` | `{body?}` | a poke (`poke`, ATM-611): the user's nudge on the whole review, which its agent hears through its watch (`kind: "poke"`) and answers; never open; refused for an agent and on an ended review | `201`, `{review, poke}` |
 
 - **Only from atm's own page.** Besides the Host check (§1): an `Origin` that is the server's own
   (`http://localhost:<port>` or `http://127.0.0.1:<port>`), this start's session token in `X-Atm-Session` (random, in

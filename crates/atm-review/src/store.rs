@@ -141,6 +141,18 @@ pub trait ReviewStore {
         by: &Actor,
     ) -> Result<CommentId>;
 
+    /// Start a chain with a poke (ATM-611): on the review as a whole, never open; the poke's ID.
+    ///
+    /// # Errors
+    /// No such review, or it can't be written.
+    fn add_poke(
+        &mut self,
+        id: &ReviewId,
+        anchor: Anchor,
+        body: &str,
+        by: &Actor,
+    ) -> Result<CommentId>;
+
     /// Reply to a comment; the reply's ID.
     ///
     /// # Errors

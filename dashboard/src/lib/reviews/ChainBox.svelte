@@ -102,9 +102,16 @@
     <div class="chain-meta">
       <span class="chain-avatar" aria-hidden="true">{initials(c.author)}</span>
       <strong class="chain-author">{c.author}</strong>
+      {#if c.poke}<span class="chain-poke" title="A nudge its agent answers, saying where the review stands"
+          ><Icon name="bell" size={12} /> Poke</span
+        >{/if}
       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
     </div>
-    <div class="chain-body"><CompMd text={c.body} onopen={openLink} {tasks} /></div>
+    {#if c.body.trim()}
+      <div class="chain-body"><CompMd text={c.body} onopen={openLink} {tasks} /></div>
+    {:else if c.poke}
+      <div class="chain-body chain-poke-empty">Poked</div>
+    {/if}
     {#if onreply}
       {#if replyingTo === c.id}
         <form
@@ -301,6 +308,22 @@
   .chain-time {
     color: var(--text-muted);
     font-size: var(--text-xs);
+  }
+  /* A poke (ATM-611): marked by its author, never resolved */
+  .chain-poke {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--purple) 12%, transparent);
+    color: var(--purple);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+  .chain-poke-empty {
+    color: var(--text-muted);
+    font-style: italic;
   }
   .chain-body {
     margin: var(--space-3) 0 var(--space-3) calc(var(--space-9) + var(--space-4));

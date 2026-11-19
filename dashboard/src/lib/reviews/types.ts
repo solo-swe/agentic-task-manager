@@ -19,6 +19,8 @@ export interface ReviewComment {
   at: string;
   body: string;
   resolved: boolean | null;
+  /** A poke (ATM-611): the user's nudge on the whole review, never open; absent for any other comment */
+  poke?: boolean;
   replies: ReviewComment[];
 }
 

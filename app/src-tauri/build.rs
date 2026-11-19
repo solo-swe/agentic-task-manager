@@ -40,6 +40,7 @@ fn main() {
         "add_review_comment",
         "update_review_comment",
         "reply_to_review_comment",
+        "poke_review",
         "subscribe_links",
         "check_update",
         "install_update",

@@ -95,6 +95,18 @@ export function replyTo(project: string, review: string, comment: string, body: 
   });
 }
 
+/** A poke (ATM-611): the user's nudge on the whole review, which its agent hears and answers; an optional message */
+export function pokeReview(project: string, review: string, body?: string): Promise<ChangeResult> {
+  const message = body?.trim() || undefined;
+  return send(project, {
+    method: 'POST',
+    resource: `${ref(review)}/pokes`,
+    body: message ? { body: message } : {},
+    command: 'poke_review',
+    args: { review, body: message ?? null },
+  });
+}
+
 export function resolveComment(
   project: string,
   review: string,

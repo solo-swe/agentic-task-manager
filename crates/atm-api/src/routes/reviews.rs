@@ -11,6 +11,7 @@
 //! | POST | `reviews/<CR>/comments` | a new chain |
 //! | PATCH | `reviews/<CR>/comments/<c>` | a comment's text or resolved box |
 //! | POST | `reviews/<CR>/comments/<c>/replies` | a reply |
+//! | POST | `reviews/<CR>/pokes` | a poke (ATM-611): a nudge its agent answers |
 
 use atm_common::py::to_json;
 use atm_lib::review_requests::request_from;
@@ -201,6 +202,16 @@ fn post_reply(
     )
 }
 
+/// `POST …/reviews/<CR>/pokes` (ATM-611): a poke, with an optional message.
+fn post_poke(reviews: &mut dyn ReviewChanges, review: &ReviewRef, body: Value) -> Response {
+    review_answer(
+        true,
+        request_from(body)
+            .and_then(|poke| reviews.poke_review(review, &poke))
+            .map(|id| json!({ "review": review.0, "poke": id })),
+    )
+}
+
 /// Whether `path` is under a project's reviews (`/api/v2/workspaces/<w>/projects/<p>/reviews…`), where a POST, PATCH
 /// or PUT may change something; on any other path those methods are refused as on a read-only server.
 #[must_use]
@@ -221,6 +232,7 @@ enum Route {
     Comment(ReviewRef),
     UpdateComment(ReviewRef, CommentId),
     Reply(ReviewRef, CommentId),
+    Poke(ReviewRef),
 }
 
 /// The route for `method` on `resource` (past `reviews`): a resource no route has is 404, one the method isn't for
@@ -236,11 +248,12 @@ fn route(method: &Method, resource: &[&str]) -> Result<Route, (StatusCode, &'sta
         ("POST", [cr, "comments"]) => Route::Comment(review(cr)),
         ("PATCH", [cr, "comments", c]) => Route::UpdateComment(review(cr), comment(c)),
         ("POST", [cr, "comments", c, "replies"]) => Route::Reply(review(cr), comment(c)),
+        ("POST", [cr, "pokes"]) => Route::Poke(review(cr)),
         (
             _,
             []
             | [_]
-            | [_, "tasks" | "decisions" | "comments"]
+            | [_, "tasks" | "decisions" | "comments" | "pokes"]
             | [_, "comments", _]
             | [_, "comments", _, "replies"],
         ) => return Err((StatusCode::METHOD_NOT_ALLOWED, "not with this method")),
@@ -287,6 +300,7 @@ pub fn serve_review_change(
         Route::Comment(review) => post_comment(reviews, &review, body),
         Route::UpdateComment(review, comment) => patch_comment(reviews, &review, &comment, body),
         Route::Reply(review, comment) => post_reply(reviews, &review, &comment, body),
+        Route::Poke(review) => post_poke(reviews, &review, body),
     }
 }
 
@@ -297,8 +311,8 @@ pub fn serve_review_change(
 mod tests {
     use atm_common::Error;
     use atm_lib::review_requests::{
-        ChangeToReview, CommentUpdate, Decision, DecisionKind, NewComment, NewReply, ReviewClosing,
-        ReviewOpening, ReviewStart, ReviewTasks, RulesOverride,
+        ChangeToReview, CommentUpdate, Decision, DecisionKind, NewComment, NewPoke, NewReply,
+        ReviewClosing, ReviewOpening, ReviewStart, ReviewTasks, RulesOverride,
     };
     use atm_lib::reviews::{Side, Status};
 
@@ -636,6 +650,28 @@ mod tests {
                 ),
                 StatusCode::CREATED,
                 json!({"review": "CR-1", "comment": "c1", "reply_to": "c4"}),
+            ),
+            // ATM-611: a poke, with a message or without one
+            (
+                Method::POST,
+                "/CR-1/pokes",
+                json!({"body": "Where are we?"}),
+                Call::Poke(
+                    r("CR-1"),
+                    NewPoke {
+                        body: Some("Where are we?".into()),
+                    },
+                ),
+                StatusCode::CREATED,
+                json!({"review": "CR-1", "poke": "c1"}),
+            ),
+            (
+                Method::POST,
+                "/CR-1/pokes",
+                json!({}),
+                Call::Poke(r("CR-1"), NewPoke::default()),
+                StatusCode::CREATED,
+                json!({"review": "CR-1", "poke": "c1"}),
             ),
         ];
         for (method, resource, body, call, status, answered) in cases {

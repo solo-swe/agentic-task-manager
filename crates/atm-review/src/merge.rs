@@ -257,6 +257,7 @@ mod tests {
             at: at.into(),
             body: body.into(),
             resolved,
+            poke: false,
             replies: Vec::new(),
         }
     }

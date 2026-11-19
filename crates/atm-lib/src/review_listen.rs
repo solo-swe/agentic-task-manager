@@ -38,7 +38,8 @@ pub enum WaitFor {
     Decision,
 }
 
-/// A comment heard, as the listeners print it.
+/// A comment heard, as the listeners print it: its `kind`, `comment`, or `poke` (ATM-611: a person's nudge on the
+/// review, which the agent answers by saying where the review stands).
 fn heard(
     review: &ReviewHeader,
     chain: &Chain,
@@ -51,6 +52,7 @@ fn heard(
         "task": task,
         "chain": chain.id.0,
         "comment": comment.id.0,
+        "kind": if comment.poke { "poke" } else { "comment" },
         "reply_to": reply_to.map(|c| c.id.0.clone()),
         "author": comment.author.0,
         "at": comment.at,
@@ -511,6 +513,7 @@ mod tests {
             at: "2026-11-17T10:00:00Z".into(),
             body: body.into(),
             resolved: None,
+            poke: false,
             replies,
         }
     }
@@ -724,6 +727,10 @@ mod tests {
         assert_eq!(with_parents(&chain(None, Vec::new())).len(), 0);
     }
 
+    fn whole_review() -> Chain {
+        chain(None, Vec::new())
+    }
+
     #[test]
     fn a_comment_heard_names_its_review_chain_place_and_text() {
         let r = review(Status::Waiting, &["ATM-1"]);
@@ -733,10 +740,17 @@ mod tests {
         assert_eq!(
             heard(&r.header, &c, &reply, Some(&parent), Some("ATM-1")),
             json!({
-                "review": "CR-1", "task": "ATM-1", "chain": "t1", "comment": "c2", "reply_to": "c1",
-                "author": "Hakan", "at": "2026-11-17T10:00:00Z", "path": "src/a.rs", "lines": [3, 4],
-                "body": "Why?"
+                "review": "CR-1", "task": "ATM-1", "chain": "t1", "comment": "c2", "kind": "comment",
+                "reply_to": "c1", "author": "Hakan", "at": "2026-11-17T10:00:00Z", "path": "src/a.rs",
+                "lines": [3, 4], "body": "Why?"
             })
+        );
+        // ATM-611: a poke is heard as one
+        let mut poke = comment("c3", "Hakan", "Where are we?", Vec::new());
+        poke.poke = true;
+        assert_eq!(
+            heard(&r.header, &whole_review(), &poke, None, Some("ATM-1"))["kind"],
+            "poke"
         );
         let whole = chain(None, Vec::new());
         let v = heard(&r.header, &whole, &reply, None, None);

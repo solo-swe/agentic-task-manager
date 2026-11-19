@@ -290,8 +290,12 @@ pub struct Comment {
     pub at: String,
     /// Its text, in Markdown.
     pub body: String,
-    /// A top-level comment's resolved box, which covers it and its replies; none for a reply.
+    /// A top-level comment's resolved box, which covers it and its replies; none for a reply, and for a poke.
     pub resolved: Option<bool>,
+    /// A poke (ATM-611): a person's nudge on the review as a whole, which its agent hears and answers. Never open, so
+    /// it never stands in the way of an approval.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub poke: bool,
     /// The replies to it, oldest first.
     pub replies: Vec<Comment>,
 }
@@ -482,6 +486,7 @@ mod tests {
             at: "2026-11-17T03:31:00Z".into(),
             body: format!("Comment {id}."),
             resolved,
+            poke: false,
             replies,
         }
     }

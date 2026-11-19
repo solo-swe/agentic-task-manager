@@ -7,6 +7,7 @@
   // (5 kB gzipped); this way about 3 kB more than the embedded copies (2 kB gzipped).
   import {
     ArrowLeft,
+    Bell,
     Bot,
     Calendar,
     Check,
@@ -62,6 +63,7 @@
   /** The dashboard's icons by the names it uses (Lucide's, but `history`, which Lucide now calls rotate-ccw-clock) */
   export const ICONS = {
     'arrow-left': ArrowLeft,
+    bell: Bell,
     bot: Bot,
     calendar: Calendar,
     check: Check,

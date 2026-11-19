@@ -74,6 +74,27 @@ impl Review {
                 at: at.to_string(),
                 body: body.trim_end().to_string(),
                 resolved: Some(false),
+                poke: false,
+                replies: Vec::new(),
+            }],
+        });
+        id
+    }
+
+    /// Start a chain with a poke (ATM-611): on the review as a whole (`anchor`, on no file), never open; its ID.
+    pub fn push_poke(&mut self, anchor: Anchor, body: &str, by: &Actor, at: &str) -> CommentId {
+        let id = self.next_comment_id();
+        let chain = self.next_chain_id();
+        self.chains.push(Chain {
+            id: chain,
+            anchor,
+            comments: vec![Comment {
+                id: id.clone(),
+                author: by.clone(),
+                at: at.to_string(),
+                body: body.trim_end().to_string(),
+                resolved: None,
+                poke: true,
                 replies: Vec::new(),
             }],
         });
@@ -103,6 +124,7 @@ impl Review {
             at: at.to_string(),
             body: body.trim_end().to_string(),
             resolved: None,
+            poke: false,
             replies: Vec::new(),
         });
         Ok(id)

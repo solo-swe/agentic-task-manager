@@ -195,6 +195,18 @@ impl ReviewStore for MemoryStore {
         })
     }
 
+    fn add_poke(
+        &mut self,
+        id: &ReviewId,
+        anchor: Anchor,
+        body: &str,
+        by: &Actor,
+    ) -> Result<CommentId> {
+        self.edit(id, |review| {
+            Ok(review.push_poke(anchor, body, by, &now_iso()))
+        })
+    }
+
     fn reply(
         &mut self,
         id: &ReviewId,

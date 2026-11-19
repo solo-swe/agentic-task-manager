@@ -196,6 +196,21 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         self.store.add_comment(&review.header.id, anchor, body, by)
     }
 
+    /// Poke the review (ATM-611): a nudge to its agent, on the review as a whole (its latest round, no file), with an
+    /// optional message; never open, so it never stands in the way of an approval. Who may poke is atm-lib's (a person).
+    ///
+    /// # Errors
+    /// An ended review (approved or closed: there is nothing to nudge), or the store's.
+    pub fn poke(&mut self, reference: &ReviewRef, body: &str, by: &Actor) -> Result<CommentId> {
+        let review = self.not_ended(reference, "be poked")?;
+        let round = review.rounds.last().map_or(1, |r| r.number);
+        let anchor = Anchor {
+            round,
+            ..Anchor::default()
+        };
+        self.store.add_poke(&review.header.id, anchor, body, by)
+    }
+
     /// Reply to a comment. Anyone.
     ///
     /// # Errors
@@ -753,6 +768,29 @@ mod tests {
                 .comment(&cr(1), on("a.rs", 1), " ", &hakan())
                 .is_err()
         );
+    }
+
+    /// ATM-611: a poke is about the whole review, on its latest round, never open, and no obstacle to an approval; an
+    /// ended review isn't poked
+    #[test]
+    fn a_poke_is_a_review_level_nudge_never_open_and_never_in_the_way_of_an_approval() {
+        let mut store = MemoryStore::new();
+        let mut reviews = Reviews::new(&mut store);
+        reviews.create(new_review(Status::Waiting)).unwrap();
+        let poke = reviews.poke(&cr(1), "Where are we?", &hakan()).unwrap();
+        // An empty message is a poke too
+        reviews.poke(&cr(1), "", &hakan()).unwrap();
+        let review = reviews.store().get_review(&cr(1)).unwrap();
+        let chain = &review.chains[0];
+        assert_eq!((chain.anchor.round, chain.anchor.path.clone()), (1, None));
+        let c = &chain.comments[0];
+        assert_eq!((c.id.clone(), c.poke, c.resolved), (poke, true, None));
+        assert_eq!(review.open_comments().count(), 0, "a poke is never open");
+        reviews
+            .submit(&cr(1), Verdict::Approve, None, None, &hakan())
+            .unwrap();
+        let refused = reviews.poke(&cr(1), "Again?", &hakan()).unwrap_err();
+        assert!(refused.to_string().contains("be poked"), "{refused}");
     }
 
     #[test]
