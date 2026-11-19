@@ -18115,7 +18115,7 @@
       "description": "Asked by Hakan (2026-11-18): on a task in review, the card itself gets its code review as a clickable badge (`CR-7`), so the review opens straight from the board or the list, without opening the task first and clicking the link in its details.\n\n## Change\n- `tasks/TaskCard.svelte`: a task with a review (its latest, as the details panel's `#detail-review` shows since ATM-585) shows a CR badge, its review's key and status (*Waiting for review*, *Changes requested*, …), in the card's badges or beside the review wait line (`.review-wait`).\n- Reuse `details/ReviewLink.svelte` and `reviews/known.svelte.ts` (`knownStatus`) rather than a second way of naming a review; the link's `href` is the review's page (`address.ts` `reviewPageOf`), so hovering or copying shows where it goes.\n- A click opens the review and does **not** open the task's details (stop the card's own click). ⌘-click, Ctrl-click or a middle click opens it in a tab of its own, as other links do (`new-tab-clicks.ts`).\n- Keyboard: the badge is a link in the card's tab order, Enter opens it.\n- Only tasks with a review show it; a task in review with no CR (a review without a change) shows nothing new.\n\n## Tests\n- `TaskCard.component.test.ts`: a task with a review shows its badge with the review's address; a click opens the review and not the task; a task without one shows none.\n- An e2e in the kanban spec: the badge on a card in review opens `CR-N`, and ⌘-click opens a new tab.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/tasks/TaskCard.svelte",
@@ -18123,7 +18123,7 @@
         "dashboard/tests/e2e/kanban.spec.ts"
       ],
       "created_at": "2026-11-18T19:00:58Z",
-      "updated_at": "2026-11-19T00:50:14Z",
+      "updated_at": "2026-11-19T00:53:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18139,7 +18139,24 @@
         "dashboard"
       ],
       "started_at": "2026-11-19T00:50:14Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "19f9c056a4996443ea93bb7db6831504fe6acdf6",
+      "code_reviews": [
+        {
+          "id": "01a1f14b-b863-7079-8830-12a2b5dab6cb",
+          "ref": "CR-41"
+        }
+      ],
+      "review_requested_at": "2026-11-19T00:53:54Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-19T00:53:54Z",
+          "kind": "review",
+          "text": "CR-41: A card in review links to its code review",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f023-1636-76de-9795-f0ebcbfffafd",
@@ -18735,14 +18752,14 @@
       "description": "Found on 2026-11-19 (ATM-625's full functional run): `performance.spec.ts` › *performance with 500 tasks* › *switching tabs* failed once, the Graph tab at **247 ms** against the 200 ms budget, while the whole suite ran on its workers. Alone, three runs in a row: Graph 111, 142 and 124 ms; the other tabs 27 to 111 ms. The change being tested (ATM-625, `CompMd.svelte`) doesn't touch the Graph tab.\n\nDon't raise the budget or just rerun it (AGENTS.md). As ATM-615 did for the long review:\n- Reproduce it with the CPU slowed (`Emulation.setCPUThrottlingRate`, 2× and 4×) or with the suite's workers.\n- Find what the Graph switch spends its time on with 500 tasks (layout, the minimap, drawing the edges, the auto-fit), with a trace or long animation frames.\n- Fix the cause, and say in the test what it now measures.\n\n## Tests\nThe spec passes 10 times in a row with the CPU slowed 2×, and in the full functional run.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/graph/DepGraph.svelte",
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-18T21:33:36Z",
-      "updated_at": "2026-11-19T00:52:43Z",
+      "updated_at": "2026-11-19T00:53:54Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18801,7 +18818,9 @@
           "to": "2026-11-19T00:52:43Z",
           "on": "user"
         }
-      ]
+      ],
+      "started_at": "2026-11-19T00:53:54Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0a7-f9d3-77df-81fe-542bbe43b428",

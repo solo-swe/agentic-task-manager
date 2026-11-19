@@ -107,6 +107,11 @@
     view = v;
   }
   const active = $derived(dashboard.loaded && !empty && vw > 0 && vh > 0);
+  // Labels only where they can be read (ATM-629, decided with Hakan): below this zoom the nodes' 12 and 10 px text is
+  // under 6 px on screen, and shaping it was most of what the tab took to show with 500 tasks (their fitted view is
+  // that small). A node then names its task on hover; zoomed in, its labels are drawn
+  const LABEL_MIN_ZOOM = 0.5;
+  const labelled = $derived(view.k >= LABEL_MIN_ZOOM);
 
   const nodeSize = { w: NODE_W, h: NODE_H };
   // The tasks the search and filters leave in (in "Dim", the others are laid out too, greyed out)
@@ -332,6 +337,7 @@
             class:graph-hovered={hovered === t.id}
             class:graph-faded={chain && !chain.has(t.id)}
             data-id={t.id}
+            data-labelled={labelled ? '' : undefined}
           >
             <rect
               x={node.x}
@@ -343,16 +349,20 @@
               stroke={ts.color}
               stroke-width="1.5"
             />
-            <text x={node.x + 8} y={node.y + 18} fill={ts.color} font-weight="700" font-size="12"
-              >{`${statusEmoji(t.status)} `}{#if isProvisional(t)}<tspan
-                  class="graph-provisional"
-                  opacity="0.7"
-                  font-style="italic"><title>{PROVISIONAL_TIP}</title>{taskLabel(t)}</tspan
-                >{:else}{taskLabel(t)}{/if}{` ${TYPE_EMOJI[t.type] ?? ''}`}</text
-            >
-            <text x={node.x + 8} y={node.y + 36} fill="var(--text-muted)" font-size="10" font-weight="400"
-              >{node.label}</text
-            >
+            {#if labelled}
+              <text x={node.x + 8} y={node.y + 18} fill={ts.color} font-weight="700" font-size="12"
+                >{`${statusEmoji(t.status)} `}{#if isProvisional(t)}<tspan
+                    class="graph-provisional"
+                    opacity="0.7"
+                    font-style="italic"><title>{PROVISIONAL_TIP}</title>{taskLabel(t)}</tspan
+                  >{:else}{taskLabel(t)}{/if}{` ${TYPE_EMOJI[t.type] ?? ''}`}</text
+              >
+              <text x={node.x + 8} y={node.y + 36} fill="var(--text-muted)" font-size="10" font-weight="400"
+                >{node.label}</text
+              >
+            {:else}
+              <title>{taskLabel(t)} {t.name}</title>
+            {/if}
           </g>
         {/each}
       {/if}

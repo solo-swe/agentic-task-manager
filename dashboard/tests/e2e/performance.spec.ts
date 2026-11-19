@@ -165,7 +165,8 @@ test.describe('performance with 500 tasks', () => {
       progress: await timeAction(page, '#tab-progress', "document.querySelector('#burndown svg')?.isConnected"),
       // Mounted when selected: the timeline is built from scratch
       agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
-      // Drawn when selected (T-525): its nodes, as the List's rows
+      // Drawn when selected (T-525): its nodes, as the List's rows; fitted, 500 tasks are at 10%, where a node's labels
+      // are too small to read and aren't drawn (ATM-629: shaping their text was half of it)
       graph: await timeAction(
         page,
         '#tab-graph',
@@ -175,6 +176,25 @@ test.describe('performance with 500 tasks', () => {
     };
     console.log('tab switch (ms):', JSON.stringify(timings));
     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
+  });
+
+  // ATM-629: a node's labels are drawn only where they can be read; below that, it names its task on hover
+  test('the graph of 500 tasks, fitted, draws its nodes without labels; zoomed to 100%, with them', async ({
+    page,
+  }) => {
+    await page.locator('#tab-graph').click();
+    const nodes = page.locator('#panel-graph #dep-graph .graph-node');
+    await expect(nodes).toHaveCount(500);
+    await expect(page.locator('.graph-zoom-level')).toHaveText('10%');
+    await expect(nodes.locator('text')).toHaveCount(0);
+    await expect(nodes.first().locator('title')).not.toBeEmpty();
+    await page
+      .locator('.graph-controls button')
+      .and(page.getByTitle(/^Actual size/))
+      .click();
+    await expect(page.locator('.graph-zoom-level')).toHaveText('100%');
+    await expect(page.locator('#panel-graph .graph-node[data-labelled]')).toHaveCount(500);
+    await expect(nodes.first().locator('text')).toHaveCount(2);
   });
 
   test('a reload that changes the data, on every tab', async ({ page, tasksServer }) => {
