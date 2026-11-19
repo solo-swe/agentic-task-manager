@@ -1279,10 +1279,13 @@ test.describe('the diff viewer on a review’s page', () => {
     );
     await page.goto(reviewPath(tasksServer, '/CR-2'));
     const conversation = page.locator('.review-conversation');
-    await expect(conversation.locator('[data-comment="c1"]').getByRole('button', { name: 'Edit comment' })).toHaveCount(
-      0,
-    );
+    // c1's own header: its replies are inside it, and your reply (c9) has Edit. Once c9 has it, the page knows you,
+    // so c1 having none is said, not just not yet drawn
     const mine = conversation.locator('[data-comment="c9"]');
+    await expect(mine.getByRole('button', { name: 'Edit comment' })).toBeVisible();
+    await expect(
+      conversation.locator('[data-comment="c1"] > .chain-meta').getByRole('button', { name: 'Edit comment' }),
+    ).toHaveCount(0);
     await mine.getByRole('button', { name: 'Edit comment' }).click();
     await mine.getByLabel('Edit your comment').fill('Because of the style guide.');
     await mine.getByRole('button', { name: 'Save' }).click();
