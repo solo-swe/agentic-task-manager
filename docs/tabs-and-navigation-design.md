@@ -164,7 +164,7 @@ back.
 |---|---|---|
 | A review, its sub-tab | `/projects/<id>/reviews/<CR>` (Overview), `…/<CR>/diffs`, `…/<CR>/comments` | Overview only; the sub-tab isn't kept |
 | Its file, round, the round against | `…/diffs?file=&round=&against=` | As now |
-| A comment in view | `…/diffs?file=…#c12` (a chain's anchor) | None |
+| A comment in view | `…/diffs?file=…&comment=c12` (in the query, not a `#c12` anchor: the app's links refuse fragments) | None |
 | A task's details over any page | `?task=ATM-633` | As now |
 | A document over any page | `?doc=path:L40` | As now |
 | The Reviews list's filter and search | `/projects/<id>/reviews?status=waiting&q=…` | Kept in the browser only |
@@ -173,6 +173,14 @@ back.
 
 Every link in atm is a real link (`<a href>` with this address), so ⌘-click, a middle click, *Copy Link* and *Open in
 New Tab* work the same on every card, row and reference, in the browser for free and in the app through §4.5.
+
+**In the app, a link is `atm://` and the same address.** The app's deep links (T-459, `app/src-tauri/src/links.rs`)
+take the dashboard's path and query after `atm://`: `atm://projects/<id>/reviews/CR-7/diffs?file=docs/x.md`. The app
+registers the scheme with macOS, so the link opens the app at that page from anywhere: a chat message, a terminal, a
+note. So the app's *Copy Link* (§4.5) copies the `atm://` form, and the browser's copies its `http://localhost:…/` one.
+The two hold the same address, which the page reads with `lib/address.ts` either way. A deep link carries no
+fragment (`links.rs` refuses one), so nothing in an address is a `#` anchor: a comment in view is `?comment=c12`
+(§4.4's table).
 
 ### 4.5 Clicks and menus
 
