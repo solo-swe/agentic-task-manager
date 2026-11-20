@@ -1765,7 +1765,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 692
+    "next_number": 694
   },
   "tasks": [
     {
@@ -18960,16 +18960,16 @@
       "description": "Hakan: lines were drawn between each line of a review's source view.\n\n## Cause\nEach line's row (its tint and its number) is placed at the code's measured line height, a fraction of a pixel (20.8 px). Where two rows meet, both half cover the same pixel, so their tints blend into a line between every two lines.\n\n## Change\n`dashboard/src/lib/reviews/DiffCode.svelte`: `rowOf` puts each row's edges on whole pixels, so the rows tile.\n\n## Tests\nThe Split Wrap test in `reviews.spec.ts` checks that every row is on whole pixels and starts where the one before it ends, wrapped and not.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-20T10:06:40Z",
-      "updated_at": "2026-11-20T10:43:57Z",
+      "updated_at": "2026-11-20T11:24:13Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -18978,7 +18978,7 @@
       ],
       "sprint": "Task&review state machine",
       "number": 690,
-      "started_at": "2026-11-20T10:06:43Z",
+      "started_at": "2026-11-20T11:24:13Z",
       "started_by": "claude:0f56a916",
       "commit": "2ba58595dde3e662041e9b73261a98352a0046f0",
       "code_reviews": [
@@ -18987,8 +18987,6 @@
           "ref": "CR-75"
         }
       ],
-      "review_requested_at": "2026-11-20T10:06:59Z",
-      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-20T10:06:59Z",
@@ -19003,7 +19001,13 @@
           "by": "Hakan Serce"
         }
       ],
-      "reviewed_at": "2026-11-20T10:43:57Z"
+      "reviews": [
+        {
+          "from": "2026-11-20T10:06:59Z",
+          "to": "2026-11-20T10:43:57Z",
+          "outcome": "changes_requested"
+        }
+      ]
     },
     {
       "id": "01a1f893-8835-72bd-99d7-203cfa1f3f02",
@@ -19017,7 +19021,7 @@
       "description": "Hakan asked for three things.\n\n## Text size\nA **Text size** setting under Document style in Settings: Tiny, Small, Medium (the default), Large, Huge. It scales a Markdown document's text on the document viewer's page and on a review's rendered sides, in every document style and theme. The headings scale with it. It is kept in the browser, like the other settings.\n\n## The ⋯ settings on a review's tab\nIn the app, a review's tab has no ⋯ at the title bar's right end, so Settings can't be opened from there. Show it as every other tab does.\n\n## A tooltip on Rendered\nThe review's Rendered button says that the page's look (its document style and text size) is set in Settings (⋯).\n\n## Tests\n- unit: the setting is kept, and an unknown value falls back to Medium;\n- e2e: a size changes the text's size in the viewer and on a rendered side, and the line numbers stay level with the text; the ⋯ shows on a review's tab; Rendered's tooltip.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/appearance.ts",
@@ -19029,7 +19033,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-20T10:49:40Z",
-      "updated_at": "2026-11-20T10:49:45Z",
+      "updated_at": "2026-11-20T11:16:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19041,7 +19045,108 @@
       "sprint": "Task&review state machine",
       "number": 691,
       "started_at": "2026-11-20T10:49:45Z",
+      "started_by": "claude:0f56a916",
+      "commit": "7a442d09faf0f6e93766b0ef8f2bb0c1c8cc0bd8",
+      "code_reviews": [
+        {
+          "id": "01a1f8a1-8965-77b5-bf02-2cc5675dd859",
+          "ref": "CR-77"
+        }
+      ],
+      "review_requested_at": "2026-11-20T11:04:58Z",
+      "notes": [
+        {
+          "at": "2026-11-20T11:04:58Z",
+          "kind": "review",
+          "text": "CR-77: Text size in Settings, the ⋯ on a review’s tab, and where Rendered’s look is set",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T11:16:25Z",
+          "kind": "note",
+          "text": "Approved: in CR-77 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T11:16:54Z",
+          "kind": "outcome",
+          "text": "Approved in CR-77: text size in Settings, the ⋯ on a review tab, and Rendered tooltip",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T11:04:58Z",
+          "to": "2026-11-20T11:16:25Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T11:16:54Z",
+      "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f8ac-7740-776b-baec-7b75fbe6cc24",
+      "name": "Rendered line numbers: subtle gray (a changed line's only a little darker), and a row of several lines shows its first",
+      "type": "polish",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan: a changed line's number on a review's rendered side is bright, bold blue, which draws the eye from the text.\n\n## Change\n- Every number is a subtle gray. A changed line's is only a little darker, still gray and never black, and not bold. The accent stays for a line under the pointer or picked for a comment.\n- A row that numbers several lines (a paragraph's lines drawn on one visual line) shows its first line's number, not a range (`3–5`). The + still says the range it comments on.\n\n## Tests\ne2e: a changed line's number is gray, not the accent, and not bold; a row of several lines shows its first number.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/app.css",
+        "dashboard/src/lib/documents/DocumentPage.svelte"
+      ],
+      "created_at": "2026-11-20T11:16:54Z",
+      "updated_at": "2026-11-20T11:16:56Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T11:16:54Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 692,
+      "started_at": "2026-11-20T11:16:56Z",
       "started_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f8b3-1427-7157-a0d9-09e6c6a437c2",
+      "name": "WebKit: a jump to a file still moves for a few frames, about 1 run in 8 (19 px; once 5,803 px)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "The e2e test *a jump to a file stays on it while the files above it are drawn* (`reviews.spec.ts`, ATM-656) fails in WebKit about 3 runs in 24, at the commit before ATM-690's changes too, so it is not new with them.\n\n## What it shows\nThe file jumped to arrives, then sits 18 to 19 px off (one line's height) for 2 to 8 frames before it comes back:\n\n```\nf047.rs: [1,-18,-18,-18,-18,-18,-18,1,1,…]\n```\n\nOnce it was 5,803 px off for a frame:\n\n```\nf093.rs: [1,-5803,1,1,…]\n```\n\n## To do\nFind which file above it grows by a line after the jump (and what makes it 5,803 px once), and why the place read isn't kept for those frames, as ATM-656 and ATM-687 meant. Measure in WebKit with `--repeat-each=24`; never only rerun it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-20T11:24:08Z",
+      "updated_at": "2026-11-20T11:24:08Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T11:24:08Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 693
     }
   ]
 }

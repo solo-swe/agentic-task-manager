@@ -111,9 +111,9 @@ describe('DiffView: the layout', () => {
     await numbers();
     expect(container.querySelectorAll('.diff-run')).toHaveLength(2);
     // Line 3 changed (marked on both sides), line 9 only added (a padding line on the old side)
-    expect(container.querySelectorAll('.diff-changed')).toHaveLength(4);
-    expect(container.querySelectorAll('.diff-new .diff-added')).toHaveLength(1);
-    expect(container.querySelectorAll('.diff-old .diff-pad')).toHaveLength(1);
+    expect(container.querySelectorAll('.diff-line.diff-changed')).toHaveLength(4);
+    expect(container.querySelectorAll('.diff-new .diff-line.diff-added')).toHaveLength(1);
+    expect(container.querySelectorAll('.diff-old .diff-line.diff-pad')).toHaveLength(1);
     const folds = screen.getAllByRole('button', { name: /^Show \d+ unchanged lines?$/ });
     expect(folds.map((b) => b.textContent?.trim())).toEqual([
       'Show 1 unchanged line',
@@ -130,8 +130,8 @@ describe('DiffView: the layout', () => {
     const { container } = show({ mode: 'unified' });
     await numbers();
     expect(container.querySelectorAll('.diff-run .diff-column')).toHaveLength(2);
-    expect(container.querySelectorAll('.diff-removed')).toHaveLength(2);
-    expect(container.querySelectorAll('.diff-added')).toHaveLength(3);
+    expect(container.querySelectorAll('.diff-line.diff-removed')).toHaveLength(2);
+    expect(container.querySelectorAll('.diff-line.diff-added')).toHaveLength(3);
     expect(container.querySelector('.diff-code.both')).not.toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
     expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'split');
@@ -171,8 +171,13 @@ describe('DiffView: the layout', () => {
       after: at('head', 'a\nb\n'),
     });
     await numbers();
-    expect(container.querySelectorAll('.diff-new .diff-added')).toHaveLength(2);
-    expect(container.querySelectorAll('.diff-old .diff-pad')).toHaveLength(2);
+    expect(container.querySelectorAll('.diff-new .diff-line.diff-added')).toHaveLength(2);
+    expect(container.querySelectorAll('.diff-old .diff-line.diff-pad')).toHaveLength(2);
+    // Hakan: no line between two lines. The two added lines are tinted by one box, the two padding lines by another
+    expect(container.querySelectorAll('.diff-new .diff-tint')).toHaveLength(1);
+    expect(container.querySelector('.diff-new .diff-tint')).toHaveClass('diff-added');
+    expect(container.querySelectorAll('.diff-old .diff-tint')).toHaveLength(1);
+    expect(container.querySelector('.diff-old .diff-tint')).toHaveClass('diff-pad');
     unmount();
     show({ after: at('head', null) });
     expect(await screen.findByRole('alert')).toHaveTextContent('f.txt: not in head');
@@ -201,7 +206,7 @@ describe('DiffView: the layout', () => {
         after: at('head', lines.join('\n') + '\n'),
       });
       await numbers();
-      const drawn = () => container.querySelectorAll('.diff-new .diff-added').length;
+      const drawn = () => container.querySelectorAll('.diff-new .diff-line.diff-added').length;
       expect(drawn()).toBe(100);
       expect(container.querySelector('.diff-more')).toHaveStyle({ height: `${150 * 20}px` });
       idle.shift()!();

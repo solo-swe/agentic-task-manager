@@ -215,6 +215,31 @@
   }
 
   const isPicked = (i: number) => !!picked && i >= picked[0] && i <= picked[1];
+  const isMarked = (i: number) => !!marked && i >= marked[0] && i <= marked[1];
+  /** The tints, one box per run of lines tinted alike, from its first line's top to its last line's bottom (Hakan: a
+   * box per line drew a pale line wherever two met, in the app's WebKit on a Retina screen, rounded to whole pixels or
+   * not): no two tinted boxes meet inside a run */
+  const tints = $derived.by(() => {
+    if (!layout) return [];
+    const runs: { kind: string; commented: boolean; picked: boolean; top: number; bottom: number }[] = [];
+    lines.forEach((line, i) => {
+      const row = rowOf(i);
+      if (!row) return;
+      const [kind, commented, picked] = [line.kind, isMarked(i), isPicked(i)];
+      if (kind === 'context' && !commented && !picked) return;
+      const last = runs.at(-1);
+      if (
+        last &&
+        last.bottom === row.top &&
+        last.kind === kind &&
+        last.commented === commented &&
+        last.picked === picked
+      )
+        last.bottom = row.top + row.height;
+      else runs.push({ kind, commented, picked, top: row.top, bottom: row.top + row.height });
+    });
+    return runs;
+  });
   const label = (l: CodeLine) =>
     numbers === 'both' ? [l.old ?? '', l.new ?? ''] : [(numbers === 'old' ? l.old : l.new) ?? ''];
   const starts = $derived(new Set(changes));
@@ -232,12 +257,21 @@
   onmouseleave={() => (hover = null)}
 >
   {#if layout}
+    {#each tints as tint (tint.top)}
+      <div
+        class="diff-tint diff-{tint.kind}"
+        class:commented={tint.commented}
+        class:picked={tint.picked}
+        style:top="{tint.top}px"
+        style:height="{tint.bottom - tint.top}px"
+      ></div>
+    {/each}
     {#each lines as line, i (i)}
       {@const row = rowOf(i)!}
       <div
         class="diff-line diff-{line.kind}"
         class:picked={isPicked(i)}
-        class:commented={!!marked && i >= marked[0] && i <= marked[1]}
+        class:commented={isMarked(i)}
         data-row={keys[i]}
         data-change={starts.has(i) ? '' : undefined}
         style:top="{row.top}px"
@@ -313,37 +347,52 @@
     overflow-wrap: anywhere;
     overflow-x: hidden;
   }
-  .diff-line {
+  /* The gutter, one strip down the run's left (the numbers' column and its line): drawn per row, its rows' edges
+     showed as pale lines too */
+  .diff-code::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--gutter);
+    border-right: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    pointer-events: none;
+  }
+  .diff-line,
+  .diff-tint {
     position: absolute;
     left: 0;
     right: 0;
     pointer-events: none;
   }
-  .diff-removed {
-    background: color-mix(in srgb, var(--red) 16%, transparent);
+  /* The tints: a box per run of lines tinted alike (the rows themselves draw none) */
+  .diff-tint.diff-removed {
+    background-color: color-mix(in srgb, var(--red) 16%, transparent);
   }
-  .diff-added {
-    background: color-mix(in srgb, var(--green) 16%, transparent);
+  .diff-tint.diff-added {
+    background-color: color-mix(in srgb, var(--green) 16%, transparent);
   }
-  .diff-changed {
-    background: color-mix(in srgb, var(--yellow) 14%, transparent);
+  .diff-tint.diff-changed {
+    background-color: color-mix(in srgb, var(--yellow) 14%, transparent);
   }
-  .diff-pad {
-    background: repeating-linear-gradient(
+  .diff-tint.diff-pad {
+    background-image: repeating-linear-gradient(
       135deg,
       transparent 0 4px,
       color-mix(in srgb, var(--border) 40%, transparent) 4px 5px
     );
   }
   /* The lines of the chain selected */
-  .diff-line.commented {
+  .diff-tint.commented {
     box-shadow: inset 3px 0 0 var(--yellow);
     background-image: linear-gradient(
       color-mix(in srgb, var(--yellow) 22%, transparent),
       color-mix(in srgb, var(--yellow) 22%, transparent)
     );
   }
-  .diff-line.picked {
+  .diff-tint.picked {
     box-shadow: inset 3px 0 0 var(--accent);
     background-color: color-mix(in srgb, var(--accent) 14%, transparent);
   }
@@ -356,8 +405,7 @@
     width: var(--gutter);
     padding: 0 var(--space-2) 0 0;
     border: none;
-    border-right: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    background: none;
     color: var(--text-muted);
     font: inherit;
     font-family: 'SF Mono', Menlo, Consolas, monospace;
