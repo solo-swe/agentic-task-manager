@@ -77,9 +77,31 @@ fn is_object_id(revision: &str) -> bool {
 }
 
 /// `GET …/projects/<p>/files?path=`: an image's bytes (whose bytes match its type), sandboxed. The `ETag` is the
-/// file's size and mtime.
+/// file's size and mtime. With `&at=<revision>`, the image as that commit or tree has it (a review's image file's
+/// sides, ATM-689), kept by the browser as `documents?at=` is when named by a full object ID.
 pub(super) fn get_file(project: &dyn ProjectSource, query: &str, request: &HeaderMap) -> Response {
     let path = parameter(query, "path");
+    let at = parameter(query, "at");
+    if !at.is_empty() {
+        let kept = is_object_id(&at);
+        let tag = etag(&json!(["image-at", at, path]));
+        if kept && unchanged(request, &tag) {
+            return not_modified(&tag, &[IMAGE_HEADERS[0], IMAGE_HEADERS[1], KEPT]);
+        }
+        return match project.image_at(&path, &at) {
+            Ok((data, content_type)) if kept => send(
+                StatusCode::OK,
+                data,
+                content_type,
+                Some(&tag),
+                &[IMAGE_HEADERS[0], IMAGE_HEADERS[1], KEPT],
+            ),
+            Ok((data, content_type)) => {
+                send(StatusCode::OK, data, content_type, None, &IMAGE_HEADERS)
+            }
+            Err(e) => error_response(&e),
+        };
+    }
     let (size, modified) = match project.file_version(&path) {
         Ok(version) => version,
         Err(e) => return error_response(&e),
@@ -206,6 +228,53 @@ mod tests {
             answer_of(project.as_ref(), "\"a-fe\"").status,
             StatusCode::OK
         );
+    }
+
+    /// ATM-689: an image at a revision (a review's image file's side): at a full object ID, sandboxed, tagged and kept
+    /// (a 304 without reading); at a name that can move, sandboxed, neither tagged nor kept; a refusal its status
+    #[test]
+    fn an_image_at_a_revision_is_its_bytes_kept_only_at_a_full_object_id() {
+        let id = "ab".repeat(20);
+        let (project, calls) = bound(FakeProject::default());
+        let query = format!("path=docs%2Fpic.gif&at={id}");
+        let first = answer(get_file(project.as_ref(), &query, &plain()));
+        assert_eq!(first.status, StatusCode::OK);
+        assert_eq!(first.body, b"GIF89a");
+        assert_eq!(first.header("content-type"), "image/gif");
+        assert!(first.header("content-security-policy").ends_with("sandbox"));
+        assert_eq!(first.header("x-content-type-options"), "nosniff");
+        assert_eq!(first.header("cache-control"), KEPT.1);
+        assert_eq!(
+            calls.taken(),
+            [Call::ImageAt("docs/pic.gif".into(), id.clone())]
+        );
+        let again = answer(get_file(project.as_ref(), &query, &having(&first.tag())));
+        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+        assert!(again.header("content-security-policy").ends_with("sandbox"));
+        assert_eq!(calls.taken(), []);
+        // A name that can move: read each time, never kept
+        let moving = answer(get_file(
+            project.as_ref(),
+            "path=pic.gif&at=HEAD",
+            &having(&first.tag()),
+        ));
+        assert_eq!(moving.status, StatusCode::OK);
+        assert_eq!(moving.tag(), "");
+        assert_eq!(moving.header("cache-control"), "no-cache");
+        assert_eq!(
+            calls.taken(),
+            [Call::ImageAt("pic.gif".into(), "HEAD".into())]
+        );
+        // What atm-docs refuses: its status
+        for (error, status) in refusals() {
+            let (project, _) = bound(FakeProject {
+                image_at: Err(error.clone()),
+                ..FakeProject::default()
+            });
+            let refused = answer(get_file(project.as_ref(), &query, &plain()));
+            assert_eq!(refused.status, status, "{error}");
+            assert_eq!(refused.tag(), "");
+        }
     }
 
     fn answer_of(project: &dyn ProjectSource, tag: &str) -> Answer {

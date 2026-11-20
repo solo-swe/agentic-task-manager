@@ -420,6 +420,15 @@ impl Member {
         read_image(self.project()?.vcs().as_ref(), path)
     }
 
+    /// The image at `path` as the commit or tree `revision` has it, and its content type (a review's image file, its
+    /// sides, ATM-689).
+    ///
+    /// # Errors
+    /// As [`Member::document_at`], and a file that isn't an image.
+    pub fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)> {
+        crate::documents::read_image_at(self.project()?.vcs().as_ref(), revision, path)
+    }
+
     /// Be told when its data changes (its store's subscription), until the subscription is dropped. `on_change` runs
     /// on the store's thread.
     ///

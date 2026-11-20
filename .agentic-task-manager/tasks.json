@@ -1765,7 +1765,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 689
+    "next_number": 690
   },
   "tasks": [
     {
@@ -14423,7 +14423,7 @@
       "description": "ATM-588 made Wrap work in Unified. In Split the button waits, saying why: a wrapped line on one side has to make its counterpart on the other as tall, and a code block CompMD drew had no element per line to give that height to (CMD-250 in CompMD's backlog).\n\n**Unblocked by CompMD 0.8.0 (ATM-648, CR-59):** a code block's view now has `view.lines()` and `view.lineHeights()`, each code line's element and measured height.\n\n## Change\n- `DiffCode.svelte` reads each line's height from the view's `lineHeights()` (and its element from `lines()`), in place of its own measuring (a collapsed range at each line's start), if they serve.\n- `DiffView.svelte` takes the taller of each pair of a Split run's two sides, and gives both lines that height.\n- The Wrap button is enabled in Split too.\n\n## Tests\n- E2e: in Split, a long line wrapped on one side keeps the other side's next line level with it, and the line numbers stay on each line's first visual line; in WebKit too (`@webkit`).\n- The pick, the `+`, a chain's highlight and the comment box work wrapped.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -14431,7 +14431,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T07:51:25Z",
-      "updated_at": "2026-11-20T09:24:39Z",
+      "updated_at": "2026-11-20T09:35:24Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "number": 616,
@@ -14443,7 +14443,24 @@
       ],
       "sprint": "Task&review state machine",
       "started_at": "2026-11-20T09:24:39Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "962d6073f32281b466fb5d8bae483f0848c96c2e",
+      "code_reviews": [
+        {
+          "id": "01a1f84f-8962-76ad-b48b-9c6c85ce705b",
+          "ref": "CR-72"
+        }
+      ],
+      "review_requested_at": "2026-11-20T09:35:24Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T09:35:24Z",
+          "kind": "review",
+          "text": "CR-72: Wrap in Split, its two sides kept level",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1edb5-a7a6-723b-9782-727820cea332",
@@ -17004,9 +17021,9 @@
         "docs/rendered-document-research.md"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:14:28Z",
+      "updated_at": "2026-11-20T09:45:22Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17025,15 +17042,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T18:14:28Z",
-      "review_state": "waiting",
+      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-19T18:14:28Z",
           "kind": "review",
           "text": "CR-60: Rendered Markdown as a document editor shows it: research",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:45:22Z",
+          "kind": "rejection",
+          "text": "CR-60 round 1: 2 open comments",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-20T09:45:22Z"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848990a501dd",
@@ -17055,9 +17079,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:22:01Z",
+      "updated_at": "2026-11-20T09:48:18Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17076,15 +17100,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T18:22:01Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T18:22:01Z",
           "kind": "review",
           "text": "CR-61: Rendered Markdown: comment with the + on a line, or a drag over lines",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:48:18Z",
+          "kind": "note",
+          "text": "Approved: in CR-61 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-20T09:48:18Z"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848aa5d26e23",
@@ -17132,7 +17163,7 @@
       "description": "Hakan (2026-11-19): the line numbers are not perfectly aligned with their lines, and toggling **Wrap** moves the numbers up and down although the lines stay the same.\n\n## Look into\n- Measure each number's box against its line's (top and baseline) in the source and rendered views, Unified and Split, wrapped and not, in Chromium and WebKit; find where they drift (font metrics of the gutter versus the code, a line's height CompMD draws versus the gutter's row, wrapped lines' heights).\n- CompMD 0.8.0 (ATM-648) gives a code block's lines through `view.lines()` and sizes them with `view.lineHeights()`: the gutter can place each number where CompMD draws its line, and the two sides of Split be kept level, instead of atm's own estimate. This also lets Wrap work in Split (ATM-588).\n\n## Tests\nAn e2e that measures every number's top against its line's (within 1 px), before and after toggling Wrap, in both views; the screenshots of the diff viewer regenerated if they change on purpose.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -17140,7 +17171,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:30:28Z",
+      "updated_at": "2026-11-20T09:48:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17161,15 +17192,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T18:30:28Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T18:30:28Z",
           "kind": "review",
           "text": "CR-62: Diff viewer: line numbers level with their lines; Wrap moves none",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:47:34Z",
+          "kind": "note",
+          "text": "Approved: in CR-62 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:48:25Z",
+          "kind": "outcome",
+          "text": "Approved in CR-62: line numbers level with their lines; Wrap moves none",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T18:30:28Z",
+          "to": "2026-11-20T09:47:34Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:48:25Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848c3c638fe6",
@@ -18578,6 +18629,46 @@
           "by": "claude:0f56a916"
         }
       ]
+    },
+    {
+      "id": "01a1f853-b838-7013-a6f3-af7c0f05adf2",
+      "name": "A review's image files show their images (before and after), not only \"binary\"",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Reported by Hakan (2026-11-20, e.g. CR-60's screenshots): a binary file is rightly not copied into a review's round as a diff, but a file of a known type should still show when opened. Every image the viewer knows (png, jpeg, gif, webp, svg) shows its old and new image on the review's Diffs tab, instead of *A binary file: listed, not shown.*\n\n## Change\n- **atm-docs:** `read_image_at(vcs, revision, path)`: an image's bytes as a commit or tree has it, with `read_document_at`'s checks (the path's, a regular file, not ignored, the size limit) and `read_image`'s (only the image types, bytes matching their name); the two share one lookup.\n- **atm-lib / atm-api:** `…/files?path=&at=<revision>`, as `…/documents?path=&at=` (kept by the browser when `at` is a full object ID); the app's `file_of` command takes `at` too (I27).\n- **Dashboard:** a binary file of an image type shows its sides (removed: the old; added: the new; modified: both, side by side, labelled), each loaded from its revision; another binary file stays listed, not shown.\n- **Docs:** `docs/security-architecture.md` I11 (the files route takes `at`, its checks) and `docs/multi-project-api.md`.\n\n## Tests\natm-docs unit tests (an image at a revision; refused when it isn't one, or isn't an image); the route's tests on its fake; the app command's; an e2e test that a review's added and modified images show.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-docs/src/lib.rs",
+        "crates/atm-lib/src/workspaces.rs",
+        "crates/atm-api/src/routes/documents.rs",
+        "app/src-tauri/src/commands.rs",
+        "dashboard/src/lib/reviews/ReviewFile.svelte",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-20T09:39:58Z",
+      "updated_at": "2026-11-20T09:40:03Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T09:39:58Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "components": [
+        "dashboard"
+      ],
+      "number": 689,
+      "started_at": "2026-11-20T09:40:03Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

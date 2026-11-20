@@ -52,6 +52,7 @@
   import ChainBox from './ChainBox.svelte';
   import ComposerActions from './ComposerActions.svelte';
   import DiffView from './DiffView.svelte';
+  import ReviewImage, { isImage } from './ReviewImage.svelte';
   import { draftActions } from './drafts';
   import { focusOnShow } from './focus';
   import { lineCounts } from './page';
@@ -75,6 +76,7 @@
     docStyle = null,
     root = null,
     wanted = false,
+    imageAt,
     onfold,
     onviewed,
     oncomment,
@@ -100,6 +102,8 @@
     root?: HTMLElement | null;
     /** The file just gone to: made at once */
     wanted?: boolean;
+    /** An image's address as revision `revision` has it, at `path` (ATM-689): a binary image file shows its sides */
+    imageAt?: (revision: string, path: string) => string;
     onfold: () => void;
     onviewed: () => void;
     /** A comment on lines (`picked`), or on the file as a whole (none: a submodule's move) */
@@ -312,6 +316,13 @@
             </button>
           {/if}
         </div>
+      {:else if file.binary && imageAt && isImage(file.path) && (file.before || file.after)}
+        <!-- An image (ATM-689): its sides as their revisions have them, side by side: the old one where it was removed
+             or changed, the new one where it was added or changed -->
+        <div class="review-images">
+          {#if file.before}<ReviewImage url={imageAt(file.before, file.old_path)} label="Before" />{/if}
+          {#if file.after}<ReviewImage url={imageAt(file.after, file.path)} label="After" />{/if}
+        </div>
       {:else if file.binary}
         <p class="review-empty">A binary file: listed, not shown.</p>
       {:else if near}
@@ -463,6 +474,12 @@
   .review-empty {
     padding: var(--space-6);
     color: var(--text-muted);
+  }
+  /* An image's sides, side by side, each as wide as half the card at most (ATM-689) */
+  .review-images {
+    display: flex;
+    gap: var(--space-6);
+    padding: var(--space-6);
   }
   .review-submodule {
     display: flex;

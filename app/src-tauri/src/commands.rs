@@ -467,7 +467,7 @@ pub fn review_of(
     Ok(member(workspaces, w, p)?.review(&review_ref(review), round, against)?)
 }
 
-/// `GET …/projects/<p>/files?path=`.
+/// `GET …/projects/<p>/files?path=` (`&at=`: as a commit or tree has it, a review's image file's side, ATM-689).
 ///
 /// # Errors
 /// As [`document_of`], and a file that isn't an image.
@@ -476,8 +476,13 @@ pub fn file_of(
     w: &str,
     p: &str,
     path: &str,
+    at: Option<&str>,
 ) -> Result<FileData, AppError> {
-    let (data, content_type) = member(workspaces, w, p)?.image(path)?;
+    let member = member(workspaces, w, p)?;
+    let (data, content_type) = match at.filter(|a| !a.is_empty()) {
+        Some(revision) => member.image_at(path, revision)?,
+        None => member.image(path)?,
+    };
     Ok(FileData {
         content_type: content_type.into(),
         data,
@@ -941,7 +946,7 @@ pub async fn project_review(
     .map(Json)
 }
 
-/// An image of a project.
+/// An image of a project (`at`: as a commit or tree has it).
 ///
 /// # Errors
 /// As [`file_of`].
@@ -952,8 +957,15 @@ pub async fn file(
     workspace: String,
     project: String,
     path: String,
+    at: Option<String>,
 ) -> Result<FileData, AppError> {
-    file_of(&state.workspaces, &workspace, &project, &path)
+    file_of(
+        &state.workspaces,
+        &workspace,
+        &project,
+        &path,
+        at.as_deref(),
+    )
 }
 
 /// A project's logo, if it has one.

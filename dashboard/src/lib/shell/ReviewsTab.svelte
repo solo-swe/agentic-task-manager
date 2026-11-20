@@ -3,7 +3,7 @@
   import { onDestroy, untrack } from 'svelte';
   import { addressOf, reviewOf, withReview } from '../address';
   import { watchWorkingCopy } from '../api/changes';
-  import { inApp } from '../api/http';
+  import { inApp, v1FileUrl } from '../api/http';
   import { setWindowTitle } from '../api/shell';
   import {
     addComment,
@@ -265,6 +265,7 @@
         project={shortName}
         file={at.file}
         side={(revision) => revisionDocuments(project, revision)}
+        imageAt={(revision, path) => v1FileUrl(project, path, revision)}
         isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
         taskHref={taskPage}
         tasks={taskLinks}

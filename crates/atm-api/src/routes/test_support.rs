@@ -38,6 +38,7 @@ pub(super) enum Call {
     Document(String),
     Image(String),
     DocumentAt(String, String),
+    ImageAt(String, String),
     Reviews(ReviewQuery),
     Review(ReviewRef, Option<u32>, Option<u32>),
     AsUser,
@@ -138,6 +139,8 @@ pub(super) struct FakeProject {
     pub reviews: Result<FakeReviews>,
     /// A file at a revision: what any is
     pub at_revision: Result<Value>,
+    /// An image at a revision: what any is
+    pub image_at: Result<(Vec<u8>, &'static str)>,
     /// What listing its reviews answers
     pub listed: Result<Value>,
     /// What a review's page answers
@@ -159,6 +162,7 @@ impl Default for FakeProject {
             head: Some("aaaa".into()),
             reviews: Ok(FakeReviews::default()),
             at_revision: Ok(json!({"path": "a.md", "revision": "t1"})),
+            image_at: Ok((b"GIF89a".to_vec(), "image/gif")),
             listed: Ok(json!({"reviews": [], "you": "Ana"})),
             page: Ok(json!({"review": {"reference": "CR-1"}, "view": {"files": []}})),
             live_stamp: Ok(None),
@@ -392,6 +396,11 @@ impl ProjectSource for Bound<FakeProject> {
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {
         self.calls.note(Call::Image(path.into()));
         self.file(path)?.image
+    }
+
+    fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)> {
+        self.calls.note(Call::ImageAt(path.into(), revision.into()));
+        self.fake.image_at.clone()
     }
 
     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>> {

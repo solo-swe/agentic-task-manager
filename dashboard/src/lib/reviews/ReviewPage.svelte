@@ -47,6 +47,7 @@
     project = null,
     file = null,
     side,
+    imageAt,
     isViewed,
     taskHref,
     tasks,
@@ -76,6 +77,8 @@
     file?: string | null;
     /** A side's files: the commit or tree a round's side is read from */
     side: (revision: string) => DocumentSource;
+    /** An image's address at a revision (ATM-689): a review's image file shows its sides; without it, listed only */
+    imageAt?: (revision: string, path: string) => string;
     isViewed: (file: ViewFile) => boolean;
     /** A task's address, for its link */
     taskHref?: (key: string) => string;
@@ -1089,6 +1092,7 @@
         {#each files as f (f.path)}
           <ReviewFile
             file={f}
+            {imageAt}
             chains={chainsOf(allChains, f)}
             drifted={driftedOf(allChains, f)}
             before={sideOf(f.before)}

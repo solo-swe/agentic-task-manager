@@ -93,7 +93,11 @@ function projectCall(workspace: string, project: string, route: string[], query:
     case 'documents':
       return { command: 'document', args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined } };
     case 'files':
-      return { command: 'file', args: { ...at, path: query.get('path') ?? '' }, image: true };
+      return {
+        command: 'file',
+        args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined },
+        image: true,
+      };
     case 'claims':
     case 'claims.json':
       return { command: 'claims', args: at };

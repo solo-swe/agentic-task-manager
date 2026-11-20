@@ -347,6 +347,64 @@ pub fn read_document(vcs: Option<&GitVcs>, path: &str) -> Result<Value> {
 /// `Invalid` for a path or revision that isn't one; `NotFound` when the commit or the file isn't there; `Refused` and
 /// `TooLarge` as [`read_document`].
 pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Result<Value> {
+    let found = file_at(vcs, revision, path)?;
+    let rendered = render(found.path, found.kind, found.detail, &found.data);
+    Ok(json!({
+        "path": found.path,
+        "kind": rendered.kind,
+        "language": rendered.language,
+        "text": rendered.text,
+        "document": rendered.document,
+        "line_offset": rendered.line_offset,
+        "lines": rendered.lines,
+        "bytes": found.data.len(),
+        "modified_at": null,
+        "tracked": true,
+        "commit": found.commit,
+        "revision": found.object,
+        "submodule": null,
+    }))
+}
+
+/// (bytes, content type) of an image as a commit or a tree has it, for an `<img>` (the files route's `at`: a review's
+/// image file, its old and new sides, ATM-689): [`read_document_at`]'s checks, then [`read_image`]'s: only the image
+/// types the viewer shows, whose bytes match their name.
+///
+/// # Errors
+/// `Refused` for any other file, as well as [`read_document_at`]'s errors.
+pub fn read_image_at(
+    vcs: Option<&GitVcs>,
+    revision: &str,
+    path: &str,
+) -> Result<(Vec<u8>, &'static str)> {
+    let found = file_at(vcs, revision, path)?;
+    let ("image", Some(content_type)) = (found.kind, found.detail) else {
+        return Err(Error::Refused(format!(
+            "{}: only images are served as files",
+            found.path
+        )));
+    };
+    if !image_matches(&found.data, content_type) {
+        return Err(Error::Refused(format!(
+            "{}: isn't the image its name says",
+            found.path
+        )));
+    }
+    Ok((found.data, content_type))
+}
+
+/// A file as a commit or a tree has it, checked, with its bytes: what [`read_document_at`] and [`read_image_at`] show.
+struct FileAt<'a> {
+    path: &'a str,
+    kind: &'static str,
+    detail: Option<&'static str>,
+    data: Vec<u8>,
+    commit: Option<String>,
+    object: String,
+}
+
+/// The file `path` at `revision`, after every check the reads at a revision make (see [`read_document_at`]).
+fn file_at<'a>(vcs: Option<&GitVcs>, revision: &str, path: &'a str) -> Result<FileAt<'a>> {
     // A file a review names, at its revision: hidden ones too (ATM-598)
     let path = document_path(path)?;
     let Some(vcs) = vcs else {
@@ -393,22 +451,14 @@ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Res
         )));
     }
     let data = repo.blob_bytes(&blob)?;
-    let rendered = render(path, kind, detail, &data);
-    Ok(json!({
-        "path": path,
-        "kind": rendered.kind,
-        "language": rendered.language,
-        "text": rendered.text,
-        "document": rendered.document,
-        "line_offset": rendered.line_offset,
-        "lines": rendered.lines,
-        "bytes": data.len(),
-        "modified_at": null,
-        "tracked": true,
-        "commit": commit,
-        "revision": object,
-        "submodule": null,
-    }))
+    Ok(FileAt {
+        path,
+        kind,
+        detail,
+        data,
+        commit,
+        object,
+    })
 }
 
 /// A file's bytes as the viewer shows them.
@@ -917,6 +967,57 @@ mod tests {
             (code["language"].as_str(), code["line_offset"].as_u64()),
             (Some("rust"), Some(1))
         );
+    }
+
+    /// ATM-689: a review's image file shows its sides, each read as its revision has it
+    #[test]
+    fn an_image_at_a_revision_is_its_bytes_as_that_commit_has_them_only_when_it_is_one() {
+        let repo = Repo::new();
+        let vcs = repo.vcs();
+        repo.commit("pic.gif", "GIF89a-old");
+        repo.git(&["tag", "old"]);
+        repo.commit("pic.gif", "GIF89a-new");
+        assert_eq!(
+            read_image_at(Some(&vcs), "old", "pic.gif").unwrap(),
+            (b"GIF89a-old".to_vec(), "image/gif")
+        );
+        assert_eq!(
+            read_image_at(Some(&vcs), "HEAD", "pic.gif").unwrap().0,
+            b"GIF89a-new".to_vec()
+        );
+        // In a tree too (a round rebuilt from its diff)
+        let tree = vcs.resolve_tree("old").unwrap();
+        assert_eq!(
+            read_image_at(Some(&vcs), &tree, "pic.gif").unwrap().0,
+            b"GIF89a-old".to_vec()
+        );
+        // Not an image, or not the image its name says: refused; not there then: not found
+        repo.commit("fake.png", "<html>");
+        for (path, what) in [
+            ("a.md", "not an image"),
+            ("fake.png", "not the image its name says"),
+        ] {
+            assert!(
+                matches!(
+                    read_image_at(Some(&vcs), "HEAD", path),
+                    Err(Error::Refused(_))
+                ),
+                "{what}"
+            );
+        }
+        assert!(matches!(
+            read_image_at(Some(&vcs), "first", "pic.gif"),
+            Err(Error::NotFound(_))
+        ));
+        // The path's and the revision's checks, as every read at a revision
+        assert!(matches!(
+            read_image_at(Some(&vcs), "HEAD", "../pic.gif"),
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(
+            read_image_at(Some(&vcs), "--output=x", "pic.gif"),
+            Err(Error::Invalid(_))
+        ));
     }
 
     /// A review's round rebuilt from its diff is a tree no commit has: read the same way, with no commit named

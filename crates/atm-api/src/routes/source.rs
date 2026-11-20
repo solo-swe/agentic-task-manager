@@ -88,6 +88,12 @@ pub trait ProjectSource {
     /// # Errors
     /// As [`ProjectSource::file_version`], and a file that isn't an image.
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)>;
+    /// The image at `path` as the commit or tree `revision` has it, and its content type (a review's image file's
+    /// side, ATM-689).
+    ///
+    /// # Errors
+    /// As [`ProjectSource::document_at`], and a file that isn't an image.
+    fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)>;
     /// The document at `path` as the commit or tree `revision` has it (a review round's side).
     ///
     /// # Errors
@@ -309,6 +315,10 @@ impl ProjectSource for Member {
 
     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {
         Member::image(self, path)
+    }
+
+    fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)> {
+        Member::image_at(self, path, revision)
     }
 
     fn document_at(&self, path: &str, revision: &str) -> Result<Value> {

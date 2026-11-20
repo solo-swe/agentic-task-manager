@@ -965,6 +965,68 @@ test.describe('a review’s page', () => {
     },
   );
 
+  // ATM-689 (Hakan, CR-60's screenshots): a binary file isn't in the round's diff, but an image shows its sides, each
+  // as its revision has it; another binary file stays listed, not shown
+  test('an image file shows its images: a new one its after side, a changed one both; another binary file is listed', async ({
+    page,
+    tasksServer,
+  }) => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
+    );
+    const binary = (path: string, status: string, before: string | null, after: string | null) => ({
+      path,
+      old_path: path,
+      status,
+      binary: true,
+      patch: '',
+      before,
+      after,
+    });
+    tasksServer.setImage('docs/new.png', 'image/png', png, 'head3');
+    tasksServer.setImage('docs/shot.png', 'image/png', png, 'base1');
+    tasksServer.setImage('docs/shot.png', 'image/png', png, 'head3');
+    await openReviews(page, tasksServer);
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        chains: [],
+        view: {
+          round: 3,
+          against: null,
+          files: [
+            binary('docs/new.png', 'added', null, 'head3'),
+            binary('docs/shot.png', 'modified', 'base1', 'head3'),
+            binary('bin/tool.wasm', 'modified', 'base1', 'head3'),
+          ],
+        },
+      }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    const sides = (path: string) => card(page, path).locator('.review-image');
+    // Added: its after side; changed: before and after, side by side
+    await expect(sides('docs/new.png')).toHaveCount(1);
+    await expect(sides('docs/new.png').locator('figcaption')).toHaveText('After');
+    await expect(sides('docs/shot.png').locator('figcaption')).toHaveText(['Before', 'After']);
+    // Each image loaded, from its revision
+    for (const path of ['docs/new.png', 'docs/shot.png'])
+      await expect
+        .poll(() =>
+          sides(path)
+            .locator('img')
+            .evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).naturalWidth)),
+        )
+        .toEqual(path === 'docs/new.png' ? [1] : [1, 1]);
+    expect(tasksServer.fileRequests).toEqual(
+      expect.arrayContaining(['docs/new.png@head3', 'docs/shot.png@base1', 'docs/shot.png@head3']),
+    );
+    // Not an image: listed, not shown
+    await expect(card(page, 'bin/tool.wasm')).toContainText('A binary file: listed, not shown.');
+    await expect(sides('bin/tool.wasm')).toHaveCount(0);
+  });
+
   // ATM-626 (Hakan, the app): the Rendered view of a new Markdown document showed only about its first page
   for (const added of [true, false])
     test(`Rendered: a long ${added ? 'new' : 'changed'} document is drawn to its end`, async ({
