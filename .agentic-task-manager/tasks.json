@@ -1414,6 +1414,11 @@
         "id": "Audit - Nov19",
         "state": "planned",
         "goal": "Fix what the November codebase audit found (docs/codebase-audit-2026-11.md): security first, then bugs, then the shared abstractions"
+      },
+      {
+        "id": "Tabs & navigation",
+        "state": "planned",
+        "goal": "A tab is a place with its own history: Back and Forward (keys, menu, mouse, title bar arrows) on the tab, an address for everything it shows, clicks and menus as in a browser, pop-ups by kind (docs/tabs-and-navigation-design.md)"
       }
     ],
     "releases": [
@@ -1765,7 +1770,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 694
+    "next_number": 702
   },
   "tasks": [
     {
@@ -15391,7 +15396,7 @@
         "dashboard/src/lib/reviews/ReviewList.svelte"
       ],
       "created_at": "2026-11-18T21:17:14Z",
-      "updated_at": "2026-11-19T10:01:16Z",
+      "updated_at": "2026-11-20T11:41:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15402,10 +15407,10 @@
         },
         {
           "sprint": "Task&review state machine",
-          "from": "2026-11-19T10:01:16Z"
+          "from": "2026-11-19T10:01:16Z",
+          "to": "2026-11-20T11:41:00Z"
         }
       ],
-      "sprint": "Task&review state machine",
       "components": [
         "dashboard",
         "docs"
@@ -15779,7 +15784,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-19T14:58:49Z",
+      "updated_at": "2026-11-20T11:41:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15790,10 +15795,10 @@
         },
         {
           "sprint": "Task&review state machine",
-          "from": "2026-11-19T10:01:16Z"
+          "from": "2026-11-19T10:01:16Z",
+          "to": "2026-11-20T11:41:00Z"
         }
       ],
-      "sprint": "Task&review state machine",
       "with": "user",
       "number": 633,
       "components": [
@@ -17316,13 +17321,13 @@
       "description": "Hakan (2026-11-19): the way the app uses tabs is inconsistent. Overhaul it on a solid foundation.\n\n## Research (a document in `docs/`, reviewed as a CR)\nExisting tabbed windowing models: browsers (Chrome, Safari, Arc), editors (VS Code, Zed), Slack, Linear, Notion, Figma, macOS's document tabs. For each: what a tab represents (a document, a place, a session), what pop-ups (dialogs, panels, menus) are scoped to (the tab or the window), what Back and Forward walk (a tab's own history, across tabs), what ⌘/Ctrl-click and a middle click do, what a tab's context menu offers, and how a page's address is kept.\n\n## Define, for atm\n- **What a tab is**, and what it keeps (its address, its scroll, what is open over it).\n- **Pop-ups:** scoped to their tab or to the app? (Hakan: should switching tabs be possible without closing a pop-up opened on one tab?)\n- **Back and Forward:** each tab's own history, in the order the reader went. Today a review reached from a Kanban card, the task dialog or the Reviews list always goes Back to the Reviews list, not to where the reader came from.\n- **A proper address for every page and what is open over it** (a specific CR, its tab, its file and round; a task's details; a document), so Back, Forward, a reload and a new tab land where expected.\n- **Right-click** (today a browser-like menu with Back and Reload: does it do what it says?) and **⌘/Ctrl-click to a new tab**: what each should do, and check what they do now.\n- **Today, mapped:** every place that opens, closes or navigates (the title bar's tabs, `lib/navigation.ts`, `address.ts`, the app's windows and menus), what each does against the model, and what changes.\n\nThe design is agreed with Hakan before it is built; the build becomes tasks of its own.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/tabs-and-navigation-design.md"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-20T11:32:41Z",
+      "updated_at": "2026-11-20T11:36:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17335,7 +17340,7 @@
       "number": 653,
       "started_at": "2026-11-19T18:30:30Z",
       "started_by": "claude:0f56a916",
-      "commit": "9327737dcda364657f01cfe9d9b0c2683f914c4d",
+      "commit": "1f80af362252f42169592d37232ad0f689d0fd79",
       "code_reviews": [
         {
           "id": "01a1f518-c839-743d-ae42-916676fb6929",
@@ -17343,15 +17348,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T18:36:44Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T18:36:44Z",
           "kind": "review",
           "text": "CR-63: Tabs, pop-ups, Back and Forward, and an address for every page: the design",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T11:35:50Z",
+          "kind": "note",
+          "text": "Approved: in CR-63 (round 3)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T11:36:06Z",
+          "kind": "outcome",
+          "text": "Approved in CR-63: the design for tabs, pop-ups, Back and Forward, and an address for every page; its build tasks go in their own sprint",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T18:36:44Z",
+          "to": "2026-11-20T11:35:50Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T11:36:06Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e62a305cee6",
@@ -19111,9 +19136,9 @@
         "dashboard/src/lib/documents/DocumentPage.svelte"
       ],
       "created_at": "2026-11-20T11:16:54Z",
-      "updated_at": "2026-11-20T11:24:27Z",
+      "updated_at": "2026-11-20T11:41:48Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -19132,15 +19157,22 @@
         }
       ],
       "review_requested_at": "2026-11-20T11:24:27Z",
-      "review_state": "waiting",
+      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-20T11:24:27Z",
           "kind": "review",
           "text": "CR-78: Rendered line numbers: subtle gray, and a row of several lines shows its first",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T11:41:48Z",
+          "kind": "rejection",
+          "text": "CR-78 round 1: 0 open comments",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-20T11:41:48Z"
     },
     {
       "id": "01a1f8b3-1427-7157-a0d9-09e6c6a437c2",
@@ -19172,6 +19204,273 @@
       ],
       "sprint": "Task&review state machine",
       "number": 693
+    },
+    {
+      "id": "01a1f8be-9f92-7355-9694-c15508e8883f",
+      "name": "A tab's own history: Back and Forward walk the active tab only, and a tab switch adds nothing",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "[The design](docs/tabs-and-navigation-design.md) §4.1 and §4.3, task 1 of §7 (approved in CR-63, with §6's recommended answers: one page for all tabs, atm keeping each tab's history).\n\n## Change\n- In the app, each title-bar tab keeps its own history: the addresses it went through, where it is in them, and each entry's scroll, restored on Back and Forward (`app-tabs.svelte.ts`, `tab-actions.ts`).\n- `navigate` (`lib/navigation.ts`) adds to the active tab's history; the page's own `history` stays one entry deep in the app.\n- Switching tabs pushes nothing anywhere: the other tab shows as it was left.\n- ⌘[ ⌘], the menu's Back and Forward, the mouse's back and forward buttons and a swipe all act on the active tab's history.\n- A new tab starts its history with the address it was opened on; its Back is disabled until it moves.\n- The browser keeps the browser's own history (one tab per browser tab).\n\n## Tests\nThe three traces of §4.3 (a review opened from a Kanban card, from a task's details, from the Reviews list), in the app and in the browser; a switch to another tab and back leaves both histories as they were; each entry's scroll restored.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/app-tabs.svelte.ts",
+        "dashboard/src/lib/tab-actions.ts",
+        "dashboard/src/lib/navigation.ts"
+      ],
+      "created_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T11:36:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Tabs & navigation",
+          "from": "2026-11-20T11:36:44Z"
+        }
+      ],
+      "sprint": "Tabs & navigation",
+      "number": 694
+    },
+    {
+      "id": "01a1f8be-9f92-7355-9694-c156588f4b10",
+      "name": "Back and Forward arrows in the app's title bar, left of the sidebar toggle",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "[The design](docs/tabs-and-navigation-design.md) §4.5 (Hakan, CR-63).\n\n## Change\n- ‹ › arrows in the app's title bar, left of the sidebar toggle, after macOS's window buttons, as Safari, Linear and Notion have them; with the sidebar open, in its top strip with the toggle (`AppTitleBar.svelte`, `SidebarToggle.svelte`).\n- They act on the active tab's history (the history of new-1); each is greyed out when there is nowhere to go.\n- A long press or a right-click lists the tab's entries, by their titles, to jump to one.\n- Not in the browser: its own buttons do this.\n\n## Tests\ne2e in the app: the arrows step Back and Forward through a tab's history, disabled at its ends, follow the tab switched to, and list the entries on a right-click.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f8be-9f92-7355-9694-c15508e8883f"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/lib/shell/SidebarToggle.svelte"
+      ],
+      "created_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T11:36:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Tabs & navigation",
+          "from": "2026-11-20T11:36:44Z"
+        }
+      ],
+      "sprint": "Tabs & navigation",
+      "number": 695
+    },
+    {
+      "id": "01a1f8be-9f92-7355-9694-c157a84ef29d",
+      "name": "The page's back button is Back, saying where it goes; closing a place over a page goes Back",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "ux",
+        "reviews"
+      ],
+      "description": "[The design](docs/tabs-and-navigation-design.md) §4.3, task 2 of §7 (§6.1's recommended answer). ATM-686 made a review's back arrow go back where the review was opened from; this finishes it on the tab's own history (new-1).\n\n## Change\n- A review page's back button reads the title of the entry before it (**← Board**, **← ATM-633**, **← Reviews**) and goes Back to it (`ReviewsTab.svelte`, `ReviewPage.svelte`).\n- With no entry before it (a tab opened on the review, a link from outside), it reads **← Reviews** and goes up to the project's list, replacing the entry.\n- Closing a place over a page (task details, a document) goes Back when the entry before it is the page under it, else replaces it, so Back after a close never lands on the same page twice (`state.svelte.ts`).\n\n## Tests\nThe button's label and target from a Kanban card, a task's details, the Reviews list and a link from outside; Back after closing task details goes to the page before.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f8be-9f92-7355-9694-c15508e8883f"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/ReviewsTab.svelte",
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/state.svelte.ts"
+      ],
+      "created_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T11:36:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Tabs & navigation",
+          "from": "2026-11-20T11:36:44Z"
+        }
+      ],
+      "sprint": "Tabs & navigation",
+      "number": 696
+    },
+    {
+      "id": "01a1f8be-9f92-7355-9694-c1583a02f0b4",
+      "name": "An address for everything a tab shows: a review's sub-tab, a comment in view, the Reviews list's filter",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "ux",
+        "reviews"
+      ],
+      "description": "[The design](docs/tabs-and-navigation-design.md) §4.4, task 3 of §7 (§6.4's recommended answer).\n\n## Change\n- A review's sub-tab in its path: `/projects/<id>/reviews/<CR>` (Overview), `…/<CR>/diffs`, `…/<CR>/comments`; choosing one is a step in the tab's history.\n- A comment in view in the query: `…/diffs?file=…&comment=c12`, never a `#` anchor (the app's `atm://` links refuse fragments, `app/src-tauri/src/links.rs`).\n- The Reviews list's filter and search: `/projects/<id>/reviews?status=waiting&q=…`, no longer kept in the browser only.\n- Help and About leave the address (`?help`, `?about`): app-wide, above every tab.\n- `lib/address.ts` reads and writes them all; `atm://` links open them (the app's routes in `links.rs`, if they need a page added).\n\n## Tests\nUnit: `address.ts` reads and writes each. e2e: each restored after a reload and by Back and Forward; an `atm://` link to a comment opens the review at it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f8be-9f92-7355-9694-c15508e8883f"
+      ],
+      "files": [
+        "dashboard/src/lib/address.ts",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/lib/shell/ReviewsTab.svelte"
+      ],
+      "created_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T11:36:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Tabs & navigation",
+          "from": "2026-11-20T11:36:44Z"
+        }
+      ],
+      "sprint": "Tabs & navigation",
+      "number": 697
+    },
+    {
+      "id": "01a1f8be-9f92-7355-9694-c1592d63e49a",
+      "name": "Clicks as in a browser: every card and row a real link; ⌘, ⇧⌘ and middle click handled in one place",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 4 of §7. ATM-686 already opens a review in place on a plain click in the app; this covers every card and row.\n\n## Change\n- Every card, row and reference is a real link (`<a href>` with its address), so *Copy Link* and *Open in New Tab* work the same everywhere.\n- A plain click opens in place, a step in the tab's history.\n- ⌘/Ctrl-click and a middle click open a new title-bar tab in the background, right of this one; ⇧⌘-click opens one brought forward. In the browser, the browser does this.\n- A middle click on a title-bar tab closes it.\n- All of it handled once, in `new-tab-clicks.ts`, not per component.\n\n## Tests\ne2e: each click on a Kanban card, a list row, a review row and a reference, in the app and the browser.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/new-tab-clicks.ts"
+      ],
+      "created_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T11:36:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Tabs & navigation",
+          "from": "2026-11-20T11:36:44Z"
+        }
+      ],
+      "sprint": "Tabs & navigation",
+      "number": 698
+    },
+    {
+      "id": "01a1f8be-9f92-7355-9694-c15aacc8ccaf",
+      "name": "atm's own right-click menus in the app: on links, on tabs, and elsewhere (WebKit's turned off)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 5 of §7.\n\n## Change\nA context menu component in `ui/`, used in the app only (the browser keeps its own):\n- on a link, card or row: **Open**, **Open in New Tab**, **Open in New Window**, **Copy Link** (the `atm://` form, §4.4);\n- on a title-bar tab: **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs**;\n- elsewhere: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text.\n\nWebKit's default menu is turned off in the app, as its Reload bypasses the app's reload.\n\n## Tests\ne2e in the app: each menu's items and what each does; Copy Link copies the `atm://` address.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f8be-9f92-7355-9694-c1592d63e49a",
+        "01a1f8be-9f92-7355-9694-c15508e8883f"
+      ],
+      "files": [],
+      "created_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T11:36:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Tabs & navigation",
+          "from": "2026-11-20T11:36:44Z"
+        }
+      ],
+      "sprint": "Tabs & navigation",
+      "number": 699
+    },
+    {
+      "id": "01a1f8be-9f92-7355-9694-c15b77d909a3",
+      "name": "Pop-ups by kind: a question stays on its tab across a switch; the app's own stay above every tab",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "[The design](docs/tabs-and-navigation-design.md) §4.2, task 6 of §7 (§6.2's recommended answer).\n\n## Change\n- A question (Add task, a confirmation, Submit review) belongs to its tab: hidden on a switch and there again on return, as a macOS sheet; a menu or dropdown closes on a switch.\n- The app's own (Settings, Help, What's new, About, the search) stay above every tab.\n- A place over a page (task details, a document) is hidden with its tab and there again on return (it is in the tab's address).\n- `App.svelte` and the dialogs.\n\n## Tests\ne2e in the app: a Submit review form half-filled on one tab, another tab shown and back, the form as it was; Settings stays open across a switch.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f8be-9f92-7355-9694-c15508e8883f"
+      ],
+      "files": [
+        "dashboard/src/App.svelte"
+      ],
+      "created_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T11:36:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Tabs & navigation",
+          "from": "2026-11-20T11:36:44Z"
+        }
+      ],
+      "sprint": "Tabs & navigation",
+      "number": 700
+    },
+    {
+      "id": "01a1f8be-9f92-7355-9694-c15c40f37bbc",
+      "name": "Docs: the desktop UI design and the addresses table in line with tabs and navigation",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "[The design](docs/tabs-and-navigation-design.md) §3's mismatches and task 7 of §7.\n\n## Change\n- `docs/app-desktop-ui-design.md` §3 and §6 replaced by a pointer to the tabs and navigation design, and what it says of tab menus and shortcuts brought in line with what was built.\n- `docs/multi-project-api.md` §2.7: the new addresses (a review's sub-tab, a comment in view, the Reviews list's filter), and a review page has a title bar and tabs in the app.\n- What's new and the changelog entries for the sprint's work.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1f8be-9f92-7355-9694-c15508e8883f",
+        "01a1f8be-9f92-7355-9694-c156588f4b10",
+        "01a1f8be-9f92-7355-9694-c157a84ef29d",
+        "01a1f8be-9f92-7355-9694-c1583a02f0b4",
+        "01a1f8be-9f92-7355-9694-c1592d63e49a",
+        "01a1f8be-9f92-7355-9694-c15aacc8ccaf",
+        "01a1f8be-9f92-7355-9694-c15b77d909a3"
+      ],
+      "files": [
+        "docs/app-desktop-ui-design.md",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T11:36:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Tabs & navigation",
+          "from": "2026-11-20T11:36:44Z"
+        }
+      ],
+      "sprint": "Tabs & navigation",
+      "number": 701
     }
   ]
 }

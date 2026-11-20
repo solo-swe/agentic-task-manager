@@ -156,9 +156,13 @@
     measured.forEach((m, i) => {
       tops.push(m ? m.top : i === 0 ? (layout?.top ?? 0) : tops[i - 1] + Math.max(own[i - 1], heights?.[i - 1] ?? 0));
     });
+    // Each row ends where the next begins, exactly (Hakan, ATM-690): at least a line's height, it overlapped the next
+    // wherever that one's text began less than a line below (after a blank line, at a new block), and the two rows'
+    // tints drew a darker line there, in the app's WebKit
     const rows = lines.map((_, i) => {
       const height = Math.max(own[i], heights?.[i] ?? 0);
-      return { top: tops[i], height: i + 1 < lines.length ? Math.max(tops[i + 1] - tops[i], lineHeight) : height };
+      const next = i + 1 < lines.length ? tops[i + 1] - tops[i] : null;
+      return { top: tops[i], height: next === null ? height : next > 0 ? next : lineHeight };
     });
     if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
   }
@@ -216,27 +220,21 @@
 
   const isPicked = (i: number) => !!picked && i >= picked[0] && i <= picked[1];
   const isMarked = (i: number) => !!marked && i >= marked[0] && i <= marked[1];
-  /** The tints, one box per run of lines tinted alike, from its first line's top to its last line's bottom (Hakan: a
-   * box per line drew a pale line wherever two met, in the app's WebKit on a Retina screen, rounded to whole pixels or
-   * not): no two tinted boxes meet inside a run */
+  /** The tints, one box per run of lines tinted alike, from its first line's top to its last line's bottom (Hakan,
+   * ATM-690): no two tinted boxes meet, or overlap, inside a run. A run is consecutive lines, whatever their rows' edges */
   const tints = $derived.by(() => {
     if (!layout) return [];
-    const runs: { kind: string; commented: boolean; picked: boolean; top: number; bottom: number }[] = [];
+    const runs: { kind: string; commented: boolean; picked: boolean; top: number; bottom: number; end: number }[] = [];
     lines.forEach((line, i) => {
       const row = rowOf(i);
       if (!row) return;
       const [kind, commented, picked] = [line.kind, isMarked(i), isPicked(i)];
       if (kind === 'context' && !commented && !picked) return;
       const last = runs.at(-1);
-      if (
-        last &&
-        last.bottom === row.top &&
-        last.kind === kind &&
-        last.commented === commented &&
-        last.picked === picked
-      )
-        last.bottom = row.top + row.height;
-      else runs.push({ kind, commented, picked, top: row.top, bottom: row.top + row.height });
+      if (last && last.end === i - 1 && last.kind === kind && last.commented === commented && last.picked === picked) {
+        last.bottom = Math.max(last.bottom, row.top + row.height);
+        last.end = i;
+      } else runs.push({ kind, commented, picked, top: row.top, bottom: row.top + row.height, end: i });
     });
     return runs;
   });

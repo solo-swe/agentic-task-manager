@@ -1687,6 +1687,69 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(newSide.getByRole('button', { name: 'Comment on line 3–4' })).toBeVisible();
   });
 
+  // ATM-690 (Hakan, CR-58's design in the app): a darker line at every blank line and new block of an added Markdown
+  // file, Wrap on. Each wrapped row was at least a line tall, so it overlapped the next where that one's text began less
+  // than a line below, and the two tints doubled there. The rows now meet exactly, and a run of lines is one tint
+  test(
+    'an added document, wrapped or not: one tint for its lines, and its rows meet exactly',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const para = (n: number) =>
+        `Paragraph ${n} says what a task's status, claim and reviews do together. ${'At some length. '.repeat(12)}\n` +
+        `It takes two source lines, each long enough to wrap. ${'Still more of it. '.repeat(10)}`;
+      const text =
+        [
+          '# The machine',
+          '',
+          para(1),
+          '',
+          '- **One:** a list item',
+          '  over two lines.',
+          '',
+          '## 2. Parts',
+          '',
+          para(2),
+        ].join('\n') + '\n';
+      const lines = text.trimEnd().split('\n');
+      const patch =
+        'diff --git a/docs/m.md b/docs/m.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/m.md\n' +
+        `@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join('\n')}\n`;
+      tasksServer.setRevisionDocument(
+        'head3',
+        projectDocument('docs/m.md', text, { kind: 'markdown', line_offset: 1 }),
+      );
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('docs/m.md', patch, 'added', null)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await page.getByRole('button', { name: 'Unified' }).click();
+      const diff = diffOf(page, 'docs/m.md');
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      /** How far the rows are from meeting (the most any row's top is off the one before it's bottom), and the tints */
+      const fit = () =>
+        diff.evaluate((d) => {
+          const rows = [...d.querySelectorAll('.diff-line')].map((r) => r.getBoundingClientRect());
+          let off = 0;
+          for (let i = 1; i < rows.length; i++) off = Math.max(off, Math.abs(rows[i].top - rows[i - 1].bottom));
+          return { off, tints: d.querySelectorAll('.diff-tint').length, tall: rows[2]?.height ?? 0 };
+        });
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      for (const wrapped of [true, false]) {
+        if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
+        // Wrapped: once the rows are placed from the text (a paragraph's line is then more than one line tall)
+        await expect
+          .poll(async () => {
+            const f = await fit();
+            return wrapped && f.tall < 30 ? 'unplaced' : f;
+          })
+          .toEqual({ off: 0, tints: 1, tall: expect.any(Number) });
+      }
+    },
+  );
+
   test('Rendered (ATM-592): a document of several pages grows its page; its last paragraph is there, numbered beside it', async ({
     page,
     tasksServer,
