@@ -18642,13 +18642,13 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 4 of §7. ATM-686 already opens a review in place on a plain click in the app; this covers every card and row.\n\n## Change\n- Every card, row and reference is a real link (`<a href>` with its address), so *Copy Link* and *Open in New Tab* work the same everywhere.\n- A plain click opens in place, a step in the tab's history.\n- ⌘/Ctrl-click and a middle click open a new title-bar tab in the background, right of this one; ⇧⌘-click opens one brought forward. In the browser, the browser does this.\n- A middle click on a title-bar tab closes it.\n- All of it handled once, in `new-tab-clicks.ts`, not per component.\n\n## Tests\ne2e: each click on a Kanban card, a list row, a review row and a reference, in the app and the browser.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/new-tab-clicks.ts"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T23:15:24Z",
+      "updated_at": "2026-11-20T23:39:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18665,7 +18665,24 @@
       "sprint": "Audit and tabs",
       "number": 698,
       "started_at": "2026-11-20T23:15:24Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "c1e3743732a4839d71ff6bafb0efa1018531a50e",
+      "code_reviews": [
+        {
+          "id": "01a1fb54-95b2-70b3-b899-55333e5c6370",
+          "ref": "CR-102"
+        }
+      ],
+      "review_requested_at": "2026-11-20T23:39:47Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T23:39:47Z",
+          "kind": "review",
+          "text": "CR-102: Clicks as in a browser: every card and row a real link; ⌘ and middle click in the background, ⇧⌘ forward",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15aacc8ccaf",
