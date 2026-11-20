@@ -48,7 +48,8 @@
     e.stopPropagation();
     if (!inApp && wantsNewTab(e)) return;
     e.preventDefault();
-    if (inApp) tabs.open(href);
+    // In place, so the review's back button comes back here (ATM-686); ⌘-click a tab of its own
+    if (inApp && wantsNewTab(e)) tabs.open(href);
     else navigate(href);
   }
 </script>

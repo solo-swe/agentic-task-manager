@@ -18290,7 +18290,7 @@
       "description": "Reported by Hakan (2026-11-20): pressing the chevron at the right of a title bar tab (`.app-tab-chooser`, the `ProjectSelector` in `dashboard/src/lib/shell/AppTitleBar.svelte`) no longer shows the project list popup.\n\n## Change\nFind what stopped it (the tab strip's scroller since ATM-639 and ATM-605, the tab's drag or click handling, or the popup clipped by the strip) and fix it, so the list opens from the chevron and choosing a project switches the tab.\n\n## Tests\nAn e2e test in the app's spec: the chevron in a tab opens the project list, and a project chosen there is shown in that tab; tagged to run in WebKit too.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/AppTitleBar.svelte",
@@ -18298,7 +18298,7 @@
         "dashboard/src/lib/shell/ProjectSelector.svelte"
       ],
       "created_at": "2026-11-20T07:11:57Z",
-      "updated_at": "2026-11-20T07:12:09Z",
+      "updated_at": "2026-11-20T07:19:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18313,7 +18313,24 @@
         "dashboard"
       ],
       "started_at": "2026-11-20T07:12:09Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f0fb92c8ccf6c421497d0a01eebec3f8f4c9109f",
+      "code_reviews": [
+        {
+          "id": "01a1f7d2-b15e-72a0-a213-4bf6f7862e73",
+          "ref": "CR-67"
+        }
+      ],
+      "review_requested_at": "2026-11-20T07:19:02Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T07:19:02Z",
+          "kind": "review",
+          "text": "CR-67: The chevron in a tab opens the project list again",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83dceb619886",
@@ -18363,7 +18380,7 @@
       "description": "Reported by Hakan (2026-11-20): the back arrow on a review page always goes to the project's reviews list (`ReviewsTab.svelte:263-264`, `backHref={listAddress}`). A review can be opened from many places: a task's details, a Kanban card, a project's Reviews tab, the All projects reviews page, the Omniboard, a link in task text. Back should return there.\n\n## Change\n- Model each of those places as an address (most already are; the details panel over a page is `?task=`), so where a review was opened from is the previous address of the tab's history.\n- The review page's back arrow goes back in the tab's history when its previous entry is in this app, labelled with where it goes (\"← Task ATM-12\", \"← Kanban\", \"← All reviews\"); only a review opened with no history (a new tab, a deep link) falls back to the project's reviews list.\n- Back and Forward (the browser's, the app's keys and menu) then move through the same entries, consistently, as `docs/tabs-and-navigation-design.md` (ATM-653) describes; go through `lib/navigation.ts`, never `history` directly.\n\n## Tests\nE2e tests: a review opened from task details, from a Kanban card, from the All projects reviews page and from the Omniboard returns there on the back arrow, with the details panel open again where it was; Forward goes back to the review; a review opened in a new tab goes to its reviews list.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/ReviewsTab.svelte",
@@ -18371,7 +18388,7 @@
         "dashboard/src/lib/navigation.ts"
       ],
       "created_at": "2026-11-20T07:11:57Z",
-      "updated_at": "2026-11-20T07:12:04Z",
+      "updated_at": "2026-11-20T07:19:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18387,7 +18404,9 @@
       "number": 686,
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-20T07:19:16Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

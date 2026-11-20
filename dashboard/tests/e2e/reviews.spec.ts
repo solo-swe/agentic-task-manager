@@ -1,5 +1,14 @@
 import type { Page } from '@playwright/test';
-import { addressOf, expect, openDashboard, projectDocument, summary, test, type TasksServer } from './helpers';
+import {
+  addressOf,
+  expect,
+  loadFixture,
+  openDashboard,
+  projectDocument,
+  summary,
+  test,
+  type TasksServer,
+} from './helpers';
 import { E2E_SESSION } from './session.mjs';
 
 // The reviews tab and a review's page (docs/code-review-design.md §3.11, ATM-574), and the diff viewer in it (§3.7,
@@ -316,6 +325,85 @@ test.describe('the reviews tab', () => {
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
     await page.goBack();
     await expect(page.locator('#review-list')).toBeVisible();
+  });
+
+  // ATM-686 (Hakan): the back button goes back to where the review was opened from, saying where, not always to the
+  // project's reviews; through the history, so Forward comes back to the review
+  test.describe('the back button goes back where the review was opened from', () => {
+    /** The fixture's project with T-004 in review through CR-2, on `tab`, CR-2's page served */
+    async function withReviewedTask(page: Page, tasksServer: TasksServer, tab: 'kanban' | 'list') {
+      const data = loadFixture('standard');
+      Object.assign(
+        data.tasks.find((t) => t.id === 'T-004')!,
+        {
+          status: 'in_review',
+          code_reviews: [{ id: 'r2', ref: 'CR-2' }],
+        },
+      );
+      tasksServer
+        .setReviews({
+          reviews: [{ review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true }],
+          you: 'Ana',
+        })
+        .setReview('CR-2', reviewPage());
+      await openDashboard(page, tasksServer, data, { tab });
+    }
+    const back = (page: Page) => page.locator('.review-back');
+
+    test('from a Kanban card: back to the board; Forward to the review again', async ({ page, tasksServer }) => {
+      await withReviewedTask(page, tasksServer, 'kanban');
+      await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+      await expect(back(page)).toHaveText('Kanban');
+      await back(page).click();
+      await expect(page.locator('#kanban')).toBeVisible();
+      expect(new URL(page.url()).pathname).toBe(`/projects/${tasksServer.projectId}/kanban`);
+      await page.goForward();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    });
+
+    test('from a task’s details: back to them, open over the page they were on', async ({ page, tasksServer }) => {
+      await withReviewedTask(page, tasksServer, 'list');
+      await page.locator('.task-card[data-id="T-004"] .task-name').first().click();
+      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+      await page.locator('#detail-review .review-link').first().click();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+      await expect(back(page)).toHaveText('T-004');
+      await back(page).click();
+      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+      const url = new URL(page.url());
+      expect([url.pathname, url.searchParams.get('task')]).toEqual([
+        `/projects/${tasksServer.projectId}/list`,
+        'T-004',
+      ]);
+    });
+
+    test('with a task’s details opened over the review and closed, and another file, still back to the board', async ({
+      page,
+      tasksServer,
+    }) => {
+      await withReviewedTask(page, tasksServer, 'kanban');
+      await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+      // A task named in the review, its details over it, closed
+      await page.locator('#review-page a[data-task="T-001"]').first().click();
+      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+      await expect(back(page)).toHaveText('Kanban');
+      await back(page).click();
+      await expect(page.locator('#kanban')).toBeVisible();
+    });
+
+    test('opened on its own (its address typed, a link from elsewhere): up to its reviews', async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer, 'CR-2');
+      await expect(back(page)).toHaveText('Reviews');
+      await back(page).click();
+      await expect(page.locator('#review-list')).toBeVisible();
+    });
   });
 
   test('⌘ or Ctrl opens a review in a browser tab of its own; the list stays', async ({ page, tasksServer }) => {

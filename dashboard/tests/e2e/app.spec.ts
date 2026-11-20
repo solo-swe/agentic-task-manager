@@ -361,10 +361,21 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#review-list')).toBeVisible();
     await expect(tabs).toHaveCount(1);
 
+    // A plain click opens it in place, as every link (ATM-686), and its back button comes back to the list
     await page.locator('.review-row[data-review="CR-2"] .review-link').click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    await expect(tabs).toHaveCount(1);
+    await expect(page.locator('.review-back')).toHaveText('Reviews');
+    await page.locator('.review-back').click();
+    await expect(page.locator('#review-list')).toBeVisible();
+
+    // ⌘-click: a tab of its own
+    await page.locator('.review-row[data-review="CR-2"] .review-link').click({ modifiers: ['ControlOrMeta'] });
     await expect(tabs).toHaveCount(2);
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    // Opened on its own, its back button goes up to its reviews list
+    await expect(page.locator('.review-back')).toHaveText('Reviews');
     // The tab is the review's: its reference and title, no project chooser
     await expect(page.locator('#dashboard-title')).toHaveText('CR-2: Trim the names');
     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);

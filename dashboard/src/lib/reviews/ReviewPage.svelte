@@ -51,6 +51,7 @@
     taskHref,
     tasks,
     backHref,
+    backLabel = 'Reviews',
     busy = false,
     problem = null,
     docStyle = null,
@@ -81,8 +82,10 @@
     /** What a task named in the review opens (ATM-593): the Tasks fact's keys, and the keys written in the description
      * and the comments that name a task (`known`); `open`, its details over the review, or `newTab` a tab of its own */
     tasks?: TaskLinks;
-    /** The reviews page's address, for the link back */
+    /** Where the back button goes: the page the review was opened from, else the reviews page (ATM-686) */
     backHref?: string;
+    /** That place's name, on the button */
+    backLabel?: string;
     busy?: boolean;
     problem?: string | null;
     /** The document style picked in Settings, for a Markdown file's rendered view */
@@ -547,12 +550,12 @@
         <a
           class="review-back"
           href={backHref ?? '#'}
-          title="All reviews"
+          title={backLabel === 'Reviews' ? 'All reviews' : `Back to ${backLabel}`}
           onclick={(e) => {
             if (!onback) return;
             e.preventDefault();
             onback();
-          }}><Icon name="arrow-left" size={15} /><span>Reviews</span></a
+          }}><Icon name="arrow-left" size={15} /><span>{backLabel}</span></a
         >
         <span class="review-divider" aria-hidden="true"></span>
       {/if}

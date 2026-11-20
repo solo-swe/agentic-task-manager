@@ -46,6 +46,33 @@ test.describe('Projects Overview: the Reviews tab', () => {
     await expect(page).toHaveURL(/\/projects\/second\/reviews\/CR-1/);
   });
 
+  // ATM-686 (Hakan): a review opened from every project's reviews goes back there, not to its project's list
+  test('a review opened here goes back here, saying so', async ({ page, tasksServer }) => {
+    tasksServer.addProject('second', 'standard', 'Second Project');
+    tasksServer.setReviews({ reviews: [entry(1, 'Ours')], you: 'Ana' });
+    tasksServer.setReview('CR-1', {
+      review: header(1, 'waiting', 'Ours'),
+      summary: '',
+      branch: null,
+      rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
+      chains: [],
+      view: { round: 1, against: null, files: [] },
+      needs_you: false,
+      you: 'Ana',
+    });
+    await page.goto('/reviews');
+    await page.locator('#overview-reviews .review-row').first().getByRole('link').click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-1');
+    const back = page.locator('.review-back');
+    await expect(back).toHaveText('All reviews');
+    await back.click();
+    await expect(page).toHaveURL(/\/reviews(\?|$)/);
+    await expect(page.locator('#overview-reviews')).toBeVisible();
+    // Forward: the review again
+    await page.goForward();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-1');
+  });
+
   test('the needs-you chip counts the reviews waiting on you: one, and nothing else, it opens', async ({
     page,
     tasksServer,
