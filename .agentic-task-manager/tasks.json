@@ -17322,7 +17322,7 @@
         "docs/tabs-and-navigation-design.md"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:36:44Z",
+      "updated_at": "2026-11-20T11:32:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17335,7 +17335,7 @@
       "number": 653,
       "started_at": "2026-11-19T18:30:30Z",
       "started_by": "claude:0f56a916",
-      "commit": "4d4e658d4b433384d6abff45ea9ab8e08fa468ed",
+      "commit": "9327737dcda364657f01cfe9d9b0c2683f914c4d",
       "code_reviews": [
         {
           "id": "01a1f518-c839-743d-ae42-916676fb6929",

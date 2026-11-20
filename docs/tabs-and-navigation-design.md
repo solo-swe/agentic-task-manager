@@ -194,6 +194,7 @@ fragment (`links.rs` refuses one), so nothing in an address is a `#` anchor: a c
 | Right-click on a title-bar tab | — | **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs** |
 | Right-click elsewhere | The browser's | atm's: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text |
 | ⌘[ ⌘], mouse back and forward, a swipe | The browser's (the tab's) | The tab's history |
+| ‹ › in the title bar | The browser's own buttons | Back and Forward arrows left of the sidebar toggle (Hakan, CR-63), after macOS's window buttons, as Safari, Linear and Notion have them: the active tab's history, each greyed out when there is nowhere to go; a long press or a right-click lists the entries to jump to |
 | ⌘R, Reload | The browser's | Reloads the page and shows this tab where it was, not the window's first tab |
 
 ## 5. What changes
@@ -206,6 +207,7 @@ fragment (`links.rs` refuses one), so nothing in an address is a `#` anchor: a c
 | `ReviewLink.svelte`, `reviews/open.ts`, `OverviewReviews.svelte` | A plain click opens a review in place; ⌘-click a new tab |
 | `state.svelte.ts` | Closing task details or a document goes Back when that lands on the page under it. A review's sub-tab, the Reviews list's filter and a comment in view join the address. Help and About leave it |
 | `App.svelte`, the dialogs | Questions belong to their tab: kept and hidden on a switch. App-wide ones stay above every tab |
+| `AppTitleBar.svelte`, `SidebarToggle.svelte`, the sidebar's top strip | Back and Forward arrows left of the sidebar toggle (in the sidebar's strip while it is open), on the active tab's history, disabled at its ends |
 | A new context menu (`ui/`, the app only) | Right-click menus of §4.5; WebKit's default turned off in the app |
 | `new-tab-clicks.ts`, the cards and rows | Every card and row is a real link; ⌘-click and middle click handled once, in one place |
 | Docs | `app-desktop-ui-design.md` §3 and §6 replaced by this; `multi-project-api.md` §2.7's addresses |
@@ -223,7 +225,8 @@ fragment (`links.rs` refuses one), so nothing in an address is a `#` anchor: a c
 ## 7. Tasks it implies
 
 1. **A tab's own history:** per-tab history and scroll in the app; a switch adds nothing; Back and Forward (keys,
-   menu, mouse, swipe) act on the tab. Tests: the three traces of §4.3 in the app and in the browser.
+   menu, mouse, swipe) act on the tab, and so do the title bar's ‹ › arrows, left of the sidebar toggle (§4.5).
+   Tests: the three traces of §4.3 in the app and in the browser; the arrows disabled at the history's ends.
 2. **The back button is Back:** labelled with the entry before it; Up when there is none. Closing a place over a page
    goes Back.
 3. **The rest of the addresses:** a review's sub-tab, a comment in view, the Reviews list's filter; Help and About out of
