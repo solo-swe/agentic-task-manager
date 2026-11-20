@@ -211,7 +211,11 @@ impl Command {
         self.renews_claims()
             && !matches!(
                 self,
-                Command::Review(ReviewCommand::Watch { .. } | ReviewCommand::Wait { .. })
+                Command::Review(
+                    ReviewCommand::Watch { .. }
+                        | ReviewCommand::Wait { .. }
+                        | ReviewCommand::Inbox { .. }
+                )
             )
     }
 
@@ -388,6 +392,11 @@ fn remind_to_watch(args: &[OsString], cwd: &Path) {
     if let Ok(project) = atm_lib::Project::open(cwd) {
         let me = atm_lib::actor::agent_identity(None, cwd);
         if let Some(line) = atm_lib::review_listen::reminder(&project, &me) {
+            eprintln!("atm: {line}");
+        }
+        // What it was told and hasn't read, on every command until it reads it (ATM-708): a watch's lines that went
+        // to a file it never opened are still in front of it
+        if let Some(line) = atm_lib::review_listen::unread_line(&project, &me) {
             eprintln!("atm: {line}");
         }
     }

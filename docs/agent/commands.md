@@ -75,3 +75,5 @@ it, is still taken and ignored.)
   to decide. No other command takes a workspace: every one works on the project in the current folder
 - `atm agents install|status|uninstall`: atm's skills where the user's agent harnesses read them; the user's to run,
   never on your own
+- `atm agents hooks install|status|uninstall [--project]`: atm's hook in Claude Code's settings (ATM-708), which puts
+  your unread review events in front of you; the user's to run, never on your own

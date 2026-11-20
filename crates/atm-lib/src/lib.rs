@@ -3,6 +3,7 @@
 //! Part of atm's Rust port (T-415): docs/porting-to-rust.md, docs/layered-architecture.md, docs/guides/rust.md.
 
 pub mod actor;
+pub mod agent_hooks;
 pub mod agents;
 pub mod archive;
 pub mod changes;

@@ -171,6 +171,16 @@ fn declared_files(task: &atm_common::Task) -> Vec<String> {
         .collect()
 }
 
+/// The files each commit changed, as git said once (ATM-708): a commit never changes, and asking git again for every
+/// task on every look made a look take seconds. In atm's state folder, a file per project.
+fn commit_files_file(root: Option<&Path>) -> PathBuf {
+    let key = root.map(|r| r.display().to_string()).unwrap_or_default();
+    atm_common::home::state_dir().join("watches").join(format!(
+        "{}.commits.json",
+        &sha256_hex(key.as_bytes())[..16]
+    ))
+}
+
 fn work_of(project: &Project, me: &str) -> Work {
     let mut work = Work {
         held: None,
@@ -182,6 +192,12 @@ fn work_of(project: &Project, me: &str) -> Work {
         return work;
     };
     let vcs = reviews::vcs(project).ok();
+    let known_file = commit_files_file(project.root());
+    let mut known: HashMap<String, Vec<String>> = std::fs::read_to_string(&known_file)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let mut learned = false;
     for task in project.store().list_tasks().unwrap_or_default() {
         let by = |field: &str| task.get(field).and_then(Value::as_str) == Some(me);
         // As a review names it: its key, never with the `~` people read (ATM-594)
@@ -194,17 +210,30 @@ fn work_of(project: &Project, me: &str) -> Work {
             work.held = Some(key.clone());
         }
         let mut files = declared_files(task);
-        // The task's commit is task text: a revision only once checked (ATM-659)
-        if let (Some(vcs), Some(commit)) = (&vcs, task.get("commit").and_then(Value::as_str))
-            && let (Ok(parent), Ok(commit)) = (
+        let commit = task.get("commit").and_then(Value::as_str);
+        if let Some(changed) = commit.and_then(|c| known.get(c)) {
+            files.extend(changed.iter().cloned());
+        } else if let (Some(vcs), Some(commit)) = (&vcs, commit)
+            // The task's commit is task text: a revision only once checked (ATM-659)
+            && let (Ok(parent), Ok(rev)) = (
                 atm_vcs::Rev::new(&format!("{commit}^")),
                 atm_vcs::Rev::new(commit),
             )
-            && let Ok(diff) = vcs.diff_range(&parent, &commit, &[atm_common::TASK_DIR])
+            && let Ok(diff) = vcs.diff_range(&parent, &rev, &[atm_common::TASK_DIR])
         {
-            files.extend(diff.files.into_iter().map(|f| f.path));
+            let changed: Vec<String> = diff.files.into_iter().map(|f| f.path).collect();
+            files.extend(changed.iter().cloned());
+            // Kept only for a commit named by its full ID: a name could move
+            if atm_vcs::is_object_id(commit) {
+                known.insert(commit.to_string(), changed);
+                learned = true;
+            }
         }
         work.tasks.push((key, files));
+    }
+    if learned && let (Some(dir), Ok(text)) = (known_file.parent(), serde_json::to_string(&known)) {
+        let _ = std::fs::create_dir_all(dir);
+        let _ = atm_common::home::write_text_atomic(&known_file, &text);
     }
     if let Some(vcs) = &vcs
         && let Ok(diff) = vcs.diff_working(&atm_vcs::Rev::head(), &[atm_common::TASK_DIR])
@@ -357,13 +386,10 @@ fn save_cursor(file: &Path, seen: &mut HashSet<String>, statuses: &mut HashMap<S
     }
 }
 
-/// Every review the store holds, whole.
+/// Every review the store holds, whole, in one read of the folder (ATM-708: a read per review read them all each
+/// time, a hundred reviews ten thousand times a look).
 fn all_reviews(store: &FileStore) -> Result<Vec<Review>> {
-    store
-        .list_reviews(&ReviewFilter::default())?
-        .into_iter()
-        .map(|h| store.get_review(&ReviewRef(h.id.0)))
-        .collect()
+    store.reviews()
 }
 
 /// Where a watch starts: the comments to pass over, and each review's status as last seen (a decision is a change to
@@ -424,7 +450,6 @@ pub fn watch(
     }
     let root = project.root().map(Path::to_path_buf);
     let store = reviews::store(project)?;
-    let all = all_reviews;
     let file = cursor_file(root.as_deref(), me);
     let (mut seen, mut statuses) = starting_point(&store, &file, options.since.as_deref())?;
     let (_subscription, told) = listen(&store)?;
@@ -446,78 +471,234 @@ pub fn watch(
         }
         first = false;
         while told.try_recv().is_ok() {}
-        let before = count;
-        // The tasks as they are now: the agent may have taken another meanwhile
-        let fresh = root.as_deref().and_then(|r| Project::open(r).ok());
-        let now = fresh.as_ref().unwrap_or(project);
-        let work = work_of(now, me);
-        // Told in the order they were written, oldest first, whichever review they are in
-        let mut news: Vec<(String, u32, Value)> = Vec::new();
-        for mut review in all(&store)? {
-            keyed_now(now, &store, &mut review.header);
-            for chain in &review.chains {
-                for (comment, parent) in with_parents(chain) {
-                    let key = seen_key(&review.header, comment);
-                    if seen.contains(&key) || seen.contains(&old_seen_key(&review.header, comment))
-                    {
-                        continue;
-                    }
-                    // Passed over for good: its own, an agent's, or in a review that has ended
-                    if comment.author.0 == me
-                        || is_agent(Some(&comment.author.0))
-                        || review.header.status.ended()
-                    {
-                        seen.insert(key);
-                        continue;
-                    }
-                    // Told once it is about the agent's work; until then judged again on each look (ATM-663, R5): the
-                    // agent may commit to its file, or start the task it is about, later
-                    if let Mine::About(task) = about_my_work(&work, me, &review, chain, comment) {
-                        seen.insert(key);
-                        let ordinal = comment
-                            .id
-                            .0
-                            .get(1..)
-                            .and_then(|n| n.parse().ok())
-                            .unwrap_or(0);
-                        news.push((
-                            comment.at.clone(),
-                            ordinal,
-                            heard(&review.header, chain, comment, parent, task.as_deref()),
-                        ));
-                    }
-                }
-            }
-        }
-        news.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
-        for (_, _, heard) in news {
+        let news = look(
+            project,
+            root.as_deref(),
+            me,
+            &store,
+            None,
+            &mut seen,
+            &mut statuses,
+        )?;
+        let told_now = news.len();
+        for heard in news {
             emit(heard);
-            count += 1;
         }
-        // Then the decisions on reviews of its work, after the words that came with them
-        for mut review in all(&store)? {
-            keyed_now(now, &store, &mut review.header);
-            let status = review.header.status;
-            let id = review.header.id.0.clone();
-            if statuses.get(&id) == Some(&status) {
-                continue;
-            }
-            if !decided(status) {
-                statuses.insert(id, status);
-                continue;
-            }
-            // A decision is kept as seen once told; one not about the agent's work yet is judged again (R5)
-            if let Mine::About(task) = decision_about_my_work(&work, me, &review.header) {
-                statuses.insert(id, status);
-                emit(decision(&review.header, task.as_deref()));
-                count += 1;
-            }
-        }
+        count += told_now;
         save_cursor(&file, &mut seen, &mut statuses);
-        if options.once && count > before {
+        if options.once && told_now > 0 {
+            // A watch with --once ends to be read: the harness tells the agent when it does (Claude Code tells of a
+            // background command only then), so what it told is read, and isn't unread in the inbox (ATM-708)
+            save_cursor(&inbox_file(root.as_deref(), me), &mut seen, &mut statuses);
             return Ok(count);
         }
     }
+}
+
+/// One look at the reviews from where `seen` and `statuses` say the agent is: each person's comment about its work
+/// not told yet, in the order they were written, then each decision on its work, after the words that came with it.
+/// `seen` and `statuses` move past what it tells and what it passes over for good. With `changed_since` (ISO 8601),
+/// only the reviews changed since then are read (a comment or a decision changes its review): the inbox's look on
+/// every command, cheap while nothing changed.
+fn look(
+    project: &Project,
+    root: Option<&Path>,
+    me: &str,
+    store: &FileStore,
+    changed_since: Option<&str>,
+    seen: &mut HashSet<String>,
+    statuses: &mut HashMap<String, Status>,
+) -> Result<Vec<Value>> {
+    let reviews: Vec<Review> = all_reviews(store)?
+        .into_iter()
+        .filter(|r| changed_since.is_none_or(|since| r.header.updated.as_str() >= since))
+        .collect();
+    if reviews.is_empty() {
+        return Ok(Vec::new());
+    }
+    // The tasks as they are now: the agent may have taken another meanwhile
+    let fresh = root.and_then(|r| Project::open(r).ok());
+    let now = fresh.as_ref().unwrap_or(project);
+    let work = work_of(now, me);
+    // Told in the order they were written, oldest first, whichever review they are in
+    let mut news: Vec<(String, u32, Value)> = Vec::new();
+    for review in &reviews {
+        let mut review = review.clone();
+        keyed_now(now, store, &mut review.header);
+        for chain in &review.chains {
+            for (comment, parent) in with_parents(chain) {
+                let key = seen_key(&review.header, comment);
+                if seen.contains(&key) || seen.contains(&old_seen_key(&review.header, comment)) {
+                    continue;
+                }
+                // Passed over for good: its own, an agent's, or in a review that has ended
+                if comment.author.0 == me
+                    || is_agent(Some(&comment.author.0))
+                    || review.header.status.ended()
+                {
+                    seen.insert(key);
+                    continue;
+                }
+                // Told once it is about the agent's work; until then judged again on each look (ATM-663, R5): the
+                // agent may commit to its file, or start the task it is about, later
+                if let Mine::About(task) = about_my_work(&work, me, &review, chain, comment) {
+                    seen.insert(key);
+                    let ordinal = comment
+                        .id
+                        .0
+                        .get(1..)
+                        .and_then(|n| n.parse().ok())
+                        .unwrap_or(0);
+                    news.push((
+                        comment.at.clone(),
+                        ordinal,
+                        heard(&review.header, chain, comment, parent, task.as_deref()),
+                    ));
+                }
+            }
+        }
+    }
+    news.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
+    let mut told: Vec<Value> = news.into_iter().map(|(_, _, heard)| heard).collect();
+    for review in &reviews {
+        let mut header = review.header.clone();
+        keyed_now(now, store, &mut header);
+        let status = header.status;
+        let id = header.id.0.clone();
+        if statuses.get(&id) == Some(&status) {
+            continue;
+        }
+        if !decided(status) {
+            statuses.insert(id, status);
+            continue;
+        }
+        // A decision is kept as seen once told; one not about the agent's work yet is judged again (R5)
+        if let Mine::About(task) = decision_about_my_work(&work, me, &header) {
+            statuses.insert(id, status);
+            told.push(decision(&header, task.as_deref()));
+        }
+    }
+    Ok(told)
+}
+
+/// What the agent has read (ATM-708): beside the watch's cursor, the same kind of cursor, moved by
+/// [`inbox`] and by a watch with `--once` (which ends to be read), never by a watch that runs on, whose lines go to a
+/// file the agent may not read. What is past the watch's cursor but not this one was told and not read.
+fn inbox_file(root: Option<&Path>, me: &str) -> PathBuf {
+    cursor_file(root, me).with_extension("inbox")
+}
+
+/// How far before a cursor was written its look reads the reviews changed: a file's time and a review's own (to the
+/// second) may disagree a little; what was seen already isn't told again.
+const CHANGED_SLACK_SECS: i64 = 5;
+
+/// When `file` was last written, less [`CHANGED_SLACK_SECS`], as a review's `updated` is written.
+fn written_at(file: &Path) -> Option<String> {
+    let secs = std::fs::metadata(file)
+        .and_then(|m| m.modified())
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    Some(atm_common::time::format_iso(
+        i64::try_from(secs).unwrap_or(i64::MAX) - CHANGED_SLACK_SECS,
+    ))
+}
+
+/// A cursor, and the time the reviews changed after it are to be read from.
+type Start = (HashSet<String>, HashMap<String, Status>, Option<String>);
+
+/// Where the inbox starts: its own cursor; the first time, the watch's (what was told before the inbox existed counts
+/// as read, once), else from now. With the time it was written: only the reviews changed since can hold what is unread.
+fn inbox_start(store: &FileStore, root: Option<&Path>, me: &str) -> Result<Start> {
+    let file = inbox_file(root, me);
+    if let Some(cursor) = read_cursor(&file) {
+        return Ok((
+            cursor.seen.into_iter().collect(),
+            cursor.statuses,
+            written_at(&file),
+        ));
+    }
+    // Kept at once: what a watch tells after this is unread until the inbox is read
+    let watch_file = cursor_file(root, me);
+    let (mut seen, mut statuses, since) = if let Some(cursor) = read_cursor(&watch_file) {
+        (
+            cursor.seen.into_iter().collect(),
+            cursor.statuses,
+            written_at(&watch_file),
+        )
+    } else {
+        let (seen, statuses) = starting_point(store, &file, None)?;
+        (seen, statuses, written_at(&file))
+    };
+    save_cursor(&file, &mut seen, &mut statuses);
+    Ok((seen, statuses, since))
+}
+
+/// What `me` hasn't read about its work (ATM-708): every person's comment and decision since it last read its inbox,
+/// as a watch prints them, oldest first; with `read`, they are read from now on (`atm review inbox`, the hook);
+/// without, only looked at (the line every command prints).
+///
+/// # Errors
+/// The reviews can't be read.
+pub fn inbox(project: &Project, me: &str, read: bool) -> Result<Vec<Value>> {
+    let root = project.root().map(Path::to_path_buf);
+    let store = reviews::store(project)?;
+    let (mut seen, mut statuses, since) = inbox_start(&store, root.as_deref(), me)?;
+    // Only the reviews changed since it was last read: cheap on every command while nothing changed
+    let news = look(
+        project,
+        root.as_deref(),
+        me,
+        &store,
+        Some(since.as_deref().unwrap_or("")),
+        &mut seen,
+        &mut statuses,
+    )?;
+    // Nothing unread: a look only moves past what is passed over for good, so it is kept too, and the next command
+    // reads only what changes after this
+    if read || news.is_empty() {
+        save_cursor(&inbox_file(root.as_deref(), me), &mut seen, &mut statuses);
+    }
+    Ok(news)
+}
+
+/// What one event says in a line: `CR-34 approved`, `CR-35 comment by Hakan`.
+fn event_line(event: &Value) -> String {
+    let review = event["review"].as_str().unwrap_or("a review");
+    if let Some(decision) = event["decision"].as_str() {
+        return format!("{review} {}", decision.replace('_', " "));
+    }
+    let kind = event["kind"].as_str().unwrap_or("comment");
+    let author = event["author"].as_str().unwrap_or("someone");
+    format!("{review} {kind} by {author}")
+}
+
+/// What every command an agent runs says on stderr while it has unread events about its work (ATM-708): how many, and
+/// which, until it reads them. It doesn't depend on the agent remembering to read a watch's output. None for a person,
+/// with nothing unread, or when the reviews can't be read (never in the command's way).
+#[must_use]
+pub fn unread_line(project: &Project, me: &str) -> Option<String> {
+    if !is_agent(Some(me)) {
+        return None;
+    }
+    unread_summary(&inbox(project, me, false).ok()?)
+}
+
+/// The unread line for `unread` events: the first three, and how many more; none without any.
+fn unread_summary(unread: &[Value]) -> Option<String> {
+    if unread.is_empty() {
+        return None;
+    }
+    let n = unread.len();
+    let mut listed: Vec<String> = unread.iter().take(3).map(event_line).collect();
+    if n > 3 {
+        listed.push(format!("{} more", n - 3));
+    }
+    Some(format!(
+        "{n} unread about your work: {}. `atm review inbox` shows them (and marks them read)",
+        listed.join(", ")
+    ))
 }
 
 /// A review's tasks as they are keyed now (ATM-630): a review written before a task's number moved at a merge names
@@ -1029,6 +1210,26 @@ mod tests {
         assert_ne!(
             cursor_file(Some(a), "claude:A"),
             cursor_file(Some(b), "claude:A")
+        );
+    }
+
+    /// ATM-708: the line every command prints while something is unread
+    #[test]
+    fn the_unread_line_names_the_first_three_and_counts_the_rest_and_is_none_without_any() {
+        let comment =
+            |n: u32| json!({"review": format!("CR-{n}"), "kind": "comment", "author": "Ana"});
+        let poke = json!({"review": "CR-5", "kind": "poke", "author": "Ana"});
+        let decided = json!({"review": "CR-6", "decision": "changes_requested"});
+        assert_eq!(unread_summary(&[]), None);
+        assert_eq!(
+            unread_summary(&[comment(1), decided.clone()]).unwrap(),
+            "2 unread about your work: CR-1 comment by Ana, CR-6 changes requested. `atm review inbox` shows them \
+             (and marks them read)"
+        );
+        let many = unread_summary(&[comment(1), poke, decided, comment(7), comment(8)]).unwrap();
+        assert!(
+            many.starts_with("5 unread about your work: CR-1 comment by Ana, CR-5 poke by Ana, CR-6 changes requested, 2 more."),
+            "{many}"
         );
     }
 

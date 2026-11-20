@@ -380,7 +380,8 @@ mod tests {
     fn a_usage_error_is_400_an_unknown_task_404_and_a_claim_held_by_another_409() {
         let too_long = atm_common::edits::check_note(&"x".repeat(501)).unwrap_err();
         let document = json!({"meta": {}, "tasks": [{"id": "T-1"}]});
-        let unknown = atm_common::keys::resolve(&document, &[], "T-9").unwrap_err();
+        let unknown =
+            atm_common::keys::resolve::<atm_common::Task>(&document, &[], "T-9").unwrap_err();
         let held =
             atm_common::Error::Conflict("can't done T-1: it is claimed by claude:B until …".into());
         for (error, status, code) in [

@@ -31,12 +31,8 @@ pub fn task_of(
         return Ok(id);
     };
     let document = project.store().document()?;
-    let archive: Vec<Task> = project
-        .store()
-        .list_archived()?
-        .into_iter()
-        .cloned()
-        .collect();
+    // Read where it is, never copied (ATM-708)
+    let archive = project.store().list_archived()?;
     // Only a key some task holds now can be ambiguous: an alias or a UUID names one task
     if !matches!(
         keys::resolve(document, &archive, key).map(|f| f.via),
@@ -90,7 +86,7 @@ fn holder_then(reviews: &FileStore, header: &ReviewHeader, key: &str) -> Option<
         let (_, blob) = vcs.blob_in(&commit, &tasks)?;
         let blob = atm_vcs::Rev::object_id(&blob).ok()?;
         let document: Value = serde_json::from_slice(&vcs.blob_bytes(&blob).ok()?).ok()?;
-        let found = keys::resolve(&document, &[], key).ok()?;
+        let found = keys::resolve::<Task>(&document, &[], key).ok()?;
         found.task.get("id")?.as_str().map(str::to_string)
     })
 }

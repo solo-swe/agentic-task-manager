@@ -49,6 +49,96 @@ pub enum AgentsCommand {
         #[command(flatten)]
         scope: Scope,
     },
+    /// Claude Code's hook for your reviews (ATM-708): what you haven't read about your work comes to you as you work
+    /// (on each prompt and tool call), and a reply waits for it. One command, `atm review inbox --hook`, in Claude
+    /// Code's settings; nothing else there changes.
+    Hooks {
+        #[command(subcommand)]
+        action: HooksAction,
+    },
+}
+
+/// What `atm agents hooks` does.
+#[derive(Debug, Subcommand)]
+pub enum HooksAction {
+    /// Add atm's hook to Claude Code's settings (yours, ~/.claude/settings.json, or this project's with --project)
+    Install {
+        #[command(flatten)]
+        scope: Scope,
+    },
+    /// Remove atm's hook, and nothing else
+    Uninstall {
+        #[command(flatten)]
+        scope: Scope,
+    },
+    /// The events atm's hook is on
+    Status {
+        #[command(flatten)]
+        scope: Scope,
+    },
+}
+
+/// The project's root for `atm agents hooks --project`: Claude Code reads `.claude/` there.
+fn hooks_dir(scope: &Scope, cwd: &Path) -> Result<Option<PathBuf>> {
+    if !scope.project {
+        return Ok(None);
+    }
+    let project = Project::open(cwd)?;
+    Ok(Some(
+        project
+            .root()
+            .map_or_else(|| cwd.to_path_buf(), Path::to_path_buf),
+    ))
+}
+
+fn run_hooks(action: HooksAction, ctx: Context, cwd: &Path) -> Result<u8> {
+    use atm_lib::agent_hooks::{HOOK_EVENTS, hooks_status, install_hooks, uninstall_hooks};
+    let (change, verb) = match action {
+        HooksAction::Status { scope } => {
+            let (file, on) = hooks_status(hooks_dir(&scope, cwd)?.as_deref())?;
+            if ctx.json {
+                print_json(&json!({"file": file, "events": on}));
+            } else if on.is_empty() {
+                println!("atm's hook isn't in {file}");
+            } else {
+                let missing: Vec<&str> = HOOK_EVENTS
+                    .iter()
+                    .copied()
+                    .filter(|e| !on.iter().any(|o| o == e))
+                    .collect();
+                println!(
+                    "atm's hook is in {file}, on {}{}",
+                    on.join(", "),
+                    if missing.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" (not on {})", missing.join(", "))
+                    }
+                );
+            }
+            return Ok(0);
+        }
+        HooksAction::Install { scope } => (
+            install_hooks(hooks_dir(&scope, cwd)?.as_deref())?,
+            "added to",
+        ),
+        HooksAction::Uninstall { scope } => (
+            uninstall_hooks(hooks_dir(&scope, cwd)?.as_deref())?,
+            "removed from",
+        ),
+    };
+    if ctx.json {
+        print_json(&json!({"file": change.file, "changed": change.changed}));
+    } else if change.changed.is_empty() {
+        println!("{}: nothing to change", change.file);
+    } else {
+        println!(
+            "atm's hook {verb} {}: {}",
+            change.file,
+            change.changed.join(", ")
+        );
+    }
+    Ok(0)
 }
 
 /// The project's folder for `--project`: where the task folder is (the working copy), else `cwd`.
@@ -119,6 +209,7 @@ fn status_lines(h: &Value) -> Vec<String> {
 pub fn run(command: AgentsCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     let version = atm_common::VERSION;
     match command {
+        AgentsCommand::Hooks { action } => run_hooks(action, ctx, cwd),
         AgentsCommand::Install {
             harness,
             scope,

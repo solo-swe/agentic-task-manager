@@ -287,6 +287,20 @@ pub enum ReviewCommand {
         #[arg(long)]
         agent: Option<String>,
     },
+    /// What you haven't read about your work in the reviews (ATM-708): each person's comment and decision since you
+    /// last read them, as a watch prints them (a JSON object a line with --json), oldest first; read from then on. A
+    /// watch with --once counts as read; one that runs on doesn't (its lines may never be read).
+    Inbox {
+        /// Only look: leave them unread
+        #[arg(long)]
+        peek: bool,
+        /// Run as Claude Code's hook (`atm agents hooks install`): its input on stdin, its answer on stdout
+        #[arg(long, conflicts_with = "peek")]
+        hook: bool,
+        /// Whose inbox
+        #[arg(long)]
+        agent: Option<String>,
+    },
     /// End a review without approval.
     Close {
         /// The review (CR-7)
@@ -623,6 +637,53 @@ fn duration_of(text: &str) -> Result<std::time::Duration> {
     std::time::Duration::try_from_secs_f64(seconds).map_err(|_| bad())
 }
 
+/// The most of Claude Code's hook input read from stdin.
+const HOOK_INPUT_BYTES: u64 = 1024 * 1024;
+
+/// `atm review inbox --hook` (ATM-708): Claude Code's hook. Its input on stdin names the session, its folder and the
+/// event; the session's unread review events are its answer on stdout, read from then on: context for the agent
+/// (`UserPromptSubmit`, `PostToolUse`), or its reply held (`Stop`). Always exit code 0 and nothing printed when there
+/// is nothing to say, the input isn't Claude Code's, or the folder holds no project: a hook never stands in the way.
+fn hook_inbox(cwd: &Path, agent: Option<&str>) -> u8 {
+    use std::io::Read;
+    let mut text = String::new();
+    if std::io::stdin()
+        .take(HOOK_INPUT_BYTES)
+        .read_to_string(&mut text)
+        .is_err()
+    {
+        return 0;
+    }
+    let input: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+    let Some(event) = input["hook_event_name"].as_str() else {
+        return 0;
+    };
+    if !atm_lib::agent_hooks::HOOK_EVENTS.contains(&event) {
+        return 0;
+    }
+    let folder = input["cwd"]
+        .as_str()
+        .map_or_else(|| cwd.to_path_buf(), std::path::PathBuf::from);
+    let Ok(project) = atm_lib::Project::open(&folder) else {
+        return 0;
+    };
+    // The session's identity, as its own commands have it: from the input, as a hook's environment may not name it
+    let me = match (agent, input["session_id"].as_str()) {
+        (Some(agent), _) if !agent.is_empty() => agent.to_string(),
+        (_, Some(session)) if std::env::var("ATM_AGENT").map_or(true, |a| a.is_empty()) => {
+            atm_lib::actor::session_identity(session, &folder)
+        }
+        _ => atm_lib::actor::agent_identity(None, &folder),
+    };
+    let Ok(unread) = atm_lib::review_listen::inbox(&project, &me, true) else {
+        return 0;
+    };
+    if let Some(answer) = atm_lib::agent_hooks::hook_answer(event, &unread) {
+        ::std::println!("{answer}");
+    }
+    0
+}
+
 /// A comment heard, for people: where, who, and its text.
 fn heard_line(heard: &Value) -> String {
     let text = |key: &str| {
@@ -737,6 +798,44 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
             )?;
             // --once with nothing told by the time up: exit code 3, as `atm review wait` (ATM-624)
             return Ok(if once && told == 0 { 3 } else { 0 });
+        }
+        ReviewCommand::Inbox {
+            peek: _,
+            hook: true,
+            agent,
+        } => return Ok(hook_inbox(cwd, agent.as_deref())),
+        ReviewCommand::Inbox {
+            peek,
+            hook: false,
+            agent,
+        } => {
+            let project = opened(cwd, agent.as_deref())?;
+            let me = actor(&project);
+            let unread = atm_lib::review_listen::inbox(&project, &me.0, !peek)?;
+            if ctx.json {
+                for event in &unread {
+                    // One object a line, as the watch prints them (I30)
+                    ::std::println!("{event}");
+                }
+            } else if unread.is_empty() {
+                println!("Nothing unread about your work.");
+            } else {
+                for event in &unread {
+                    match event["decision"].as_str() {
+                        Some(decision) => println!(
+                            "{}{}: {}",
+                            event["review"].as_str().unwrap_or_default(),
+                            event["task"]
+                                .as_str()
+                                .map(|t| format!(" ({t})"))
+                                .unwrap_or_default(),
+                            decision.replace('_', " ")
+                        ),
+                        None => println!("{}", heard_line(event)),
+                    }
+                }
+            }
+            return Ok(0);
         }
         ReviewCommand::Create {
             title,

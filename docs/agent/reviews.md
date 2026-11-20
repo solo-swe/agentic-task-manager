@@ -49,7 +49,10 @@
   - `atm review wait CR-7 [--for decision] [--timeout 2h] --json`, in the background, once your task is in review
     (its claim is released then, so there is none to hold): it ends when the reviewer submits (or decides) with what
     happened and the new comments; exit code 3 when the time is up first.
-  - `atm review watch --json [--timeout 8h]`, in the background, once per session: it names no review and no task,
+  - `atm review watch --json --once [--timeout 8h]`, in the background, once per session, **started again each time it
+    ends** (ATM-708): it ends as soon as it tells something, and its ending is what tells you. Claude Code, like many
+    harnesses, tells you of a background command only when it ends; a watch without `--once` runs on and only writes
+    to a file you may never read. It names no review and no task,
     and prints, one JSON object a line, each person's comment or reply about your work (`review`, `task` or `null`,
     `comment`, `kind`, `reply_to`, `path`, `lines`, `body`), from any review: a live review on your working copy, a review of
     your task, or in a batch review the chains on your files or naming your task. Answer each where it was made.
@@ -70,6 +73,15 @@
     - Any atm command you run without one, while a review of your work is open, ends with one line on stderr
       saying so: at most every ten minutes, and at once when a review changed that it didn't name yet. Never on
       stdout, and never for a person.
+    **atm knows what you have read** (ATM-708): a watch with `--once` counts as read, since its ending puts it in front
+    of you; one that runs on doesn't. Until you read it:
+    - every atm command you run ends with a line on stderr, `2 unread about your work: CR-34 approved, CR-35 comment
+      by Ana`, so you see it without remembering to look;
+    - `atm review inbox [--json]` prints what you haven't read, as the watch does, oldest first, and marks it read
+      (`--peek` only looks). Answer each comment where it was made, as below.
+    - In Claude Code, the user can install atm's hook (`atm agents hooks install`, theirs to run, never yours): your
+      unread events then come into your context on each prompt and tool call, and your reply waits while there are
+      some.
 - **A poke** (`kind: "poke"` on the watch's line; every other comment is `kind: "comment"`): a person nudging you
   about the review as a whole, with a message or none. Answer it by looking at where the review stands, and replying to
   the poke (`atm review reply CR-7 <its comment> --body '…'`) with what you did or what you are waiting for: the open

@@ -103,8 +103,8 @@ impl Project {
         if !atm_common::keys::keys_format(document) {
             return Ok(reference.to_string());
         }
-        let archive: Vec<atm_common::Task> =
-            self.store.list_archived()?.into_iter().cloned().collect();
+        // Read where it is, never copied (ATM-708)
+        let archive = self.store.list_archived()?;
         let found = atm_common::keys::resolve(document, &archive, reference)?;
         Ok(found
             .task
