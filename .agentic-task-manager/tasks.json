@@ -19388,7 +19388,7 @@
         "crates/atm-cli/src/commands/review.rs"
       ],
       "created_at": "2026-11-20T23:29:46Z",
-      "updated_at": "2026-11-20T23:36:57Z",
+      "updated_at": "2026-11-20T23:45:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19400,7 +19400,8 @@
       "sprint": "Audit and tabs",
       "number": 711,
       "started_at": "2026-11-20T23:36:57Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "12c1639508b33fb93acf2fddb69201cf8f7cbb5a"
     }
   ]
 }
