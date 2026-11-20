@@ -322,7 +322,65 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(2);
     await expect(left).toHaveCount(0);
     await expect(right).toHaveCount(0);
+    await expect(page.locator('#app-tab-more')).toHaveCount(0);
   });
+
+  // ATM-685 (Hakan): when the tabs don't all fit, More ⌄ lists those out of view; one chosen there is shown, scrolled
+  // into view. In WebKit too, the app's engine on macOS
+  test(
+    'More ⌄ lists the tabs out of view; one chosen is shown, in view',
+    { tag: '@webkit' },
+    async ({ page, tasksServer }) => {
+      await tasksServer.asApp();
+      tasksServer.windowShell = { system_menu_bar: true, system_window_buttons: false };
+      tasksServer.use('standard');
+      tasksServer.addProject('second', 'minimal', 'Second Project');
+      const board = `/projects/${tasksServer.projectId}/kanban`;
+      // The first tab is the other project's, the last (active, in view) one of eleven boards
+      tasksServer.restoredTabs = {
+        addresses: ['/projects/second', ...Array.from({ length: 11 }, () => board)],
+        active: 11,
+      };
+      await page.setViewportSize({ width: 1000, height: 700 });
+      await page.goto('/');
+      await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(12);
+      const more = page.locator('#app-tab-more');
+      await expect(more).toBeVisible();
+      // It sits in the bar, which still fits the window
+      expect(
+        await page.evaluate(() => {
+          const bar = document.querySelector('#app-titlebar')!;
+          return bar.scrollWidth <= bar.clientWidth;
+        }),
+      ).toBe(true);
+      await more.click();
+      const items = page.locator('#app-tab-more-menu .title-bar-tabs-menu-item');
+      await expect(items.first()).toHaveText('Second Project');
+      // Only those out of view: the active one is in view, so it isn't listed
+      const listed = await items.evaluateAll((els) => els.map((e) => e.getAttribute('data-tab')));
+      const active = await page.locator('.title-bar-tab.selected [role="tab"]').getAttribute('id');
+      expect(listed).not.toContain(active!.replace('app-tab-', ''));
+      // Over the page, so a real click reaches it (it was under the page's subtitle at first)
+      await items.first().click({ timeout: 5000 });
+      await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+      // Shown, and scrolled into view: wholly inside the strip
+      const first = page.locator('.title-bar-tab').first();
+      await expect(first).toHaveClass(/selected/);
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const strip = document.querySelector('.title-bar-tabs-scroller')!.getBoundingClientRect();
+            const tab = document.querySelector('.title-bar-tab')!.getBoundingClientRect();
+            return tab.left >= strip.left - 1 && tab.right <= strip.right + 1;
+          }),
+        )
+        .toBe(true);
+      // Now the last tabs are out of view: the menu lists them, not the first
+      await more.click();
+      await expect(items.first()).not.toHaveText('Minimal Project');
+      await page.keyboard.press('Escape');
+    },
+  );
 
   test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
     page,
