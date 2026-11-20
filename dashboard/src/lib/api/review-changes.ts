@@ -35,8 +35,15 @@ interface Change {
   args: Record<string, unknown>;
 }
 
+/** `.` or `..` as an ID in a change's path (ATM-676, audit D7): the URL parser works it out, so the write would go to
+ * another route */
+const DOTTED = new Set(['.', '..']);
+const dotted = (segments: string[]) => segments.some((s) => DOTTED.has(s));
+
 async function send(project: string, change: Change): Promise<ChangeResult> {
   const workspace = apiWorkspace();
+  if (dotted([workspace, project, ...change.resource.split('/').map((s) => decodeURIComponent(s))]))
+    return { ok: false, message: 'A review, project or workspace ID can’t be . or ..' };
   if (inApp) {
     try {
       const body = await invoke<Record<string, unknown>>(change.command, { workspace, project, ...change.args });

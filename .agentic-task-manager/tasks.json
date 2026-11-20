@@ -1830,7 +1830,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 708
+    "next_number": 710
   },
   "tasks": [
     {
@@ -18600,7 +18600,7 @@
       "description": "Audit findings D1, D2 and the stale-guard abstraction ([the report](docs/codebase-audit-2026-11.md#d1-medium-bug-project-loads-apply-stale-and-out-of-order-answers-checked)).\n\n- **D1:** `dashboard/src/lib/state.svelte.ts:812-817` assigns the worktrees before checking the project is still shown; the guard compares the project ID only (two workspaces can have one); `refreshArchive` writes `this.archive` unchecked; `reload()` runs from the timer, focus, navigation and the app's events with no in-flight guard. Add a small `latest()` helper in `lib/` (a sequence token checked after every await) keyed on `workspace/project`, use it in `fetchAndApply`, `refreshArchive` and `refreshProjectSources`, skip a poll while one is in flight, and replace the other three guards with it (`ReviewsTab`, `AllProjectsBoard`, `DocumentViewer`).\n- **D2:** `dashboard/src/lib/shell/ReviewsTab.svelte:255` reuses one `<ReviewPage>` across reviews, so a review-wide comment typed on CR-1 posts to CR-2 after following a link. Wrap it in `{#key page.review.id}`.\n\n## Tests\nUnit tests with a stubbed API that answers out of order (A's answer after B is shown changes nothing; an older poll after a newer one changes nothing); an e2e test in `reviews.spec.ts`: a draft review comment on one review isn't there after moving to another.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/state.svelte.ts",
@@ -18608,7 +18608,7 @@
         "dashboard/src/lib/latest.ts"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T22:03:29Z",
+      "updated_at": "2026-11-20T22:17:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18620,7 +18620,24 @@
       "sprint": "Audit and tabs",
       "number": 675,
       "started_at": "2026-11-20T22:03:29Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "7e8b77d2d9bb5dad1e5da0f46258dfa0c62788ce",
+      "code_reviews": [
+        {
+          "id": "01a1fb09-6ddc-7485-ac64-7cf5a1823a43",
+          "ref": "CR-97"
+        }
+      ],
+      "review_requested_at": "2026-11-20T22:17:41Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T22:17:41Z",
+          "kind": "review",
+          "text": "CR-97: Dashboard: only the latest load applies; a review page per review",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226c64577940",
@@ -18635,7 +18652,7 @@
       "description": "Audit findings D3, D4, D5, D7 and D9 ([the report](docs/codebase-audit-2026-11.md#d3-medium-security-the-submodule-commit-link-skips-safeurl-checked)).\n\n- **D3:** `dashboard/src/lib/reviews/ReviewFile.svelte:119` puts `${moved.repository}/commit/${sha}` in an `href` without `safeUrl` (I14), and assumes GitHub's paths: `repoLinks(safeUrl(moved?.repository) ?? '')?.commit(sha)`.\n- **D4:** `safeTree` (`compmd.ts:446`) turns only raw `<img>` into text; drop every `html` node CompMD would render as HTML (check CompMD 0.8.0's own policy first), and treat `area[href]` and SVG links like `a[href]` in `secureLinks`, `follow` and the app's external-link catcher.\n- **D5:** `app-tabs.svelte.ts:147` reads `sessionStorage` at module level, which throws when site data is blocked: wrap it in try/catch as `prefs.ts` does.\n- **D7:** `address.ts:124` accepts `.` and `..` as review or project IDs, which change the API path a write goes to: refuse them in `addressParams` and the URL builders.\n- **D9:** `decodeURIComponent` on a `#task=%E0` link throws (`compmd.ts:327`, `CompMd.svelte:261`): try/catch.\n\n## Tests\nUnit tests: `url.test.ts`, `compmd.test.ts` (raw `<area>` shows as text), `address.test.ts` (`..` refused), the tabs module loading with a throwing `sessionStorage`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewFile.svelte",
@@ -18645,9 +18662,9 @@
         "dashboard/src/lib/documents/CompMd.svelte"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T22:17:45Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -18655,7 +18672,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 676
+      "number": 676,
+      "started_at": "2026-11-20T22:17:45Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226d932b5d3f",
@@ -20412,6 +20431,71 @@
       ],
       "completed_at": "2026-11-20T20:36:48Z",
       "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1fb0c-dc87-7005-8105-d728a37c2bd3",
+      "name": "Review watching that doesn't depend on the agent remembering: --once in the skills, unread events on every command, a Claude Code hook",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "ux"
+      ],
+      "description": "Agents miss review comments and decisions in every project (Hakan, 2026-11-21, from a real session). The watch catches them, but the lines don't reach the agent.\n\n## The cause\n- In Claude Code a background command notifies the agent only when it **exits**. `atm review watch --json` runs for hours, so each line only lands in a file, and the agent sees it only if it remembers to read that file.\n- Remembering fails when the agent is deep in a task (a CI run, debugging) and after the conversation is compacted. A memory note asking it to read the watch relies on the same memory.\n- The agent then reports a review's state from what it did, not from what atm says.\n\n## Change\n- **A. The skills start the watch with `--once`** and restart it after each notice. This covers `atm-loop-tasks`, `atm-do-task`, `atm-push` and any other skill that starts the watch, plus `atm docs reviews`. In Claude Code, exiting is the event the agent is told about, so each comment or decision interrupts it mid-task, and the restarted watch first prints what came in between. Today the skills say this only \"where a background command reports only when it ends\", and agents don't recognise that Claude Code is such a place. Name it.\n- **B. Unread events on every atm command:** a short stderr line (`2 unread: CR-34 approved, CR-35 commented`), from the agent's cursor (what `loop next` reports as `since_last_watch`), until the agent has read them. Also `atm review inbox [--json]`, which prints them and marks them read. `atm task state` and `atm review create` say so too, so a review's state isn't reported from a stale view.\n- **C. A Claude Code hook atm installs** (`atm agents install`, or `atm hooks install`, only when the user runs it):\n  - on `UserPromptSubmit` and `PostToolUse`, it adds the unread review events (from `atm review inbox`) to the agent's context;\n  - on `Stop`, it blocks the reply while events are unread.\n  \n  This is the strongest of the three, because it doesn't depend on the model remembering anything. The hook runs atm only, and changes nothing but its own entries in the settings file.\n\n## Security\nC writes Claude Code's settings, an agent harness's configuration: only on the user's command, never from a skill. It needs its own entry in `docs/security-architecture.md` (what it writes, that it runs only `atm`, how it's removed), and the agent sandbox run before the release (a skill and atm output agents act on change).\n\n## Tests\n- **B:** the CLI suite. A comment and a decision show on the next command's stderr until `atm review inbox` reads them, per agent; another agent's cursor is untouched.\n- **C:** the hook's install, repeat install and removal leave other settings as they were; its output, with and without unread events.\n- **A:** the skills' text checked by the existing skill tests.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "skills/atm-loop-tasks/SKILL.md",
+        "skills/atm-do-task/SKILL.md",
+        "skills/atm-push/SKILL.md",
+        "docs/agent/reviews.md",
+        "crates/atm-lib/src/review_listen.rs",
+        "crates/atm-cli/src/main.rs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-20T22:21:26Z",
+      "updated_at": "2026-11-20T22:21:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T22:21:26Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "number": 708
+    },
+    {
+      "id": "01a1fb11-1865-716b-95a4-002b0ad3ff35",
+      "name": "Unit tests: CompMD's settling outlives a test file and fails the run with an unhandled rejection",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "test"
+      ],
+      "description": "A full `pnpm test` run (ATM-676, 2026-11-21) passed every test but failed on one unhandled rejection: `ReferenceError: document is not defined` in `@compmd/sandbox`'s `settling.js` (`stylesheetsLoaded(document)`), from `tests/unit/HelpDialog.component.test.ts`. The file passes alone, and the earlier full run that day was clean, so it shows only under load.\n\n## The cause, as far as read\n- `closes with the close button, Escape and the backdrop` opens Help (a real CompMD render), then closes it after `settled()`.\n- The sandbox's `Settling` loop runs on after the view is destroyed, and when the file ends first, jsdom is gone.\n- In jsdom, settling never finishes anyway: `document.fonts` is missing. So waiting for `data-compmd=\"ready\"` doesn't help; that fires on `rendered`, before settling.\n\n## Change\nFind the right end for it:\n- whether `view.destroy()` should stop the settling (CompMD's: report it upstream, from its published package's behaviour);\n- or the test helpers make the sandbox's settling end in jsdom: a `document.fonts` stub in the unit tests' setup, and waiting for the view's `settled` before a component test ends.\n\nNever just rerun the suite or silence the error.\n\n## Tests\nThe full unit run under load, several times, with no unhandled error.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/tests/unit/HelpDialog.component.test.ts",
+        "dashboard/tests/unit/compmd.helpers.ts"
+      ],
+      "created_at": "2026-11-20T22:26:04Z",
+      "updated_at": "2026-11-20T22:26:04Z",
+      "created_by": "claude:0f56a916",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T22:26:04Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "number": 709
     }
   ]
 }

@@ -143,5 +143,15 @@ export class AppTabs {
   }
 }
 
+/** The window's session storage, or null where there is none or site data is blocked: reading `sessionStorage` itself
+ * throws then, and at module level that kept the page from loading (ATM-676, audit D5) */
+export function sessionStore(): Storage | null {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 /** The window's tabs (the app's; the browser has none) */
-export const appTabs = new AppTabs(typeof sessionStorage === 'undefined' ? null : sessionStorage);
+export const appTabs = new AppTabs(sessionStore());

@@ -49,6 +49,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { DocumentSource } from '../documents/source';
+  import { submoduleCommitUrl } from '../repo';
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
   import ComposerActions from './ComposerActions.svelte';
@@ -125,7 +126,8 @@
   // are on the entry as a whole
   const moved = $derived(file.submodule ?? null);
   const short = (sha: string) => sha.slice(0, 7);
-  const commitUrl = (sha: string) => (moved?.repository ? `${moved.repository}/commit/${sha}` : null);
+  // Through safeUrl, as its host builds commit links (ATM-676, audit D3): the address comes from the reviewed change
+  const commitUrl = (sha: string) => submoduleCommitUrl(moved?.repository, sha);
   let writing = $state(false);
   let draft = $state('');
   let problem = $state<string | null>(null);

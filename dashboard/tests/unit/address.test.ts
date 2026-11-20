@@ -23,6 +23,34 @@ const at = (href: string) => {
   return { pathname: url.pathname, search: url.search, hash: url.hash };
 };
 
+describe('. and .. are no IDs (ATM-676, audit D7)', () => {
+  it('a path with a . or .. segment, written or escaped, names no page', () => {
+    for (const path of [
+      '/projects/../reviews',
+      '/projects/%2E%2E',
+      '/projects/%2e/list',
+      '/projects/p1/reviews/..',
+      '/projects/p1/reviews/%2E%2E',
+      '/w/../projects/p1',
+      '/w/%2E%2E/projects/p1',
+    ]) {
+      const params = addressParams(path);
+      expect(
+        ['workspace', 'project', 'review'].map((k) => params.get(k)),
+        path,
+      ).toEqual([null, null, null]);
+    }
+    // A dot inside an ID is an ID
+    expect(addressParams('/projects/a..b/reviews/CR-1.2').get('review')).toBe('CR-1.2');
+  });
+
+  it('an old link naming project . or .. names none', () => {
+    expect(legacyParams('#project=..&view=list')?.get('project')).toBeNull();
+    expect(legacyParams('#project=.&view=list')?.get('project')).toBeNull();
+    expect(legacyParams('#project=p1')?.get('project')).toBe('p1');
+  });
+});
+
 describe('the address (T-429)', () => {
   it('reads the page from the path and the rest from the query', () => {
     expect(params('/')).toEqual([]);

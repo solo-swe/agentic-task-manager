@@ -251,6 +251,40 @@ describe('task text through the real processor', () => {
     expect(text).toContain('rel');
   });
 
+  // ATM-676 (audit D4): defence in depth, as CompMD shows other tags as text itself
+  it('safeTree: raw HTML is kept only for CompMD’s own tags, without attributes that run, style or load; any other is text', () => {
+    const htmlOf = (text: string) => {
+      const kept: string[] = [];
+      const walk = (node: { type: string; value?: string; children?: unknown[] }) => {
+        if (node.type === 'html') kept.push(String(node.value));
+        (node.children as (typeof node)[] | undefined)?.forEach(walk);
+      };
+      walk(safeTree(run(text).expanded) as never);
+      return kept;
+    };
+    for (const kept of ['<kbd>K</kbd>', 'a<br>b', 'x<sub>2</sub>', '<a href="https://example.com">s</a>'])
+      expect(htmlOf(`Press ${kept} now.`).length, kept).toBeGreaterThan(0);
+    expect(htmlOf('<details open>\n<summary>More</summary>\n\nHidden.\n\n</details>\n').length).toBeGreaterThan(0);
+    for (const text of [
+      '<area href="javascript:alert(1)">',
+      '<map name="m"><area href="https://evil.example" shape="rect"></map>',
+      '<div style="position:fixed;inset:0">cover</div>',
+      '<img src="https://example.com/x.png">',
+      // (inline, each tag is a node of its own: an `<a href>` inside would be a raw link, which secureLinks checks)
+      '<svg onload="alert(1)"><text>x</text></svg>',
+      '<kbd onclick="alert(1)">K</kbd>',
+      '<sup style="font-size:9em">big</sup>',
+      '<iframe src="https://example.com"></iframe>',
+    ]) {
+      // No opening tag is left (a lone closing one, `</kbd>`, opens nothing)
+      expect(
+        htmlOf(`See ${text} here.`).filter((h) => !/^<\//.test(h)),
+        text,
+      ).toEqual([]);
+      expect(textOf(safeTree(run(`See ${text} here.`).expanded)), text).toContain(text.slice(0, 5));
+    }
+  });
+
   it('safeTree for a project’s text: a relative link opens the viewer, a relative image loads from this server', () => {
     const tree = safeTree(
       run(

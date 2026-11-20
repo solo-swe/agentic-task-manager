@@ -45,13 +45,17 @@ export function addressParams(address: string): URLSearchParams {
   const path = (q >= 0 ? address.slice(0, q) : address).split('#')[0];
   const query = q >= 0 ? address.slice(q + 1).split('#')[0] : '';
   const params = new URLSearchParams();
-  let segments = path.split('/').filter(Boolean).map(decode);
+  const decoded = path.split('/').filter(Boolean).map(decode);
+  // A segment that doesn't decode, or is `.` or `..` (`%2E%2E` decoded), names no page: as an ID it would change the
+  // API path a read or a write goes to (ATM-676, audit D7)
+  const usable = decoded.every((s): s is string => s !== null && s !== '' && s !== '.' && s !== '..');
+  let segments: string[] = usable ? (decoded as string[]) : [];
   // /w/<w>/…: the page in workspace <w>
-  if (segments[0] === 'w' && segments[1]) {
+  if (usable && segments[0] === 'w' && segments[1]) {
     if (segments[1] !== DEFAULT_WORKSPACE) params.set('workspace', segments[1]);
     segments = segments.slice(2);
   }
-  if (segments.every((s): s is string => s !== null && s !== '')) {
+  if (usable) {
     const [first, id, tab, ...rest] = segments;
     if (first === PROJECTS && id === undefined) {
       params.set('overview', '');
@@ -203,6 +207,9 @@ export function isPagePath(pathname: string): boolean {
  * anchor, nothing) */
 export function legacyParams(hash: string): URLSearchParams | null {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
+  // A project named `.` or `..` is none (ATM-676, as in a path)
+  const project = params.get('project');
+  if (project === '.' || project === '..') params.delete('project');
   return [...params.keys()].some((key) => LEGACY_KEYS.includes(key)) ? params : null;
 }
 

@@ -21,10 +21,18 @@ export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input) : f
 /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
 export type ProjectFile = 'claims.json' | 'worktrees.json';
 
+/** An ID (a workspace's, a project's, a review's) as a segment of an API path. `.` and `..` (and empty) are refused
+ * (ATM-676, audit D7): the URL parser works them out, `%2E%2E` too, so `/projects/../reviews` would be another route,
+ * and a write would go there */
+export function idSegment(id: string): string {
+  if (id === '' || id === '.' || id === '..') throw new Error(`${JSON.stringify(id)} isn't an ID`);
+  return encodeURIComponent(id);
+}
+
 /** A project's own route in the current workspace: `default`'s v1 one, or another workspace's v2 one */
 function projectRoute(project: string, route: string): string {
   const prefix = workspacePrefix();
-  const id = encodeURIComponent(project);
+  const id = idSegment(project);
   return prefix ? `${prefix}/projects/${id}/${route}` : `/api/v1/projects/${id}/${route}`;
 }
 
@@ -32,8 +40,8 @@ function projectRoute(project: string, route: string): string {
 export function projectFileUrl(project: string, file: ProjectFile): string {
   const prefix = workspacePrefix();
   return prefix
-    ? `${prefix}/projects/${encodeURIComponent(project)}/${file.replace(/\.json$/, '')}`
-    : `/p/${encodeURIComponent(project)}/${file}`;
+    ? `${prefix}/projects/${idSegment(project)}/${file.replace(/\.json$/, '')}`
+    : `/p/${idSegment(project)}/${file}`;
 }
 
 /** A project's tasks with what atm derives for them, and its meta (GET api/v1/projects/<id>/tasks, T-364) */
@@ -80,7 +88,7 @@ export function reviewUrl(project: string, review: string, round?: number | null
   if (round) params.set('round', String(round));
   if (against) params.set('against', String(against));
   const search = params.toString();
-  return `${projectRoute(project, 'reviews')}/${encodeURIComponent(review)}` + (search ? `?${search}` : '');
+  return `${projectRoute(project, 'reviews')}/${idSegment(review)}` + (search ? `?${search}` : '');
 }
 
 /** An image file of the project, its bytes, for an <img> (T-392); `at`: as that commit or tree has it (a review's

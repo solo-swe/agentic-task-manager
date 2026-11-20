@@ -1,5 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { commitRef, pullRef, repoLinks, repositoryOf } from '../../src/lib/repo';
+import { commitRef, pullRef, repoLinks, repositoryOf, submoduleCommitUrl } from '../../src/lib/repo';
+
+describe('submoduleCommitUrl (ATM-676, audit D3)', () => {
+  it('links a submodule commit as its host does, without a trailing .git', () => {
+    for (const [repository, url] of [
+      ['https://github.com/acme/lib', 'https://github.com/acme/lib/commit/abc'],
+      ['https://github.com/acme/lib.git', 'https://github.com/acme/lib/commit/abc'],
+      ['https://github.com/acme/lib/', 'https://github.com/acme/lib/commit/abc'],
+      ['https://gitlab.com/acme/group/lib.git', 'https://gitlab.com/acme/group/lib/-/commit/abc'],
+      ['https://codeberg.org/acme/lib', 'https://codeberg.org/acme/lib/commit/abc'],
+    ]) {
+      expect(submoduleCommitUrl(repository, 'abc'), repository).toBe(url);
+    }
+  });
+
+  it('no link for an address that isn’t http(s), a host it builds no links for, or none', () => {
+    for (const repository of [
+      'javascript:alert(1)//github.com/a/b',
+      'data:text/html,x',
+      'git@github.com:acme/lib.git',
+      '../lib',
+      'https://example.com/acme/lib',
+      '',
+      null,
+      undefined,
+    ]) {
+      expect(submoduleCommitUrl(repository, 'abc'), String(repository)).toBeNull();
+    }
+  });
+});
 
 const github = { repository: 'https://github.com/acme/demo' };
 

@@ -2,13 +2,27 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchFile,
   fetchProjectFile,
+  idSegment,
+  projectFileUrl,
   reviewUrl,
   reviewsUrl,
   v1DocumentAtUrl,
+  v1TasksUrl,
   type Fetch,
   type Validators,
 } from '../../src/lib/api/http';
 import { apiWorkspace, setApiWorkspace, workspacePrefix } from '../../src/lib/api/workspace';
+
+describe('an ID in an API path (ATM-676, audit D7)', () => {
+  it('is escaped; ., .. and empty are refused, never a path the URL parser would work out', () => {
+    expect(idSegment('a b/c')).toBe('a%20b%2Fc');
+    expect(idSegment('CR-1.2')).toBe('CR-1.2');
+    for (const id of ['', '.', '..']) expect(() => idSegment(id), id).toThrow("isn't an ID");
+    expect(() => v1TasksUrl('..')).toThrow();
+    expect(() => projectFileUrl('.', 'claims.json')).toThrow();
+    expect(() => reviewUrl('p1', '..')).toThrow();
+  });
+});
 
 /** A fetch answering `status` with `body` and `headers`, recording what it was asked */
 function answering(status: number, body = '', headers: Record<string, string> = {}) {

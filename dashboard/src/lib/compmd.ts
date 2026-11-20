@@ -341,7 +341,7 @@ const TASK_KEY = /~?\b[A-Z][A-Z0-9]{0,9}-\d+\b/g;
 /** The link a task key in a text is made (ATM-593), and the key back from one */
 export const taskHref = (key: string) => `#task=${encodeURIComponent(key)}`;
 export function taskOfHref(href: string): string | null {
-  return href.startsWith('#task=') ? decodeURIComponent(href.slice('#task='.length)) || null : null;
+  return href.startsWith('#task=') ? safeDecode(href.slice('#task='.length)) || null : null;
 }
 
 /** A node of CompMD's expanded tree, as far as safeTree reads it (mdast's fields) */
@@ -396,7 +396,41 @@ export function blocksIn<T>(tree: T, [from, to]: readonly [number, number]): T {
 }
 
 const DATA_IMAGE = /^\s*data:image\//i;
-const RAW_IMAGE = /<\s*img\b/i;
+
+/** The raw HTML tags task text keeps: CompMD's own list (its README: `details`, `summary`, `sub`, `sup`, `kbd`, `br`,
+ * and `a` with a safe `href`), less `img`, which shows its text as other images from elsewhere do. Any other tag, or one
+ * of these with an attribute that runs code, styles or loads something, shows as text before CompMD sees it (ATM-676,
+ * audit D4): defence in depth, CompMD shows other tags as text too */
+const RAW_TAGS = new Set(['details', 'summary', 'sub', 'sup', 'kbd', 'br', 'a']);
+const RAW_TAG = /<\s*\/?\s*([a-zA-Z][\w:-]*)([^>]*)/g;
+const RAW_UNSAFE_ATTRIBUTE = /(?:^|[\s"'/])(?:on\w+|style|src|srcset|formaction|action|xlink:href|xmlns(?::\w+)?)\s*=/i;
+function rawHtmlKept(html: string): boolean {
+  for (const [, name, attributes] of html.matchAll(RAW_TAG)) {
+    if (!RAW_TAGS.has(name.toLowerCase()) || RAW_UNSAFE_ATTRIBUTE.test(attributes)) return false;
+  }
+  return true;
+}
+
+const XLINK = 'http://www.w3.org/1999/xlink';
+/** What a click on rendered text follows (ATM-676, audit D4): HTML's `a` and `area`, and an SVG `a` (a diagram's),
+ * by `href` or the older `xlink:href` */
+export const LINK_SELECTOR = 'a[href], area[href], a[*|href]';
+/** A link's address, trimmed; '' when it has none */
+export function hrefOf(link: Element): string {
+  return (link.getAttribute('href') ?? link.getAttributeNS(XLINK, 'href') ?? '').trim();
+}
+/** The link a click on `target` is on, or null */
+export function linkAt(target: EventTarget | null): Element | null {
+  return target instanceof Element ? target.closest(LINK_SELECTOR) : null;
+}
+/** `text` percent-decoded, or null when it isn't valid (`%E0`): decodeURIComponent throws there (ATM-676, audit D9) */
+export function safeDecode(text: string): string | null {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The expanded tree with what task text mustn't do taken out before it renders (§3), so the browser never even asks:
@@ -460,7 +494,7 @@ export function safeTree<T>(tree: T, { localImage, docLink, taskKnown }: Project
         return [{ ...node, children: inside }];
       }
       case 'html':
-        if (RAW_IMAGE.test(String(node.value))) return asText(node.value);
+        if (!rawHtmlKept(String(node.value))) return asText(node.value);
         break;
     }
     return node.children ? [{ ...node, children: node.children.flatMap((c) => visit(c, inLink)) }] : [node];
@@ -490,13 +524,14 @@ export function dashboardAddress(href: string, page: string = location.href): st
  * its text. External links open in a new tab without access to this page; `#` links stay, for the panel to scroll.
  */
 export function secureLinks(root: ParentNode) {
-  for (const a of root.querySelectorAll('a[href]')) {
-    const href = a.getAttribute('href') ?? '';
+  // An image map's area and a diagram's SVG link too (ATM-676)
+  for (const a of root.querySelectorAll(LINK_SELECTOR)) {
+    const href = hrefOf(a);
     if (!safeHref(href)) {
       a.replaceWith(...a.childNodes);
       continue;
     }
-    if (href.trim().startsWith('#') || dashboardAddress(href) !== null) continue;
+    if (href.startsWith('#') || dashboardAddress(href) !== null) continue;
     a.setAttribute('target', '_blank');
     a.setAttribute('rel', 'noopener noreferrer');
   }

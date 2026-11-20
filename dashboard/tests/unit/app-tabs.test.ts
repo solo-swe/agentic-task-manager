@@ -19,6 +19,28 @@ function memory(): Storage {
 
 const addresses = (tabs: AppTabs) => tabs.tabs.map((t) => t.address);
 
+describe('site data blocked (ATM-676, audit D5)', () => {
+  it('the module loads when reading sessionStorage throws; its tabs work, kept nowhere', async () => {
+    const real = Object.getOwnPropertyDescriptor(window, 'sessionStorage');
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('blocked', 'SecurityError');
+      },
+    });
+    try {
+      vi.resetModules();
+      const module = await import('../../src/lib/app-tabs.svelte');
+      expect(module.sessionStore()).toBeNull();
+      module.appTabs.start('/projects/p1');
+      expect(module.appTabs.tabs.map((t) => t.address)).toEqual(['/projects/p1']);
+    } finally {
+      Object.defineProperty(window, 'sessionStorage', real!);
+      vi.resetModules();
+    }
+  });
+});
+
 describe('the app’s tabs (T-514): a tab is an address', () => {
   it('starts with one tab at the page shown, and the active tab follows the page', () => {
     const tabs = new AppTabs();

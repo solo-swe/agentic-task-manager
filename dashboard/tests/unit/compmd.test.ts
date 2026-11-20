@@ -17,11 +17,13 @@ import {
   gutterRows,
   loadCompmd,
   resetCompmd,
+  safeDecode,
   safeHref,
   sandboxOptions,
   secureLinks,
   slug,
   taskData,
+  taskOfHref,
   type GutterRow,
 } from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
@@ -287,6 +289,27 @@ describe('the links CompMD renders', () => {
     secureLinks(root);
     return root;
   }
+
+  // ATM-676 (audit D4): an image map's area and a diagram's SVG link are links too
+  it('an area and an SVG link are made safe as a link is: an unsafe one is its text, a web one a new tab', () => {
+    const root = rendered(
+      '<map><area id="bad-area" href="javascript:alert(1)"><area id="web-area" href="https://example.com"></map>' +
+        '<svg><a id="bad-svg" href="javascript:alert(1)"><text>x</text></a>' +
+        '<a id="old-svg" xlink:href="https://example.com"><text>y</text></a></svg>',
+    );
+    expect(root.querySelector('#bad-area')).toBeNull();
+    expect(root.querySelector('#bad-svg')).toBeNull();
+    expect(root.textContent).toContain('x');
+    expect(root.querySelector('#web-area')?.getAttribute('target')).toBe('_blank');
+    expect(root.querySelector('#old-svg')?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('a task link or anchor with a malformed % is no task and doesn’t throw (ATM-676, audit D9)', () => {
+    expect(taskOfHref('#task=%E0')).toBeNull();
+    expect(taskOfHref('#task=ATM-1')).toBe('ATM-1');
+    expect(safeDecode('%E0%A4%A')).toBeNull();
+    expect(safeDecode('a%20b')).toBe('a b');
+  });
 
   it('web and mail links open in a new tab, without access to the page', () => {
     const root = rendered('<a href="https://example.com">site</a> <a href="mailto:a@b.c">mail</a>');
