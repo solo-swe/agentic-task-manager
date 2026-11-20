@@ -1,9 +1,13 @@
 #!/bin/sh
-# Start a release of the atm CLI: check that the version is the one the repository says, then tag it. Pushing the tag
-# (`--push`, or by hand) runs .github/workflows/release.yml, which builds, signs and drafts the GitHub release;
-# publishing that draft updates the Homebrew formula (.github/workflows/homebrew.yml). packaging/README.md has it all.
+# Start a release of the atm CLI: tag the merged main as it is on GitHub (origin/main), once its Cargo.toml has the
+# version. Pushing the tag (`--push`, or by hand) runs .github/workflows/release.yml, which builds, signs and drafts the
+# GitHub release; publishing that draft updates the Homebrew formula (.github/workflows/homebrew.yml).
+# packaging/README.md has it all.
 #
-# Usage: packaging/release.sh <version> [--push]     run from the repository's root, on main, after the release PR
+# It tags origin/main's commit, never HEAD (ATM-705): the branch checked out and the working tree don't change what is
+# tagged, so it runs from any of them (a release branch, with work in progress).
+#
+# Usage: packaging/release.sh <version> [--push]     run in the repository, after the release PR is merged
 set -eu
 
 version=${1:?usage: release.sh <version> [--push]}
@@ -21,19 +25,18 @@ case "$version" in
 esac
 [ -z "$push" ] || [ "$push" = "--push" ] || fail "unknown option $push (only --push)"
 
-# atm's version: the workspace's
-cargo_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
-[ "$cargo_version" = "$version" ] || fail "Cargo.toml says $cargo_version, not $version"
-
-branch=$(git rev-parse --abbrev-ref HEAD)
-[ "$branch" = "main" ] || fail "releases are tagged on main (this is $branch)"
-[ -z "$(git status --porcelain)" ] || fail "the working tree has changes: commit or stash them first"
 git fetch --quiet origin main
-[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || fail "main isn't origin/main: pull (or push) first"
-if git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null; then fail "$tag exists already"; fi
+commit=$(git rev-parse origin/main)
 
-git tag -a "$tag" -m "atm $version"
-echo "Tagged $tag."
+# atm's version on main: the workspace's, in the commit to tag
+main_version=$(git show "$commit:Cargo.toml" | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)
+[ "$main_version" = "$version" ] || fail "origin/main's Cargo.toml says $main_version, not $version: is the release PR merged?"
+
+if git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null; then fail "$tag exists already"; fi
+[ -z "$(git ls-remote --tags origin "refs/tags/$tag")" ] || fail "$tag exists already on origin"
+
+git tag -a "$tag" -m "atm $version" "$commit"
+echo "Tagged $tag: origin/main, $(git log -1 --format='%h %s' "$commit")."
 if [ "$push" = "--push" ]; then
   git push origin "$tag"
   echo "Pushed $tag: the Release workflow builds it and drafts the release."

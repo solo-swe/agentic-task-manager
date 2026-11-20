@@ -28,7 +28,7 @@ server with its own `atm service stop`.
 
 | File | What it does |
 |---|---|
-| `release.sh <version> [--push]` | Checks the version is `Cargo.toml`'s and that `main` is clean and pushed, then tags `v<version>` (and pushes the tag with `--push`) |
+| `release.sh <version> [--push]` | Fetches `main` and tags its commit on GitHub (`origin/main`) `v<version>`, once that commit's `Cargo.toml` has the version and the tag exists nowhere yet (and pushes the tag with `--push`). It never tags `HEAD`, so it runs from any branch and working tree (ATM-705) |
 | `keychain-macos.sh` | Imports the Developer ID certificate into a keychain of the release job's own; the macOS jobs run it first |
 | `sign-macos.sh <binary>` | Signs a macOS build with the Developer ID (hardened runtime) and notarizes it; the release workflow runs it |
 | `notarize-dmg.sh <dmg>` | Signs the app's DMG, notarizes it and staples the ticket to it (Tauri's bundler has signed and notarized the app inside) |
@@ -47,7 +47,8 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
 
 1. The release PR is merged to `main`; the version is in `Cargo.toml`, with its `CHANGELOG.md` and `WHATS-NEW.md` entries
    (`check-versions.mjs`).
-2. `packaging/release.sh 0.33.0 --push` tags `v0.33.0` and pushes the tag.
+2. `packaging/release.sh 0.33.0 --push` tags the merged `origin/main` `v0.33.0` and pushes the tag (from any branch:
+   there is no need to check out `main`).
 3. `.github/workflows/release.yml` builds atm for macOS (arm64, x86_64), Linux (x86_64, arm64, on Ubuntu 22.04 for an
    older glibc) and Windows (x86_64), signs and notarizes the macOS builds; builds the app as one universal DMG
    (arm64 and x86_64, its CLI a universal binary made with `lipo`), signed and notarized, its ticket stapled; and

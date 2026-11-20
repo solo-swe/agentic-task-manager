@@ -173,34 +173,133 @@ describe('packaging', () => {
     }
   });
 
-  test('release.sh tags only the version Cargo.toml has, on a clean main that is pushed', () => {
-    const origin = tempDir('atm-origin-');
-    const root = tempDir('atm-release-');
-    try {
+  // release.sh tags origin/main's commit (ATM-705): what is checked out, and the working tree, change nothing
+  describe('release.sh', () => {
+    const repos = () => {
+      const origin = tempDir('atm-origin-');
+      const root = tempDir('atm-release-');
       git(['init', '-q', '--bare', '-b', 'main'], origin);
       git(['init', '-q', '-b', 'main'], root);
       git(['config', 'user.email', 't@example.com'], root);
       git(['config', 'user.name', 'T'], root);
-      fs.writeFileSync(path.join(root, 'Cargo.toml'), '[workspace.package]\nversion = "1.2.3"\n');
-      git(['add', 'Cargo.toml'], root);
-      git(['commit', '-qm', 'one'], root);
       git(['remote', 'add', 'origin', origin], root);
-      git(['push', '-q', 'origin', 'main'], root);
-
-      assert.match(run('release.sh', ['1.2.4'], root).stderr, /Cargo\.toml says 1\.2\.3, not 1\.2\.4/);
-      assert.match(run('release.sh', ['latest'], root).stderr, /latest isn't a version/);
-      fs.writeFileSync(path.join(root, 'notes.txt'), 'x');
-      assert.match(run('release.sh', ['1.2.3'], root).stderr, /the working tree has changes/);
-      fs.rmSync(path.join(root, 'notes.txt'));
-
-      const r = run('release.sh', ['1.2.3'], root);
-      assert.equal(r.status, 0, r.stderr);
-      assert.match(r.stdout, /Push it to build the release: git push origin v1\.2\.3/);
-      assert.equal(git(['tag', '--list'], root), 'v1.2.3');
-      assert.match(run('release.sh', ['1.2.3'], root).stderr, /v1\.2\.3 exists already/);
-    } finally {
+      return { origin, root };
+    };
+    const commit = (root, version, message) => {
+      fs.writeFileSync(path.join(root, 'Cargo.toml'), `[workspace.package]\nversion = "${version}"\n`);
+      git(['add', 'Cargo.toml'], root);
+      git(['commit', '-qm', message], root);
+    };
+    const cleanUp = ({ origin, root }) => {
       removeDir(origin);
       removeDir(root);
-    }
+    };
+
+    test('refuses what isn’t a version, and an unknown option', () => {
+      const r = repos();
+      try {
+        commit(r.root, '1.2.3', 'one');
+        git(['push', '-q', 'origin', 'main'], r.root);
+        assert.match(run('release.sh', ['latest'], r.root).stderr, /latest isn't a version/);
+        assert.match(run('release.sh', ['1.2.3', '--force'], r.root).stderr, /unknown option --force/);
+        assert.equal(git(['tag', '--list'], r.root), '');
+      } finally {
+        cleanUp(r);
+      }
+    });
+
+    test('tags origin/main’s commit from another branch, with changes in the working tree', () => {
+      const r = repos();
+      try {
+        commit(r.root, '1.2.3', 'the release');
+        git(['push', '-q', 'origin', 'main'], r.root);
+        const main = git(['rev-parse', 'HEAD'], r.root);
+        git(['switch', '-q', '-c', 'dev/1.3.0'], r.root);
+        commit(r.root, '1.3.0', 'work on the next one');
+        fs.writeFileSync(path.join(r.root, 'notes.txt'), 'untracked');
+        fs.writeFileSync(path.join(r.root, 'Cargo.toml'), '[workspace.package]\nversion = "1.2.3"\n'); // uncommitted
+
+        const out = run('release.sh', ['1.2.3'], r.root);
+        assert.equal(out.status, 0, out.stderr);
+        assert.match(out.stdout, /Tagged v1\.2\.3: origin\/main, [0-9a-f]+ the release\./);
+        assert.match(out.stdout, /Push it to build the release: git push origin v1\.2\.3/);
+        assert.equal(git(['rev-parse', 'v1.2.3^{commit}'], r.root), main);
+        assert.equal(git(['branch', '--show-current'], r.root), 'dev/1.3.0');
+        assert.equal(fs.readFileSync(path.join(r.root, 'notes.txt'), 'utf8'), 'untracked');
+        assert.match(run('release.sh', ['1.2.3'], r.root).stderr, /v1\.2\.3 exists already/);
+      } finally {
+        cleanUp(r);
+      }
+    });
+
+    test('tags origin/main even when the local main is behind it', () => {
+      const r = repos();
+      try {
+        commit(r.root, '1.2.2', 'old');
+        git(['push', '-q', 'origin', 'main'], r.root);
+        git(['switch', '-q', '-c', 'dev/1.2.3'], r.root);
+        commit(r.root, '1.2.3', 'the release');
+        git(['push', '-q', 'origin', 'dev/1.2.3:main'], r.root); // merged on GitHub
+        const merged = git(['rev-parse', 'HEAD'], r.root);
+        git(['switch', '-q', 'main'], r.root);
+        git(['update-ref', 'refs/remotes/origin/main', 'main'], r.root); // not fetched yet
+
+        const out = run('release.sh', ['1.2.3'], r.root);
+        assert.equal(out.status, 0, out.stderr);
+        assert.equal(git(['rev-parse', 'v1.2.3^{commit}'], r.root), merged);
+      } finally {
+        cleanUp(r);
+      }
+    });
+
+    test('refuses a version origin/main’s Cargo.toml doesn’t have, whatever the working tree says', () => {
+      const r = repos();
+      try {
+        commit(r.root, '1.2.3', 'one');
+        git(['push', '-q', 'origin', 'main'], r.root);
+        fs.writeFileSync(path.join(r.root, 'Cargo.toml'), '[workspace.package]\nversion = "1.2.4"\n');
+        git(['commit', '-qam', 'not pushed'], r.root);
+
+        const out = run('release.sh', ['1.2.4'], r.root);
+        assert.equal(out.status, 1);
+        assert.match(out.stderr, /origin\/main's Cargo\.toml says 1\.2\.3, not 1\.2\.4: is the release PR merged\?/);
+        assert.equal(git(['tag', '--list'], r.root), '');
+      } finally {
+        cleanUp(r);
+      }
+    });
+
+    test('refuses a tag that exists only on origin', () => {
+      const r = repos();
+      try {
+        commit(r.root, '1.2.3', 'one');
+        git(['push', '-q', 'origin', 'main'], r.root);
+        git(['tag', 'v1.2.3'], r.root);
+        git(['push', '-q', 'origin', 'v1.2.3'], r.root);
+        git(['tag', '-d', 'v1.2.3'], r.root);
+
+        const out = run('release.sh', ['1.2.3'], r.root);
+        assert.equal(out.status, 1);
+        assert.match(out.stderr, /v1\.2\.3 exists already on origin/);
+        assert.equal(git(['tag', '--list'], r.root), '');
+      } finally {
+        cleanUp(r);
+      }
+    });
+
+    test('--push pushes the tag to origin', () => {
+      const r = repos();
+      try {
+        commit(r.root, '1.2.3', 'one');
+        git(['push', '-q', 'origin', 'main'], r.root);
+
+        const out = run('release.sh', ['1.2.3', '--push'], r.root);
+        assert.equal(out.status, 0, out.stderr);
+        assert.match(out.stdout, /Pushed v1\.2\.3/);
+        assert.equal(git(['tag', '--list'], r.origin), 'v1.2.3');
+      } finally {
+        cleanUp(r);
+      }
+    });
   });
 });
