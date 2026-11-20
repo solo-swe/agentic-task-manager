@@ -198,7 +198,8 @@
           style:height="{row.height}px"
           onmousedown={onpress && row.drawn ? (e) => press(e, row) : undefined}
         >
-          {row.from === row.to ? row.from : `${row.from}–${row.to}`}
+          <!-- A row of several lines (a paragraph's, on one visual line) by its first: the range is the + 's to say -->
+          {row.from}
           {#if onpress && row.drawn && (hover === row.from || isHeld(row))}
             <LinePlus
               line={row.from === row.to ? row.from : `${row.from}–${row.to}`}

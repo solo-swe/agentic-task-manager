@@ -18980,7 +18980,7 @@
       "number": 690,
       "started_at": "2026-11-20T11:24:13Z",
       "started_by": "claude:0f56a916",
-      "commit": "2ba58595dde3e662041e9b73261a98352a0046f0",
+      "commit": "0bd6b1c39397647927ef695d89da672f0510af53",
       "code_reviews": [
         {
           "id": "01a1f86c-74ad-71b0-ad10-bfa792277388",

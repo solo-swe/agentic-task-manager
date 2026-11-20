@@ -1140,6 +1140,27 @@ test.describe('a review’s page', () => {
         if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
         const diff = diffOf(page, 'docs/a.md');
         await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+        // Hakan: no line drawn between two lines. Its 40 added lines are tinted by one box, from the first line's top to
+        // the last's bottom: a box per line drew a pale line wherever two met, in the app's WebKit
+        await expect(diff.locator('.diff-tint')).toHaveCount(1);
+        // Once the rows are placed (wrapped: from CompMD's layout, a moment after its text)
+        await expect
+          .poll(() =>
+            diff.evaluate((d, wrapped) => {
+              const box = (el: Element | null) => el?.getBoundingClientRect();
+              const rows = d.querySelectorAll('.diff-line');
+              const [tint, first, last] = [
+                box(d.querySelector('.diff-tint')),
+                box(rows[0]),
+                box(rows[rows.length - 1]),
+              ];
+              if (!tint || !first || !last) return 99;
+              // Wrapped, each line is several visual lines tall: until then the rows are still the unwrapped ones
+              if (wrapped && first.height < 30) return 98;
+              return Math.max(Math.abs(tint.top - first.top), Math.abs(tint.bottom - last.bottom));
+            }, wrapped),
+          )
+          .toBeLessThan(1);
         // A line in the middle of the first file, in the middle of the pane
         const line = diff.locator('.diff-line').nth(20);
         await line.evaluate((l) => l.scrollIntoView({ block: 'center' }));
@@ -1614,6 +1635,57 @@ test.describe('the diff viewer on a review’s page', () => {
         .toBe(true);
     },
   );
+
+  // ATM-692 (Hakan): the numbers in the margin are subtle gray, a changed line's only a little darker (it was bold blue);
+  // a row of several lines (a paragraph's two short lines on one visual line) shows its first, not a range
+  test('Rendered: line numbers subtle gray, a changed one a little darker; a row of several lines shows its first', async ({
+    page,
+    tasksServer,
+  }) => {
+    const text = (ending: string) => `# Plan\n\nFirst half\nsecond half.\n\n${ending}\n`;
+    const patch =
+      'diff --git a/docs/short.md b/docs/short.md\n--- a/docs/short.md\n+++ b/docs/short.md\n' +
+      '@@ -6 +6 @@\n-Old ending.\n+New ending.\n';
+    await openReviews(page, tasksServer);
+    tasksServer
+      .setRevisionDocument('base1', projectDocument('docs/short.md', text('Old ending.')))
+      .setRevisionDocument('head3', projectDocument('docs/short.md', text('New ending.')));
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [{ ...file('docs/short.md', patch), after: 'head3' }] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/short.md'));
+    const view = diffOf(page, 'docs/short.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    const changed = newSide.locator('.doc-gutter-lines [data-line="6"]');
+    await expect(changed).toHaveClass(/marked/);
+    const look = (row: typeof changed) =>
+      row.evaluate((el) => {
+        const s = getComputedStyle(el);
+        const accent = getComputedStyle(el.closest('.doc-page')!).getPropertyValue('--accent');
+        const probe = document.createElement('span');
+        probe.style.color = accent;
+        el.append(probe);
+        const accentColour = getComputedStyle(probe).color;
+        probe.remove();
+        return { colour: s.color, weight: s.fontWeight, accent: accentColour };
+      });
+    const mark = await look(changed);
+    const plain = await look(newSide.locator('.doc-gutter-lines [data-line="3"]'));
+    // Not the accent, not bold; a little darker than another line's, which is gray too
+    expect(mark.colour).not.toBe(mark.accent);
+    expect(mark.weight).toBe('400');
+    expect(plain.colour).not.toBe(mark.colour);
+    expect(plain.colour).not.toBe(plain.accent);
+    // The paragraph's two lines, on one visual line: its row says 3, not 3–4
+    const row = newSide.locator('.doc-gutter-lines [data-line="3"]');
+    await expect(row).toHaveText('3');
+    // The + still says both lines
+    await row.hover();
+    await expect(newSide.getByRole('button', { name: 'Comment on line 3–4' })).toBeVisible();
+  });
 
   test('Rendered (ATM-592): a document of several pages grows its page; its last paragraph is there, numbered beside it', async ({
     page,

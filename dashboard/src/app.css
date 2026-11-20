@@ -2650,8 +2650,17 @@ button.repo-ref {
   pointer-events: auto;
   cursor: pointer;
 }
+/* Its numbers subtle, gray (Hakan, ATM-692: a changed line's in bold blue drew the eye from the text): a changed line's
+   only a little darker, still gray */
+.doc-page.pickable .doc-gutter-lines div {
+  color: color-mix(in srgb, var(--text-muted) 65%, transparent);
+}
+.doc-page.pickable .doc-gutter-lines div.marked {
+  color: var(--text-muted);
+  font-weight: normal;
+}
 .doc-page.pickable .doc-gutter-lines div:hover,
-.doc-gutter-lines div.picked {
+.doc-page.pickable .doc-gutter-lines div.picked {
   color: var(--accent);
 }
 /* A link's lines in a Markdown document: on the boxes of their text, not across the page */
