@@ -19223,7 +19223,7 @@
       "description": "Hakan, on CR-58 (2026-11-21): reviewing a live review's latest against round 2 says the review has no round 3.\n\n## The cause\n`review_page` (`crates/atm-lib/src/review_pages.rs`) shows a live review's working copy, when it changed since the last checkpoint, as the round after the stored ones, but only when no round is named (`now = round.is_none() && live`).\n\nChoosing a round to compare against, the page asks again with the round it shows named (`?round=3&against=2`). Round 3 isn't stored, so `round_of` refuses it: `CR-n has no round 3`.\n\n## Change\nOn a live review, a request for the round after the stored ones is the working copy now: `now` too, so its patch is the working copy's and `against` compares with it. When the working copy hasn't changed since the last checkpoint, that round is the last one.\n\n## Tests\n- atm-lib: the live review's page, its working copy changed, asked with `round = latest + 1` and an `against`; and asked with that round when nothing changed.\n- An e2e test in `reviews.spec.ts`: a live review's latest compared against an earlier round shows the diff, no error.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_pages.rs",
@@ -19231,7 +19231,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-20T23:02:12Z",
-      "updated_at": "2026-11-20T23:02:16Z",
+      "updated_at": "2026-11-20T23:03:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19243,7 +19243,24 @@
       "sprint": "Audit and tabs",
       "number": 710,
       "started_at": "2026-11-20T23:02:16Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "6f622322176a0eb012a89f20c1904fff5f15320e",
+      "code_reviews": [
+        {
+          "id": "01a1fb33-be75-71fb-bcea-53c60f5845f5",
+          "ref": "CR-100"
+        }
+      ],
+      "review_requested_at": "2026-11-20T23:03:54Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T23:03:54Z",
+          "kind": "review",
+          "text": "CR-100: A live review compared against an earlier round: the working copy, not \"no round N\"",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
