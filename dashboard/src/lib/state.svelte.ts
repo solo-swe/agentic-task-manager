@@ -51,7 +51,7 @@ import {
 } from './filters';
 import { dialogOf, withDialog, type DialogId } from './dialogs';
 import { docOf, withDoc, type DocumentRef } from './documents';
-import { currentAddress, entryState, navigate } from './navigation';
+import { back, currentAddress, entryState, navigate } from './navigation';
 
 /** How many of the document viewer's own history entries lead to this one (0: not the viewer's) */
 function documentDepth(): number {
@@ -1065,7 +1065,8 @@ export class DashboardState {
    * document opened from a link or a reload, closes it without a new history entry */
   documentBack() {
     if (documentDepth() > 0) {
-      history.back();
+      // The tab's history: the app's tab's own (ATM-694), else the browser's
+      back(1);
       return;
     }
     this.closeDocument();
@@ -1076,7 +1077,7 @@ export class DashboardState {
   closeDocument() {
     const depth = documentDepth();
     if (depth > 0) {
-      history.go(-depth);
+      back(depth);
       return;
     }
     this.docRef = null;

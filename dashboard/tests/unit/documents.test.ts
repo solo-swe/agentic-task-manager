@@ -256,9 +256,10 @@ describe('opening and Back (the dashboard state)', () => {
     expect(dashboard.docRef).toEqual({ path: 'docs/x.md', lines: [3, 3] });
     expect(location.pathname + location.search).toBe('/projects/p1/list?doc=docs/x.md:L3');
     expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 1 });
-    const back = vi.spyOn(history, 'back').mockImplementation(() => {});
+    // In the browser, the tab's history is the browser's: one entry back (ATM-694: through navigation's back)
+    const back = vi.spyOn(history, 'go').mockImplementation(() => {});
     dashboard.documentBack();
-    expect(back).toHaveBeenCalledTimes(1);
+    expect(back.mock.calls).toEqual([[-1]]);
     back.mockRestore();
   });
 

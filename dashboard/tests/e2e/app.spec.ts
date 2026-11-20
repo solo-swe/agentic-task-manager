@@ -561,6 +561,58 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.windowCalls).toContain('close_window');
   });
 
+  // ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): each tab its own history; a switch adds nothing
+  test('Back and Forward walk the active tab’s own history; a switch of tab adds to neither; the page’s own stays put', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/list`);
+    await page.goto('/');
+    await expect(page.locator('#panel-list')).toBeVisible();
+    const depth = await page.evaluate(() => history.length);
+    const at = () => addressOf(page).split('?')[0];
+    const base = `/projects/${tasksServer.projectId}`;
+
+    // Steps in this tab: the Kanban view, then a task's details over it
+    await page.locator('#tab-kanban').click();
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    await page.locator('.kanban-card[data-id="T-004"] .card-title, .kanban-card[data-id="T-004"]').first().click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    // The page's own history never grew
+    expect(await page.evaluate(() => history.length)).toBe(depth);
+
+    // Back: the details close, the board stays; Back again: the list; Forward: the board
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+    await expect.poll(at).toBe(`${base}/kanban`);
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect.poll(at).toBe(`${base}/list`);
+    await tasksServer.chooseMenu({ kind: 'back' }); // nothing before the tab's first entry
+    await expect.poll(at).toBe(`${base}/list`);
+    await tasksServer.chooseMenu({ kind: 'forward' });
+    await expect.poll(at).toBe(`${base}/kanban`);
+
+    // A new tab: its own history, Back going nowhere
+    await page.locator('#app-tab-new').click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    // Back to the first tab: as it was left, and its Back still the list (the switch added nothing)
+    await page.locator('#app-titlebar [role="tab"]').nth(0).click();
+    await expect.poll(at).toBe(`${base}/kanban`);
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect.poll(at).toBe(`${base}/list`);
+    // The mouse's back and forward buttons too
+    await page.mouse.move(400, 300);
+    await page.evaluate(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 4, bubbles: true })));
+    await expect.poll(at).toBe(`${base}/kanban`);
+    await page.evaluate(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 3, bubbles: true })));
+    await expect.poll(at).toBe(`${base}/list`);
+    expect(await page.evaluate(() => history.length)).toBe(depth);
+  });
+
   test('the sidebar (T-515): projects open here or, ⌘-clicked, in a new tab; a task too; its button and menu hide it', async ({
     page,
     tasksServer,

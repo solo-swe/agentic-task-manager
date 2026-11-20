@@ -19,6 +19,44 @@ function memory(): Storage {
 
 const addresses = (tabs: AppTabs) => tabs.tabs.map((t) => t.address);
 
+describe('a tab’s own history (ATM-694)', () => {
+  it('tabs an older page kept, without histories, start one at their address; a broken one too', () => {
+    const storage = memory();
+    storage.setItem(
+      'atm-app-tabs',
+      JSON.stringify({
+        tabs: [
+          { id: 't1', address: '/board' },
+          { id: 't2', address: '/projects/p1', history: { entries: [], at: 3 } },
+        ],
+        active: 't1',
+      }),
+    );
+    const tabs = new AppTabs(storage);
+    tabs.start('/board');
+    expect(tabs.tabs.map((t) => t.history)).toEqual([
+      { entries: [{ address: '/board', state: {} }], at: 0 },
+      { entries: [{ address: '/projects/p1', state: {} }], at: 0 },
+    ]);
+  });
+
+  it('keeps its last 50 entries; Back and Forward stop at its ends; kept over a reload', () => {
+    const storage = memory();
+    const tabs = new AppTabs(storage);
+    tabs.start('/');
+    for (let i = 1; i <= 60; i++) tabs.push({ address: `/projects/p${i}`, state: {} });
+    expect(tabs.current!.history.entries).toHaveLength(50);
+    expect(tabs.current!.history.entries[0].address).toBe('/projects/p11');
+    expect(tabs.go(1)).toBeNull();
+    expect(tabs.go(-49)?.address).toBe('/projects/p11');
+    expect([tabs.canGo(-1), tabs.go(-1), tabs.current!.address]).toEqual([false, null, '/projects/p11']);
+    const reloaded = new AppTabs(storage);
+    reloaded.start('/projects/p11');
+    expect(reloaded.current!.history.at).toBe(0);
+    expect(reloaded.canGo(1)).toBe(true);
+  });
+});
+
 describe('site data blocked (ATM-676, audit D5)', () => {
   it('the module loads when reading sessionStorage throws; its tabs work, kept nowhere', async () => {
     const real = Object.getOwnPropertyDescriptor(window, 'sessionStorage');

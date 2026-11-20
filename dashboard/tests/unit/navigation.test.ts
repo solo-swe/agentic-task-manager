@@ -160,3 +160,125 @@ describe('where an entry was reached from', () => {
     expect(originOf('/a?y=2', '/a', {})).toEqual({});
   });
 });
+
+// ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): in the app each title-bar tab has its own history; the
+// page's own stays one entry deep
+describe('a tab’s own history (the app)', () => {
+  /** The app: a fresh navigation module, the tabs as its history, a router whose entry is the last one it was sent */
+  async function app(start = '/projects/abc/kanban') {
+    const nav = await fresh();
+    const { AppTabs } = await import('../../src/lib/app-tabs.svelte');
+    const { tabActions } = await import('../../src/lib/tab-actions');
+    const tabs = new AppTabs();
+    tabs.start(start);
+    let state: EntryState = {};
+    let shown = start;
+    const went: [string, boolean][] = [];
+    nav.useRouter({
+      go: (address, { replace, state: next }) => {
+        went.push([address, replace]);
+        shown = address;
+        state = next;
+        // As the app's router: the location moves there, its one entry replaced
+        history.replaceState(null, '', address);
+        nav.arrived();
+      },
+      state: () => state,
+      back: () => {
+        throw new Error('the page’s own history is never walked in the app');
+      },
+    });
+    history.replaceState(null, '', start);
+    nav.useTabHistory(tabs);
+    const actions = tabActions(tabs, {
+      go: () => nav.showTab(),
+      leave: nav.rememberScroll,
+      closeWindow: () => {},
+      openWindow: async () => true,
+    });
+    return { nav, tabs, actions, went, shown: () => shown };
+  }
+
+  const addresses = (tabs: { current?: { history: { entries: { address: string }[]; at: number } } }) => {
+    const h = tabs.current!.history;
+    return [h.entries.map((e) => e.address), h.at];
+  };
+
+  it('a step adds to the active tab’s history; Back and Forward walk it; the page’s own entry is always replaced', async () => {
+    const { nav, tabs, went, shown } = await app();
+    expect(nav.canGo(-1)).toBe(false);
+    nav.navigate('/projects/abc/kanban?task=T-1');
+    nav.navigate('/projects/abc/reviews/CR-7');
+    expect(addresses(tabs)).toEqual([
+      ['/projects/abc/kanban', '/projects/abc/kanban?task=T-1', '/projects/abc/reviews/CR-7'],
+      2,
+    ]);
+    expect(went.every(([, replace]) => replace)).toBe(true);
+    // The review page's back button knows where it was reached from
+    expect(nav.backEntry()).toEqual({ address: '/projects/abc/kanban?task=T-1', steps: 1 });
+    expect(nav.back()).toBe(true);
+    expect(shown()).toBe('/projects/abc/kanban?task=T-1');
+    expect(nav.back()).toBe(true);
+    expect(shown()).toBe('/projects/abc/kanban');
+    expect([nav.canGo(-1), nav.back()]).toEqual([false, false]);
+    expect(nav.forward()).toBe(true);
+    expect(shown()).toBe('/projects/abc/kanban?task=T-1');
+    // A step from the middle drops what was ahead, as a browser's does
+    nav.navigate('/projects/abc/list');
+    expect(addresses(tabs)).toEqual([
+      ['/projects/abc/kanban', '/projects/abc/kanban?task=T-1', '/projects/abc/list'],
+      2,
+    ]);
+    expect(nav.canGo(1)).toBe(false);
+  });
+
+  it('a replace changes the current entry only', async () => {
+    const { nav, tabs } = await app();
+    nav.navigate('/projects/abc/list');
+    nav.navigate('/projects/abc/list?sprint=S1', { replace: true });
+    expect(addresses(tabs)).toEqual([['/projects/abc/kanban', '/projects/abc/list?sprint=S1'], 1]);
+  });
+
+  it('switching tabs adds nothing to either history; each shows as it was left', async () => {
+    const { nav, tabs, actions, shown } = await app();
+    nav.navigate('/projects/abc/reviews/CR-7');
+    const first = tabs.active;
+    actions.open('/board');
+    expect(shown()).toBe('/board');
+    expect(nav.canGo(-1)).toBe(false); // a new tab's Back is disabled until it moves
+    nav.navigate('/board?task=T-2');
+    actions.select(first);
+    expect(shown()).toBe('/projects/abc/reviews/CR-7');
+    expect(addresses(tabs)).toEqual([['/projects/abc/kanban', '/projects/abc/reviews/CR-7'], 1]);
+    nav.back();
+    expect(shown()).toBe('/projects/abc/kanban');
+    actions.step(1);
+    expect(shown()).toBe('/board?task=T-2');
+    expect(addresses(tabs)).toEqual([['/board', '/board?task=T-2'], 1]);
+  });
+
+  it('each entry keeps the scroll of its page, restored on Back and on a switch back to its tab', async () => {
+    const { nav, actions } = await app();
+    const board = document.body.appendChild(document.createElement('div'));
+    board.id = 'kanban-board';
+    try {
+      board.scrollTop = 120;
+      board.scrollLeft = 30;
+      // jsdom keeps what is set: what the page would scroll to
+      expect(nav.scrollOf()).toEqual({ 'kanban-board': { top: 120, left: 30 } });
+      nav.navigate('/projects/abc/list');
+      board.scrollTop = 0;
+      board.scrollLeft = 0;
+      nav.back();
+      expect([board.scrollTop, board.scrollLeft]).toEqual([120, 30]);
+      // Left for another tab and back
+      board.scrollTop = 64;
+      actions.open('/board');
+      board.scrollTop = 0;
+      actions.step(-1);
+      expect(board.scrollTop).toBe(64);
+    } finally {
+      board.remove();
+    }
+  });
+});
