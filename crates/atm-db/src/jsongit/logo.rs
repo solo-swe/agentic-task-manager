@@ -28,7 +28,7 @@ fn candidates() -> Vec<String> {
 }
 
 fn refused(message: String) -> Error {
-    Error::Failed { message, code: 2 }
+    Error::Invalid(message)
 }
 
 /// A logo the project has: its path in the project, the file, its content type, and whether `meta.logo` set it.

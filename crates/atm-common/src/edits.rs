@@ -18,12 +18,9 @@ pub const MAX_NOTE: usize = 500;
 pub fn check_note(text: &str) -> Result<&str> {
     let n = text.chars().count();
     if n > MAX_NOTE {
-        return Err(Error::Failed {
-            message: format!(
-                "a note is at most {MAX_NOTE} characters (this one has {n}); put longer text in a file in the repository and mention it in the note"
-            ),
-            code: 2,
-        });
+        return Err(Error::Invalid(format!(
+            "a note is at most {MAX_NOTE} characters (this one has {n}); put longer text in a file in the repository and mention it in the note"
+        )));
     }
     Ok(text)
 }
@@ -98,14 +95,11 @@ pub fn status_for(vocab: &Vocabulary, kind: Kind, chosen: Option<&str>) -> Resul
         Some(known) => format!("its kind is {}", known.as_str()),
         None => "the project has no such status".into(),
     };
-    Err(Error::Failed {
-        message: format!(
-            "--status {chosen} is not one of the {} statuses ({what}); use {}",
-            kind.as_str(),
-            options.join(" or ")
-        ),
-        code: 2,
-    })
+    Err(Error::Invalid(format!(
+        "--status {chosen} is not one of the {} statuses ({what}); use {}",
+        kind.as_str(),
+        options.join(" or ")
+    )))
 }
 
 /// The fields an attempt at a task leaves, which going back to to do clears (DM-4.4).

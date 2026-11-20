@@ -184,6 +184,7 @@ describe('the IPC transport (T-457)', () => {
     ['invalid', 400],
     ['refused', 403],
     ['too_large', 413],
+    ['conflict', 409],
     ['failed', 500],
     ['something new', 500],
   ])('a command’s %s error is HTTP %i with its message', async (kind, status) => {

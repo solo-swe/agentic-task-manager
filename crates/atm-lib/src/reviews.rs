@@ -468,7 +468,7 @@ fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>> {
     let mut planned = Vec::with_capacity(ids.len());
     for id in ids {
         let Some(task) = project.store().get_task(id)? else {
-            return Err(Error::failed(format!("no task {id}")));
+            return Err(Error::NotFound(format!("no task {id}")));
         };
         let key = project.task_key(task);
         let claim = claims
@@ -476,12 +476,9 @@ fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>> {
             .find(|c| c.get("task").and_then(Value::as_str) == Some(id.as_str()));
         let held_by = claim.and_then(|c| holder(c, now));
         if let Some(other) = held_by.filter(|agent| Some(*agent) != me.as_deref()) {
-            return Err(Error::Failed {
-                message: format!(
-                    "can't open a review of {key}: it is claimed by {other}, who opens its review"
-                ),
-                code: 4,
-            });
+            return Err(Error::Conflict(format!(
+                "can't open a review of {key}: it is claimed by {other}, who opens its review"
+            )));
         }
         // The author's own claim, run out but not yet dropped: the task is about to go back to to do
         let own_lapsed = claim.is_some_and(|c| {

@@ -38,7 +38,7 @@ fn task_at(work: &mut Working, task_id: &str) -> Result<usize> {
     } else {
         ""
     };
-    Err(Error::failed(format!("no task {task_id}{hint}")))
+    Err(Error::NotFound(format!("no task {task_id}{hint}")))
 }
 
 /// Apply the workflow's trailer rule: `forbid` removes Co-Authored-By lines, `{require}` adds the missing lines.
@@ -180,7 +180,7 @@ pub fn commit_task(
         } else {
             ""
         };
-        return Err(Error::failed(format!("no task {task_id}{hint}")));
+        return Err(Error::NotFound(format!("no task {task_id}{hint}")));
     };
     let meta = store
         .document()?

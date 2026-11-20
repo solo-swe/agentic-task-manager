@@ -280,7 +280,7 @@ pub fn change_task_status(
         let (tasks, at) = snapshot(&work.document, task_id);
         let Some(at) = at else {
             let hint = if in_archive(task_id)? { " (it is archived: atm db unarchive brings it back)" } else { "" };
-            return Err(Error::failed(format!("no task {task_id}{hint}")));
+            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
         };
         if OWN_LEASE_COMMANDS.contains(&command) {
             let then = format!("atm task state {task_id} {}", command_state(command));
@@ -552,7 +552,7 @@ pub fn add_task_note(project: &mut Project, task_id: &str, text: &str) -> Result
             } else {
                 ""
             };
-            return Err(Error::failed(format!("no task {task_id}{hint}")));
+            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
         };
         let mut task = tasks[at].clone();
         let stamp = now_iso();

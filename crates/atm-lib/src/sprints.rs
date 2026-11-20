@@ -21,10 +21,7 @@ fn invalid(message: impl Into<String>) -> Error {
 
 /// No such sprint (exit code 2, as the Python atm's `NotFound(…, 2)`).
 fn not_found(message: impl Into<String>) -> Error {
-    Error::Failed {
-        message: message.into(),
-        code: 2,
-    }
+    Error::Invalid(message.into())
 }
 
 fn id_of(value: &Value) -> Option<&str> {
@@ -922,7 +919,7 @@ pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec
                 } else {
                     ""
                 };
-                return Err(Error::failed(format!("no task {task_id}{hint}")));
+                return Err(Error::NotFound(format!("no task {task_id}{hint}")));
             };
             let task = work.document["tasks"][at]
                 .as_object()

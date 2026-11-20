@@ -18023,14 +18023,14 @@
       "description": "Audit findings R5, R6 and R12 ([the report](docs/codebase-audit-2026-11.md#r5-high-bug-the-watch-marks-a-comment-seen-before-judging-it-reported-confirms-my-earlier-suspicion)).\n\n- **R5:** `crates/atm-lib/src/review_listen.rs:433` puts every comment into `seen` (and the saved cursor) before judging it, so one judged not about the agent's work is never told, even after the agent's commit touches its file, or after the agent starts a task a person reviewed first. Decisions alike (`:464`). Only what was told, or skipped for its author, goes into `seen`; the rest is judged again each look while the review is open.\n- **R6:** `seen` is keyed by `review/cN`, and a merge renumbers clashing IDs. Key it by ID with author and time (or a hash of them).\n- **R12:** several watches of one agent share one lease file (the first to end deletes it) and overwrite each other's cursor. One lease per process, and merge the cursor under a lock.\n\n## Tests\n`tests/scripts/reviews/listening.test.mjs`: a comment on a file the agent touches only in a later commit is told after that commit; a comment made before the agent starts the task is told once it starts; two watches, one ending, leave the other's lease.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_listen.rs",
         "tests/scripts/reviews/listening.test.mjs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T17:47:54Z",
+      "updated_at": "2026-11-20T17:55:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18042,7 +18042,24 @@
       "sprint": "Audit and tabs",
       "number": 663,
       "started_at": "2026-11-20T17:47:54Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "978917529078bf4954da1d0ec0ff7b21ff674487",
+      "code_reviews": [
+        {
+          "id": "01a1fa19-9124-70bc-8cf9-72367815d675",
+          "ref": "CR-88"
+        }
+      ],
+      "review_requested_at": "2026-11-20T17:55:42Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T17:55:42Z",
+          "kind": "review",
+          "text": "CR-88: The review watch judges again what was not about my work yet",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22603f058a59",
@@ -18057,7 +18074,7 @@
       "description": "Audit findings C2, C17 and H3 ([the report](docs/codebase-audit-2026-11.md#c2-medium-bug-usage-errors-and-claimed-by-another-reach-the-dashboard-as-http-500-checked)).\n\n`crates/atm-api/src/routes.rs:122` maps every `Error::Failed` to 500, but about 22 places build usage errors as `Failed { code: 2 }` and four build \"claimed by another\" as `Failed { code: 4 }`. The tasks route (`routes/tasks.rs:71-78`) maps errors its own way. Unknown task and unknown sprint are built as different variants in different modules.\n\n## Change\n- The `code: 2` cases become `Error::Invalid`; add `Error::Conflict(String)` (exit 4, HTTP 409) for claims.\n- `routes/tasks.rs` uses `error_response`.\n- One exit-code table (0 ok, 1 error, 2 usage, 3 nothing available, 4 conflict, and a separate code for a wait's timeout) in `atm-common`, mapped in one place; document it in `docs/agent/` (agents read exit codes).\n- \"No such task\" is `NotFound` everywhere (one `task_at(work, id)` helper next to `Working`).\n\n## Tests\natm-api route tests: a too-long note is 400, a claim held by another is 409, an unknown task is 404. CLI scenarios keep their exit codes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/error.rs",
@@ -18067,9 +18084,9 @@
         "crates/atm-common/src/rules.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T17:55:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -18077,7 +18094,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 664
+      "number": 664,
+      "started_at": "2026-11-20T17:55:49Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2261e3b74860",

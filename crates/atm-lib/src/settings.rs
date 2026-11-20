@@ -481,15 +481,12 @@ pub fn rename_term(
             .filter_map(|e| e.get("id").and_then(Value::as_str))
             .collect();
         let Some(at) = ids.iter().position(|id| *id == from) else {
-            return Err(Error::Failed {
-                message: format!(
-                    "no {} {from}; the {}: {}",
-                    list.task_field(),
-                    list.meta_key(),
-                    ids.join(", ")
-                ),
-                code: 2,
-            });
+            return Err(Error::Invalid(format!(
+                "no {} {from}; the {}: {}",
+                list.task_field(),
+                list.meta_key(),
+                ids.join(", ")
+            )));
         };
         if to != from && ids.contains(&to.as_str()) {
             return Err(Error::Invalid(format!(

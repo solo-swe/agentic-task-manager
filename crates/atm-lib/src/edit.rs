@@ -864,7 +864,7 @@ pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit)
             } else {
                 ""
             };
-            return Err(Error::failed(format!("no task {task_id}{hint}")));
+            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
         };
         let mut task = work.document["tasks"][at]
             .as_object()
@@ -961,10 +961,10 @@ pub fn relabel(project: &mut Project, from: &str, to: &str) -> Result<RelabeledT
             to,
         );
         if tasks + archived == 0 {
-            return Err(Error::Failed {
-                message: format!("no task has the label {}", repr_str(from)),
-                code: 2,
-            });
+            return Err(Error::Invalid(format!(
+                "no task has the label {}",
+                repr_str(from)
+            )));
         }
         if let Some(entries) = work
             .document

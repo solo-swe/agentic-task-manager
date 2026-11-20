@@ -676,10 +676,7 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
         Some(dir) => {
             let folder = atm_common::home::absolute(&cwd.join(dir));
             if !folder.is_dir() {
-                return Err(Error::Failed {
-                    message: format!("--dir {dir}: not a directory"),
-                    code: 2,
-                });
+                return Err(Error::Invalid(format!("--dir {dir}: not a directory")));
             }
             folder
         }

@@ -112,16 +112,22 @@ fn not_modified(tag: &str, headers: &[(&str, &str)]) -> Response {
     )
 }
 
-/// atm-lib's refusals as HTTP statuses: a malformed request, no such thing, one too large, one atm doesn't show.
-fn error_response(error: &atm_common::Error) -> Response {
-    let status = match error {
+/// atm-lib's errors as HTTP statuses, the one mapping every route uses (ATM-664): a malformed request, no such
+/// thing, one too large, one atm doesn't show, one another holds; anything else is the server's.
+fn status_of(error: &atm_common::Error) -> StatusCode {
+    match error {
         atm_common::Error::Invalid(_) => StatusCode::BAD_REQUEST,
         atm_common::Error::NotFound(_) => StatusCode::NOT_FOUND,
         atm_common::Error::TooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
         atm_common::Error::Refused(_) => StatusCode::FORBIDDEN,
+        atm_common::Error::Conflict(_) => StatusCode::CONFLICT,
         atm_common::Error::Failed { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-    };
-    send_error(status, &error.to_string())
+    }
+}
+
+/// An error's answer: its status ([`status_of`]) and its message.
+fn error_response(error: &atm_common::Error) -> Response {
+    send_error(status_of(error), &error.to_string())
 }
 
 /// A read about one project.
@@ -364,6 +370,26 @@ mod tests {
             let answer = answer(error_response(&error));
             assert_eq!(answer.status, status, "{error}");
             assert_eq!(answer.json(), json!({"error": error.to_string()}));
+        }
+    }
+
+    /// ATM-664: what the audit found reaching the dashboard as 500, as atm builds it: a note too long is the
+    /// request's fault (400), an unknown task none (404), a task another agent holds a conflict (409), each with the
+    /// CLI's exit code beside it
+    #[test]
+    fn a_usage_error_is_400_an_unknown_task_404_and_a_claim_held_by_another_409() {
+        let too_long = atm_common::edits::check_note(&"x".repeat(501)).unwrap_err();
+        let document = json!({"meta": {}, "tasks": [{"id": "T-1"}]});
+        let unknown = atm_common::keys::resolve(&document, &[], "T-9").unwrap_err();
+        let held =
+            atm_common::Error::Conflict("can't done T-1: it is claimed by claude:B until …".into());
+        for (error, status, code) in [
+            (too_long, StatusCode::BAD_REQUEST, 2),
+            (unknown, StatusCode::NOT_FOUND, 1),
+            (held, StatusCode::CONFLICT, 4),
+        ] {
+            assert_eq!(answer(error_response(&error)).status, status, "{error}");
+            assert_eq!(error.code(), code, "{error}");
         }
     }
 

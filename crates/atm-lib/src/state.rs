@@ -164,10 +164,7 @@ fn fail(message: impl Into<String>) -> Error {
 }
 
 fn usage(message: impl Into<String>) -> Error {
-    Error::Failed {
-        message: message.into(),
-        code: 2,
-    }
+    Error::Invalid(message.into())
 }
 
 fn text(task: &Task, key: &str) -> Option<String> {

@@ -99,10 +99,10 @@ fn sprint_names(vocab: &Vocabulary, given: &[String]) -> Result<Vec<String>> {
                     } else {
                         ids.join(", ")
                     };
-                    Error::Failed {
-                        message: format!("no sprint {}; the sprints: {known}", repr_str(name)),
-                        code: 2,
-                    }
+                    Error::Invalid(format!(
+                        "no sprint {}; the sprints: {known}",
+                        repr_str(name)
+                    ))
                 })
         })
         .collect()

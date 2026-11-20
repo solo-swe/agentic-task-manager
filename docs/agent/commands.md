@@ -1,9 +1,10 @@
 # Commands: atm's commands, by what you are doing
 
 Every command takes `--json` and `--dry-run` (`-n`), anywhere on the line; `atm help` lists them all and
-`atm <command> --help` describes one. Exit codes: 0 ok, 1 an error (the message says what), 2 a usage error, 3 nothing
-to do (`loop next`), 4 the task is claimed by another agent. Output to a pipe (as agents get it) is plain text, never
-cut; `--color auto|always|never` only styles it for a terminal.
+`atm <command> --help` describes one. Exit codes: 0 ok, 1 an error (the message says what: no such task, a refusal),
+2 a usage error (a value atm doesn't know, a note too long), 3 nothing to do (`loop next`) or a wait whose time was up
+(`review wait`, `review watch --once`), 4 a conflict: the task is claimed by another agent, or your own lease ran out.
+Output to a pipe (as agents get it) is plain text, never cut; `--color auto|always|never` only styles it for a terminal.
 
 `<id>` is a task's key (`ATM-527`, any case) in a project with task keys, or its old ID (`T-527`), an alias or its UUID;
 in a project without keys, its ID (`atm docs tasks`). Keys are plain from the moment a task is made: use them anywhere

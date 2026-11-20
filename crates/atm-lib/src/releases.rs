@@ -50,10 +50,10 @@ fn unknown_release(vocab: &Vocabulary, id: &str) -> Error {
     } else {
         ids.join(", ")
     };
-    Error::Failed {
-        message: format!("no release {}; the releases: {known}", repr_str(id)),
-        code: 2,
-    }
+    Error::Invalid(format!(
+        "no release {}; the releases: {known}",
+        repr_str(id)
+    ))
 }
 
 /// The releases in order, each with its tasks (by effective release, both files) by kind and by stage.

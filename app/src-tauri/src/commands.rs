@@ -206,6 +206,8 @@ pub enum AppError {
     Refused(String),
     /// Larger than atm hands out.
     TooLarge(String),
+    /// Another holds it: a task claimed by another agent (ATM-664).
+    Conflict(String),
     /// Anything else atm refuses or can't do.
     Failed(String),
 }
@@ -218,6 +220,7 @@ impl From<atm_common::Error> for AppError {
             E::Invalid(m) => Self::Invalid(m),
             E::Refused(m) => Self::Refused(m),
             E::TooLarge(m) => Self::TooLarge(m),
+            E::Conflict(m) => Self::Conflict(m),
             E::Failed { message, .. } => Self::Failed(message),
         }
     }
@@ -1363,6 +1366,11 @@ mod tests {
                 AppError::TooLarge("big".into()),
                 "too_large",
             ),
+            (
+                E::Conflict("claimed".into()),
+                AppError::Conflict("claimed".into()),
+                "conflict",
+            ),
             (E::failed("off"), AppError::Failed("off".into()), "failed"),
         ] {
             let message = match &app {
@@ -1370,6 +1378,7 @@ mod tests {
                 | AppError::Invalid(m)
                 | AppError::Refused(m)
                 | AppError::TooLarge(m)
+                | AppError::Conflict(m)
                 | AppError::Failed(m) => m.clone(),
             };
             assert_eq!(AppError::from(error), app);

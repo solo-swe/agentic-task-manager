@@ -88,14 +88,11 @@ pub fn check_holder(
     if let Some(claim) = claims.get(task_id).filter(|c| atm_common::py::truthy(c))
         && claim.get("agent").and_then(Value::as_str) != agent
     {
-        return Err(Error::Failed {
-            message: format!(
-                "can't {command} {task_id}: it is claimed by {} until {}",
-                py_str_opt(claim.get("agent")),
-                py_str_opt(claim.get("lease_expires_at"))
-            ),
-            code: 4,
-        });
+        return Err(Error::Conflict(format!(
+            "can't {command} {task_id}: it is claimed by {} until {}",
+            py_str_opt(claim.get("agent")),
+            py_str_opt(claim.get("lease_expires_at"))
+        )));
     }
     Ok(())
 }
@@ -141,12 +138,9 @@ pub fn own_lease_expired(
         Some(then) => format!("Run `atm task state {task_id} in_progress`, then `{then}` again."),
         None => format!("Run `atm task state {task_id} in_progress` to claim it again."),
     };
-    Some(Error::Failed {
-        message: format!(
-            "{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next}"
-        ),
-        code: 4,
-    })
+    Some(Error::Conflict(format!(
+        "{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next}"
+    )))
 }
 
 /// A new claim on the task, from this working copy (its worktree and branch, T-202).

@@ -389,10 +389,10 @@ fn resolve_project(target: Option<&str>, cwd: &Path) -> Result<(PathBuf, Map<Str
         None => cwd.to_path_buf(),
     };
     if !folder.is_dir() {
-        return Err(Error::Failed {
-            message: format!("{}: not a directory", target.unwrap_or_default()),
-            code: 2,
-        });
+        return Err(Error::Invalid(format!(
+            "{}: not a directory",
+            target.unwrap_or_default()
+        )));
     }
     let paths = find_paths(&folder)?;
     let path = main_worktree(&paths.root);
@@ -596,10 +596,9 @@ impl FileRegistry {
     /// No target, no such project, the registry's lock or file.
     pub fn remove_project(&self, target: &str, cwd: &Path) -> Result<Value> {
         if target.is_empty() {
-            return Err(Error::Failed {
-                message: "remove needs a project ID or path (see `atm workspace projects`)".into(),
-                code: 2,
-            });
+            return Err(Error::Invalid(
+                "remove needs a project ID or path (see `atm workspace projects`)".into(),
+            ));
         }
         let mut candidates = vec![
             target.to_string(),

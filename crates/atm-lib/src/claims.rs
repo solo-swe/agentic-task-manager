@@ -38,10 +38,7 @@ fn claims_of(store: &mut Map<String, Value>) -> &mut Map<String, Value> {
 
 fn no_live_claim(task_id: &str, gone: bool) -> Error {
     let why = if gone { " (its lease expired)" } else { "" };
-    Error::Failed {
-        message: format!("{task_id} has no live claim{why}"),
-        code: 4,
-    }
+    Error::Conflict(format!("{task_id} has no live claim{why}"))
 }
 
 fn renew(claim: &mut Value, document: &Value) {

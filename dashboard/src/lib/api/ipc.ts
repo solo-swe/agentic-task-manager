@@ -8,7 +8,7 @@ import { DEFAULT_WORKSPACE } from './workspace';
 
 /** A command's error, as the app sends it (`AppError`) */
 interface AppError {
-  kind: 'not_found' | 'invalid' | 'refused' | 'too_large' | 'failed';
+  kind: 'not_found' | 'invalid' | 'refused' | 'too_large' | 'conflict' | 'failed';
   message: string;
 }
 
@@ -23,6 +23,8 @@ const STATUS: Record<AppError['kind'], number> = {
   invalid: 400,
   refused: 403,
   too_large: 413,
+  // Another holds it (ATM-664), as the server answers it
+  conflict: 409,
   failed: 500,
 };
 

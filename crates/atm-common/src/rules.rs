@@ -55,10 +55,10 @@ impl Vocabulary {
         } else {
             ids.join(", ")
         };
-        Err(Error::Failed {
-            message: format!("no release {}; the releases: {known}", repr_str(release)),
-            code: 2,
-        })
+        Err(Error::Invalid(format!(
+            "no release {}; the releases: {known}",
+            repr_str(release)
+        )))
     }
 
     /// A task's release: its own, else its sprint's (SR-2.6), if any.

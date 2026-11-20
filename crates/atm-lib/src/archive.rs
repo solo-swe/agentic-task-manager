@@ -180,10 +180,10 @@ fn plan_archive(
         let mut chosen = HashSet::new();
         for name in &request.sprints {
             let Some(sprint) = vocab.find_sprint(Some(&json!(name))) else {
-                return Err(Error::Failed {
-                    message: format!("no sprint {}", atm_common::py::repr_str(name)),
-                    code: 2,
-                });
+                return Err(Error::Invalid(format!(
+                    "no sprint {}",
+                    atm_common::py::repr_str(name)
+                )));
             };
             chosen.insert(sprint.get("id").map(py_str).unwrap_or_default());
         }

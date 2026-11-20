@@ -92,10 +92,10 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
             .filter(|i| !tasks.iter().any(|t| id_of(t) == Some(i)))
             .collect();
         if !missing.is_empty() {
-            return Err(Error::Failed {
-                message: format!("--tasks: no task {}", missing.join(", ")),
-                code: 2,
-            });
+            return Err(Error::Invalid(format!(
+                "--tasks: no task {}",
+                missing.join(", ")
+            )));
         }
         scope = "the listed tasks".into();
         let order: Vec<String> = sel.tasks.clone();
@@ -138,16 +138,16 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
                     } else {
                         ids.join(", ")
                     };
-                    Error::Failed {
-                        message: format!("no sprint {}; the sprints: {known}", repr_str(name)),
-                        code: 2,
-                    }
+                    Error::Invalid(format!(
+                        "no sprint {}; the sprints: {known}",
+                        repr_str(name)
+                    ))
                 })?;
             if sprint.get("state").and_then(Value::as_str) == Some("closed") {
-                return Err(Error::Failed {
-                    message: format!("the sprint {} is closed", repr_str(&names_of(sprint))),
-                    code: 2,
-                });
+                return Err(Error::Invalid(format!(
+                    "the sprint {} is closed",
+                    repr_str(&names_of(sprint))
+                )));
             }
             named.push(names_of(sprint));
         }

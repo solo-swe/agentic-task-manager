@@ -525,7 +525,7 @@ pub(super) fn draft() -> Draft {
 }
 
 /// Each of atm-lib's refusals, with the status a route answers it with.
-pub(super) fn refusals() -> [(Error, StatusCode); 5] {
+pub(super) fn refusals() -> [(Error, StatusCode); 6] {
     [
         (Error::Invalid("malformed".into()), StatusCode::BAD_REQUEST),
         (Error::NotFound("no such".into()), StatusCode::NOT_FOUND),
@@ -534,6 +534,7 @@ pub(super) fn refusals() -> [(Error, StatusCode); 5] {
             StatusCode::PAYLOAD_TOO_LARGE,
         ),
         (Error::Refused("not shown".into()), StatusCode::FORBIDDEN),
+        (Error::Conflict("claimed".into()), StatusCode::CONFLICT),
         (Error::failed("broken"), StatusCode::INTERNAL_SERVER_ERROR),
     ]
 }

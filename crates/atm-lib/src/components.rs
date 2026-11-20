@@ -327,10 +327,10 @@ pub fn edit_component(
             } else {
                 known.join(", ")
             };
-            return Err(Error::Failed {
-                message: format!("no component {}; the components: {listed}", repr_str(id)),
-                code: 2,
-            });
+            return Err(Error::Invalid(format!(
+                "no component {}; the components: {listed}",
+                repr_str(id)
+            )));
         }
         let at = work.document["meta"]["components"]
             .as_array()
@@ -467,10 +467,10 @@ pub fn rename_component(project: &mut Project, id: &str, new: &str) -> Result<Re
             } else {
                 ids.join(", ")
             };
-            return Err(Error::Failed {
-                message: format!("no component {}; the components: {listed}", repr_str(id)),
-                code: 2,
-            });
+            return Err(Error::Invalid(format!(
+                "no component {}; the components: {listed}",
+                repr_str(id)
+            )));
         };
         if new == id {
             return Err(invalid(format!(
