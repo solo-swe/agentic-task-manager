@@ -1254,6 +1254,13 @@ drafts, the watch's catch-up and lease, and task keys plain from creation (ADR-0
   - **The frames' policies, the hosting contract (`GET` only, the bundle's frames and packs, `sandbox allow-scripts`, CORS `*`, `nosniff`) and I26 are unchanged.**
   - `minimumReleaseAgeExclude` names the `@compmd/*` packages at 0.8.0 too, and `@compmd/host@0.8.0`: released the same day, by CompMD's author, as for 0.7.
   - **CompMD's guide for agents** (`docs/agent/compmd-llms.txt`, `atm docs compmd`) is its `spec/llms.txt` at `v0.8.0`, taken from the public repository; it differs from the copy before only by one link, so what agents read about rendering is unchanged.
+- **CompMD 0.9.0 (ATM-703).** Then 0.9.0, the same way: the four `@compmd/*` packages at 0.9.0 (`@compmd/host` and `@compmd/registry` 0.9.0 with them), the crates at `=0.9.0` (`compmd-pack` 0.9.0). No new package. Where it differs from 0.8:
+  - **The frames no longer highlight code themselves:** they ask the host's page, over the sandbox protocol's version 2 (`highlight`, `highlighted`), and the page answers only for the blocks it sent them. A page in frame mode loads the frames' `highlight.js` from where the frames are served: under `/assets/compmd/<version>/` (`atm serve`, the dev server) and on `compmd://` (the app), which every policy atm sets already allows for the frames' scripts. No policy changes on atm's side.
+  - **The frames' own policies are narrower:** they no longer allow `'wasm-unsafe-eval'`, as they load no highlighter. The host page keeps it for the processor and the highlighter.
+  - **The processor lists only the components a document uses** (`hostComponents`), no longer every one a pack gives: a document without a diagram loads no Mermaid. What a component may do is unchanged; the sandbox still never runs a component the text defines (`compmd-processor.test.ts`).
+  - **Every origin for a host's own documents** (`"any"`) is new in CompMD; atm doesn't use it: task text and documents still load no images or data from elsewhere.
+  - `minimumReleaseAgeExclude` names the 0.9.0 packages, released today by CompMD's author.
+  - **CompMD's guide for agents** is its `spec/llms.txt` at `v0.9.0`, unchanged since `v0.8.0`.
 
 ## 4. Keeping it current
 

@@ -216,3 +216,45 @@ The jump test now holds the restyles at none (`reviews.spec.ts`). The tab switch
 
 **Sizes:** CompMD's WebAssembly 2,812,614 → 2,960,440 bytes (+5%); `compmd.js` 82,744 → 98,690 bytes; the frames'
 runtime 71,941 → 81,004 bytes; the dashboard's page unchanged (1,058,092 bytes).
+
+## CompMD 0.9.0 (ATM-703)
+
+CompMD 0.9.0 moves code highlighting out of the frames: the host's page makes Shiki once and answers each frame's
+blocks, one block a task (CompMD measures ten frames blocking a WebKit page 0.4 s instead of 2.8 s). Its processor
+lists only the components a document uses, so a document without a diagram loads no Mermaid. The review's diffs are
+host-mode pages, not frames, so their highlighting was already the page's; the change reaches the task text and
+documents that draw a frame (a diagram).
+
+Measured the same way on 0.8.0 and on 0.9.0, on this Mac, atm 0.41.0 otherwise unchanged: the timed e2e tests, one
+worker, three runs each, medians.
+
+**The timed e2e tests** (`reviews.spec.ts`, `performance.spec.ts`; Chromium, medians of three; 0.8.0 → 0.9.0):
+
+| | 0.8.0 | 0.9.0 |
+|---|---|---|
+| A jump to a long review's last file: sheets set / styles read | 0 / 0 | 0 / 0 |
+| The long review: the first file drawn / settled | 36 / 70 ms | 37 / 71 ms |
+| The long review: the slowest frame after it settled | 24 ms | 23 ms |
+| The long review: DOM nodes alive after down and back | 22,116 | 22,116 |
+| A file far down a large review: total | 85 ms | 87 ms |
+| The + following the pointer: median / slowest frame | 33 / 34 ms | 33 / 34 ms |
+| Tab switches (500 tasks): Kanban / Progress / Agents / Graph / List | 21 / 47 / 68 / 79 / 79 ms | 24 / 48 / 67 / 79 / 78 ms |
+| A reload that changes the data: Graph / Kanban / Progress | 60 / 51 / 67 ms | 53 / 51 / 52 ms |
+
+All within their run-to-run spread but the reload's Progress tab (66–68 ms on 0.8.0, 52–54 on 0.9.0, every run).
+
+**The real review** (CompMD's CR-1, 94 files; `real-review.spec.ts`, one run per engine, in the full e2e runs; the
+0.8.0 run was before ATM-693's jump fix, so the jumps compare both changes):
+
+| | Chromium | WebKit |
+|---|---|---|
+| Opening: blocked | 83 → 83 ms | 102 → 92 ms |
+| Opening: busy until | 251 → 272 ms | 272 → 249 ms |
+| Scrolled to the end: the last file drawn | 2,048 → 1,929 ms | 2,022 → 2,017 ms |
+| Scrolling: blocked | 133 → 117 ms | 0 → 0 ms |
+| A jump to the top: blocked | 0 → 0 ms | 74 → 70 ms |
+| A jump to the end: blocked (long frames) | 0 → 0 ms | 107 → 51 ms (2 → 1) |
+| The sides: their time at atm in all (the slowest) | 15.3 → 10.4 s (159 → 110 ms) | 1.1 → 1.1 s (89 → 85 ms) |
+
+**Sizes:** CompMD's WebAssembly 2,960,441 → 2,967,257 bytes (+0.2%); `compmd.js` 98,693 → 99,956 bytes; the frames'
+runtime 81,004 → 82,429 bytes; the dashboard's page unchanged (1,084,296 bytes).
