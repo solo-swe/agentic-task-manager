@@ -18209,7 +18209,7 @@
       "description": "Audit findings C4, C5, C16 and L9 ([the report](docs/codebase-audit-2026-11.md#c4-medium-security-atm_now-replaces-the-clock-in-release-builds-checked)).\n\n- **C4:** `crates/atm-common/src/time.rs:8-13` lets `ATM_NOW` replace the clock in every build; claim liveness reads `now()`, so `ATM_NOW=2099-… atm loop next --claim` takes every other agent's task. Honour it only when a second, test-only variable is set too (the CLI suite sets both), or only in debug builds; check what `tests/scripts/` needs first.\n- **L9:** `meta.lease_minutes` takes any positive number, `inf` too: clamp it (at most a year) and use `saturating_add` in `lease_until` and `offered_to`.\n- **C5:** `--timeout 1e20` panics in `review.rs:623`: `Duration::try_from_secs_f64`.\n- **C16:** `parse_iso` accepts seconds 60 and 61; the next task number `highest + 1` can wrap (`keys.rs:108`): refuse and `checked_add`.\n\n## Tests\nScenarios: a lease from another agent stays live under `ATM_NOW` alone; `lease_minutes: 1e300` keeps claims alive; `--timeout 1e20` exits 2; `parse_iso(\"…T23:59:60Z\")` is None.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/time.rs",
@@ -18219,7 +18219,7 @@
         "crates/atm-common/src/keys.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T20:51:40Z",
+      "updated_at": "2026-11-20T20:57:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18231,7 +18231,24 @@
       "sprint": "Audit and tabs",
       "number": 666,
       "started_at": "2026-11-20T20:51:40Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "fa56427d25a89637d9ea3748b42446af4c934341",
+      "code_reviews": [
+        {
+          "id": "01a1fac0-4cf7-7780-a07d-31c8d54460d7",
+          "ref": "CR-93"
+        }
+      ],
+      "review_requested_at": "2026-11-20T20:57:49Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T20:57:49Z",
+          "kind": "review",
+          "text": "CR-93: ATM_NOW in debug builds only; lease length, timeouts, times and task numbers bounded",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226323bfa33b",
@@ -18244,7 +18261,7 @@
       "description": "Audit findings L4, L7, L10 and L11 ([the report](docs/codebase-audit-2026-11.md#l4-medium-inconsistency-a-skipped-dependency-blocks-until-it-is-archived-then-counts-as-done-checked)).\n\n- **L4:** a skipped dependency blocks while it is in `tasks.json` (`crates/atm-common/src/rules.rs:164`) and counts as met once archived (`:176`); `foreign.rs:321` has a third rule. Decide with the state machine (ATM-633) whether a skipped dependency is met, and write one `dependency_met(kind, resolution)` used for live, archived and foreign tasks; `archived` returns the archived task's kind, not a bool (a `Dependencies { tasks, archive }` type replaces the five \"is it archived\" closures).\n- **L7:** `status.rs:117` and `summary.rs:622` hand stored claims to `next_task`; `next_task_for` drops expired ones first. One read-only `live_claims(store, now)` for all three.\n- **L10:** `todo_command` (`changes.rs:397`) uses the default vocabulary and counts expired claims: use the project's vocabulary and live claims.\n- **L11:** keep `query::task_stage`, delete `releases::stage_of`.\n\n## Tests\nUnit tests for each rule; a scenario where an agent's claim has expired and `project status` names the same next task as `loop next`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/rules.rs",
@@ -18255,9 +18272,9 @@
         "crates/atm-lib/src/foreign.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T20:58:09Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -18268,7 +18285,14 @@
       "related": [
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
-      "number": 667
+      "number": 667,
+      "started_at": "2026-11-20T20:57:54Z",
+      "started_by": "claude:0f56a916",
+      "waiting_on": "user",
+      "questions": [
+        "L4: is a skipped dependency met? Today it blocks while in tasks.json, is met once archived, and another project task has a third rule. (a) met: skipped means not needed, dependents go on (recommended: what archiving already does); (b) never met: a dependent waits until the dependency is removed; (c) leave it to ATM-633 (CR-58), do only L7, L10, L11 here. The rest (one live-claims read, todo_command on the project vocabulary, one stage function) needs no decision."
+      ],
+      "blocked_at": "2026-11-20T20:58:09Z"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2264acbd2910",
@@ -18343,7 +18367,7 @@
       "description": "Audit findings R4, H1, R7 and R14 ([the report](docs/codebase-audit-2026-11.md#r4-medium-bug-a-reversed-line-range-panics-page-rendering-checked)).\n\n- **R4:** `crates/atm-review/src/rounds.rs:382-384` panics on `lines: (5, 3)` (`mapped[0]` of an empty list). Require `1 <= first <= last` in `rules::comment` and `read_heading`, and guard `follow`.\n- **H1:** `crates/atm-vcs/src/lib.rs:622-623` cuts 3 bytes off every `git status -z` record, also a rename's second field, which has no prefix: `README.md` becomes `DME.md`, and an old path starting with a multibyte character panics. Parse R/C entries as two fields; `entry.get(3..)`.\n- **R14:** `diff.rs:166` lists changed files without `-z`, so paths with tabs or quotes come back C-quoted; type changes show as modified. Use `-z`.\n- **R7:** `reviews.rs:653`, `:671` writes the review's decision, then changes each task; a failure on the second task leaves them split. Check every task's transition first (as `openings` does for create), then write.\n\n## Tests\natm-review and atm-vcs unit tests for each; a `tests/scripts/reviews/` case with a staged rename of `éé/x.md` while a live review is open.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/rounds.rs",
@@ -18353,9 +18377,9 @@
         "crates/atm-lib/src/reviews.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T20:58:14Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -18363,7 +18387,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 670
+      "number": 670,
+      "started_at": "2026-11-20T20:58:14Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22679dfa1332",

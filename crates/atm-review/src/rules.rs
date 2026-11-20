@@ -190,6 +190,14 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
                 review.header.reference, anchor.round
             )));
         };
+        // Lines run forwards from line 1 (ATM-670, audit R4: (5, 3) panicked the page that placed the comment)
+        if let Some((first, last)) = anchor.lines
+            && (first == 0 || last < first)
+        {
+            return Err(Error::Invalid(format!(
+                "a comment's lines run from the first to the last, from line 1: not {first}-{last}"
+            )));
+        }
         // A path is one of the round's files, and has no control character: comments.md's heading carries it, so a
         // newline in it could add a heading or a comment of its own (ATM-658, I31)
         if let Some(path) = &anchor.path {
@@ -1272,6 +1280,21 @@ mod tests {
             }
         }
         assert_eq!(reviews.store().get_review(&cr(1)).unwrap().chains.len(), 4);
+        // ATM-670: lines run forwards from line 1; one line, or a range, is fine
+        for (lines, ok) in [
+            ((5, 3), false),
+            ((0, 2), false),
+            ((0, 0), false),
+            ((3, 3), true),
+            ((3, 5), true),
+        ] {
+            let anchor = Anchor {
+                lines: Some(lines),
+                ..on("a.rs", 1)
+            };
+            let result = reviews.comment(&cr(1), anchor, "Lines.", &hakan());
+            assert_eq!(result.is_ok(), ok, "{lines:?}: {result:?}");
+        }
     }
 
     #[test]

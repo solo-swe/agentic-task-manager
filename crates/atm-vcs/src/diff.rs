@@ -160,18 +160,27 @@ impl GitVcs {
             all.extend_from_slice(args);
             self.git_with(&all, env, None)
         };
-        let binary: Vec<String> = with(&["--numstat", "--no-renames"])?
-            .lines()
-            .filter_map(|line| line.strip_prefix("-\t-\t").map(str::to_string))
+        // NUL-separated (`-z`, ATM-670, audit R14): a path is as it is, never C-quoted for a tab or a quote in it
+        let binary: Vec<String> = with(&["--numstat", "--no-renames", "-z"])?
+            .split('\0')
+            .filter_map(|record| record.strip_prefix("-\t-\t").map(str::to_string))
             .collect();
         let mut files = Vec::new();
-        for line in with(&["-M", "--name-status"])?.lines() {
-            let mut parts = line.split('\t');
-            let status = parts.next().and_then(|s| s.chars().next()).unwrap_or('M');
-            let (from, path) = match (parts.next(), parts.next()) {
-                (Some(from), Some(to)) => (Some(from.to_string()), to.to_string()),
-                (Some(path), None) => (None, path.to_string()),
-                _ => continue,
+        let listed = with(&["-M", "--name-status", "-z"])?;
+        let mut fields = listed.split('\0').filter(|f| !f.is_empty());
+        // Each change is its status, then its path; a rename or a copy, its old path and its new one
+        while let Some(code) = fields.next() {
+            let status = code.chars().next().unwrap_or('M');
+            let (from, path) = if matches!(status, 'R' | 'C') {
+                match (fields.next(), fields.next()) {
+                    (Some(from), Some(to)) => (Some(from.to_string()), to.to_string()),
+                    _ => break,
+                }
+            } else {
+                match fields.next() {
+                    Some(path) => (None, path.to_string()),
+                    None => break,
+                }
             };
             files.push(ChangedFile {
                 binary: binary.contains(&path),
@@ -536,6 +545,32 @@ mod tests {
             vcs.diff_range(&rev("no-such"), &Rev::head(), &[]),
             Err(Error::NotFound(_))
         ));
+    }
+
+    /// ATM-670 (audit R14): without -z, git C-quoted a path with a tab or a quote ("a\tb.md"), and that was the name
+    #[cfg(unix)]
+    #[test]
+    fn a_path_with_a_tab_a_quote_or_a_rename_is_listed_as_it_is() {
+        let (_repo, vcs) = repo();
+        write(&vcs, "plain.md", "one\ntwo\nthree\nfour\n");
+        let base = commit(&vcs, "base");
+        write(&vcs, "a\tb \"c\".md", "new\n");
+        git(&vcs, &["mv", "plain.md", "éé moved.md"]);
+        let head = commit(&vcs, "head");
+        let diff = vcs.diff_range(&base, &head, &[]).unwrap();
+        let mut files: Vec<(String, char, Option<String>)> = diff
+            .files
+            .into_iter()
+            .map(|f| (f.path, f.status, f.from))
+            .collect();
+        files.sort();
+        assert_eq!(
+            files,
+            [
+                ("a\tb \"c\".md".to_string(), 'A', None),
+                ("éé moved.md".to_string(), 'R', Some("plain.md".to_string())),
+            ]
+        );
     }
 
     #[test]

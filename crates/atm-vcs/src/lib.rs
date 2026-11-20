@@ -661,11 +661,26 @@ impl GitVcs {
         let status = String::from_utf8_lossy(&status.stdout).into_owned();
         let task_folder = format!("{}/", atm_common::TASK_DIR);
         let mut state = vec![head];
-        for entry in status.split('\0').filter(|e| e.len() >= 4) {
-            let path = &entry[3..];
-            if path.starts_with(&task_folder) {
+        let mut records = status.split('\0');
+        while let Some(entry) = records.next() {
+            // `XY path`; a rename or a copy (R or C in either column) has its old path as the next field, with no
+            // status before it (ATM-670, audit H1: three bytes were cut off it too, `README.md` read as `DME.md`, and a
+            // multibyte first character panicked)
+            let (Some(status), Some(path)) = (entry.get(..2), entry.get(3..)) else {
+                continue;
+            };
+            let from = if status.contains(['R', 'C']) {
+                records.next()
+            } else {
+                None
+            };
+            if path.is_empty() || path.starts_with(&task_folder) {
                 continue;
             }
+            let entry = match from {
+                Some(from) => format!("{entry}\0{from}"),
+                None => entry.to_string(),
+            };
             let version = std::fs::metadata(self.root.join(path)).ok().map(|m| {
                 let modified = m
                     .modified()
@@ -1221,6 +1236,24 @@ mod tests {
             "a new file"
         );
         assert_eq!(GitVcs::new(&dir.0.join("not-a-repo")).working_state(), None);
+    }
+
+    /// ATM-670 (audit H1): a rename's old path, the record after it, lost three bytes (`README.md` read as `DME.md`),
+    /// and one starting with a multibyte character panicked
+    #[test]
+    fn a_staged_rename_is_read_with_both_its_paths_whole() {
+        let dir = scratch();
+        let vcs = init(&dir.0);
+        write(&vcs, "éé/README.md", "# Read me\n");
+        git(&dir.0, &["add", "."]);
+        git(&dir.0, &["commit", "-q", "-m", "first"]);
+        git(&dir.0, &["mv", "éé/README.md", "éé/x.md"]);
+        let state = vcs.working_state().unwrap();
+        // The new path after its status, the old one whole after it
+        assert!(state.contains("R  éé/x.md\0éé/README.md\t"), "{state:?}");
+        // The old path moved too: a different state
+        git(&dir.0, &["mv", "éé/x.md", "éé/y.md"]);
+        assert_ne!(vcs.working_state().unwrap(), state);
     }
 
     #[test]

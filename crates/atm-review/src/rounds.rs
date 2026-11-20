@@ -389,9 +389,15 @@ pub fn follow(
     new_text: Option<&str>,
     made_on: u32,
 ) -> Placement {
-    let (first, last) = lines;
+    // A reversed range is never written (ATM-670): read as its two ends in order, never an empty list to index
+    let (first, last) = (lines.0.min(lines.1), lines.0.max(lines.1));
     let mapped: Vec<Mapped> = (first..=last).map(|line| map_line(hunks, line)).collect();
-    let (start, end) = (mapped[0].line(), mapped[mapped.len() - 1].line());
+    let (Some(start), Some(end)) = (
+        mapped.first().map(|m| m.line()),
+        mapped.last().map(|m| m.line()),
+    ) else {
+        return Placement::At((first, last));
+    };
     let moved = (start, end.max(start));
     let Some(new_text) = new_text else {
         return Placement::Drifted {
@@ -685,6 +691,19 @@ mod tests {
         assert_eq!(
             follow((11, 11), None, &[hunk(10, 0, 11, 2)], Some(""), 1),
             Placement::At((13, 13))
+        );
+    }
+
+    /// ATM-670 (audit R4): a reversed range (a hand-edited comments.md, or one from before the rule) panicked the page
+    #[test]
+    fn a_reversed_range_is_followed_as_its_ends_in_order_never_a_panic() {
+        assert_eq!(
+            follow((12, 10), None, &[hunk(1, 3, 1, 0)], Some(""), 1),
+            follow((10, 12), None, &[hunk(1, 3, 1, 0)], Some(""), 1)
+        );
+        assert_eq!(
+            follow((5, 3), None, &[], Some(""), 1),
+            Placement::At((3, 5))
         );
     }
 

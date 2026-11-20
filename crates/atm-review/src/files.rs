@@ -316,8 +316,18 @@ pub mod comments_md {
         } else {
             let lines = what.rsplit_once(':').and_then(|(path, range)| {
                 let (first, last) = range.split_once('-').unwrap_or((range, range));
-                Some((path.to_string(), (first.parse().ok()?, last.parse().ok()?)))
+                Some((
+                    path.to_string(),
+                    (first.parse::<u32>().ok()?, last.parse::<u32>().ok()?),
+                ))
             });
+            // Lines run forwards from line 1 (ATM-670): a heading with 5-3 or 0 is not one atm wrote, kept unread
+            if lines
+                .as_ref()
+                .is_some_and(|(_, (first, last))| *first == 0 || last < first)
+            {
+                return None;
+            }
             match lines {
                 Some((path, lines)) => (Some(path), Some(lines)),
                 None => (Some(what), None),
@@ -850,6 +860,9 @@ written at the margin by hand
             "## :3 · round 1 · t1",
             "## t1",
             "## ",
+            // Lines that don't run forwards from line 1 (ATM-670)
+            "## a.rs:5-3 · round 1 · t1",
+            "## a.rs:0 · round 1 · t1",
         ] {
             let text =
                 format!("{heading}\n- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1\n  Why?\n");

@@ -162,5 +162,30 @@ describe('atm review: refusals', () => {
     }
   });
 
+  // ATM-670 (audit H1): the live review's look at the working copy cut three bytes off a rename's old path, and one
+  // starting with a multibyte character panicked
+  test('a staged rename of a file under éé/ while a live review is open: the review reads, and follows it', () => {
+    const root = project();
+    try {
+      fs.mkdirSync(path.join(root, 'éé'));
+      commitFile(root, 'éé/README.md', '# Read me\n', 'a file under éé/');
+      ok(['review', 'live'], root, HAKAN);
+      git(['mv', 'éé/README.md', 'éé/x.md'], root);
+      const shown = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
+      assert.equal(shown.header.status, 'live');
+      // A comment on it now checkpoints the working copy: the rename is in it, by both its paths
+      ok(['review', 'comment', 'CR-1', '--body', 'Why move it?'], root, HAKAN);
+      const round = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN)
+        .json()
+        .rounds.find((r) => r.number === 2);
+      assert.deepEqual(
+        round.files.map((f) => [f.path, f.status]),
+        [['éé/x.md', { renamed: { from: 'éé/README.md' } }]],
+      );
+    } finally {
+      removeDir(root);
+    }
+  });
+
   // ATM-622 (Hakan): a later round naming only the file that changed showed every other file as deleted since round 1
 });

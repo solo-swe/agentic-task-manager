@@ -641,6 +641,28 @@ pub fn submit(
     // A live review is approved as the working copy is now (ATM-576): that is the checkpoint its task's change is
     // compared with when it is done (unless the approval would be refused anyway, with comments open)
     let before = reviews.get_review(reference)?;
+    let command = match verdict {
+        Verdict::Approve => Some(Command::Approve),
+        Verdict::RequestChanges => Some(Command::RequestChanges),
+        Verdict::Comment => None,
+    };
+    let options_for = |review: &Review| {
+        let round = review.rounds.last().map_or(1, |r| r.number);
+        let open = review.open_comments().count();
+        Options {
+            note: Some(format!("in {} (round {round})", review.header.reference)),
+            reason: Some(format!(
+                "{} round {round}: {open} open comment{}",
+                review.header.reference,
+                if open == 1 { "" } else { "s" }
+            )),
+            ..Options::default()
+        }
+    };
+    // Every task the decision changes checked before the review records it (ATM-670): all or none
+    if let Some(command) = command {
+        check_decision(project, &tasks, command, &options_for(&before))?;
+    }
     if verdict == Verdict::Approve
         && before.header.status == Status::Live
         && before.open_comments().next().is_none()
@@ -648,27 +670,57 @@ pub fn submit(
         checkpoint_now(project, reference)?;
     }
     Reviews::new(&mut reviews).submit(reference, verdict, body, overriding, &by)?;
-    let review = reviews.get_review(reference)?;
-    let command = match verdict {
-        Verdict::Approve => Command::Approve,
-        Verdict::RequestChanges => Command::RequestChanges,
-        Verdict::Comment => return Ok(()),
+    let Some(command) = command else {
+        return Ok(());
     };
-    let round = review.rounds.last().map_or(1, |r| r.number);
-    let open = review.open_comments().count();
-    let options = Options {
-        note: Some(format!("in {} (round {round})", review.header.reference)),
-        reason: Some(format!(
-            "{} round {round}: {open} open comment{}",
-            review.header.reference,
-            if open == 1 { "" } else { "s" }
-        )),
-        ..Options::default()
-    };
+    let options = options_for(&reviews.get_review(reference)?);
     for id in tasks {
         if kind_of(project, &id)?.is_some_and(|(kind, _)| kind == Kind::Review) {
             change_task_status(project, command, &id, &options)?;
         }
+    }
+    Ok(())
+}
+
+/// Whether `command` may change each of `ids` in review, checked through the state machine on a copy before anything
+/// is written (ATM-670, audit R7): a decision was recorded on the review, then the second task's change failed, and
+/// the two were left split. A task not in review is left as it is, as [`submit`] does.
+///
+/// # Errors
+/// The first task the state machine refuses, naming it.
+fn check_decision(
+    project: &Project,
+    ids: &[String],
+    command: Command,
+    options: &Options,
+) -> Result<()> {
+    let vocab: &Vocabulary = project.store().vocabulary()?;
+    let tasks = project.store().list_tasks()?;
+    let stamp = atm_common::time::now_iso();
+    for id in ids {
+        let Some(task) = project.store().get_task(id)? else {
+            return Err(Error::NotFound(format!("no task {id}")));
+        };
+        if vocab.kind_of(task.get("status")) != Some(Kind::Review) {
+            continue;
+        }
+        let mut copy = task.clone();
+        crate::state::change_status(
+            &mut copy,
+            command,
+            options,
+            vocab,
+            &tasks,
+            project.actor(),
+            &stamp,
+            &|_| Ok(false),
+        )
+        .map_err(|e| {
+            Error::failed(format!(
+                "the decision can't reach {}, so it isn't recorded: {e}",
+                project.task_key(task)
+            ))
+        })?;
     }
     Ok(())
 }
@@ -941,6 +993,45 @@ mod tests {
     }
     fn reopen(root: &Path, actor: &str) -> Project {
         Project::open(root).unwrap().with_actor(Some(actor.into()))
+    }
+
+    /// ATM-670 (audit R7): a decision is checked against every task it changes before the review records it
+    #[test]
+    fn a_decision_is_checked_on_every_task_before_anything_is_written() {
+        use crate::state::{Command, Options};
+        let dir = dir();
+        project(&dir.0, "Hakan");
+        let file = dir.0.join(".agentic-task-manager/tasks.json");
+        let mut tasks: Value =
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        tasks["tasks"][1]["status"] = json!("in_review");
+        tasks["tasks"][1]["review_state"] = json!("waiting");
+        std::fs::write(&file, tasks.to_string()).unwrap();
+        let before = std::fs::read_to_string(&file).unwrap();
+        let p = reopen(&dir.0, "Hakan");
+        let ids = ["T-1".to_string(), "T-2".to_string()];
+        // A request for changes without its reason: refused, naming the task in review it can't reach
+        let refused = super::check_decision(&p, &ids, Command::RequestChanges, &Options::default())
+            .unwrap_err();
+        assert!(
+            refused
+                .to_string()
+                .starts_with("the decision can't reach T-2, so it isn't recorded"),
+            "{refused}"
+        );
+        // With it, fine; T-1, in progress, is left as it is
+        let options = Options {
+            reason: Some("CR-1 round 1: 1 open comment".into()),
+            ..Options::default()
+        };
+        super::check_decision(&p, &ids, Command::RequestChanges, &options).unwrap();
+        super::check_decision(&p, &ids, Command::Approve, &options).unwrap();
+        // Checking writes nothing
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+        // An unknown task is named
+        let missing = super::check_decision(&p, &["T-9".to_string()], Command::Approve, &options)
+            .unwrap_err();
+        assert_eq!(missing.to_string(), "no task T-9");
     }
     fn round() -> NewRound {
         NewRound {
