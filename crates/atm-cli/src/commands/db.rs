@@ -188,9 +188,8 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
     }
     let mut project = Project::open(cwd)?;
     if let Some(meta_file) = meta_file.filter(|m| !m.is_empty()) {
-        let new = std::fs::read_to_string(cwd.join(meta_file))
-            .ok()
-            .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+        let text = crate::option_file::read_option_file(cwd, "meta-file", meta_file)?;
+        let new = serde_json::from_str::<Value>(&text).ok();
         let Some(Value::Object(new)) = new else {
             return Err(Error::Invalid(format!(
                 "{meta_file} must hold a JSON object: the meta keys to set"

@@ -28,6 +28,7 @@ macro_rules! eprint {
 }
 
 mod commands;
+mod option_file;
 mod output;
 mod process;
 

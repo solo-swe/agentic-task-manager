@@ -29,9 +29,10 @@ const CASES = [
     "atm: --description and --description-file can't both be given",
   ],
   [
+    // A file that can't be used is a usage error, as every --*-file option says it (ATM-662)
     ['task', 'add', '--name', 'x', '--type', 'feature', '--description-file', 'gone.md'],
-    1,
-    "atm: can't read the description file gone.md",
+    2,
+    "atm: --description-file gone.md: can't read it",
   ],
   [
     ['task', 'edit', 'T-1', '--description', 'd', '--description-file', 'd.md'],
@@ -39,7 +40,7 @@ const CASES = [
     "atm: --description and --description-file can't both be given",
   ],
   [['task', 'edit', 'T-1', '--sprint', 'S1', '--backlog'], 2, "atm: --sprint and --backlog can't both be given"],
-  [['task', 'edit', 'T-1', '--description-file', 'gone.md'], 1, "atm: can't read the description file gone.md"],
+  [['task', 'edit', 'T-1', '--description-file', 'gone.md'], 2, "atm: --description-file gone.md: can't read it"],
   [
     ['task', 'add', '--name', 'x', '--type', 'feature', '--components', 'all'],
     2,

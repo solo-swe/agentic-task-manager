@@ -314,8 +314,7 @@ fn actor(project: &Project) -> Actor {
 fn text_of(body: Body, cwd: &Path) -> Result<String> {
     let text = match (body.body, body.body_file) {
         (Some(text), _) => text,
-        (None, Some(file)) => std::fs::read_to_string(cwd.join(&file))
-            .map_err(|e| Error::failed(format!("can't read {file}: {e}")))?,
+        (None, Some(file)) => crate::option_file::read_option_file(cwd, "body-file", &file)?,
         (None, None) => {
             return Err(Error::Invalid(
                 "give the text with --body or --body-file".into(),
@@ -749,8 +748,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
         } => {
             let mut project = opened(cwd, agent.as_deref())?;
             let summary = match summary_file {
-                Some(file) => std::fs::read_to_string(cwd.join(&file))
-                    .map_err(|e| Error::failed(format!("can't read {file}: {e}")))?,
+                Some(file) => crate::option_file::read_option_file(cwd, "summary-file", &file)?,
                 None => String::new(),
             };
             let first = new_round(&project, change, cwd, None, &[])?;
@@ -837,10 +835,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 .unwrap_or_default();
             // The new summary read before anything is written
             let summary = summary_file
-                .map(|file| {
-                    std::fs::read_to_string(cwd.join(&file))
-                        .map_err(|e| Error::failed(format!("can't read {file}: {e}")))
-                })
+                .map(|file| crate::option_file::read_option_file(cwd, "summary-file", &file))
                 .transpose()?;
             let round = new_round(&project, change, cwd, last, &files)?;
             if ctx.dry_run {
@@ -1375,7 +1370,8 @@ mod tests {
             (body(Some(""), None), 2, "the text is empty"),
             (body(Some("  \n"), None), 2, "the text is empty"),
             (body(None, Some("blank.md")), 2, "the text is empty"),
-            (body(None, Some("gone.md")), 1, "can't read gone.md"),
+            // A file that can't be used is a usage error, as every --*-file option says it (ATM-662)
+            (body(None, Some("gone.md")), 2, "--body-file gone.md: can't read it"),
         ] {
             let e = text_of(given, &dir).unwrap_err();
             assert_eq!(e.code(), code, "{says}");

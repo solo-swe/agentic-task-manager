@@ -94,13 +94,14 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
         println!("[dry-run] would edit task {}", args.task_id);
         return Ok(());
     }
-    let description =
-        match &file {
-            Some(file) => Some(std::fs::read_to_string(cwd.join(file)).map_err(|e| {
-                Error::failed(format!("can't read the description file {file}: {e}"))
-            })?),
-            None => args.description,
-        };
+    let description = match &file {
+        Some(file) => Some(crate::option_file::read_option_file(
+            cwd,
+            "description-file",
+            file,
+        )?),
+        None => args.description,
+    };
     let added_files = !args.add_file.is_empty();
     let mut change = TaskEdit {
         name: args.name,

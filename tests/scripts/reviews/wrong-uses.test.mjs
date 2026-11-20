@@ -46,13 +46,17 @@ describe('atm review: refusals', () => {
       const cases = [
         [['review', 'create', '--title', 'x'], 2, /say what to review/],
         [['review', 'create', '--title', 'x', '--range', 'HEAD'], 2, /--range takes BASE\.\.HEAD, not HEAD/],
-        [['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'], 1, /can't read gone\.md/],
+        [
+          ['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'],
+          2,
+          /--summary-file gone\.md: can't read it/,
+        ],
         [['review', 'create', '--title', 'x', '--range', 'HEAD~1..HEAD', '--uncommitted'], 2, /cannot be used with/],
         [['review', 'show', 'CR-9'], 1, /no review CR-9/],
         [['review', 'show', 'CR-1', '--against', '1'], 2, /--round/],
         [['review', 'comment', 'CR-1'], 2, /--body or --body-file/],
         [['review', 'comment', 'CR-1', '--body', '   '], 2, /the text is empty/],
-        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 1, /can't read gone\.md/],
+        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 2, /--body-file gone\.md: can't read it/],
         [['review', 'comment', 'CR-1', '--body', 'x', '--body-file', 'a.txt'], 2, /cannot be used with/],
         [['review', 'comment', 'CR-1', '--lines', '2', '--body', 'x'], 2, /--file/],
         [

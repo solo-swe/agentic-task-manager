@@ -15,6 +15,7 @@ pub mod pathtext;
 pub mod py;
 pub mod repository;
 pub mod rules;
+pub mod secrets;
 pub mod sha1;
 pub mod sha256;
 pub mod skills;

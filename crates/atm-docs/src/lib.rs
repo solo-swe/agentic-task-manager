@@ -109,17 +109,10 @@ const DOC_LANGUAGES: &[(&str, &str)] = &[
     ("Makefile", "makefile"),
 ];
 
-/// Whether a file name is one that holds keys, refused whatever git says (§4b).
+/// Whether a file name is one that holds keys, refused whatever git says (§4b): atm-common's rule, which the
+/// `--*-file` options keep too (ATM-662).
 fn key_file(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    let by_extension = ["pem", "key", "p12", "pfx", "keystore", "jks"]
-        .iter()
-        .any(|e| lower.ends_with(&format!(".{e}")));
-    let ssh = ["rsa", "dsa", "ecdsa", "ed25519"].iter().any(|k| {
-        let base = format!("id_{k}");
-        lower == base || lower.starts_with(&format!("{base}."))
-    });
-    by_extension || ssh
+    atm_common::secrets::key_file(name)
 }
 
 /// The path a request names, checked (§4b), in the working copy and at a revision alike: relative to the project's
@@ -142,11 +135,7 @@ pub fn document_path(path: &str) -> Result<&str> {
         return refused("git's and atm's own folders");
     }
     let name = segments.last().copied().unwrap_or_default();
-    let lower = name.to_ascii_lowercase();
-    let example = [".example", ".sample", ".template"]
-        .iter()
-        .any(|e| lower.ends_with(e));
-    if (lower == ".env" || lower.starts_with(".env.")) && !example {
+    if atm_common::secrets::env_file(name) {
         return refused("environment files");
     }
     Ok(path)
