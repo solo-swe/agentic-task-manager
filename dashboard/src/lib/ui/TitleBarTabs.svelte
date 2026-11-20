@@ -417,9 +417,13 @@
     min-width: 0;
     position: relative;
   }
+  /* It reaches a hairline below its room, over the bar's bottom line (ATM-688): the tabs fill it, so the selected one,
+     in the page's background, covers the line and joins the page under it; the others, transparent, leave it showing.
+     Clipped to its room, it had cut that pixel off, and the line ran under the selected tab too */
   .title-bar-tabs-scroller {
+    --hairline: 1px;
     display: flex;
-    inset: 0;
+    inset: 0 0 calc(-1 * var(--hairline)) 0;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior: contain;
@@ -457,8 +461,6 @@
     display: flex;
     flex: 0 0 var(--tab-width);
     gap: var(--space-1);
-    --hairline: 1px;
-    margin-bottom: calc(-1 * var(--hairline));
     min-width: 0;
     padding: 0 var(--space-2) 0 var(--space-4);
     position: relative;

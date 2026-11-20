@@ -1765,7 +1765,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 688
+    "next_number": 689
   },
   "tasks": [
     {
@@ -18454,7 +18454,7 @@
       "description": "Reported by Hakan (2026-11-20): in a live review, the diff updates as the working copy changes (`ReviewsTab.svelte` asks again every 2 s in the browser, on a change in the app). Those updates must never flicker, and never move the scroll of the file tree (left) or the diffs (right). A document being read, or a file chosen on the left, stays where it is, as far as the update allows.\n\n## Change\n- Measure first: an e2e test on a live review that changes the working copy while a file is chosen and the pane is scrolled into it, sampling every frame (as ATM-656's test does): the pane's scroll, the chosen file's top, and whether any drawn block goes blank or is replaced.\n- Then fix what the measurement shows: keep the files' components and their drawn code and documents across an update (keyed by path, the same text not drawn again), keep the scroll of both panes, and hold the file or line being read in place when files above it grow or shrink.\n\n## Tests\nThat e2e test, for a change in another file, in the file being read (above and below the place read), and a file added above; in Chromium and WebKit (`@webkit`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -18463,7 +18463,7 @@
         "dashboard/src/lib/shell/ReviewsTab.svelte"
       ],
       "created_at": "2026-11-20T08:36:18Z",
-      "updated_at": "2026-11-20T08:36:22Z",
+      "updated_at": "2026-11-20T09:02:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18478,6 +18478,59 @@
       ],
       "number": 687,
       "started_at": "2026-11-20T08:36:22Z",
+      "started_by": "claude:0f56a916",
+      "commit": "3af6e1bfa5b61ca6ed58311df1b9c4bf8d864443",
+      "code_reviews": [
+        {
+          "id": "01a1f831-821d-739c-8ec5-8bb9f6f43623",
+          "ref": "CR-70"
+        }
+      ],
+      "review_requested_at": "2026-11-20T09:02:36Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T09:02:36Z",
+          "kind": "review",
+          "text": "CR-70: A live review updates without flicker, and the place read stays put",
+          "by": "claude:0f56a916"
+        }
+      ]
+    },
+    {
+      "id": "01a1f83a-4d94-73f7-98bf-1f833fbff0db",
+      "name": "The selected title bar tab has no line under it again: it joins the page, so it reads as selected",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "Reported by Hakan (2026-11-20): the title bar's line runs under the selected tab too, so only its colour says it is selected. The selected tab should have no line under it and join the page under it, as a browser's does.\n\nThe tab is meant to cover the bar's bottom line (`margin-bottom: -1px`, the page's background), but since ATM-605 the tabs are in a scroller with `overflow-y: hidden` (`ui/TitleBarTabs.svelte`), which clips that pixel.\n\n## Change\nLet the scroller hold the pixel below the bar, so the selected tab covers the line; the other tabs keep it.\n\n## Tests\nAn e2e test in `app.spec.ts` (WebKit too): at the bar's bottom line, under the selected tab, is the tab; under another tab, the bar's line.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/ui/TitleBarTabs.svelte",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-20T09:12:12Z",
+      "updated_at": "2026-11-20T09:12:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T09:12:12Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "components": [
+        "dashboard"
+      ],
+      "number": 688,
+      "started_at": "2026-11-20T09:12:16Z",
       "started_by": "claude:0f56a916"
     }
   ]

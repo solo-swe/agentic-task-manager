@@ -325,6 +325,48 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#app-tab-more')).toHaveCount(0);
   });
 
+  // ATM-688 (Hakan): the bar's line runs under every tab but the selected one, which joins the page under it. The tab
+  // covers the line's pixel with the page's background; the tabs' scroller (ATM-605) clipped that pixel away
+  test('the selected tab has no line under it; the others do', { tag: '@webkit' }, async ({ page, tasksServer }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    const board = `/projects/${tasksServer.projectId}/kanban`;
+    tasksServer.restoredTabs = { addresses: [board, board, board], active: 1 };
+    await page.goto('/');
+    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(3);
+    const seen = await page.evaluate(() => {
+      const bar = document.querySelector('#app-titlebar')!.getBoundingClientRect();
+      const strip = document.querySelector('.title-bar-tabs-scroller')!.getBoundingClientRect();
+      const tabs = [...document.querySelectorAll<HTMLElement>('.title-bar-tab')];
+      const page = getComputedStyle(document.body).getPropertyValue('--bg');
+      return {
+        // The strip holds the line's row (it is the bar's last pixel)
+        stripReachesLine: strip.bottom >= bar.bottom - 0.5,
+        tabs: tabs.map((t) => ({
+          selected: t.classList.contains('selected'),
+          coversLine: t.getBoundingClientRect().bottom >= bar.bottom - 0.5,
+          background: getComputedStyle(t).backgroundColor,
+        })),
+        page,
+      };
+    });
+    expect(seen.stripReachesLine).toBe(true);
+    const selected = seen.tabs.find((t) => t.selected)!;
+    const others = seen.tabs.filter((t) => !t.selected);
+    // The selected tab reaches over the line, opaque; the others leave it showing through
+    expect(selected.coversLine).toBe(true);
+    expect(selected.background).not.toBe('rgba(0, 0, 0, 0)');
+    for (const t of others) expect(t.background).toBe('rgba(0, 0, 0, 0)');
+    // What is drawn there, under the selected tab's middle: the tab (its page colour), not the bar
+    const at = await page.evaluate(() => {
+      const bar = document.querySelector('#app-titlebar')!.getBoundingClientRect();
+      const tab = document.querySelector('.title-bar-tab.selected')!.getBoundingClientRect();
+      const hit = document.elementFromPoint(tab.left + 8, bar.bottom - 0.5);
+      return hit?.closest('.title-bar-tab.selected') !== null;
+    });
+    expect(at).toBe(true);
+  });
+
   // ATM-685 (Hakan): when the tabs don't all fit, More ⌄ lists those out of view; one chosen there is shown, scrolled
   // into view. In WebKit too, the app's engine on macOS
   test(
