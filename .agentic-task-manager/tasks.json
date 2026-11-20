@@ -14244,7 +14244,7 @@
       "description": "Hakan (2026-11-19): the rules for how a task's status and its reviews change together are spread across commands and keep breaking. Today's three bugs: a review's approval lost when the task's key changed (ATM-630), a review opened beside a task that didn't move (ATM-631), and a lapsed claim leaving a task half in review (ATM-632). They should be one explicit state machine.\n\nDesigned **with Hakan**: propose it, agree on it, then build it.\n\n## Design (a document in `docs/`, reviewed with Hakan as a CR)\n- **States:** a task's status kinds (`todo`, `active`, `review`, `blocked`, `done`, `skipped`), each with its claim (none, held, lapsed) and its reviews (none, open, rounds, changes requested, approved, closed, live).\n- **Events:** claim, a claim lapsing, release, commit, review created, a round added, a comment, request changes, approve, reject, close, push or merge, the task's number moved at a merge (ADR-009: its old key an alias), and a user's answer.\n- **The table:** for each state and event, the next state or a refusal with its message. No event leaves a task and its review disagreeing.\n- A diagram of it (Mermaid), and where it lives in the layers: one module in `atm-lib` that every command and the dashboard's API go through.\n- Today's rules mapped onto it: what changes, and what an existing project's tasks and reviews look like after the move (a migration if any).\n\n## Build (after the design is agreed)\n- One module holds the transitions; the CLI commands, the REST routes and the app call it, and none sets a status on its own.\n- Unit tests: a table of every state × event, each with its expected next state or refusal, including the three bugs above as cases.\n- The agent docs (`atm docs states`, `atm docs reviews`) are written from the same table.\n\nMay be split into design and build tasks once the design is agreed.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [
         "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
         "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
@@ -14258,7 +14258,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-20T23:22:27Z",
+      "updated_at": "2026-11-20T23:49:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14282,7 +14282,7 @@
       "components": [
         "docs"
       ],
-      "started_at": "2026-11-19T09:04:16Z",
+      "started_at": "2026-11-20T23:49:14Z",
       "started_by": "claude:0f56a916",
       "commit": "4622c760104e651739baa25c58d130b4a9371793",
       "code_reviews": [
@@ -14291,8 +14291,6 @@
           "ref": "CR-58"
         }
       ],
-      "review_requested_at": "2026-11-19T09:12:57Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T09:12:57Z",
@@ -14312,8 +14310,14 @@
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/56"
       },
       "merged_at": "2026-11-19T14:50:42Z",
-      "reviewed_at": "2026-11-20T23:11:28Z",
-      "sprint": "Audit and tabs"
+      "sprint": "Audit and tabs",
+      "reviews": [
+        {
+          "from": "2026-11-19T09:12:57Z",
+          "to": "2026-11-20T23:11:28Z",
+          "outcome": "approved"
+        }
+      ]
     },
     {
       "id": "01a1f0b9-f451-744a-956a-23995623df35",
@@ -18642,13 +18646,13 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 4 of §7. ATM-686 already opens a review in place on a plain click in the app; this covers every card and row.\n\n## Change\n- Every card, row and reference is a real link (`<a href>` with its address), so *Copy Link* and *Open in New Tab* work the same everywhere.\n- A plain click opens in place, a step in the tab's history.\n- ⌘/Ctrl-click and a middle click open a new title-bar tab in the background, right of this one; ⇧⌘-click opens one brought forward. In the browser, the browser does this.\n- A middle click on a title-bar tab closes it.\n- All of it handled once, in `new-tab-clicks.ts`, not per component.\n\n## Tests\ne2e: each click on a Kanban card, a list row, a review row and a reference, in the app and the browser.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/new-tab-clicks.ts"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T23:39:47Z",
+      "updated_at": "2026-11-20T23:52:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18674,15 +18678,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T23:39:47Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T23:39:47Z",
           "kind": "review",
           "text": "CR-102: Clicks as in a browser: every card and row a real link; ⌘ and middle click in the background, ⇧⌘ forward",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T23:51:59Z",
+          "kind": "note",
+          "text": "Approved: in CR-102 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T23:52:44Z",
+          "kind": "outcome",
+          "text": "Approved in CR-102.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T23:39:47Z",
+          "to": "2026-11-20T23:51:59Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T23:52:44Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15aacc8ccaf",
@@ -19388,7 +19412,7 @@
         "crates/atm-cli/src/commands/review.rs"
       ],
       "created_at": "2026-11-20T23:29:46Z",
-      "updated_at": "2026-11-20T23:45:46Z",
+      "updated_at": "2026-11-20T23:51:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19399,9 +19423,36 @@
       ],
       "sprint": "Audit and tabs",
       "number": 711,
-      "started_at": "2026-11-20T23:36:57Z",
+      "started_at": "2026-11-20T23:51:32Z",
       "started_by": "claude:0f56a916",
-      "commit": "12c1639508b33fb93acf2fddb69201cf8f7cbb5a"
+      "commit": "48823f76c1374ecc63bcf009b74d775dfa3d0216",
+      "code_reviews": [
+        {
+          "id": "01a1fb5d-1e5d-7580-a346-5f2f710794be",
+          "ref": "CR-103"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-20T23:49:06Z",
+          "kind": "review",
+          "text": "CR-103: Split the large files: reviews.rs and review_pages.rs done (moves); plans for review_listen.rs and the CLI review command",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T23:50:47Z",
+          "kind": "note",
+          "text": "Approved: in CR-103 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T23:49:06Z",
+          "to": "2026-11-20T23:50:47Z",
+          "outcome": "approved"
+        }
+      ]
     }
   ]
 }

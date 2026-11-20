@@ -51,6 +51,233 @@ pub fn decides(header: &ReviewHeader, who: &Actor) -> bool {
     }
 }
 
+/// What happens to a review, the events whose rules are the review's own (ATM-633, docs/task-review-state-machine.md
+/// §3.4, §5.4). The task table and their composition are atm-lib's (`lifecycle`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewEvent<'a> {
+    /// A draft goes to its reviewers.
+    AskForReview,
+    /// The author's next round.
+    Round,
+    /// A live review's checkpoint (§3.5).
+    Checkpoint,
+    /// A reviewer's decision, or a comment on the whole; `overriding` a person's override of who decides, with why;
+    /// `also_open` comments open by then besides the review's own (a reviewer's drafts sent with it, ATM-612).
+    Submit {
+        verdict: Verdict,
+        overriding: Option<&'a str>,
+        also_open: &'a [String],
+    },
+    /// Ended without approval.
+    Close,
+    /// The tasks it names changed.
+    SetTasks,
+    /// Its summary changed.
+    EditSummary,
+}
+
+/// What an event does to a review, once its rules let it: its next status (none: it stays), the author it takes (a
+/// round's maker, on a live review a person opened), and the override a decision was made under.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Next<'a> {
+    pub status: Option<Status>,
+    pub author: Option<Actor>,
+    pub overridden: Option<&'a str>,
+}
+
+/// The review table (ATM-633): what `event` by `by` does to `review`, or why it may not, the refusal's words and kind
+/// (its exit code) as each command has always said them. Pure: it reads the review given and writes nothing, so a
+/// front end can ask it what a reader may do (§5.2's `can`) as the commands do before writing.
+///
+/// # Errors
+/// The refusal: an ended review, someone who may not, a status the event isn't for, an approval with comments open, an
+/// override without its reason.
+pub fn review_next<'a>(review: &Review, event: &ReviewEvent<'a>, by: &Actor) -> Result<Next<'a>> {
+    let header = &review.header;
+    let status = header.status;
+    let ended = |what: &str| -> Result<()> {
+        if status.ended() {
+            Err(not_now(review, what))
+        } else {
+            Ok(())
+        }
+    };
+    let stays = Next::default();
+    let to = |status: Status| Next {
+        status: Some(status),
+        ..Next::default()
+    };
+    let author_or_decider = |what: String| -> Result<()> {
+        if is_author(header, by) || decides(header, by) {
+            Ok(())
+        } else {
+            Err(refused(what))
+        }
+    };
+    match *event {
+        ReviewEvent::AskForReview => {
+            if status != Status::Draft {
+                return Err(not_now(review, "be asked for again"));
+            }
+            if !is_author(header, by) {
+                return Err(refused(format!(
+                    "only {}'s author asks for its review",
+                    header.reference
+                )));
+            }
+            Ok(to(Status::Waiting))
+        }
+        ReviewEvent::Round => {
+            ended("get another round")?;
+            round_next(review, by)
+        }
+        ReviewEvent::Checkpoint => {
+            if status != Status::Live {
+                return Err(not_now(
+                    review,
+                    "take a checkpoint (only a live review does)",
+                ));
+            }
+            Ok(stays)
+        }
+        ReviewEvent::Submit {
+            verdict,
+            overriding,
+            also_open,
+        } => {
+            ended("be submitted on")?;
+            submit_next(review, verdict, overriding, also_open, by)
+        }
+        ReviewEvent::Close => {
+            ended("be closed")?;
+            author_or_decider(format!(
+                "{} is closed by its author or a reviewer",
+                header.reference
+            ))?;
+            Ok(to(Status::Closed))
+        }
+        ReviewEvent::SetTasks => {
+            ended("change its tasks")?;
+            author_or_decider(format!(
+                "{}'s tasks are changed by its author or a reviewer",
+                header.reference
+            ))?;
+            Ok(stays)
+        }
+        ReviewEvent::EditSummary => {
+            ended("change its summary")?;
+            if !is_author(header, by) {
+                return Err(refused(format!(
+                    "{}'s summary is its author's to change",
+                    header.reference
+                )));
+            }
+            Ok(stays)
+        }
+    }
+}
+
+/// A round on a review that isn't ended: its author's (one not known yet takes the round's maker, unless a reviewer);
+/// a review sent back or live is waiting on its reviewers again.
+fn round_next<'a>(review: &Review, by: &Actor) -> Result<Next<'a>> {
+    let header = &review.header;
+    let author = match &header.author {
+        Some(author) if author != by => {
+            return Err(refused(format!(
+                "only {}'s author adds its rounds",
+                header.reference
+            )));
+        }
+        None if header.reviewers.contains(by) => {
+            return Err(refused(format!(
+                "{}'s rounds are its author's, not a reviewer's",
+                header.reference
+            )));
+        }
+        None => Some(by.clone()),
+        Some(_) => None,
+    };
+    let next =
+        matches!(header.status, Status::ChangesRequested | Status::Live).then_some(Status::Waiting);
+    Ok(Next {
+        status: next,
+        author,
+        ..Next::default()
+    })
+}
+
+/// A submission on a review that isn't ended: who decides (or a person's override, with why), then what the verdict
+/// leads to.
+fn submit_next<'a>(
+    review: &Review,
+    verdict: Verdict,
+    overriding: Option<&'a str>,
+    also_open: &[String],
+    by: &Actor,
+) -> Result<Next<'a>> {
+    let header = &review.header;
+    let status = header.status;
+    let overridden = match overriding {
+        Some(reason) if reason.trim().is_empty() => {
+            return Err(Error::Invalid(
+                "overriding the review's rules needs the reason why".into(),
+            ));
+        }
+        // One who may decide anyway: nothing to override
+        _ if decides(header, by) => None,
+        Some(reason) => Some(reason),
+        None => {
+            return Err(refused(format!(
+                "{} is decided by its reviewers{}; a person may override that, saying why",
+                header.reference,
+                if header.reviewers.is_empty() {
+                    ", not its author"
+                } else {
+                    ""
+                }
+            )));
+        }
+    };
+    let next = match verdict {
+        // Sent back too (ATM-609): a reviewer may change their mind, or settle what they asked for themselves
+        Verdict::Approve => {
+            if !matches!(
+                status,
+                Status::Waiting | Status::Live | Status::ChangesRequested
+            ) {
+                return Err(not_now(review, "be approved"));
+            }
+            let open: Vec<String> = review
+                .open_comments()
+                .map(|c| c.id.0.clone())
+                .chain(also_open.iter().cloned())
+                .collect();
+            if !open.is_empty() {
+                return Err(Error::failed(format!(
+                    "{} can't be approved while comments are open: {}",
+                    header.reference,
+                    open.join(", ")
+                )));
+            }
+            Some(Status::Approved)
+        }
+        // Sent back already, it isn't sent back again (CR-2): a reviewer's further words are a comment, which the page
+        // calls *Publish comments*
+        Verdict::RequestChanges => {
+            if status != Status::Waiting {
+                return Err(not_now(review, "be sent back"));
+            }
+            Some(Status::ChangesRequested)
+        }
+        Verdict::Comment => None,
+    };
+    Ok(Next {
+        status: next,
+        overridden,
+        ..Next::default()
+    })
+}
+
 /// Why `who` may not decide `header`'s review, said in the record of an override.
 fn not_a_decider(header: &ReviewHeader, who: &Actor) -> &'static str {
     if is_author(header, who) {
@@ -107,17 +334,16 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     /// Not a draft, not its author, or the store's.
     pub fn ask_for_review(&mut self, reference: &ReviewRef, by: &Actor) -> Result<()> {
         let review = self.open(reference)?;
-        if review.header.status != Status::Draft {
-            return Err(not_now(&review, "be asked for again"));
+        let next = review_next(&review, &ReviewEvent::AskForReview, by)?;
+        self.apply(&review, &next, by)
+    }
+
+    /// What `next` says of the review's status, written.
+    fn apply(&mut self, review: &Review, next: &Next, by: &Actor) -> Result<()> {
+        match next.status {
+            Some(status) => self.store.set_status(&review.header.id, status, by),
+            None => Ok(()),
         }
-        if !is_author(&review.header, by) {
-            return Err(refused(format!(
-                "only {}'s author asks for its review",
-                review.header.reference
-            )));
-        }
-        self.store
-            .set_status(&review.header.id, Status::Waiting, by)
     }
 
     /// The author's next round, after addressing the comments: a review sent back is open again, and a live one ends
@@ -127,32 +353,14 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     /// # Errors
     /// An ended review, not its author (or a reviewer, while there is none), or the store's.
     pub fn add_round(&mut self, reference: &ReviewRef, round: NewRound) -> Result<u32> {
-        let review = self.not_ended(reference, "get another round")?;
-        match &review.header.author {
-            Some(author) if *author != round.by => {
-                return Err(refused(format!(
-                    "only {}'s author adds its rounds",
-                    review.header.reference
-                )));
-            }
-            None if review.header.reviewers.contains(&round.by) => {
-                return Err(refused(format!(
-                    "{}'s rounds are its author's, not a reviewer's",
-                    review.header.reference
-                )));
-            }
-            None => self.store.set_author(&review.header.id, &round.by)?,
-            Some(_) => {}
-        }
+        let review = self.open(reference)?;
         let by = round.by.clone();
-        let number = self.store.add_round(&review.header.id, round)?;
-        if matches!(
-            review.header.status,
-            Status::ChangesRequested | Status::Live
-        ) {
-            self.store
-                .set_status(&review.header.id, Status::Waiting, &by)?;
+        let next = review_next(&review, &ReviewEvent::Round, &by)?;
+        if let Some(author) = &next.author {
+            self.store.set_author(&review.header.id, author)?;
         }
+        let number = self.store.add_round(&review.header.id, round)?;
+        self.apply(&review, &next, &by)?;
         Ok(number)
     }
 
@@ -163,12 +371,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     /// Not live, or the store's.
     pub fn checkpoint(&mut self, reference: &ReviewRef, round: NewRound) -> Result<u32> {
         let review = self.open(reference)?;
-        if review.header.status != Status::Live {
-            return Err(not_now(
-                &review,
-                "take a checkpoint (only a live review does)",
-            ));
-        }
+        review_next(&review, &ReviewEvent::Checkpoint, &round.by)?;
         self.store.add_round(&review.header.id, round)
     }
 
@@ -328,8 +531,14 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         overriding: Option<&str>,
         by: &Actor,
     ) -> Result<()> {
-        let (review, overridden, next) = self.decision(reference, verdict, overriding, by, &[])?;
-        self.record_decision(&review, verdict, body, overridden, next, by)
+        let review = self.open(reference)?;
+        let event = ReviewEvent::Submit {
+            verdict,
+            overriding,
+            also_open: &[],
+        };
+        let next = review_next(&review, &event, by)?;
+        self.record_decision(&review, verdict, body, next.overridden, next.status, by)
     }
 
     /// Whether `by`'s decision would be taken, with `also_open` more top-level comments open by then (a reviewer's
@@ -345,76 +554,13 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         by: &Actor,
         also_open: &[String],
     ) -> Result<()> {
-        self.decision(reference, verdict, overriding, by, also_open)
-            .map(|_| ())
-    }
-
-    /// A decision's checks: the review, whether an override is needed (its reason, then), and the status it leads to.
-    fn decision<'o>(
-        &self,
-        reference: &ReviewRef,
-        verdict: Verdict,
-        overriding: Option<&'o str>,
-        by: &Actor,
-        also_open: &[String],
-    ) -> Result<(Review, Option<&'o str>, Option<Status>)> {
-        let review = self.not_ended(reference, "be submitted on")?;
-        let overridden = match overriding {
-            Some(reason) if reason.trim().is_empty() => {
-                return Err(Error::Invalid(
-                    "overriding the review's rules needs the reason why".into(),
-                ));
-            }
-            // One who may decide anyway: nothing to override
-            _ if decides(&review.header, by) => None,
-            Some(reason) => Some(reason),
-            None => {
-                return Err(refused(format!(
-                    "{} is decided by its reviewers{}; a person may override that, saying why",
-                    review.header.reference,
-                    if review.header.reviewers.is_empty() {
-                        ", not its author"
-                    } else {
-                        ""
-                    }
-                )));
-            }
+        let review = self.open(reference)?;
+        let event = ReviewEvent::Submit {
+            verdict,
+            overriding,
+            also_open,
         };
-        let status = review.header.status;
-        let next = match verdict {
-            // Sent back too (ATM-609): a reviewer may change their mind, or settle what they asked for themselves
-            Verdict::Approve => {
-                if !matches!(
-                    status,
-                    Status::Waiting | Status::Live | Status::ChangesRequested
-                ) {
-                    return Err(not_now(&review, "be approved"));
-                }
-                let open: Vec<String> = review
-                    .open_comments()
-                    .map(|c| c.id.0.clone())
-                    .chain(also_open.iter().cloned())
-                    .collect();
-                if !open.is_empty() {
-                    return Err(Error::failed(format!(
-                        "{} can't be approved while comments are open: {}",
-                        review.header.reference,
-                        open.join(", ")
-                    )));
-                }
-                Some(Status::Approved)
-            }
-            // Sent back already, it isn't sent back again (CR-2): a reviewer's further words are a comment, which
-            // the page calls *Publish comments*
-            Verdict::RequestChanges => {
-                if status != Status::Waiting {
-                    return Err(not_now(&review, "be sent back"));
-                }
-                Some(Status::ChangesRequested)
-            }
-            Verdict::Comment => None,
-        };
-        Ok((review, overridden, next))
+        review_next(&review, &event, by).map(|_| ())
     }
 
     /// A decision taken: the override on the record, its words, the status.
@@ -469,13 +615,8 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     /// # Errors
     /// An ended review, someone who may not, or the store's.
     pub fn close(&mut self, reference: &ReviewRef, reason: &str, by: &Actor) -> Result<()> {
-        let review = self.not_ended(reference, "be closed")?;
-        if !is_author(&review.header, by) && !decides(&review.header, by) {
-            return Err(refused(format!(
-                "{} is closed by its author or a reviewer",
-                review.header.reference
-            )));
-        }
+        let review = self.open(reference)?;
+        let next = review_next(&review, &ReviewEvent::Close, by)?;
         if !reason.trim().is_empty() {
             let anchor = Anchor {
                 round: review.rounds.last().map_or(1, |r| r.number),
@@ -486,7 +627,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
                 .add_comment(&review.header.id, anchor, reason, by)?;
             self.store.resolve(&review.header.id, &id, true)?;
         }
-        self.store.set_status(&review.header.id, Status::Closed, by)
+        self.apply(&review, &next, by)
     }
 
     /// Change the tasks a review names (§3.2 ③): its author's or a reviewer's.
@@ -499,13 +640,8 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         tasks: Vec<String>,
         by: &Actor,
     ) -> Result<()> {
-        let review = self.not_ended(reference, "change its tasks")?;
-        if !is_author(&review.header, by) && !decides(&review.header, by) {
-            return Err(refused(format!(
-                "{}'s tasks are changed by its author or a reviewer",
-                review.header.reference
-            )));
-        }
+        let review = self.open(reference)?;
+        review_next(&review, &ReviewEvent::SetTasks, by)?;
         self.store.set_tasks(&review.header.id, tasks)
     }
 
@@ -515,13 +651,8 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     /// # Errors
     /// An ended review, someone who isn't its author, or the store's.
     pub fn edit_summary(&mut self, reference: &ReviewRef, summary: &str, by: &Actor) -> Result<()> {
-        let review = self.not_ended(reference, "change its summary")?;
-        if !is_author(&review.header, by) {
-            return Err(refused(format!(
-                "{}'s summary is its author's to change",
-                review.header.reference
-            )));
-        }
+        let review = self.open(reference)?;
+        review_next(&review, &ReviewEvent::EditSummary, by)?;
         self.store
             .edit_summary(&review.header.id, &review.header.title, summary)
     }
@@ -971,6 +1102,181 @@ mod tests {
         let header = store.create_review(new_review(Status::Waiting)).unwrap();
         store.set_status(&header.id, status, &hakan()).unwrap();
         header.reference
+    }
+
+    /// ATM-633 (docs/task-review-state-machine.md §5.4, §7 step 2): the review table, one row for every status and
+    /// event, each with the next status or the refusal's words; a pair without a row fails, so a new status or event
+    /// can't go untested. The author makes rounds and asks for review; the reviewer decides, closes and names tasks.
+    const TABLE_STATUSES: [Status; 6] = [
+        Status::Draft,
+        Status::Waiting,
+        Status::Live,
+        Status::ChangesRequested,
+        Status::Approved,
+        Status::Closed,
+    ];
+    const TABLE_EVENTS: [&str; 9] = [
+        "ask",
+        "round",
+        "checkpoint",
+        "approve",
+        "request",
+        "comment",
+        "close",
+        "tasks",
+        "summary",
+    ];
+
+    /// A row of the review table: the status, the event, and the next status (`Ok(None)`: it stays) or words the
+    /// refusal says
+    type Row = (Status, &'static str, Result<Option<Status>, &'static str>);
+
+    /// The event a row names
+    fn table_event(name: &str) -> super::ReviewEvent<'static> {
+        use super::ReviewEvent;
+        match name {
+            "ask" => ReviewEvent::AskForReview,
+            "round" => ReviewEvent::Round,
+            "checkpoint" => ReviewEvent::Checkpoint,
+            "approve" | "request" | "comment" => ReviewEvent::Submit {
+                verdict: match name {
+                    "approve" => Verdict::Approve,
+                    "request" => Verdict::RequestChanges,
+                    _ => Verdict::Comment,
+                },
+                overriding: None,
+                also_open: &[],
+            },
+            "close" => ReviewEvent::Close,
+            "tasks" => ReviewEvent::SetTasks,
+            _ => ReviewEvent::EditSummary,
+        }
+    }
+
+    /// Who does it: the author for its own events, the reviewer for the others
+    fn table_by(name: &str) -> Actor {
+        match name {
+            "ask" | "round" | "checkpoint" | "summary" => agent(),
+            _ => hakan(),
+        }
+    }
+
+    /// The review table's rows (docs/task-review-state-machine.md §3.4)
+    fn review_rows() -> Vec<Row> {
+        use Status::{Approved, ChangesRequested, Closed, Draft, Live, Waiting};
+        let mut rows: Vec<Row> = vec![
+            (Draft, "ask", Ok(Some(Waiting))),
+            (Waiting, "ask", Err("it can't be asked for again")),
+            (Live, "ask", Err("it can't be asked for again")),
+            (ChangesRequested, "ask", Err("it can't be asked for again")),
+            (Approved, "ask", Err("it can't be asked for again")),
+            (Closed, "ask", Err("it can't be asked for again")),
+            (Draft, "round", Ok(None)),
+            (Waiting, "round", Ok(None)),
+            (Live, "round", Ok(Some(Waiting))),
+            (ChangesRequested, "round", Ok(Some(Waiting))),
+            (Draft, "checkpoint", Err("it can't take a checkpoint")),
+            (Waiting, "checkpoint", Err("it can't take a checkpoint")),
+            (Live, "checkpoint", Ok(None)),
+            (
+                ChangesRequested,
+                "checkpoint",
+                Err("it can't take a checkpoint"),
+            ),
+            (Approved, "checkpoint", Err("it can't take a checkpoint")),
+            (Closed, "checkpoint", Err("it can't take a checkpoint")),
+            (Draft, "approve", Err("it can't be approved")),
+            (Waiting, "approve", Ok(Some(Approved))),
+            (Live, "approve", Ok(Some(Approved))),
+            (ChangesRequested, "approve", Ok(Some(Approved))),
+            (Draft, "request", Err("it can't be sent back")),
+            (Waiting, "request", Ok(Some(ChangesRequested))),
+            (Live, "request", Err("it can't be sent back")),
+            (ChangesRequested, "request", Err("it can't be sent back")),
+        ];
+        for status in [Draft, Waiting, Live, ChangesRequested] {
+            rows.push((status, "comment", Ok(None)));
+            rows.push((status, "close", Ok(Some(Closed))));
+            rows.push((status, "tasks", Ok(None)));
+            rows.push((status, "summary", Ok(None)));
+        }
+        let ended_words = [
+            ("round", "it can't get another round"),
+            ("approve", "it can't be submitted on"),
+            ("request", "it can't be submitted on"),
+            ("comment", "it can't be submitted on"),
+            ("close", "it can't be closed"),
+            ("tasks", "it can't change its tasks"),
+            ("summary", "it can't change its summary"),
+        ];
+        for (what, words) in ended_words {
+            rows.push((Approved, what, Err(words)));
+            rows.push((Closed, what, Err(words)));
+        }
+        rows
+    }
+
+    #[test]
+    fn the_review_table_has_a_row_for_every_status_and_event() {
+        use super::review_next;
+        use std::collections::HashSet;
+        let rows = review_rows();
+        // Every pair has its row, once
+        let mut seen = HashSet::new();
+        for (status, name, _) in &rows {
+            assert!(
+                seen.insert((status.name(), *name)),
+                "two rows for {} {name}",
+                status.name()
+            );
+        }
+        for status in TABLE_STATUSES {
+            for name in TABLE_EVENTS {
+                assert!(
+                    seen.contains(&(status.name(), name)),
+                    "no row for {} {name}",
+                    status.name()
+                );
+            }
+        }
+        for (status, name, expected) in rows {
+            let mut store = MemoryStore::new();
+            let reference = at(&mut store, status);
+            let review = store.get_review(&reference).unwrap();
+            let got = review_next(&review, &table_event(name), &table_by(name));
+            match (&got, expected) {
+                (Ok(next), Ok(want)) => assert_eq!(next.status, want, "{} {name}", status.name()),
+                (Err(error), Err(words)) => {
+                    assert!(
+                        error.to_string().contains(words),
+                        "{} {name}: {error}",
+                        status.name()
+                    );
+                }
+                _ => panic!("{} {name}: {got:?}, expected {expected:?}", status.name()),
+            }
+        }
+    }
+
+    /// ATM-633: the table reads the review it is given and writes nothing (§5.2's `can` asks it)
+    #[test]
+    fn the_review_table_writes_nothing() {
+        use super::{ReviewEvent, review_next};
+        let mut store = MemoryStore::new();
+        let reference = at(&mut store, Status::Waiting);
+        let review = store.get_review(&reference).unwrap();
+        let next = review_next(
+            &review,
+            &ReviewEvent::Submit {
+                verdict: Verdict::Approve,
+                overriding: None,
+                also_open: &[],
+            },
+            &hakan(),
+        )
+        .unwrap();
+        assert_eq!(next.status, Some(Status::Approved));
+        assert_eq!(status(&store, 1), Status::Waiting);
     }
 
     fn is_refused(result: &Result<impl std::fmt::Debug, Error>) -> bool {
