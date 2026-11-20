@@ -1245,7 +1245,22 @@ drafts, the watch's catch-up and lease, and task keys plain from creation (ADR-0
   - That commit comes from the round's file, which anyone who can change the review wrote. atm passes git only a full SHA (40 or 64 hex digits), so the text can never be taken for an option or a revision expression; anything else is ignored, and the key resolves as every command resolves it. A test (`review_keys.rs`) writes `HEAD`, `main` and `--output=x` there.
   - It reads with `git ls-tree` and `git cat-file blob`, in the working copy the review is in, and only parses the result as JSON to find a task's UUID. It writes nothing and runs nothing else.
 
-**Release 0.42.0 (the sprint Task&review state machine; in progress, completed by the release task).** So far:
+**Release 0.42.0 (the sprint Task&review state machine).** A review's pages finished (rendered Markdown commented on,
+its comments in a margin, Wrap in Split, image files), the app's tabs, and CompMD 0.8.0 then 0.9.0. The state machine
+itself (ATM-633) moved to the backlog and is not in it.
+
+- **Entry points:** one, a file read at a revision (ATM-689): `GET /api/v1/projects/<id>/file?path=…&at=<rev>` and the
+  app's `file` command with `at`, for a review's image files. It is in I11: `at` must be a full object ID a review
+  keeps (40 or 64 hex digits), never a branch, a ref or an expression, so the text can't name another commit or be
+  taken for an option; the path is checked as every file read's is. No CLI command reads a new path or URL.
+- **New files:** none. The dashboard keeps one more setting in the browser (`docSize`, ATM-691).
+- **Skills and `docs/agent/`:** no skill changed. `docs/agent/compmd-llms.txt` (`atm docs compmd`) names CompMD 0.9.0
+  in its header; its text, what agents read about rendering, is unchanged since 0.8.0. So no sandbox run is needed: no
+  instruction agents act on changed (§3.3).
+- **CI:** no workflow or permission changed.
+- **Dependencies:** CompMD 0.8.0 and 0.9.0 (below), no other new package or crate.
+
+The two CompMD upgrades, as they were made:
 
 - **CompMD 0.8.0 (ATM-648).** The dashboard, `atm serve` and the app render with CompMD 0.8.0: `@compmd/processor`, `render`, `sandbox` and `vite` 0.8.0, and the crates `tauri-plugin-compmd` and `compmd-host` `=0.8.0` (`compmd-pack` 0.8.0 with them). Where it differs from 0.7:
   - **One new package, `@compmd/host` 0.8.0** (CompMD's own, MIT, by its author), which `@compmd/vite` uses to serve its bundle in development with the same contract as `compmd-host` (its WebAssembly). It serves nothing in the page atm ships.

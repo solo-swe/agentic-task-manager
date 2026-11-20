@@ -1770,7 +1770,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 704
+    "next_number": 705
   },
   "tasks": [
     {
@@ -19253,14 +19253,14 @@
       "description": "The e2e test *a jump to a file stays on it while the files above it are drawn* (`reviews.spec.ts`, ATM-656) fails in WebKit about 3 runs in 24, at the commit before ATM-690's changes too, so it is not new with them.\n\n## What it shows\nThe file jumped to arrives, then sits 18 to 19 px off (one line's height) for 2 to 8 frames before it comes back:\n\n```\nf047.rs: [1,-18,-18,-18,-18,-18,-18,1,1,…]\n```\n\nOnce it was 5,803 px off for a frame:\n\n```\nf093.rs: [1,-5803,1,1,…]\n```\n\n## To do\nFind which file above it grows by a line after the jump (and what makes it 5,803 px once), and why the place read isn't kept for those frames, as ATM-656 and ATM-687 meant. Measure in WebKit with `--repeat-each=24`; never only rerun it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-20T11:24:08Z",
-      "updated_at": "2026-11-20T12:24:07Z",
+      "updated_at": "2026-11-20T15:53:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19281,15 +19281,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T12:24:07Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T12:24:07Z",
           "kind": "review",
           "text": "CR-81: A file jumped to stays put in WebKit: no anchoring scroll while held, the cards above frozen",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T15:53:41Z",
+          "kind": "note",
+          "text": "Approved: in CR-81 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T15:53:56Z",
+          "kind": "outcome",
+          "text": "Approved in CR-81: a file jumped to stays put in WebKit",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T12:24:07Z",
+          "to": "2026-11-20T15:53:41Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T15:53:56Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15508e8883f",
@@ -19639,7 +19659,7 @@
       "description": "Move atm from CompMD 0.8.0 to 0.9.0 (asked by Hakan, 2026-11-20, the last task before the release), everywhere it is pinned, and adapt what 0.9.0 changes. As ATM-648 did for 0.8.0 (CR-59).\n\n## The pins\n- **Rust** (the workspace `Cargo.toml`): `tauri-plugin-compmd` and `compmd-host` at `=0.9.0`; `Cargo.lock` follows.\n- **Dashboard** (`dashboard/package.json`): the `@compmd/*` packages at 0.9.0; the lockfile updated on purpose. `pnpm-workspace.yaml`'s `minimumReleaseAgeExclude` names them if they are newer than the release-age rule allows.\n- **CompMD's runtime** in `dist/assets/compmd/<version>/`: the version folder moves to `0.9.0`.\n- **CompMD's guide for agents**, `docs/agent/compmd-llms.txt` (`atm docs compmd`): 0.9.0's `spec/llms.txt`, from the public GitHub repository at its tag.\n\n## Adapt\nRead 0.9.0's changelog from the published package (never the local checkout), and list what changed for a host: the processor's frontmatter and data, the render's `lines()` and `lineHeights()` (the document viewer's gutter, the rendered diff and Wrap in Split use them), the sandbox's messages and policy.\n\n## Measure, before and after\nAs CR-59 did, on 0.8.0 first, then on 0.9.0:\n- the real review (CompMD's CR-1) in Chromium and WebKit: opening, a jump to the top and to the end (blocked ms), scrolled to the end;\n- the timed tests, three times each on one worker (medians): a jump's restyles, the long review's settling, slowest frame and DOM nodes, the pointer, tab switches and reloads;\n- sizes: CompMD's WebAssembly, `compmd.js`, the dashboard's page.\nWrite them into `docs/review-performance.md` and the CR.\n\n## Checks\n`pnpm run verify` (Linux screenshots included; regenerate only those that changed on purpose), `cargo test`, clippy, `cargo deny check`; `pnpm run size` within budget; `docs/security-architecture.md` notes the upgrade and any change to what the sandbox allows.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -19652,7 +19672,7 @@
         "docs/review-performance.md"
       ],
       "created_at": "2026-11-20T12:29:32Z",
-      "updated_at": "2026-11-20T12:29:35Z",
+      "updated_at": "2026-11-20T15:54:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19664,6 +19684,79 @@
       "sprint": "Task&review state machine",
       "number": 703,
       "started_at": "2026-11-20T12:29:35Z",
+      "started_by": "claude:0f56a916",
+      "commit": "9bfa7c4cf8c7135c077e7a6fd2eeb0c78d1e630e",
+      "code_reviews": [
+        {
+          "id": "01a1f8f8-7bc0-75f7-a4bc-0f86a1893f46",
+          "ref": "CR-82"
+        }
+      ],
+      "review_requested_at": "2026-11-20T12:39:56Z",
+      "notes": [
+        {
+          "at": "2026-11-20T12:39:56Z",
+          "kind": "review",
+          "text": "CR-82: CompMD 0.9.0, measured before and after",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T15:51:59Z",
+          "kind": "note",
+          "text": "Approved: in CR-82 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T15:54:47Z",
+          "kind": "outcome",
+          "text": "Approved in CR-82: CompMD 0.9.0, measured before and after",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T12:39:56Z",
+          "to": "2026-11-20T15:51:59Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T15:54:47Z",
+      "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f9ac-0ec2-706e-aa2b-19f09b095516",
+      "name": "Release 0.42.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "release"
+      ],
+      "description": "Ship the sprint *Task&review state machine* as 0.42.0, as AGENTS.md's *Versions* and *CI* sections describe. Its state machine itself (ATM-633) moved to the backlog; the release is the sprint's other work: the review pages (rendered Markdown commented on in a margin like Word, Wrap in Split, line numbers level and subtle, no seams between lines, a jump that stays put, live reviews that don't move, images), the app's tabs (More ⌄, the project chooser, the selected tab, Back to where a review was opened from), Settings' text size, and CompMD 0.8.0 then 0.9.0. Work moves to `dev/0.42.0`, from the work on top of 0.41.0.\n\n## Change\n- **The version:** `Cargo.toml`'s `[workspace.package]` to `0.42.0`; `Cargo.lock` updated by the build.\n- **`CHANGELOG.md`:** the `[0.42.0]` entry, dated the release day: every change of the sprint's tasks.\n- **`WHATS-NEW.md`:** 3–6 short plain-language bullets about what a user notices.\n- **Screenshots:** regenerate the Linux baselines this sprint changed (`pnpm run test:e2e:visual:update`, Docker), look at them, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): finish the 0.42.0 entry. No skill or `docs/agent/` text agents act on changed (only the CompMD guide's header), so no sandbox run; the new entry point (a file read at a revision, ATM-689) is in it.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPushing, the release PR from `dev/0.42.0` to `main`, merging, tagging and publishing are Hakan's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-20T15:56:05Z",
+      "updated_at": "2026-11-20T15:56:08Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T15:56:05Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 704,
+      "started_at": "2026-11-20T15:56:08Z",
       "started_by": "claude:0f56a916"
     }
   ]
