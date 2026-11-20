@@ -1405,10 +1405,64 @@
       },
       {
         "id": "Task&review state machine",
-        "state": "active",
+        "state": "closed",
         "start": "2026-11-19T16:18:53Z",
         "goal": "One state machine for tasks, claims and reviews, live reviews included, in atm-lib; the CLI, the API and the dashboard ask it",
-        "release": "0.42.0"
+        "release": "0.42.0",
+        "end": "2026-11-20T16:05:25Z",
+        "report": {
+          "done": [
+            "01a1eda3-9ed4-71e4-8d2e-919e67b9261c",
+            "01a1f49d-a9cd-7229-8a16-02140f1cdeca",
+            "01a1f4fd-42b5-741f-92a8-84889ca15f2a",
+            "01a1f4fd-42b5-741f-92a8-848990a501dd",
+            "01a1f4fd-42b5-741f-92a8-848aa5d26e23",
+            "01a1f4fd-42b5-741f-92a8-848b9d6a97b8",
+            "01a1f4fd-42b5-741f-92a8-848c3c638fe6",
+            "01a1f558-bc0a-762d-9c45-4e62a305cee6",
+            "01a1f558-bc0a-762d-9c45-4e632884fe3f",
+            "01a1f558-bc0a-762d-9c45-4e642f23672e",
+            "01a1f7cc-3257-7251-9ecd-83db95b7695d",
+            "01a1f7cc-3257-7251-9ecd-83dceb619886",
+            "01a1f7cc-3257-7251-9ecd-83dd79ff17ea",
+            "01a1f819-6c2f-774b-923c-6b97a9827afd",
+            "01a1f83a-4d94-73f7-98bf-1f833fbff0db",
+            "01a1f853-b838-7013-a6f3-af7c0f05adf2",
+            "01a1f86c-28ea-7783-8c1f-95c638d3c235",
+            "01a1f893-8835-72bd-99d7-203cfa1f3f02",
+            "01a1f8ac-7740-776b-baec-7b75fbe6cc24",
+            "01a1f8b3-1427-7157-a0d9-09e6c6a437c2",
+            "01a1f8d9-79c7-7484-b094-c9afad23fb21",
+            "01a1f8ee-f4e3-74c6-b0bd-f61a8a5f8676",
+            "01a1f9ac-0ec2-706e-aa2b-19f09b095516"
+          ],
+          "carried": [],
+          "added": [
+            "01a1eda3-9ed4-71e4-8d2e-919e67b9261c",
+            "01a1f49d-a9cd-7229-8a16-02140f1cdeca",
+            "01a1f4fd-42b5-741f-92a8-84889ca15f2a",
+            "01a1f4fd-42b5-741f-92a8-848990a501dd",
+            "01a1f4fd-42b5-741f-92a8-848aa5d26e23",
+            "01a1f4fd-42b5-741f-92a8-848b9d6a97b8",
+            "01a1f4fd-42b5-741f-92a8-848c3c638fe6",
+            "01a1f558-bc0a-762d-9c45-4e62a305cee6",
+            "01a1f558-bc0a-762d-9c45-4e632884fe3f",
+            "01a1f558-bc0a-762d-9c45-4e642f23672e",
+            "01a1f7cc-3257-7251-9ecd-83db95b7695d",
+            "01a1f7cc-3257-7251-9ecd-83dceb619886",
+            "01a1f7cc-3257-7251-9ecd-83dd79ff17ea",
+            "01a1f819-6c2f-774b-923c-6b97a9827afd",
+            "01a1f83a-4d94-73f7-98bf-1f833fbff0db",
+            "01a1f853-b838-7013-a6f3-af7c0f05adf2",
+            "01a1f86c-28ea-7783-8c1f-95c638d3c235",
+            "01a1f893-8835-72bd-99d7-203cfa1f3f02",
+            "01a1f8ac-7740-776b-baec-7b75fbe6cc24",
+            "01a1f8b3-1427-7157-a0d9-09e6c6a437c2",
+            "01a1f8d9-79c7-7484-b094-c9afad23fb21",
+            "01a1f8ee-f4e3-74c6-b0bd-f61a8a5f8676",
+            "01a1f9ac-0ec2-706e-aa2b-19f09b095516"
+          ]
+        }
       },
       {
         "id": "Audit - Nov19",
@@ -19734,7 +19788,7 @@
       "description": "Ship the sprint *Task&review state machine* as 0.42.0, as AGENTS.md's *Versions* and *CI* sections describe. Its state machine itself (ATM-633) moved to the backlog; the release is the sprint's other work: the review pages (rendered Markdown commented on in a margin like Word, Wrap in Split, line numbers level and subtle, no seams between lines, a jump that stays put, live reviews that don't move, images), the app's tabs (More ⌄, the project chooser, the selected tab, Back to where a review was opened from), Settings' text size, and CompMD 0.8.0 then 0.9.0. Work moves to `dev/0.42.0`, from the work on top of 0.41.0.\n\n## Change\n- **The version:** `Cargo.toml`'s `[workspace.package]` to `0.42.0`; `Cargo.lock` updated by the build.\n- **`CHANGELOG.md`:** the `[0.42.0]` entry, dated the release day: every change of the sprint's tasks.\n- **`WHATS-NEW.md`:** 3–6 short plain-language bullets about what a user notices.\n- **Screenshots:** regenerate the Linux baselines this sprint changed (`pnpm run test:e2e:visual:update`, Docker), look at them, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): finish the 0.42.0 entry. No skill or `docs/agent/` text agents act on changed (only the CompMD guide's header), so no sandbox run; the new entry point (a file read at a revision, ATM-689) is in it.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPushing, the release PR from `dev/0.42.0` to `main`, merging, tagging and publishing are Hakan's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -19745,7 +19799,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-20T15:56:05Z",
-      "updated_at": "2026-11-20T15:56:08Z",
+      "updated_at": "2026-11-20T16:05:21Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19757,7 +19811,18 @@
       "sprint": "Task&review state machine",
       "number": 704,
       "started_at": "2026-11-20T15:56:08Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "2d250f33b175d20ac7a649170a84e368520cb302",
+      "completed_at": "2026-11-20T16:05:21Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-20T16:05:21Z",
+          "kind": "outcome",
+          "text": "Released as 0.42.0 on `dev/0.42.0`: the version, the CHANGELOG and WHATS-NEW entries, the security checklist entry and two regenerated Linux screenshots. verify, cargo test, clippy and deny all pass.",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
