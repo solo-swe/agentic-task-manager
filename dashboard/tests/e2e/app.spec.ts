@@ -682,6 +682,43 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#in-tab-trail')).toHaveCount(0);
   });
 
+  // Hakan: in the app, the regular themes' board scrolled as a whole, with a scrollbar, where each column should
+  // scroll inside without one (the sticky-notes and hand-drawn themes, whose columns stretch, didn't)
+  for (const theme of ['default', 'sticky-notes']) {
+    test(`in the app, the board fits its tab and each column scrolls inside it, without a scrollbar (${theme}) @webkit`, async ({
+      page,
+      tasksServer,
+    }) => {
+      await tasksServer.asApp();
+      tasksServer.use('kanban');
+      // A large window, and a small one (Hakan's: about 1000 × 615)
+      for (const [width, height] of [
+        [1280, 720],
+        [1000, 615],
+      ]) {
+        await page.setViewportSize({ width, height });
+        await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+        if (theme !== 'default') await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        const done = page.locator('.kanban-column[data-status="done"]');
+        const showAll = done.getByRole('button', { name: /Show all/ });
+        if (await showAll.count()) await showAll.click();
+        // The board doesn't scroll as a whole, nor does the tab or the page
+        const overflow = (selector: string) =>
+          page.locator(selector).evaluate((el) => el.scrollHeight - el.clientHeight);
+        await expect.poll(() => overflow('.kanban-board'), { message: `${width} × ${height}` }).toBeLessThanOrEqual(0);
+        // The tab and the page neither (in a small window the board keeps its 320px minimum, and the page gives way)
+        if (height >= 720) {
+          expect(await overflow('#app-main')).toBeLessThanOrEqual(0);
+          expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
+        }
+        // The column does, inside, with no scrollbar taking room
+        const cards = done.locator('.kanban-cards');
+        expect(await cards.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+        expect(await cards.evaluate((el) => (el as HTMLElement).offsetWidth - el.clientWidth)).toBe(0);
+      }
+    });
+  }
+
   test('the status bar (T-516): up to date, the agents at work, the copyright, the version and the links', async ({
     page,
     tasksServer,

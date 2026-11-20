@@ -3768,6 +3768,18 @@ svg.graph-minimap.hidden {
   flex: 1 1 0;
   min-height: 320px;
 }
+/* A board that fills its panel (the project's, the Omniboard's) caps its columns at its own height, as a size
+   container (100cqh), never as max-height: 100% of a flexed height, which the app's WebKit doesn't resolve: there the
+   columns grew to their cards and the board scrolled as a whole, with a scrollbar (Hakan, 0.42.0; the drawn themes,
+   whose columns stretch, didn't) */
+.kanban > .kanban-board,
+.on-board > #overview-panel > .all-board {
+  container-type: size;
+}
+.kanban > .kanban-board > .kanban-column,
+.on-board > #overview-panel > .all-board > .kanban-column {
+  max-height: 100cqh;
+}
 .kanban.grouped {
   flex: 1 1 0;
   /* The toolbar and the ungrouped board's minimum */

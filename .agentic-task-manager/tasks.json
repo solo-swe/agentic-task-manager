@@ -1830,7 +1830,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 706
+    "next_number": 708
   },
   "tasks": [
     {
@@ -18074,7 +18074,7 @@
       "description": "Audit findings C2, C17 and H3 ([the report](docs/codebase-audit-2026-11.md#c2-medium-bug-usage-errors-and-claimed-by-another-reach-the-dashboard-as-http-500-checked)).\n\n`crates/atm-api/src/routes.rs:122` maps every `Error::Failed` to 500, but about 22 places build usage errors as `Failed { code: 2 }` and four build \"claimed by another\" as `Failed { code: 4 }`. The tasks route (`routes/tasks.rs:71-78`) maps errors its own way. Unknown task and unknown sprint are built as different variants in different modules.\n\n## Change\n- The `code: 2` cases become `Error::Invalid`; add `Error::Conflict(String)` (exit 4, HTTP 409) for claims.\n- `routes/tasks.rs` uses `error_response`.\n- One exit-code table (0 ok, 1 error, 2 usage, 3 nothing available, 4 conflict, and a separate code for a wait's timeout) in `atm-common`, mapped in one place; document it in `docs/agent/` (agents read exit codes).\n- \"No such task\" is `NotFound` everywhere (one `task_at(work, id)` helper next to `Working`).\n\n## Tests\natm-api route tests: a too-long note is 400, a claim held by another is 409, an unknown task is 404. CLI scenarios keep their exit codes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/error.rs",
@@ -18084,7 +18084,7 @@
         "crates/atm-common/src/rules.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T17:55:49Z",
+      "updated_at": "2026-11-20T18:04:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18096,7 +18096,24 @@
       "sprint": "Audit and tabs",
       "number": 664,
       "started_at": "2026-11-20T17:55:49Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "a5be6bf79a0a6853c06cb6a5dc505ecb5eccefa8",
+      "code_reviews": [
+        {
+          "id": "01a1fa21-3fd4-7720-9bc3-a439332c20d8",
+          "ref": "CR-89"
+        }
+      ],
+      "review_requested_at": "2026-11-20T18:04:05Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T18:04:05Z",
+          "kind": "review",
+          "text": "CR-89: Errors typed: Invalid and a new Conflict, so the server answers 400, 404 and 409",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2261e3b74860",
@@ -18110,7 +18127,7 @@
       "description": "Audit findings C3 and L13 ([the report](docs/codebase-audit-2026-11.md#c3-medium-security-status-type-and-priority-ids-and-sprint-names-arent-shell-safe-checked)).\n\n`crates/atm-common/src/vocabulary.rs:211-215` accepts any non-empty status, type or priority ID, and sprint names only refuse outer spaces and length, while releases and components use `valid_short_id`. Agents paste these into commands (`atm task state … <status>`, `--sprint '<name>'`). And `backlog`, `new`, `active`, `next` are accepted as sprint names (`crates/atm-lib/src/sprints.rs:263`, and `rename_sprint`), after which `--to backlog` can never mean that sprint.\n\n## Change\n- `valid_short_id` on the IDs in `terms()`.\n- Sprint names: letters, digits, space, `.`, `_`, `-`, `&` (the current sprint has one) and the like; no `$`, backtick, `;`, `|`, quotes, newlines. Decide the set from the existing names (`atm sprint list --all`) so nothing existing breaks.\n- Refuse the four reserved words, case-insensitively, in `checked_name` and `rename_sprint`.\n- Note it in `docs/security-architecture.md` I8.\n\n## Tests\n`tests/scripts/scenarios/security.json`: a status `done$(x)` and a sprint `s1;x` are refused on load and on add; `atm sprint add backlog` is refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/vocabulary.rs",
@@ -18119,9 +18136,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T18:04:10Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -18129,7 +18146,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 665
+      "number": 665,
+      "started_at": "2026-11-20T18:04:10Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2262499c2829",
@@ -20151,6 +20170,73 @@
       ],
       "completed_at": "2026-11-20T17:17:39Z",
       "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1fa2f-0a43-7206-8145-8fafde0be227",
+      "name": "Document styles: every page GitHub's width; GitHub the default and first, Theme last",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "ux"
+      ],
+      "description": "Hakan (2026-11-20): the Docs and Magazine document styles draw a narrower page than GitHub's, and GitHub's is the right size; the Theme style (the theme's own page, `auto`) looks darker and not at all like paper.\n\nToday each style copies its model's line length (`dashboard/src/themes/doc-styles.css`): GitHub 980px, Docs `calc(44rem + 112px)` (about 816px), Magazine 760px.\n\n## Change\n- Docs and Magazine: the page as wide as GitHub's (980px max), their type and colours as they are. Keep the width in one variable, so the styles can't drift apart again.\n- `dashboard/src/lib/appearance.ts`: `DOC_STYLES` in the order GitHub, Docs, Magazine, Theme (the `auto` entry last), and `DEFAULT_DOC_STYLE` GitHub. A reader who chose a style keeps it; one who never chose gets GitHub. Check how `prefs.ts` stores the default (a stored `auto` that was never chosen must not keep the old default).\n- The diff viewer's rendered side (`.doc-sheet`) follows, as it uses the same styles.\n- Settings' sample (`.doc-style-sample`) and the Rendered tooltip's wording still right.\n\n## Tests\n- `appearance` unit tests: the order and the default.\n- e2e `documents.spec.ts`: a fresh dashboard renders a Markdown document in the GitHub style; Docs and Magazine pages are as wide as GitHub's.\n- Screenshots that change (Settings menu, document viewer) are regenerated in the release task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/themes/doc-styles.css",
+        "dashboard/src/lib/appearance.ts",
+        "dashboard/src/lib/prefs.ts",
+        "dashboard/tests/unit/appearance.test.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-20T18:19:09Z",
+      "updated_at": "2026-11-20T18:19:09Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T18:19:09Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "number": 706
+    },
+    {
+      "id": "01a1fa31-88c0-75df-bb58-6495920a527c",
+      "name": "In the app, the regular themes' board scrolls as a whole, with a scrollbar",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "ux",
+        "app"
+      ],
+      "description": "Hakan (2026-11-20, 0.42.0, the app): on the Kanban and the Omniboard, in every regular theme, the board scrolls as a whole with a scrollbar, the columns running past the window; each column should scroll inside, without one. The sticky-notes and hand-drawn themes are right.\n\n## Cause (as far as the tests can tell)\nA regular theme keeps a column to the board's height with `max-height: 100%` of the board, whose height is flexed (`flex: 1 1 0`). The app's WebKit doesn't resolve that percentage: the columns grow to their cards and the board, `overflow-x: auto` (so its y scrolls too), scrolls. The drawn themes set `--board-align: stretch`, which sizes the columns without a percentage. Playwright's WebKit and Chromium both resolve it, so no test saw it: the board tests ran in Chromium only, the screenshots are Linux Chromium (no scrollbars), and none looked at a long column in the app's frame.\n\n## Change\nThe two full-height boards (`.kanban > .kanban-board`, the Omniboard's `.all-board`) are size containers, their columns capped at `100cqh`: no percentage of a flexed height.\n\n## Tests\n- `app.spec.ts` (@webkit): in the app's frame, default and sticky-notes, a large and a small window: the board doesn't scroll as a whole, the tab and the page neither, a long column scrolls inside without a scrollbar.\n- `kanban.spec.ts`: the columns test also in WebKit, and the board not scrolling.\n- Hakan checks it in the app (`cargo tauri dev`): Playwright's WebKit never showed the bug.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/app.css",
+        "dashboard/tests/e2e/app.spec.ts",
+        "dashboard/tests/e2e/kanban.spec.ts"
+      ],
+      "created_at": "2026-11-20T18:21:52Z",
+      "updated_at": "2026-11-20T18:21:55Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T18:21:52Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "number": 707,
+      "started_at": "2026-11-20T18:21:55Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

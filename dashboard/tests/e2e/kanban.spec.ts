@@ -298,7 +298,8 @@ test.describe('Kanban board', () => {
     await expect(column(page, 'done').locator('.kanban-card')).toHaveCount(20);
   });
 
-  test('columns reach down to the status bar and scroll inside; the page itself never scrolls (T-237, T-262)', async ({
+  // @webkit: the app's engine (Hakan: in the app, the regular themes' board scrolled as a whole, with a scrollbar)
+  test('columns reach down to the status bar and scroll inside; the page itself never scrolls (T-237, T-262) @webkit', async ({
     page,
     tasksServer,
   }) => {
@@ -311,6 +312,9 @@ test.describe('Kanban board', () => {
       if (await showAll.count()) await showAll.click();
       // One scrollbar at most: the page is exactly the window's height
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(height);
+      // The board doesn't scroll as a whole: its columns fit it, each scrolling inside (without a scrollbar)
+      const board = page.locator('.kanban-board');
+      expect(await board.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(0);
       const footer = (await page.locator('footer').boundingBox())!;
       const box = (await done.boundingBox())!;
       expect(footer.y - (box.y + box.height)).toBeGreaterThanOrEqual(0);
