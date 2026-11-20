@@ -1,5 +1,6 @@
 <script lang="ts">
   import { claimSummary } from '../claims';
+  import { followInPlace } from '../new-tab-clicks';
   import ReviewLink from '../details/ReviewLink.svelte';
   import type { KanbanCard } from '../kanban';
   import { dashboard } from '../state.svelte';
@@ -39,15 +40,7 @@
 
   // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
   const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
-
-  function onKeydown(e: KeyboardEvent) {
-    // A key on a link inside it (its review's) is the link's
-    if (e.target !== e.currentTarget) return;
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      dashboard.showDetail(task.id);
-    }
-  }
+  const href = $derived(dashboard.taskAddress(task));
 </script>
 
 <div
@@ -56,10 +49,6 @@
   data-id={task.id}
   data-type={task.type}
   data-priority={priorityOf(dashboard.vocab, task)}
-  role="button"
-  tabindex="0"
-  onclick={() => dashboard.showDetail(task.id)}
-  onkeydown={onKeydown}
 >
   <div class="kanban-card-top">
     <span class="kanban-card-id"><TaskKey {task} /></span>
@@ -87,7 +76,11 @@
     <LabelChips {task} compact />
     {#if card.nextUp}<span class="kanban-next-up">Next up</span>{/if}
   </div>
-  <div class="kanban-card-name">{task.name}</div>
+  <!-- A real link to its details (ATM-698): Copy Link, ⌘-click and a middle click work as on any link; a plain
+       click opens them here. It covers the card (`.card-link`), under the card's own links -->
+  <a class="kanban-card-name card-link" {href} onclick={(e) => followInPlace(e, () => dashboard.showDetail(task.id))}
+    >{task.name}</a
+  >
   {#if claim}
     <div class="kanban-claim" title="Claimed by {claim.agent}">{claimSummary(claim, dashboard.loadedAt)}</div>
   {/if}

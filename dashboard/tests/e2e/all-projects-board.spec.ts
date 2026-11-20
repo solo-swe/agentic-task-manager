@@ -143,7 +143,8 @@ test.describe('All projects board', () => {
     await expect(page.locator('#detail-overlay.open')).toHaveCount(0);
     await expect(page.locator('#all-board')).toBeVisible();
     // Another card, by the keyboard
-    await page.locator('#all-board .board-card[data-project="shop"][data-id="T-005"]').press('Enter');
+    // (its link: the card's one stop for the keyboard, ATM-698)
+    await page.locator('#all-board .board-card[data-project="shop"][data-id="T-005"] .card-link').press('Enter');
     await expect(panel.locator('h3 > span').first()).toHaveText('T-005');
     await page.keyboard.press('Escape');
     expect(page.url()).toBe(url);

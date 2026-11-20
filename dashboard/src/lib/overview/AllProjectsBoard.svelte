@@ -21,6 +21,8 @@
   import ProjectLogo from '../ui/ProjectLogo.svelte';
   import TaskKey from '../ui/TaskKey.svelte';
   import { shortId } from '../keys';
+  import { followInPlace } from '../new-tab-clicks';
+  import { withTask } from '../routes';
 
   let { projects }: { projects: ProjectEntry[] } = $props();
 
@@ -93,13 +95,6 @@
   function open(item: AllBoardCard) {
     void dashboard.openOnBoard(item.project.id, item.card.id);
   }
-
-  function onKeydown(e: KeyboardEvent, item: AllBoardCard) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      open(item);
-    }
-  }
 </script>
 
 <!-- The five columns, of every project or of one project's lane (no chips there: the lane says whose they are) -->
@@ -117,15 +112,7 @@
           {@const card = item.card}
           {@const ts = typeStyle(card.type ?? '')}
           {@const line = status(item, column.id)}
-          <div
-            class="kanban-card board-card"
-            data-id={card.id}
-            data-project={item.project.id}
-            role="button"
-            tabindex="0"
-            onclick={() => open(item)}
-            onkeydown={(e) => onKeydown(e, item)}
-          >
+          <div class="kanban-card board-card" data-id={card.id} data-project={item.project.id}>
             <div class="kanban-card-top">
               {#if !lane}
                 <button
@@ -164,7 +151,12 @@
                 >
               {/if}
             </div>
-            <div class="kanban-card-name">{card.name}</div>
+            <!-- A real link (ATM-698): the task on its project's page; a plain click opens its details over the board -->
+            <a
+              class="kanban-card-name card-link"
+              href={withTask(dashboard.projectAddress(item.project.id), card.key ?? card.id)}
+              onclick={(e) => followInPlace(e, () => open(item))}>{card.name}</a
+            >
             {#if line}
               <div
                 class="kanban-waiting board-card-status"

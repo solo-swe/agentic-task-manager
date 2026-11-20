@@ -44,7 +44,7 @@
     type EntryState,
   } from '../lib/navigation';
   import { newTabAddress } from '../lib/new-tab-clicks';
-  import { tabActions, wantsNewTab } from '../lib/tab-actions';
+  import { inBackground, tabActions, wantsNewTab } from '../lib/tab-actions';
 
   const tabs = tabActions();
 
@@ -57,7 +57,8 @@
     if (!address) return;
     e.preventDefault();
     e.stopPropagation();
-    tabs.open(address);
+    // In the background, right of this tab; ⇧⌘ brings it forward (ATM-698)
+    tabs.open(address, inBackground(e));
   }
   import { dashboard } from '../lib/state.svelte';
 

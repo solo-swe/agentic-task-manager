@@ -184,9 +184,25 @@ test.describe('Kanban board', () => {
     await card(page, 'T-030').click();
     await expect(page.locator('#detail-panel h3')).toHaveText('T-030 Waiting on work in progress');
     await page.keyboard.press('Escape');
-    await card(page, 'T-025').focus();
+    // The card's one stop for the keyboard is its link (ATM-698)
+    await card(page, 'T-025').locator('.card-link').focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('#detail-panel h3')).toHaveText('T-025 Build the board');
+  });
+
+  // ATM-698: a card is a real link to its details, for Copy Link and a new tab; a plain click still opens them here
+  test('a card is a link to its details: its address the page’s with ?task=, a plain click in place', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openKanban(page, tasksServer, 'kanban');
+    const link = card(page, 'T-025').locator('a.card-link');
+    await expect(link).toHaveAttribute('href', /^\/projects\/[^/?]+(\/kanban)?\?(.*&)?task=T-025$/);
+    // A click anywhere on the card is the link's (it covers the card), and opens the details here
+    const before = await page.evaluate(() => history.length);
+    await card(page, 'T-025').click({ position: { x: 8, y: 8 } });
+    await expect(page.locator('#detail-panel h3')).toHaveText('T-025 Build the board');
+    expect(await page.evaluate(() => history.length)).toBe(before + 1);
   });
 
   // ATM-619: a card in review shows its code review, a link that opens it from the board, not the task

@@ -2175,6 +2175,8 @@ button.menu-trigger:hover,
   font-weight: 500;
   margin-bottom: var(--space-3);
   cursor: pointer;
+  /* A real link since ATM-698, as it looked as a button */
+  text-decoration: none;
 }
 .task-name:hover {
   color: var(--accent);
@@ -4006,11 +4008,36 @@ svg.graph-minimap.hidden {
   padding: var(--space-1) var(--space-3);
 }
 .kanban-card-name {
+  display: block;
   margin-top: var(--space-3);
   font-family: var(--card-font, inherit);
   font-size: var(--card-font-size, var(--text-md));
   font-weight: var(--card-font-weight, normal);
   line-height: 1.4;
+  color: inherit;
+  text-decoration: none;
+}
+/* A card is its link (ATM-698): the link covers it, so ⌘-click and a middle click anywhere on it are the link's; the
+   card's own links and buttons stay above it */
+.kanban-card {
+  position: relative;
+}
+.kanban-card .card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.kanban-card a:not(.card-link),
+.kanban-card button {
+  position: relative;
+  z-index: 1;
+}
+.kanban-card .card-link:focus-visible {
+  outline: none;
+}
+.kanban-card:has(.card-link:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .kanban-readiness {
   margin-top: var(--space-3);

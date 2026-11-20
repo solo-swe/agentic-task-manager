@@ -469,9 +469,12 @@ test.describe('the dashboard in the atm app', () => {
     await page.locator('.review-back').click();
     await expect(page.locator('#review-list')).toBeVisible();
 
-    // ⌘-click: a tab of its own
+    // ⌘-click: a tab of its own, in the background, this tab still the list (ATM-698, as browsers do)
     await page.locator('.review-row[data-review="CR-2"] .review-link').click({ modifiers: ['ControlOrMeta'] });
     await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#review-list')).toBeVisible();
+    await tabs.nth(1).click();
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
     // Opened on its own, its back button goes up to its reviews list
@@ -559,6 +562,42 @@ test.describe('the dashboard in the atm app', () => {
     await expect(tabs).toHaveCount(1);
     await page.locator('.title-bar-tab-close').nth(0).click();
     expect(tasksServer.windowCalls).toContain('close_window');
+  });
+
+  // ATM-698 (docs/tabs-and-navigation-design.md §4.5): clicks as in a browser, on every card and row
+  test('⌘-click and a middle click on a card or row open a tab in the background; ⇧⌘-click brings it forward', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/kanban`);
+    await page.goto('/');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    const card = page.locator('.kanban-card[data-id="T-004"] .card-link');
+    await card.click({ button: 'middle' });
+    await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await card.click({ modifiers: ['ControlOrMeta', 'Shift'] });
+    await expect(tabs).toHaveCount(3);
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => addressOf(page)).toContain('task=T-004');
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+    // A list row's name, the same: a real link to its details
+    await tabs.nth(0).click({ timeout: 5000 });
+    await page.locator('#tab-list').click();
+    const row = page.locator('.task-card[data-id="T-004"] a.task-name');
+    await expect(row).toHaveAttribute('href', /\/list\?(.*&)?task=T-004$/);
+    await row.click({ modifiers: ['ControlOrMeta'] });
+    await expect(tabs).toHaveCount(4);
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    // A plain click opens it here
+    await row.click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await expect(tabs).toHaveCount(4);
   });
 
   // ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): each tab its own history; a switch adds nothing
@@ -649,6 +688,10 @@ test.describe('the dashboard in the atm app', () => {
     const id = await card.getAttribute('data-id');
     await card.click({ modifiers: ['ControlOrMeta'] });
     await expect(tabs).toHaveCount(3);
+    // In the background, right of this tab, which stays as it was (ATM-698)
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+    await tabs.nth(1).click();
     await expect.poll(() => addressOf(page)).toContain(`task=${id}`);
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
     await page.keyboard.press('Escape');

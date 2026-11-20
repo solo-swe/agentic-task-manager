@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { newTabAddress } from '../../src/lib/new-tab-clicks';
-import { wantsNewTab } from '../../src/lib/tab-actions';
+import { followInPlace, newTabAddress, plainClick } from '../../src/lib/new-tab-clicks';
+import { inBackground, wantsNewTab } from '../../src/lib/tab-actions';
 
 function element(html: string, selector: string): Element {
   const host = document.createElement('div');
@@ -29,5 +29,35 @@ describe('open in a new tab (T-515)', () => {
     expect(wantsNewTab(new MouseEvent('click', { ctrlKey: true }))).toBe(true);
     expect(wantsNewTab(new MouseEvent('auxclick', { button: 1 }))).toBe(true);
     expect(wantsNewTab(new MouseEvent('click'))).toBe(false);
+  });
+
+  // ATM-698: every card and row is a real link; a link to any of the dashboard's pages opens in a new tab
+  it('a link to one of the dashboard’s pages (a card’s, a review row’s, a reference) is its address; `#…` and other sites aren’t', () => {
+    const here = '/projects/abc/kanban';
+    expect(newTabAddress(element('<a href="/projects/abc/reviews/CR-7">r</a>', 'a'), here)).toBe(
+      '/projects/abc/reviews/CR-7',
+    );
+    expect(newTabAddress(element('<a href="/projects/abc/list?task=ATM-1"><b>x</b></a>', 'b'), here)).toBe(
+      '/projects/abc/list?task=ATM-1',
+    );
+    expect(newTabAddress(element('<a href="/api/projects">x</a>', 'a'), here)).toBeNull();
+    // A task's key in text is the text's to open (CompMD's link handler)
+    expect(newTabAddress(element('<a href="#task=ATM-1">x</a>', 'a'), here)).toBeNull();
+  });
+
+  it('a plain click opens in place, any other is left alone; ⇧ keeps the new tab forward, else it is in the background', () => {
+    let opened = 0;
+    const open = () => opened++;
+    const plain = new MouseEvent('click', { button: 0, cancelable: true });
+    followInPlace(plain, open);
+    expect([opened, plain.defaultPrevented]).toEqual([1, true]);
+    for (const other of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+      const e = new MouseEvent('click', { button: 0, cancelable: true, ...other });
+      followInPlace(e, open);
+      expect([opened, e.defaultPrevented], JSON.stringify(other)).toEqual([1, false]);
+    }
+    expect(plainClick(new MouseEvent('click'))).toBe(true);
+    expect(inBackground(new MouseEvent('click', { metaKey: true }))).toBe(true);
+    expect(inBackground(new MouseEvent('click', { metaKey: true, shiftKey: true }))).toBe(false);
   });
 });

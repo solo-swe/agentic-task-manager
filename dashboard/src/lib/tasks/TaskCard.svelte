@@ -1,5 +1,6 @@
 <script lang="ts">
   import { claimSummary } from '../claims';
+  import { followInPlace } from '../new-tab-clicks';
   import ReviewLink from '../details/ReviewLink.svelte';
   import { scrollToTask } from '../scroll';
   import { dashboard } from '../state.svelte';
@@ -46,7 +47,13 @@
 <div class="task-card status-{task.status} kind-{kind ?? 'none'}" id="task-{task.id}" data-id={task.id}>
   <div class="task-id"><TaskKey {task} /></div>
   <div class="task-body">
-    <button type="button" class="task-name" onclick={() => dashboard.showDetail(task.id)}>{task.name}</button>
+    <!-- A real link to its details (ATM-698): a plain click opens them here, any other click is the browser's or the
+         app's new tab -->
+    <a
+      class="task-name"
+      href={dashboard.taskAddress(task)}
+      onclick={(e) => followInPlace(e, () => dashboard.showDetail(task.id))}>{task.name}</a
+    >
     {#if excerpt}<div class="task-excerpt">{excerpt}</div>{/if}
     <div class="task-meta">
       {#if showSprint}

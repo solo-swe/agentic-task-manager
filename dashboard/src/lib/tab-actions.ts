@@ -10,9 +10,15 @@ export function wantsNewTab(e: MouseEvent): boolean {
   return e.metaKey || e.ctrlKey || e.button === 1;
 }
 
+/** Whether such a click keeps the new tab in the background, as browsers do: all but ⇧⌘ (⇧Ctrl) brings it forward */
+export function inBackground(e: MouseEvent): boolean {
+  return !e.shiftKey;
+}
+
 export interface TabActions {
-  /** A new tab at `address` (the workspace's overview by default) */
-  open(address?: string): void;
+  /** A new tab at `address` (the workspace's overview by default), shown; in the `background`, right of this one,
+   * which stays shown (ATM-698: ⌘-click and a middle click; ⇧⌘-click brings it forward) */
+  open(address?: string, background?: boolean): void;
   select(id: string): void;
   /** Close tab `id`, the active one by default */
   close(id?: string): void;
@@ -47,7 +53,8 @@ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): T
     return change();
   };
   return {
-    open: (address = '/') => go(leaving(() => tabs.open(address))),
+    open: (address = '/', background = false) =>
+      background ? void tabs.open(address, true) : go(leaving(() => tabs.open(address))),
     select: (id) => go(id === tabs.active ? undefined : (leaving(() => tabs.select(id)) ?? undefined)),
     close: (id = tabs.active) => go(tabs.close(id)),
     step: (step) => go(leaving(() => tabs.step(step)) ?? undefined),

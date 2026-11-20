@@ -1830,7 +1830,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 711
+    "next_number": 712
   },
   "tasks": [
     {
@@ -14258,9 +14258,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-20T23:11:28Z",
+      "updated_at": "2026-11-20T23:22:27Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -14271,6 +14271,10 @@
           "sprint": "Task&review state machine",
           "from": "2026-11-19T10:01:16Z",
           "to": "2026-11-20T11:41:00Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T23:22:27Z"
         }
       ],
       "with": "user",
@@ -14308,7 +14312,8 @@
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/56"
       },
       "merged_at": "2026-11-19T14:50:42Z",
-      "reviewed_at": "2026-11-20T23:11:28Z"
+      "reviewed_at": "2026-11-20T23:11:28Z",
+      "sprint": "Audit and tabs"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-23995623df35",
@@ -18437,7 +18442,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.1 and §4.3, task 1 of §7 (approved in CR-63, with §6's recommended answers: one page for all tabs, atm keeping each tab's history).\n\n## Change\n- In the app, each title-bar tab keeps its own history: the addresses it went through, where it is in them, and each entry's scroll, restored on Back and Forward (`app-tabs.svelte.ts`, `tab-actions.ts`).\n- `navigate` (`lib/navigation.ts`) adds to the active tab's history; the page's own `history` stays one entry deep in the app.\n- Switching tabs pushes nothing anywhere: the other tab shows as it was left.\n- ⌘[ ⌘], the menu's Back and Forward, the mouse's back and forward buttons and a swipe all act on the active tab's history.\n- A new tab starts its history with the address it was opened on; its Back is disabled until it moves.\n- The browser keeps the browser's own history (one tab per browser tab).\n\n## Tests\nThe three traces of §4.3 (a review opened from a Kanban card, from a task's details, from the Reviews list), in the app and in the browser; a switch to another tab and back leaves both histories as they were; each entry's scroll restored.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/app-tabs.svelte.ts",
@@ -18445,7 +18450,7 @@
         "dashboard/src/lib/navigation.ts"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T22:59:10Z",
+      "updated_at": "2026-11-20T23:34:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18467,10 +18472,45 @@
           "kind": "handoff",
           "text": "Not started: ATM-708 (review watching, raised by Hakan today) taken first.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T23:15:04Z",
+          "kind": "review",
+          "text": "CR-101: A tab's own history in the app: Back and Forward walk the active tab, a switch adds nothing",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T23:32:52Z",
+          "kind": "note",
+          "text": "Approved: in CR-101 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T23:34:20Z",
+          "kind": "outcome",
+          "text": "Approved in CR-101. Not in it, as the CR said: a trackpad swipe (with the title bar arrows), and the review traces in the app (after the in-place click).",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-20T22:59:10Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f75eda1babf89d3b2f26dba43d1dabd170c4309f",
+      "code_reviews": [
+        {
+          "id": "01a1fb3d-f6b6-7532-b3d9-8b56be138b25",
+          "ref": "CR-101"
+        }
+      ],
+      "review_requested_at": "2026-11-20T23:15:04Z",
+      "reviews": [
+        {
+          "from": "2026-11-20T23:15:04Z",
+          "to": "2026-11-20T23:32:52Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T23:34:20Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c156588f4b10",
@@ -18602,13 +18642,13 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 4 of §7. ATM-686 already opens a review in place on a plain click in the app; this covers every card and row.\n\n## Change\n- Every card, row and reference is a real link (`<a href>` with its address), so *Copy Link* and *Open in New Tab* work the same everywhere.\n- A plain click opens in place, a step in the tab's history.\n- ⌘/Ctrl-click and a middle click open a new title-bar tab in the background, right of this one; ⇧⌘-click opens one brought forward. In the browser, the browser does this.\n- A middle click on a title-bar tab closes it.\n- All of it handled once, in `new-tab-clicks.ts`, not per component.\n\n## Tests\ne2e: each click on a Kanban card, a list row, a review row and a reference, in the app and the browser.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/new-tab-clicks.ts"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T17:16:06Z",
+      "updated_at": "2026-11-20T23:15:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18623,7 +18663,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 698
+      "number": 698,
+      "started_at": "2026-11-20T23:15:24Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15aacc8ccaf",
@@ -19146,7 +19188,7 @@
       "description": "Agents miss review comments and decisions in every project (Hakan, 2026-11-21, from a real session). The watch catches them, but the lines don't reach the agent.\n\n## The cause\n- In Claude Code a background command notifies the agent only when it **exits**. `atm review watch --json` runs for hours, so each line only lands in a file, and the agent sees it only if it remembers to read that file.\n- Remembering fails when the agent is deep in a task (a CI run, debugging) and after the conversation is compacted. A memory note asking it to read the watch relies on the same memory.\n- The agent then reports a review's state from what it did, not from what atm says.\n\n## Change\n- **A. The skills start the watch with `--once`** and restart it after each notice. This covers `atm-loop-tasks`, `atm-do-task`, `atm-push` and any other skill that starts the watch, plus `atm docs reviews`. In Claude Code, exiting is the event the agent is told about, so each comment or decision interrupts it mid-task, and the restarted watch first prints what came in between. Today the skills say this only \"where a background command reports only when it ends\", and agents don't recognise that Claude Code is such a place. Name it.\n- **B. Unread events on every atm command:** a short stderr line (`2 unread: CR-34 approved, CR-35 commented`), from the agent's cursor (what `loop next` reports as `since_last_watch`), until the agent has read them. Also `atm review inbox [--json]`, which prints them and marks them read. `atm task state` and `atm review create` say so too, so a review's state isn't reported from a stale view.\n- **C. A Claude Code hook atm installs** (`atm agents install`, or `atm hooks install`, only when the user runs it):\n  - on `UserPromptSubmit` and `PostToolUse`, it adds the unread review events (from `atm review inbox`) to the agent's context;\n  - on `Stop`, it blocks the reply while events are unread.\n  \n  This is the strongest of the three, because it doesn't depend on the model remembering anything. The hook runs atm only, and changes nothing but its own entries in the settings file.\n\n## Security\nC writes Claude Code's settings, an agent harness's configuration: only on the user's command, never from a skill. It needs its own entry in `docs/security-architecture.md` (what it writes, that it runs only `atm`, how it's removed), and the agent sandbox run before the release (a skill and atm output agents act on change).\n\n## Tests\n- **B:** the CLI suite. A comment and a decision show on the next command's stderr until `atm review inbox` reads them, per agent; another agent's cursor is untouched.\n- **C:** the hook's install, repeat install and removal leave other settings as they were; its output, with and without unread events.\n- **A:** the skills' text checked by the existing skill tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "skills/atm-loop-tasks/SKILL.md",
@@ -19158,7 +19200,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T22:21:26Z",
-      "updated_at": "2026-11-20T22:58:20Z",
+      "updated_at": "2026-11-20T23:34:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19179,15 +19221,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T22:58:20Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T22:58:20Z",
           "kind": "review",
           "text": "CR-99: Review events reach the agent: --once in the skills, an inbox, Claude Code hook; looks 20x faster",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T23:31:37Z",
+          "kind": "note",
+          "text": "Approved: in CR-99 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T23:34:10Z",
+          "kind": "outcome",
+          "text": "Approved in CR-99. Follow-ups discussed there: hooks for other harnesses (not yet a task), and ATM-711 for the file split.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T22:58:20Z",
+          "to": "2026-11-20T23:31:37Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T23:34:10Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fb11-1865-716b-95a4-002b0ad3ff35",
@@ -19230,7 +19292,7 @@
       "description": "Hakan, on CR-58 (2026-11-21): reviewing a live review's latest against round 2 says the review has no round 3.\n\n## The cause\n`review_page` (`crates/atm-lib/src/review_pages.rs`) shows a live review's working copy, when it changed since the last checkpoint, as the round after the stored ones, but only when no round is named (`now = round.is_none() && live`).\n\nChoosing a round to compare against, the page asks again with the round it shows named (`?round=3&against=2`). Round 3 isn't stored, so `round_of` refuses it: `CR-n has no round 3`.\n\n## Change\nOn a live review, a request for the round after the stored ones is the working copy now: `now` too, so its patch is the working copy's and `against` compares with it. When the working copy hasn't changed since the last checkpoint, that round is the last one.\n\n## Tests\n- atm-lib: the live review's page, its working copy changed, asked with `round = latest + 1` and an `against`; and asked with that round when nothing changed.\n- An e2e test in `reviews.spec.ts`: a live review's latest compared against an earlier round shows the diff, no error.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_pages.rs",
@@ -19238,7 +19300,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-20T23:02:12Z",
-      "updated_at": "2026-11-20T23:03:54Z",
+      "updated_at": "2026-11-20T23:34:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19259,15 +19321,69 @@
         }
       ],
       "review_requested_at": "2026-11-20T23:03:54Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T23:03:54Z",
           "kind": "review",
           "text": "CR-100: A live review compared against an earlier round: the working copy, not \"no round N\"",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T23:32:19Z",
+          "kind": "note",
+          "text": "Approved: in CR-100 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T23:34:22Z",
+          "kind": "outcome",
+          "text": "Approved in CR-100. Tested in atm-lib on a real working copy; no e2e test (the e2e server stands in for this code).",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T23:03:54Z",
+          "to": "2026-11-20T23:32:19Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T23:34:22Z",
+      "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1fb4b-6acd-7037-b908-ef6b279428c2",
+      "name": "Split the large Rust files as the Rust guide says: modules by concern, tests out, integration tests in tests/",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "refactor"
+      ],
+      "description": "Hakan on CR-99 and CR-100 (2026-11-21): the files are too large. Split them into logical modules, give them unit tests that use fakes for what they depend on, and move the integration tests into their own files, by [the Rust guide](docs/guides/rust.md) (§Crates and modules, §Tests).\n\n## The files (lines of code / lines of tests, 2026-11-21)\n| File | Code | Tests |\n|---|---|---|\n| `crates/atm-cli/src/commands/review.rs` | 1,386 | 100 |\n| `app/src-tauri/src/commands.rs` | 1,114 | 425 |\n| `crates/atm-lib/src/review_listen.rs` | 974 | 538 |\n| `crates/atm-lib/src/reviews.rs` | 937 | 1,300 |\n| `crates/atm-vcs/src/lib.rs` | 771 | 642 |\n| `crates/atm-lib/src/review_pages.rs` | 724 | 371 |\n| `crates/atm-review/src/folder.rs` | 651 | 648 |\n| `crates/atm-docs/src/lib.rs` | 535 | 836 |\n| `crates/atm-review/src/rules.rs` | 529 | 1,162 |\n| `crates/atm-review/src/files.rs` | 511 | 565 |\n| `crates/atm-review/src/rounds.rs` | 455 | 742 |\n| `crates/atm-api/src/routes/reviews.rs` | 391 | 778 |\n| `app/src-tauri/src/lib.rs` | 236 | 1,283 |\n\n## Rules (the guide)\n- **Module files:** `foo.rs` next to a `foo/` directory, never `foo/mod.rs`. Public APIs stay the same (re-exported).\n- **Unit tests** stay with their code while it reads well, else `foo/tests.rs`, else `foo/tests/` by group. They test the unit alone, with hand-written fakes behind a trait (atm-review's `ReviewStore` already has a memory store).\n- **Integration tests** (a real git repository, the real store, several layers) go to the crate's `tests/` directory, one file per area.\n- About 400 lines is when a file reads badly, not a threshold.\n\n## How\n- One file at a time, the reviews area first (`reviews.rs`, `review_pages.rs`, `review_listen.rs`, `commands/review.rs`), before ATM-633's build changes them.\n- Each a move only: no logic changed, the same tests passing (`cargo test`, the CLI suite), the plan for it agreed first, as on CR-100.\n- Where a unit test today needs a real repository only because nothing is faked, add the fake and keep the real-repository version as an integration test.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/reviews.rs",
+        "crates/atm-lib/src/review_pages.rs",
+        "crates/atm-lib/src/review_listen.rs",
+        "crates/atm-cli/src/commands/review.rs"
+      ],
+      "created_at": "2026-11-20T23:29:46Z",
+      "updated_at": "2026-11-20T23:36:57Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T23:29:46Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "number": 711,
+      "started_at": "2026-11-20T23:36:57Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

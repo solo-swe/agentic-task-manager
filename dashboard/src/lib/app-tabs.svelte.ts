@@ -153,10 +153,18 @@ export class AppTabs implements TabHistory {
 
   /** A new tab at `address`, after the active one, and active, its history starting there (Back disabled until it
    * moves). Its address, to go to */
-  open(address: string): string {
+  open(address: string): string;
+  /** In the `background` (⌘-click, a middle click; ATM-698): right of the active one, which stays shown: nothing to
+   * go to */
+  open(address: string, background: boolean): string | undefined;
+  open(address: string, background = false): string | undefined {
     const tab: AppTab = { id: `t${this.#next++}`, address, history: historyAt(address) };
     const at = this.tabs.findIndex((t) => t.id === this.active);
     this.tabs.splice(at < 0 ? this.tabs.length : at + 1, 0, tab);
+    if (background && at >= 0) {
+      this.#save();
+      return undefined;
+    }
     this.active = tab.id;
     this.#save();
     return address;

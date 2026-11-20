@@ -991,6 +991,14 @@ export class DashboardState {
     this.query = '';
   }
 
+  /** The address of task `task`'s details over this page (ATM-698): a card's and a row's link, for Copy Link and a new
+   * tab; reads the page's tab so a card's link follows it */
+  taskAddress(task: Task): string {
+    void this.tab;
+    void this.projectId;
+    return withTask(currentAddress(), taskLabel(task));
+  }
+
   /** A task's details, in the address (?task=) on a project's page: opening them is a new history entry, so Back
    * closes them; another task's replace them in place. A task opened on the Omniboard isn't in the address (T-411). */
   showDetail(id: string) {
