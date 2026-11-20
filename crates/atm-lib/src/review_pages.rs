@@ -668,12 +668,16 @@ pub fn review_page(
         .map(|r| r.number)
         .ok_or_else(|| Error::NotFound(format!("{} has no rounds", review.header.reference)))?;
     let vcs = reviews::vcs(project)?;
-    let now = round.is_none() && review.header.status == Status::Live;
+    // The working copy: asked with no round, or by the number the page shows it as, the round after the stored ones
+    // (ATM-710: compared against an earlier round, the page names it, and it isn't stored)
+    let now = review.header.status == Status::Live && round.is_none_or(|r| r == latest + 1);
     let working = if now {
         reviews::working_now(project, &review)?
     } else {
         None
     };
+    // Unchanged since the last checkpoint, there is no round after it: that one is the working copy
+    let round = round.filter(|r| working.is_some() || *r != latest + 1 || !now);
     let drafts = drafts_of(project, &review);
     let (mut view, chains, drafts) = match working {
         Some(new) => {

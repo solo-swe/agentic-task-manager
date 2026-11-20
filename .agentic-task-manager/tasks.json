@@ -1830,7 +1830,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 710
+    "next_number": 711
   },
   "tasks": [
     {
@@ -18430,7 +18430,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.1 and §4.3, task 1 of §7 (approved in CR-63, with §6's recommended answers: one page for all tabs, atm keeping each tab's history).\n\n## Change\n- In the app, each title-bar tab keeps its own history: the addresses it went through, where it is in them, and each entry's scroll, restored on Back and Forward (`app-tabs.svelte.ts`, `tab-actions.ts`).\n- `navigate` (`lib/navigation.ts`) adds to the active tab's history; the page's own `history` stays one entry deep in the app.\n- Switching tabs pushes nothing anywhere: the other tab shows as it was left.\n- ⌘[ ⌘], the menu's Back and Forward, the mouse's back and forward buttons and a swipe all act on the active tab's history.\n- A new tab starts its history with the address it was opened on; its Back is disabled until it moves.\n- The browser keeps the browser's own history (one tab per browser tab).\n\n## Tests\nThe three traces of §4.3 (a review opened from a Kanban card, from a task's details, from the Reviews list), in the app and in the browser; a switch to another tab and back leaves both histories as they were; each entry's scroll restored.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/app-tabs.svelte.ts",
@@ -18438,7 +18438,7 @@
         "dashboard/src/lib/navigation.ts"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T22:29:45Z",
+      "updated_at": "2026-11-20T22:59:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18461,7 +18461,9 @@
           "text": "Not started: ATM-708 (review watching, raised by Hakan today) taken first.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-20T22:59:10Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c156588f4b10",
@@ -19209,6 +19211,39 @@
       ],
       "sprint": "Audit and tabs",
       "number": 709
+    },
+    {
+      "id": "01a1fb32-2d87-77ef-a96b-3882d16be1bc",
+      "name": "A live review's working copy compared against an earlier round says \"no round N\"",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Hakan, on CR-58 (2026-11-21): reviewing a live review's latest against round 2 says the review has no round 3.\n\n## The cause\n`review_page` (`crates/atm-lib/src/review_pages.rs`) shows a live review's working copy, when it changed since the last checkpoint, as the round after the stored ones, but only when no round is named (`now = round.is_none() && live`).\n\nChoosing a round to compare against, the page asks again with the round it shows named (`?round=3&against=2`). Round 3 isn't stored, so `round_of` refuses it: `CR-n has no round 3`.\n\n## Change\nOn a live review, a request for the round after the stored ones is the working copy now: `now` too, so its patch is the working copy's and `against` compares with it. When the working copy hasn't changed since the last checkpoint, that round is the last one.\n\n## Tests\n- atm-lib: the live review's page, its working copy changed, asked with `round = latest + 1` and an `against`; and asked with that round when nothing changed.\n- An e2e test in `reviews.spec.ts`: a live review's latest compared against an earlier round shows the diff, no error.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/review_pages.rs",
+        "crates/atm-lib/src/reviews.rs",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-20T23:02:12Z",
+      "updated_at": "2026-11-20T23:02:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T23:02:12Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "number": 710,
+      "started_at": "2026-11-20T23:02:16Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
