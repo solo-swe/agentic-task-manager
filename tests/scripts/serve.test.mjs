@@ -746,6 +746,22 @@ describe('serve', () => {
       'If-None-Match': doc.headers.get('etag'),
     });
     assert.equal(again.status, 304);
+    // ATM-671 (audit H5): a read another site's page sends is refused before anything runs; atm's own page's is not
+    for (const [headers, status] of [
+      [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
+      [{ Origin: 'https://evil.example' }, 403],
+      [{ Origin: 'null' }, 403],
+      [{ 'Sec-Fetch-Site': 'same-origin' }, 200],
+      [{ Origin: `http://localhost:${port}` }, 200],
+      [{ Origin: 'http://localhost:5173' }, 200],
+    ]) {
+      assert.equal((await get('documents', 'docs/x.md', headers)).status, status, JSON.stringify(headers));
+    }
+    // The page itself may be opened from another site, and its assets loaded
+    assert.equal(
+      (await fetch(`http://localhost:${port}/`, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status,
+      200,
+    );
     fs.writeFileSync(path.join(root, 'docs/x.md'), '# Changed\n');
     const changed = await get('documents', 'docs/x.md', {
       'If-None-Match': doc.headers.get('etag'),

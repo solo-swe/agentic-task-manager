@@ -4,7 +4,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 
 use super::source::ProjectSource;
-use super::{IMAGE_HEADERS, etag};
+use super::{IMAGE_HEADERS, etag, unchanged};
 use crate::{send_conditional, send_error};
 
 /// `GET …/projects/<p>/logo`: the project's logo (the store checks it is inside the project and small enough), kept
@@ -16,8 +16,15 @@ pub(super) fn get_logo(project: &dyn ProjectSource, request: &HeaderMap) -> Resp
     if stamp.is_null() {
         return send_error(StatusCode::NOT_FOUND, "no logo");
     }
-    let read = || project.read_logo();
-    send_conditional(request, &etag(&stamp), read, kind, &IMAGE_HEADERS)
+    let tag = etag(&stamp);
+    if unchanged(request, &tag) {
+        return send_conditional(request, &tag, Vec::new, kind, &IMAGE_HEADERS);
+    }
+    // One that can't be read is none, never an empty image kept as this version (ATM-671, audit H8)
+    let Some(bytes) = project.read_logo() else {
+        return send_error(StatusCode::NOT_FOUND, "no logo");
+    };
+    send_conditional(request, &tag, move || bytes, kind, &IMAGE_HEADERS)
 }
 
 #[cfg(test)]
@@ -31,6 +38,19 @@ mod tests {
         FakeProject {
             logo: Some((stamp, kind, b"<logo>".to_vec())),
             ..FakeProject::default()
+        }
+    }
+
+    trait Unreadable {
+        /// The same logo, found but not readable (the fake's empty bytes)
+        fn without_logo_bytes(self) -> Self;
+    }
+    impl Unreadable for FakeProject {
+        fn without_logo_bytes(mut self) -> Self {
+            if let Some(logo) = self.logo.as_mut() {
+                logo.2 = Vec::new();
+            }
+            self
         }
     }
 
@@ -72,6 +92,16 @@ mod tests {
                 "{changed}"
             );
         }
+    }
+
+    /// ATM-671 (audit H8): a logo found but not readable was a cached, empty 200
+    #[test]
+    fn a_logo_that_cant_be_read_is_not_found_and_not_cached() {
+        let (project, calls) = bound(with_logo(json!([6, "1"]), "image/png").without_logo_bytes());
+        let answer = answer(get_logo(project.as_ref(), &plain()));
+        assert_eq!(answer.status, StatusCode::NOT_FOUND);
+        assert_eq!(answer.tag(), "");
+        assert_eq!(calls.taken(), [Call::ReadLogo]);
     }
 
     #[test]

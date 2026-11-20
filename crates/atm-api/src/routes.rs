@@ -504,18 +504,25 @@ mod tests {
             ("/p/p1/logo", "", vec![project("default"), Call::ReadLogo]),
             (
                 "/api/v2/workspaces/work/projects/p1/documents",
-                "path=a.md&at=t1",
+                // A revision is a full object ID (ATM-671)
+                "path=a.md&at=0123456789abcdef0123456789abcdef01234567",
                 vec![
                     project("work"),
-                    Call::DocumentAt("a.md".into(), "t1".into()),
+                    Call::DocumentAt(
+                        "a.md".into(),
+                        "0123456789abcdef0123456789abcdef01234567".into(),
+                    ),
                 ],
             ),
             (
                 "/api/v1/projects/p1/documents",
-                "path=a.md&at=t1",
+                "path=a.md&at=0123456789abcdef0123456789abcdef01234567",
                 vec![
                     project("default"),
-                    Call::DocumentAt("a.md".into(), "t1".into()),
+                    Call::DocumentAt(
+                        "a.md".into(),
+                        "0123456789abcdef0123456789abcdef01234567".into(),
+                    ),
                 ],
             ),
             (

@@ -128,10 +128,13 @@ pub fn document_path(path: &str) -> Result<&str> {
     let path = path_shape(path)?;
     let refused = |what: &str| Err(Error::Refused(format!("{path}: {what} aren't shown")));
     let segments: Vec<&str> = path.split('/').collect();
-    if segments
-        .iter()
-        .any(|s| matches!(*s, ".git" | ".agentic-task-manager"))
-    {
+    // In any case (ATM-671, audit H2: macOS's and Windows' file systems find `.GIT/config` as `.git/config`), and as
+    // Windows also reads a name with dots or spaces after it (`.git.`, `.git `)
+    let own_folder = |s: &str| {
+        let name = s.trim_end_matches(['.', ' ']).to_ascii_lowercase();
+        name == ".git" || name == ".agentic-task-manager"
+    };
+    if segments.iter().any(|s| own_folder(s)) {
         return refused("git's and atm's own folders");
     }
     let name = segments.last().copied().unwrap_or_default();
@@ -601,6 +604,12 @@ mod tests {
             ".git/config",
             "sub/.git/HEAD",
             ".agentic-task-manager/tasks.json",
+            // In any case, and as Windows reads trailing dots and spaces (ATM-671)
+            ".GIT/config",
+            "sub/.Git/HEAD",
+            ".Agentic-Task-Manager/tasks.json",
+            ".git./config",
+            ".git /config",
             ".env",
             "src/.env.local",
             ".ENV.production",

@@ -63,6 +63,29 @@ pub fn logo_file(root: &Path, relative: &str) -> Result<(PathBuf, &'static str)>
             "{relative}: a logo is an SVG, PNG, WebP or ICO image"
         )));
     };
+    // As the files route reads a file (ATM-671, audit H7): never in git's or atm's own folder, in any case, and never
+    // through a symbolic link on the way, even one pointing inside the project
+    let own_folder = |s: &str| {
+        let name = s.trim_end_matches(['.', ' ']).to_ascii_lowercase();
+        name == ".git" || name == ".agentic-task-manager"
+    };
+    if relative.split(['/', '\\']).any(own_folder) {
+        return Err(refused(format!(
+            "{relative}: a logo isn't read from git's or atm's own folders"
+        )));
+    }
+    let mut on_the_way = root.to_path_buf();
+    for part in relative
+        .split(['/', '\\'])
+        .filter(|p| !p.is_empty() && *p != ".")
+    {
+        on_the_way.push(part);
+        if std::fs::symlink_metadata(&on_the_way).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(refused(format!(
+                "{relative}: a logo isn't read through a symbolic link"
+            )));
+        }
+    }
     let real_root = atm_common::pathtext::canonical(root).unwrap_or_else(|_| root.to_path_buf());
     let joined = real_root.join(relative);
     // A missing file can't be resolved: its folder decides whether it is inside
@@ -241,8 +264,36 @@ mod tests {
         let error = logo_file(project.path(), "logo.svg").unwrap_err();
         assert_eq!(
             error.to_string(),
-            "logo.svg: the logo must be inside the project folder"
+            "logo.svg: a logo isn't read through a symbolic link"
         );
+        // ATM-671 (audit H7): a link inside the project is refused too, as the files route refuses it, and so is
+        // git's own folder, in any case
+        put(project.path(), "real.svg", 1);
+        std::os::unix::fs::symlink(
+            project.path().join("real.svg"),
+            project.path().join("alias.svg"),
+        )
+        .unwrap();
+        assert!(
+            logo_file(project.path(), "alias.svg")
+                .unwrap_err()
+                .to_string()
+                .contains("symbolic link")
+        );
+        assert!(logo_file(project.path(), "real.svg").is_ok());
+        for in_git in [
+            ".git/logo.svg",
+            ".GIT/logo.svg",
+            "a/.agentic-task-manager/logo.svg",
+        ] {
+            assert!(
+                logo_file(project.path(), in_git)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("own folders"),
+                "{in_git}"
+            );
+        }
     }
 
     #[test]

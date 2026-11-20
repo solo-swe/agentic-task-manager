@@ -70,7 +70,8 @@ pub trait ProjectSource {
     /// Its logo's version (null when the file isn't there) and content type, when it names one.
     fn logo(&self) -> Option<(Value, &'static str)>;
     /// Its logo's bytes.
-    fn read_logo(&self) -> Vec<u8>;
+    /// The logo's bytes; none when it can't be read (gone since it was found, or unreadable: ATM-671).
+    fn read_logo(&self) -> Option<Vec<u8>>;
     /// The size and mtime of the file at `path` in its working copy, once atm-docs has checked the path.
     ///
     /// # Errors
@@ -287,10 +288,8 @@ impl ProjectSource for Member {
         Member::logo(self).map(|(file, kind)| (file_stamp(&file), kind))
     }
 
-    fn read_logo(&self) -> Vec<u8> {
-        Member::logo(self)
-            .and_then(|(file, _)| std::fs::read(file).ok())
-            .unwrap_or_default()
+    fn read_logo(&self) -> Option<Vec<u8>> {
+        Member::logo(self).and_then(|(file, _)| std::fs::read(file).ok())
     }
 
     fn file_version(&self, path: &str) -> Result<(u64, u128)> {

@@ -338,13 +338,14 @@ impl ProjectSource for Bound<FakeProject> {
             .map(|(stamp, kind, _)| (stamp.clone(), *kind))
     }
 
-    fn read_logo(&self) -> Vec<u8> {
+    fn read_logo(&self) -> Option<Vec<u8>> {
         self.calls.note(Call::ReadLogo);
+        // An empty logo stands for one that can't be read
         self.fake
             .logo
             .as_ref()
             .map(|(_, _, bytes)| bytes.clone())
-            .unwrap_or_default()
+            .filter(|bytes| !bytes.is_empty())
     }
 
     fn file_version(&self, path: &str) -> Result<(u64, u128)> {

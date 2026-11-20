@@ -98,6 +98,23 @@ fn same_token(a: &str, b: &str) -> bool {
             == 0
 }
 
+/// Whether a request comes from another site's page (ATM-671): the browser says so (`Sec-Fetch-Site: cross-site`), or
+/// its `Origin` isn't on this machine (`localhost` or `127.0.0.1`, any port: the dashboard's dev server, on another
+/// port, sends its requests on). A client without these headers (atm itself, a script) is none.
+fn from_another_site(headers: &HeaderMap) -> bool {
+    let value = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+    if value("sec-fetch-site").is_some_and(|s| s.eq_ignore_ascii_case("cross-site")) {
+        return true;
+    }
+    value(header::ORIGIN.as_str()).is_some_and(|origin| {
+        let host = origin
+            .strip_prefix("http://")
+            .and_then(|rest| rest.split(':').next())
+            .unwrap_or_default();
+        !(host == "localhost" || host == "127.0.0.1")
+    })
+}
+
 /// Why a review change is refused before anything is read (docs/code-review-design.md §3.12): it must come from the
 /// page this server served, with its token, as JSON. None when it may go on.
 fn review_change_refused(served: &Served, host: &str, headers: &HeaderMap) -> Option<Response> {
@@ -265,6 +282,14 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
         return serve_checked_review_change(Arc::clone(&served), host, request).await;
     }
     let path = request.uri().path();
+    // A read another site's page sends (ATM-671, audit H5): reads write too (`recent.json`) and run git, so a GET
+    // from elsewhere is refused. Opening the page itself from another site is fine, and so are its assets
+    if !pages::is_page(path)
+        && !path.starts_with(assets::PREFIX)
+        && from_another_site(request.headers())
+    {
+        return send_error(StatusCode::FORBIDDEN, "a read comes from atm's own page");
+    }
     if pages::is_page(path) {
         let policy = page_csp(&served.hashes, &format!("http://{host}"));
         return send(
