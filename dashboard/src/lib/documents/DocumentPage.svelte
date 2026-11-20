@@ -36,8 +36,12 @@
     onover,
     held = null,
     overlay,
+    after,
     page = $bindable(),
   }: {
+    /** Drawn after a part shown, across the page (ATM-651: a review's chains under their block, in the gap the page is
+     * cut at) */
+    after?: Snippet<[PagePart]>;
     /** A row of the margin pressed (its + or its number), as the source lines it numbers (ATM-650): the rows take a +
      * under the pointer only with it */
     onpress?: (lines: [number, number], extend: boolean) => void;
@@ -67,13 +71,17 @@
 
   const markdown = $derived(kind === 'markdown');
   const shown = $derived(parts ?? [{ type: 'shown' as const, from: 1, to: lines }]);
-  const folded = $derived(shown.some((p) => p.type === 'fold'));
+  /** Shown in parts (folded, or cut where a chain shows, ATM-651): each part draws its own lines only */
+  const folded = $derived(shown.length > 1);
 
   /** Each part's lines where CompMD drew them, in the page's coordinates, and its rows: by the part's first line */
   let placed = $state.raw<Record<number, { drawn: DrawnLine[]; rows: GutterRow[] }>>({});
   const shownParts = $derived(shown.filter((p) => p.type === 'shown'));
-  const drawn = $derived(shownParts.flatMap((p) => placed[p.from]?.drawn ?? []));
-  const rows = $derived(shownParts.flatMap((p) => placed[p.from]?.rows ?? []));
+  // Each part's own lines only: a part just cut from a larger one (ATM-651) still has the larger one's until it is
+  // measured again, which would list the lines after the cut twice
+  const within = (p: PagePart, line: number) => line >= p.from && line <= p.to;
+  const drawn = $derived(shownParts.flatMap((p) => (placed[p.from]?.drawn ?? []).filter((l) => within(p, l.line))));
+  const rows = $derived(shownParts.flatMap((p) => (placed[p.from]?.rows ?? []).filter((r) => within(p, r.from))));
   $effect(() => {
     onplaced?.({ drawn, rows });
   });
@@ -81,6 +89,28 @@
   $effect(() => {
     void path;
     placed = {};
+    measured = {};
+  });
+
+  /** Each part's lines as CompMD last gave them, from its own element: placed on the page again whenever the page
+   * changes size (ATM-651: a chain shown after a part moves the parts below it, which CompMD doesn't see, as their
+   * own pages didn't change; their numbers and marks stayed behind) */
+  let measured: Record<number, { lines: DrawnLine[]; from: HTMLElement }> = {};
+  function measure(part: PagePart, lines: DrawnLine[], from: HTMLElement) {
+    measured = { ...measured, [part.from]: { lines, from } };
+    place(part, lines, from);
+  }
+  $effect(() => {
+    const el = page;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const moved = new ResizeObserver(() => {
+      for (const part of shownParts) {
+        const m = measured[part.from];
+        if (m?.from.isConnected) place(part, m.lines, m.from);
+      }
+    });
+    moved.observe(el);
+    return () => moved.disconnect();
   });
 
   // CompMD's boxes, moved into the page's coordinates; a part's margin numbers its own lines, in its own height (the
@@ -192,9 +222,10 @@
             {localImage}
             {onopen}
             only={folded ? [part.from, part.to] : undefined}
-            onlines={(drawnLines, from) => place(part, drawnLines, from)}
+            onlines={(drawnLines, from) => measure(part, drawnLines, from)}
           />
         </div>
+        {#if after}<div class="doc-after" data-after={part.to}>{@render after(part)}</div>{/if}
       {:else}
         {@const count = part.to - part.from + 1}
         <button class="doc-fold" data-from={part.from} onclick={() => onunfold?.(part)}>
@@ -206,6 +237,15 @@
 </article>
 
 <style>
+  /* What the host shows after a part (ATM-651): over the page's marks, on the page's own font */
+  .doc-after {
+    position: relative;
+    z-index: 1;
+    font-family: var(--font-sans);
+  }
+  .doc-after:empty {
+    display: none;
+  }
   .doc-fold {
     display: block;
     position: relative;

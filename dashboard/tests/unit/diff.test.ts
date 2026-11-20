@@ -230,6 +230,30 @@ describe('changes, keys and marks', () => {
       expect(renderedParts([], new Set([3]), 12)).toEqual([{ type: 'shown', from: 1, to: 12 }]);
     });
 
+    // ATM-651: a chain shows under its block, in a gap the page is cut at
+    it('cuts a shown part after the block a cut line is in; never a block, nor a fold, nor at a part’s end', () => {
+      // Shown 10–18 (blocks 10–11, 13–14, 16–17): a chain ending on line 13 cuts after its block (14)
+      expect(renderedParts(blocks, new Set([14]), total, new Set(), undefined, new Set([13]))).toEqual([
+        { type: 'fold', from: 1, to: 9 },
+        { type: 'shown', from: 10, to: 14 },
+        { type: 'shown', from: 15, to: 18 },
+        { type: 'fold', from: 19, to: 30 },
+      ]);
+      // Two cuts in one part, in order; one on a blank line (15) cuts right after it
+      expect(renderedParts(blocks, new Set([14]), total, new Set(), undefined, new Set([16, 10, 15]))).toEqual([
+        { type: 'fold', from: 1, to: 9 },
+        { type: 'shown', from: 10, to: 11 },
+        { type: 'shown', from: 12, to: 15 },
+        { type: 'shown', from: 16, to: 17 },
+        { type: 'shown', from: 18, to: 18 },
+        { type: 'fold', from: 19, to: 30 },
+      ]);
+      // At a part's end, or in a fold: nothing to cut
+      expect(renderedParts(blocks, new Set([14]), total, new Set(), undefined, new Set([18, 25]))).toEqual(
+        renderedParts(blocks, new Set([14]), total),
+      );
+    });
+
     it('a block reaching into the context is shown whole, never cut', () => {
       // A long block (lines 5–40) whose last line is near a change at 42: all of it
       expect(

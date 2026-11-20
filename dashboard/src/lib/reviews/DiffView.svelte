@@ -6,7 +6,7 @@
   import ComposerActions from './ComposerActions.svelte';
   import DiffCode, { type CodeLine } from './DiffCode.svelte';
   import { draftActions } from './drafts';
-  import { focusOnShow } from './focus';
+  import { focusOnShow, focusWhenPlaced } from './focus';
   import RenderedSide from './RenderedSide.svelte';
   import {
     changeStarts,
@@ -165,7 +165,13 @@
   const placed = $derived(
     new Set(blocks.flatMap((b) => (b.type === 'rows' ? b.rows.flatMap((r) => chainsAfter(r).map((c) => c.id)) : []))),
   );
-  const elsewhere = $derived(shownView === 'source' ? chains.filter((c) => !placed.has(c.id)) : chains);
+  // Rendered (ATM-651): a chain with lines on a side shown is under its block on the page; the others (a whole
+  // file's, one on a side not shown) after the document
+  const elsewhere = $derived(
+    shownView === 'source'
+      ? chains.filter((c) => !placed.has(c.id))
+      : chains.filter((c) => !c.anchor.lines || !sides.includes(c.anchor.side)),
+  );
 
   /** A block's rows cut after each row a chain ends at, so the chain shows right under its lines, and after the last
    * line picked, so the comment being written shows right under them (inside another chain's lines too); the chains
@@ -306,19 +312,10 @@
     return { side: s, lines: [same[0].n, same.at(-1)!.n], quote: same.map((r) => r.text).join('\n') };
   });
 
-  // The rendered view's pick: the lines picked by their + (ATM-650) or under the text selected
+  // The rendered view's pick: the lines picked by their + (ATM-650) or under the text selected. Its comment box goes
+  // where the comment will show (ATM-651): under the block its last line is in, the page cut there (RenderedSide);
+  // not after the document, where a comment on its first lines was written a document away (ATM-627)
   let renderedPick = $state<Picked | null>(null);
-  // Where its comment box goes (ATM-627): right under the text picked (`below`, a client y), over the side it was
-  // picked on, in the rendered view's coordinates. Not after the document: a comment on its first lines was written a
-  // document away
-  let renderedEl = $state<HTMLElement>();
-  let pickAt = $state<{ top: number; left: number; width: number } | null>(null);
-  function placePick(s: Side, below: number) {
-    const within = renderedEl?.getBoundingClientRect();
-    if (!within) return (pickAt = null);
-    const pane = renderedEl?.querySelector(`.diff-pane.diff-${s}`)?.getBoundingClientRect() ?? within;
-    pickAt = { top: below - within.top, left: pane.left - within.left, width: pane.width };
-  }
   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
 
   function cancel() {
@@ -426,6 +423,10 @@
   />
 {/snippet}
 
+{#snippet renderedComposer()}
+  {#if renderedPick}{@render composer(renderedPick)}{/if}
+{/snippet}
+
 {#snippet composer(p: Picked)}
   <form
     class="diff-composer"
@@ -444,7 +445,7 @@
       rows="3"
       placeholder="Leave a comment…"
       bind:value={draft}
-      {@attach focusOnShow}
+      {@attach shownView === 'rendered' ? focusWhenPlaced : focusOnShow}
       onkeydown={(e) => {
         if (e.key === 'Escape') cancel();
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
@@ -552,7 +553,7 @@
       <div class="diff-more" style:height="{(items.total - limit) * 20}px" aria-hidden="true"></div>
     {/if}
   {:else}
-    <div class="diff-rendered" class:single={sides.length < 2} bind:this={renderedEl}>
+    <div class="diff-rendered" class:single={sides.length < 2}>
       {#each sides as s (s)}
         {@const doc = s === 'old' ? oldDoc : newDoc}
         {#if doc}
@@ -563,6 +564,9 @@
             selected={selectedChain?.anchor.side === s ? selectedChain.anchor.lines : null}
             picking={renderedPick?.side === s ? renderedPick.lines : null}
             {docStyle}
+            chains={chains.filter((c) => c.anchor.side === s && c.anchor.lines)}
+            {chainBox}
+            composer={renderedPick?.side === s && oncomment ? renderedComposer : undefined}
             label={sides.length < 2
               ? s === 'old'
                 ? 'Before (deleted)'
@@ -571,8 +575,7 @@
                 ? 'Before'
                 : 'After'}
             onpick={oncomment
-              ? (p, below) => {
-                  placePick(s, below);
+              ? (p) => {
                   renderedPick = p;
                   draft = '';
                 }
@@ -580,16 +583,6 @@
           />
         {/if}
       {/each}
-      {#if composing && oncomment}
-        <div
-          class="diff-rendered-composer"
-          style:top="{pickAt?.top ?? 0}px"
-          style:left="{pickAt?.left ?? 0}px"
-          style:width={pickAt ? `${pickAt.width}px` : '100%'}
-        >
-          {@render composer(composing)}
-        </div>
-      {/if}
     </div>
   {/if}
 
@@ -776,11 +769,6 @@
     isolation: isolate;
     display: grid;
     grid-template-columns: 1fr 1fr;
-  }
-  /* The comment box, under the text selected, over the document below it (ATM-627) */
-  .diff-rendered-composer {
-    position: absolute;
-    z-index: 2;
   }
   .diff-rendered.single {
     grid-template-columns: 1fr;

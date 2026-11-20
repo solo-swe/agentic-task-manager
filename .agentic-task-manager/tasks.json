@@ -18950,7 +18950,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-20T10:06:40Z",
-      "updated_at": "2026-11-20T10:06:43Z",
+      "updated_at": "2026-11-20T10:06:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18962,7 +18962,8 @@
       "sprint": "Task&review state machine",
       "number": 690,
       "started_at": "2026-11-20T10:06:43Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "2ba58595dde3e662041e9b73261a98352a0046f0"
     }
   ]
 }

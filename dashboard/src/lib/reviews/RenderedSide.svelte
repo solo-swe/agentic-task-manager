@@ -1,9 +1,10 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { ProjectDocument } from '../documents';
   import { loadCompmd, processText, topBlocks, type Block, type DrawnLine, type GutterRow } from '../compmd';
-  import DocumentPage from '../documents/DocumentPage.svelte';
-  import { linesUnder, renderedParts, type RenderedPart } from './diff';
-  import type { Picked, Side } from './types';
+  import DocumentPage, { type PagePart } from '../documents/DocumentPage.svelte';
+  import { CONTEXT, linesUnder, renderedParts, type RenderedPart } from './diff';
+  import type { Chain, Picked, Side } from './types';
 
   // One side of a Markdown file in the diff viewer's rendered view (docs/code-review-design.md §3.7, ATM-574): the
   // document viewer's own page (ATM-645: `DocumentPage`, the same paper, width, height and margin numbers), on its
@@ -19,8 +20,17 @@
     picking = null,
     label,
     docStyle = null,
+    chains = [],
+    chainBox,
+    composer,
     onpick,
   }: {
+    /** This side's chains with lines (ATM-651): each shows under the block its last line is in, the page cut there */
+    chains?: readonly Chain[];
+    /** How a chain shows: the source view's own box, with reply, resolve and edit */
+    chainBox?: Snippet<[Chain]>;
+    /** The comment being written on this side's `picking` lines: where it will land, under their block */
+    composer?: Snippet;
     doc: ProjectDocument;
     side: Side;
     /** The lines of this side the patch changed */
@@ -59,11 +69,23 @@
   });
   /** The folds opened, by their first line */
   let opened = $state.raw<ReadonlySet<number>>(new Set());
+  /** Where each chain, and the comment being written, ends: its block is shown, and the page is cut after it, the
+   * chain shown in the gap (ATM-651), as the source view shows a chain under its lines */
+  const ends = $derived(
+    new Set([...chains.flatMap((c) => (c.anchor.lines ? [c.anchor.lines[1]] : [])), ...(picking ? [picking[1]] : [])]),
+  );
   const near = $derived.by((): ReadonlySet<number> => {
     const chain = selected ? Array.from({ length: selected[1] - selected[0] + 1 }, (_, i) => selected[0] + i) : [];
-    return new Set([...changed, ...chain]);
+    return new Set([...changed, ...chain, ...ends]);
   });
-  const parts = $derived(blocks ? renderedParts(blocks, near, doc.lines, opened) : null);
+  const parts = $derived(blocks ? renderedParts(blocks, near, doc.lines, opened, CONTEXT, ends) : null);
+  /** What shows after a part: the chains ending in it, the latest-starting first as the source view orders them, and
+   * the comment being written when its lines end there */
+  const chainsAfter = (part: PagePart) =>
+    chains
+      .filter((c) => c.anchor.lines && c.anchor.lines[1] >= part.from && c.anchor.lines[1] <= part.to)
+      .sort((x, y) => (y.anchor.lines?.[0] ?? 0) - (x.anchor.lines?.[0] ?? 0));
+  const writingAfter = (part: PagePart) => !!picking && picking[1] >= part.from && picking[1] <= part.to;
 
   /** Where the page drew the lines, in its coordinates */
   let drawn = $state.raw<DrawnLine[]>([]);
@@ -172,6 +194,10 @@
       {held}
       bind:page={pageEl}
     >
+      {#snippet after(part: PagePart)}
+        {#if chainBox}{#each chainsAfter(part) as chain (chain.id)}{@render chainBox(chain)}{/each}{/if}
+        {#if composer && writingAfter(part)}{@render composer()}{/if}
+      {/snippet}
       {#snippet overlay()}
         {#each marks as mark, i (i)}
           <div

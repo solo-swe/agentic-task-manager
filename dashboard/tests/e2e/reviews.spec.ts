@@ -732,6 +732,20 @@ test.describe('a review’s page', () => {
       expect(Math.abs(s.old[1].height - s.now[1].height)).toBeLessThan(2);
       // Each side's rows meet its text: fn b's row starts where the changed line's ends, on both sides
       for (const rows of [s.old, s.now]) expect(Math.abs(rows[2].top - (rows[1].top + rows[1].height))).toBeLessThan(2);
+      // Hakan: no line drawn between two lines. Each row on whole pixels, from where the one before it ends: a row's
+      // edge inside a pixel was half covered by both rows, and their tints drew a seam there
+      const tiled = async () => {
+        const t = await sides();
+        for (const rows of [t.old, t.now]) {
+          const offset = rows[0].top % 1;
+          for (const [k, r] of rows.entries()) {
+            expect(Math.abs(((r.top - offset) % 1) - Math.round((r.top - offset) % 1))).toBeLessThan(0.01);
+            expect(Math.abs(r.height - Math.round(r.height))).toBeLessThan(0.01);
+            if (k > 0) expect(r.top - (rows[k - 1].top + rows[k - 1].height)).toBeCloseTo(0, 2);
+          }
+        }
+      };
+      await tiled();
       // Unwrapped again: one line height each, the two sides level as before
       await wrap.click();
       await expect
@@ -740,6 +754,7 @@ test.describe('a review’s page', () => {
           return t.now[1]?.height ?? 0;
         })
         .toBeLessThan(30);
+      await tiled();
     },
   );
 
@@ -1489,6 +1504,88 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(view.locator('.diff-pane')).toHaveCount(1);
     await expect(view.locator('.diff-pane')).toHaveClass(/diff-new/);
   });
+
+  // ATM-651 (Hakan): a comment on rendered Markdown shows on the page, under its block (the page cut there), as the
+  // source view shows a chain under its lines: open and resolved ones, in Split and Unified; a new one once sent
+  test(
+    'Rendered: each chain shows under its block, open or resolved; a new comment shows there once sent',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const chain = (id: string, lines: [number, number], body: string, resolved: boolean | null = false) => ({
+        id,
+        anchor: { round: 3, path: 'docs/plan.md', side: 'new', lines, quote: null },
+        comments: [{ ...comment(`c-${id}`, body, resolved) }],
+        placed: lines,
+        drifted: null,
+      });
+      const chains = [chain('t5', [5, 5], 'Why this ending?'), chain('t6', [3, 3], 'The first step is fine.', true)];
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ chains, view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+      const view = diffOf(page, 'docs/plan.md');
+      await expect(view.locator('.diff-line').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Rendered' }).click();
+      const newSide = view.locator('.diff-pane.diff-new');
+      /** The chain's box right under the paragraph it is on, on that side's page; none after the document */
+      const under = async (id: string, text: string, room = 60) => {
+        const box = newSide.locator(`.doc-after [data-chain="${id}"]`);
+        await expect(box).toBeVisible();
+        const para = (await newSide.locator('.compmd-page p', { hasText: text }).boundingBox())!;
+        const at = (await box.boundingBox())!;
+        expect(at.y).toBeGreaterThanOrEqual(para.y + para.height - 1);
+        expect(at.y - (para.y + para.height)).toBeLessThan(room);
+      };
+      for (const layout of ['Split', 'Unified'] as const) {
+        await page.getByRole('button', { name: layout }).click();
+        await under('t5', 'New ending.');
+        await under('t6', 'First step.');
+        // The resolved one folded, as in the source view; nothing after the document
+        await expect(newSide.locator('[data-chain="t6"]')).toHaveAttribute('data-resolved', '');
+        await expect(view.locator('.diff-elsewhere [data-chain]')).toHaveCount(0);
+      }
+      // A new comment: written under its block, and shown there once the page has it
+      await page.getByRole('button', { name: 'Split' }).click();
+      const plus = newSide.locator('.doc-gutter-lines [data-line="3"]');
+      await plus.hover();
+      await newSide.getByRole('button', { name: 'Comment on line 3' }).click();
+      const composer = view.locator('.doc-after .diff-composer');
+      await expect(composer).toBeVisible();
+      await composer.getByRole('textbox').fill('Say why.');
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({
+          chains: [...chains, chain('t7', [3, 3], 'Say why.')],
+          view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] },
+        }),
+      );
+      await composer.getByRole('button', { name: 'Comment' }).click();
+      await expect.poll(() => tasksServer.reviewChanges.at(-1)?.path).toBe('/CR-2/comments');
+      // Under the same block as the resolved one there, after it
+      await under('t7', 'First step.', 140);
+      // The lines below the chains numbered and marked where their text is now, not where it was before them
+      const ending = (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!;
+      await expect
+        .poll(async () => {
+          const number = (await newSide.locator('.doc-gutter-lines [data-line="5"]').boundingBox())!;
+          return Math.abs(number.y + number.height / 2 - (ending.y + ending.height / 2));
+        })
+        .toBeLessThan(4);
+      // Its change mark on its text (the glyphs' box, inside the paragraph's line), not where the text was
+      await expect
+        .poll(() =>
+          newSide
+            .locator('.diff-block-mark.diff-added')
+            .evaluateAll(
+              (marks, top) => marks.some((m) => Math.abs(m.getBoundingClientRect().top - top) < 8),
+              ending.y,
+            ),
+        )
+        .toBe(true);
+    },
+  );
 
   test('Rendered (ATM-592): a document of several pages grows its page; its last paragraph is there, numbered beside it', async ({
     page,
