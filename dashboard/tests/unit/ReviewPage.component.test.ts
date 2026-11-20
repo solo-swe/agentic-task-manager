@@ -562,26 +562,24 @@ describe('ReviewPage: Diffs', () => {
     expect(onfile).not.toHaveBeenCalled();
   });
 
-  // ATM-588: Wrap, in Unified; in Split it waits, saying why (its sides kept level line by line)
-  it('Wrap: in Unified it wraps every file’s lines, kept for the next page; in Split it is disabled, saying why', async () => {
+  // ATM-588: Wrap, in Unified; ATM-616: in Split too, its two sides kept level (the measuring: e2e)
+  it('Wrap: in Unified and in Split it wraps every file’s lines, kept for the next page', async () => {
     localStorage.removeItem('atm-review-layout');
     const { container, unmount } = await diffs(data({}, { files: [file('src/a.rs')] }));
     await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
     const wrap = () => screen.getByRole('button', { name: 'Wrap' });
-    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
-    expect(wrap()).toBeDisabled();
-    expect(wrap()).toHaveAttribute('title', expect.stringMatching(/Unified for now/));
-    expect(wrap().closest('[title]')).toHaveAttribute('title', expect.stringMatching(/level line by line/));
     await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
     expect(wrap()).toBeEnabled();
     expect(wrap()).toHaveAttribute('aria-pressed', 'false');
     await fireEvent.click(wrap());
     expect(wrap()).toHaveAttribute('aria-pressed', 'true');
     await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).not.toBeNull());
-    // Back to Split: not wrapped there, and pressed again only in Unified
+    // Split: still wrapped, both sides
     await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
-    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).toBeNull());
-    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
+    expect(wrap()).toBeEnabled();
+    expect(wrap()).toHaveAttribute('aria-pressed', 'true');
+    await vi.waitFor(() => expect(container.querySelectorAll('.diff-old .diff-code.wrap').length).toBeGreaterThan(0));
+    expect(container.querySelectorAll('.diff-new .diff-code.wrap').length).toBeGreaterThan(0);
     await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
     unmount();
     await diffs(data({}, { files: [file('src/a.rs')] }));

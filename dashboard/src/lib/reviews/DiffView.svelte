@@ -65,8 +65,8 @@
     chains?: Chain[];
     mode?: 'split' | 'unified';
     view?: 'source' | 'rendered';
-    /** Long lines wrap (ATM-588), in Unified: Split keeps its two sides' lines level, which a wrapped line can't do
-     * until CompMD draws each line as an element of its own */
+    /** Long lines wrap (ATM-588); in Split each line as tall as the taller of its two sides, so they stay level
+     * (ATM-616, CompMD 0.8.0's line heights) */
     wrap?: boolean;
     viewed?: boolean;
     /** Its own header (the path, the layout and view switches, Viewed); the review's page has its own */
@@ -220,6 +220,21 @@
     return () => clearTimeout(id);
   });
   const drawnItems = $derived(items.out.filter((item) => item.start < limit));
+
+  // Wrapped in Split (ATM-616): each side of a run says how tall each of its lines is as drawn, and both sides make
+  // each line the taller of the two, so a long line wrapped on one side keeps the other side's next line level with it
+  let wrappedLines = $state<Record<string, number[]>>({});
+  function tallest(run: string): number[] | null {
+    const old = wrappedLines[`${run}-old`];
+    const now = wrappedLines[`${run}-new`];
+    if (!old && !now) return null;
+    return Array.from({ length: Math.max(old?.length ?? 0, now?.length ?? 0) }, (_, i) =>
+      Math.max(old?.[i] ?? 0, now?.[i] ?? 0),
+    );
+  }
+  $effect(() => {
+    if (!wrap) wrappedLines = {};
+  });
 
   const splitSide = (rows: SplitRow[], s: Side): CodeLine[] =>
     rows.map((r) => {
@@ -492,10 +507,14 @@
         <div class="diff-run" data-keys={keys.join(' ')}>
           {#if mode === 'split'}
             {#each ['old', 'new'] as const as s (s)}
+              {@const run = `${b}-${segment.first}`}
               <div class="diff-column diff-{s}">
                 <DiffCode
                   lines={splitSide(segment.rows as SplitRow[], s)}
                   {language}
+                  {wrap}
+                  heights={wrap ? tallest(run) : null}
+                  onwrapped={(heights) => (wrappedLines = { ...wrappedLines, [`${run}-${s}`]: heights })}
                   numbers={s}
                   {keys}
                   changes={s === 'new' ? changes : []}

@@ -10,6 +10,7 @@
 </script>
 
 <script lang="ts">
+  import { FRONTMATTER_LINES, type DrawnLine } from '../compmd';
   import CompMd from '../documents/CompMd.svelte';
   import LinePlus from '../ui/LinePlus.svelte';
   import { fenced } from './diff';
@@ -29,12 +30,19 @@
     picked = null,
     marked = null,
     wrap = false,
+    heights = null,
+    onwrapped,
     onpick,
     onover,
   }: {
     /** Long lines wrap at the column's width (ATM-588): each line's row as tall as CompMD drew it, its number on its
      * first visual line */
     wrap?: boolean;
+    /** Wrapped in Split (ATM-616): each line at least this tall, by its index in `lines` (the taller of it and its
+     * counterpart on the other side), so the two sides stay level */
+    heights?: readonly number[] | null;
+    /** Wrapped: each line's own height as drawn (its visual lines), by index, each time it changes */
+    onwrapped?: (natural: number[]) => void;
     /** The lines of the chain selected, by their index in `lines`: marked */
     marked?: [number, number] | null;
     lines: CodeLine[];
@@ -90,7 +98,6 @@
     const lineHeight = !wrap && lines.length && drawnHeight > 0 ? drawnHeight / lines.length : styled();
     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
-    if (wrap) measureWrapped(code);
   }
   // Wrapped or not: measured again (the code's lines take their new heights)
   $effect(() => {
@@ -116,51 +123,58 @@
   });
 
   /** Wrapped (ATM-588): each line's row in the run's pixels, from its first visual line to the next line's. Lines aren't
-   * one height then, so the gutter follows the text. CompMD draws a code block's lines as text between newlines (and
-   * says where only a Markdown document's lines are), so each line's top is read here, from a collapsed range at its
-   * start: read only, nothing of CompMD's page is changed */
+   * one height then, so the gutter follows the text. Where each line is comes from CompMD's boxes of its lines
+   * (`lines()`, each line an element of its own since 0.8.0; ATM-616), one box per piece of text on each visual line it
+   * covers: read only, nothing of CompMD's page is changed */
   let wrapped = $state.raw<{ top: number; height: number }[] | null>(null);
-  function measureWrapped(code: HTMLElement) {
-    if (!el) return;
-    const origin = el.getBoundingClientRect().top;
-    const starts: { node: Text; offset: number }[] = [];
-    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
-    let atStart = true;
-    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
-      const text = node.data;
-      for (let at = 0; at <= text.length; at++) {
-        if (atStart && at < text.length) {
-          starts.push({ node, offset: at });
-          atStart = false;
-        }
-        if (text[at] === '\n') atStart = true;
-      }
-    }
-    const range = document.createRange();
-    // Where nothing is laid out (a test's page), there is nothing to measure: the lines keep one height
-    if (typeof range.getClientRects !== 'function') return;
+  /** Each line's own height as last reported: its visual lines, not the height another side gave it */
+  let natural: number[] = [];
+  /** A run's code line `i` is this many lines into the text CompMD processes: the dashboard's frontmatter, then the
+   * fence's line (diff.ts `fenced`), then the code */
+  const FIRST_LINE = FRONTMATTER_LINES + 2;
+  function wrappedFrom(drawn: readonly DrawnLine[], from: HTMLElement) {
+    if (!el || !wrap) return;
     const lineHeight = layout?.lineHeight ?? FALLBACK_LINE;
-    // A character's box is its glyphs' (the font's height), centred in its line's box: the line starts half a line
-    // height above that centre (ATM-652: taking the character's top put every row half the leading low)
-    const tops = starts.map(({ node, offset }) => {
-      range.setStart(node, offset);
-      range.collapse(true);
-      const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
-      return (rect.top + rect.bottom) / 2 - lineHeight / 2 - origin;
+    const shift = from.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    const boxes = new Map(drawn.map((d) => [d.line, d.rects.filter((r) => r.height > 0)]));
+    // A line's visual lines: its boxes grouped by their middle (a line of tokens has a box per token). A box is its
+    // glyphs' (the font's height), centred in its visual line: that starts half a line height above the middle
+    // (ATM-652: taking the box's top put every row half the leading low)
+    const measured = lines.map((_, i) => {
+      const rects = boxes.get(i + FIRST_LINE) ?? [];
+      const middles = rects.map((r) => r.y + r.height / 2).sort((a, b) => a - b);
+      const rows = middles.filter((m, k) => k === 0 || m - middles[k - 1] > lineHeight / 2);
+      return rows.length ? { top: rows[0] - lineHeight / 2 + shift, count: rows.length } : null;
     });
-    const bottom = code.getBoundingClientRect().bottom - origin;
-    // Empty lines at the end have no character to measure: one line height each, up from the code's end
-    const missing = lines.length - tops.length;
-    for (let k = missing; k > 0; k--) tops.push(bottom - k * lineHeight);
+    const own = measured.map((m) => (m ? m.count : 1) * lineHeight);
+    if (JSON.stringify(own) !== JSON.stringify(natural)) {
+      natural = own;
+      onwrapped?.(own);
+    }
+    // Each row from its line's top to the next line's (an empty line, with no box, right after the one before it)
+    const tops: number[] = [];
+    measured.forEach((m, i) => {
+      tops.push(m ? m.top : i === 0 ? (layout?.top ?? 0) : tops[i - 1] + Math.max(own[i - 1], heights?.[i - 1] ?? 0));
+    });
     const rows = lines.map((_, i) => {
-      const top = tops[i];
-      const next = i + 1 < lines.length ? tops[i + 1] : bottom;
-      return { top, height: Math.max(next - top, lineHeight) };
+      const height = Math.max(own[i], heights?.[i] ?? 0);
+      return { top: tops[i], height: i + 1 < lines.length ? Math.max(tops[i + 1] - tops[i], lineHeight) : height };
     });
     if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
   }
   $effect(() => {
-    if (!wrap) wrapped = null;
+    if (!wrap) {
+      wrapped = null;
+      natural = [];
+    }
+  });
+  /** The heights given, as CompMD takes them: by line of the text, only those taller than one line */
+  const lineHeights = $derived.by(() => {
+    if (!wrap || !heights || !layout) return null;
+    const one = layout.lineHeight;
+    return new Map(
+      heights.flatMap((h, i) => (h > one + 0.5 ? [[i + FIRST_LINE, Math.round(h * 100) / 100] as const] : [])),
+    );
   });
   /** Each line's row: measured when wrapped, else the code's one line height */
   const rowOf = (i: number) =>
@@ -252,7 +266,7 @@
     </div>
   {:else}
     <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
-    <CompMd {text} plain={source} />
+    <CompMd {text} plain={source} onlines={wrap ? wrappedFrom : undefined} {lineHeights} />
   {/if}
 </div>
 

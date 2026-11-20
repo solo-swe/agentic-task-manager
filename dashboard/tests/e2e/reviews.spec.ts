@@ -598,9 +598,9 @@ test.describe('a review’s page', () => {
   });
 
   // ATM-588: Wrap, in Unified: a long line wraps at the column's width, its row as tall as it, its number on its first
-  // visual line, the next line's row right under it; no sideways scroll. In Split it waits, saying why
+  // visual line, the next line's row right under it; no sideways scroll
   test(
-    'Wrap: a long line wraps in Unified, the next line level with its text; in Split the button says why it waits',
+    'Wrap: a long line wraps in Unified, the next line level with its text',
     WEBKIT_TOO,
     async ({ page, tasksServer }) => {
       const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
@@ -625,10 +625,6 @@ test.describe('a review’s page', () => {
       await page.goto(reviewPath(tasksServer, '/CR-2'));
       await page.getByRole('tab', { name: /^Diffs/ }).click();
       const wrap = page.getByRole('button', { name: 'Wrap' });
-      // Split: Wrap waits, saying why
-      await page.getByRole('button', { name: 'Split' }).click();
-      await expect(wrap).toBeDisabled();
-      await expect(wrap).toHaveAttribute('title', /Unified for now/);
       // Unified, wrapped
       await page.getByRole('button', { name: 'Unified' }).click();
       await wrap.click();
@@ -656,6 +652,94 @@ test.describe('a review’s page', () => {
       await page.reload();
       await page.getByRole('tab', { name: /^Diffs/ }).click();
       await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
+    },
+  );
+
+  // ATM-616 (Hakan): Wrap in Split too. A line wrapped on one side makes its counterpart on the other as tall (CompMD
+  // 0.8.0's line heights), so the lines after it stay level across the two sides, and each side's numbers stay on
+  // their lines' first visual lines
+  test(
+    'Wrap in Split: a line wrapped on one side keeps the two sides level after it',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+      // Names of their own, each one token, so each side's text can be found where it is drawn
+      const oldText = 'fn alpha() {}\nfn short() {}\nfn beta() {}\nfn gamma() {}\n';
+      const newText = `fn alpha() {}\n${long}\nfn beta() {}\nfn gamma() {}\n`;
+      const patch =
+        'diff --git a/src/long.rs b/src/long.rs\n--- a/src/long.rs\n+++ b/src/long.rs\n@@ -1,4 +1,4 @@\n fn alpha() {}\n' +
+        `-fn short() {}\n+${long}\n fn beta() {}\n fn gamma() {}\n`;
+      const code = (text: string) =>
+        projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 });
+      tasksServer.setRevisionDocument('base1', code(oldText)).setRevisionDocument('head3', code(newText));
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await page.getByRole('button', { name: 'Split' }).click();
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      await expect(wrap).toBeEnabled();
+      await wrap.click();
+      await expect(wrap).toHaveAttribute('aria-pressed', 'true');
+      const diff = diffOf(page, 'src/long.rs');
+      await expect(diff.locator('.diff-old .diff-code.wrap [data-compmd="ready"]').first()).toBeAttached();
+      await expect(diff.locator('.diff-new .diff-code.wrap [data-compmd="ready"]').first()).toBeAttached();
+      /** Where `needle`'s text is drawn on each side (its first character's middle), and each side's gutter rows */
+      const sides = () =>
+        diff.evaluate((root) => {
+          const at = (side: string, needle: string) => {
+            for (const pre of root.querySelectorAll(`.diff-${side} .compmd-page pre`)) {
+              const walker = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT);
+              for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+                const i = n.data.indexOf(needle);
+                if (i < 0) continue;
+                const range = document.createRange();
+                range.setStart(n, i);
+                range.setEnd(n, i + 1);
+                const r = range.getBoundingClientRect();
+                return (r.top + r.bottom) / 2;
+              }
+            }
+            return null;
+          };
+          const rows = (side: string) =>
+            [...root.querySelectorAll<HTMLElement>(`.diff-${side} .diff-code .diff-line`)].map((l) => ({
+              top: l.getBoundingClientRect().top,
+              height: l.getBoundingClientRect().height,
+              number: l.querySelector('.diff-number')?.getBoundingClientRect(),
+            }));
+          return {
+            b: [at('old', 'beta'), at('new', 'beta')],
+            c: [at('old', 'gamma'), at('new', 'gamma')],
+            old: rows('old'),
+            now: rows('new'),
+          };
+        });
+      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level
+      await expect
+        .poll(async () => {
+          const s = await sides();
+          return s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
+        })
+        .toBeLessThan(2);
+      const s = await sides();
+      expect(Math.abs(s.c[0]! - s.c[1]!)).toBeLessThan(2);
+      // The changed line's rows: several lines tall on both sides, the same height
+      expect(s.now[1].height).toBeGreaterThan(s.now[0].height * 2);
+      expect(Math.abs(s.old[1].height - s.now[1].height)).toBeLessThan(2);
+      // Each side's rows meet its text: fn b's row starts where the changed line's ends, on both sides
+      for (const rows of [s.old, s.now]) expect(Math.abs(rows[2].top - (rows[1].top + rows[1].height))).toBeLessThan(2);
+      // Unwrapped again: one line height each, the two sides level as before
+      await wrap.click();
+      await expect
+        .poll(async () => {
+          const t = await sides();
+          return t.now[1]?.height ?? 0;
+        })
+        .toBeLessThan(30);
     },
   );
 
