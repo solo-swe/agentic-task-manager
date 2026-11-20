@@ -12,6 +12,12 @@ use atm_common::{Error, Result};
 
 pub mod diff;
 pub use diff::{ChangedFile, Diff};
+mod rev;
+pub use rev::{Rev, is_object_id};
+
+/// After a command's options, before its revisions: git reads nothing after it as an option, a second guard beside
+/// [`Rev`]'s check (ATM-659).
+const END_OF_OPTIONS: &str = "--end-of-options";
 
 /// Pathspecs that stage more than the files named: another agent's work can be in the same tree.
 const WHOLE_TREE: [&str; 7] = [".", "-A", "--all", "-u", "--update", ":/", "*"];
@@ -396,12 +402,13 @@ impl GitVcs {
 
     /// A revision's SHA, or none if there is no such commit.
     #[must_use]
-    pub fn resolve(&self, rev: &str) -> Option<String> {
+    pub fn resolve(&self, rev: &Rev) -> Option<String> {
         ask(
             &[
                 "rev-parse",
                 "--verify",
                 "--quiet",
+                END_OF_OPTIONS,
                 &format!("{rev}^{{commit}}"),
             ],
             &self.root,
@@ -410,12 +417,13 @@ impl GitVcs {
 
     /// The tree a revision names (a commit's, or a tree itself, as a review's rebuilt round is), or none.
     #[must_use]
-    pub fn resolve_tree(&self, rev: &str) -> Option<String> {
+    pub fn resolve_tree(&self, rev: &Rev) -> Option<String> {
         ask(
             &[
                 "rev-parse",
                 "--verify",
                 "--quiet",
+                END_OF_OPTIONS,
                 &format!("{rev}^{{tree}}"),
             ],
             &self.root,
@@ -424,17 +432,30 @@ impl GitVcs {
 
     /// Whether the commit is an ancestor of HEAD (on the current branch).
     #[must_use]
-    pub fn in_history(&self, sha: &str) -> bool {
-        run(&["merge-base", "--is-ancestor", sha, "HEAD"], &self.root)
-            .is_some_and(|o| o.status.success())
+    pub fn in_history(&self, sha: &Rev) -> bool {
+        run(
+            &[
+                "merge-base",
+                "--is-ancestor",
+                END_OF_OPTIONS,
+                sha.as_str(),
+                "HEAD",
+            ],
+            &self.root,
+        )
+        .is_some_and(|o| o.status.success())
     }
 
     /// The commit's message.
     ///
     /// # Errors
     /// When git can't read it.
-    pub fn message(&self, sha: &str) -> Result<String> {
-        step(&["log", "-1", "--format=%B", sha], &self.root, false)
+    pub fn message(&self, sha: &Rev) -> Result<String> {
+        step(
+            &["log", "-1", "--format=%B", END_OF_OPTIONS, sha.as_str()],
+            &self.root,
+            false,
+        )
     }
 
     // The working copy's files, for the document viewer (docs/compmd-viewer-design.md §4). atm-docs checks the path
@@ -478,9 +499,17 @@ impl GitVcs {
     /// A regular file as `commit` (a SHA, as [`GitVcs::resolve`] gives it) has it: its size and its blob; none when the
     /// commit has no regular file there (no entry, a symlink, a submodule, a folder).
     #[must_use]
-    pub fn blob_in(&self, commit: &str, relative: &str) -> Option<(u64, String)> {
+    pub fn blob_in(&self, commit: &Rev, relative: &str) -> Option<(u64, String)> {
         let output = run(
-            &["ls-tree", "-z", "--long", commit, "--", relative],
+            &[
+                "ls-tree",
+                "-z",
+                "--long",
+                END_OF_OPTIONS,
+                commit.as_str(),
+                "--",
+                relative,
+            ],
             &self.root,
         )?;
         if !output.status.success() {
@@ -503,10 +532,20 @@ impl GitVcs {
     /// 160000); none for anything else there, or nothing (ATM-599: a submodule only moved has no other trace in a
     /// diff).
     #[must_use]
-    pub fn gitlink_in(&self, object: &str, relative: &str) -> Option<String> {
+    pub fn gitlink_in(&self, object: &Rev, relative: &str) -> Option<String> {
         // Named as the project has it; read as this repository has it (a submodule's round, ATM-583)
         let relative = self.inside_path(relative)?;
-        let output = run(&["ls-tree", "-z", object, "--", relative], &self.root)?;
+        let output = run(
+            &[
+                "ls-tree",
+                "-z",
+                END_OF_OPTIONS,
+                object.as_str(),
+                "--",
+                relative,
+            ],
+            &self.root,
+        )?;
         if !output.status.success() {
             return None;
         }
@@ -523,9 +562,12 @@ impl GitVcs {
     ///
     /// # Errors
     /// git isn't available, or there is no such blob.
-    pub fn blob_bytes(&self, blob: &str) -> Result<Vec<u8>> {
-        let output = run(&["cat-file", "blob", blob], &self.root)
-            .ok_or_else(|| Error::failed("git isn't available"))?;
+    pub fn blob_bytes(&self, blob: &Rev) -> Result<Vec<u8>> {
+        let output = run(
+            &["cat-file", "blob", END_OF_OPTIONS, blob.as_str()],
+            &self.root,
+        )
+        .ok_or_else(|| Error::failed("git isn't available"))?;
         if !output.status.success() {
             return Err(Error::NotFound(format!("{blob}: no such blob")));
         }
@@ -685,7 +727,7 @@ impl GitVcs {
     #[must_use]
     pub fn head(&self) -> Option<String> {
         if self.in_repository() {
-            self.resolve("HEAD")
+            self.resolve(&Rev::head())
         } else {
             None
         }
@@ -801,6 +843,11 @@ mod tests {
         names.iter().map(ToString::to_string).collect()
     }
 
+    /// A revision, by a name or ID the test has.
+    fn r(name: &str) -> Rev {
+        Rev::new(name).unwrap()
+    }
+
     #[test]
     fn only_git_is_a_version_control_atm_knows() {
         assert!(open(Path::new("."), "git").is_ok());
@@ -823,7 +870,7 @@ mod tests {
         assert_eq!(vcs.submodule_of("a.txt"), None);
         assert_eq!(vcs.remote_url(), None);
         assert_eq!(vcs.default_base(), "main");
-        assert_eq!(vcs.resolve("HEAD"), None);
+        assert_eq!(vcs.resolve(&Rev::head()), None);
     }
 
     #[test]
@@ -916,12 +963,12 @@ mod tests {
             .commit(&names(&["a.txt", "new.txt", "gone.txt"]), "the change")
             .unwrap();
         assert_eq!(vcs.head().as_deref(), Some(sha.as_str()));
-        assert_eq!(vcs.resolve("HEAD"), Some(sha.clone()));
-        assert_eq!(vcs.message(&sha).unwrap(), "the change");
+        assert_eq!(vcs.resolve(&Rev::head()), Some(sha.clone()));
+        assert_eq!(vcs.message(&r(&sha)).unwrap(), "the change");
         let changed = git(&dir.0, &["show", "--name-status", "--format=", &sha]);
         assert_eq!(changed, "M\ta.txt\nD\tgone.txt\nA\tnew.txt");
         assert_eq!(git(&dir.0, &["status", "--porcelain"]), "A  staged.txt");
-        assert!(vcs.in_history(&first) && vcs.in_history(&sha));
+        assert!(vcs.in_history(&r(&first)) && vcs.in_history(&r(&sha)));
     }
 
     #[test]
@@ -936,7 +983,7 @@ mod tests {
             "{error}"
         );
         assert!(
-            vcs.message("no-such-commit")
+            vcs.message(&r("no-such-commit"))
                 .unwrap_err()
                 .to_string()
                 .starts_with("git log failed: ")
@@ -950,22 +997,22 @@ mod tests {
         write(&vcs, "a.txt", "a");
         let first = commit_all(&vcs, "first");
         let tree = git(&dir.0, &["rev-parse", "HEAD^{tree}"]);
-        assert_eq!(vcs.resolve("main"), Some(first.clone()));
-        assert_eq!(vcs.resolve_tree(&first), Some(tree.clone()));
+        assert_eq!(vcs.resolve(&r("main")), Some(first.clone()));
+        assert_eq!(vcs.resolve_tree(&r(&first)), Some(tree.clone()));
         assert_eq!(
-            vcs.resolve_tree(&tree),
+            vcs.resolve_tree(&r(&tree)),
             Some(tree.clone()),
             "a tree is its own"
         );
-        assert_eq!(vcs.resolve(&tree), None, "a tree is no commit");
-        assert_eq!(vcs.resolve("no-such-branch"), None);
+        assert_eq!(vcs.resolve(&r(&tree)), None, "a tree is no commit");
+        assert_eq!(vcs.resolve(&r("no-such-branch")), None);
         git(&dir.0, &["checkout", "-q", "-b", "side"]);
         write(&vcs, "b.txt", "b");
         let side = commit_all(&vcs, "side");
         git(&dir.0, &["checkout", "-q", "main"]);
-        assert!(vcs.in_history(&first));
-        assert!(!vcs.in_history(&side), "on another branch");
-        assert!(!vcs.in_history("no-such-commit"));
+        assert!(vcs.in_history(&r(&first)));
+        assert!(!vcs.in_history(&r(&side)), "on another branch");
+        assert!(!vcs.in_history(&r("no-such-commit")));
     }
 
     #[test]
@@ -1080,10 +1127,10 @@ mod tests {
         git(&dir.0, &["update-index", "--chmod=+x", "run.sh"]);
         #[cfg(unix)]
         std::os::unix::fs::symlink("docs/a.md", vcs.root.join("link.md")).unwrap();
-        let head = commit_all(&vcs, "first");
+        let head = r(&commit_all(&vcs, "first"));
         let (size, blob) = vcs.blob_in(&head, "docs/a.md").unwrap();
         assert_eq!(size, 5);
-        assert_eq!(vcs.blob_bytes(&blob).unwrap(), b"hello");
+        assert_eq!(vcs.blob_bytes(&r(&blob)).unwrap(), b"hello");
         assert_eq!(
             vcs.blob_in(&head, "run.sh").map(|(s, _)| s),
             Some(10),
@@ -1092,10 +1139,10 @@ mod tests {
         for other in ["docs", "missing.md", "docs/a", "link.md"] {
             assert_eq!(vcs.blob_in(&head, other), None, "{other}");
         }
-        assert_eq!(vcs.blob_in("no-such-commit", "docs/a.md"), None);
+        assert_eq!(vcs.blob_in(&r("no-such-commit"), "docs/a.md"), None);
         let unknown = "0".repeat(40);
         assert_eq!(
-            vcs.blob_bytes(&unknown).unwrap_err(),
+            vcs.blob_bytes(&r(&unknown)).unwrap_err(),
             Error::NotFound(format!("{unknown}: no such blob"))
         );
     }
@@ -1276,15 +1323,15 @@ mod tests {
             ],
         );
         let head = commit_all(&vcs, "the submodule");
-        let tree = vcs.resolve_tree(&head).unwrap();
-        for object in [head.as_str(), tree.as_str()] {
+        let tree = vcs.resolve_tree(&r(&head)).unwrap();
+        for object in [r(&head), r(&tree)] {
             assert_eq!(
-                vcs.gitlink_in(object, "lib/sub"),
+                vcs.gitlink_in(&object, "lib/sub"),
                 Some(sub_head.clone()),
                 "{object}"
             );
             for other in ["lib/top.txt", "lib", "lib/none", "lib/sub/a.txt", "-p"] {
-                assert_eq!(vcs.gitlink_in(object, other), None, "{object} {other}");
+                assert_eq!(vcs.gitlink_in(&object, other), None, "{object} {other}");
             }
         }
     }

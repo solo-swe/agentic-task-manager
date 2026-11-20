@@ -412,16 +412,15 @@ fn file_at<'a>(vcs: Option<&GitVcs>, revision: &str, path: &'a str) -> Result<Fi
             "this project has no repository to read files from".into(),
         ));
     };
-    // A revision is a commit's name, never an option for git
-    if revision.is_empty() || revision.starts_with('-') || revision.contains('\0') {
-        return Err(Error::Invalid(format!("{revision}: not a revision")));
-    }
+    // A revision is a commit's name, never an option for git (atm-vcs's Rev, ATM-659)
+    let rev = atm_vcs::Rev::new(revision)
+        .map_err(|_| Error::Invalid(format!("{revision}: not a revision")))?;
     // A commit, or a tree (a review's round rebuilt from its diff, which no commit has): the project's, or, for a file
     // in a submodule, the submodule's own (a review's round of commits made in it, ATM-583), read by its path there
     let found = |repo: &GitVcs| {
-        let commit = repo.resolve(revision);
-        let object = commit.clone().or_else(|| repo.resolve_tree(revision))?;
-        Some((commit, object))
+        let commit = repo.resolve(&rev);
+        let object = commit.clone().or_else(|| repo.resolve_tree(&rev))?;
+        Some((commit, atm_vcs::Rev::object_id(&object).ok()?))
     };
     let (repo, inside, commit, object) = match found(vcs) {
         Some((commit, object)) => (vcs.clone(), path.to_string(), commit, object),
@@ -450,14 +449,14 @@ fn file_at<'a>(vcs: Option<&GitVcs>, revision: &str, path: &'a str) -> Result<Fi
             limit / 1_000_000
         )));
     }
-    let data = repo.blob_bytes(&blob)?;
+    let data = repo.blob_bytes(&atm_vcs::Rev::object_id(&blob)?)?;
     Ok(FileAt {
         path,
         kind,
         detail,
         data,
         commit,
-        object,
+        object: object.to_string(),
     })
 }
 
@@ -948,6 +947,11 @@ mod tests {
         std::mem::forget(lib); // inside the project, which removes it
     }
 
+    /// The test repository's first commit, tagged `first`.
+    fn first() -> atm_vcs::Rev {
+        atm_vcs::Rev::new("first").unwrap()
+    }
+
     #[test]
     fn a_file_at_a_revision_is_read_as_that_commit_has_it() {
         let repo = Repo::new();
@@ -955,7 +959,7 @@ mod tests {
         let then = read_document_at(Some(&vcs), "first", "a.md").unwrap();
         assert_eq!(then["document"], "# One\n");
         assert_eq!(then["kind"], "markdown");
-        assert_eq!(then["revision"], json!(vcs.resolve("first")));
+        assert_eq!(then["revision"], json!(vcs.resolve(&first())));
         assert_eq!(
             read_document(Some(&vcs), "a.md").unwrap()["document"],
             "# Two\n"
@@ -986,7 +990,9 @@ mod tests {
             b"GIF89a-new".to_vec()
         );
         // In a tree too (a round rebuilt from its diff)
-        let tree = vcs.resolve_tree("old").unwrap();
+        let tree = vcs
+            .resolve_tree(&atm_vcs::Rev::new("old").unwrap())
+            .unwrap();
         assert_eq!(
             read_image_at(Some(&vcs), &tree, "pic.gif").unwrap().0,
             b"GIF89a-old".to_vec()
@@ -1025,14 +1031,14 @@ mod tests {
     fn a_file_in_a_tree_is_read_as_the_tree_has_it() {
         let repo = Repo::new();
         let vcs = repo.vcs();
-        let tree = vcs.resolve_tree("first").unwrap();
+        let tree = vcs.resolve_tree(&first()).unwrap();
         let then = read_document_at(Some(&vcs), &tree, "a.md").unwrap();
         assert_eq!(then["document"], "# One\n");
         assert_eq!(then["revision"], json!(tree));
         assert_eq!(then["commit"], Value::Null);
         // A commit's own answer names the commit
         let at_commit = read_document_at(Some(&vcs), "first", "a.md").unwrap();
-        assert_eq!(at_commit["commit"], json!(vcs.resolve("first")));
+        assert_eq!(at_commit["commit"], json!(vcs.resolve(&first())));
         // The tree's checks are a commit's: a file it doesn't have, a path atm doesn't show
         assert!(matches!(
             read_document_at(Some(&vcs), &tree, "b.md"),

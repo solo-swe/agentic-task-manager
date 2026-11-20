@@ -16,9 +16,14 @@ fn hakan() -> Actor {
     Actor::from("Hakan Serce")
 }
 
+/// A round's commit, as atm records it: a full ID (ATM-659: the folder store refuses anything else).
+fn base() -> String {
+    "a1".repeat(20)
+}
+
 fn round(patch: &str) -> NewRound {
     NewRound {
-        kind: RoundKind::Working { base: "a1".into() },
+        kind: RoundKind::Working { base: base() },
         submodule: None,
         files: Vec::new(),
         patch: Patch(patch.into()),
@@ -96,7 +101,7 @@ pub(crate) fn a_new_review_is_kept_numbered_with_its_first_round(store: &mut dyn
     let round = &review.rounds[0];
     assert_eq!(
         (round.number, &round.by, &round.kind),
-        (1, &agent(), &RoundKind::Working { base: "a1".into() })
+        (1, &agent(), &RoundKind::Working { base: base() })
     );
     assert_eq!(
         store.round_diff(&first.id, 1).unwrap().0,

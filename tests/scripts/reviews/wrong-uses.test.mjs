@@ -122,5 +122,41 @@ describe('atm review: refusals', () => {
     }
   });
 
+  // ATM-659: rounds/N.json is committed and merged, anyone's to write, and its commits reach git: a revision that would
+  // be an option to git (`--index-output=x` writes a file) is refused when the round is read, before git sees it
+  test('a round whose commit is no full ID, an option to git say, is refused and writes nothing', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
+      const reviews = path.join(root, '.agentic-task-manager/reviews');
+      const [folder] = fs.readdirSync(reviews);
+      const file = path.join(reviews, folder, 'rounds/1.json');
+      const round = JSON.parse(fs.readFileSync(file, 'utf8'));
+      assert.equal(round.kind.kind, 'working');
+      for (const base of ['--index-output=x', '-p', 'HEAD']) {
+        fs.writeFileSync(file, JSON.stringify({ ...round, kind: { ...round.kind, base } }));
+        for (const args of [
+          ['review', 'show', 'CR-1', '--json'],
+          ['review', 'show', 'CR-1', '--round', '1'],
+        ]) {
+          const r = atm(args, root, HAKAN);
+          assert.equal(r.code, 1, `${base}: atm ${args.join(' ')}: ${r.stdout}`);
+          assert.match(r.stderr, /rounds[/\\]1\.json: its base .* isn't a commit's full ID/, `${base}: ${r.stderr}`);
+        }
+        const doctor = atm(['doctor'], root, HAKAN);
+        assert.match(doctor.stdout + doctor.stderr, /its base .* isn't a commit's full ID/, base);
+      }
+      // git wrote no file of the option's, in the project or its git folder
+      assert.ok(!fs.existsSync(path.join(root, 'x')));
+      assert.ok(!fs.existsSync(path.join(root, '.git/x')));
+      // The round as atm wrote it reads again
+      fs.writeFileSync(file, JSON.stringify(round));
+      ok(['review', 'show', 'CR-1', '--json'], root, HAKAN);
+    } finally {
+      removeDir(root);
+    }
+  });
+
   // ATM-622 (Hakan): a later round naming only the file that changed showed every other file as deleted since round 1
 });

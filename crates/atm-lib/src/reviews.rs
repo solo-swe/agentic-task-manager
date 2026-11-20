@@ -947,9 +947,10 @@ mod tests {
     }
     fn round() -> NewRound {
         NewRound {
+            // Commits as atm records them, full IDs (ATM-659)
             kind: RoundKind::Range {
-                base: "a".into(),
-                head: "b".into(),
+                base: "a".repeat(40),
+                head: "b".repeat(40),
             },
             submodule: None,
             files: Vec::new(),
@@ -1286,8 +1287,8 @@ mod tests {
         let mut reviews = super::store(&project).unwrap();
         let mut later = round();
         later.kind = RoundKind::Range {
-            base: "a".into(),
-            head: "c".into(),
+            base: "a".repeat(40),
+            head: "c".repeat(40),
         };
         super::Reviews::new(&mut reviews)
             .add_round(&cr, later)

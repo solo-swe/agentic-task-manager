@@ -240,22 +240,23 @@ pub fn record_commit(
     rev: &str,
 ) -> Result<Value> {
     let vcs = needs_git(vcs)?;
-    if rev.starts_with('-') {
-        return Err(Error::Invalid(format!(
+    let given = atm_vcs::Rev::new(rev).map_err(|_| {
+        Error::Invalid(format!(
             "--record takes a revision, not an option: {}",
             repr_str(rev)
-        )));
-    }
+        ))
+    })?;
     let sha = vcs
-        .resolve(rev)
+        .resolve(&given)
         .ok_or_else(|| Error::failed(format!("no commit {rev} in this repository")))?;
-    if !vcs.in_history(&sha) {
+    let commit = atm_vcs::Rev::object_id(&sha)?;
+    if !vcs.in_history(&commit) {
         return Err(Error::failed(format!(
             "{} is not on the current branch (an ancestor of HEAD)",
             &sha[..7.min(sha.len())]
         )));
     }
-    let text = vcs.message(&sha)?;
+    let text = vcs.message(&commit)?;
     let task = record_on_task(project, task_id, &sha)?;
     let id = task.get("id").map(py_str).unwrap_or_default();
     // With task keys (ADR-007 §9) the message names its key, an alias or a key with an earlier prefix

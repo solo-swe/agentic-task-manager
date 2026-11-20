@@ -8,7 +8,7 @@
 //! quote finds it again; else it has **drifted**, shown at its last place, with the round and lines it was made on.
 
 use atm_common::{Error, Result, TASK_DIR};
-use atm_vcs::{ChangedFile, Diff, GitVcs};
+use atm_vcs::{ChangedFile, Diff, GitVcs, Rev};
 
 use crate::model::{
     Actor, Anchor, FileChange, FileStatus, Patch, Review, ReviewId, Round, RoundKind,
@@ -117,13 +117,23 @@ fn shared_repository(vcs: &GitVcs, a: &Round, b: &Round) -> Result<GitVcs> {
 /// # Errors
 /// Either isn't a commit, or git fails.
 pub fn from_range(vcs: &GitVcs, base: &str, head: &str, by: &Actor) -> Result<NewRound> {
-    let resolve = |rev: &str| {
-        vcs.resolve(rev)
-            .ok_or_else(|| Error::Invalid(format!("{rev} isn't a commit here")))
-    };
-    let (base, head) = (resolve(base)?, resolve(head)?);
+    let (base, head) = (commit(vcs, base)?, commit(vcs, head)?);
     let diff = vcs.diff_range(&base, &head, &[TASK_DIR])?;
+    let (base, head) = (base.to_string(), head.to_string());
     Ok(round(vcs, RoundKind::Range { base, head }, diff, by))
+}
+
+/// A revision someone named, as its commit's full SHA: what a round records.
+fn commit(vcs: &GitVcs, rev: &str) -> Result<Rev> {
+    vcs.resolve(&Rev::new(rev)?)
+        .ok_or_else(|| Error::Invalid(format!("{rev} isn't a commit here")))
+        .and_then(|sha| Rev::object_id(&sha))
+}
+
+/// A round's commit, as `rounds/N.json` has it: a full object ID (ATM-659; a round's files are read with
+/// [`RoundKind::check`] first, and atm writes only SHAs there).
+fn recorded(id: &str) -> Result<Rev> {
+    Rev::object_id(id)
 }
 
 /// A round of the working tree against `base` (`HEAD` by default): uncommitted changes, new files included, or a
@@ -132,10 +142,9 @@ pub fn from_range(vcs: &GitVcs, base: &str, head: &str, by: &Actor) -> Result<Ne
 /// # Errors
 /// `base` isn't a commit, or git fails.
 pub fn from_working(vcs: &GitVcs, base: &str, by: &Actor) -> Result<NewRound> {
-    let base = vcs
-        .resolve(base)
-        .ok_or_else(|| Error::Invalid(format!("{base} isn't a commit here")))?;
+    let base = commit(vcs, base)?;
     let diff = vcs.diff_working(&base, &[TASK_DIR])?;
+    let base = base.to_string();
     Ok(round(vcs, RoundKind::Working { base }, diff, by))
 }
 
@@ -155,7 +164,7 @@ pub fn from_files(vcs: &GitVcs, paths: &[String], by: &Actor) -> Result<NewRound
 ///
 /// # Errors
 /// The base is gone from this clone, or the diff doesn't apply to it; the round's submodule isn't checked out here.
-pub fn tree(vcs: &GitVcs, round: &Round, patch: &Patch) -> Result<String> {
+pub fn tree(vcs: &GitVcs, round: &Round, patch: &Patch) -> Result<Rev> {
     let vcs = &repository(vcs, round)?;
     let binary: Vec<String> = round
         .files
@@ -163,11 +172,12 @@ pub fn tree(vcs: &GitVcs, round: &Round, patch: &Patch) -> Result<String> {
         .filter(|f| f.binary)
         .map(|f| f.path.clone())
         .collect();
-    match &round.kind {
-        RoundKind::Range { head, .. } => vcs.tree_of(head),
-        RoundKind::Working { base } => vcs.tree_after(Some(base), &patch.0, &binary),
+    let tree = match &round.kind {
+        RoundKind::Range { head, .. } => vcs.tree_of(&recorded(head)?),
+        RoundKind::Working { base } => vcs.tree_after(Some(&recorded(base)?), &patch.0, &binary),
         RoundKind::Files => vcs.tree_after(None, &patch.0, &binary),
-    }
+    }?;
+    Rev::object_id(&tree)
 }
 
 fn round_of(review: &Review, number: u32) -> Result<&Round> {
@@ -440,6 +450,7 @@ pub fn place<S: RoundDiffs + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::{Hunk, Placement, follow, hunks};
+    use atm_vcs::Rev;
 
     /// A hunk that replaces `old_len` lines with `new_len` (or inserts, with no old lines).
     fn hunk(old_start: u32, old_len: u32, new_start: u32, new_len: u32) -> Hunk {
@@ -866,8 +877,8 @@ mod tests {
         assert_eq!(
             round.kind,
             RoundKind::Range {
-                base: vcs.resolve("HEAD~1").unwrap(),
-                head: vcs.resolve("HEAD").unwrap()
+                base: vcs.resolve(&Rev::new("HEAD~1").unwrap()).unwrap(),
+                head: vcs.resolve(&Rev::head()).unwrap()
             }
         );
         assert_eq!(round.by, by);
@@ -899,7 +910,7 @@ mod tests {
             at: String::new(),
         };
         let head_tree = tree(&vcs, &kept, &round.patch).unwrap();
-        assert_eq!(head_tree, vcs.tree_of("HEAD").unwrap());
+        assert_eq!(head_tree.as_str(), vcs.tree_of(&Rev::head()).unwrap());
         assert_eq!(
             vcs.file_in(&head_tree, "c.rs").as_deref(),
             Some("fn c() {}\n")
@@ -934,7 +945,7 @@ mod tests {
         assert_eq!(
             round.kind,
             RoundKind::Working {
-                base: vcs.resolve("HEAD").unwrap()
+                base: vcs.resolve(&Rev::head()).unwrap()
             }
         );
         assert_eq!(

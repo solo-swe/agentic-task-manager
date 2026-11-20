@@ -184,6 +184,29 @@ pub enum RoundKind {
     Files,
 }
 
+impl RoundKind {
+    /// Whether the commits it names are full object IDs, as atm records them: `rounds/N.json` is committed and merged,
+    /// so anyone who can push writes it, and these reach git (ATM-659).
+    ///
+    /// # Errors
+    /// `Invalid`, naming the one that isn't.
+    pub fn check(&self) -> atm_common::Result<()> {
+        let commits: &[(&str, &String)] = match self {
+            Self::Range { base, head } => &[("base", base), ("head", head)],
+            Self::Working { base } => &[("base", base)],
+            Self::Files => &[],
+        };
+        for (what, id) in commits {
+            if !atm_vcs::is_object_id(id) {
+                return Err(atm_common::Error::Invalid(format!(
+                    "its {what} {id:?} isn't a commit's full ID, as atm writes it"
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// How a file changed in a round.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -447,6 +470,65 @@ mod tests {
             serde_json::to_value(Patch("diff".into())).unwrap(),
             serde_json::json!("diff")
         );
+    }
+
+    /// ATM-659: a round's commits reach git, and `rounds/N.json` is anyone's to write: full object IDs only
+    #[test]
+    fn a_rounds_commits_are_full_object_ids_or_it_is_refused() {
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        let sha256 = "f".repeat(64);
+        for good in [
+            RoundKind::Range {
+                base: sha.into(),
+                head: sha256.clone(),
+            },
+            RoundKind::Working { base: sha.into() },
+            RoundKind::Files,
+        ] {
+            assert!(good.check().is_ok(), "{good:?}");
+        }
+        for (bad, says) in [
+            (
+                RoundKind::Range {
+                    base: "--index-output=x".into(),
+                    head: sha.into(),
+                },
+                "base \"--index-output=x\"",
+            ),
+            (
+                RoundKind::Range {
+                    base: sha.into(),
+                    head: "-p".into(),
+                },
+                "head \"-p\"",
+            ),
+            (
+                RoundKind::Range {
+                    base: sha.into(),
+                    head: "HEAD".into(),
+                },
+                "head \"HEAD\"",
+            ),
+            (
+                RoundKind::Working {
+                    base: "abc1234".into(),
+                },
+                "base \"abc1234\"",
+            ),
+            (
+                RoundKind::Working {
+                    base: format!("{sha}\n--all"),
+                },
+                "base",
+            ),
+        ] {
+            match bad.check() {
+                Err(atm_common::Error::Invalid(message)) => {
+                    assert!(message.contains(says), "{message}");
+                }
+                other => panic!("{bad:?}: {other:?}"),
+            }
+        }
     }
 
     #[test]

@@ -194,16 +194,20 @@ fn work_of(project: &Project, me: &str) -> Work {
             work.held = Some(key.clone());
         }
         let mut files = declared_files(task);
-        if let (Some(vcs), Some(commit)) = (&vcs, task.get("commit").and_then(Value::as_str)) {
-            let parent = format!("{commit}^");
-            if let Ok(diff) = vcs.diff_range(&parent, commit, &[atm_common::TASK_DIR]) {
-                files.extend(diff.files.into_iter().map(|f| f.path));
-            }
+        // The task's commit is task text: a revision only once checked (ATM-659)
+        if let (Some(vcs), Some(commit)) = (&vcs, task.get("commit").and_then(Value::as_str))
+            && let (Ok(parent), Ok(commit)) = (
+                atm_vcs::Rev::new(&format!("{commit}^")),
+                atm_vcs::Rev::new(commit),
+            )
+            && let Ok(diff) = vcs.diff_range(&parent, &commit, &[atm_common::TASK_DIR])
+        {
+            files.extend(diff.files.into_iter().map(|f| f.path));
         }
         work.tasks.push((key, files));
     }
     if let Some(vcs) = &vcs
-        && let Ok(diff) = vcs.diff_working("HEAD", &[atm_common::TASK_DIR])
+        && let Ok(diff) = vcs.diff_working(&atm_vcs::Rev::head(), &[atm_common::TASK_DIR])
     {
         work.uncommitted = diff.files.into_iter().map(|f| f.path).collect();
     }

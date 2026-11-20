@@ -180,7 +180,7 @@ impl FileStore {
         let text = read_file(&path).ok()??;
         serde_json::from_str::<Round>(&text)
             .ok()
-            .filter(|r| r.number == 1)
+            .filter(|r| r.number == 1 && r.kind.check().is_ok())
     }
 
     /// One review's folder, read: its header, summary, comments and rounds.
@@ -225,6 +225,11 @@ impl FileStore {
                         round.number
                     )));
                 }
+                // Its commits reach git: full IDs only, never a name git could read as an option (ATM-659)
+                round
+                    .kind
+                    .check()
+                    .map_err(|e| Error::failed(format!("{}: {e}", entry.path().shown())))?;
                 rounds.push(round);
             }
         }
@@ -343,7 +348,7 @@ impl FileStore {
 
     /// The review a reference names, as the folder holds it.
     fn find(&self, reference: &ReviewRef) -> Result<Held> {
-        let (held, ..) = self.read_all()?;
+        let (held, _, unreadable) = self.read_all()?;
         if let Some(found) = held.iter().find(|h| {
             h.review.header.reference == *reference || h.review.header.id.0 == reference.0
         }) {
@@ -356,6 +361,13 @@ impl FileStore {
             .filter(|h| h.review.header.reference.0.starts_with(&prefix))
             .collect();
         if clashing.is_empty() {
+            // A review whose folder atm can't read says why, rather than that there is none (ATM-659: a round refused)
+            if let Some(bad) = unreadable.iter().find(|u| u.reference == reference.0) {
+                return Err(Error::failed(format!(
+                    "{reference} can't be read: {}",
+                    bad.problem
+                )));
+            }
             return Err(Error::NotFound(format!("no review {reference}")));
         }
         let names: Vec<String> = clashing
@@ -669,8 +681,9 @@ mod tests {
             status: Status::Waiting,
             first: NewRound {
                 kind: RoundKind::Range {
-                    base: "a1".into(),
-                    head: "b2".into(),
+                    // Commits as atm records them, full IDs (ATM-659)
+                    base: "a1".repeat(20),
+                    head: "b2".repeat(20),
                 },
                 submodule: None,
                 files: vec![FileChange {

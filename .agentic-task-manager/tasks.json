@@ -17805,7 +17805,7 @@
       "description": "Audit findings R1 and R2 ([the report](docs/codebase-audit-2026-11.md#r1-high-security-a-comment-body-can-forge-a-reply-from-anyone-checked)).\n\n- **Body:** `crates/atm-review/src/files.rs:219-224` writes body lines verbatim, one level deeper than the comment, which is where a reply's `- **author** · at · cN` line goes. A body line of that shape is read back (`files.rs:436-446`) as a reply by whoever it names; the watch tells it to agents as a person's word.\n- **Path:** `files.rs:186-204` writes `## {path}:{a}-{b} · round N · tK` with the path as given; nothing refuses a newline in it, so a path can add a heading or a resolved comment by the user.\n\n## Change\n- Escape, when writing, every body line that `read_item` or `read_heading` would accept (a marker the reader strips), or keep bodies in fenced blocks; existing files still read as before.\n- Refuse a comment `path` with control characters, and one not among the round's files, in `rules::comment` (CLI and REST alike, `review_requests.rs:265-272`).\n- Record the rule in `docs/security-architecture.md` (B2, I6's row or a new invariant).\n\n## Tests\natm-review unit tests: a body containing a reply-shaped line and a heading-shaped line round-trips as one comment's body; a path with `\\n` is refused; a path not in the round is refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/files.rs",
@@ -17813,7 +17813,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T17:24:05Z",
+      "updated_at": "2026-11-20T17:32:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17825,7 +17825,24 @@
       "sprint": "Audit and tabs",
       "number": 658,
       "started_at": "2026-11-20T17:24:05Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f425b4ba918a2b5ada9beb3d3a10a95e0c2afeb5",
+      "code_reviews": [
+        {
+          "id": "01a1fa03-e7c6-7638-a273-c968df0026ec",
+          "ref": "CR-86"
+        }
+      ],
+      "review_requested_at": "2026-11-20T17:32:02Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T17:32:02Z",
+          "kind": "review",
+          "text": "CR-86: comments.md: a body or path cannot forge another comment",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225bee272d5d",
@@ -17840,7 +17857,7 @@
       "description": "Audit findings R3 and the `Rev` abstraction ([the report](docs/codebase-audit-2026-11.md#r3-high-security-revisions-from-roundsnjson-reach-git-unchecked-checked-path-effect-suspected)).\n\n`RoundKind`'s `base` and `head` are free strings from `rounds/N.json`, a committed and mergeable file. `crates/atm-review/src/rounds.rs:166-169` passes them to `tree_of` (`git rev-parse <head>^{tree}`) and `tree_after` (`git read-tree <base>`) in `crates/atm-vcs/src/diff.rs:297`, `:352`, without `commit_sha` (`diff.rs:119`) or `--end-of-options`. So do `file_in`, `diff_trees`, `gitlink_in`, `blob_in`, `message` and `in_history`. A value starting with `-` becomes an option to git, run just by opening the review page.\n\n## Change\n- Validate `base` and `head` as full hexadecimal object IDs when a round is read (`model.rs`); a round that fails is refused with a clear error.\n- Introduce a `Rev` newtype in atm-vcs (a hex object ID, or a name checked not to start with `-` and with no NUL), and make every git-facing method take it, so an unchecked string can't reach git again.\n- Add `--end-of-options` where git supports it.\n\n## Tests\n- atm-vcs unit tests: each method refuses a revision starting with `-`.\n- A `tests/scripts/reviews/` test: a review whose `rounds/1.json` has `\"base\": \"--index-output=x\"` shows an error and writes no file.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-vcs/src/lib.rs",
@@ -17849,9 +17866,9 @@
         "crates/atm-review/src/rounds.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T17:32:07Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17859,7 +17876,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 659
+      "number": 659,
+      "started_at": "2026-11-20T17:32:07Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225cbe03e286",

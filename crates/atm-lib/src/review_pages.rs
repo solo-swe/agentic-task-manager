@@ -366,8 +366,11 @@ fn with_links(
     before: Option<&String>,
     after: &String,
 ) -> Vec<FilePatch> {
-    let linked =
-        |object: Option<&String>, path: &str| object.and_then(|o| repo.gitlink_in(o, path));
+    // A side is a round's commit or a tree atm rebuilt: a full object ID, or nothing to look up (ATM-659)
+    let linked = |object: Option<&String>, path: &str| {
+        let object = atm_vcs::Rev::object_id(object?).ok()?;
+        repo.gitlink_in(&object, path)
+    };
     patches
         .into_iter()
         .map(|mut file| {
@@ -410,7 +413,7 @@ fn view<S: RoundDiffs + ?Sized>(
             };
             let after = match &round.kind {
                 RoundKind::Range { head, .. } => head.clone(),
-                _ => rounds::tree(vcs, round, &diff)?,
+                _ => rounds::tree(vcs, round, &diff)?.to_string(),
             };
             (before, after, diff, Some(&round.files))
         }
@@ -421,8 +424,8 @@ fn view<S: RoundDiffs + ?Sized>(
         }
         Some(from) => {
             let earlier = round_of(review, from)?;
-            let before = rounds::tree(vcs, earlier, &store.diff_of(id, from)?)?;
-            let after = rounds::tree(vcs, round, &diff)?;
+            let before = rounds::tree(vcs, earlier, &store.diff_of(id, from)?)?.to_string();
+            let after = rounds::tree(vcs, round, &diff)?.to_string();
             let between = rounds::compare(vcs, store, review, from, shown)?;
             (Some(before), after, between, None)
         }
@@ -459,7 +462,8 @@ fn view<S: RoundDiffs + ?Sized>(
         if let Some((Some(from), Some(to))) = &file.submodule
             && from != to
             && let Some(sub) = vcs.submodule_at(&file.path)
-            && let Ok(diff) = sub.diff_range(from, to, &[])
+            && let (Ok(a), Ok(b)) = (atm_vcs::Rev::object_id(from), atm_vcs::Rev::object_id(to))
+            && let Ok(diff) = sub.diff_range(&a, &b, &[])
         {
             out.extend(
                 file_patches(&diff.patch)

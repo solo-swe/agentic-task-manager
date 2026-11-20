@@ -32,8 +32,9 @@ fn dir() -> Dir {
 fn round() -> NewRound {
     NewRound {
         kind: RoundKind::Range {
-            base: "a".into(),
-            head: "b".into(),
+            // Commits as atm records them, full IDs (ATM-659)
+            base: "a".repeat(40),
+            head: "b".repeat(40),
         },
         submodule: None,
         // The file the drafts are on: a comment is on one of its round's files (ATM-658)
