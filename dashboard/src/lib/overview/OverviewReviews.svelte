@@ -77,12 +77,12 @@
   const pageOf = (entry: ReviewEntry | undefined, reference: string) =>
     reviewPageOf(currentAddress(), entry?.project?.id ?? '', reference);
 
-  /** A row opened: its review's page, in its project; in the app in a tab of its own, in the browser in place (with ⌘
-   * or Ctrl, in a browser tab of its own) */
+  /** A row opened: its review's page, in its project, in place (its back button comes back here, ATM-686); with ⌘ or
+   * Ctrl in a tab of its own, the app's or the browser's */
   function open(reference: string, newTab: boolean, entry?: ReviewEntry) {
     if (!entry?.project) return;
     const address = pageOf(entry, reference);
-    if (inApp) tabActions().open(address);
+    if (newTab && inApp) tabActions().open(address);
     else if (newTab) window.open(address, '_blank', 'noopener');
     else navigate(address);
   }

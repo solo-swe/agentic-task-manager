@@ -8,6 +8,7 @@
   // with focus. With `onmove`, a tab is dragged along the strip with the pointer, or moved a place with ⌃⇧ (⌘⇧) and an
   // arrow (T-532). Each tab is a button (role tab) filling the tab, its label drawn over it: a click on the label falls
   // through to it, and controls of the label's own (a chooser, a link) keep their clicks, beside the button, not in it.
+  import { DropdownMenu } from 'bits-ui';
   import { untrack, type Snippet } from 'svelte';
 
   interface Props {
@@ -31,6 +32,8 @@
     ariaLabel?: string;
     /** Each tab's element ID is this and the tab's ID; the + is `{idPrefix}new` */
     idPrefix?: string;
+    /** A tab's name in words: with it, when the tabs don't all fit, a **More ⌄** menu lists those out of view */
+    name?: (tab: T) => string;
   }
   let {
     tabs,
@@ -43,6 +46,7 @@
     width = 220,
     ariaLabel = 'Tabs',
     idPrefix = 'title-bar-tab-',
+    name,
   }: Props = $props();
 
   const elements: Record<string, HTMLElement> = {};
@@ -52,6 +56,8 @@
   // tabs don't fit, each disabled at its end; the active tab is scrolled into view.
   let scroller = $state<HTMLElement>();
   let overflow = $state({ more: false, left: false, right: false });
+  /** The part of the strip in view, in pixels from its start: which tabs the More menu lists (ATM-685) */
+  let view = $state({ from: 0, to: 0 });
 
   function measure() {
     const el = scroller;
@@ -63,7 +69,15 @@
       right: more && el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
     };
     if (next.more !== overflow.more || next.left !== overflow.left || next.right !== overflow.right) overflow = next;
+    const seen = { from: el.scrollLeft, to: el.scrollLeft + el.clientWidth };
+    if (seen.from !== view.from || seen.to !== view.to) view = seen;
   }
+
+  /** The tabs not wholly in view, in order (every tab is `width` wide): what More ⌄ offers (ATM-685) */
+  const hidden = $derived(
+    overflow.more ? tabs.filter((_, i) => i * width < view.from - 1 || (i + 1) * width > view.to + 1) : [],
+  );
+  let moreOpen = $state(false);
 
   /** ‹ or ›: the strip scrolled by about a tab */
   function step(direction: -1 | 1) {
@@ -296,6 +310,40 @@
       onclick={() => step(1)}>›</button
     >
   {/if}
+  {#if name && hidden.length > 0}
+    <!-- More ⌄ (ATM-685): the tabs out of view, to choose one, which is then scrolled into view, as a browser's tab
+         list; drawn over the page, so nothing of the bar clips it -->
+    <DropdownMenu.Root bind:open={moreOpen}>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <button
+            {...props}
+            class="title-bar-tabs-more"
+            id="{idPrefix}more"
+            title="More tabs"
+            aria-label="More tabs ({hidden.length})">More<span class="title-bar-tabs-more-caret">⌄</span></button
+          >
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content side="bottom" align="end" sideOffset={4} preventScroll={false} aria-label="More tabs">
+          {#snippet child({ props, wrapperProps })}
+            <div {...wrapperProps}>
+              <div {...props} class="title-bar-tabs-menu" id="{idPrefix}more-menu">
+                {#each hidden as tab (tab.id)}
+                  <DropdownMenu.Item onSelect={() => onselect(tab.id)}>
+                    {#snippet child({ props: item })}
+                      <div {...item} class="title-bar-tabs-menu-item" data-tab={tab.id}>{name(tab)}</div>
+                    {/snippet}
+                  </DropdownMenu.Item>
+                {/each}
+              </div>
+            </div>
+          {/snippet}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  {/if}
   {#if onnew}
     <button class="title-bar-tab-new" id="{idPrefix}new" title="New Tab" aria-label="New Tab" onclick={onnew}>+</button>
   {/if}
@@ -308,6 +356,60 @@
     flex: 0 1 auto;
     min-width: 0;
   }
+  /* More ⌄ (ATM-685): after the arrows, a real width, as theirs (ATM-639) */
+  .title-bar-tabs-more {
+    align-items: center;
+    align-self: center;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    display: inline-flex;
+    flex: 0 0 60px;
+    font-size: var(--text-sm);
+    gap: var(--space-1);
+    height: 28px;
+    justify-content: center;
+    white-space: nowrap;
+    width: 60px;
+  }
+  .title-bar-tabs-more:hover,
+  .title-bar-tabs-more[aria-expanded='true'] {
+    background: var(--surface);
+    color: var(--text);
+  }
+  .title-bar-tabs-more-caret {
+    line-height: 1;
+    transform: translateY(-2px);
+  }
+  .title-bar-tabs-menu {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
+    display: flex;
+    flex-direction: column;
+    max-height: 60vh;
+    max-width: 320px;
+    min-width: 200px;
+    overflow-y: auto;
+    padding: var(--space-2);
+    /* Over the page, as the bar's other menus (app.css .menu): Bits UI's wrapper takes it from here */
+    z-index: 50;
+  }
+  .title-bar-tabs-menu-item {
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    cursor: default;
+    font-size: var(--text-sm);
+    overflow: hidden;
+    padding: var(--space-2) var(--space-4);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .title-bar-tabs-menu-item[data-highlighted] {
+    background: var(--surface2);
+  }
   /* The tabs' own scroller: clipped to its room, its scroll bar hidden (the wheel and ‹ › scroll it), a scroll at its
      end never passed on to the page */
   .title-bar-tabs-room {
@@ -315,9 +417,13 @@
     min-width: 0;
     position: relative;
   }
+  /* It reaches a hairline below its room, over the bar's bottom line (ATM-688): the tabs fill it, so the selected one,
+     in the page's background, covers the line and joins the page under it; the others, transparent, leave it showing.
+     Clipped to its room, it had cut that pixel off, and the line ran under the selected tab too */
   .title-bar-tabs-scroller {
+    --hairline: 1px;
     display: flex;
-    inset: 0;
+    inset: 0 0 calc(-1 * var(--hairline)) 0;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior: contain;
@@ -355,8 +461,6 @@
     display: flex;
     flex: 0 0 var(--tab-width);
     gap: var(--space-1);
-    --hairline: 1px;
-    margin-bottom: calc(-1 * var(--hairline));
     min-width: 0;
     padding: 0 var(--space-2) 0 var(--space-4);
     position: relative;

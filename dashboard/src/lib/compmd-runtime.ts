@@ -1,8 +1,8 @@
 // CompMD for the whole document (ATM-646): what every rendered text shares, made once, not once per text. A review
 // page renders tens to hundreds of texts (each diff run, each comment); each paid for a sandbox of its own and an
-// observer of its own on <html>. The CompMD pages themselves are still one per text: each one opened or closed sets
-// the document's adopted style sheets and reads a computed style, a restyle of the whole page, until CompMD shares
-// those per document too (its task); when it does, its shared style sheet and scheme are passed here, in one place.
+// observer of its own on <html>. The CompMD pages themselves are one per text; since CompMD 0.8.0 (ATM-648) they share
+// one style sheet per document and read the colour scheme only for a frame or a component, so opening or closing one
+// restyles nothing (the jump test in reviews.spec.ts holds it at none).
 import { sandboxOptions, type CompmdModule } from './compmd';
 
 type Sandbox = ReturnType<CompmdModule['createSandbox']>;

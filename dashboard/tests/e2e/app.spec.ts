@@ -95,80 +95,100 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#settings-overlay')).not.toHaveClass(/open/);
   });
 
-  test('the title bar (T-513): on macOS the system’s buttons and menu bar; elsewhere the page draws them', async ({
-    page,
-    tasksServer,
-  }) => {
-    await tasksServer.asApp();
-    tasksServer.use('standard');
-    await page.goto('/');
-    // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
-    // charts are inside the tab, under it, without a second title
-    await expect(page.locator('#app-titlebar .title-bar-tab.selected #dashboard-title')).toHaveText('Standard Project');
-    await expect(page.locator('#dashboard-title')).toHaveCount(1);
-    await expect(page.locator('#app-tab-new')).toBeVisible();
-    await expect(page.locator('#app-titlebar [role="tab"]')).toHaveCount(1);
-    await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
-    // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
-    // the tab only the subtitle line; no reload button or version chip
-    await expect(page.locator('.title-bar-tab.selected #project-selector')).toBeVisible();
-    await expect(page.locator('.title-bar-tab.selected #other-projects-need')).toHaveCount(0);
-    // The chooser in the tab opens its menu (its click isn't the tab's)
-    await page.locator('.title-bar-tab.selected #project-selector').click();
-    await expect(page.locator('#project-menu')).toBeVisible();
-    await page.keyboard.press('Escape');
-    // Search and Filters inside the tab, on the subtitle's line, before it; not in the title bar
-    await expect(page.locator('.topbar.in-tab .in-tab-row #filters')).toBeVisible();
-    await expect(page.locator('#app-titlebar #filters')).toHaveCount(0);
-    expect(
-      await page.evaluate(() => {
-        const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
-        const filters = box('.in-tab-row #filters');
-        const subtitle = box('.in-tab-row #subtitle');
-        return (
-          filters.right <= subtitle.left &&
-          Math.abs(filters.top + filters.height / 2 - (subtitle.top + subtitle.height / 2)) < 4
-        );
-      }),
-    ).toBe(true);
-    // The Filters button is its icon (its name stays for screen readers), and its popup opens inside the window
-    await expect(page.locator('#filters-toggle')).toHaveAccessibleName(/Filters/);
-    expect(await page.locator('#filters-toggle .filters-label').evaluate((e) => e.getBoundingClientRect().width)).toBe(
-      1,
-    );
-    await page.locator('#filters-toggle').click();
-    await expect(page.locator('.filter-panel')).toBeVisible();
-    expect(await page.locator('.filter-panel').evaluate((e) => e.getBoundingClientRect().left)).toBeGreaterThanOrEqual(
-      0,
-    );
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
-    await expect(page.locator('#reload-btn')).toHaveCount(0);
-    await expect(page.locator('#version-chip')).toHaveCount(0);
-    await expect(page.locator('#window-buttons')).toHaveCount(0);
-    await expect(page.locator('#app-menus')).toHaveCount(0);
-    await page.locator('#tab-list').click();
-    await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
-    // A drag on the bar's free space moves the window; a double click maximizes it
-    // The bar's free space: just past the +
-    const free = await page.evaluate(() => document.querySelector('#app-tab-new')!.getBoundingClientRect().right + 16);
-    await page.locator('#app-titlebar').click({ position: { x: free, y: 10 } });
-    await page.locator('#app-titlebar').dblclick({ position: { x: free, y: 10 } });
-    expect(tasksServer.windowCalls).toContain('start_dragging');
-    expect(tasksServer.windowCalls).toContain('toggle_maximize');
+  // In WebKit too, the app's engine on macOS: the tab chooser's list was clipped by the tabs' strip (ATM-684)
+  test(
+    'the title bar (T-513): on macOS the system’s buttons and menu bar; elsewhere the page draws them',
+    { tag: '@webkit' },
+    async ({ page, tasksServer }) => {
+      await tasksServer.asApp();
+      tasksServer.use('standard');
+      await page.goto('/');
+      // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
+      // charts are inside the tab, under it, without a second title
+      await expect(page.locator('#app-titlebar .title-bar-tab.selected #dashboard-title')).toHaveText(
+        'Standard Project',
+      );
+      await expect(page.locator('#dashboard-title')).toHaveCount(1);
+      await expect(page.locator('#app-tab-new')).toBeVisible();
+      await expect(page.locator('#app-titlebar [role="tab"]')).toHaveCount(1);
+      await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
+      // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
+      // the tab only the subtitle line; no reload button or version chip
+      await expect(page.locator('.title-bar-tab.selected #project-selector')).toBeVisible();
+      await expect(page.locator('.title-bar-tab.selected #other-projects-need')).toHaveCount(0);
+      // The chooser in the tab opens its menu (its click isn't the tab's)
+      await page.locator('.title-bar-tab.selected #project-selector').click();
+      await expect(page.locator('#project-menu')).toBeVisible();
+      // Drawn where it can be seen and used, not clipped by the tabs' scrolling strip (ATM-684): what is at its
+      // middle is the menu itself, once it is placed beside its button, and its filter takes a real click
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const menu = document.querySelector('#project-menu')!;
+            const box = menu.getBoundingClientRect();
+            const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+            return box.height > 40 && !!at && menu.contains(at);
+          }),
+        )
+        .toBe(true);
+      await page.locator('#project-filter').click();
+      await expect(page.locator('#project-filter')).toBeFocused();
+      await page.keyboard.press('Escape');
+      // Search and Filters inside the tab, on the subtitle's line, before it; not in the title bar
+      await expect(page.locator('.topbar.in-tab .in-tab-row #filters')).toBeVisible();
+      await expect(page.locator('#app-titlebar #filters')).toHaveCount(0);
+      expect(
+        await page.evaluate(() => {
+          const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+          const filters = box('.in-tab-row #filters');
+          const subtitle = box('.in-tab-row #subtitle');
+          return (
+            filters.right <= subtitle.left &&
+            Math.abs(filters.top + filters.height / 2 - (subtitle.top + subtitle.height / 2)) < 4
+          );
+        }),
+      ).toBe(true);
+      // The Filters button is its icon (its name stays for screen readers), and its popup opens inside the window
+      await expect(page.locator('#filters-toggle')).toHaveAccessibleName(/Filters/);
+      expect(
+        await page.locator('#filters-toggle .filters-label').evaluate((e) => e.getBoundingClientRect().width),
+      ).toBe(1);
+      await page.locator('#filters-toggle').click();
+      await expect(page.locator('.filter-panel')).toBeVisible();
+      expect(
+        await page.locator('.filter-panel').evaluate((e) => e.getBoundingClientRect().left),
+      ).toBeGreaterThanOrEqual(0);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
+      await expect(page.locator('#reload-btn')).toHaveCount(0);
+      await expect(page.locator('#version-chip')).toHaveCount(0);
+      await expect(page.locator('#window-buttons')).toHaveCount(0);
+      await expect(page.locator('#app-menus')).toHaveCount(0);
+      await page.locator('#tab-list').click();
+      await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+      // A drag on the bar's free space moves the window; a double click maximizes it
+      // The bar's free space: just past the +
+      const free = await page.evaluate(
+        () => document.querySelector('#app-tab-new')!.getBoundingClientRect().right + 16,
+      );
+      await page.locator('#app-titlebar').click({ position: { x: free, y: 10 } });
+      await page.locator('#app-titlebar').dblclick({ position: { x: free, y: 10 } });
+      expect(tasksServer.windowCalls).toContain('start_dragging');
+      expect(tasksServer.windowCalls).toContain('toggle_maximize');
 
-    // Windows and Linux: the page's window buttons and its menus
-    tasksServer.windowShell = { system_menu_bar: false, system_window_buttons: false };
-    tasksServer.windowCalls = [];
-    await page.reload();
-    await expect(page.locator('#window-buttons')).toBeVisible();
-    await page.locator('#window-minimize').click();
-    await page.locator('#window-close').click();
-    expect(tasksServer.windowCalls).toEqual(['minimize', 'close_window']);
-    await page.locator('#app-menus').getByRole('menuitem', { name: 'View' }).click();
-    await page.getByRole('menuitemcheckbox', { name: /List/ }).click();
-    await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
-  });
+      // Windows and Linux: the page's window buttons and its menus
+      tasksServer.windowShell = { system_menu_bar: false, system_window_buttons: false };
+      tasksServer.windowCalls = [];
+      await page.reload();
+      await expect(page.locator('#window-buttons')).toBeVisible();
+      await page.locator('#window-minimize').click();
+      await page.locator('#window-close').click();
+      expect(tasksServer.windowCalls).toEqual(['minimize', 'close_window']);
+      await page.locator('#app-menus').getByRole('menuitem', { name: 'View' }).click();
+      await page.getByRole('menuitemcheckbox', { name: /List/ }).click();
+      await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+    },
+  );
 
   test('a switch of tab shows the project at once, its name steady; one shown before needs no load (T-525)', async ({
     page,
@@ -302,7 +322,107 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(2);
     await expect(left).toHaveCount(0);
     await expect(right).toHaveCount(0);
+    await expect(page.locator('#app-tab-more')).toHaveCount(0);
   });
+
+  // ATM-688 (Hakan): the bar's line runs under every tab but the selected one, which joins the page under it. The tab
+  // covers the line's pixel with the page's background; the tabs' scroller (ATM-605) clipped that pixel away
+  test('the selected tab has no line under it; the others do', { tag: '@webkit' }, async ({ page, tasksServer }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    const board = `/projects/${tasksServer.projectId}/kanban`;
+    tasksServer.restoredTabs = { addresses: [board, board, board], active: 1 };
+    await page.goto('/');
+    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(3);
+    const seen = await page.evaluate(() => {
+      const bar = document.querySelector('#app-titlebar')!.getBoundingClientRect();
+      const strip = document.querySelector('.title-bar-tabs-scroller')!.getBoundingClientRect();
+      const tabs = [...document.querySelectorAll<HTMLElement>('.title-bar-tab')];
+      const page = getComputedStyle(document.body).getPropertyValue('--bg');
+      return {
+        // The strip holds the line's row (it is the bar's last pixel)
+        stripReachesLine: strip.bottom >= bar.bottom - 0.5,
+        tabs: tabs.map((t) => ({
+          selected: t.classList.contains('selected'),
+          coversLine: t.getBoundingClientRect().bottom >= bar.bottom - 0.5,
+          background: getComputedStyle(t).backgroundColor,
+        })),
+        page,
+      };
+    });
+    expect(seen.stripReachesLine).toBe(true);
+    const selected = seen.tabs.find((t) => t.selected)!;
+    const others = seen.tabs.filter((t) => !t.selected);
+    // The selected tab reaches over the line, opaque; the others leave it showing through
+    expect(selected.coversLine).toBe(true);
+    expect(selected.background).not.toBe('rgba(0, 0, 0, 0)');
+    for (const t of others) expect(t.background).toBe('rgba(0, 0, 0, 0)');
+    // What is drawn there, under the selected tab's middle: the tab (its page colour), not the bar
+    const at = await page.evaluate(() => {
+      const bar = document.querySelector('#app-titlebar')!.getBoundingClientRect();
+      const tab = document.querySelector('.title-bar-tab.selected')!.getBoundingClientRect();
+      const hit = document.elementFromPoint(tab.left + 8, bar.bottom - 0.5);
+      return hit?.closest('.title-bar-tab.selected') !== null;
+    });
+    expect(at).toBe(true);
+  });
+
+  // ATM-685 (Hakan): when the tabs don't all fit, More ⌄ lists those out of view; one chosen there is shown, scrolled
+  // into view. In WebKit too, the app's engine on macOS
+  test(
+    'More ⌄ lists the tabs out of view; one chosen is shown, in view',
+    { tag: '@webkit' },
+    async ({ page, tasksServer }) => {
+      await tasksServer.asApp();
+      tasksServer.windowShell = { system_menu_bar: true, system_window_buttons: false };
+      tasksServer.use('standard');
+      tasksServer.addProject('second', 'minimal', 'Second Project');
+      const board = `/projects/${tasksServer.projectId}/kanban`;
+      // The first tab is the other project's, the last (active, in view) one of eleven boards
+      tasksServer.restoredTabs = {
+        addresses: ['/projects/second', ...Array.from({ length: 11 }, () => board)],
+        active: 11,
+      };
+      await page.setViewportSize({ width: 1000, height: 700 });
+      await page.goto('/');
+      await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(12);
+      const more = page.locator('#app-tab-more');
+      await expect(more).toBeVisible();
+      // It sits in the bar, which still fits the window
+      expect(
+        await page.evaluate(() => {
+          const bar = document.querySelector('#app-titlebar')!;
+          return bar.scrollWidth <= bar.clientWidth;
+        }),
+      ).toBe(true);
+      await more.click();
+      const items = page.locator('#app-tab-more-menu .title-bar-tabs-menu-item');
+      await expect(items.first()).toHaveText('Second Project');
+      // Only those out of view: the active one is in view, so it isn't listed
+      const listed = await items.evaluateAll((els) => els.map((e) => e.getAttribute('data-tab')));
+      const active = await page.locator('.title-bar-tab.selected [role="tab"]').getAttribute('id');
+      expect(listed).not.toContain(active!.replace('app-tab-', ''));
+      // Over the page, so a real click reaches it (it was under the page's subtitle at first)
+      await items.first().click({ timeout: 5000 });
+      await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+      // Shown, and scrolled into view: wholly inside the strip
+      const first = page.locator('.title-bar-tab').first();
+      await expect(first).toHaveClass(/selected/);
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const strip = document.querySelector('.title-bar-tabs-scroller')!.getBoundingClientRect();
+            const tab = document.querySelector('.title-bar-tab')!.getBoundingClientRect();
+            return tab.left >= strip.left - 1 && tab.right <= strip.right + 1;
+          }),
+        )
+        .toBe(true);
+      // Now the last tabs are out of view: the menu lists them, not the first
+      await more.click();
+      await expect(items.first()).not.toHaveText('Minimal Project');
+      await page.keyboard.press('Escape');
+    },
+  );
 
   test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
     page,
@@ -341,15 +461,33 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#review-list')).toBeVisible();
     await expect(tabs).toHaveCount(1);
 
+    // A plain click opens it in place, as every link (ATM-686), and its back button comes back to the list
     await page.locator('.review-row[data-review="CR-2"] .review-link').click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    await expect(tabs).toHaveCount(1);
+    await expect(page.locator('.review-back')).toHaveText('Reviews');
+    await page.locator('.review-back').click();
+    await expect(page.locator('#review-list')).toBeVisible();
+
+    // ⌘-click: a tab of its own
+    await page.locator('.review-row[data-review="CR-2"] .review-link').click({ modifiers: ['ControlOrMeta'] });
     await expect(tabs).toHaveCount(2);
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    // Opened on its own, its back button goes up to its reviews list
+    await expect(page.locator('.review-back')).toHaveText('Reviews');
     // The tab is the review's: its reference and title, no project chooser
     await expect(page.locator('#dashboard-title')).toHaveText('CR-2: Trim the names');
     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
     // The window's own bar and sidebar toggle are there, as on every tab
     await expect(page.locator('#app-titlebar')).toBeVisible();
+    // ATM-691 (Hakan): and the ⋯ at its right end, which opens Settings, the document's text size with them
+    await page.locator('#app-titlebar-end #settings-btn').click();
+    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
+    await page.locator('#settings-sheet #doc-size-select').selectOption('large');
+    await expect(page.locator('html')).toHaveAttribute('data-doc-size', 'large');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#settings-overlay')).not.toHaveClass(/open/);
     // The selected tab joins the review's top bar under it, in one colour, as a project's tab joins its page (ATM-608)
     const colours = await page.evaluate(() => {
       const of = (selector: string) => getComputedStyle(document.querySelector(selector)!).backgroundColor;
@@ -655,8 +793,11 @@ test.describe('the dashboard in the atm app', () => {
     await page.evaluate(() => ((window as unknown as { beforeReload: boolean }).beforeReload = true));
     await tasksServer.chooseMenu({ kind: 'reload' });
     await expect.poll(() => tasksServer.windowCalls).toContain('reload_window');
+    // A look that lands while the page is going away (its context destroyed) is no answer yet: look again
     await expect
-      .poll(() => page.evaluate(() => (window as unknown as { beforeReload?: boolean }).beforeReload ?? false))
+      .poll(() =>
+        page.evaluate(() => (window as unknown as { beforeReload?: boolean }).beforeReload ?? false).catch(() => true),
+      )
       .toBe(false);
     // Loaded again: the same tabs, the same one shown, its page drawn
     await page.waitForLoadState('load');

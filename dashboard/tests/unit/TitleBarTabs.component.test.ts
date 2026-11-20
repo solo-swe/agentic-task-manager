@@ -151,4 +151,46 @@ describe('TitleBarTabs (a reusable title-bar tab strip)', () => {
       ['Tabs to the right', false],
     ]);
   });
+
+  // ATM-685: More ⌄ when the tabs don't all fit, counting those not wholly in view (its menu: e2e's app.spec.ts)
+  const SIX: Tab[] = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, name: id.toUpperCase() }));
+  it.each([
+    // scrolled to, in view (300 px of six 100 px tabs): the tabs not wholly in it
+    [0, 3],
+    [150, 4],
+    [300, 3],
+  ])('scrolled to %ipx, More counts the %i tabs out of view', async (left, out) => {
+    const { container } = render(TitleBarTabs<Tab>, {
+      tabs: SIX,
+      active: 'a',
+      label,
+      onselect: vi.fn(),
+      width: 100,
+      name: (tab: Tab) => tab.name,
+    });
+    const strip = container.querySelector<HTMLElement>('.title-bar-tabs-scroller')!;
+    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 600 });
+    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
+    strip.scrollLeft = left;
+    await fireEvent.scroll(strip);
+    expect(container.querySelector('.title-bar-tabs-more')?.getAttribute('aria-label')).toBe(`More tabs (${out})`);
+  });
+
+  it('no More without a name for the tabs, or while they all fit', async () => {
+    const fitting = render(TitleBarTabs<Tab>, {
+      tabs: SIX,
+      active: 'a',
+      label,
+      onselect: vi.fn(),
+      name: (t: Tab) => t.name,
+    });
+    expect(fitting.container.querySelector('.title-bar-tabs-more')).toBeNull();
+    const nameless = render(TitleBarTabs<Tab>, { tabs: SIX, active: 'a', label, onselect: vi.fn(), width: 100 });
+    const strip = nameless.container.querySelector<HTMLElement>('.title-bar-tabs-scroller')!;
+    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 600 });
+    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
+    await fireEvent.scroll(strip);
+    expect(nameless.container.querySelector('.title-bar-tabs-arrow')).not.toBeNull();
+    expect(nameless.container.querySelector('.title-bar-tabs-more')).toBeNull();
+  });
 });

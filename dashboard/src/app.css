@@ -1193,6 +1193,10 @@ button.menu-trigger:hover,
   left: 0;
   width: 300px;
 }
+/* Placed by Bits UI's wrapper beside its button (a tab's chooser, ATM-684): not by its own offset */
+.project-menu.floating {
+  position: static;
+}
 
 /* The workspace switcher, after the project selector when there are several workspaces (WorkspaceSelector.svelte) */
 .workspace-switch {
@@ -2633,6 +2637,31 @@ button.repo-ref {
 }
 .doc-gutter-lines div.blank:not(.marked) {
   opacity: 0.55;
+}
+/* A page that takes comments (a review's rendered side, ATM-650): room between the numbers and the text for the + of
+   the line under the pointer; a number that draws text is pressed as its + is; the picked lines' numbers in the accent */
+.doc-page.pickable[data-kind='markdown'] {
+  padding-left: 64px;
+}
+.doc-page.pickable .doc-gutter {
+  opacity: 1;
+}
+.doc-page.pickable .doc-gutter-lines div:not(.blank) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+/* Its numbers subtle, gray (Hakan, ATM-692: a changed line's in bold blue drew the eye from the text): a changed line's
+   only a little darker, still gray */
+.doc-page.pickable .doc-gutter-lines div {
+  color: color-mix(in srgb, var(--text-muted) 65%, transparent);
+}
+.doc-page.pickable .doc-gutter-lines div.marked {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+.doc-page.pickable .doc-gutter-lines div:hover,
+.doc-page.pickable .doc-gutter-lines div.picked {
+  color: var(--accent);
 }
 /* A link's lines in a Markdown document: on the boxes of their text, not across the page */
 .doc-line-mark.doc-text-mark {

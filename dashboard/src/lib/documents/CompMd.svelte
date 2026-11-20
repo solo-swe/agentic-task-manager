@@ -44,6 +44,7 @@
     only,
     tasks,
     onlines,
+    lineHeights = null,
     onopen,
   }: {
     text: string;
@@ -61,6 +62,9 @@
      * task, which `open` opens (`newTab`: ⌘, Ctrl or a middle click); without it, keys stay text */
     tasks?: TaskLinks;
     onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
+    /** Code lines, by their line in the text, made at least that tall (CompMD 0.8.0's `lineHeights`): a wrapped line's
+     * counterpart on a diff's other side as tall as it (ATM-616) */
+    lineHeights?: ReadonlyMap<number, number> | null;
     onopen?: (ref: DocumentRef) => void;
   } = $props();
 
@@ -98,6 +102,18 @@
   /** Drawn, but for an earlier text: hidden, the new text as written shown in its place until its turn (ATM-625) */
   let stale = $state(false);
   let view: View | null = null;
+  /** The view is open: the lines' heights can be given to it */
+  let opened = $state(false);
+  /** Heights were given to the view: none asked for any more clears them */
+  let heightsGiven = false;
+  // The heights asked for, given to the view as they change; it keeps them through its later renders. A text no one
+  // sizes lines of (most: a task's, a document) never calls it
+  $effect(() => {
+    const heights = lineHeights;
+    if (!opened || !view || (!heights?.size && !heightsGiven)) return;
+    view.lineHeights(heights ?? new Map());
+    heightsGiven = !!heights?.size;
+  });
   /** Stops this view following the dashboard's theme (the document's one observer, compmd-runtime) */
   let unfollow: (() => void) | null = null;
   /** Destroyed (ATM-620): nothing is drawn any more. A draw after it made a view nothing would destroy, whose listeners
@@ -128,7 +144,9 @@
       '\u0000' +
       (path ?? '') +
       '\u0000' +
-      (only?.join('-') ?? ''),
+      (only?.join('-') ?? '') +
+      // Its lines read or not: a text processed without origins has no lines to give (a run wrapped, ATM-616)
+      (onlines ? '\u0000lines' : ''),
   );
   // A drawn text that changed waits for its turn as the new text, as written (ATM-625): the old drawing, kept until
   // then, had the old lines, so a run cut in two by a comment stood as tall as before it was cut, and the comment box
@@ -182,7 +200,15 @@
         turnDone = null;
         return;
       }
-      const processed = processText(compmd, text, task, path, { localImage, docLink, taskKnown: tasks?.known });
+      // Read for its lines (onlines): each node keeps where it came from, so the view can place every line
+      const processed = processText(
+        compmd,
+        text,
+        task,
+        path,
+        { localImage, docLink, taskKnown: tasks?.known },
+        !!onlines,
+      );
       const tree = only ? blocksIn(processed.tree, only) : processed.tree;
       const components = processed.components;
       if (!view) {
@@ -190,6 +216,7 @@
         // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
         // app, under the origin CompMD's plugin gives the page, ADR-006). The document's one sandbox (ATM-646)
         view = sandboxOf(compmd).open(target, { components });
+        opened = true;
         view.on('rendered', () => {
           secureLinks(target);
           drawn = true;

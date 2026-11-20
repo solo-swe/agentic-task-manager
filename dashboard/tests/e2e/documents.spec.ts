@@ -300,6 +300,43 @@ test.describe('the document viewer', () => {
     await expect(viewer(page)).not.toHaveAttribute('data-doc-style');
     expect(await style('backgroundImage', '')).toContain('repeating-linear-gradient');
   });
+
+  // ATM-691 (Hakan): a text size in Settings, Tiny to Huge, scaling the document's text in every style; kept
+  test('a text size from Settings scales the document’s text, in the theme’s page and a style’s; its numbers beside it', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openWithDocument(page, tasksServer);
+    const page_ = viewer(page).locator('.doc-page');
+    const size = () => page_.locator('.compmd').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const medium = await size();
+    await openMenu(page, '#settings-btn');
+    await expect(page.locator('#doc-size-select')).toHaveValue('medium');
+    await expect(page.locator('#doc-size-select option')).toHaveText(['Tiny', 'Small', 'Medium', 'Large', 'Huge']);
+    // The theme's page: its own size, scaled
+    await page.locator('#doc-size-select').selectOption('huge');
+    await expect.poll(size).toBeCloseTo(medium * 1.3, 1);
+    await page.locator('#doc-size-select').selectOption('tiny');
+    await expect.poll(size).toBeCloseTo(medium * 0.8, 1);
+    // A style's page: the style's size, scaled; the heading with it
+    await page.locator('#doc-style-select').selectOption('github');
+    await page.locator('#doc-size-select').selectOption('large');
+    await expect.poll(size).toBeCloseTo(16 * 1.15, 1);
+    const heading = page_.locator('.compmd-page h1');
+    expect(await heading.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeCloseTo(16 * 1.15 * 2, 1);
+    // Each line's number still beside its text, at the new size: the last paragraph's, below everything that grew
+    await expect
+      .poll(async () => {
+        const number = await page_.locator('.doc-gutter-lines div:not(.blank)').last().boundingBox();
+        const text = await page_.locator('.compmd-page p', { hasText: 'One route.' }).boundingBox();
+        return number && text ? Math.abs(number.y + number.height / 2 - (text.y + text.height / 2)) : 99;
+      })
+      .toBeLessThan(4);
+    // Kept for the next page
+    await page.reload();
+    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    await expect(page.locator('html')).toHaveAttribute('data-doc-size', 'large');
+  });
 });
 
 // T-394: a code or text file's line numbers, #L links, images, refreshing in place, links to the dashboard

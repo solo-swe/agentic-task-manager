@@ -47,10 +47,12 @@
     project = null,
     file = null,
     side,
+    imageAt,
     isViewed,
     taskHref,
     tasks,
     backHref,
+    backLabel = 'Reviews',
     busy = false,
     problem = null,
     docStyle = null,
@@ -75,14 +77,18 @@
     file?: string | null;
     /** A side's files: the commit or tree a round's side is read from */
     side: (revision: string) => DocumentSource;
+    /** An image's address at a revision (ATM-689): a review's image file shows its sides; without it, listed only */
+    imageAt?: (revision: string, path: string) => string;
     isViewed: (file: ViewFile) => boolean;
     /** A task's address, for its link */
     taskHref?: (key: string) => string;
     /** What a task named in the review opens (ATM-593): the Tasks fact's keys, and the keys written in the description
      * and the comments that name a task (`known`); `open`, its details over the review, or `newTab` a tab of its own */
     tasks?: TaskLinks;
-    /** The reviews page's address, for the link back */
+    /** Where the back button goes: the page the review was opened from, else the reviews page (ATM-686) */
     backHref?: string;
+    /** That place's name, on the button */
+    backLabel?: string;
     busy?: boolean;
     problem?: string | null;
     /** The document style picked in Settings, for a Markdown file's rendered view */
@@ -174,10 +180,9 @@
   let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
   let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
   let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
-  /** Long lines wrap (ATM-588): in Unified, until Split can keep its sides level with a wrapped line */
+  /** Long lines wrap (ATM-588), in Split too, its two sides kept level (ATM-616) */
   let wrap = $state(stored.wrap === true);
   $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width, wrap }));
-  const WRAP_IN_SPLIT = 'Wrap works in Unified for now: Split keeps its two sides level line by line';
   const hasMarkdown = $derived(files.some((f) => /\.(md|markdown|mdx)$/i.test(f.path)));
 
   // A file folds once viewed; its fold button opens or folds it again whatever its tick
@@ -270,8 +275,30 @@
     const card = cards().find((c) => c.getBoundingClientRect().bottom > box.top + 48);
     atFile = card?.dataset.file ?? null;
   }
+  // A live review keeps the place read itself (ATM-687): its files change under the reader, and WebKit's own scroll
+  // anchoring, anchored inside a card a live update drew again, moved the pane by the card's height (1,033 px). Its
+  // pane has the browser's anchoring off (`.live`), and the first card in view is kept where it is when a card above
+  // it changes size (the cards' ResizeObserver, below); a card that grows below the place read moves nothing anyway
+  let reading: { path: string; top: number } | null = null;
+  /** The first card in view, and how far its top is from the pane's: what a live update keeps in place */
+  function remember() {
+    const el = list;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const card = cards().find((c) => c.getBoundingClientRect().bottom > top + 1);
+    reading = card?.dataset.file ? { path: card.dataset.file, top: card.getBoundingClientRect().top - top } : null;
+  }
+  /** That card back where it was, the list scrolled by the difference */
+  function keepReading() {
+    const el = list;
+    const card = reading ? cardOf(reading.path) : null;
+    if (!el || !card || !reading) return remember();
+    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top - reading.top;
+    if (Math.abs(off) >= 1) el.scrollTop += off;
+  }
   let scrolling = 0;
   function onscroll() {
+    if (live) remember();
     if (scrolling) return;
     scrolling = requestAnimationFrame(() => {
       scrolling = 0;
@@ -305,12 +332,20 @@
   let wanted = $state<string | null>(null);
   const cardOf = (path: string) =>
     list?.querySelector<HTMLElement>(`.review-file-card[data-file="${CSS.escape(path)}"]`) ?? null;
+  /** `card` at the list's top, as near as it scrolls: the list scrolled by the difference, and nothing else (ATM-656:
+   * `scrollIntoView` also scrolls what holds the list, and in WebKit landed a few px off one time in two) */
+  function toTop(card: HTMLElement | null) {
+    const el = list;
+    if (!el || !card) return;
+    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    if (Math.abs(off) >= 1) el.scrollTop += off;
+  }
   async function showFile(path: string, address = true) {
     tab = 'diffs';
     holdNearCards();
     wanted = path;
     await tick();
-    cardOf(path)?.scrollIntoView({ block: 'start' });
+    toTop(cardOf(path));
     atFile = chosen = pinned = path;
     // The address follows once the page is idle: the file is drawn first (a navigation re-renders the layout)
     writing?.();
@@ -319,14 +354,36 @@
 
   // The file gone to stays at the top while the cards around it are made (each as tall as its diff, not its
   // estimate), until the user scrolls, clicks or presses a key in the list, or another jump
-  let pinned: string | null = null;
+  // While it is held (ATM-693), nothing moves it: the cards above it keep their heights (ReviewFile `frozen`: out of view
+  // above it, so not seen), and the browser's scroll anchoring is off in the pane (`.held`). WebKit, anchoring, scrolled
+  // the pane a line when the held card's content was drawn again, which changed no card's size, so this observer never
+  // put it back (19 px for a few frames, 1 jump in 8); and the observer's own correction, when a card above changed
+  // size, came a frame late in WebKit (96 px off for that frame). Once the reader moves, both are back
+  let pinned = $state<string | null>(null);
+  const pinnedAt = $derived(pinned === null ? -1 : files.findIndex((f) => f.path === pinned));
+  /** The hold ended: the cards above take their own heights again, in the same update the pane's anchoring comes back,
+   * so no anchor has seen them change; the file held stays where it was, the pane scrolled by what they changed */
+  function release() {
+    const el = list;
+    const card = pinned ? cardOf(pinned) : null;
+    const before = card ? card.getBoundingClientRect().top : null;
+    pinned = null;
+    if (!el || !card || before === null) return;
+    void tick().then(() => {
+      const off = card.getBoundingClientRect().top - before;
+      if (Math.abs(off) >= 1) el.scrollTop += off;
+    });
+  }
   $effect(() => {
     const el = list;
     void files;
     if (!el) return;
-    const unpin = () => (pinned = null);
+    const unpin = () => {
+      if (pinned) release();
+    };
     const settle = new ResizeObserver(() => {
-      if (pinned) cardOf(pinned)?.scrollIntoView({ block: 'start' });
+      if (pinned) toTop(cardOf(pinned));
+      else if (live) keepReading();
     });
     for (const card of el.querySelectorAll('.review-file-card')) settle.observe(card);
     const events = ['wheel', 'touchstart', 'mousedown', 'keydown'] as const;
@@ -373,7 +430,7 @@
   async function jump(back: boolean, kind: keyof typeof TARGETS = 'change') {
     tab = 'diffs';
     holdNearCards();
-    pinned = null;
+    if (pinned) release();
     await tick();
     if (!list) return;
     const target = TARGETS[kind];
@@ -539,12 +596,12 @@
         <a
           class="review-back"
           href={backHref ?? '#'}
-          title="All reviews"
+          title={backLabel === 'Reviews' ? 'All reviews' : `Back to ${backLabel}`}
           onclick={(e) => {
             if (!onback) return;
             e.preventDefault();
             onback();
-          }}><Icon name="arrow-left" size={15} /><span>Reviews</span></a
+          }}><Icon name="arrow-left" size={15} /><span>{backLabel}</span></a
         >
         <span class="review-divider" aria-hidden="true"></span>
       {/if}
@@ -793,13 +850,12 @@
             >
           </div>
           <div class="review-segmented" role="group" aria-label="Lines">
-            <span class="review-wrap-hint" title={mode === 'split' ? WRAP_IN_SPLIT : undefined}>
+            <span class="review-wrap-hint">
               <button
                 id="review-wrap"
-                aria-pressed={wrap && mode === 'unified'}
+                aria-pressed={wrap}
                 aria-label="Wrap"
-                title={mode === 'split' ? WRAP_IN_SPLIT : 'Wrap long lines'}
-                disabled={mode === 'split'}
+                title="Wrap long lines"
                 onclick={() => (wrap = !wrap)}><Icon name="wrap-text" size={15} /></button
               >
             </span>
@@ -815,7 +871,7 @@
               <button
                 aria-pressed={rendered === 'rendered'}
                 aria-label="Rendered"
-                title="Rendered"
+                title="Rendered, as the document viewer shows it. Its document style and text size are in Settings (⋯)"
                 onclick={() => (rendered = 'rendered')}><Icon name="eye" size={15} /></button
               >
             </div>
@@ -1053,10 +1109,11 @@
         onpointerdown={drag}
         onkeydown={nudge}
       ></div>
-      <div class="review-diffs" bind:this={list} {onscroll}>
-        {#each files as f (f.path)}
+      <div class="review-diffs" class:live class:held={pinned !== null} bind:this={list} {onscroll}>
+        {#each files as f, i (f.path)}
           <ReviewFile
             file={f}
+            {imageAt}
             chains={chainsOf(allChains, f)}
             drifted={driftedOf(allChains, f)}
             before={sideOf(f.before)}
@@ -1065,11 +1122,12 @@
             folded={folded(f)}
             {mode}
             view={rendered}
-            wrap={wrap && mode === 'unified'}
+            {wrap}
             {busy}
             {docStyle}
             root={list}
             wanted={f.path === wanted}
+            frozen={pinnedAt >= 0 && i < pinnedAt}
             onfold={() => (folds = { ...folds, [f.path]: !folded(f) })}
             onviewed={() => toggleViewed(f)}
             oncomment={(picked, body) => oncomment({ path: f.path, picked, body })}
@@ -1754,6 +1812,11 @@
   .review-splitter:focus-visible {
     background: color-mix(in srgb, var(--accent) 35%, transparent);
     outline: none;
+  }
+  /* A live review's pane keeps the place read itself (ATM-687, keepReading): the browser's scroll anchoring off */
+  .review-diffs.live,
+  .review-diffs.held {
+    overflow-anchor: none;
   }
   .review-diffs {
     overflow: auto;

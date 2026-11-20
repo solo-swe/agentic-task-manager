@@ -23,6 +23,7 @@
   import AppTitleBar from './lib/shell/AppTitleBar.svelte';
   import ReviewsTab from './lib/shell/ReviewsTab.svelte';
   import { reviewWindow } from './lib/reviews/window.svelte';
+  import SettingsMenu from './lib/shell/SettingsMenu.svelte';
 
   // A project's address naming a review (/projects/<id>/reviews/CR-7) shows that review alone, over the whole window
   const reviewing = $derived(dashboard.route.page === 'project' && !!reviewOf(addressOf(page.url)).review);
@@ -48,7 +49,7 @@
     return () => query.removeEventListener('change', onChange);
   });
 
-  $effect(() => applyAppearance(document.documentElement, dashboard.theme, dashboard.mode));
+  $effect(() => applyAppearance(document.documentElement, dashboard.theme, dashboard.mode, dashboard.docSize));
 
   // Remember the view per project (FR-5): every change to filters, tab, panel or board options is saved
   $effect(() => dashboard.saveView());
@@ -56,11 +57,14 @@
   $effect(() => dashboard.syncSprintParam());
 </script>
 
+<!-- A review's tab, at the title bar's right end: the ⋯ settings, as every tab has (ATM-691) -->
+{#snippet reviewEnd()}<SettingsMenu />{/snippet}
+
 <UpdateNotice />
 {#if reviewing && inApp}
   <!-- A review's page in the app (ATM-574): a tab of its own, under the window's sidebar and title bar as every tab -->
   <Sidebar />
-  <AppTitleBar title={reviewWindow.title || dashboard.projectName} />
+  <AppTitleBar title={reviewWindow.title || dashboard.projectName} end={reviewEnd} />
   <main class="review-tab-main" id="app-main"><ReviewsTab /></main>
 {:else if reviewing}
   <!-- A review's page in the browser (ATM-574): the whole window -->

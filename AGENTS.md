@@ -157,7 +157,11 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain 
   instant, and a timer is skipped with `page.clock` (`cards.spec.ts`). More workers than Playwright's default don't
   help here (the machine is saturated at 5) and break the timing budgets. A test measured against a budget is tagged
   `@timed` (`test.describe('…', { tag: '@timed' }, …)`): it runs in the `timed` project, once every other test has
-  passed, so no heavy test shares the machine with it (`playwright.config.ts`, ATM-641). Traces are recorded only on CI's retry;
+  passed, so no heavy test shares the machine with it (`playwright.config.ts`, ATM-641), and on one worker, so no
+  other timed test does either (ATM-654: beside each other they missed their budgets; it adds about half a minute to
+  the run). A test tagged `@webkit` (`WEBKIT_TOO` in `reviews.spec.ts`) also runs in WebKit, the app's engine on
+  macOS, in the `webkit` project (ATM-655): tag a test whose layout or scrolling could differ there. Traces are
+  recorded only on CI's retry;
   locally, `--trace on` while looking into a failure.
 
 ## CI

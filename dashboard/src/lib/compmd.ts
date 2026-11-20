@@ -60,6 +60,7 @@ export function compmdRequest(
   task: Task | undefined,
   now = new Date(),
   timeZone = localTimeZone(),
+  origins = false,
 ) {
   return {
     ...base,
@@ -69,6 +70,9 @@ export function compmdRequest(
     tz: timeZone,
     allowedOrigins: [] as string[],
     host: task ? { task: taskData(task) } : {},
+    // Where each line was drawn, for a caller that reads the view's lines() (a diff's wrapped run, ATM-616); the
+    // text's lines then count from the frontmatter's first (FRONTMATTER_LINES before the text's own)
+    ...(origins ? { origins: true } : {}),
   };
 }
 
@@ -244,6 +248,9 @@ export interface CompmdModule {
       scheme(): void;
       /** Each line of the text that draws something, with its boxes, from the container's top left (CompMD 0.5.0) */
       lines(from?: number): AsyncGenerator<DrawnLine>;
+      /** Each code line named at least that tall, by its line in the text, in CSS pixels, through later renders until the
+       * next call (CompMD 0.8.0): a diff's two sides kept level (ATM-616) */
+      lineHeights(heights: ReadonlyMap<number, number>): void;
       /** A component shows its fallback, and why (`@compmd/sandbox`'s `ViewEvents.error`); `failed` and `missing`
        * draw nothing at all */
       on(
@@ -271,8 +278,17 @@ export function packComponents<T>(components: readonly T[]): T[] {
 }
 
 /** A text processed: its expanded tree, safe to render (safeTree), and the packs' components it can name */
-export function processText(compmd: CompmdModule, text: string, task?: Task, path?: string, links: ProjectLinks = {}) {
-  const request = path ? documentRequest(compmd.request, path, text) : compmdRequest(compmd.request, text, task);
+export function processText(
+  compmd: CompmdModule,
+  text: string,
+  task?: Task,
+  path?: string,
+  links: ProjectLinks = {},
+  origins = false,
+) {
+  const request = path
+    ? documentRequest(compmd.request, path, text)
+    : compmdRequest(compmd.request, text, task, undefined, undefined, origins);
   const document = new compmd.OpenDocument(request);
   try {
     return { tree: safeTree(document.expanded, links), components: packComponents(document.components) };

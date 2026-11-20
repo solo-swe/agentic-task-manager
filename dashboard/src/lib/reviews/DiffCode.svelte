@@ -10,7 +10,9 @@
 </script>
 
 <script lang="ts">
+  import { FRONTMATTER_LINES, type DrawnLine } from '../compmd';
   import CompMd from '../documents/CompMd.svelte';
+  import LinePlus from '../ui/LinePlus.svelte';
   import { fenced } from './diff';
 
   // A run of a file's lines in the diff viewer (docs/code-review-design.md §3.7, ATM-573): one fenced block of the
@@ -28,12 +30,19 @@
     picked = null,
     marked = null,
     wrap = false,
+    heights = null,
+    onwrapped,
     onpick,
     onover,
   }: {
     /** Long lines wrap at the column's width (ATM-588): each line's row as tall as CompMD drew it, its number on its
      * first visual line */
     wrap?: boolean;
+    /** Wrapped in Split (ATM-616): each line at least this tall, by its index in `lines` (the taller of it and its
+     * counterpart on the other side), so the two sides stay level */
+    heights?: readonly number[] | null;
+    /** Wrapped: each line's own height as drawn (its visual lines), by index, each time it changes */
+    onwrapped?: (natural: number[]) => void;
     /** The lines of the chain selected, by their index in `lines`: marked */
     marked?: [number, number] | null;
     lines: CodeLine[];
@@ -89,7 +98,6 @@
     const lineHeight = !wrap && lines.length && drawnHeight > 0 ? drawnHeight / lines.length : styled();
     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
-    if (wrap) measureWrapped(code);
   }
   // Wrapped or not: measured again (the code's lines take their new heights)
   $effect(() => {
@@ -115,57 +123,77 @@
   });
 
   /** Wrapped (ATM-588): each line's row in the run's pixels, from its first visual line to the next line's. Lines aren't
-   * one height then, so the gutter follows the text. CompMD draws a code block's lines as text between newlines (and
-   * says where only a Markdown document's lines are), so each line's top is read here, from a collapsed range at its
-   * start: read only, nothing of CompMD's page is changed */
+   * one height then, so the gutter follows the text. Where each line is comes from CompMD's boxes of its lines
+   * (`lines()`, each line an element of its own since 0.8.0; ATM-616), one box per piece of text on each visual line it
+   * covers: read only, nothing of CompMD's page is changed */
   let wrapped = $state.raw<{ top: number; height: number }[] | null>(null);
-  function measureWrapped(code: HTMLElement) {
-    if (!el) return;
-    const origin = el.getBoundingClientRect().top;
-    const starts: { node: Text; offset: number }[] = [];
-    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
-    let atStart = true;
-    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
-      const text = node.data;
-      for (let at = 0; at <= text.length; at++) {
-        if (atStart && at < text.length) {
-          starts.push({ node, offset: at });
-          atStart = false;
-        }
-        if (text[at] === '\n') atStart = true;
-      }
-    }
-    const range = document.createRange();
-    // Where nothing is laid out (a test's page), there is nothing to measure: the lines keep one height
-    if (typeof range.getClientRects !== 'function') return;
-    const tops = starts.map(({ node, offset }) => {
-      range.setStart(node, offset);
-      range.collapse(true);
-      const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
-      return rect.top - origin;
-    });
-    const bottom = code.getBoundingClientRect().bottom - origin;
-    // Empty lines at the end have no character to measure: one line height each, up from the code's end
+  /** Each line's own height as last reported: its visual lines, not the height another side gave it */
+  let natural: number[] = [];
+  /** A run's code line `i` is this many lines into the text CompMD processes: the dashboard's frontmatter, then the
+   * fence's line (diff.ts `fenced`), then the code */
+  const FIRST_LINE = FRONTMATTER_LINES + 2;
+  function wrappedFrom(drawn: readonly DrawnLine[], from: HTMLElement) {
+    if (!el || !wrap) return;
     const lineHeight = layout?.lineHeight ?? FALLBACK_LINE;
-    const missing = lines.length - tops.length;
-    for (let k = missing; k > 0; k--) tops.push(bottom - k * lineHeight);
+    const shift = from.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    const boxes = new Map(drawn.map((d) => [d.line, d.rects.filter((r) => r.height > 0)]));
+    // A line's visual lines: its boxes grouped by their middle (a line of tokens has a box per token). A box is its
+    // glyphs' (the font's height), centred in its visual line: that starts half a line height above the middle
+    // (ATM-652: taking the box's top put every row half the leading low)
+    const measured = lines.map((_, i) => {
+      const rects = boxes.get(i + FIRST_LINE) ?? [];
+      const middles = rects.map((r) => r.y + r.height / 2).sort((a, b) => a - b);
+      const rows = middles.filter((m, k) => k === 0 || m - middles[k - 1] > lineHeight / 2);
+      return rows.length ? { top: rows[0] - lineHeight / 2 + shift, count: rows.length } : null;
+    });
+    const own = measured.map((m) => (m ? m.count : 1) * lineHeight);
+    if (JSON.stringify(own) !== JSON.stringify(natural)) {
+      natural = own;
+      onwrapped?.(own);
+    }
+    // Each row from its line's top to the next line's (an empty line, with no box, right after the one before it)
+    const tops: number[] = [];
+    measured.forEach((m, i) => {
+      tops.push(m ? m.top : i === 0 ? (layout?.top ?? 0) : tops[i - 1] + Math.max(own[i - 1], heights?.[i - 1] ?? 0));
+    });
+    // Each row ends where the next begins, exactly (Hakan, ATM-690): at least a line's height, it overlapped the next
+    // wherever that one's text began less than a line below (after a blank line, at a new block), and the two rows'
+    // tints drew a darker line there, in the app's WebKit
     const rows = lines.map((_, i) => {
-      const top = tops[i];
-      const next = i + 1 < lines.length ? tops[i + 1] : bottom;
-      return { top, height: Math.max(next - top, layout?.lineHeight ?? FALLBACK_LINE) };
+      const height = Math.max(own[i], heights?.[i] ?? 0);
+      const next = i + 1 < lines.length ? tops[i + 1] - tops[i] : null;
+      return { top: tops[i], height: next === null ? height : next > 0 ? next : lineHeight };
     });
     if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
   }
   $effect(() => {
-    if (!wrap) wrapped = null;
+    if (!wrap) {
+      wrapped = null;
+      natural = [];
+    }
   });
-  /** Each line's row: measured when wrapped, else the code's one line height */
-  const rowOf = (i: number) =>
-    wrap && wrapped?.[i]
-      ? wrapped[i]
-      : layout
-        ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
-        : null;
+  /** The heights given, as CompMD takes them: by line of the text, only those taller than one line */
+  const lineHeights = $derived.by(() => {
+    if (!wrap || !heights || !layout) return null;
+    const one = layout.lineHeight;
+    return new Map(
+      heights.flatMap((h, i) => (h > one + 0.5 ? [[i + FIRST_LINE, Math.round(h * 100) / 100] as const] : [])),
+    );
+  });
+  /** Each line's row: measured when wrapped, else the code's one line height; its edges on whole pixels, so the rows
+   * tile: a line height of 20.8 px put each edge inside a pixel, which both rows half covered, and their two tints drew
+   * a line between every two lines */
+  const rowOf = (i: number) => {
+    const row =
+      wrap && wrapped?.[i]
+        ? wrapped[i]
+        : layout
+          ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
+          : null;
+    if (!row) return null;
+    const top = Math.round(row.top);
+    return { top, height: Math.round(row.top + row.height) - top };
+  };
 
   /** The line at a pointer's height in the run, if there is one there */
   function lineAt(e: MouseEvent): number | null {
@@ -191,6 +219,25 @@
   }
 
   const isPicked = (i: number) => !!picked && i >= picked[0] && i <= picked[1];
+  const isMarked = (i: number) => !!marked && i >= marked[0] && i <= marked[1];
+  /** The tints, one box per run of lines tinted alike, from its first line's top to its last line's bottom (Hakan,
+   * ATM-690): no two tinted boxes meet, or overlap, inside a run. A run is consecutive lines, whatever their rows' edges */
+  const tints = $derived.by(() => {
+    if (!layout) return [];
+    const runs: { kind: string; commented: boolean; picked: boolean; top: number; bottom: number; end: number }[] = [];
+    lines.forEach((line, i) => {
+      const row = rowOf(i);
+      if (!row) return;
+      const [kind, commented, picked] = [line.kind, isMarked(i), isPicked(i)];
+      if (kind === 'context' && !commented && !picked) return;
+      const last = runs.at(-1);
+      if (last && last.end === i - 1 && last.kind === kind && last.commented === commented && last.picked === picked) {
+        last.bottom = Math.max(last.bottom, row.top + row.height);
+        last.end = i;
+      } else runs.push({ kind, commented, picked, top: row.top, bottom: row.top + row.height, end: i });
+    });
+    return runs;
+  });
   const label = (l: CodeLine) =>
     numbers === 'both' ? [l.old ?? '', l.new ?? ''] : [(numbers === 'old' ? l.old : l.new) ?? ''];
   const starts = $derived(new Set(changes));
@@ -208,12 +255,21 @@
   onmouseleave={() => (hover = null)}
 >
   {#if layout}
+    {#each tints as tint (tint.top)}
+      <div
+        class="diff-tint diff-{tint.kind}"
+        class:commented={tint.commented}
+        class:picked={tint.picked}
+        style:top="{tint.top}px"
+        style:height="{tint.bottom - tint.top}px"
+      ></div>
+    {/each}
     {#each lines as line, i (i)}
       {@const row = rowOf(i)!}
       <div
         class="diff-line diff-{line.kind}"
         class:picked={isPicked(i)}
-        class:commented={!!marked && i >= marked[0] && i <= marked[1]}
+        class:commented={isMarked(i)}
         data-row={keys[i]}
         data-change={starts.has(i) ? '' : undefined}
         style:top="{row.top}px"
@@ -229,13 +285,13 @@
             >{#each label(line) as n, k (k)}<span>{n}</span>{/each}</button
           >
           {#if onpick && (hover === i || isPicked(i))}
-            <button
-              class="diff-plus"
-              class:held={isPicked(i)}
-              tabindex="-1"
-              aria-label="Comment on line {line.new ?? line.old}"
-              onmousedown={(e) => press(e, i)}>+</button
-            >
+            <LinePlus
+              line={line.new ?? line.old ?? ''}
+              held={isPicked(i)}
+              left="calc(var(--gutter) + var(--space-1))"
+              top={wrap ? 'calc(var(--line-height) / 2)' : '50%'}
+              onpress={(e) => press(e, i)}
+            />
           {/if}
         {/if}
       </div>
@@ -249,7 +305,7 @@
     </div>
   {:else}
     <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
-    <CompMd {text} plain={source} />
+    <CompMd {text} plain={source} onlines={wrap ? wrappedFrom : undefined} {lineHeights} />
   {/if}
 </div>
 
@@ -263,6 +319,9 @@
        of its gutter, stays inside the run, off the fold row after it */
     overflow: clip;
     overflow-clip-margin: 2px;
+    /* Never the pane's scroll anchor (ATM-655): a run's text is replaced when its turn to be highlighted comes, and
+       WebKit, anchored on that text, scrolled the pane by the whole run's height (1,600 px after a comment box opened) */
+    overflow-anchor: none;
   }
   .diff-code.both {
     --gutter: calc(var(--space-10) * 2);
@@ -286,45 +345,52 @@
     overflow-wrap: anywhere;
     overflow-x: hidden;
   }
-  /* A wrapped line's number stays on its first visual line, the gutter as tall as all of them */
-  .diff-code.wrap .diff-number {
-    align-items: flex-start;
-    line-height: var(--line-height);
+  /* The gutter, one strip down the run's left (the numbers' column and its line): drawn per row, its rows' edges
+     showed as pale lines too */
+  .diff-code::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--gutter);
+    border-right: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    pointer-events: none;
   }
-  .diff-code.wrap .diff-plus {
-    top: calc(var(--line-height) / 2);
-  }
-  .diff-line {
+  .diff-line,
+  .diff-tint {
     position: absolute;
     left: 0;
     right: 0;
     pointer-events: none;
   }
-  .diff-removed {
-    background: color-mix(in srgb, var(--red) 16%, transparent);
+  /* The tints: a box per run of lines tinted alike (the rows themselves draw none) */
+  .diff-tint.diff-removed {
+    background-color: color-mix(in srgb, var(--red) 16%, transparent);
   }
-  .diff-added {
-    background: color-mix(in srgb, var(--green) 16%, transparent);
+  .diff-tint.diff-added {
+    background-color: color-mix(in srgb, var(--green) 16%, transparent);
   }
-  .diff-changed {
-    background: color-mix(in srgb, var(--yellow) 14%, transparent);
+  .diff-tint.diff-changed {
+    background-color: color-mix(in srgb, var(--yellow) 14%, transparent);
   }
-  .diff-pad {
-    background: repeating-linear-gradient(
+  .diff-tint.diff-pad {
+    background-image: repeating-linear-gradient(
       135deg,
       transparent 0 4px,
       color-mix(in srgb, var(--border) 40%, transparent) 4px 5px
     );
   }
   /* The lines of the chain selected */
-  .diff-line.commented {
+  .diff-tint.commented {
     box-shadow: inset 3px 0 0 var(--yellow);
     background-image: linear-gradient(
       color-mix(in srgb, var(--yellow) 22%, transparent),
       color-mix(in srgb, var(--yellow) 22%, transparent)
     );
   }
-  .diff-line.picked {
+  .diff-tint.picked {
     box-shadow: inset 3px 0 0 var(--accent);
     background-color: color-mix(in srgb, var(--accent) 14%, transparent);
   }
@@ -337,13 +403,16 @@
     width: var(--gutter);
     padding: 0 var(--space-2) 0 0;
     border: none;
-    border-right: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    background: none;
     color: var(--text-muted);
     font: inherit;
     font-family: 'SF Mono', Menlo, Consolas, monospace;
     font-size: var(--text-xs);
     user-select: none;
+    /* Its text centred in one line of the code, as the code's text is in its line (ATM-652): level with it, and on a
+       wrapped line's first visual line, so Wrap moves no number */
+    align-items: flex-start;
+    line-height: var(--line-height);
   }
   .pickable .diff-number {
     cursor: pointer;
@@ -355,33 +424,5 @@
   .diff-number:hover,
   .picked .diff-number {
     color: var(--accent);
-  }
-  /* The + of the line under the pointer, and of the lines picked while their comment is written */
-  .diff-plus {
-    pointer-events: auto;
-    position: absolute;
-    top: 50%;
-    left: calc(var(--gutter) + var(--space-1));
-    transform: translateY(-50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--space-7);
-    height: var(--space-7);
-    max-height: 100%;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: var(--accent);
-    color: var(--on-accent);
-    font: inherit;
-    font-weight: 700;
-    font-size: var(--text-sm);
-    line-height: 1;
-    cursor: pointer;
-    user-select: none;
-  }
-  .diff-plus:not(.held) {
-    opacity: 0.85;
   }
 </style>

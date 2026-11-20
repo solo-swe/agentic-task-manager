@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "atm-api"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "atm-common",
  "atm-lib",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "atm-app"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "atm-api",
  "atm-common",
@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "atm-cli"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "atm-common"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "dirs",
  "jiff",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "atm-db"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "atm-common",
  "atm-fs",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "atm-docs"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "atm-common",
  "atm-fs",
@@ -344,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "atm-fs"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "atm-common",
  "notify",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "atm-lib"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "atm-common",
  "atm-db",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "atm-review"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "atm-common",
  "atm-fs",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "atm-vcs"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "atm-common",
  "serde_json",
@@ -787,9 +787,9 @@ dependencies = [
 
 [[package]]
 name = "compmd-host"
-version = "0.7.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f58e714c07b70ba4e0148e2bc8a9085105b0cc59e812b6391d5dc85188642da9"
+checksum = "fd0757fe10ee0437612212430395849fb78847ecc9535d16d94f75ea1e4b07e1"
 dependencies = [
  "compmd-pack",
  "http",
@@ -801,9 +801,9 @@ dependencies = [
 
 [[package]]
 name = "compmd-pack"
-version = "0.7.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c89292c2bb76605fe2310e89cb5a38c13d33aa2070b0cd67ba0656667dabbad1"
+checksum = "fa63257f2a4987095ffce5c6dfd3007c4635005b2962a21da1f3755279d2a95e"
 dependencies = [
  "semver",
  "serde",
@@ -4349,9 +4349,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-compmd"
-version = "0.7.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a433dc38ed75d00293d0f453646358d861f66a5fb471d1e3d4e112870a6ded"
+checksum = "2fe3c0e5f878c6ec65aec48fbaa05b914fbc29c71f9a3143923f1e77c0f55609"
 dependencies = [
  "compmd-host",
  "serde_json",

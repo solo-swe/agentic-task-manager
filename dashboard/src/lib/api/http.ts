@@ -83,9 +83,12 @@ export function reviewUrl(project: string, review: string, round?: number | null
   return `${projectRoute(project, 'reviews')}/${encodeURIComponent(review)}` + (search ? `?${search}` : '');
 }
 
-/** An image file of the project, its bytes, for an <img> (T-392) */
-export function v1FileUrl(project: string, path: string): string {
-  return `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}`;
+/** An image file of the project, its bytes, for an <img> (T-392); `at`: as that commit or tree has it (a review's
+ * image file's side, ATM-689) */
+export function v1FileUrl(project: string, path: string, at?: string): string {
+  return (
+    `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}` + (at ? `&at=${encodeURIComponent(at)}` : '')
+  );
 }
 
 /** The current workspace's projects, with their summaries (api/projects for `default`) */

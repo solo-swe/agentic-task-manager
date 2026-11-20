@@ -29,7 +29,8 @@ export interface TabWindow {
   openWindow(address: string): Promise<boolean>;
 }
 
-const window_: TabWindow = { go: (address) => navigate(address), closeWindow, openWindow };
+/** A tab shown: an entry with no way back in it, as the one before is another tab's (ATM-686) */
+const window_: TabWindow = { go: (address) => navigate(address, { fresh: true }), closeWindow, openWindow };
 
 /** The actions on `tabs`, in `win` */
 export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): TabActions {

@@ -330,10 +330,13 @@
     border-top: none;
     padding-top: 0;
   }
+  /* Its rows wrap, whole items to the next line, when the chain is narrow (ATM-651: a balloon in a rendered document's
+     margin); a button or a label never breaks inside itself */
   .chain-where {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-2) var(--space-4);
     min-height: var(--space-9);
     color: var(--text-muted);
     font-size: var(--text-xs);
@@ -341,6 +344,7 @@
     letter-spacing: 0.02em;
   }
   .chain-folded-note {
+    white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
@@ -361,8 +365,9 @@
   /* Where a top-level comment stands, above it */
   .chain-state {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2) var(--space-3);
     margin: var(--space-2) 0 var(--space-4);
     font-size: var(--text-xs);
   }
@@ -380,8 +385,13 @@
   }
   .chain-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-2) var(--space-4);
+  }
+  .chain-author,
+  .chain-time {
+    white-space: nowrap;
   }
   .chain-avatar {
     display: inline-flex;
@@ -467,6 +477,7 @@
   }
   .chain-actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--space-3);
     margin-top: var(--space-3);
@@ -484,6 +495,7 @@
     font: inherit;
     font-size: var(--text-xs);
     font-weight: 500;
+    white-space: nowrap;
     cursor: pointer;
   }
   .chain :global(.chain-button:hover) {
@@ -513,6 +525,7 @@
     color: var(--accent);
     font: inherit;
     font-size: var(--text-xs);
+    white-space: nowrap;
     cursor: pointer;
   }
   .chain-link:hover {

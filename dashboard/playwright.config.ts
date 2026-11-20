@@ -34,12 +34,15 @@ export default defineConfig({
     // `pnpm exec playwright test <spec> --trace on` records them while looking into a failure
     trace: 'on-first-retry',
   },
-  // The dashboard at its pages' paths, as atm serve serves it (T-429), in three projects, one after the other (ATM-641):
+  // The dashboard at its pages' paths, as atm serve serves it (T-429), in four projects, one after the other (ATM-641):
   // the tests that measure time against a budget (tagged @timed) must not share the machine with heavy ones, which made
   // them miss it (the long review's settle, 104 to 110 ms for 100, beside a review of 5,000 lines and a WebKit page
   // busy for seconds; alone, 26 to 61).
   // - `svelte`: every other test;
-  // - `timed`: the @timed tests, once `svelte` is done;
+  // - `webkit`: the tests tagged @webkit again in WebKit, the app's engine on macOS (ATM-655: the pane jumped there
+  //   and not in Chromium), once `svelte` is done;
+  // - `timed`: the @timed tests, once `webkit` is done (no WebKit page beside them), one at a time (ATM-654: beside each other they missed their
+  //   budgets too, the long review's first draw 443 ms for 200; alone, 50 to 100);
   // - `measure`: a real review measured in Chromium and WebKit (real-review.spec.ts), last; it runs only when given a
   //   review (a developer's real-review.local.json, or the environment).
   // A project runs only once the one before it passed: with a functional test failing, the timed ones wait for its fix.
@@ -52,10 +55,23 @@ export default defineConfig({
       use: { baseURL: `http://localhost:${PORT}/` },
     },
     {
+      name: 'webkit',
+      testIgnore: /real-review\.spec\.ts/,
+      grep: /@webkit/,
+      grepInvert: /@timed/,
+      dependencies: ['svelte'],
+      use: {
+        ...devices['Desktop Safari'],
+        viewport: { width: 1280, height: 900 },
+        baseURL: `http://localhost:${PORT}/`,
+      },
+    },
+    {
       name: 'timed',
       testIgnore: /real-review\.spec\.ts/,
       grep: /@timed/,
-      dependencies: ['svelte'],
+      dependencies: ['webkit'],
+      workers: 1,
       use: { baseURL: `http://localhost:${PORT}/` },
     },
     { name: 'measure', testMatch: /real-review\.spec\.ts/, dependencies: ['timed'] },

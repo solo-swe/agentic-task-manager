@@ -6,7 +6,7 @@
   import ComposerActions from './ComposerActions.svelte';
   import DiffCode, { type CodeLine } from './DiffCode.svelte';
   import { draftActions } from './drafts';
-  import { focusOnShow } from './focus';
+  import { focusOnShow, focusWhenPlaced } from './focus';
   import RenderedSide from './RenderedSide.svelte';
   import {
     changeStarts,
@@ -65,8 +65,8 @@
     chains?: Chain[];
     mode?: 'split' | 'unified';
     view?: 'source' | 'rendered';
-    /** Long lines wrap (ATM-588), in Unified: Split keeps its two sides' lines level, which a wrapped line can't do
-     * until CompMD draws each line as an element of its own */
+    /** Long lines wrap (ATM-588); in Split each line as tall as the taller of its two sides, so they stay level
+     * (ATM-616, CompMD 0.8.0's line heights) */
     wrap?: boolean;
     viewed?: boolean;
     /** Its own header (the path, the layout and view switches, Viewed); the review's page has its own */
@@ -85,12 +85,15 @@
     onprevfile?: () => void;
   } = $props();
 
-  // The two sides, kept while the same ones load again (a refresh): nothing flickers
+  // The two sides, kept while the same ones load again (a refresh), and while the same file's next revisions load (a
+  // live review's working copy is a new tree at each change, ATM-687): what is shown stays until the new text is
+  // there, and is drawn again only where that text differs. Nothing flickers
   let oldDoc = $state.raw<ProjectDocument | null>(null);
   let newDoc = $state.raw<ProjectDocument | null>(null);
   let problem = $state<string | null>(null);
   let loaded = $state(false);
-  let loadedFor = '';
+  /** The files (old path and path) whose sides are shown */
+  let loadedFiles = '';
 
   async function side(source: DocumentSource | null, file: string) {
     if (!source) return null;
@@ -100,29 +103,33 @@
   }
 
   $effect(() => {
-    const [b, a, from, to] = [before, after, oldPath, path];
-    const key = `${b?.id ?? ''}:${from}|${a?.id ?? ''}:${to}`;
-    if (untrack(() => key !== loadedFor)) {
+    const [b, a, from, to, p] = [before, after, oldPath, path, patch];
+    const files = `${from}|${to}`;
+    // Another file (not another revision of this one): loading until its sides are there
+    if (files !== loadedFiles) {
       loaded = false;
       problem = null;
     }
     void Promise.all([side(b, from), side(a, to)])
       .then(([o, n]) => {
-        if (b !== before || a !== after) return; // another file meanwhile
+        if (b !== before || a !== after || p !== patch) return; // another file or revision meanwhile
         if (oldDoc?.text !== o?.text || oldDoc?.path !== o?.path) oldDoc = o;
         if (newDoc?.text !== n?.text || newDoc?.path !== n?.path) newDoc = n;
+        shownPatch = p;
         problem = null;
         loaded = true;
-        loadedFor = key;
+        loadedFiles = files;
       })
       .catch((e: unknown) => {
         problem = e instanceof Error ? e.message : String(e);
         loaded = true;
-        loadedFor = key;
+        loadedFiles = files;
       });
   });
 
-  const hunks = $derived(parseHunks(patch));
+  /** The patch of the sides shown: a new one waits for its sides, so the rows never pair one with the other's text */
+  let shownPatch = $state(untrack(() => patch));
+  const hunks = $derived(parseHunks(shownPatch));
   const language = $derived(newDoc?.language ?? oldDoc?.language ?? null);
   const markdown = $derived((newDoc ?? oldDoc)?.kind === 'markdown');
   const shownView = $derived(view === 'rendered' && markdown ? 'rendered' : 'source');
@@ -158,7 +165,13 @@
   const placed = $derived(
     new Set(blocks.flatMap((b) => (b.type === 'rows' ? b.rows.flatMap((r) => chainsAfter(r).map((c) => c.id)) : []))),
   );
-  const elsewhere = $derived(shownView === 'source' ? chains.filter((c) => !placed.has(c.id)) : chains);
+  // Rendered (ATM-651): a chain with lines on a side shown is under its block on the page; the others (a whole
+  // file's, one on a side not shown) after the document
+  const elsewhere = $derived(
+    shownView === 'source'
+      ? chains.filter((c) => !placed.has(c.id))
+      : chains.filter((c) => !c.anchor.lines || !sides.includes(c.anchor.side)),
+  );
 
   /** A block's rows cut after each row a chain ends at, so the chain shows right under its lines, and after the last
    * line picked, so the comment being written shows right under them (inside another chain's lines too); the chains
@@ -213,6 +226,21 @@
     return () => clearTimeout(id);
   });
   const drawnItems = $derived(items.out.filter((item) => item.start < limit));
+
+  // Wrapped in Split (ATM-616): each side of a run says how tall each of its lines is as drawn, and both sides make
+  // each line the taller of the two, so a long line wrapped on one side keeps the other side's next line level with it
+  let wrappedLines = $state<Record<string, number[]>>({});
+  function tallest(run: string): number[] | null {
+    const old = wrappedLines[`${run}-old`];
+    const now = wrappedLines[`${run}-new`];
+    if (!old && !now) return null;
+    return Array.from({ length: Math.max(old?.length ?? 0, now?.length ?? 0) }, (_, i) =>
+      Math.max(old?.[i] ?? 0, now?.[i] ?? 0),
+    );
+  }
+  $effect(() => {
+    if (!wrap) wrappedLines = {};
+  });
 
   const splitSide = (rows: SplitRow[], s: Side): CodeLine[] =>
     rows.map((r) => {
@@ -284,22 +312,10 @@
     return { side: s, lines: [same[0].n, same.at(-1)!.n], quote: same.map((r) => r.text).join('\n') };
   });
 
-  // The rendered view's pick: the lines under the text selected
+  // The rendered view's pick: the lines picked by their + (ATM-650) or under the text selected. Its comment box goes
+  // where the comment will show (ATM-651): in a balloon in the margin beside its lines, as Word's (RenderedSide); not
+  // after the document, where a comment on its first lines was written a document away (ATM-627)
   let renderedPick = $state<Picked | null>(null);
-  // Where its comment box goes (ATM-627): right under the text selected, over the side it was selected on, in the
-  // rendered view's coordinates. Not after the document: a comment on its first lines was written a document away
-  let renderedEl = $state<HTMLElement>();
-  let pickAt = $state<{ top: number; left: number; width: number } | null>(null);
-  function placePick() {
-    const selection = window.getSelection();
-    const within = renderedEl?.getBoundingClientRect();
-    if (!within || !selection || !selection.rangeCount) return (pickAt = null);
-    const text = selection.getRangeAt(0).getBoundingClientRect();
-    const start = selection.anchorNode;
-    const pane = (start instanceof Element ? start : start?.parentElement)?.closest('.diff-pane');
-    const side = pane?.getBoundingClientRect() ?? within;
-    pickAt = { top: text.bottom - within.top, left: side.left - within.left, width: side.width };
-  }
   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
 
   function cancel() {
@@ -407,6 +423,10 @@
   />
 {/snippet}
 
+{#snippet renderedComposer()}
+  {#if renderedPick}{@render composer(renderedPick)}{/if}
+{/snippet}
+
 {#snippet composer(p: Picked)}
   <form
     class="diff-composer"
@@ -425,7 +445,7 @@
       rows="3"
       placeholder="Leave a comment…"
       bind:value={draft}
-      {@attach focusOnShow}
+      {@attach shownView === 'rendered' ? focusWhenPlaced : focusOnShow}
       onkeydown={(e) => {
         if (e.key === 'Escape') cancel();
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
@@ -488,10 +508,14 @@
         <div class="diff-run" data-keys={keys.join(' ')}>
           {#if mode === 'split'}
             {#each ['old', 'new'] as const as s (s)}
+              {@const run = `${b}-${segment.first}`}
               <div class="diff-column diff-{s}">
                 <DiffCode
                   lines={splitSide(segment.rows as SplitRow[], s)}
                   {language}
+                  {wrap}
+                  heights={wrap ? tallest(run) : null}
+                  onwrapped={(heights) => (wrappedLines = { ...wrappedLines, [`${run}-${s}`]: heights })}
                   numbers={s}
                   {keys}
                   changes={s === 'new' ? changes : []}
@@ -529,7 +553,7 @@
       <div class="diff-more" style:height="{(items.total - limit) * 20}px" aria-hidden="true"></div>
     {/if}
   {:else}
-    <div class="diff-rendered" class:single={sides.length < 2} bind:this={renderedEl}>
+    <div class="diff-rendered" class:single={sides.length < 2}>
       {#each sides as s (s)}
         {@const doc = s === 'old' ? oldDoc : newDoc}
         {#if doc}
@@ -538,7 +562,12 @@
             side={s}
             changed={s === 'old' ? changed.old : changed.new}
             selected={selectedChain?.anchor.side === s ? selectedChain.anchor.lines : null}
+            selectedChain={selectedId}
+            picking={renderedPick?.side === s ? renderedPick.lines : null}
             {docStyle}
+            chains={chains.filter((c) => c.anchor.side === s && c.anchor.lines)}
+            {chainBox}
+            composer={renderedPick?.side === s && oncomment ? renderedComposer : undefined}
             label={sides.length < 2
               ? s === 'old'
                 ? 'Before (deleted)'
@@ -548,7 +577,6 @@
                 : 'After'}
             onpick={oncomment
               ? (p) => {
-                  placePick();
                   renderedPick = p;
                   draft = '';
                 }
@@ -556,16 +584,6 @@
           />
         {/if}
       {/each}
-      {#if composing && oncomment}
-        <div
-          class="diff-rendered-composer"
-          style:top="{pickAt?.top ?? 0}px"
-          style:left="{pickAt?.left ?? 0}px"
-          style:width={pickAt ? `${pickAt.width}px` : '100%'}
-        >
-          {@render composer(composing)}
-        </div>
-      {/if}
     </div>
   {/if}
 
@@ -716,8 +734,10 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
   }
+  /* Wrapping, whole buttons, when the box is narrow (a rendered document's margin, ATM-651) */
   .diff-composer-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-3);
@@ -734,6 +754,7 @@
     background: var(--bg);
     color: var(--text);
     font: inherit;
+    white-space: nowrap;
     cursor: pointer;
   }
   .diff-composer-actions :global(button.primary) {
@@ -745,21 +766,20 @@
     opacity: 0.5;
     cursor: default;
   }
-  /* Its own stacking context: the comment box is above the pages, their marks and folds, and under the card's
-     sticky header */
+  /* The two sides, their pages as wide as each other: a side with comments (ATM-651) takes its margin's room on top of
+     its share, so its page isn't the narrower one. Its own stacking context: the comment box is above the pages, their
+     marks and folds, and under the card's sticky header */
   .diff-rendered {
     position: relative;
     isolation: isolate;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    align-items: stretch;
   }
-  /* The comment box, under the text selected, over the document below it (ATM-627) */
-  .diff-rendered-composer {
-    position: absolute;
-    z-index: 2;
+  .diff-rendered > :global(.diff-pane) {
+    flex: 1 1 0%;
   }
-  .diff-rendered.single {
-    grid-template-columns: 1fr;
+  .diff-rendered > :global(.diff-pane.with-margin) {
+    flex: 1 1 var(--doc-margin-room);
   }
   .diff-rendered :global(.diff-pane.diff-old) {
     border-right: 1px solid var(--border);

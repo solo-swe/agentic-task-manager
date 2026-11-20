@@ -199,9 +199,23 @@ describe('task text through the real processor', () => {
     const document = new OpenDocument(requestFor(text));
     try {
       expect(document.components.map((c) => c.name)).toContain('evil');
-      expect(packComponents(document.components).map((c) => c.name)).toEqual(['mermaid']);
+      // Not given to the sandbox; and since CompMD 0.9.0 the pack's own components are listed only when the text uses
+      // them, so this text gives the sandbox nothing at all
+      expect(packComponents(document.components).map((c) => c.name)).toEqual([]);
     } finally {
       document.free();
+    }
+  });
+
+  it('a pack’s component is given to the sandbox only when the text uses it (CompMD 0.9.0)', () => {
+    const uses = new OpenDocument(requestFor('```mermaid\ngraph TD; A-->B\n```\n'));
+    const plain = new OpenDocument(requestFor('Just text.\n'));
+    try {
+      expect(packComponents(uses.components).map((c) => c.name)).toEqual(['mermaid']);
+      expect(packComponents(plain.components)).toEqual([]);
+    } finally {
+      uses.free();
+      plain.free();
     }
   });
 

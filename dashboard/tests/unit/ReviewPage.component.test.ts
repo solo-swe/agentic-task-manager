@@ -346,14 +346,32 @@ describe('ReviewPage: Diffs', () => {
     expect(card(container, 'README.md')).toHaveClass('folded');
   });
 
+  /** A layout for the list, which jsdom has none of: each card 1,000 px below the one before (plus `grown`, as if the
+   * cards above it grew), the list at the window's top; what `scrollTop` the page sets moves them all (ATM-656: the
+   * list is scrolled by the card's distance from its top, not `scrollIntoView`) */
+  function laidOut(container: HTMLElement) {
+    const list = container.querySelector('.review-diffs') as HTMLElement;
+    const grown = { by: 0 };
+    list.getBoundingClientRect = () => ({ top: 0, bottom: 800 }) as DOMRect;
+    container.querySelectorAll<HTMLElement>('.review-file-card').forEach((c, i) => {
+      c.getBoundingClientRect = () => {
+        const top = (i + 1) * 1000 + grown.by - list.scrollTop;
+        return { top, bottom: top + 900 } as DOMRect;
+      };
+    });
+    /** The card's top, against the list's */
+    const topOf = (path: string) => card(container, path).getBoundingClientRect().top;
+    return { list, grown, topOf };
+  }
+
   it('a click in the tree goes to the file’s card and puts it in the address; a tick there marks it viewed', async () => {
     const { container, onfile, onviewed } = await diffs();
-    const scroll = vi.mocked(Element.prototype.scrollIntoView);
+    const { topOf } = laidOut(container);
     await fireEvent.click(within(container.querySelector('.review-files') as HTMLElement).getByText('a.rs'));
     // The address follows once the page is idle
     expect(onfile).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(onfile).toHaveBeenCalledWith('src/a.rs'));
-    expect(scroll.mock.contexts.at(-1)).toBe(card(container, 'src/a.rs'));
+    expect(topOf('src/a.rs')).toBe(0);
     expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs');
     await fireEvent.click(
       within(container.querySelector('.review-files') as HTMLElement).getByLabelText('Viewed src/b.rs'),
@@ -375,38 +393,52 @@ describe('ReviewPage: Diffs', () => {
     );
     try {
       const { container } = await diffs();
-      const scroll = vi.mocked(Element.prototype.scrollIntoView);
+      const { list, grown, topOf } = laidOut(container);
       await fireEvent.click(within(container.querySelector('.review-files') as HTMLElement).getByText('a.rs'));
-      const grow = () => resized.forEach((callback) => callback([], {} as ResizeObserver));
-      scroll.mockClear();
-      grow();
-      expect(scroll.mock.contexts).toContain(card(container, 'src/a.rs'));
+      /** The cards above grow by `by`, and the list's observers hear of it */
+      const grow = (by: number) => {
+        grown.by += by;
+        resized.forEach((callback) => callback([], {} as ResizeObserver));
+      };
+      expect(topOf('src/a.rs')).toBe(0);
+      grow(300);
+      expect(topOf('src/a.rs')).toBe(0);
       // The user scrolls the list: it stays where they put it
-      await fireEvent.wheel(container.querySelector('.review-diffs') as HTMLElement);
-      scroll.mockClear();
-      grow();
-      expect(scroll.mock.contexts).not.toContain(card(container, 'src/a.rs'));
+      await fireEvent.wheel(list);
+      grow(300);
+      expect(topOf('src/a.rs')).toBe(300);
       // Another file gone to is pinned in its turn; Next unpins it
       await fireEvent.keyDown(window, { key: ']' });
-      scroll.mockClear();
-      grow();
-      expect(scroll.mock.contexts).toContain(card(container, 'src/b.rs'));
+      grow(300);
+      expect(topOf('src/b.rs')).toBe(0);
       await fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
-      scroll.mockClear();
-      grow();
-      expect(scroll.mock.contexts).not.toContain(card(container, 'src/b.rs'));
+      const at = list.scrollTop;
+      grow(300);
+      expect(list.scrollTop).toBe(at);
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
   it('the address’s file is gone to when the page opens, without writing the address again', async () => {
-    const { container, onfile } = show(data(), { file: 'src/a.rs' });
-    await vi.waitFor(() =>
-      expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs'),
-    );
-    expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toContain(card(container, 'src/a.rs'));
-    expect(onfile).not.toHaveBeenCalled();
+    // A layout from the start (the page goes to the file as it opens): each card 1,000 px below the one before
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      const list = this.parentElement;
+      if (!this.classList.contains('review-file-card') || !list) return { top: 0, bottom: 800 } as DOMRect;
+      const top = ([...list.children].indexOf(this) + 1) * 1000 - list.scrollTop;
+      return { top, bottom: top + 900 } as DOMRect;
+    };
+    try {
+      const { container, onfile } = show(data(), { file: 'src/a.rs' });
+      await vi.waitFor(() =>
+        expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs'),
+      );
+      expect(card(container, 'src/a.rs').getBoundingClientRect().top).toBe(0);
+      expect(onfile).not.toHaveBeenCalled();
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = rect;
+    }
   });
 
   // ATM-595: the tree's folders fold, by click and keys, all at once, kept for the session; a jump opens them
@@ -530,26 +562,24 @@ describe('ReviewPage: Diffs', () => {
     expect(onfile).not.toHaveBeenCalled();
   });
 
-  // ATM-588: Wrap, in Unified; in Split it waits, saying why (its sides kept level line by line)
-  it('Wrap: in Unified it wraps every file’s lines, kept for the next page; in Split it is disabled, saying why', async () => {
+  // ATM-588: Wrap, in Unified; ATM-616: in Split too, its two sides kept level (the measuring: e2e)
+  it('Wrap: in Unified and in Split it wraps every file’s lines, kept for the next page', async () => {
     localStorage.removeItem('atm-review-layout');
     const { container, unmount } = await diffs(data({}, { files: [file('src/a.rs')] }));
     await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
     const wrap = () => screen.getByRole('button', { name: 'Wrap' });
-    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
-    expect(wrap()).toBeDisabled();
-    expect(wrap()).toHaveAttribute('title', expect.stringMatching(/Unified for now/));
-    expect(wrap().closest('[title]')).toHaveAttribute('title', expect.stringMatching(/level line by line/));
     await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
     expect(wrap()).toBeEnabled();
     expect(wrap()).toHaveAttribute('aria-pressed', 'false');
     await fireEvent.click(wrap());
     expect(wrap()).toHaveAttribute('aria-pressed', 'true');
     await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).not.toBeNull());
-    // Back to Split: not wrapped there, and pressed again only in Unified
+    // Split: still wrapped, both sides
     await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
-    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).toBeNull());
-    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
+    expect(wrap()).toBeEnabled();
+    expect(wrap()).toHaveAttribute('aria-pressed', 'true');
+    await vi.waitFor(() => expect(container.querySelectorAll('.diff-old .diff-code.wrap').length).toBeGreaterThan(0));
+    expect(container.querySelectorAll('.diff-new .diff-code.wrap').length).toBeGreaterThan(0);
     await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
     unmount();
     await diffs(data({}, { files: [file('src/a.rs')] }));

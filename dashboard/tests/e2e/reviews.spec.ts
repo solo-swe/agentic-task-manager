@@ -1,11 +1,24 @@
 import type { Page } from '@playwright/test';
-import { addressOf, expect, openDashboard, projectDocument, summary, test, type TasksServer } from './helpers';
+import {
+  addressOf,
+  expect,
+  loadFixture,
+  openDashboard,
+  projectDocument,
+  summary,
+  test,
+  type TasksServer,
+} from './helpers';
 import { E2E_SESSION } from './session.mjs';
 
 // The reviews tab and a review's page (docs/code-review-design.md §3.11, ATM-574), and the diff viewer in it (§3.7,
 // ATM-573): the fixture plays atm serve's review routes (the list, a review's page for a view, a round's sides by
 // revision) and records the changes the page sends. A review's page is a window of its own: the list opens it in a
 // browser tab, with its Overview, Diffs and Comments tabs.
+
+/** A test that runs in WebKit too (the `webkit` project, ATM-655): the app's engine on macOS, where the diff viewer's
+ * layout and scrolling have differed from Chromium's */
+const WEBKIT_TOO = { tag: '@webkit' };
 
 const lines = (n: number, change: (i: number) => string | null = () => null) =>
   Array.from({ length: n }, (_, i) => change(i + 1) ?? `line ${i + 1}`).join('\n') + '\n';
@@ -314,6 +327,85 @@ test.describe('the reviews tab', () => {
     await expect(page.locator('#review-list')).toBeVisible();
   });
 
+  // ATM-686 (Hakan): the back button goes back to where the review was opened from, saying where, not always to the
+  // project's reviews; through the history, so Forward comes back to the review
+  test.describe('the back button goes back where the review was opened from', () => {
+    /** The fixture's project with T-004 in review through CR-2, on `tab`, CR-2's page served */
+    async function withReviewedTask(page: Page, tasksServer: TasksServer, tab: 'kanban' | 'list') {
+      const data = loadFixture('standard');
+      Object.assign(
+        data.tasks.find((t) => t.id === 'T-004')!,
+        {
+          status: 'in_review',
+          code_reviews: [{ id: 'r2', ref: 'CR-2' }],
+        },
+      );
+      tasksServer
+        .setReviews({
+          reviews: [{ review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true }],
+          you: 'Ana',
+        })
+        .setReview('CR-2', reviewPage());
+      await openDashboard(page, tasksServer, data, { tab });
+    }
+    const back = (page: Page) => page.locator('.review-back');
+
+    test('from a Kanban card: back to the board; Forward to the review again', async ({ page, tasksServer }) => {
+      await withReviewedTask(page, tasksServer, 'kanban');
+      await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+      await expect(back(page)).toHaveText('Kanban');
+      await back(page).click();
+      await expect(page.locator('#kanban')).toBeVisible();
+      expect(new URL(page.url()).pathname).toBe(`/projects/${tasksServer.projectId}/kanban`);
+      await page.goForward();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    });
+
+    test('from a task’s details: back to them, open over the page they were on', async ({ page, tasksServer }) => {
+      await withReviewedTask(page, tasksServer, 'list');
+      await page.locator('.task-card[data-id="T-004"] .task-name').first().click();
+      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+      await page.locator('#detail-review .review-link').first().click();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+      await expect(back(page)).toHaveText('T-004');
+      await back(page).click();
+      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+      const url = new URL(page.url());
+      expect([url.pathname, url.searchParams.get('task')]).toEqual([
+        `/projects/${tasksServer.projectId}/list`,
+        'T-004',
+      ]);
+    });
+
+    test('with a task’s details opened over the review and closed, and another file, still back to the board', async ({
+      page,
+      tasksServer,
+    }) => {
+      await withReviewedTask(page, tasksServer, 'kanban');
+      await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+      // A task named in the review, its details over it, closed
+      await page.locator('#review-page a[data-task="T-001"]').first().click();
+      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+      await expect(back(page)).toHaveText('Kanban');
+      await back(page).click();
+      await expect(page.locator('#kanban')).toBeVisible();
+    });
+
+    test('opened on its own (its address typed, a link from elsewhere): up to its reviews', async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer, 'CR-2');
+      await expect(back(page)).toHaveText('Reviews');
+      await back(page).click();
+      await expect(page.locator('#review-list')).toBeVisible();
+    });
+  });
+
   test('⌘ or Ctrl opens a review in a browser tab of its own; the list stays', async ({ page, tasksServer }) => {
     // The new tab's own page has no fixture behind it (it is the page's): its address is what is checked here
     await openReviews(page, tasksServer);
@@ -506,64 +598,458 @@ test.describe('a review’s page', () => {
   });
 
   // ATM-588: Wrap, in Unified: a long line wraps at the column's width, its row as tall as it, its number on its first
-  // visual line, the next line's row right under it; no sideways scroll. In Split it waits, saying why
-  test('Wrap: a long line wraps in Unified, the next line level with its text; in Split the button says why it waits', async ({
+  // visual line, the next line's row right under it; no sideways scroll
+  test(
+    'Wrap: a long line wraps in Unified, the next line level with its text',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+      const text = `fn a() {}\n${long}\nfn b() {}\n`;
+      const patch =
+        'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,3 @@\n' +
+        text
+          .trimEnd()
+          .split('\n')
+          .map((l) => `+${l}`)
+          .join('\n') +
+        '\n';
+      tasksServer.setRevisionDocument(
+        'head3',
+        projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
+      );
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      // Unified, wrapped
+      await page.getByRole('button', { name: 'Unified' }).click();
+      await wrap.click();
+      await expect(wrap).toHaveAttribute('aria-pressed', 'true');
+      const diff = diffOf(page, 'src/long.rs');
+      await expect(diff.locator('.diff-code.wrap')).toBeVisible();
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      const rows = () =>
+        diff.locator('.diff-code.wrap').evaluate((code) => {
+          const lines = [...code.querySelectorAll<HTMLElement>('.diff-line')].map((l) => ({
+            top: parseFloat(l.style.top),
+            height: parseFloat(l.style.height),
+          }));
+          const pre = code.querySelector('.compmd-page pre') as HTMLElement | null;
+          return { lines, sideways: pre ? pre.scrollWidth > pre.clientWidth + 1 : true };
+        });
+      await expect.poll(async () => (await rows()).lines[1]?.height ?? 0).toBeGreaterThan(40);
+      const { lines, sideways } = await rows();
+      expect(lines).toHaveLength(3);
+      // The long line is several of the others tall; the next line's row starts where it ends
+      expect(lines[1].height).toBeGreaterThan(lines[0].height * 2);
+      expect(Math.abs(lines[2].top - (lines[1].top + lines[1].height))).toBeLessThan(2);
+      expect(sideways).toBe(false);
+      // Kept for the next page
+      await page.reload();
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
+    },
+  );
+
+  // ATM-616 (Hakan): Wrap in Split too. A line wrapped on one side makes its counterpart on the other as tall (CompMD
+  // 0.8.0's line heights), so the lines after it stay level across the two sides, and each side's numbers stay on
+  // their lines' first visual lines
+  test(
+    'Wrap in Split: a line wrapped on one side keeps the two sides level after it',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+      // Names of their own, each one token, so each side's text can be found where it is drawn
+      const oldText = 'fn alpha() {}\nfn short() {}\nfn beta() {}\nfn gamma() {}\n';
+      const newText = `fn alpha() {}\n${long}\nfn beta() {}\nfn gamma() {}\n`;
+      const patch =
+        'diff --git a/src/long.rs b/src/long.rs\n--- a/src/long.rs\n+++ b/src/long.rs\n@@ -1,4 +1,4 @@\n fn alpha() {}\n' +
+        `-fn short() {}\n+${long}\n fn beta() {}\n fn gamma() {}\n`;
+      const code = (text: string) =>
+        projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 });
+      tasksServer.setRevisionDocument('base1', code(oldText)).setRevisionDocument('head3', code(newText));
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await page.getByRole('button', { name: 'Split' }).click();
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      await expect(wrap).toBeEnabled();
+      await wrap.click();
+      await expect(wrap).toHaveAttribute('aria-pressed', 'true');
+      const diff = diffOf(page, 'src/long.rs');
+      await expect(diff.locator('.diff-old .diff-code.wrap [data-compmd="ready"]').first()).toBeAttached();
+      await expect(diff.locator('.diff-new .diff-code.wrap [data-compmd="ready"]').first()).toBeAttached();
+      /** Where `needle`'s text is drawn on each side (its first character's middle), and each side's gutter rows */
+      const sides = () =>
+        diff.evaluate((root) => {
+          const at = (side: string, needle: string) => {
+            for (const pre of root.querySelectorAll(`.diff-${side} .compmd-page pre`)) {
+              const walker = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT);
+              for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+                const i = n.data.indexOf(needle);
+                if (i < 0) continue;
+                const range = document.createRange();
+                range.setStart(n, i);
+                range.setEnd(n, i + 1);
+                const r = range.getBoundingClientRect();
+                return (r.top + r.bottom) / 2;
+              }
+            }
+            return null;
+          };
+          const rows = (side: string) =>
+            [...root.querySelectorAll<HTMLElement>(`.diff-${side} .diff-code .diff-line`)].map((l) => ({
+              top: l.getBoundingClientRect().top,
+              height: l.getBoundingClientRect().height,
+              number: l.querySelector('.diff-number')?.getBoundingClientRect(),
+            }));
+          return {
+            b: [at('old', 'beta'), at('new', 'beta')],
+            c: [at('old', 'gamma'), at('new', 'gamma')],
+            old: rows('old'),
+            now: rows('new'),
+          };
+        });
+      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level,
+      // and the old side's rows placed from its taller line (they follow CompMD's layout, a moment after its text's)
+      await expect
+        .poll(async () => {
+          const s = await sides();
+          const text = s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
+          const rows = s.old[1] && s.now[1] ? Math.abs(s.old[1].height - s.now[1].height) : 999;
+          return Math.max(text, rows);
+        })
+        .toBeLessThan(2);
+      const s = await sides();
+      expect(Math.abs(s.c[0]! - s.c[1]!)).toBeLessThan(2);
+      // The changed line's rows: several lines tall on both sides, the same height
+      expect(s.now[1].height).toBeGreaterThan(s.now[0].height * 2);
+      expect(Math.abs(s.old[1].height - s.now[1].height)).toBeLessThan(2);
+      // Each side's rows meet its text: fn b's row starts where the changed line's ends, on both sides
+      for (const rows of [s.old, s.now]) expect(Math.abs(rows[2].top - (rows[1].top + rows[1].height))).toBeLessThan(2);
+      // Hakan: no line drawn between two lines. Each row on whole pixels, from where the one before it ends: a row's
+      // edge inside a pixel was half covered by both rows, and their tints drew a seam there
+      const tiled = async () => {
+        const t = await sides();
+        for (const rows of [t.old, t.now]) {
+          const offset = rows[0].top % 1;
+          for (const [k, r] of rows.entries()) {
+            expect(Math.abs(((r.top - offset) % 1) - Math.round((r.top - offset) % 1))).toBeLessThan(0.01);
+            expect(Math.abs(r.height - Math.round(r.height))).toBeLessThan(0.01);
+            if (k > 0) expect(r.top - (rows[k - 1].top + rows[k - 1].height)).toBeCloseTo(0, 2);
+          }
+        }
+      };
+      await tiled();
+      // Unwrapped again: one line height each, the two sides level as before
+      await wrap.click();
+      await expect
+        .poll(async () => {
+          const t = await sides();
+          return t.now[1]?.height ?? 0;
+        })
+        .toBeLessThan(30);
+      await tiled();
+    },
+  );
+
+  // ATM-652 (Hakan): the numbers weren't level with their lines, and Wrap moved them up or down. Each number's text is
+  // centred on its line's first visual line, within 1 px, wrapped or not, in Unified and Split
+  test(
+    'every line number is level with its line’s text, and Wrap doesn’t move it',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+      const text = `fn a() {}\n${long}\nfn b() {}\n\n// done\n`;
+      const patch =
+        'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,5 @@\n' +
+        text
+          .slice(0, -1)
+          .split('\n')
+          .map((l) => `+${l}`)
+          .join('\n') +
+        '\n';
+      tasksServer.setRevisionDocument(
+        'head3',
+        projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
+      );
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      const diff = diffOf(page, 'src/long.rs');
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      /** Each numbered line: its number's text centre less its text's (the first character of its first visual line) */
+      const offsets = () =>
+        diff.evaluate((view) =>
+          [...view.querySelectorAll<HTMLElement>('.diff-code')].flatMap((run) => {
+            const code = run.querySelector<HTMLElement>('.compmd-page pre > code');
+            if (!code) return [];
+            // Where each line starts in the code's text
+            const starts: { node: Text; offset: number }[] = [];
+            const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+            let atStart = true;
+            for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null)
+              for (let at = 0; at <= node.data.length; at++) {
+                if (atStart && at < node.data.length) {
+                  starts.push({ node, offset: at });
+                  atStart = false;
+                }
+                if (node.data[at] === '\n') atStart = true;
+              }
+            const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
+            const range = document.createRange();
+            return [...run.querySelectorAll<HTMLElement>('.diff-line')].flatMap((line, i) => {
+              const number = line.querySelector('.diff-number span:last-child')?.firstChild;
+              const start = starts[i];
+              if (!number || !start || start.node.data[start.offset] === '\n') return [];
+              range.selectNodeContents(number);
+              const n = centre(range.getBoundingClientRect());
+              range.setStart(start.node, start.offset);
+              range.setEnd(start.node, start.offset + 1);
+              return [Math.round((n - centre(range.getClientRects()[0])) * 10) / 10];
+            });
+          }),
+        );
+      // Once the rows are placed: they follow CompMD's layout, which comes a moment after a switch (Wrap's rows from the
+      // wrapped text's boxes; read at once, the lines after the long one were still one visual line apart)
+      const level = async (what: string) => {
+        await expect
+          .poll(async () => {
+            const found = await offsets();
+            return found.length >= 4 && found.every((d) => Math.abs(d) <= 1);
+          })
+          .toBe(true);
+        const found = await offsets();
+        for (const d of found) expect(Math.abs(d), `${what}: ${JSON.stringify(found)}`).toBeLessThanOrEqual(1);
+        return found;
+      };
+      await page.getByRole('button', { name: 'Split' }).click();
+      await level('split');
+      await page.getByRole('button', { name: 'Unified' }).click();
+      const plain = await level('unified');
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      await wrap.click();
+      await expect(diff.locator('.diff-code.wrap')).toBeVisible();
+      await expect.poll(async () => (await offsets()).length).toBe(plain.length);
+      const wrapped = await level('unified, wrapped');
+      // Wrap moves no number against its text (it was 4 px: 1.5 above it, then 2.5 below)
+      wrapped.forEach((d, i) =>
+        expect(Math.abs(d - plain[i]), JSON.stringify({ plain, wrapped })).toBeLessThanOrEqual(1),
+      );
+    },
+  );
+
+  test(
+    'Rendered: every line number is level with its text, a heading’s and a paragraph’s',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+      const view = diffOf(page, 'docs/plan.md');
+      await expect(view.locator('.diff-line').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Rendered' }).click();
+      const newSide = view.locator('.diff-pane.diff-new');
+      await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+      await expect(newSide.locator('.doc-gutter-lines [data-line="1"]')).toBeVisible();
+      // Each number's text centre less its block's first line of text's (the text, not the block's box)
+      const offsets = await newSide.evaluate((side) => {
+        const centre = (r: DOMRect) => (r.top + r.bottom) / 2;
+        const range = document.createRange();
+        return (
+          [
+            [1, 'h1'],
+            [3, 'p:nth-of-type(1)'],
+            [5, 'p:nth-of-type(2)'],
+          ] as const
+        ).map(([line, block]) => {
+          const number = side.querySelector(`.doc-gutter-lines [data-line="${line}"]`)!.firstChild!;
+          range.selectNodeContents(number);
+          const n = centre(range.getBoundingClientRect());
+          range.selectNodeContents(side.querySelector(`.compmd-page ${block}`)!);
+          return Math.round((n - centre(range.getClientRects()[0])) * 10) / 10;
+        });
+      });
+      for (const d of offsets) expect(Math.abs(d), JSON.stringify(offsets)).toBeLessThanOrEqual(1);
+    },
+  );
+
+  // ATM-656 (Hakan): a jump to a file from the tree sometimes ended elsewhere: the files above it drawn after the jump
+  // grew and pushed it out of view. The file's header stays where the jump put it (the pane's top, or as near as the
+  // pane can scroll), frame after frame, while the files around it are drawn
+  test(
+    'a jump to a file stays on it while the files above it are drawn: one in the middle, the last, one scrolled at once',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      // Shaped as the long review of the performance tests (94 files, a few long ones, some long lines)
+      const sizes = Array.from({ length: 94 }, (_, i) => (i % 31 === 0 ? 600 : i % 7 === 0 ? 120 : 12));
+      const files = sizes.map((added, i) => {
+        const path = `src/d${String(Math.floor(i / 10)).padStart(2, '0')}/f${String(i).padStart(3, '0')}.rs`;
+        const body = Array.from(
+          { length: added },
+          (_, n) => `+let value_${n} = "${'x'.repeat(n % 5 === 0 ? 240 : 30)}";`,
+        ).join('\n');
+        return {
+          path,
+          old_path: path,
+          status: 'modified',
+          binary: false,
+          patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,${added + 3} @@\n line 1\n line 2\n line 3\n${body}\n`,
+          before: `b${i}`,
+          after: `a${i}`,
+        };
+      });
+      await openReviews(page, tasksServer);
+      files.forEach((f, i) => {
+        const head = ['line 1', 'line 2', 'line 3'];
+        const added = f.patch
+          .split('\n')
+          .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+          .map((l) => l.slice(1));
+        const doc = (text: string) => projectDocument(f.path, text, { kind: 'code', language: 'rust', line_offset: 1 });
+        tasksServer
+          .setRevisionDocument(`b${i}`, doc(head.join('\n') + '\n'))
+          .setRevisionDocument(`a${i}`, doc([...head, ...added].join('\n') + '\n'));
+      });
+      tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files } }));
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await expect(diffOf(page, files[0].path).locator('.diff-line').first()).toBeVisible();
+      /** The file's card top against the pane's, as each frame was drawn (read right after it: a read in the frame's own
+       * callback comes before the page holds the file in place for it), for 1.5 s from when the jump brought it in */
+      const followed = (path: string) =>
+        page.evaluate(
+          (p) =>
+            new Promise<number[]>((done) => {
+              const pane = document.querySelector<HTMLElement>('.review-diffs')!;
+              const tops: number[] = [];
+              let start: number | null = null;
+              const after = new MessageChannel();
+              after.port1.onmessage = () => read();
+              const frame = () => after.port2.postMessage(null);
+              const read = () => {
+                const card = document.querySelector(`.review-file-card[data-file="${CSS.escape(p)}"]`);
+                const top = card
+                  ? Math.round(card.getBoundingClientRect().top - pane.getBoundingClientRect().top)
+                  : null;
+                if (start === null && top !== null && top > -40 && top < pane.clientHeight) start = performance.now();
+                if (start !== null && top !== null) tops.push(top);
+                if (start === null || performance.now() - start < 1500) requestAnimationFrame(frame);
+                else done(tops);
+              };
+              requestAnimationFrame(frame);
+            }),
+          path,
+        );
+      // A file in the middle, the last file, and one scrolled a little at once (the reader's own scroll ends the jump's
+      // hold: what is in view stays put all the same while the cards above it are drawn)
+      for (const [target, scrolled] of [
+        [files[47], false],
+        [files.at(-1)!, false],
+        [files[70], true],
+      ] as const) {
+        const name = target.path.split('/').at(-1)!;
+        const tops = followed(target.path);
+        await page.locator('.review-file-name', { hasText: name }).first().click();
+        if (scrolled) {
+          const box = (await page.locator('.review-diffs').boundingBox())!;
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await page.mouse.wheel(0, 30);
+        }
+        // From the frame it reached the place it ends at (the first frames may catch it on its way there, or the wheel's
+        // own scroll still landing)
+        const all = await tops;
+        const last = all.at(-1)!;
+        const seen = all.slice(all.findIndex((t) => Math.abs(t - last) < 4));
+        const pane = (await page.locator('.review-diffs').boundingBox())!;
+        expect(last, `${name}: ${JSON.stringify(seen)}`).toBeLessThan(pane.height / 2);
+        // At the top (scrolled: as far below it as the wheel went, when WebKit took the wheel in time)
+        if (target !== files.at(-1)) {
+          expect(last, `${name}: ${JSON.stringify(seen)}`).toBeLessThan(16);
+          expect(last, `${name}: ${JSON.stringify(seen)}`).toBeGreaterThan(scrolled ? -60 : -16);
+        }
+        // Once there, it stays: no frame after it arrived moves it (it moved 400 px for a frame in WebKit, or for good)
+        for (const top of seen) expect(Math.abs(top - last), `${name}: ${JSON.stringify(seen)}`).toBeLessThan(4);
+        await expect(diffOf(page, target.path)).toBeInViewport();
+      }
+    },
+  );
+
+  // ATM-689 (Hakan, CR-60's screenshots): a binary file isn't in the round's diff, but an image shows its sides, each
+  // as its revision has it; another binary file stays listed, not shown
+  test('an image file shows its images: a new one its after side, a changed one both; another binary file is listed', async ({
     page,
     tasksServer,
   }) => {
-    const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
-    const text = `fn a() {}\n${long}\nfn b() {}\n`;
-    const patch =
-      'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,3 @@\n' +
-      text
-        .trimEnd()
-        .split('\n')
-        .map((l) => `+${l}`)
-        .join('\n') +
-      '\n';
-    tasksServer.setRevisionDocument(
-      'head3',
-      projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
     );
+    const binary = (path: string, status: string, before: string | null, after: string | null) => ({
+      path,
+      old_path: path,
+      status,
+      binary: true,
+      patch: '',
+      before,
+      after,
+    });
+    tasksServer.setImage('docs/new.png', 'image/png', png, 'head3');
+    tasksServer.setImage('docs/shot.png', 'image/png', png, 'base1');
+    tasksServer.setImage('docs/shot.png', 'image/png', png, 'head3');
     await openReviews(page, tasksServer);
     tasksServer.setReview(
       'CR-2',
-      reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
+      reviewPage({
+        chains: [],
+        view: {
+          round: 3,
+          against: null,
+          files: [
+            binary('docs/new.png', 'added', null, 'head3'),
+            binary('docs/shot.png', 'modified', 'base1', 'head3'),
+            binary('bin/tool.wasm', 'modified', 'base1', 'head3'),
+          ],
+        },
+      }),
     );
     await page.goto(reviewPath(tasksServer, '/CR-2'));
     await page.getByRole('tab', { name: /^Diffs/ }).click();
-    const wrap = page.getByRole('button', { name: 'Wrap' });
-    // Split: Wrap waits, saying why
-    await page.getByRole('button', { name: 'Split' }).click();
-    await expect(wrap).toBeDisabled();
-    await expect(wrap).toHaveAttribute('title', /Unified for now/);
-    // Unified, wrapped
-    await page.getByRole('button', { name: 'Unified' }).click();
-    await wrap.click();
-    await expect(wrap).toHaveAttribute('aria-pressed', 'true');
-    const diff = diffOf(page, 'src/long.rs');
-    await expect(diff.locator('.diff-code.wrap')).toBeVisible();
-    await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
-    const rows = () =>
-      diff.locator('.diff-code.wrap').evaluate((code) => {
-        const lines = [...code.querySelectorAll<HTMLElement>('.diff-line')].map((l) => ({
-          top: parseFloat(l.style.top),
-          height: parseFloat(l.style.height),
-        }));
-        const pre = code.querySelector('.compmd-page pre') as HTMLElement | null;
-        return { lines, sideways: pre ? pre.scrollWidth > pre.clientWidth + 1 : true };
-      });
-    await expect.poll(async () => (await rows()).lines[1]?.height ?? 0).toBeGreaterThan(40);
-    const { lines, sideways } = await rows();
-    expect(lines).toHaveLength(3);
-    // The long line is several of the others tall; the next line's row starts where it ends
-    expect(lines[1].height).toBeGreaterThan(lines[0].height * 2);
-    expect(Math.abs(lines[2].top - (lines[1].top + lines[1].height))).toBeLessThan(2);
-    expect(sideways).toBe(false);
-    // Kept for the next page
-    await page.reload();
-    await page.getByRole('tab', { name: /^Diffs/ }).click();
-    await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
+    const sides = (path: string) => card(page, path).locator('.review-image');
+    // Added: its after side; changed: before and after, side by side
+    await expect(sides('docs/new.png')).toHaveCount(1);
+    await expect(sides('docs/new.png').locator('figcaption')).toHaveText('After');
+    await expect(sides('docs/shot.png').locator('figcaption')).toHaveText(['Before', 'After']);
+    // Each image loaded, from its revision
+    for (const path of ['docs/new.png', 'docs/shot.png'])
+      await expect
+        .poll(() =>
+          sides(path)
+            .locator('img')
+            .evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).naturalWidth)),
+        )
+        .toEqual(path === 'docs/new.png' ? [1] : [1, 1]);
+    expect(tasksServer.fileRequests).toEqual(
+      expect.arrayContaining(['docs/new.png@head3', 'docs/shot.png@base1', 'docs/shot.png@head3']),
+    );
+    // Not an image: listed, not shown
+    await expect(card(page, 'bin/tool.wasm')).toContainText('A binary file: listed, not shown.');
+    await expect(sides('bin/tool.wasm')).toHaveCount(0);
   });
 
   // ATM-626 (Hakan, the app): the Rendered view of a new Markdown document showed only about its first page
@@ -618,65 +1104,89 @@ test.describe('a review’s page', () => {
 
   // ATM-625 (Hakan, the app): + on a wrapped long line of a Markdown file sent the pane to near the end of the review
   for (const wrapped of [true, false])
-    test(`+ on a line ${wrapped ? 'wrapped' : 'not wrapped'} opens the comment box where it is; the pane stays`, async ({
-      page,
-      tasksServer,
-    }) => {
-      const long = (n: number) => `Line ${n}: ${'a long sentence of the plan, '.repeat(12)}`;
-      const texts = ['docs/a.md', 'docs/b.md', 'docs/c.md'].map(
-        (path, k) => [path, Array.from({ length: 40 }, (_, n) => long(k * 100 + n)).join('\n') + '\n'] as const,
-      );
-      const patchOf = (path: string, text: string) =>
-        `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1,40 @@\n` +
-        text
-          .trimEnd()
-          .split('\n')
-          .map((l) => `+${l}`)
-          .join('\n') +
-        '\n';
-      for (const [path, text] of texts)
-        tasksServer.setRevisionDocument('head3', projectDocument(path, text, { kind: 'markdown', line_offset: 1 }));
-      await openReviews(page, tasksServer);
-      tasksServer.setReview(
-        'CR-2',
-        reviewPage({
-          view: {
-            round: 3,
-            against: null,
-            files: texts.map(([path, text]) => file(path, patchOf(path, text), 'added', null)),
-          },
-        }),
-      );
-      await page.goto(reviewPath(tasksServer, '/CR-2'));
-      await page.getByRole('tab', { name: /^Diffs/ }).click();
-      await page.getByRole('button', { name: 'Unified' }).click();
-      const wrap = page.getByRole('button', { name: 'Wrap' });
-      if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
-      const diff = diffOf(page, 'docs/a.md');
-      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
-      // A line in the middle of the first file, in the middle of the pane
-      const line = diff.locator('.diff-line').nth(20);
-      await line.evaluate((l) => l.scrollIntoView({ block: 'center' }));
-      const pane = page.locator('.review-diffs');
-      const before = await pane.evaluate((p) => p.scrollTop);
-      // Over the line's text (CompMD's code lies over the rows; the run finds the line from the pointer's height)
-      await line.hover({ force: true });
-      await diff.locator('.diff-plus').click();
-      const box = page.getByRole('textbox', { name: /Comment/ }).first();
-      await expect(box).toBeFocused();
-      // The comment box opens under the line, in view; the pane stays (it moved 444 px, 1,564 wrapped: the run's old
-      // drawing, still all 40 lines while the box under its first half took the focus)
-      await page.waitForTimeout(300);
-      const after = await pane.evaluate((p) => p.scrollTop);
-      expect(Math.abs(after - before), `the pane moved from ${before} to ${after}`).toBeLessThan(40);
-      await expect(box).toBeInViewport();
-      const below = await box.evaluate(
-        (b, l) => b.getBoundingClientRect().top - (l as HTMLElement).getBoundingClientRect().bottom,
-        await line.elementHandle(),
-      );
-      expect(below).toBeGreaterThanOrEqual(-1);
-      expect(below).toBeLessThan(120);
-    });
+    test(
+      `+ on a line ${wrapped ? 'wrapped' : 'not wrapped'} opens the comment box where it is; the pane stays`,
+      WEBKIT_TOO,
+      async ({ page, tasksServer }) => {
+        const long = (n: number) => `Line ${n}: ${'a long sentence of the plan, '.repeat(12)}`;
+        const texts = ['docs/a.md', 'docs/b.md', 'docs/c.md'].map(
+          (path, k) => [path, Array.from({ length: 40 }, (_, n) => long(k * 100 + n)).join('\n') + '\n'] as const,
+        );
+        const patchOf = (path: string, text: string) =>
+          `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1,40 @@\n` +
+          text
+            .trimEnd()
+            .split('\n')
+            .map((l) => `+${l}`)
+            .join('\n') +
+          '\n';
+        for (const [path, text] of texts)
+          tasksServer.setRevisionDocument('head3', projectDocument(path, text, { kind: 'markdown', line_offset: 1 }));
+        await openReviews(page, tasksServer);
+        tasksServer.setReview(
+          'CR-2',
+          reviewPage({
+            view: {
+              round: 3,
+              against: null,
+              files: texts.map(([path, text]) => file(path, patchOf(path, text), 'added', null)),
+            },
+          }),
+        );
+        await page.goto(reviewPath(tasksServer, '/CR-2'));
+        await page.getByRole('tab', { name: /^Diffs/ }).click();
+        await page.getByRole('button', { name: 'Unified' }).click();
+        const wrap = page.getByRole('button', { name: 'Wrap' });
+        if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
+        const diff = diffOf(page, 'docs/a.md');
+        await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+        // Hakan: no line drawn between two lines. Its 40 added lines are tinted by one box, from the first line's top to
+        // the last's bottom: a box per line drew a pale line wherever two met, in the app's WebKit
+        await expect(diff.locator('.diff-tint')).toHaveCount(1);
+        // Once the rows are placed (wrapped: from CompMD's layout, a moment after its text)
+        await expect
+          .poll(() =>
+            diff.evaluate((d, wrapped) => {
+              const box = (el: Element | null) => el?.getBoundingClientRect();
+              const rows = d.querySelectorAll('.diff-line');
+              const [tint, first, last] = [
+                box(d.querySelector('.diff-tint')),
+                box(rows[0]),
+                box(rows[rows.length - 1]),
+              ];
+              if (!tint || !first || !last) return 99;
+              // Wrapped, each line is several visual lines tall: until then the rows are still the unwrapped ones
+              if (wrapped && first.height < 30) return 98;
+              return Math.max(Math.abs(tint.top - first.top), Math.abs(tint.bottom - last.bottom));
+            }, wrapped),
+          )
+          .toBeLessThan(1);
+        // A line in the middle of the first file, in the middle of the pane
+        const line = diff.locator('.diff-line').nth(20);
+        await line.evaluate((l) => l.scrollIntoView({ block: 'center' }));
+        const pane = page.locator('.review-diffs');
+        const before = await pane.evaluate((p) => p.scrollTop);
+        // Over the line's text (CompMD's code lies over the rows; the run finds the line from the pointer's height)
+        await line.hover({ force: true });
+        await diff.locator('.diff-plus').click();
+        const box = page.getByRole('textbox', { name: /Comment/ }).first();
+        await expect(box).toBeFocused();
+        // The comment box opens under the line, in view; the pane stays (it moved 444 px, 1,564 wrapped: the run's old
+        // drawing, still all 40 lines while the box under its first half took the focus). In WebKit (ATM-655) it moved
+        // by the run's height a few frames later, the run's text replaced by its highlighted text: WebKit's scroll
+        // anchoring, anchored inside the run
+        await page.waitForTimeout(300);
+        const after = await pane.evaluate((p) => p.scrollTop);
+        expect(Math.abs(after - before), `the pane moved from ${before} to ${after}`).toBeLessThan(40);
+        await expect(box).toBeInViewport();
+        const below = await box.evaluate(
+          (b, l) => b.getBoundingClientRect().top - (l as HTMLElement).getBoundingClientRect().bottom,
+          await line.elementHandle(),
+        );
+        expect(below).toBeGreaterThanOrEqual(-1);
+        expect(below).toBeLessThan(120);
+      },
+    );
 
   // ATM-589: a run that ends with an empty line, before the fold that ends the file: the empty line is drawn, its
   // number beside it, and nothing over the fold
@@ -1000,6 +1510,11 @@ test.describe('the diff viewer on a review’s page', () => {
     await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
     const view = diffOf(page, 'docs/plan.md');
     await expect(view.locator('.diff-line').first()).toBeVisible();
+    // ATM-691 (Hakan): its tooltip says where its look is set
+    await expect(page.getByRole('button', { name: 'Rendered' })).toHaveAttribute(
+      'title',
+      /document style and text size are in Settings/,
+    );
     await page.getByRole('button', { name: 'Rendered' }).click();
     await expect(view).toHaveAttribute('data-view', 'rendered');
     await expect(view.locator('.diff-pane')).toHaveCount(2);
@@ -1021,10 +1536,250 @@ test.describe('the diff viewer on a review’s page', () => {
     const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
     const heading = (await newSide.locator('.compmd-page h1').boundingBox())!;
     expect(number.x + number.width).toBeLessThanOrEqual(heading.x);
+    // ATM-691: the text size from Settings (on <html>) scales the rendered side's text; its numbers follow it
+    const text = newSide.locator('.compmd').first();
+    const fontSize = () => text.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const medium = await fontSize();
+    await page.evaluate(() => (document.documentElement.dataset.docSize = 'huge'));
+    await expect.poll(fontSize).toBeCloseTo(medium * 1.3, 1);
+    await expect
+      .poll(async () => {
+        const n = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
+        const h = (await newSide.locator('.compmd-page h1').boundingBox())!;
+        return Math.abs(n.y + n.height / 2 - (h.y + h.height / 2));
+      })
+      .toBeLessThan(4);
     await page.getByRole('button', { name: 'Unified' }).click();
     await expect(view.locator('.diff-pane')).toHaveCount(1);
     await expect(view.locator('.diff-pane')).toHaveClass(/diff-new/);
   });
+
+  // ATM-651 (Hakan): a comment on rendered Markdown shows beside the page, "like a callout from the line, like MS Word":
+  // each chain in a balloon in a margin right of the page, level with its text, a line from the text to it; the page
+  // whole (cut under each block, it drew its footnotes in every piece). Open and resolved ones, in Split and Unified; a
+  // new one written there, and shown there once sent
+  test(
+    'Rendered: each chain in a balloon in the margin, beside its text, a callout to it; the page whole; a new comment there too',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const chain = (id: string, lines: [number, number], body: string, resolved: boolean | null = false) => ({
+        id,
+        anchor: { round: 3, path: 'docs/plan.md', side: 'new', lines, quote: null },
+        comments: [{ ...comment(`c-${id}`, body, resolved) }],
+        placed: lines,
+        drifted: null,
+      });
+      const chains = [chain('t5', [5, 5], 'Why this ending?'), chain('t6', [3, 3], 'The first step is fine.', true)];
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ chains, view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+      const view = diffOf(page, 'docs/plan.md');
+      await expect(view.locator('.diff-line').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Rendered' }).click();
+      const newSide = view.locator('.diff-pane.diff-new');
+      const pageBox = newSide.locator('.doc-page');
+      /** The balloon right of the page, level with its paragraph (its top within a line of the text's) or below the
+       * balloon above it, and its callout drawn */
+      const beside = async (id: string, text: string, below = 0) => {
+        const balloon = newSide.locator(`.doc-balloon[data-balloon="${id}"]`);
+        await expect(balloon.locator(id === 'new' ? '.diff-composer' : `[data-chain="${id}"]`)).toBeVisible();
+        await expect
+          .poll(async () => {
+            const [para, at, sheet] = [
+              (await newSide.locator('.compmd-page p', { hasText: text }).boundingBox())!,
+              (await balloon.boundingBox())!,
+              (await pageBox.boundingBox())!,
+            ];
+            const level = Math.abs(at.y - (para.y + para.height / 2 - 16)) < 4;
+            return { right: at.x >= sheet.x + sheet.width, placed: level || at.y >= below };
+          })
+          .toEqual({ right: true, placed: true });
+        return (await balloon.boundingBox())!;
+      };
+      for (const layout of ['Split', 'Unified'] as const) {
+        await page.getByRole('button', { name: layout }).click();
+        const first = await beside('t6', 'First step.');
+        await beside('t5', 'New ending.', first.y + first.height);
+        // A callout per chain, from its text to its balloon
+        await expect(newSide.locator('.doc-callouts polyline')).toHaveCount(2);
+        // The resolved one folded, as in the source view; nothing after the document
+        await expect(newSide.locator('[data-chain="t6"]')).toHaveAttribute('data-resolved', '');
+        await expect(view.locator('.diff-elsewhere [data-chain]')).toHaveCount(0);
+        // The page whole: one part, the paragraphs as close as without comments
+        await expect(newSide.locator('.doc-part')).toHaveCount(1);
+        const [step, ending] = [
+          (await newSide.locator('.compmd-page p', { hasText: 'First step.' }).boundingBox())!,
+          (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!,
+        ];
+        expect(ending.y - (step.y + step.height)).toBeLessThan(60);
+      }
+      // A new comment: written in a balloon beside its text, and shown there once the page has it
+      await page.getByRole('button', { name: 'Split' }).click();
+      const plus = newSide.locator('.doc-gutter-lines [data-line="3"]');
+      await plus.hover();
+      await newSide.getByRole('button', { name: 'Comment on line 3' }).click();
+      await beside('new', 'First step.');
+      const composer = newSide.locator('.doc-balloon[data-balloon="new"] .diff-composer');
+      await expect(composer).toBeVisible();
+      await composer.getByRole('textbox').fill('Say why.');
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({
+          chains: [...chains, chain('t7', [3, 3], 'Say why.')],
+          view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] },
+        }),
+      );
+      await composer.getByRole('button', { name: 'Comment' }).click();
+      await expect.poll(() => tasksServer.reviewChanges.at(-1)?.path).toBe('/CR-2/comments');
+      // Beside the same text as the resolved one there, under its balloon; the balloons never overlap
+      const resolved = (await newSide.locator('.doc-balloon[data-balloon="t6"]').boundingBox())!;
+      await beside('t7', 'First step.', resolved.y + resolved.height);
+      const boxes = await newSide
+        .locator('.doc-balloon')
+        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).sort((a, b) => a.top - b.top));
+      for (let i = 1; i < boxes.length; i++) expect(boxes[i].top).toBeGreaterThanOrEqual(boxes[i - 1].bottom);
+      // The lines' numbers and marks beside their text (both read together: the pane may have scrolled). The pointer
+      // off the balloons: one under it selects its chain, whose lines are then marked as the chain's, not as changed
+      await page.mouse.move(0, 0);
+      const endingText = newSide.locator('.compmd-page p', { hasText: 'New ending.' });
+      await expect
+        .poll(async () => {
+          const number = (await newSide.locator('.doc-gutter-lines [data-line="5"]').boundingBox())!;
+          const text = (await endingText.boundingBox())!;
+          return Math.abs(number.y + number.height / 2 - (text.y + text.height / 2));
+        })
+        .toBeLessThan(4);
+      const ending = (await endingText.boundingBox())!;
+      // Its change mark on its text (the glyphs' box, inside the paragraph's line), not where the text was
+      await expect
+        .poll(() =>
+          newSide
+            .locator('.diff-block-mark.diff-added')
+            .evaluateAll(
+              (marks, top) => marks.some((m) => Math.abs(m.getBoundingClientRect().top - top) < 8),
+              ending.y,
+            ),
+        )
+        .toBe(true);
+    },
+  );
+
+  // ATM-692 (Hakan): the numbers in the margin are subtle gray, a changed line's only a little darker (it was bold blue);
+  // a row of several lines (a paragraph's two short lines on one visual line) shows its first, not a range
+  test('Rendered: line numbers subtle gray, a changed one a little darker; a row of several lines shows its first', async ({
+    page,
+    tasksServer,
+  }) => {
+    const text = (ending: string) => `# Plan\n\nFirst half\nsecond half.\n\n${ending}\n`;
+    const patch =
+      'diff --git a/docs/short.md b/docs/short.md\n--- a/docs/short.md\n+++ b/docs/short.md\n' +
+      '@@ -6 +6 @@\n-Old ending.\n+New ending.\n';
+    await openReviews(page, tasksServer);
+    tasksServer
+      .setRevisionDocument('base1', projectDocument('docs/short.md', text('Old ending.')))
+      .setRevisionDocument('head3', projectDocument('docs/short.md', text('New ending.')));
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [{ ...file('docs/short.md', patch), after: 'head3' }] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/short.md'));
+    const view = diffOf(page, 'docs/short.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    const changed = newSide.locator('.doc-gutter-lines [data-line="6"]');
+    await expect(changed).toHaveClass(/marked/);
+    const look = (row: typeof changed) =>
+      row.evaluate((el) => {
+        const s = getComputedStyle(el);
+        const accent = getComputedStyle(el.closest('.doc-page')!).getPropertyValue('--accent');
+        const probe = document.createElement('span');
+        probe.style.color = accent;
+        el.append(probe);
+        const accentColour = getComputedStyle(probe).color;
+        probe.remove();
+        return { colour: s.color, weight: s.fontWeight, accent: accentColour };
+      });
+    const mark = await look(changed);
+    const plain = await look(newSide.locator('.doc-gutter-lines [data-line="3"]'));
+    // Not the accent, not bold; a little darker than another line's, which is gray too
+    expect(mark.colour).not.toBe(mark.accent);
+    expect(mark.weight).toBe('400');
+    expect(plain.colour).not.toBe(mark.colour);
+    expect(plain.colour).not.toBe(plain.accent);
+    // The paragraph's two lines, on one visual line: its row says 3, not 3–4
+    const row = newSide.locator('.doc-gutter-lines [data-line="3"]');
+    await expect(row).toHaveText('3');
+    // The + still says both lines
+    await row.hover();
+    await expect(newSide.getByRole('button', { name: 'Comment on line 3–4' })).toBeVisible();
+  });
+
+  // ATM-690 (Hakan, CR-58's design in the app): a darker line at every blank line and new block of an added Markdown
+  // file, Wrap on. Each wrapped row was at least a line tall, so it overlapped the next where that one's text began less
+  // than a line below, and the two tints doubled there. The rows now meet exactly, and a run of lines is one tint
+  test(
+    'an added document, wrapped or not: one tint for its lines, and its rows meet exactly',
+    WEBKIT_TOO,
+    async ({ page, tasksServer }) => {
+      const para = (n: number) =>
+        `Paragraph ${n} says what a task's status, claim and reviews do together. ${'At some length. '.repeat(12)}\n` +
+        `It takes two source lines, each long enough to wrap. ${'Still more of it. '.repeat(10)}`;
+      const text =
+        [
+          '# The machine',
+          '',
+          para(1),
+          '',
+          '- **One:** a list item',
+          '  over two lines.',
+          '',
+          '## 2. Parts',
+          '',
+          para(2),
+        ].join('\n') + '\n';
+      const lines = text.trimEnd().split('\n');
+      const patch =
+        'diff --git a/docs/m.md b/docs/m.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/m.md\n' +
+        `@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join('\n')}\n`;
+      tasksServer.setRevisionDocument(
+        'head3',
+        projectDocument('docs/m.md', text, { kind: 'markdown', line_offset: 1 }),
+      );
+      await openReviews(page, tasksServer);
+      tasksServer.setReview(
+        'CR-2',
+        reviewPage({ view: { round: 3, against: null, files: [file('docs/m.md', patch, 'added', null)] } }),
+      );
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await page.getByRole('button', { name: 'Unified' }).click();
+      const diff = diffOf(page, 'docs/m.md');
+      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
+      /** How far the rows are from meeting (the most any row's top is off the one before it's bottom), and the tints */
+      const fit = () =>
+        diff.evaluate((d) => {
+          const rows = [...d.querySelectorAll('.diff-line')].map((r) => r.getBoundingClientRect());
+          let off = 0;
+          for (let i = 1; i < rows.length; i++) off = Math.max(off, Math.abs(rows[i].top - rows[i - 1].bottom));
+          return { off, tints: d.querySelectorAll('.diff-tint').length, tall: rows[2]?.height ?? 0 };
+        });
+      const wrap = page.getByRole('button', { name: 'Wrap' });
+      for (const wrapped of [true, false]) {
+        if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
+        // Wrapped: once the rows are placed from the text (a paragraph's line is then more than one line tall)
+        await expect
+          .poll(async () => {
+            const f = await fit();
+            return wrapped && f.tall < 30 ? 'unplaced' : f;
+          })
+          .toEqual({ off: 0, tints: 1, tall: expect.any(Number) });
+      }
+    },
+  );
 
   test('Rendered (ATM-592): a document of several pages grows its page; its last paragraph is there, numbered beside it', async ({
     page,
@@ -1141,11 +1896,132 @@ test.describe('the diff viewer on a review’s page', () => {
         [centre.x + centre.width / 2, centre.y + centre.height / 2],
       );
       expect(top).toBe(true);
-      // Under the text it comments on, not at the end of the document
+      // Beside the text it comments on, in the margin right of the page (ATM-651), not at the end of the document
       const text = (await picked.boundingBox())!;
-      expect(centre.y).toBeGreaterThanOrEqual(text.y + text.height - 1);
-      expect(centre.y - (text.y + text.height)).toBeLessThan(200);
+      const sheet = (await view.locator(`.diff-pane.diff-new .doc-page`).boundingBox())!;
+      expect(centre.x).toBeGreaterThanOrEqual(sheet.x + sheet.width);
+      expect(Math.abs(centre.y - (text.y + text.height / 2 - 16))).toBeLessThan(40);
     });
+
+  // ATM-650 (Hakan): the rendered view takes comments as the source view does: the + of the line under the pointer
+  test('Rendered: the + of a block under the pointer, clicked, opens the comment box under it, on its lines', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+    const view = diffOf(page, 'docs/plan.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    // No + until the pointer is over a block; then the + of that block's line, beside its number
+    await expect(newSide.locator('.diff-plus')).toHaveCount(0);
+    const heading = newSide.locator('.compmd-page h1');
+    const text = (await heading.boundingBox())!;
+    await page.mouse.move(text.x + 20, text.y + text.height / 2);
+    const plus = newSide.getByRole('button', { name: 'Comment on line 1' });
+    await expect(plus).toBeVisible();
+    await expect(newSide.locator('.diff-plus')).toHaveCount(1);
+    const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
+    const plusBox = (await plus.boundingBox())!;
+    expect(plusBox.x).toBeGreaterThanOrEqual(number.x + number.width);
+    expect(plusBox.x + plusBox.width).toBeLessThanOrEqual(text.x);
+    expect(Math.abs(plusBox.y + plusBox.height / 2 - (number.y + number.height / 2))).toBeLessThan(2);
+    // A blank line between blocks has no +
+    const blank = (await newSide.locator('.doc-gutter-lines [data-line="2"]').boundingBox())!;
+    await page.mouse.move(text.x + 20, blank.y + blank.height / 2);
+    await expect(newSide.locator('.diff-plus')).toHaveCount(0);
+    // Clicked: the box, on line 1, right under the heading; the + stays while the comment is written
+    await page.mouse.move(text.x + 20, text.y + text.height / 2);
+    await plus.click();
+    const composer = view.locator('.diff-composer');
+    await expect(composer).toContainText('Line 1');
+    await expect(page.getByRole('textbox', { name: 'Comment on line 1' })).toBeFocused();
+    // Beside the heading, in the margin right of the page (ATM-651), level with it
+    const box = (await composer.boundingBox())!;
+    const sheet = (await newSide.locator('.doc-page').boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(sheet.x + sheet.width);
+    expect(Math.abs(box.y - (text.y + text.height / 2 - 16))).toBeLessThan(4);
+    await page.mouse.move(0, 0);
+    await expect(newSide.locator('.diff-plus.held')).toHaveCount(1);
+    await expect(newSide.locator('.diff-block-mark.diff-picked')).not.toHaveCount(0);
+    // Its number, pressed, picks it too
+    await composer.getByRole('button', { name: 'Cancel' }).click();
+    await expect(composer).toHaveCount(0);
+    await newSide.locator('.doc-gutter-lines [data-line="3"]').click();
+    await expect(view.locator('.diff-composer')).toContainText('Line 3');
+  });
+
+  test('Rendered: the + dragged over two blocks picks their lines; the comment is sent on them and shows in the source view', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({ view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+    const view = diffOf(page, 'docs/plan.md');
+    await expect(view.locator('.diff-line').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Rendered' }).click();
+    const newSide = view.locator('.diff-pane.diff-new');
+    await newSide.getByRole('button', { name: 'Show 2 unchanged lines' }).click();
+    const first = (await newSide.locator('.compmd-page p', { hasText: 'First step.' }).boundingBox())!;
+    const last = (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!;
+    await page.mouse.move(first.x + 10, first.y + first.height / 2);
+    const plus = (await newSide.getByRole('button', { name: 'Comment on line 3' }).boundingBox())!;
+    await page.mouse.move(plus.x + plus.width / 2, plus.y + plus.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(plus.x + plus.width / 2, last.y + last.height / 2, { steps: 4 });
+    await page.mouse.up();
+    const composer = view.locator('.diff-composer');
+    await expect(composer).toContainText('Lines 3–5');
+    // The two blocks keep their + (the blank line between them draws nothing)
+    await expect(newSide.locator('.diff-plus.held')).toHaveCount(2);
+    await composer.getByRole('textbox').fill('Both steps.');
+    await composer.getByRole('button', { name: 'Comment' }).click();
+    await expect.poll(() => tasksServer.reviewChanges.length).toBe(1);
+    expect(tasksServer.reviewChanges[0]).toMatchObject({
+      method: 'POST',
+      path: '/CR-2/comments',
+      body: {
+        path: 'docs/plan.md',
+        lines: [3, 5],
+        side: 'new',
+        quote: 'First step.\n\nNew ending.',
+        round: 3,
+        body: 'Both steps.',
+      },
+    });
+    // The page shows it again: in the source view, under the same lines
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] },
+        chains: [
+          {
+            id: 'tr',
+            anchor: { round: 3, path: 'docs/plan.md', side: 'new', lines: [3, 5], quote: 'First step.' },
+            comments: [comment('cr', 'Both steps.')],
+            placed: [3, 5],
+            drifted: null,
+          },
+        ],
+      }),
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.getByRole('button', { name: 'Source' }).click();
+    const chain = view.locator('[data-chain="tr"]');
+    await expect(chain).toBeVisible();
+    const lineFive = (await view.locator('.diff-new [data-row]').last().boundingBox())!;
+    expect((await chain.boundingBox())!.y).toBeGreaterThanOrEqual(lineFive.y + lineFive.height - 1);
+  });
 
   // ATM-591: the rendered view folds as the source view does: whole blocks near the change, the rest folded
   test('Rendered folds: the blocks near a change, with their own line numbers; the rest folded, each fold opened by a click', async ({
@@ -1303,13 +2179,51 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(
       conversation.locator('[data-comment="c1"] > .chain-meta').getByRole('button', { name: 'Edit comment' }),
     ).toHaveCount(0);
-    await mine.getByRole('button', { name: 'Edit comment' }).click();
+    // Pressed until its box opens: on a busy machine a press while the page is still settling was lost once (WebKit,
+    // the whole spec on five workers; never alone, and a refresh while editing keeps the edit: the test below)
+    await expect(async () => {
+      if (!(await mine.getByLabel('Edit your comment').count()))
+        await mine.getByRole('button', { name: 'Edit comment' }).click({ timeout: 1000 });
+      await expect(mine.getByLabel('Edit your comment')).toBeVisible({ timeout: 1000 });
+    }).toPass();
     await mine.getByLabel('Edit your comment').fill('Because of the style guide.');
     await mine.getByRole('button', { name: 'Save' }).click();
     await expect
       .poll(() => tasksServer.reviewChanges.at(-1))
       .toMatchObject({ method: 'PATCH', path: '/CR-2/comments/c9', body: { body: 'Because of the style guide.' } });
     await expect(mine.getByLabel('Edit your comment')).toHaveCount(0);
+  });
+
+  test('a refresh of the review while you edit your reply keeps the edit', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    const theirs = {
+      ...comment('c1', 'Why upper case?'),
+      author: 'claude:a',
+      replies: [comment('c9', 'Because.', null)],
+    };
+    const page_ = reviewPage({
+      chains: [
+        {
+          id: 't1',
+          anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
+          comments: [theirs],
+          placed: null,
+          drifted: null,
+        },
+      ],
+    });
+    tasksServer.setReview('CR-2', page_);
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    const mine = page.locator('.review-conversation [data-comment="c9"]');
+    await mine.getByRole('button', { name: 'Edit comment' }).click();
+    await mine.getByLabel('Edit your comment').fill('Half written');
+    const asked = tasksServer.reviewRequests.filter((r) => r === 'CR-2').length;
+    // The review changed elsewhere (another comment), and the page reads it again
+    tasksServer.setReview('CR-2', { ...page_, review: { ...page_.review, title: 'Review 2, retitled' } });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect.poll(() => tasksServer.reviewRequests.filter((r) => r === 'CR-2').length).toBeGreaterThan(asked);
+    await expect(page.getByText('Review 2, retitled').first()).toBeVisible();
+    await expect(mine.getByLabel('Edit your comment')).toHaveValue('Half written');
   });
 
   // ATM-612: drafts, only the user's, sent together with their decision
@@ -1709,6 +2623,104 @@ test.describe('a live review (ATM-576)', () => {
       .toMatchObject({ method: 'POST', path: '/CR-5/comments', body: { body: 'Keep going.' } });
   });
 
+  // ATM-687 (Hakan): the working copy changing under a reader moves nothing and blanks nothing. Each change is a new
+  // tree, so every file's `after` is another revision, its text mostly the same
+  for (const view of ['source', 'rendered'] as const)
+    for (const grown of ['far above', 'just above', 'here'] as const)
+      test(
+        `an update never blanks a file or moves either pane: the file being read stays put (${view}, ${grown === 'here' ? 'it grown below the place read' : `a file ${grown} it grown`})`,
+        WEBKIT_TOO,
+        async ({ page, tasksServer }) => {
+          const head = ['line 1', 'line 2', 'line 3'];
+          const added = (n: number, more = 0) => Array.from({ length: n + more }, (_, k) => `let value_${k} = ${k};`);
+          /** File i: a Rust file adding 30 lines (more, `more`), or the plan, a Markdown document; its after side `rev` */
+          const entry = (i: number, rev: string, more = 0) => {
+            const md = i === 8;
+            const path = md ? 'docs/plan.md' : `src/f${String(i).padStart(2, '0')}.rs`;
+            const lines = md
+              ? Array.from({ length: 30 + more }, (_, k) =>
+                  k % 3 === 0 ? `## Part ${k}` : `Paragraph ${k} of the plan.`,
+                )
+              : added(30, more);
+            const body = lines.map((l) => `+${l}`).join('\n');
+            const patch = `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,${lines.length + 3} @@\n line 1\n line 2\n line 3\n${body}\n`;
+            const doc = (text: string) =>
+              md
+                ? projectDocument(path, text)
+                : projectDocument(path, text, { kind: 'code', language: 'rust', line_offset: 1 });
+            tasksServer
+              .setRevisionDocument(`b${i}`, doc(head.join('\n') + '\n'))
+              .setRevisionDocument(rev, doc([...head, ...lines].join('\n') + '\n'));
+            return { ...file(path, patch, 'modified', `b${i}`), after: rev };
+          };
+          const files = (rev: string, grown = -1) =>
+            Array.from({ length: 14 }, (_, i) => entry(i, `${rev}${i}`, i === grown ? 20 : 0));
+          tasksServer.setReview('CR-5', livePage(...files('a')));
+          await openReviews(page, tasksServer, 'CR-5');
+          await page.getByRole('tab', { name: /^Diffs/ }).click();
+          if (view === 'rendered') await page.getByRole('button', { name: 'Rendered', exact: true }).click();
+          const reading = files('a')[8].path;
+          // The plan chosen on the left, then read a little into it
+          await page.locator('.review-file-name', { hasText: 'plan.md' }).first().click();
+          await expect(diffOf(page, reading)).toBeInViewport();
+          await page.waitForTimeout(600);
+          const box = (await page.locator('.review-diffs').boundingBox())!;
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await page.mouse.wheel(0, 150);
+          await page.waitForTimeout(400);
+          /** Every frame for `ms`: the read card's top in the pane, both panes' scroll, and whether any diff is blank */
+          const sample = (ms: number) =>
+            page.evaluate(
+              ([p, ms]) =>
+                new Promise<{ top: number; list: number; tree: number; blank: number; changed: number }[]>((done) => {
+                  const pane = document.querySelector<HTMLElement>('.review-diffs')!;
+                  const tree = document.querySelector<HTMLElement>('.review-files')!;
+                  const card = () => document.querySelector(`.review-file-card[data-file="${CSS.escape(p)}"]`)!;
+                  let changed = 0;
+                  const seen = new MutationObserver((records) => (changed += records.length));
+                  seen.observe(card(), { childList: true, subtree: true, characterData: true });
+                  const out: { top: number; list: number; tree: number; blank: number; changed: number }[] = [];
+                  const start = performance.now();
+                  const read = () => {
+                    out.push({
+                      top: Math.round(card().getBoundingClientRect().top - pane.getBoundingClientRect().top),
+                      list: Math.round(pane.scrollTop),
+                      tree: Math.round(tree.scrollTop),
+                      blank: document.querySelectorAll('.diff-loading').length,
+                      changed,
+                    });
+                    if (performance.now() - start < ms) requestAnimationFrame(read);
+                    else {
+                      seen.disconnect();
+                      done(out);
+                    }
+                  };
+                  requestAnimationFrame(read);
+                }),
+              [reading, ms] as const,
+            );
+          // The working copy changes: a new tree (every file's after side renamed, its text the same), and a file grows
+          // by 20 lines at its end: one far above the one read (not drawn), the one just above it (drawn), or the one
+          // read, below the place read (in WebKit, anchored inside the card, the pane jumped 1,033 px). The page asks
+          // again within LIVE_MS
+          const which = { 'far above': 2, 'just above': 7, here: 8 }[grown];
+          const frames = sample(4500);
+          tasksServer.setReview('CR-5', livePage(...files('n', which)));
+          const all = await frames;
+          // The update arrived: the grown file's header counts its 50 lines
+          await expect(card(page, files('n')[which].path).locator('.review-file-head')).toContainText('+50');
+          const first = all[0];
+          const why = JSON.stringify(all.filter((f, i) => i === 0 || JSON.stringify(f) !== JSON.stringify(all[i - 1])));
+          for (const f of all) {
+            expect(f.blank, why).toBe(0);
+            expect(Math.abs(f.top - first.top), why).toBeLessThan(3);
+            expect(f.tree, why).toBe(first.tree);
+          }
+          // The plan's own text didn't change: nothing in its card was drawn again
+          if (grown !== 'here') expect(all.at(-1)!.changed, why).toBe(0);
+        },
+      );
+
   test('ends with Approve or Close review, never sent back; Close sends why', async ({ page, tasksServer }) => {
     tasksServer.setReview('CR-5', livePage(file('README.md', PATCH_C)));
     await openReviews(page, tasksServer, 'CR-5');
@@ -1903,10 +2915,10 @@ test.describe('performance', { tag: '@timed' }, () => {
   });
 
   // ATM-646: a review shaped as CompMD's CR-7 (15 files, one long: ~100,000 px of cards not made yet; CR-7's was 500,000,
-  // which only costs this test time). A jump to its last file must not restyle the whole page over and over: each
-  // CompMD page opened or closed sets the document's adopted style sheets and reads a computed style, a full restyle
-  // each (~1 s in the app's WebKit). Until CompMD shares those per document, the pages opened are what is in view, and
-  // the page itself forces none
+  // which only costs this test time). A jump to its last file must not restyle the whole page over and over: with
+  // CompMD 0.7.1 each CompMD page opened or closed set the document's adopted style sheets and read a computed style,
+  // a full restyle each (~1 s in the app's WebKit). CompMD 0.8.0 shares one style sheet per document and reads the
+  // colour scheme only for a frame or a component (ATM-648): the jump restyles nothing, and the page itself forces none
   test('a jump to the last file of a long review restyles the page only for the CompMD pages it shows (measured)', async ({
     page,
     tasksServer,
@@ -1993,11 +3005,11 @@ test.describe('performance', { tag: '@timed' }, () => {
     // The cards in view and near it, a page a side of each run: no more (the cards passed over aren't made)
     expect(jump.pages).toBeGreaterThan(0);
     expect(jump.pages).toBeLessThanOrEqual(8);
-    // Each page set the sheets once opening it, once closing it (a card given back once the page settled)
-    expect(jump.adopted).toBeLessThanOrEqual(2 * jump.pages);
-    // CompMD 0.7.1's own reads, four a page it opens and draws (its scheme, ATM-646's CompMD task); the review's
-    // own code forces none (it forced 68 more before: DiffCode measured every run on every change in it, ATM-644)
-    expect(jump.computed).toBeLessThanOrEqual(4 * jump.pages);
+    // No page sets the document's sheets as it opens or closes (CompMD 0.8.0's one sheet a document; with 0.7.1, 10 for
+    // 7 pages), and nothing reads a computed style (0.7.1 read 28: its scheme, four a page; the review's own code forced
+    // 68 more before ATM-644)
+    expect(jump.adopted).toBe(0);
+    expect(jump.computed).toBe(0);
   });
 
   // ATM-587: a review shaped as CompMD's CR-1 (94 files, ~3,000 lines added: a few long files, most short, some long

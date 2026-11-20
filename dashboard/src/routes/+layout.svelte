@@ -20,7 +20,7 @@
   import '../themes/hand-drawn.css';
   import '../themes/doc-styles.css';
   import { onMount, type Snippet } from 'svelte';
-  import { afterNavigate, goto } from '$app/navigation';
+  import { afterNavigate, beforeNavigate, goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import App from '../App.svelte';
   import { addressOf, legacyParams } from '../lib/address';
@@ -32,7 +32,7 @@
   import { appTabs } from '../lib/app-tabs.svelte';
   import { sendExternalLink } from '../lib/external-links';
   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
-  import { arrived, currentAddress, navigate, useRouter, type EntryState } from '../lib/navigation';
+  import { arrived, currentAddress, navigate, originOf, useRouter, type EntryState } from '../lib/navigation';
   import { newTabAddress } from '../lib/new-tab-clicks';
   import { tabActions, wantsNewTab } from '../lib/tab-actions';
 
@@ -59,6 +59,7 @@
       // eslint-disable-next-line svelte/no-navigation-without-resolve
       void goto(address, { replace, state, reset: false }),
     state: () => page.state as EntryState,
+    back: (steps) => history.go(-steps),
   });
 
   /** An old link (#project=…&view=…), or an address written another way, becomes the page's own address */
@@ -115,8 +116,18 @@
     return watchChanges(dashboard.workspace, dashboard.projectId, () => void dashboard.reload());
   });
 
+  // A link the router followed itself (an anchor's plain click) pushed an entry: it remembers the address it was
+  // reached from, as navigate's entries do (ATM-686)
+  let leaving: { address: string; state: EntryState } | null = null;
+  beforeNavigate(({ type }) => {
+    leaving = type === 'link' ? { address: currentAddress(), state: page.state as EntryState } : null;
+  });
+
   afterNavigate(({ type }) => {
     arrived();
+    if (type === 'link' && leaving && leaving.address !== currentAddress() && !(page.state as EntryState).atmFrom)
+      replaceState('', { ...page.state, ...originOf(currentAddress(), leaving.address, leaving.state) });
+    leaving = null;
     // The active tab shows where the page is now (T-514)
     if (inApp) appTabs.follow(currentAddress());
     // The first page is the app's start, which loads it

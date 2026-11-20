@@ -650,8 +650,13 @@ mod integration_tests {
         assert_eq!(listed["reviews"], json!([]), "{listed}");
         assert_eq!(ok(rest(&home, &format!("{p}/reviews"), "")), listed);
         let (status, _, bytes) = rest(&home, &format!("{p}/files"), "path=pixel.png");
-        let image = file_of(&workspaces, "work", "abcd1234", "pixel.png").expect("the image");
+        let image = file_of(&workspaces, "work", "abcd1234", "pixel.png", None).expect("the image");
         assert_eq!((status, bytes), (200, image.data));
+        // At a revision too (a review's image file's side, ATM-689)
+        let (status, _, bytes) = rest(&home, &format!("{p}/files"), "path=pixel.png&at=HEAD");
+        let then =
+            file_of(&workspaces, "work", "abcd1234", "pixel.png", Some("HEAD")).expect("at HEAD");
+        assert_eq!((status, bytes), (200, then.data));
         let (status, _, bytes) = rest(&home, &format!("{p}/logo"), "");
         let logo = logo_of(&workspaces, "work", "abcd1234")
             .expect("the logo")
@@ -748,7 +753,16 @@ mod integration_tests {
                 "file",
                 with(json!({"path": "pixel.png"})),
                 serde_json::to_value(
-                    file_of(workspaces, "work", "abcd1234", "pixel.png").expect("file"),
+                    file_of(workspaces, "work", "abcd1234", "pixel.png", None).expect("file"),
+                )
+                .expect("json"),
+            ),
+            (
+                "file",
+                with(json!({"path": "pixel.png", "at": "HEAD"})),
+                serde_json::to_value(
+                    file_of(workspaces, "work", "abcd1234", "pixel.png", Some("HEAD"))
+                        .expect("file at HEAD"),
                 )
                 .expect("json"),
             ),

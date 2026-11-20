@@ -4,6 +4,70 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [0.42.0] - 2026-11-20
+
+A review's pages, finished: rendered Markdown commented on as on code, its comments in a margin beside the page with
+a callout to each, as Word shows them; Wrap in Split; line numbers level with their text and quiet; a jump that stays
+on its file; a live review that never moves under the reader; image files shown. The app's tabs: More ⌄ for those
+that don't fit, the project chooser again, and Back to wherever a review was opened from. A text size for documents.
+CompMD 0.8.0, then 0.9.0. The task and review state machine this sprint was named for (ATM-633) moved to the backlog;
+its design is under review.
+
+### Added
+- **Comment on rendered Markdown as on code** (ATM-650): on a review's rendered side, the + of the block under the
+  pointer (or its line number), pressed, dragged over more blocks or Shift-pressed, picks their source lines; text
+  selected picks the lines under it. The comment box opens beside them.
+- **Comments shown beside a rendered document, like Word** (ATM-651): every chain on a rendered side sits in a balloon
+  in a margin right of the page, level with the text it is on, a callout line from that text to it (solid for the
+  selected chain); the text a comment is on is marked faintly. Balloons are pushed down only where they would overlap;
+  a new comment is written in one. The page is never cut: footnotes and the rest stay where they are. In Split, the
+  side with comments gets the margin's room on top of its share, so both pages stay as wide.
+- **Wrap in Split** (ATM-616): long lines wrap on both sides, a line wrapped on one side making its counterpart as
+  tall (CompMD 0.8.0's `lineHeights`), so the two sides stay level.
+- **Image files in a review** (ATM-689): a review's image files show their images, before and after, not only
+  "binary". `GET /api/v1/projects/<id>/file?path=…&at=<rev>` and the app's `file` command take `at`, a full object
+  ID a review keeps (security invariant I11).
+- **Text size for documents** (ATM-691): Settings' *Text size* (Tiny, Small, Medium, Large, Huge) scales a Markdown
+  document's text in the document viewer and on a review's rendered sides, in every document style, its line numbers
+  with it; kept per browser (`docSize`).
+- **More ⌄ in the app's title bar** (ATM-685): when the tabs don't all fit, a *More* menu lists the rest to choose
+  from.
+- **The ⋯ settings on a review's tab** in the app (ATM-691), and a tooltip on *Rendered* saying where its look is set.
+
+### Changed
+- **A review's back arrow goes back where the review was opened from** (ATM-686): task details, the Kanban board, a
+  reviews list, the Omniboard, labelled with it; a review opened on its own goes up to its reviews. Pages are
+  addresses with Back and Forward; a review link opens in place (⌘-click a tab of its own).
+- **Rendered line numbers are quiet** (ATM-692): gray, a changed line's only a little darker, never the accent or
+  bold; a row of several lines shows its first number (`3`, not `3–4`).
+- **Line numbers level with their text** (ATM-652): each number centred on its line's first visual line, within a
+  pixel, wrapped or not, in Unified and Split.
+- **The selected title bar tab joins the page** (ATM-688): no line under it.
+- **A card's code review badge** wraps between its parts on a narrow card, never inside one (ATM-702).
+- **CompMD 0.8.0, then 0.9.0** (ATM-648, ATM-703): `@compmd/processor`, `render`, `sandbox` and `vite`, and the
+  crates `tauri-plugin-compmd` and `compmd-host`. 0.8.0: in WebKit (the app) a review opens without its 1.7 s block
+  (Oniguruma's WebAssembly highlights), and a jump restyles nothing (one style sheet per document). 0.9.0: the frames
+  ask the page to highlight their code, and a document loads only the components it uses. `atm docs compmd` is
+  CompMD's guide at v0.9.0. Measured before and after in `docs/review-performance.md`.
+
+### Fixed
+- **No line between two lines of a review's source view** (ATM-690): wrapped rows overlapped by a pixel at blank lines
+  and new blocks, and the tints doubled there; each row now ends where the next begins, and a run of tinted lines is
+  one box.
+- **A jump to a file stays on it** (ATM-656, ATM-693): the files above it drawn after the jump no longer push it out of
+  view; in WebKit, while the file is held, the cards above it keep their height and the pane's scroll anchoring is
+  off, so it no longer drifts a line for a few frames (1 jump in 8).
+- **A live review never flickers or moves** (ATM-687): an update keeps both panes and the file being read where they
+  are, in WebKit too.
+- **The + on a wrapped line in WebKit** no longer sends the review pane 1,600 px away (ATM-655).
+- **The project chooser's chevron in a tab** opens the project list again (ATM-684).
+
+### Developer
+- The timed e2e tests run one at a time, in a `timed` project after the rest (ATM-654); several flaky waits in the
+  review specs now wait for the layout to settle.
+- Research and designs: rendered Markdown's look (`docs/rendered-document-research.md`, ATM-649) and tabs, pop-ups,
+  Back and Forward (`docs/tabs-and-navigation-design.md`, ATM-653), whose tasks are the sprint *Tabs & navigation*.
+
 ## [0.41.0] - 2026-11-19
 
 Code reviews in the app: the reviews that wait for you shown wherever you are, a grouped reviews list, drafts, pokes

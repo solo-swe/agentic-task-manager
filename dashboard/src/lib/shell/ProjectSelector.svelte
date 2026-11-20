@@ -12,8 +12,9 @@
   const OVERVIEW = '';
 
   /** `badge`: the other projects' needs-you count on the button (the browser's title bar); the app's tab label
-   * shows none (T-513) */
-  let { badge = true }: { badge?: boolean } = $props();
+   * shows none (T-513). `floating`: the list drawn over the page, placed by the button, rather than inside the
+   * button's box: in a tab, whose strip scrolls and so clips what is inside it (ATM-684) */
+  let { badge = true, floating = false }: { badge?: boolean; floating?: boolean } = $props();
 
   let open = $state(false);
   let query = $state('');
@@ -87,79 +88,93 @@
         </button>
       {/snippet}
     </Popover.Trigger>
-    <Popover.ContentStatic role="dialog" aria-label="Projects">
-      {#snippet child({ props })}
-        <div {...props} class="menu project-menu" id="project-menu">
-          <input
-            class="project-filter"
-            id="project-filter"
-            type="text"
-            placeholder="Filter projects"
-            autocomplete="off"
-            role="combobox"
-            aria-label="Filter projects"
-            aria-expanded="true"
-            aria-controls="project-options"
-            aria-activedescendant={options.includes(active) ? optionId(active) : undefined}
-            bind:this={filter}
-            bind:value={query}
-            oninput={onInput}
-            onkeydown={onKey}
-          />
-          <ul class="project-options" id="project-options" role="listbox" aria-label="Projects">
-            {#if options.includes(OVERVIEW)}
-              <li
-                class="project-option"
-                id={optionId(OVERVIEW)}
-                role="option"
-                aria-selected={current === OVERVIEW}
-                class:active={active === OVERVIEW}
-                data-id="overview"
-                onclick={() => choose(OVERVIEW)}
-                onkeydown={() => {}}
-                onmouseenter={() => (active = OVERVIEW)}
-              >
-                <!-- Where each project shows its logo (T-348) -->
-                <span class="project-option-icon"><Icon name="layout-grid" size={16} /></span>
-                <span class="project-option-name">Projects Overview</span>
-              </li>
-            {/if}
-            {#each shown as project (project.id)}
-              {@const percent = project.summary?.percent ?? 0}
-              <li
-                class="project-option"
-                class:missing={project.missing}
-                class:active={active === project.id}
-                id={optionId(project.id)}
-                role="option"
-                aria-selected={current === project.id}
-                aria-disabled={project.missing}
-                data-id={project.id}
-                title={project.path}
-                onclick={() => !project.missing && choose(project.id)}
-                onkeydown={() => {}}
-                onmouseenter={() => !project.missing && (active = project.id)}
-              >
-                <ProjectLogo {project} size={16} />
-                <span class="project-option-name">{project.name}</span>
-                {#if project.missing}
-                  <span class="project-option-note">not found</span>
-                {:else}
-                  {#if needsYou(project)}
-                    <span class="project-option-dot" title="{needsYou(project)} need you" aria-label="needs you"></span>
-                  {/if}
-                  <span class="project-option-bar" aria-label="{percent}% done"
-                    ><span class="project-option-fill" style:width="{percent}%"></span></span
-                  >
-                {/if}
-              </li>
-            {/each}
-            {#if !options.length && !shown.length}
-              <li class="project-option-empty">No project matches</li>
-            {/if}
-          </ul>
-        </div>
-      {/snippet}
-    </Popover.ContentStatic>
+    {#if floating}
+      <Popover.Portal>
+        <Popover.Content role="dialog" aria-label="Projects" side="bottom" align="start" sideOffset={6}>
+          {#snippet child({ props, wrapperProps })}
+            <div {...wrapperProps}>
+              <div {...props} class="menu project-menu floating" id="project-menu">{@render list()}</div>
+            </div>
+          {/snippet}
+        </Popover.Content>
+      </Popover.Portal>
+    {:else}
+      <Popover.ContentStatic role="dialog" aria-label="Projects">
+        {#snippet child({ props })}
+          <div {...props} class="menu project-menu" id="project-menu">{@render list()}</div>
+        {/snippet}
+      </Popover.ContentStatic>
+    {/if}
   </Popover.Root>
 </div>
+
+{#snippet list()}
+  <input
+    class="project-filter"
+    id="project-filter"
+    type="text"
+    placeholder="Filter projects"
+    autocomplete="off"
+    role="combobox"
+    aria-label="Filter projects"
+    aria-expanded="true"
+    aria-controls="project-options"
+    aria-activedescendant={options.includes(active) ? optionId(active) : undefined}
+    bind:this={filter}
+    bind:value={query}
+    oninput={onInput}
+    onkeydown={onKey}
+  />
+  <ul class="project-options" id="project-options" role="listbox" aria-label="Projects">
+    {#if options.includes(OVERVIEW)}
+      <li
+        class="project-option"
+        id={optionId(OVERVIEW)}
+        role="option"
+        aria-selected={current === OVERVIEW}
+        class:active={active === OVERVIEW}
+        data-id="overview"
+        onclick={() => choose(OVERVIEW)}
+        onkeydown={() => {}}
+        onmouseenter={() => (active = OVERVIEW)}
+      >
+        <!-- Where each project shows its logo (T-348) -->
+        <span class="project-option-icon"><Icon name="layout-grid" size={16} /></span>
+        <span class="project-option-name">Projects Overview</span>
+      </li>
+    {/if}
+    {#each shown as project (project.id)}
+      {@const percent = project.summary?.percent ?? 0}
+      <li
+        class="project-option"
+        class:missing={project.missing}
+        class:active={active === project.id}
+        id={optionId(project.id)}
+        role="option"
+        aria-selected={current === project.id}
+        aria-disabled={project.missing}
+        data-id={project.id}
+        title={project.path}
+        onclick={() => !project.missing && choose(project.id)}
+        onkeydown={() => {}}
+        onmouseenter={() => !project.missing && (active = project.id)}
+      >
+        <ProjectLogo {project} size={16} />
+        <span class="project-option-name">{project.name}</span>
+        {#if project.missing}
+          <span class="project-option-note">not found</span>
+        {:else}
+          {#if needsYou(project)}
+            <span class="project-option-dot" title="{needsYou(project)} need you" aria-label="needs you"></span>
+          {/if}
+          <span class="project-option-bar" aria-label="{percent}% done"
+            ><span class="project-option-fill" style:width="{percent}%"></span></span
+          >
+        {/if}
+      </li>
+    {/each}
+    {#if !options.length && !shown.length}
+      <li class="project-option-empty">No project matches</li>
+    {/if}
+  </ul>
+{/snippet}

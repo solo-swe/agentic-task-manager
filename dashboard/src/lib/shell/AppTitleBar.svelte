@@ -22,7 +22,7 @@
   import { dashboard } from '../state.svelte';
   import Logo from '../ui/Logo.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
-  import { appTabs, tabProject } from '../app-tabs.svelte';
+  import { appTabs, tabProject, type AppTab } from '../app-tabs.svelte';
   import { tabActions } from '../tab-actions';
   import TitleBarTabs from '../ui/TitleBarTabs.svelte';
   import AppMenus from './AppMenus.svelte';
@@ -42,6 +42,16 @@
     document.title = title;
     void setWindowTitle(title);
   });
+
+  /** A tab's name, by the project or review in its own address (T-525, ATM-574): its label's, and its entry's in the
+   * strip's More menu (ATM-685) */
+  function tabName(tab: AppTab): string {
+    const id = tabProject(tab.address);
+    const review = reviewOf(tab.address).review;
+    if (review) return reviewWindow.names[`${id}:${review}`] ?? review;
+    const listed = id === null ? undefined : dashboard.projects.find((p) => p.id === id);
+    return listed ? (dashboard.nameOf(listed.id) ?? listed.name) : id === null ? 'Projects Overview' : title;
+  }
 </script>
 
 <!-- A mouse-down on the bar's free space drags the window (a pointer gesture, as the system's title bar's) -->
@@ -66,6 +76,7 @@
     onclose={(id) => tabs.close(id)}
     onnew={() => tabs.open()}
     onmove={tabs.move}
+    name={tabName}
   >
     {#snippet label(tab)}
       <!-- Every tab, chosen or not, by the project in its own address (T-525): its logo and its name as its page
@@ -73,19 +84,20 @@
            the tab before -->
       {@const id = tabProject(tab.address)}
       {@const listed = id === null ? undefined : dashboard.projects.find((p) => p.id === id)}
-      {@const name = listed ? (dashboard.nameOf(listed.id) ?? listed.name) : id === null ? 'Projects Overview' : title}
-      {@const review = reviewOf(tab.address).review}
-      {#if review}
+      {@const name = tabName(tab)}
+      {#if reviewOf(tab.address).review}
         <!-- A review's tab (ATM-574): its reference and title, no project chooser -->
         <Icon name="message-square" size={15} />
-        {#if tab.id === appTabs.active}<h1 id="dashboard-title">{reviewWindow.names[`${id}:${review}`] ?? review}</h1>
-        {:else}<span class="app-tab-name">{reviewWindow.names[`${id}:${review}`] ?? review}</span>{/if}
+        {#if tab.id === appTabs.active}<h1 id="dashboard-title">{name}</h1>
+        {:else}<span class="app-tab-name">{name}</span>{/if}
       {:else}
         {#if listed}<ProjectLogo project={listed} size={16} />{:else}<Logo size={16} />{/if}
         {#if tab.id === appTabs.active}
           <!-- The tab shown: its name is the page's heading, and the project chooser -->
           <h1 id="dashboard-title">{name}</h1>
-          {#if dashboard.projects.length > 0}<span class="app-tab-chooser"><ProjectSelector badge={false} /></span>{/if}
+          {#if dashboard.projects.length > 0}<span class="app-tab-chooser"
+              ><ProjectSelector badge={false} floating /></span
+            >{/if}
         {:else}
           <span class="app-tab-name">{name}</span>
         {/if}

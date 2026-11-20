@@ -270,9 +270,9 @@ export class TasksServer {
   private images = new Map<string, { contentType: string; body: Buffer }>();
   fileRequests: string[] = [];
 
-  /** Serve an image of the default project through the files route */
-  setImage(path: string, contentType: string, body: Buffer) {
-    this.images.set(path, { contentType, body });
+  /** Serve an image of the default project through the files route; with `at`, as that revision has it (`&at=`) */
+  setImage(path: string, contentType: string, body: Buffer, at?: string) {
+    this.images.set(at ? `${at}:${path}` : path, { contentType, body });
   }
 
   /** Answer the documents route for `path` with an error, as atm serve refuses a file */
@@ -550,9 +550,13 @@ export class TasksServer {
       });
     });
     await this.page.route(V1_FILES, (route) => {
-      const path = new URL(route.request().url()).searchParams.get('path') ?? '';
-      this.fileRequests.push(path);
-      const image = isDefault(route.request().url(), V1_FILES) ? this.images.get(path) : undefined;
+      const query = new URL(route.request().url()).searchParams;
+      const path = query.get('path') ?? '';
+      const at = query.get('at');
+      this.fileRequests.push(at ? `${path}@${at}` : path);
+      const image = isDefault(route.request().url(), V1_FILES)
+        ? this.images.get(at ? `${at}:${path}` : path)
+        : undefined;
       return image
         ? route.fulfill({ status: 200, contentType: image.contentType, body: image.body })
         : route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "not in the project"}' });

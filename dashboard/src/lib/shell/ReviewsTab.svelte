@@ -3,7 +3,7 @@
   import { onDestroy, untrack } from 'svelte';
   import { addressOf, reviewOf, withReview } from '../address';
   import { watchWorkingCopy } from '../api/changes';
-  import { inApp } from '../api/http';
+  import { inApp, v1FileUrl } from '../api/http';
   import { setWindowTitle } from '../api/shell';
   import {
     addComment,
@@ -19,7 +19,8 @@
     updateDraft,
     type ChangeResult,
   } from '../api/review-changes';
-  import { currentAddress, navigate } from '../navigation';
+  import { backEntry, currentAddress, goBack, navigate } from '../navigation';
+  import { placeName } from '../places';
   import {
     LIVE_MS,
     isViewed,
@@ -182,11 +183,11 @@
 
   const go = (address: string, replace = false) => navigate(address, { replace });
 
-  /** A review opened from the list: in the app, in a tab of its own; in the browser, in place (its page has a way
-   * back), or with ⌘ or Ctrl in a browser tab of its own */
+  /** A review opened from the list: in place (its page's back button comes back here, ATM-686), or with ⌘ or Ctrl in
+   * a tab of its own, the app's or the browser's */
   function open(reference: string, newTab = false) {
     const address = withReview(currentAddress(), { review: reference });
-    if (inApp) tabActions().open(address);
+    if (newTab && inApp) tabActions().open(address);
     else if (newTab) window.open(address, '_blank', 'noopener');
     else go(address);
   }
@@ -222,6 +223,13 @@
 
   const review = $derived(shown?.review.reference ?? at.review ?? '');
   const listAddress = $derived(withReview(currentAddress(), { review: null }));
+  /** Where the review was opened from in this tab (ATM-686): its back button goes Back there, saying where; a review
+   * opened on its own (a new tab, a link from elsewhere) goes up to its reviews list. Another place over the review
+   * (a task's details) or another file or round is the same page: its way back is the review's (navigation.ts) */
+  const cameFrom = $derived.by(() => {
+    void router.url;
+    return backEntry()?.address ?? null;
+  });
 
   // A task named in a review (ATM-593): this project's opens its details over the review (the review's own address,
   // with `?task=`), closed back to the review as it was; another project's opens at its project's page. ⌘, Ctrl or a
@@ -257,11 +265,13 @@
         project={shortName}
         file={at.file}
         side={(revision) => revisionDocuments(project, revision)}
+        imageAt={(revision, path) => v1FileUrl(project, path, revision)}
         isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
         taskHref={taskPage}
         tasks={taskLinks}
-        backHref={listAddress}
-        onback={() => go(listAddress)}
+        backHref={cameFrom ?? listAddress}
+        backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
+        onback={() => (cameFrom ? goBack() : go(listAddress))}
         {busy}
         {problem}
         docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}

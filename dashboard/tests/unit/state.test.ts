@@ -543,4 +543,13 @@ describe('DashboardState appearance', () => {
     first.setDocStyle('terminal');
     expect(new DashboardState().docStyle).toBe('auto');
   });
+
+  it('remembers the text size; an unknown one is Medium (ATM-691)', () => {
+    const first = new DashboardState();
+    expect(first.docSize).toBe('medium');
+    first.setDocSize('huge');
+    expect(new DashboardState().docSize).toBe('huge');
+    first.setDocSize('gigantic');
+    expect(new DashboardState().docSize).toBe('medium');
+  });
 });

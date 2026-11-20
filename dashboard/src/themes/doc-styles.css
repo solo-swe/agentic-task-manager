@@ -8,6 +8,27 @@
    its gutter and padding (app.css); only its paper and colours change. Fonts are the system's: the page's CSP loads
    none from elsewhere. The same page, as `.doc-sheet`, is the diff viewer's rendered side (ATM-574). */
 
+/* ---- The text size (ATM-691): Settings' Text size, on <html> (appearance.ts DOC_SIZES), scales a Markdown
+   document's text in every style; the theme's own page (Auto) from the size it has ---- */
+:root {
+  --doc-scale: 1;
+}
+:root[data-doc-size='tiny'] {
+  --doc-scale: 0.8;
+}
+:root[data-doc-size='small'] {
+  --doc-scale: 0.9;
+}
+:root[data-doc-size='large'] {
+  --doc-scale: 1.15;
+}
+:root[data-doc-size='huge'] {
+  --doc-scale: 1.3;
+}
+:is(.doc-viewer, .doc-sheet):not([data-doc-style]) .doc-page[data-kind='markdown'] .compmd {
+  font-size: calc(1em * var(--doc-scale));
+}
+
 /* ---- GitHub: the README look ---- */
 :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] {
   --doc-desk: #010409;
@@ -41,7 +62,7 @@
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
-  font-size: 16px;
+  font-size: calc(16px * var(--doc-scale));
   line-height: 1.5;
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd-page {
@@ -157,7 +178,7 @@
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd {
   font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  font-size: 18px;
+  font-size: calc(18px * var(--doc-scale));
   line-height: 1.7;
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd-page {
@@ -251,7 +272,7 @@
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd {
   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  font-size: 17px;
+  font-size: calc(17px * var(--doc-scale));
   line-height: 1.65;
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd-page {
@@ -359,6 +380,10 @@
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 4px;
+}
+/* Text size's sample: an "A" at the size chosen */
+.doc-size-sample {
+  font-size: calc(13px * var(--doc-scale));
 }
 .doc-style-sample[data-doc-style='github'] {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;

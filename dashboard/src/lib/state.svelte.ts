@@ -28,9 +28,11 @@ import { getPref, setPref, storageAvailable } from './prefs';
 import { dashboardBuild, dashboardVersion } from './release-notes';
 import {
   isModePref,
+  knownDocSize,
   knownDocStyle,
   knownTheme,
   resolveMode,
+  type DocSize,
   type DocStyle,
   type Mode,
   type ModePref,
@@ -385,6 +387,8 @@ export class DashboardState {
   theme = $state(knownTheme(getPref('theme', 'default')));
   /** The document viewer's page (T-404), per browser like the theme */
   docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', 'auto')));
+  /** The size of a document's text (ATM-691), per browser like its style */
+  docSize = $state<DocSize>(knownDocSize(getPref('docSize', 'medium')));
   systemPrefersLight = $state(prefersLight());
   mode = $derived<Mode>(resolveMode(this.modePref, this.systemPrefersLight));
 
@@ -886,6 +890,11 @@ export class DashboardState {
   setDocStyle(id: string) {
     this.docStyle = knownDocStyle(id);
     setPref('docStyle', this.docStyle);
+  }
+
+  setDocSize(id: string) {
+    this.docSize = knownDocSize(id);
+    setPref('docSize', this.docSize);
   }
 
   setAutoRefreshSeconds(seconds: number) {

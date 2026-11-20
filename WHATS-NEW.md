@@ -2,6 +2,16 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.42.0] - 2026-11-20
+
+- Comment on rendered Markdown in a review just as on code, and see the comments beside the page, each with a line
+  to the text it is about.
+- Long lines wrap side by side too, the line numbers sit right beside their text, and the lines no longer show
+  stripes between them.
+- Going to a file in a review stays on it, and a live review no longer jumps while you read it.
+- Pick a text size for documents in Settings, and see a review's images, before and after.
+- In the app, a More menu lists the tabs that don't fit, and a review's back arrow takes you back where you came from.
+
 ## [0.41.0] - 2026-11-19
 
 - See which reviews wait for you from anywhere: a count in the sidebar and in what needs you, and each task's review

@@ -252,6 +252,35 @@ test.describe('Kanban board', () => {
     await expect(page.locator('#detail-review .review-link-status')).toHaveText('Approved');
   });
 
+  // Hakan: on a narrow card the badge broke inside its parts, "CR-" over "79", "Waiting for" over "review". It wraps
+  // between them now, each kept on one line, and stays inside the card
+  test('a narrow card’s code review badge wraps between its parts, never inside one', async ({ page, tasksServer }) => {
+    const data = loadFixture('standard');
+    Object.assign(
+      data.tasks.find((t) => t.id === 'T-004')!,
+      {
+        status: 'in_review',
+        code_reviews: [{ id: 'u2', ref: 'CR-79' }],
+      },
+    );
+    tasksServer.reviewStatuses = { u2: 'waiting' };
+    await openDashboard(page, tasksServer.withAtmSummary(), data, { tab: 'kanban' });
+    const the = card(page, 'T-004');
+    const link = the.locator('.card-review .review-link');
+    await expect(link.locator('.review-link-status')).toHaveText('Waiting for review');
+    await the.evaluate((c) => ((c as HTMLElement).style.width = '200px'));
+    const parts = await link.evaluate((a) => {
+      const line = parseFloat(getComputedStyle(a).lineHeight) || 16;
+      const box = a.getBoundingClientRect();
+      const card = a.closest('.kanban-card')!.getBoundingClientRect();
+      return {
+        broken: [...a.children].filter((p) => p.getBoundingClientRect().height > line * 1.4).map((p) => p.textContent),
+        inside: box.right <= card.right + 0.5,
+      };
+    });
+    expect(parts).toEqual({ broken: [], inside: true });
+  });
+
   test('skipped tasks are hidden behind a toggle', async ({ page, tasksServer }) => {
     await openKanban(page, tasksServer, 'kanban');
     await expect(column(page, 'skipped')).toHaveCount(0);

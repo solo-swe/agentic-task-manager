@@ -23,6 +23,7 @@ async function compmdWithView() {
     scheme() {},
     destroy() {},
     async *lines() {},
+    lineHeights: vi.fn(),
   };
   const compmd = await realCompmd();
   const createSandbox = vi.fn(() => ({ open: () => view }));
@@ -30,6 +31,7 @@ async function compmdWithView() {
   return {
     raise: (event: string, data: Parameters<Listener>[0]) => listeners[event]?.forEach((l) => l(data)),
     createSandbox,
+    lineHeights: view.lineHeights,
   };
 }
 
@@ -39,6 +41,24 @@ afterEach(() => {
 });
 
 describe('CompMd', () => {
+  // ATM-616: a diff's two sides kept level, wrapped: the lines' heights given to CompMD's view as they change, and
+  // cleared once none are asked for; a text no one sizes lines of never calls it
+  it('gives the view the lines’ heights asked for, as they change; none asked for clears them, once', async () => {
+    const { lineHeights } = await compmdWithView();
+    const { rerender } = render(CompMd, { text: '```rust\nfn a() {}\n```\n', plain: 'fn a() {}' });
+    await vi.waitFor(() => expect(loadCompmd).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(lineHeights).not.toHaveBeenCalled();
+    const heights = new Map([[2, 60]]);
+    await rerender({ lineHeights: heights });
+    await vi.waitFor(() => expect(lineHeights).toHaveBeenLastCalledWith(heights));
+    await rerender({ lineHeights: null });
+    await vi.waitFor(() => expect(lineHeights).toHaveBeenLastCalledWith(new Map()));
+    const calls = lineHeights.mock.calls.length;
+    await rerender({ lineHeights: new Map() });
+    expect(lineHeights.mock.calls.length).toBe(calls);
+  });
+
   // ATM-586: a code review's summary and comments are the project's text: given onopen, their relative links open the
   // document viewer, as a task's do; without it (Help, What's new) they stay text
   it('given onopen, a relative link opens its document; without, it stays text', async () => {
