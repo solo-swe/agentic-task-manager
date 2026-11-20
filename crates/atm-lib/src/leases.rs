@@ -14,9 +14,10 @@ use crate::loop_rules::lease_minutes;
 /// When a lease taken now runs out.
 #[must_use]
 pub fn lease_until(document: &Value) -> String {
-    #[allow(clippy::cast_possible_truncation)] // reason: a lease's seconds fit an i64
+    #[allow(clippy::cast_possible_truncation)]
+    // reason: a lease's seconds fit an i64 (at most a year's)
     let seconds = (lease_minutes(document) * 60.0) as i64;
-    format_iso(now() + seconds)
+    format_iso(now().saturating_add(seconds))
 }
 
 /// `{:g}` of a number of minutes, as the Python atm prints it in messages: `120`, `0.5`.

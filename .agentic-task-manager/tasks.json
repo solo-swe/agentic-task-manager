@@ -18152,7 +18152,7 @@
       "description": "Audit findings C3 and L13 ([the report](docs/codebase-audit-2026-11.md#c3-medium-security-status-type-and-priority-ids-and-sprint-names-arent-shell-safe-checked)).\n\n`crates/atm-common/src/vocabulary.rs:211-215` accepts any non-empty status, type or priority ID, and sprint names only refuse outer spaces and length, while releases and components use `valid_short_id`. Agents paste these into commands (`atm task state … <status>`, `--sprint '<name>'`). And `backlog`, `new`, `active`, `next` are accepted as sprint names (`crates/atm-lib/src/sprints.rs:263`, and `rename_sprint`), after which `--to backlog` can never mean that sprint.\n\n## Change\n- `valid_short_id` on the IDs in `terms()`.\n- Sprint names: letters, digits, space, `.`, `_`, `-`, `&` (the current sprint has one) and the like; no `$`, backtick, `;`, `|`, quotes, newlines. Decide the set from the existing names (`atm sprint list --all`) so nothing existing breaks.\n- Refuse the four reserved words, case-insensitively, in `checked_name` and `rename_sprint`.\n- Note it in `docs/security-architecture.md` I8.\n\n## Tests\n`tests/scripts/scenarios/security.json`: a status `done$(x)` and a sprint `s1;x` are refused on load and on add; `atm sprint add backlog` is refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/vocabulary.rs",
@@ -18161,7 +18161,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T20:43:03Z",
+      "updated_at": "2026-11-20T20:51:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18177,10 +18177,25 @@
           "at": "2026-11-20T20:36:45Z",
           "kind": "failure",
           "text": "lease expired (claude:0f56a916)"
+        },
+        {
+          "at": "2026-11-20T20:51:34Z",
+          "kind": "review",
+          "text": "CR-92: Status, type and priority IDs and sprint names shell-safe; four sprint names reserved",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-20T20:43:03Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "82596fee2d330f0e949a76ff4df956a28ca9f2ec",
+      "code_reviews": [
+        {
+          "id": "01a1faba-9555-7497-9134-d051b68477ac",
+          "ref": "CR-92"
+        }
+      ],
+      "review_requested_at": "2026-11-20T20:51:34Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2262499c2829",
@@ -18194,7 +18209,7 @@
       "description": "Audit findings C4, C5, C16 and L9 ([the report](docs/codebase-audit-2026-11.md#c4-medium-security-atm_now-replaces-the-clock-in-release-builds-checked)).\n\n- **C4:** `crates/atm-common/src/time.rs:8-13` lets `ATM_NOW` replace the clock in every build; claim liveness reads `now()`, so `ATM_NOW=2099-… atm loop next --claim` takes every other agent's task. Honour it only when a second, test-only variable is set too (the CLI suite sets both), or only in debug builds; check what `tests/scripts/` needs first.\n- **L9:** `meta.lease_minutes` takes any positive number, `inf` too: clamp it (at most a year) and use `saturating_add` in `lease_until` and `offered_to`.\n- **C5:** `--timeout 1e20` panics in `review.rs:623`: `Duration::try_from_secs_f64`.\n- **C16:** `parse_iso` accepts seconds 60 and 61; the next task number `highest + 1` can wrap (`keys.rs:108`): refuse and `checked_add`.\n\n## Tests\nScenarios: a lease from another agent stays live under `ATM_NOW` alone; `lease_minutes: 1e300` keeps claims alive; `--timeout 1e20` exits 2; `parse_iso(\"…T23:59:60Z\")` is None.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/time.rs",
@@ -18204,9 +18219,9 @@
         "crates/atm-common/src/keys.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T20:51:40Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -18214,7 +18229,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 666
+      "number": 666,
+      "started_at": "2026-11-20T20:51:40Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226323bfa33b",

@@ -171,12 +171,20 @@ fn keys_numbers_and_order() {
         None,
         "legacy: no keys"
     );
-    assert_eq!(next_task_number(&document, &archive), 542);
+    assert_eq!(next_task_number(&document, &archive), Ok(542));
     // Never at or below a number given, whatever meta says
     let mut behind = document.clone();
     behind["meta"]["next_number"] = json!(3);
-    assert_eq!(next_task_number(&behind, &archive), 542);
-    assert_eq!(next_task_number(&json!({"meta": {}, "tasks": []}), &[]), 1);
+    assert_eq!(next_task_number(&behind, &archive), Ok(542));
+    assert_eq!(
+        next_task_number(&json!({"meta": {}, "tasks": []}), &[]),
+        Ok(1)
+    );
+    // The largest number taken: none is left, rather than one wrapped round to 0 (ATM-666)
+    let full = json!({"meta": {}, "tasks": [{"id": "x", "number": u64::MAX}]});
+    assert!(
+        matches!(next_task_number(&full, &[]), Err(crate::Error::Invalid(m)) if m.contains("no number is left"))
+    );
     let two = task(json!({"id": "x", "number": 2}));
     let ten = task(json!({"id": "a", "number": 10}));
     assert_eq!(

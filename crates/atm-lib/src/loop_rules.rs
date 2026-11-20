@@ -30,10 +30,14 @@ pub fn lease_minutes(document: &Value) -> f64 {
         Some(Value::Bool(b)) => Some(f64::from(u8::from(*b))),
         Some(_) => None,
     };
+    // At most a year (ATM-666, audit L9): `inf` or 1e300 made a lease's seconds overflow, and no claim ever ran out
     minutes
-        .filter(|m| *m > 0.0)
-        .unwrap_or(DEFAULT_LEASE_MINUTES)
+        .filter(|m| m.is_finite() && *m > 0.0)
+        .map_or(DEFAULT_LEASE_MINUTES, |m| m.min(MAX_LEASE_MINUTES))
 }
+
+/// The longest lease: a year.
+pub const MAX_LEASE_MINUTES: f64 = 365.0 * 24.0 * 60.0;
 
 /// What the loop works on (SR-3.2): the active sprint (the default, in a project with sprints), named sprints, a list
 /// of tasks, all tasks, or the backlog; `task_type` narrows it.
@@ -228,7 +232,7 @@ fn offered_to(document: &Value, task: &Task, agent: Option<&str>) -> bool {
     };
     #[allow(clippy::cast_possible_truncation)] // reason: minutes of a lease in seconds fit an i64
     let lease = (lease_minutes(document) * 60.0) as i64;
-    now() >= reviewed + lease
+    now() >= reviewed.saturating_add(lease)
 }
 
 /// What the loop sees for a selection: the tasks it could take now in its order, the selection's tasks, the

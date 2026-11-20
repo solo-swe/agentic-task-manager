@@ -257,7 +257,7 @@ pub fn archive_finished(project: &mut Project, request: &ArchiveRequest) -> Resu
                     .filter_map(Value::as_object)
                     .cloned()
                     .collect();
-                let next = next_task_number(&work.document, &archived);
+                let next = next_task_number(&work.document, &archived)?;
                 work.document["meta"]["next_number"] = json!(next);
             } else {
                 let next = next_free_number(&work.document);

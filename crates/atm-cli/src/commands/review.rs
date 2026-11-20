@@ -619,7 +619,8 @@ fn duration_of(text: &str) -> Result<std::time::Duration> {
         "h" => 3600.0,
         _ => 1.0,
     };
-    Ok(std::time::Duration::from_secs_f64(seconds))
+    // A number too large for a Duration (1e20) is refused, never a panic (ATM-666, audit C5)
+    std::time::Duration::try_from_secs_f64(seconds).map_err(|_| bad())
 }
 
 /// A comment heard, for people: where, who, and its text.
@@ -1317,7 +1318,7 @@ mod tests {
             );
         }
         for bad in [
-            "", "0", "0s", "-5m", "soon", "5d", "m", "NaN", "inf", "1e400",
+            "", "0", "0s", "-5m", "soon", "5d", "m", "NaN", "inf", "1e400", "1e20", "1e20h",
         ] {
             let e = duration_of(bad).unwrap_err();
             assert_eq!(e.code(), 2, "{bad}");

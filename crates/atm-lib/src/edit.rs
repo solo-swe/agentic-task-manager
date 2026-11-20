@@ -454,7 +454,11 @@ fn add_keyed_tasks(
         .filter_map(Value::as_object)
         .cloned()
         .collect();
-    let first = next_task_number(&work.document, &archive);
+    let first = next_task_number(&work.document, &archive)?;
+    // The last of the new numbers fits too (ATM-666): never one wrapped round to a number given already
+    first
+        .checked_add(tasks.len() as u64)
+        .ok_or_else(|| Error::Invalid("no task numbers are left for these tasks".into()))?;
     let uuids: Vec<String> = tasks.iter().map(|_| new_task_uuid()).collect();
     let prefix = project_key(&work.document).unwrap_or_default().to_string();
     let label = |n: usize| task_key(&prefix, first + n as u64);

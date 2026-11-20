@@ -1,15 +1,20 @@
 //! Time as atm writes it (the Python atm's `common/core.py`): seconds since 1970 in UTC, written as ISO 8601 to the
-//! second (`2026-05-01T08:00:00Z`). `ATM_NOW` replaces the current time, for tests.
+//! second (`2026-05-01T08:00:00Z`). `ATM_NOW` replaces the current time, for tests, in debug builds only.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// The current time in seconds since 1970 (UTC); `ATM_NOW` (ISO 8601) overrides it.
+/// Whether `ATM_NOW` may replace the clock: in a debug build (the CLI suite's and the e2e suite's binaries) only,
+/// never in a release (ATM-665/666, audit C4: `ATM_NOW=2099-… atm loop next --claim` took every other agent's
+/// task, their leases run out by that clock). A second variable would be no barrier: whoever sets one sets both.
+pub const CLOCK_OVERRIDE: bool = cfg!(debug_assertions);
+
+/// The current time in seconds since 1970 (UTC); in a debug build, `ATM_NOW` (ISO 8601) overrides it.
 #[must_use]
 pub fn now() -> i64 {
-    std::env::var("ATM_NOW")
-        .ok()
-        .and_then(|t| parse_iso(&t))
-        .unwrap_or_else(real_now)
+    if CLOCK_OVERRIDE && let Some(at) = std::env::var("ATM_NOW").ok().and_then(|t| parse_iso(&t)) {
+        return at;
+    }
+    real_now()
 }
 
 /// The clock's time, whatever `ATM_NOW` says (how old a lock is).
@@ -118,7 +123,8 @@ pub fn parse_iso(text: &str) -> Option<i64> {
         && (1..=month_days[usize::try_from(month - 1).ok()?]).contains(&day)
         && hour < 24
         && minute < 60
-        && second < 62;
+        // No leap second: 23:59:60 would be the next day's 00:00:00 written another way (ATM-666, audit C16)
+        && second < 60;
     valid.then(|| days_from_civil(year, month, day) * 86_400 + hour * 3600 + minute * 60 + second)
 }
 
@@ -152,15 +158,23 @@ mod tests {
         }
     }
 
+    /// ATM-666 (audit C4): `ATM_NOW` moved the clock in every build, so `ATM_NOW=2099-… atm loop next --claim` took
+    /// every other agent's task; now only a debug build (the tests' binaries) heeds it
+    #[test]
+    fn atm_now_moves_the_clock_in_a_debug_build_only() {
+        assert_eq!(super::CLOCK_OVERRIDE, cfg!(debug_assertions));
+    }
+
     #[test]
     fn a_time_is_read_up_to_each_fields_limit_and_refused_past_it() {
         for (text, read) in [
             ("2026-01-01T23:59:59Z", true),
             ("2026-01-01T24:00:00Z", false),
             ("2026-01-01T00:60:00Z", false),
-            // Python's strptime takes leap seconds up to 61
-            ("2026-01-01T00:00:61Z", true),
-            ("2026-01-01T00:00:62Z", false),
+            // No leap second (ATM-666): 23:59:60 would be the next day's midnight written another way
+            ("2026-01-01T00:00:59Z", true),
+            ("2026-01-01T23:59:60Z", false),
+            ("2026-01-01T00:00:61Z", false),
             ("2026-01-00T00:00:00Z", false),
             ("2026-04-30T00:00:00Z", true),
             ("2026-04-31T00:00:00Z", false),

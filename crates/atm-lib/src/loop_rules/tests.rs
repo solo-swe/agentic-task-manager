@@ -681,4 +681,21 @@ fn the_lease_is_the_projects_when_it_is_a_positive_number() {
     assert!((lease_minutes(&json!({"meta": {"lease_minutes": 30}})) - 30.0).abs() < f64::EPSILON);
     assert!((lease_minutes(&json!({"meta": {"lease_minutes": "15"}})) - 15.0).abs() < f64::EPSILON);
     assert!((lease_minutes(&json!({"meta": {"lease_minutes": -1}})) - 120.0).abs() < f64::EPSILON);
+    // At most a year (ATM-666): a huge one is a year, one that isn't a number at all the default
+    for huge in [json!(1e300), json!("1e300"), json!(MAX_LEASE_MINUTES * 2.0)] {
+        assert!(
+            (lease_minutes(&json!({"meta": {"lease_minutes": huge}})) - MAX_LEASE_MINUTES).abs()
+                < f64::EPSILON
+        );
+    }
+    for not_finite in ["inf", "NaN", "-inf"] {
+        assert!(
+            (lease_minutes(&json!({"meta": {"lease_minutes": not_finite}})) - 120.0).abs()
+                < f64::EPSILON
+        );
+    }
+    // A lease taken now still runs out, a year on at most, never overflowing
+    let until = crate::leases::lease_until(&json!({"meta": {"lease_minutes": 1e300}}));
+    let at = atm_common::time::parse_iso(&until).expect("a time");
+    assert!(at - atm_common::time::now() <= 366 * 24 * 3600, "{until}");
 }

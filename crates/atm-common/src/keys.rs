@@ -98,8 +98,11 @@ pub fn task_order(a: &Task, b: &Task) -> Ordering {
 
 /// The number the next new task gets: `meta.next_number`, but never at or below a number a task (working or archived)
 /// already has, so no number is ever given twice (ADR-007 §1).
-#[must_use]
-pub fn next_task_number(document: &Value, archive: &[Task]) -> u64 {
+///
+/// # Errors
+/// `Invalid` when a task already has the largest number there is: the next would wrap round to one given already
+/// (ATM-666, audit C16).
+pub fn next_task_number(document: &Value, archive: &[Task]) -> Result<u64> {
     let tasks = document["tasks"]
         .as_array()
         .into_iter()
@@ -115,7 +118,12 @@ pub fn next_task_number(document: &Value, archive: &[Task]) -> u64 {
         .and_then(|m| m.get("next_number"))
         .and_then(Value::as_u64)
         .unwrap_or(1);
-    stored.max(highest + 1)
+    let after = highest.checked_add(1).ok_or_else(|| {
+        Error::Invalid(format!(
+            "a task has the number {highest}, the largest there is: no number is left for a new task"
+        ))
+    })?;
+    Ok(stored.max(after))
 }
 
 /// How a reference found its task.
