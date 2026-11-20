@@ -17857,7 +17857,7 @@
       "description": "Audit findings R3 and the `Rev` abstraction ([the report](docs/codebase-audit-2026-11.md#r3-high-security-revisions-from-roundsnjson-reach-git-unchecked-checked-path-effect-suspected)).\n\n`RoundKind`'s `base` and `head` are free strings from `rounds/N.json`, a committed and mergeable file. `crates/atm-review/src/rounds.rs:166-169` passes them to `tree_of` (`git rev-parse <head>^{tree}`) and `tree_after` (`git read-tree <base>`) in `crates/atm-vcs/src/diff.rs:297`, `:352`, without `commit_sha` (`diff.rs:119`) or `--end-of-options`. So do `file_in`, `diff_trees`, `gitlink_in`, `blob_in`, `message` and `in_history`. A value starting with `-` becomes an option to git, run just by opening the review page.\n\n## Change\n- Validate `base` and `head` as full hexadecimal object IDs when a round is read (`model.rs`); a round that fails is refused with a clear error.\n- Introduce a `Rev` newtype in atm-vcs (a hex object ID, or a name checked not to start with `-` and with no NUL), and make every git-facing method take it, so an unchecked string can't reach git again.\n- Add `--end-of-options` where git supports it.\n\n## Tests\n- atm-vcs unit tests: each method refuses a revision starting with `-`.\n- A `tests/scripts/reviews/` test: a review whose `rounds/1.json` has `\"base\": \"--index-output=x\"` shows an error and writes no file.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-vcs/src/lib.rs",
@@ -17866,7 +17866,7 @@
         "crates/atm-review/src/rounds.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T17:32:07Z",
+      "updated_at": "2026-11-20T17:47:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17878,7 +17878,24 @@
       "sprint": "Audit and tabs",
       "number": 659,
       "started_at": "2026-11-20T17:32:07Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "453dda89ce3303a3d9fa72f2b7a403d6663e42a9",
+      "code_reviews": [
+        {
+          "id": "01a1fa11-d8c8-75de-a8a8-cae62c8d2c39",
+          "ref": "CR-87"
+        }
+      ],
+      "review_requested_at": "2026-11-20T17:47:16Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T17:47:16Z",
+          "kind": "review",
+          "text": "CR-87: No revision reaches git as an option: a Rev type, rounds checked when read",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225cbe03e286",
@@ -17965,7 +17982,7 @@
       "description": "Audit findings A2, C1 and C17's file part ([the report](docs/codebase-audit-2026-11.md#c1-medium-security-every---file-option-reads-any-path-of-any-size-checked-see-a2)).\n\n`cwd.join(file)` with an absolute path is that path, so `atm task edit X --description-file ~/.ssh/id_ed25519` (a pre-approved command) puts a key in `tasks.json`, which `atm vcs commit` commits. No size cap either. Seven call sites: `task/add.rs:117`, `:189`, `task/edit.rs:99`, `review.rs:317`, `:752`, `:841`, `db.rs:191`; they also report a missing file three different ways.\n\n## Change\nOne `read_option_file(cwd, option, file) -> Result<String>` and `read_option_json(...)` in `atm-cli`: canonicalize; allow only paths inside the project or the system temp folder; refuse dot-folders and key files (the same check as `atm-docs`' key-file rule); cap at 1 MiB; one wording and exit code (2) for a file that can't be used. Use it at every call site. Update `docs/security-architecture.md` (B1/B2: a new entry point rule).\n\n## Tests\n`tests/scripts/` cases: an absolute path outside the project, `~/.ssh/...`, a symlink out of the project, a 2 MiB file, `/dev/zero`: each refused with exit 2; a scratch file in the temp folder and one in the project accepted.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/task/add.rs",
@@ -17975,9 +17992,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T17:47:51Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17985,7 +18002,14 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 662
+      "number": 662,
+      "started_at": "2026-11-20T17:47:21Z",
+      "started_by": "claude:0f56a916",
+      "waiting_on": "user",
+      "questions": [
+        "Skills tell agents to write scratch files outside the repo; Claude Code jobs use ~/.claude/jobs/<id>/tmp (not the project or system temp, and a dot-folder), so this rule would refuse every --summary-file and --json-file agents pass today. (a) keep the 1 MiB cap and key-file refusal for any path, drop the inside-project-or-temp rule (recommended); (b) the rule as written, skills write scratch files in a gitignored folder in .agentic-task-manager/; (c) also allow an ATM_SCRATCH_DIR. Which?"
+      ],
+      "blocked_at": "2026-11-20T17:47:51Z"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225f960376f7",
@@ -17999,16 +18023,16 @@
       "description": "Audit findings R5, R6 and R12 ([the report](docs/codebase-audit-2026-11.md#r5-high-bug-the-watch-marks-a-comment-seen-before-judging-it-reported-confirms-my-earlier-suspicion)).\n\n- **R5:** `crates/atm-lib/src/review_listen.rs:433` puts every comment into `seen` (and the saved cursor) before judging it, so one judged not about the agent's work is never told, even after the agent's commit touches its file, or after the agent starts a task a person reviewed first. Decisions alike (`:464`). Only what was told, or skipped for its author, goes into `seen`; the rest is judged again each look while the review is open.\n- **R6:** `seen` is keyed by `review/cN`, and a merge renumbers clashing IDs. Key it by ID with author and time (or a hash of them).\n- **R12:** several watches of one agent share one lease file (the first to end deletes it) and overwrite each other's cursor. One lease per process, and merge the cursor under a lock.\n\n## Tests\n`tests/scripts/reviews/listening.test.mjs`: a comment on a file the agent touches only in a later commit is told after that commit; a comment made before the agent starts the task is told once it starts; two watches, one ending, leave the other's lease.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_listen.rs",
         "tests/scripts/reviews/listening.test.mjs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T17:47:54Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -18016,7 +18040,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 663
+      "number": 663,
+      "started_at": "2026-11-20T17:47:54Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22603f058a59",

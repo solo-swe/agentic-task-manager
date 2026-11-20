@@ -236,4 +236,132 @@ describe('agents listening (ATM-567)', () => {
       removeDir(root);
     }
   });
+
+  // ATM-663 (R5): the watch marked a comment seen before judging it, so one not about the agent's work then was never
+  // told, even once it was
+  describe('what isn’t about the agent’s work yet is judged again, and told once it is (ATM-663)', () => {
+    const A = { ATM_AGENT: 'claude:A' };
+    const B = { ATM_AGENT: 'claude:B' };
+    const told = (r) =>
+      r.stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l));
+    const watchOnce = (root, env, timeout = '1s') =>
+      atm(['review', 'watch', '--once', '--json', '--timeout', timeout], root, env);
+
+    test('a comment on a file the agent touches only in a later commit is told after that commit', () => {
+      // T-1 is A's, with no file yet; T-2 B's (b.txt); a review of both, of B's commit to b.txt and c.txt
+      const root = makeProject({
+        commit: true,
+        files: {
+          '.agentic-task-manager/tasks.json': {
+            meta: { project: 'Later' },
+            tasks: [
+              { id: 'T-1', name: 'One', type: 'feature', status: 'in_progress', started_by: 'claude:A' },
+              {
+                id: 'T-2',
+                name: 'Two',
+                type: 'feature',
+                status: 'in_progress',
+                started_by: 'claude:B',
+                files: ['b.txt'],
+              },
+            ],
+          },
+          'a.txt': 'a\n',
+          'b.txt': 'b\n',
+          'c.txt': 'c\n',
+        },
+      });
+      try {
+        fs.writeFileSync(path.join(root, 'b.txt'), 'b, changed\n');
+        commitFile(root, 'c.txt', 'c, changed\n', 'b and c');
+        ok(
+          ['review', 'create', '--title', 'Both', '--task', 'T-1', '--task', 'T-2', '--range', 'HEAD~1..HEAD'],
+          root,
+          B,
+        );
+        // A's first watch starts from now
+        assert.equal(watchOnce(root, A).code, 3);
+        ok(['review', 'comment', 'CR-1', '--file', 'c.txt', '--lines', '1', '--body', 'Who owns c?'], root, HAKAN);
+        // Not A's yet: no task of A's touches c.txt
+        assert.equal(watchOnce(root, A).code, 3);
+        // A's commit touches c.txt: the comment is A's now, about T-1, told once
+        fs.writeFileSync(path.join(root, 'c.txt'), 'c, A’s now\n');
+        ok(['vcs', 'commit', 'T-1', '--file', 'c.txt'], root, A);
+        const after = watchOnce(root, A, '10s');
+        assert.equal(after.code, 0, after.stderr);
+        assert.deepEqual(
+          told(after).map((h) => [h.review, h.task, h.body]),
+          [['CR-1', 'T-1', 'Who owns c?']],
+        );
+        assert.equal(watchOnce(root, A).code, 3, 'told once');
+      } finally {
+        removeDir(root);
+      }
+    });
+
+    test('a comment and a decision made before the agent starts the task are told once it starts', () => {
+      const root = makeProject({
+        commit: true,
+        files: {
+          '.agentic-task-manager/tasks.json': {
+            meta: { project: 'Before' },
+            tasks: [{ id: 'T-1', name: 'One', type: 'feature', status: 'todo', files: ['a.txt'] }],
+          },
+          'a.txt': 'a\n',
+        },
+      });
+      try {
+        // B worked T-1 and asked for its review; A's watch starts, and nothing is A's
+        ok(['task', 'state', 'T-1', 'in_progress'], root, B);
+        fs.writeFileSync(path.join(root, 'a.txt'), 'a, changed\n');
+        ok(['review', 'create', '--title', 'One', '--task', 'T-1', '--uncommitted'], root, B);
+        assert.equal(watchOnce(root, A).code, 3);
+        ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Name it better.'], root, HAKAN);
+        ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
+        assert.equal(watchOnce(root, A).code, 3, 'not A’s work');
+        // A takes the task back for the rework: both are A's to hear now
+        ok(['task', 'state', 'T-1', 'in_progress'], root, A);
+        const after = watchOnce(root, A, '10s');
+        assert.equal(after.code, 0, after.stderr);
+        assert.deepEqual(
+          told(after).map((h) => [h.task, h.body ?? h.decision]),
+          [
+            ['T-1', 'Name it better.'],
+            ['T-1', 'changes_requested'],
+          ],
+        );
+        assert.equal(watchOnce(root, A).code, 3, 'told once');
+      } finally {
+        removeDir(root);
+      }
+    });
+
+    // R12: watches of one agent shared one lease, and the first to end removed it while the others ran
+    test('two watches of one agent: one ending leaves the other’s lease', async () => {
+      const root = project();
+      let long;
+      try {
+        long = background(['review', 'watch', '--json', '--timeout', '6s'], root, AGENT);
+        await until(() => /Watching the reviews/.test(long.stderr()), 'the long watch to start');
+        const short = background(['review', 'watch', '--json', '--timeout', '1s'], root, AGENT);
+        await until(() => /Watching the reviews/.test(short.stderr()), 'the short watch to start');
+        await short.ended;
+        // At once, before the long one's next look could renew a lease the short one removed (`loop next` may have
+        // nothing to hand out: its watch state is said either way)
+        const next = JSON.parse(atm(['loop', 'next', '--json'], root, AGENT).stdout);
+        assert.equal(next.watch.running, true);
+        // The long one ends at its time (a watch killed leaves its lease until it runs out): none runs
+        await long.ended;
+        const after = JSON.parse(atm(['loop', 'next', '--json'], root, AGENT).stdout);
+        assert.equal(after.watch.running, false, 'none runs');
+      } finally {
+        long?.stop();
+        removeDir(root);
+      }
+    });
+  });
 });

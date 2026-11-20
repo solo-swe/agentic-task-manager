@@ -320,15 +320,38 @@ fn read_cursor(file: &Path) -> Option<Cursor> {
     serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
 }
 
-/// Keep where the watch is; a cursor that can't be written only means the next watch starts from now.
-fn save_cursor(file: &Path, seen: &HashSet<String>, statuses: &HashMap<String, Status>) {
-    let mut seen: Vec<String> = seen.iter().cloned().collect();
-    seen.sort();
+/// A comment as the cursor knows it (ATM-663, R6): its review, its author, its time and a hash of its text, never its
+/// number, which a merge renumbers when two clones gave the same one (a comment renumbered isn't told again).
+fn seen_key(review: &ReviewHeader, comment: &Comment) -> String {
+    let text = &sha256_hex(comment.body.as_bytes())[..16];
+    format!("{}/{}/{}/{text}", review.id.0, comment.author.0, comment.at)
+}
+
+/// The key older watches wrote (`review/cN`): still read, so a cursor from before ATM-663 tells nothing again.
+fn old_seen_key(review: &ReviewHeader, comment: &Comment) -> String {
+    format!("{}/{}", review.id.0, comment.id.0)
+}
+
+/// Keep where the watch is, merged with what the agent's other watches of the project kept meanwhile (ATM-663, R12:
+/// each wrote its own over the others'), under the watches' lock; `seen` and `statuses` become the merged ones, so a
+/// comment another watch told isn't told again. A cursor that can't be written only means the next watch starts from
+/// now.
+fn save_cursor(file: &Path, seen: &mut HashSet<String>, statuses: &mut HashMap<String, Status>) {
+    let Some(dir) = file.parent() else { return };
+    let _lock = atm_db::jsongit::lock::lock(dir, Some(2.0));
+    if let Some(theirs) = read_cursor(file) {
+        seen.extend(theirs.seen);
+        for (review, status) in theirs.statuses {
+            statuses.entry(review).or_insert(status);
+        }
+    }
+    let mut listed: Vec<String> = seen.iter().cloned().collect();
+    listed.sort();
     let cursor = Cursor {
-        seen,
+        seen: listed,
         statuses: statuses.clone(),
     };
-    if let (Some(dir), Ok(text)) = (file.parent(), serde_json::to_string(&cursor)) {
+    if let Ok(text) = serde_json::to_string(&cursor) {
         let _ = std::fs::create_dir_all(dir);
         let _ = atm_common::home::write_text_atomic(file, &text);
     }
@@ -363,7 +386,7 @@ fn starting_point(
             review
                 .comments()
                 .filter(|c| since.is_none_or(|s| c.at.as_str() < s))
-                .map(|c| format!("{}/{}", review.header.id.0, c.id.0)),
+                .map(|c| seen_key(&review.header, c)),
         );
         // Decided since then: left out, so it is told
         if since.is_none_or(|s| review.header.updated.as_str() < s) {
@@ -371,7 +394,7 @@ fn starting_point(
         }
     }
     if since.is_none() {
-        save_cursor(file, &seen, &statuses);
+        save_cursor(file, &mut seen, &mut statuses);
     }
     Ok((seen, statuses))
 }
@@ -434,13 +457,23 @@ pub fn watch(
             keyed_now(now, &store, &mut review.header);
             for chain in &review.chains {
                 for (comment, parent) in with_parents(chain) {
-                    if !seen.insert(format!("{}/{}", review.header.id.0, comment.id.0)) {
+                    let key = seen_key(&review.header, comment);
+                    if seen.contains(&key) || seen.contains(&old_seen_key(&review.header, comment))
+                    {
                         continue;
                     }
-                    if comment.author.0 == me || is_agent(Some(&comment.author.0)) {
+                    // Passed over for good: its own, an agent's, or in a review that has ended
+                    if comment.author.0 == me
+                        || is_agent(Some(&comment.author.0))
+                        || review.header.status.ended()
+                    {
+                        seen.insert(key);
                         continue;
                     }
+                    // Told once it is about the agent's work; until then judged again on each look (ATM-663, R5): the
+                    // agent may commit to its file, or start the task it is about, later
                     if let Mine::About(task) = about_my_work(&work, me, &review, chain, comment) {
+                        seen.insert(key);
                         let ordinal = comment
                             .id
                             .0
@@ -465,16 +498,22 @@ pub fn watch(
         for mut review in all(&store)? {
             keyed_now(now, &store, &mut review.header);
             let status = review.header.status;
-            let was = statuses.insert(review.header.id.0.clone(), status);
-            if was == Some(status) || !decided(status) {
+            let id = review.header.id.0.clone();
+            if statuses.get(&id) == Some(&status) {
                 continue;
             }
+            if !decided(status) {
+                statuses.insert(id, status);
+                continue;
+            }
+            // A decision is kept as seen once told; one not about the agent's work yet is judged again (R5)
             if let Mine::About(task) = decision_about_my_work(&work, me, &review.header) {
+                statuses.insert(id, status);
                 emit(decision(&review.header, task.as_deref()));
                 count += 1;
             }
         }
-        save_cursor(&file, &seen, &statuses);
+        save_cursor(&file, &mut seen, &mut statuses);
         if options.once && count > before {
             return Ok(count);
         }
@@ -529,9 +568,35 @@ const LEASE_SECS: i64 = 60;
 /// How long atm stays quiet after reminding an agent that it isn't watching, unless something new came meanwhile.
 const REMIND_EVERY_SECS: i64 = 600;
 
-/// The lease of `me`'s watch of the project at `root`: beside its cursor.
+/// The lease of this process's watch for `me` of the project at `root`, beside its cursor: one per watch (ATM-663,
+/// R12: watches sharing one, the first to end removed it while the others ran).
 fn lease_file(root: Option<&Path>, me: &str) -> PathBuf {
-    cursor_file(root, me).with_extension("live")
+    cursor_file(root, me).with_extension(format!("{}.live", std::process::id()))
+}
+
+/// Whether any watch of `me`'s on the project at `root` holds its lease at `now` (an older atm's one shared lease,
+/// `<cursor>.live`, too). Leases that ran out are removed on the way: their watches were killed.
+fn any_lease_holds(root: Option<&Path>, me: &str, now: i64) -> bool {
+    let cursor = cursor_file(root, me);
+    let (Some(dir), Some(stem)) = (cursor.parent(), cursor.file_stem().and_then(|s| s.to_str()))
+    else {
+        return false;
+    };
+    let prefix = format!("{stem}.");
+    let mut holding = false;
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let lease = Path::new(&name).extension().is_some_and(|e| e == "live");
+        if !(lease && name.starts_with(&prefix)) {
+            continue;
+        }
+        if holds(std::fs::read_to_string(entry.path()).ok().as_deref(), now) {
+            holding = true;
+        } else {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    holding
 }
 
 /// When atm last reminded `me` that it wasn't watching: beside its cursor.
@@ -540,7 +605,7 @@ fn reminded_file(root: Option<&Path>, me: &str) -> PathBuf {
 }
 
 /// A running watch's lease (ATM-642): until when it is known to run, in seconds since 1970, written while it runs
-/// and removed when it ends. Several watches of one agent share it; the others renew it within [`RECHECK`].
+/// and removed when it ends. Each watch has its own ([`lease_file`]).
 struct Lease(PathBuf);
 
 impl Lease {
@@ -624,8 +689,7 @@ fn open_and_changed(
 /// The reviews or the tasks can't be read.
 pub fn watch_state(project: &Project, me: &str) -> Result<WatchState> {
     let root = project.root().map(Path::to_path_buf);
-    let lease = std::fs::read_to_string(lease_file(root.as_deref(), me)).ok();
-    if holds(lease.as_deref(), atm_common::time::real_now()) {
+    if any_lease_holds(root.as_deref(), me, atm_common::time::real_now()) {
         return Ok(WatchState {
             running: true,
             ..WatchState::default()
@@ -886,15 +950,69 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let file = dir.join("watches").join("x.json");
         assert!(read_cursor(&file).is_none());
-        let seen: HashSet<String> = ["r1/c2".to_string(), "r1/c1".to_string()].into();
-        let statuses: HashMap<String, Status> = [("r1".to_string(), Status::Approved)].into();
-        save_cursor(&file, &seen, &statuses);
+        let mut seen: HashSet<String> = ["r1/c2".to_string(), "r1/c1".to_string()].into();
+        let mut statuses: HashMap<String, Status> = [("r1".to_string(), Status::Approved)].into();
+        save_cursor(&file, &mut seen, &mut statuses);
         let back = read_cursor(&file).unwrap();
         assert_eq!(back.seen, ["r1/c1", "r1/c2"]);
         assert_eq!(back.statuses, statuses);
         std::fs::write(&file, "{ not json").unwrap();
         assert!(read_cursor(&file).is_none());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ATM-663 (R12): two watches of one agent each wrote their own cursor over the other's
+    #[test]
+    fn a_watch_cursor_is_merged_with_what_another_watch_kept_meanwhile() {
+        let dir = std::env::temp_dir().join(format!("atm-lib-watch-merge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let file = dir.join("watches").join("x.json");
+        // The other watch kept r1/c1 told and r2 approved
+        let mut other: HashSet<String> = ["r1/c1".to_string()].into();
+        let mut its: HashMap<String, Status> = [("r2".to_string(), Status::Approved)].into();
+        save_cursor(&file, &mut other, &mut its);
+        // This one told r1/c2 and saw r1 sent back, and r2 still waiting
+        let mut seen: HashSet<String> = ["r1/c2".to_string()].into();
+        let mut statuses: HashMap<String, Status> = [
+            ("r1".to_string(), Status::ChangesRequested),
+            ("r2".to_string(), Status::Waiting),
+        ]
+        .into();
+        save_cursor(&file, &mut seen, &mut statuses);
+        // Both kept on disk and in memory; for a review both saw, this watch's own status
+        let back = read_cursor(&file).unwrap();
+        assert_eq!(back.seen, ["r1/c1", "r1/c2"]);
+        assert_eq!(seen, ["r1/c1".to_string(), "r1/c2".to_string()].into());
+        assert_eq!(back.statuses, statuses);
+        assert_eq!(statuses["r2"], Status::Waiting);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ATM-663 (R6): a merge renumbers a comment whose number two clones both gave
+    #[test]
+    fn a_comment_is_known_by_its_author_time_and_text_not_its_number() {
+        let review = review(Status::Waiting, &["T-1"]);
+        let first = comment("c3", "Hakan Serce", "Why?", vec![]);
+        let renumbered = comment("c7", "Hakan Serce", "Why?", vec![]);
+        assert_eq!(
+            seen_key(&review.header, &first),
+            seen_key(&review.header, &renumbered)
+        );
+        let other = comment("c3", "Hakan Serce", "Why not?", vec![]);
+        assert_ne!(
+            seen_key(&review.header, &first),
+            seen_key(&review.header, &other)
+        );
+        let by_someone_else = comment("c3", "Ana", "Why?", vec![]);
+        assert_ne!(
+            seen_key(&review.header, &first),
+            seen_key(&review.header, &by_someone_else)
+        );
+        // The key an older watch wrote is its number's
+        assert_eq!(
+            old_seen_key(&review.header, &first),
+            format!("{}/c3", review.header.id.0)
+        );
     }
 
     #[test]
