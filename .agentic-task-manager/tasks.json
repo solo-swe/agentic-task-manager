@@ -1765,7 +1765,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 690
+    "next_number": 691
   },
   "tasks": [
     {
@@ -14423,7 +14423,7 @@
       "description": "ATM-588 made Wrap work in Unified. In Split the button waits, saying why: a wrapped line on one side has to make its counterpart on the other as tall, and a code block CompMD drew had no element per line to give that height to (CMD-250 in CompMD's backlog).\n\n**Unblocked by CompMD 0.8.0 (ATM-648, CR-59):** a code block's view now has `view.lines()` and `view.lineHeights()`, each code line's element and measured height.\n\n## Change\n- `DiffCode.svelte` reads each line's height from the view's `lineHeights()` (and its element from `lines()`), in place of its own measuring (a collapsed range at each line's start), if they serve.\n- `DiffView.svelte` takes the taller of each pair of a Split run's two sides, and gives both lines that height.\n- The Wrap button is enabled in Split too.\n\n## Tests\n- E2e: in Split, a long line wrapped on one side keeps the other side's next line level with it, and the line numbers stay on each line's first visual line; in WebKit too (`@webkit`).\n- The pick, the `+`, a chain's highlight and the comment box work wrapped.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
@@ -14431,7 +14431,7 @@
         "dashboard/src/lib/reviews/ReviewPage.svelte"
       ],
       "created_at": "2026-11-18T07:51:25Z",
-      "updated_at": "2026-11-20T09:35:24Z",
+      "updated_at": "2026-11-20T09:52:33Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "number": 616,
@@ -14452,15 +14452,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T09:35:24Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T09:35:24Z",
           "kind": "review",
           "text": "CR-72: Wrap in Split, its two sides kept level",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:51:57Z",
+          "kind": "note",
+          "text": "Approved: in CR-72 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:52:33Z",
+          "kind": "outcome",
+          "text": "Approved in CR-72: Wrap in Split, its two sides kept level",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T09:35:24Z",
+          "to": "2026-11-20T09:51:57Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:52:33Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1edb5-a7a6-723b-9782-727820cea332",
@@ -17015,13 +17035,13 @@
       "description": "Hakan (2026-11-19): a review's rendered Markdown looks very dark. It should simply look right, as a top-level document editor shows a document (Microsoft Word, Google Docs, Apple Pages, Notion): a page you read and comment on, not a dark panel.\n\n## Research\nWrite `docs/rendered-document-research.md`, reviewed as a CR:\n- **How editors show a document:** the page (its colour in light and dark modes, its paper, margins, width and shadow), the canvas around it, the text's type and size, headings, tables, code, images; how each handles dark mode (Word's and Docs' dark canvas with a light page, or a dark page; Pages; Notion's in-canvas text). Screenshots or precise descriptions, each sourced.\n- **What atm shows now:** the review's rendered side and the document viewer's page (`DocumentPage.svelte`, ATM-645), in each theme and mode, with screenshots; why it looks dark (the page's colours, the theme tokens, CompMD's styles: atm's own CSS, per the boundary).\n- **The gap:** what is missing to get there, as a list of concrete changes with where each lives (atm's CSS and components, the theme tokens; anything that would be CompMD's, named as such and not built here).\n- **A recommendation**, and the follow-up tasks it implies.\n\nThe diff's own marks (added, removed, changed blocks) and the comments must still read on the page.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/rendered-document-research.md"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-20T09:48:57Z",
+      "updated_at": "2026-11-20T09:51:18Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17034,7 +17054,7 @@
       "number": 649,
       "started_at": "2026-11-20T09:48:57Z",
       "started_by": "claude:0f56a916",
-      "commit": "bd75d5a173e5d0d7dbf0e3b87f93b6e9159b4426",
+      "commit": "5b9f2d484f3be1ff6eaf285a01d4c943c39fce79",
       "code_reviews": [
         {
           "id": "01a1f504-664d-74a9-8860-04a6080c9fd4",
@@ -17053,6 +17073,24 @@
           "kind": "rejection",
           "text": "CR-60 round 1: 2 open comments",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:49:25Z",
+          "kind": "review",
+          "text": "CR-60: round 2",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:50:40Z",
+          "kind": "note",
+          "text": "Approved: in CR-60 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:51:18Z",
+          "kind": "outcome",
+          "text": "Approved in CR-60 (round 2): docs/rendered-document-research.md, with the decisions in §7; its follow-up tasks are in §6, to be added",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -17060,8 +17098,16 @@
           "from": "2026-11-19T18:14:28Z",
           "to": "2026-11-20T09:45:22Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-20T09:49:25Z",
+          "to": "2026-11-20T09:50:40Z",
+          "outcome": "approved"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-20T09:49:25Z",
+      "completed_at": "2026-11-20T09:51:18Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848990a501dd",
@@ -17146,7 +17192,7 @@
       "description": "Hakan (2026-11-19): a comment entered on rendered Markdown isn't shown on the screen.\n\n## Two ways to show them (Hakan's)\n1. **In a margin on the right**, beside the block they are about, as Word and Google Docs show comments; a line or a highlight ties each to its block.\n2. **Cut the page at that point and split it in two**, the comment in the space between, as the source view shows a chain under its lines.\n\nPropose one (or both, by width) with a mockup in the CR, then build it: every chain on the file shows at its block, open ones and resolved ones as the source view shows them, with reply, resolve and edit; a comment being written shows where it will land. Follows from ATM-650 (commenting there) and fits the look the research task settles (ATM-649).\n\n## Tests\ne2e: a chain on a rendered block shows at that block, in both views; a new comment shows once sent; a resolved one folds as in the source view.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f4fd-42b5-741f-92a8-848990a501dd"
       ],
@@ -17156,7 +17202,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-19T18:06:49Z",
+      "updated_at": "2026-11-20T09:49:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17166,7 +17212,9 @@
         }
       ],
       "sprint": "Task&review state machine",
-      "number": 651
+      "number": 651,
+      "started_at": "2026-11-20T09:49:37Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848b9d6a97b8",
@@ -17299,16 +17347,16 @@
       "description": "Found in ATM-652 (CR-62): in the full e2e run, the long review's first draw took 208 ms against its 200 ms budget. Measured, not rerun: alone it is 50 to 100 ms; with the other `@timed` tests running beside it, 83 to 143 ms with ATM-652's change and 98 to **443 ms without it**. ATM-641 kept the timed tests away from the functional ones, not from each other: the `timed` project still runs on five workers.\n\n## Change\nThe `timed` project runs on one worker (`playwright.config.ts`: `workers` per project, or `fullyParallel: false` and one worker for it), so each measurement has the machine to itself. Note how long the project then takes, locally and in CI, and say so in `AGENTS.md`'s testing conventions next to ATM-641's note.\n\n## Tests\nThe full run (`--project svelte --project timed`) three times: the timed tests within their budgets each time; their medians recorded in the CR.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/playwright.config.ts",
         "AGENTS.md"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-20T09:48:48Z",
+      "updated_at": "2026-11-20T09:49:37Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17330,7 +17378,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T19:55:50Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T19:55:50Z",
@@ -17343,9 +17390,23 @@
           "kind": "note",
           "text": "Approved: in CR-64 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:49:37Z",
+          "kind": "outcome",
+          "text": "Approved in CR-64: the timed e2e tests run one at a time",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-20T09:48:48Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T19:55:50Z",
+          "to": "2026-11-20T09:48:48Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:49:37Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e632884fe3f",
@@ -17359,7 +17420,7 @@
       "description": "Found in ATM-652 (CR-62): the e2e test *+ on a line wrapped opens the comment box where it is; the pane stays* (`reviews.spec.ts`, ATM-625) passes in Chromium and fails in WebKit, the app's engine on macOS, with and without ATM-652's change: the pane moves from about 1,230 to 2,860 px when the comment box opens. The suite runs Chromium only, so nothing caught it.\n\n## Look into\nWhy WebKit scrolls the pane: the comment box's focus (`focusOnShow`) scrolling it into view before it is placed, a run being cut where the pick ends (the segments are drawn again) and the scroll anchoring WebKit lacks, or the rows measured again after a wrap.\n\n## Fix and tests\nThe pane stays where it is in WebKit too. Run the reviews specs in WebKit: either a WebKit project for the reviews specs in `playwright.config.ts` (its cost measured), or at least this test in WebKit as well.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffView.svelte",
@@ -17367,9 +17428,9 @@
         "dashboard/playwright.config.ts"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-20T09:49:03Z",
+      "updated_at": "2026-11-20T09:49:36Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17391,7 +17452,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T21:19:34Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T21:19:34Z",
@@ -17404,9 +17464,23 @@
           "kind": "note",
           "text": "Approved: in CR-65 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:49:36Z",
+          "kind": "outcome",
+          "text": "Approved in CR-65: the + on a wrapped line keeps the pane where it is in WebKit; tests in WebKit",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-20T09:49:03Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T21:19:34Z",
+          "to": "2026-11-20T09:49:03Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:49:36Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e642f23672e",
@@ -17420,7 +17494,7 @@
       "description": "Hakan (2026-11-19): jumping to a file in a review's diffs (the last file, say, from the file tree) sometimes ends somewhere else: right after the jump, the files above it are drawn and expand, and push the file below the screen.\n\n## Expected\nA jump lands with the file's header at the top of the pane, and it stays there while the files above it are drawn, measured or highlighted (ATM-587 draws long files a chunk at a time; CompMD renders runs one at a time).\n\n## Look into\n- What grows above the target after the jump: files not drawn yet (their placeholder height versus their real one), chunks added a frame at a time, CompMD's highlighting changing a run's height, folds.\n- Keep the target in place: scroll anchoring (Chromium has it, WebKit doesn't, and the app is WebKit), or hold the target's position while what is above it changes (measure its top before and after each change and scroll by the difference) until the page settles; or give the files above their real height before the jump.\n\n## Tests\ne2e on a long review (the performance fixture's 94 files): jump to the last file and to one in the middle; the file's header stays at the pane's top (within a few px) for a second after, in Chromium and WebKit.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -17428,7 +17502,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-19T21:58:57Z",
+      "updated_at": "2026-11-20T10:03:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17452,15 +17526,35 @@
         }
       ],
       "review_requested_at": "2026-11-19T21:58:57Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-19T21:58:57Z",
           "kind": "review",
           "text": "CR-66: A jump to a file stays on it while the files above are drawn",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T10:01:57Z",
+          "kind": "note",
+          "text": "Approved: in CR-66 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T10:03:47Z",
+          "kind": "outcome",
+          "text": "Approved in CR-66: a jump to a file stays on it while the files above are drawn",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-19T21:58:57Z",
+          "to": "2026-11-20T10:01:57Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T10:03:47Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2259e5eae26e",
@@ -18401,7 +18495,7 @@
       "description": "Reported by Hakan (2026-11-20): pressing the chevron at the right of a title bar tab (`.app-tab-chooser`, the `ProjectSelector` in `dashboard/src/lib/shell/AppTitleBar.svelte`) no longer shows the project list popup.\n\n## Change\nFind what stopped it (the tab strip's scroller since ATM-639 and ATM-605, the tab's drag or click handling, or the popup clipped by the strip) and fix it, so the list opens from the chevron and choosing a project switches the tab.\n\n## Tests\nAn e2e test in the app's spec: the chevron in a tab opens the project list, and a project chosen there is shown in that tab; tagged to run in WebKit too.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/AppTitleBar.svelte",
@@ -18409,7 +18503,7 @@
         "dashboard/src/lib/shell/ProjectSelector.svelte"
       ],
       "created_at": "2026-11-20T07:11:57Z",
-      "updated_at": "2026-11-20T07:19:02Z",
+      "updated_at": "2026-11-20T09:50:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18433,15 +18527,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T07:19:02Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T07:19:02Z",
           "kind": "review",
           "text": "CR-67: The chevron in a tab opens the project list again",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:49:29Z",
+          "kind": "note",
+          "text": "Approved: in CR-67 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:50:15Z",
+          "kind": "outcome",
+          "text": "Approved in CR-67: the chevron in a tab opens the project list again",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T07:19:02Z",
+          "to": "2026-11-20T09:49:29Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:50:15Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83dceb619886",
@@ -18455,14 +18569,14 @@
       "description": "Asked by Hakan (2026-11-20): when the title bar's tab strip is full, put a **More ⌄** button at its end that opens a menu of the tabs that don't fit; choosing one shows it (scrolled into view, or moved into the visible part).\n\n## Change\n- `dashboard/src/lib/ui/TitleBarTabs.svelte`: measure which tabs are fully visible; when some aren't, show **More ⌄** (a Bits UI menu) listing those, each with its label, the current one marked.\n- Decide whether the scroll arrows stay next to it or the button replaces them (as browsers' tab overflow lists do); keep tab dragging working.\n\n## Tests\nComponent tests for which tabs the menu lists at a few widths; an e2e test that opens a hidden tab from the menu, tagged for WebKit too.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/ui/TitleBarTabs.svelte",
         "dashboard/src/lib/shell/AppTitleBar.svelte"
       ],
       "created_at": "2026-11-20T07:11:57Z",
-      "updated_at": "2026-11-20T07:38:20Z",
+      "updated_at": "2026-11-20T09:56:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18486,15 +18600,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T07:38:20Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T07:38:20Z",
           "kind": "review",
           "text": "CR-69: More ⌄ lists the tabs that do not fit",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:56:21Z",
+          "kind": "note",
+          "text": "Approved: in CR-69 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:56:37Z",
+          "kind": "outcome",
+          "text": "Approved in CR-69: More ⌄ lists the tabs that do not fit",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T07:38:20Z",
+          "to": "2026-11-20T09:56:21Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:56:37Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83dd79ff17ea",
@@ -18508,7 +18642,7 @@
       "description": "Reported by Hakan (2026-11-20): the back arrow on a review page always goes to the project's reviews list (`ReviewsTab.svelte:263-264`, `backHref={listAddress}`). A review can be opened from many places: a task's details, a Kanban card, a project's Reviews tab, the All projects reviews page, the Omniboard, a link in task text. Back should return there.\n\n## Change\n- Model each of those places as an address (most already are; the details panel over a page is `?task=`), so where a review was opened from is the previous address of the tab's history.\n- The review page's back arrow goes back in the tab's history when its previous entry is in this app, labelled with where it goes (\"← Task ATM-12\", \"← Kanban\", \"← All reviews\"); only a review opened with no history (a new tab, a deep link) falls back to the project's reviews list.\n- Back and Forward (the browser's, the app's keys and menu) then move through the same entries, consistently, as `docs/tabs-and-navigation-design.md` (ATM-653) describes; go through `lib/navigation.ts`, never `history` directly.\n\n## Tests\nE2e tests: a review opened from task details, from a Kanban card, from the All projects reviews page and from the Omniboard returns there on the back arrow, with the details panel open again where it was; Forward goes back to the review; a review opened in a new tab goes to its reviews list.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/ReviewsTab.svelte",
@@ -18516,7 +18650,7 @@
         "dashboard/src/lib/navigation.ts"
       ],
       "created_at": "2026-11-20T07:11:57Z",
-      "updated_at": "2026-11-20T07:31:37Z",
+      "updated_at": "2026-11-20T09:51:17Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18543,15 +18677,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T07:31:37Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T07:31:37Z",
           "kind": "review",
           "text": "CR-68: A review goes back to where it was opened from",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:50:03Z",
+          "kind": "note",
+          "text": "Approved: in CR-68 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:51:17Z",
+          "kind": "outcome",
+          "text": "Approved in CR-68: a review goes back to where it was opened from",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T07:31:37Z",
+          "to": "2026-11-20T09:50:03Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:51:17Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f819-6c2f-774b-923c-6b97a9827afd",
@@ -18565,7 +18719,7 @@
       "description": "Reported by Hakan (2026-11-20): in a live review, the diff updates as the working copy changes (`ReviewsTab.svelte` asks again every 2 s in the browser, on a change in the app). Those updates must never flicker, and never move the scroll of the file tree (left) or the diffs (right). A document being read, or a file chosen on the left, stays where it is, as far as the update allows.\n\n## Change\n- Measure first: an e2e test on a live review that changes the working copy while a file is chosen and the pane is scrolled into it, sampling every frame (as ATM-656's test does): the pane's scroll, the chosen file's top, and whether any drawn block goes blank or is replaced.\n- Then fix what the measurement shows: keep the files' components and their drawn code and documents across an update (keyed by path, the same text not drawn again), keep the scroll of both panes, and hold the file or line being read in place when files above it grow or shrink.\n\n## Tests\nThat e2e test, for a change in another file, in the file being read (above and below the place read), and a file added above; in Chromium and WebKit (`@webkit`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -18574,7 +18728,7 @@
         "dashboard/src/lib/shell/ReviewsTab.svelte"
       ],
       "created_at": "2026-11-20T08:36:18Z",
-      "updated_at": "2026-11-20T09:02:36Z",
+      "updated_at": "2026-11-20T10:01:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18598,15 +18752,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T09:02:36Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T09:02:36Z",
           "kind": "review",
           "text": "CR-70: A live review updates without flicker, and the place read stays put",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T10:00:58Z",
+          "kind": "note",
+          "text": "Approved: in CR-70 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T10:01:22Z",
+          "kind": "outcome",
+          "text": "Approved in CR-70: a live review updates without flicker, and the place read stays put",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T09:02:36Z",
+          "to": "2026-11-20T10:00:58Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T10:01:22Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f83a-4d94-73f7-98bf-1f833fbff0db",
@@ -18620,14 +18794,14 @@
       "description": "Reported by Hakan (2026-11-20): the title bar's line runs under the selected tab too, so only its colour says it is selected. The selected tab should have no line under it and join the page under it, as a browser's does.\n\nThe tab is meant to cover the bar's bottom line (`margin-bottom: -1px`, the page's background), but since ATM-605 the tabs are in a scroller with `overflow-y: hidden` (`ui/TitleBarTabs.svelte`), which clips that pixel.\n\n## Change\nLet the scroller hold the pixel below the bar, so the selected tab covers the line; the other tabs keep it.\n\n## Tests\nAn e2e test in `app.spec.ts` (WebKit too): at the bar's bottom line, under the selected tab, is the tab; under another tab, the bar's line.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/ui/TitleBarTabs.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-20T09:12:12Z",
-      "updated_at": "2026-11-20T09:18:04Z",
+      "updated_at": "2026-11-20T09:53:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18651,15 +18825,35 @@
         }
       ],
       "review_requested_at": "2026-11-20T09:18:04Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T09:18:04Z",
           "kind": "review",
           "text": "CR-71: The selected tab has no line under it again",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:52:11Z",
+          "kind": "note",
+          "text": "Approved: in CR-71 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:53:24Z",
+          "kind": "outcome",
+          "text": "Approved in CR-71: the selected tab has no line under it again",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T09:18:04Z",
+          "to": "2026-11-20T09:52:11Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:53:24Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f853-b838-7013-a6f3-af7c0f05adf2",
@@ -18673,7 +18867,7 @@
       "description": "Reported by Hakan (2026-11-20, e.g. CR-60's screenshots): a binary file is rightly not copied into a review's round as a diff, but a file of a known type should still show when opened. Every image the viewer knows (png, jpeg, gif, webp, svg) shows its old and new image on the review's Diffs tab, instead of *A binary file: listed, not shown.*\n\n## Change\n- **atm-docs:** `read_image_at(vcs, revision, path)`: an image's bytes as a commit or tree has it, with `read_document_at`'s checks (the path's, a regular file, not ignored, the size limit) and `read_image`'s (only the image types, bytes matching their name); the two share one lookup.\n- **atm-lib / atm-api:** `…/files?path=&at=<revision>`, as `…/documents?path=&at=` (kept by the browser when `at` is a full object ID); the app's `file_of` command takes `at` too (I27).\n- **Dashboard:** a binary file of an image type shows its sides (removed: the old; added: the new; modified: both, side by side, labelled), each loaded from its revision; another binary file stays listed, not shown.\n- **Docs:** `docs/security-architecture.md` I11 (the files route takes `at`, its checks) and `docs/multi-project-api.md`.\n\n## Tests\natm-docs unit tests (an image at a revision; refused when it isn't one, or isn't an image); the route's tests on its fake; the app command's; an e2e test that a review's added and modified images show.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-docs/src/lib.rs",
@@ -18684,7 +18878,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T09:39:58Z",
-      "updated_at": "2026-11-20T09:48:44Z",
+      "updated_at": "2026-11-20T09:52:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18708,15 +18902,67 @@
         }
       ],
       "review_requested_at": "2026-11-20T09:48:44Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-20T09:48:44Z",
           "kind": "review",
           "text": "CR-73: A review shows its image files: before and after",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:50:59Z",
+          "kind": "note",
+          "text": "Approved: in CR-73 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:52:00Z",
+          "kind": "outcome",
+          "text": "Approved in CR-73: a review shows its image files, before and after",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T09:48:44Z",
+          "to": "2026-11-20T09:50:59Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:52:00Z",
+      "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1f86c-28ea-7783-8c1f-95c638d3c235",
+      "name": "A review's source view draws no line between two lines",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Hakan: lines were drawn between each line of a review's source view.\n\n## Cause\nEach line's row (its tint and its number) is placed at the code's measured line height, a fraction of a pixel (20.8 px). Where two rows meet, both half cover the same pixel, so their tints blend into a line between every two lines.\n\n## Change\n`dashboard/src/lib/reviews/DiffCode.svelte`: `rowOf` puts each row's edges on whole pixels, so the rows tile.\n\n## Tests\nThe Split Wrap test in `reviews.spec.ts` checks that every row is on whole pixels and starts where the one before it ends, wrapped and not.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/DiffCode.svelte",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-20T10:06:40Z",
+      "updated_at": "2026-11-20T10:06:43Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T10:06:40Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 690,
+      "started_at": "2026-11-20T10:06:43Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
