@@ -1193,6 +1193,10 @@ button.menu-trigger:hover,
   left: 0;
   width: 300px;
 }
+/* Placed by Bits UI's wrapper beside its button (a tab's chooser, ATM-684): not by its own offset */
+.project-menu.floating {
+  position: static;
+}
 
 /* The workspace switcher, after the project selector when there are several workspaces (WorkspaceSelector.svelte) */
 .workspace-switch {

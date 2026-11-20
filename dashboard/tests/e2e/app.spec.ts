@@ -95,80 +95,100 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#settings-overlay')).not.toHaveClass(/open/);
   });
 
-  test('the title bar (T-513): on macOS the system’s buttons and menu bar; elsewhere the page draws them', async ({
-    page,
-    tasksServer,
-  }) => {
-    await tasksServer.asApp();
-    tasksServer.use('standard');
-    await page.goto('/');
-    // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
-    // charts are inside the tab, under it, without a second title
-    await expect(page.locator('#app-titlebar .title-bar-tab.selected #dashboard-title')).toHaveText('Standard Project');
-    await expect(page.locator('#dashboard-title')).toHaveCount(1);
-    await expect(page.locator('#app-tab-new')).toBeVisible();
-    await expect(page.locator('#app-titlebar [role="tab"]')).toHaveCount(1);
-    await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
-    // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
-    // the tab only the subtitle line; no reload button or version chip
-    await expect(page.locator('.title-bar-tab.selected #project-selector')).toBeVisible();
-    await expect(page.locator('.title-bar-tab.selected #other-projects-need')).toHaveCount(0);
-    // The chooser in the tab opens its menu (its click isn't the tab's)
-    await page.locator('.title-bar-tab.selected #project-selector').click();
-    await expect(page.locator('#project-menu')).toBeVisible();
-    await page.keyboard.press('Escape');
-    // Search and Filters inside the tab, on the subtitle's line, before it; not in the title bar
-    await expect(page.locator('.topbar.in-tab .in-tab-row #filters')).toBeVisible();
-    await expect(page.locator('#app-titlebar #filters')).toHaveCount(0);
-    expect(
-      await page.evaluate(() => {
-        const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
-        const filters = box('.in-tab-row #filters');
-        const subtitle = box('.in-tab-row #subtitle');
-        return (
-          filters.right <= subtitle.left &&
-          Math.abs(filters.top + filters.height / 2 - (subtitle.top + subtitle.height / 2)) < 4
-        );
-      }),
-    ).toBe(true);
-    // The Filters button is its icon (its name stays for screen readers), and its popup opens inside the window
-    await expect(page.locator('#filters-toggle')).toHaveAccessibleName(/Filters/);
-    expect(await page.locator('#filters-toggle .filters-label').evaluate((e) => e.getBoundingClientRect().width)).toBe(
-      1,
-    );
-    await page.locator('#filters-toggle').click();
-    await expect(page.locator('.filter-panel')).toBeVisible();
-    expect(await page.locator('.filter-panel').evaluate((e) => e.getBoundingClientRect().left)).toBeGreaterThanOrEqual(
-      0,
-    );
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
-    await expect(page.locator('#reload-btn')).toHaveCount(0);
-    await expect(page.locator('#version-chip')).toHaveCount(0);
-    await expect(page.locator('#window-buttons')).toHaveCount(0);
-    await expect(page.locator('#app-menus')).toHaveCount(0);
-    await page.locator('#tab-list').click();
-    await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
-    // A drag on the bar's free space moves the window; a double click maximizes it
-    // The bar's free space: just past the +
-    const free = await page.evaluate(() => document.querySelector('#app-tab-new')!.getBoundingClientRect().right + 16);
-    await page.locator('#app-titlebar').click({ position: { x: free, y: 10 } });
-    await page.locator('#app-titlebar').dblclick({ position: { x: free, y: 10 } });
-    expect(tasksServer.windowCalls).toContain('start_dragging');
-    expect(tasksServer.windowCalls).toContain('toggle_maximize');
+  // In WebKit too, the app's engine on macOS: the tab chooser's list was clipped by the tabs' strip (ATM-684)
+  test(
+    'the title bar (T-513): on macOS the system’s buttons and menu bar; elsewhere the page draws them',
+    { tag: '@webkit' },
+    async ({ page, tasksServer }) => {
+      await tasksServer.asApp();
+      tasksServer.use('standard');
+      await page.goto('/');
+      // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
+      // charts are inside the tab, under it, without a second title
+      await expect(page.locator('#app-titlebar .title-bar-tab.selected #dashboard-title')).toHaveText(
+        'Standard Project',
+      );
+      await expect(page.locator('#dashboard-title')).toHaveCount(1);
+      await expect(page.locator('#app-tab-new')).toBeVisible();
+      await expect(page.locator('#app-titlebar [role="tab"]')).toHaveCount(1);
+      await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
+      // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
+      // the tab only the subtitle line; no reload button or version chip
+      await expect(page.locator('.title-bar-tab.selected #project-selector')).toBeVisible();
+      await expect(page.locator('.title-bar-tab.selected #other-projects-need')).toHaveCount(0);
+      // The chooser in the tab opens its menu (its click isn't the tab's)
+      await page.locator('.title-bar-tab.selected #project-selector').click();
+      await expect(page.locator('#project-menu')).toBeVisible();
+      // Drawn where it can be seen and used, not clipped by the tabs' scrolling strip (ATM-684): what is at its
+      // middle is the menu itself, once it is placed beside its button, and its filter takes a real click
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const menu = document.querySelector('#project-menu')!;
+            const box = menu.getBoundingClientRect();
+            const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+            return box.height > 40 && !!at && menu.contains(at);
+          }),
+        )
+        .toBe(true);
+      await page.locator('#project-filter').click();
+      await expect(page.locator('#project-filter')).toBeFocused();
+      await page.keyboard.press('Escape');
+      // Search and Filters inside the tab, on the subtitle's line, before it; not in the title bar
+      await expect(page.locator('.topbar.in-tab .in-tab-row #filters')).toBeVisible();
+      await expect(page.locator('#app-titlebar #filters')).toHaveCount(0);
+      expect(
+        await page.evaluate(() => {
+          const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+          const filters = box('.in-tab-row #filters');
+          const subtitle = box('.in-tab-row #subtitle');
+          return (
+            filters.right <= subtitle.left &&
+            Math.abs(filters.top + filters.height / 2 - (subtitle.top + subtitle.height / 2)) < 4
+          );
+        }),
+      ).toBe(true);
+      // The Filters button is its icon (its name stays for screen readers), and its popup opens inside the window
+      await expect(page.locator('#filters-toggle')).toHaveAccessibleName(/Filters/);
+      expect(
+        await page.locator('#filters-toggle .filters-label').evaluate((e) => e.getBoundingClientRect().width),
+      ).toBe(1);
+      await page.locator('#filters-toggle').click();
+      await expect(page.locator('.filter-panel')).toBeVisible();
+      expect(
+        await page.locator('.filter-panel').evaluate((e) => e.getBoundingClientRect().left),
+      ).toBeGreaterThanOrEqual(0);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
+      await expect(page.locator('#reload-btn')).toHaveCount(0);
+      await expect(page.locator('#version-chip')).toHaveCount(0);
+      await expect(page.locator('#window-buttons')).toHaveCount(0);
+      await expect(page.locator('#app-menus')).toHaveCount(0);
+      await page.locator('#tab-list').click();
+      await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+      // A drag on the bar's free space moves the window; a double click maximizes it
+      // The bar's free space: just past the +
+      const free = await page.evaluate(
+        () => document.querySelector('#app-tab-new')!.getBoundingClientRect().right + 16,
+      );
+      await page.locator('#app-titlebar').click({ position: { x: free, y: 10 } });
+      await page.locator('#app-titlebar').dblclick({ position: { x: free, y: 10 } });
+      expect(tasksServer.windowCalls).toContain('start_dragging');
+      expect(tasksServer.windowCalls).toContain('toggle_maximize');
 
-    // Windows and Linux: the page's window buttons and its menus
-    tasksServer.windowShell = { system_menu_bar: false, system_window_buttons: false };
-    tasksServer.windowCalls = [];
-    await page.reload();
-    await expect(page.locator('#window-buttons')).toBeVisible();
-    await page.locator('#window-minimize').click();
-    await page.locator('#window-close').click();
-    expect(tasksServer.windowCalls).toEqual(['minimize', 'close_window']);
-    await page.locator('#app-menus').getByRole('menuitem', { name: 'View' }).click();
-    await page.getByRole('menuitemcheckbox', { name: /List/ }).click();
-    await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
-  });
+      // Windows and Linux: the page's window buttons and its menus
+      tasksServer.windowShell = { system_menu_bar: false, system_window_buttons: false };
+      tasksServer.windowCalls = [];
+      await page.reload();
+      await expect(page.locator('#window-buttons')).toBeVisible();
+      await page.locator('#window-minimize').click();
+      await page.locator('#window-close').click();
+      expect(tasksServer.windowCalls).toEqual(['minimize', 'close_window']);
+      await page.locator('#app-menus').getByRole('menuitem', { name: 'View' }).click();
+      await page.getByRole('menuitemcheckbox', { name: /List/ }).click();
+      await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+    },
+  );
 
   test('a switch of tab shows the project at once, its name steady; one shown before needs no load (T-525)', async ({
     page,

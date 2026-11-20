@@ -85,7 +85,9 @@
         {#if tab.id === appTabs.active}
           <!-- The tab shown: its name is the page's heading, and the project chooser -->
           <h1 id="dashboard-title">{name}</h1>
-          {#if dashboard.projects.length > 0}<span class="app-tab-chooser"><ProjectSelector badge={false} /></span>{/if}
+          {#if dashboard.projects.length > 0}<span class="app-tab-chooser"
+              ><ProjectSelector badge={false} floating /></span
+            >{/if}
         {:else}
           <span class="app-tab-name">{name}</span>
         {/if}
