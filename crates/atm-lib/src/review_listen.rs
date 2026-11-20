@@ -941,8 +941,8 @@ fn reminder_for(state: &WatchState, last: Option<&Reminded>, now: i64) -> Option
         )
     };
     Some(format!(
-        "you aren't watching your reviews ({n} open: {open}{changed}). Start `atm review watch --json` as a \
-         background command and read what it prints (atm docs reviews)"
+        "you aren't watching your reviews ({n} open: {open}{changed}). Start `atm review watch --json --once` as \
+         a background command, read what it prints when it ends, and start it again (atm docs reviews)"
     ))
 }
 
