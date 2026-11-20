@@ -1465,9 +1465,10 @@
         }
       },
       {
-        "id": "Audit - Nov19",
-        "state": "planned",
-        "goal": "Fix what the November codebase audit found (docs/codebase-audit-2026-11.md): security first, then bugs, then the shared abstractions"
+        "id": "Audit and tabs",
+        "state": "active",
+        "goal": "Fix what the November codebase audit found (docs/codebase-audit-2026-11.md): security first, then bugs, then the shared abstractions",
+        "start": "2026-11-20T17:16:33Z"
       },
       {
         "id": "Tabs & navigation",
@@ -17762,11 +17763,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "related": [
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
@@ -17798,11 +17799,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 658
     },
     {
@@ -17832,11 +17833,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 659
     },
     {
@@ -17864,11 +17865,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "with": "user",
       "related": [
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
@@ -17903,11 +17904,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "with": "user",
       "number": 661
     },
@@ -17939,11 +17940,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 662
     },
     {
@@ -17970,11 +17971,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 663
     },
     {
@@ -18005,11 +18006,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 664
     },
     {
@@ -18038,11 +18039,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 665
     },
     {
@@ -18072,11 +18073,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 666
     },
     {
@@ -18106,11 +18107,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "related": [
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
@@ -18140,11 +18141,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 668
     },
     {
@@ -18170,11 +18171,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 669
     },
     {
@@ -18204,11 +18205,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 670
     },
     {
@@ -18239,11 +18240,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 671
     },
     {
@@ -18274,11 +18275,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 672
     },
     {
@@ -18307,11 +18308,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 673
     },
     {
@@ -18340,11 +18341,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 674
     },
     {
@@ -18372,11 +18373,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 675
     },
     {
@@ -18407,11 +18408,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 676
     },
     {
@@ -18443,11 +18444,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 677
     },
     {
@@ -18481,11 +18482,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 678
     },
     {
@@ -18515,11 +18516,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 679
     },
     {
@@ -18549,11 +18550,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 680
     },
     {
@@ -18584,11 +18585,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 681
     },
     {
@@ -18621,11 +18622,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 682
     },
     {
@@ -18657,11 +18658,11 @@
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
-          "sprint": "Audit - Nov19",
+          "sprint": "Audit and tabs",
           "from": "2026-11-20T06:55:03Z"
         }
       ],
-      "sprint": "Audit - Nov19",
+      "sprint": "Audit and tabs",
       "number": 683
     },
     {
@@ -19490,16 +19491,21 @@
         "dashboard/src/lib/navigation.ts"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Tabs & navigation",
-          "from": "2026-11-20T11:36:44Z"
+          "from": "2026-11-20T11:36:44Z",
+          "to": "2026-11-20T17:16:06Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Tabs & navigation",
+      "sprint": "Audit and tabs",
       "number": 694
     },
     {
@@ -19523,16 +19529,21 @@
         "dashboard/src/lib/shell/SidebarToggle.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Tabs & navigation",
-          "from": "2026-11-20T11:36:44Z"
+          "from": "2026-11-20T11:36:44Z",
+          "to": "2026-11-20T17:16:06Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Tabs & navigation",
+      "sprint": "Audit and tabs",
       "number": 695
     },
     {
@@ -19558,16 +19569,21 @@
         "dashboard/src/lib/state.svelte.ts"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Tabs & navigation",
-          "from": "2026-11-20T11:36:44Z"
+          "from": "2026-11-20T11:36:44Z",
+          "to": "2026-11-20T17:16:06Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Tabs & navigation",
+      "sprint": "Audit and tabs",
       "number": 696
     },
     {
@@ -19593,16 +19609,21 @@
         "dashboard/src/lib/shell/ReviewsTab.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Tabs & navigation",
-          "from": "2026-11-20T11:36:44Z"
+          "from": "2026-11-20T11:36:44Z",
+          "to": "2026-11-20T17:16:06Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Tabs & navigation",
+      "sprint": "Audit and tabs",
       "number": 697
     },
     {
@@ -19623,16 +19644,21 @@
         "dashboard/src/lib/new-tab-clicks.ts"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Tabs & navigation",
-          "from": "2026-11-20T11:36:44Z"
+          "from": "2026-11-20T11:36:44Z",
+          "to": "2026-11-20T17:16:06Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Tabs & navigation",
+      "sprint": "Audit and tabs",
       "number": 698
     },
     {
@@ -19654,16 +19680,21 @@
       ],
       "files": [],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Tabs & navigation",
-          "from": "2026-11-20T11:36:44Z"
+          "from": "2026-11-20T11:36:44Z",
+          "to": "2026-11-20T17:16:06Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Tabs & navigation",
+      "sprint": "Audit and tabs",
       "number": 699
     },
     {
@@ -19686,16 +19717,21 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Tabs & navigation",
-          "from": "2026-11-20T11:36:44Z"
+          "from": "2026-11-20T11:36:44Z",
+          "to": "2026-11-20T17:16:06Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Tabs & navigation",
+      "sprint": "Audit and tabs",
       "number": 700
     },
     {
@@ -19725,16 +19761,21 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T11:36:44Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Tabs & navigation",
-          "from": "2026-11-20T11:36:44Z"
+          "from": "2026-11-20T11:36:44Z",
+          "to": "2026-11-20T17:16:06Z"
+        },
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Tabs & navigation",
+      "sprint": "Audit and tabs",
       "number": 701
     },
     {
@@ -19965,17 +20006,21 @@
         "dashboard/tests/unit/ci-workflow.test.ts"
       ],
       "created_at": "2026-11-20T16:31:59Z",
-      "updated_at": "2026-11-20T17:12:39Z",
+      "updated_at": "2026-11-20T17:16:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 705,
       "started_at": "2026-11-20T16:32:03Z",
       "started_by": "claude:0f56a916",
-      "commit": "d4c5f8edf02b3449dd7a6cde0157022e4dc7f729",
+      "commit": "919378580c1f8f0114b70e69b199c65bbdb22bcb",
       "code_reviews": [
         {
           "id": "01a1f9ce-24d3-7287-ada4-70197bd193e6",
           "ref": "CR-83"
+        },
+        {
+          "id": "01a1f9f2-d79e-77d5-ab78-c9603b750f41",
+          "ref": "CR-84"
         }
       ],
       "review_requested_at": "2026-11-20T16:33:19Z",
@@ -19994,7 +20039,14 @@
           "by": "Hakan Serce"
         }
       ],
-      "reviewed_at": "2026-11-20T17:11:14Z"
+      "reviewed_at": "2026-11-20T17:11:14Z",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-20T17:16:06Z"
+        }
+      ],
+      "sprint": "Audit and tabs"
     }
   ]
 }
