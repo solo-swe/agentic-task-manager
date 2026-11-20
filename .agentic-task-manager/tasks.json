@@ -1467,13 +1467,9 @@
       {
         "id": "Audit and tabs",
         "state": "active",
-        "goal": "Fix what the November codebase audit found (docs/codebase-audit-2026-11.md): security first, then bugs, then the shared abstractions",
-        "start": "2026-11-20T17:16:33Z"
-      },
-      {
-        "id": "Tabs & navigation",
-        "state": "planned",
-        "goal": "A tab is a place with its own history: Back and Forward (keys, menu, mouse, title bar arrows) on the tab, an address for everything it shows, clicks and menus as in a browser, pop-ups by kind (docs/tabs-and-navigation-design.md)"
+        "goal": "Fix what the November audit found (security first, then bugs, then the shared abstractions), and make a tab a place with its own history and address (docs/tabs-and-navigation-design.md)",
+        "start": "2026-11-20T17:16:33Z",
+        "release": "0.43.0"
       }
     ],
     "releases": [
@@ -1752,6 +1748,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/57"
         },
         "released_at": "2026-11-20T16:29:40Z"
+      },
+      {
+        "id": "0.43.0",
+        "state": "planned"
       }
     ],
     "migrations": [
