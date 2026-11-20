@@ -2348,6 +2348,43 @@ test.describe('the diff viewer on a review’s page', () => {
       });
   });
 
+  // ATM-675 (audit D2): the page was one component across reviews, so what was typed on one was posted to the next
+  test('a comment typed on one review isn’t there on the next one gone to', async ({ page, tasksServer }) => {
+    const data = loadFixture('standard');
+    Object.assign(
+      data.tasks.find((t) => t.id === 'T-001')!,
+      {
+        status: 'in_review',
+        code_reviews: [
+          { id: 'r2', ref: 'CR-2' },
+          { id: 'r1', ref: 'CR-1' },
+        ],
+      },
+    );
+    tasksServer
+      .setReviews({
+        reviews: [
+          { review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true },
+          { review: header(1), branch: 'dev/1', chains: 0, open: 0, needs_you: true },
+        ],
+        you: 'Ana',
+      })
+      .setReview('CR-2', reviewPage())
+      .setReview('CR-1', reviewPage({ review: header(1), chains: [] }));
+    await openDashboard(page, tasksServer, data, { tab: 'reviews' });
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('button', { name: 'Comment on the review' }).click();
+    await page.locator('#review-comment-body').fill('Half a thought');
+    // To CR-1 without leaving the page: from the details of the task both review
+    await page.locator('#review-page a[data-task="T-001"]').first().click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.locator('#detail-review .review-link', { hasText: 'CR-1' }).click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-1');
+    await expect(page.locator('#review-comment-body')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Comment on the review' }).click();
+    await expect(page.locator('#review-comment-body')).toHaveValue('');
+  });
+
   test('viewed folds a file, kept in the browser; its fold opens it again', async ({ page, tasksServer }) => {
     await openDiffs(page, tasksServer);
     await card(page, 'src/a.rs').getByLabel('Viewed src/a.rs').check();

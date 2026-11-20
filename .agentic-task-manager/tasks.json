@@ -18446,7 +18446,7 @@
       "description": "Audit findings H2, H5, H6, H7 and H8 ([the report](docs/codebase-audit-2026-11.md#h2-medium-security-the-git-refusal-is-case-sensitive-checked-exploitability-suspected)).\n\n- **H2:** `crates/atm-docs/src/lib.rs:138-143` compares `.git` and `.agentic-task-manager` case-sensitively; on macOS `.GIT/config` may be served. Compare case-insensitively; on Windows also refuse segments ending in `.` or a space and `~` short names. First check with a test whether `git check-ignore` already refuses it.\n- **H5:** GETs have no Origin check: any site can make the server write `recent.json` and run git (`at=:/<regex>`). Refuse a GET whose `Sec-Fetch-Site` is `cross-site` or whose `Origin` isn't the server's, except `/assets/`.\n- **H6:** `at` may name a subtree: accept only a commit or a root tree a round recorded.\n- **H7, H8:** the logo route (`crates/atm-db/src/jsongit/logo.rs:66`) follows symlinks and skips the files route's rules, and a logo that can't be read is a cached empty 200 (`routes/source.rs:284`): resolve and read it through `atm-docs`' image read, once, and answer 404 on failure.\n- Update `docs/security-architecture.md` I11 and I12.\n\n## Tests\n`tests/scripts/serve.test.mjs`: `.GIT/config` refused; a cross-site GET refused and `recent.json` unchanged; a logo that is a symlink, or in `.git`, refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-docs/src/lib.rs",
@@ -18456,7 +18456,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T21:52:05Z",
+      "updated_at": "2026-11-20T22:03:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18468,7 +18468,24 @@
       "sprint": "Audit and tabs",
       "number": 671,
       "started_at": "2026-11-20T21:52:05Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "83a4b47d85fea9d82d9b0e24c16c33aafc7f7c80",
+      "code_reviews": [
+        {
+          "id": "01a1fafc-518e-7777-ab2a-6502aed57bef",
+          "ref": "CR-96"
+        }
+      ],
+      "review_requested_at": "2026-11-20T22:03:22Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T22:03:22Z",
+          "kind": "review",
+          "text": "CR-96: Document routes: .git in any case, logo rules, other sites refused, full object IDs",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2268ca6d16aa",
@@ -18583,7 +18600,7 @@
       "description": "Audit findings D1, D2 and the stale-guard abstraction ([the report](docs/codebase-audit-2026-11.md#d1-medium-bug-project-loads-apply-stale-and-out-of-order-answers-checked)).\n\n- **D1:** `dashboard/src/lib/state.svelte.ts:812-817` assigns the worktrees before checking the project is still shown; the guard compares the project ID only (two workspaces can have one); `refreshArchive` writes `this.archive` unchecked; `reload()` runs from the timer, focus, navigation and the app's events with no in-flight guard. Add a small `latest()` helper in `lib/` (a sequence token checked after every await) keyed on `workspace/project`, use it in `fetchAndApply`, `refreshArchive` and `refreshProjectSources`, skip a poll while one is in flight, and replace the other three guards with it (`ReviewsTab`, `AllProjectsBoard`, `DocumentViewer`).\n- **D2:** `dashboard/src/lib/shell/ReviewsTab.svelte:255` reuses one `<ReviewPage>` across reviews, so a review-wide comment typed on CR-1 posts to CR-2 after following a link. Wrap it in `{#key page.review.id}`.\n\n## Tests\nUnit tests with a stubbed API that answers out of order (A's answer after B is shown changes nothing; an older poll after a newer one changes nothing); an e2e test in `reviews.spec.ts`: a draft review comment on one review isn't there after moving to another.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/state.svelte.ts",
@@ -18591,9 +18608,9 @@
         "dashboard/src/lib/latest.ts"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T22:03:29Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -18601,7 +18618,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 675
+      "number": 675,
+      "started_at": "2026-11-20T22:03:29Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226c64577940",

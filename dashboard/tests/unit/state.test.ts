@@ -295,6 +295,94 @@ describe('DashboardState', () => {
     });
   });
 
+  describe('answers out of order (ATM-675, audit D1)', () => {
+    afterEach(() => {
+      history.replaceState(null, '', '/');
+      localStorage.clear();
+    });
+    const OTHER = {
+      meta: { project: 'Other', id: 'other' },
+      tasks: [{ id: 'T-1', name: 'Other', type: 'feature', status: 'todo' }],
+    };
+    /** The server, but the next requests whose URL `holds` matches wait, each until released with a body */
+    function holding(base: ReturnType<typeof server>, holds: (url: string) => boolean) {
+      const waiting: ((body: unknown) => void)[] = [];
+      const fn = vi.fn((url: string) => {
+        if (!holds(String(url))) return base(url);
+        return new Promise<Response>((answer) => waiting.push((body) => answer(new Response(JSON.stringify(body)))));
+      });
+      return { fn, waiting };
+    }
+    const tasksOf = (id: string) => (url: string) => url.startsWith(v1Tasks(id)) && !url.includes('archived');
+
+    it("project A's answer coming after B is shown changes nothing", async () => {
+      const held = holding(server({ projects: [project('p2'), project('p3')] }), tasksOf('p3'));
+      vi.stubGlobal('fetch', held.fn);
+      history.replaceState(null, '', '/projects/p3');
+      const s = new DashboardState();
+      const first = s.load();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      history.replaceState(null, '', '/projects/p2');
+      s.onNavigate();
+      await vi.waitFor(() => expect([s.projectId, s.loaded]).toEqual(['p2', true]));
+      held.waiting[0](asTaskViews(OTHER));
+      await first;
+      expect([s.projectId, s.projectName, s.tasks.length]).toEqual(['p2', 'Standard Project', 12]);
+    });
+
+    it("an older poll's answer coming after a newer one's changes nothing", async () => {
+      const s = new DashboardState();
+      await s.load();
+      let holdNext = true;
+      const held = holding(server(), (url) => tasksOf('p1')(url) && holdNext && !(holdNext = false));
+      vi.stubGlobal('fetch', held.fn);
+      const older = s.reload();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      await s.reload(); // the newer one: the server's answer now
+      expect(s.projectName).toBe('Standard Project');
+      held.waiting[0](asTaskViews(OTHER));
+      await older;
+      expect([s.projectName, s.tasks.length]).toEqual(['Standard Project', 12]);
+    });
+
+    it('a poll waits while a load is still out; a reload asked for goes ahead', async () => {
+      const s = new DashboardState();
+      await s.load();
+      const held = holding(server(), tasksOf('p1'));
+      vi.stubGlobal('fetch', held.fn);
+      const out = s.reload();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      s.poll();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(held.waiting).toHaveLength(1);
+      const asked = s.reload();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(2));
+      for (const answer of held.waiting) answer(asTaskViews(standard));
+      await Promise.all([out, asked]);
+      // Nothing out: the next poll asks
+      s.poll();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(3));
+      held.waiting[2](asTaskViews(standard));
+    });
+
+    it("project A's archive coming after B is shown is not B's", async () => {
+      const archiveOf = (id: string) => (url: string) => url.startsWith(v1Tasks(id)) && url.includes('archived');
+      const held = holding(server({ projects: [project('p2'), project('p3')] }), archiveOf('p3'));
+      vi.stubGlobal('fetch', held.fn);
+      history.replaceState(null, '', '/projects/p3');
+      const s = new DashboardState();
+      await s.load();
+      s.wantArchive();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      history.replaceState(null, '', '/projects/p2');
+      s.onNavigate();
+      await vi.waitFor(() => expect([s.projectId, s.loaded]).toEqual(['p2', true]));
+      held.waiting[0]({ ...asTaskViews(OTHER), archived: true });
+      await new Promise((r) => setTimeout(r, 0));
+      expect([s.archive, s.archiveLoaded]).toEqual([[], false]);
+    });
+  });
+
   it('keeps showing the same project across reloads', async () => {
     const s = new DashboardState();
     await s.load();

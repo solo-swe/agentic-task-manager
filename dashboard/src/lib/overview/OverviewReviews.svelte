@@ -8,6 +8,7 @@
   import type { ProjectEntry } from '../load';
   import { currentAddress, navigate } from '../navigation';
   import { loadReviews } from '../review-data';
+  import { latest } from '../latest';
   import { keepFilter, keptFilter } from '../review-filter';
   import { mergeProjectReviews } from '../reviews/page';
   import ReviewList from '../reviews/ReviewList.svelte';
@@ -34,12 +35,13 @@
   let loading = $state(false);
   let problem = $state<string | null>(null);
   let shownText = '';
-  let asked = 0;
+  // Only the latest ask's answer is shown (ATM-675)
+  const loads = latest();
 
   /** Each project's reviews the query keeps, asked of each at once; a project that can't answer is left out, and the
    * list says which */
   async function load() {
-    const ask = ++asked;
+    const ask = loads.ask();
     const from = listed;
     loading = !entries.length;
     const answers = await Promise.all(
@@ -50,7 +52,8 @@
         ),
       ),
     );
-    if (ask !== asked) return;
+    ask.done();
+    if (!ask.current()) return;
     loading = false;
     const failed = from.filter((_, i) => !answers[i]).map((p) => p.name);
     problem = failed.length ? `Couldn't read the reviews of ${failed.join(', ')}.` : null;

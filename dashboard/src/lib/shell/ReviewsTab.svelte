@@ -19,6 +19,7 @@
     updateDraft,
     type ChangeResult,
   } from '../api/review-changes';
+  import { latest } from '../latest';
   import { backEntry, currentAddress, goBack, navigate } from '../navigation';
   import { placeName } from '../places';
   import {
@@ -90,18 +91,19 @@
   let shownText = '';
   let entriesText = '';
 
-  let asked = 0;
+  // Only the latest ask's answer is shown (ATM-675)
+  const loads = latest();
   async function load() {
     const id = project;
     if (!id) return;
-    const ask = ++asked;
+    const ask = loads.ask();
     if (!at.review) loading = !entries.length;
     try {
       if (at.review) {
         const page = await loadReview(id, at.review, at.round, at.against);
         learnReviews(id, [page.review]);
         const text = JSON.stringify(page);
-        if (ask === asked && text !== shownText) {
+        if (ask.current() && text !== shownText) {
           shownText = text;
           [shown, choices] = [page, []];
         }
@@ -113,22 +115,23 @@
         );
         learnUnreadable(id, listed.unreadable ?? []);
         const text = JSON.stringify([listed.reviews, listed.unreadable]);
-        if (ask === asked && text !== entriesText) {
+        if (ask.current() && text !== entriesText) {
           entriesText = text;
           [entries, unreadable] = [listed.reviews, listed.unreadable ?? []];
         }
       }
-      if (ask === asked) problem = null;
+      if (ask.current()) problem = null;
     } catch (e) {
-      if (ask !== asked) return;
+      if (!ask.current()) return;
       problem = (e as Error).message;
       const review = at.review;
       if (review && !shown) {
         const listed = await loadReviews(id, NO_QUERY).catch(() => null);
-        if (ask === asked) choices = (listed?.reviews ?? []).filter((r) => r.review.reference.startsWith(`${review}.`));
+        if (ask.current()) choices = (listed?.reviews ?? []).filter((r) => r.review.reference.startsWith(`${review}.`));
       }
     } finally {
-      if (ask === asked) loading = false;
+      if (ask.current()) loading = false;
+      ask.done();
     }
   }
 
@@ -260,45 +263,29 @@
   {#if at.review}
     {#if shown && project}
       {@const page = shown}
-      <ReviewPage
-        {page}
-        project={shortName}
-        file={at.file}
-        side={(revision) => revisionDocuments(project, revision)}
-        imageAt={(revision, path) => v1FileUrl(project, path, revision)}
-        isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
-        taskHref={taskPage}
-        tasks={taskLinks}
-        backHref={cameFrom ?? listAddress}
-        backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
-        onback={() => (cameFrom ? goBack() : go(listAddress))}
-        {busy}
-        {problem}
-        docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
-        onfile={(path) => go(withReview(currentAddress(), { ...at, file: path }), true)}
-        onround={(round, against) => go(withReview(currentAddress(), { ...at, round, against }))}
-        onviewed={(file) => (viewed = toggleViewed(page.review.id, page.view.round, page.view.against, file))}
-        oncomment={({ path, picked, body }) =>
-          change(
-            addComment(project, review, {
-              path,
-              lines: picked?.lines ?? null,
-              side: picked?.side ?? 'new',
-              quote: picked?.quote ?? null,
-              round: path ? page.view.round : null,
-              body,
-            }),
-          )}
-        onreply={(to, body) => change(replyTo(project, review, to, body))}
-        onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
-        onedit={(comment, body) => change(editComment(project, review, comment, body))}
-        onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
-        onclose={(reason) => change(closeReview(project, review, reason))}
-        onpoke={(body) => change(pokeReview(project, review, body))}
-        ondrafts={{
-          comment: (path, picked, body) =>
+      <!-- Another review is another page (ATM-675, audit D2): nothing typed on one, no file it was at, stays for the next -->
+      {#key page.review.id}
+        <ReviewPage
+          {page}
+          project={shortName}
+          file={at.file}
+          side={(revision) => revisionDocuments(project, revision)}
+          imageAt={(revision, path) => v1FileUrl(project, path, revision)}
+          isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
+          taskHref={taskPage}
+          tasks={taskLinks}
+          backHref={cameFrom ?? listAddress}
+          backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
+          onback={() => (cameFrom ? goBack() : go(listAddress))}
+          {busy}
+          {problem}
+          docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
+          onfile={(path) => go(withReview(currentAddress(), { ...at, file: path }), true)}
+          onround={(round, against) => go(withReview(currentAddress(), { ...at, round, against }))}
+          onviewed={(file) => (viewed = toggleViewed(page.review.id, page.view.round, page.view.against, file))}
+          oncomment={({ path, picked, body }) =>
             change(
-              addDraft(project, review, {
+              addComment(project, review, {
                 path,
                 lines: picked?.lines ?? null,
                 side: picked?.side ?? 'new',
@@ -306,13 +293,33 @@
                 round: path ? page.view.round : null,
                 body,
               }),
-            ),
-          reply: (to, body) => change(addDraft(project, review, { reply_to: to, body })),
-          edit: (id, body) => change(updateDraft(project, review, id, body)),
-          remove: (id) => change(removeDraft(project, review, id)),
-        }}
-        ondocument={(ref) => dashboard.openDocument(ref)}
-      />
+            )}
+          onreply={(to, body) => change(replyTo(project, review, to, body))}
+          onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
+          onedit={(comment, body) => change(editComment(project, review, comment, body))}
+          onsubmit={(decision, body) =>
+            change(submitDecision(project, review, body ? { decision, body } : { decision }))}
+          onclose={(reason) => change(closeReview(project, review, reason))}
+          onpoke={(body) => change(pokeReview(project, review, body))}
+          ondrafts={{
+            comment: (path, picked, body) =>
+              change(
+                addDraft(project, review, {
+                  path,
+                  lines: picked?.lines ?? null,
+                  side: picked?.side ?? 'new',
+                  quote: picked?.quote ?? null,
+                  round: path ? page.view.round : null,
+                  body,
+                }),
+              ),
+            reply: (to, body) => change(addDraft(project, review, { reply_to: to, body })),
+            edit: (id, body) => change(updateDraft(project, review, id, body)),
+            remove: (id) => change(removeDraft(project, review, id)),
+          }}
+          ondocument={(ref) => dashboard.openDocument(ref)}
+        />
+      {/key}
     {:else if problem}
       <p class="reviews-problem" role="alert">{problem}</p>
       {#if choices.length}

@@ -22,7 +22,7 @@
 
   $effect(() => {
     if (!dashboard.polls) return;
-    const timer = setInterval(() => dashboard.reload(), dashboard.autoRefreshSeconds * 1000);
+    const timer = setInterval(() => dashboard.poll(), dashboard.autoRefreshSeconds * 1000);
     return () => clearInterval(timer);
   });
 </script>

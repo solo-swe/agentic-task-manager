@@ -19,6 +19,7 @@
   import { getPref, setPref } from '../prefs';
   import { slug, type DrawnLine, type GutterRow } from '../compmd';
   import { compactAt } from '../scroll';
+  import { latest } from '../latest';
   import type { DocumentRefresh, DocumentSource } from './source';
   import DocumentPage from './DocumentPage.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -58,15 +59,20 @@
   /** The source and path the shown document is of */
   let shownKey = '';
   const keyOf = (from: DocumentSource | null, path: string | undefined) => `${from?.id}\u0000${path}`;
+  // Only the latest ask's answer is shown, and only while its file is open (ATM-675): not another file's, nor an
+  // older poll's that came last
+  const loads = latest(() => keyOf(source, ref?.path));
 
   async function load(key: string, from: DocumentSource, path: string, poll: boolean) {
-    const result = await from.load(path, poll ? validators : undefined);
-    if (key !== keyOf(source, ref?.path)) return; // another file was opened meanwhile
+    const ask = loads.ask();
+    const result = await from.load(path, poll ? validators : undefined).finally(() => ask.done());
+    if (!ask.current(key)) return; // another file was opened meanwhile, or a newer answer is on its way
     loading = false;
     if (result.unchanged) return;
     if ('error' in result) {
-      // A poll that fails keeps what is shown; a first load says what happened
-      if (!poll || result.error !== 'failed') {
+      // A poll that fails keeps what is shown; a first load says what happened, and so does a poll that came in its
+      // place (the first load's answer was dropped for it) with nothing shown yet
+      if (!poll || !doc || result.error !== 'failed') {
         doc = null;
         error = { kind: result.error, message: result.message };
       }
