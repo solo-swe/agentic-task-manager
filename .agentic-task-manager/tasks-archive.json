@@ -1,6 +1,6 @@
 {
   "meta": {
-    "archived_at": "2026-11-19T15:15:40Z",
+    "archived_at": "2026-11-20T22:59:05Z",
     "format": 2
   },
   "tasks": [
@@ -21414,6 +21414,1597 @@
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
       },
       "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "11236fcd-6ba1-8747-9784-d132ca113e9e",
+      "number": 415,
+      "name": "Port atm-cli from Python to Rust",
+      "type": "refactor",
+      "description": "Port atm-cli from Python to Rust as a single static executable.\n\nPreserve the `atm` command interface and task state machine defined in docs/improving-atm-cli-ergonomics.md\nand docs/modernizing-build-approach.md. This depends on the Python design tasks (T-412, T-414, T-416) being complete\nand frozen before porting, so the Rust implementation translates a stable spec rather than a moving target.\n\nSee docs/porting-to-rust.md for the full analysis: Rust benefits (single binary, compile-time checks, clap/serde),\ncosts (loss of readable-script transparency, cross-platform CI, merge driver registration, atm serve parity),\nsketch of the Rust structure, risks, and open questions.\n\nWork items:\n1. Wait for T-412 (CLI ergonomics redesign), T-414 (build modernization), and T-416 (third-party libraries) to reach a frozen Python spec\n2. Choose Rust web framework for atm serve (Axum, Actix, std HTTP)\n3. Port task state machine to Rust enums (compile-time exhaustiveness)\n4. Port CLI to clap mirroring the frozen Python command structure\n5. Port REST API server\n6. Set up cross-platform CI build matrix (macOS x86_64/arm64, Linux, Windows)\n7. Ship single static binary; keep atm.sh launcher as thin wrapper\n8. Test merge driver (atm merge-driver) on all platforms\n",
+      "requirements": [
+        "[Rust guide](docs/guides/rust.md)"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "475e38c0-bffc-8473-8f69-bfb0f0767397",
+        "6ae00513-55fe-8ea7-b630-00cae1e601a2",
+        "410a56f8-dcbb-82c6-a57e-052e49a192e2",
+        "99977b61-39c7-88ff-8223-3b50aab6dd03",
+        "8e5e5b1a-a3e5-8d1a-8372-836537d2f1e0"
+      ],
+      "files": [
+        "docs/porting-to-rust.md",
+        "docs/guides/rust.md"
+      ],
+      "created_at": "2026-11-05T07:03:15Z",
+      "updated_at": "2026-11-08T04:29:46Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli"
+      ],
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:02:02Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:31:56Z",
+      "started_by": "claude:34798264",
+      "commit": "3b839f72e1e7831c3f2d5ddbc67aeb942056154b",
+      "completed_at": "2026-11-06T20:53:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T20:53:42Z",
+          "kind": "outcome",
+          "text": "Design agreed in `docs/porting-to-rust.md` (crates per layer, axum, side-by-side port, no plugin after the switch); implementation: T-443 (this sprint), T-444–T-454 (The Rust port).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      },
+      "merged_at": "2026-11-08T04:28:35Z"
+    },
+    {
+      "id": "4ebd2acb-4dc5-8e87-9803-92b1bece1735",
+      "number": 416,
+      "name": "Incorporate third-party libraries into atm-cli",
+      "type": "refactor",
+      "description": "Incorporate third-party libraries into atm-cli (enabled by T-414 build modernization).\n\nSee docs/cli-improvements-with-3p.md for the full survey: click/typer for CLI parsing, pydantic for data validation,\ntransitions for the state machine, rich for output formatting, loguru for logging, pendulum/arrow for date/time,\nhttpx/uvicorn for the REST API server, watchdog for serve --refresh, filelock for cross-platform locking, jsonschema\nfor tasks.json validation, pytest/hypothesis for testing.\n\nWork items:\n1. Add click (or typer) for one command group (e.g. atm task state), keeping old argparse commands as wrappers\n2. Add pydantic for task/meta model validation (fail-fast at load time)\n3. Add transitions for the task state machine (declarative guards and hooks)\n4. Add rich for atm list / atm show output (color-coded statuses, tables, panels)\n5. Add loguru for structured logging (levels, rotation, clean backtraces)\n6. Add filelock for cross-platform file locking (replaces fcntl + custom mkdir lock)\n7. Add jsonschema validation for tasks.json at load time (atm doctor)\n8. Add httpx + uvicorn for atm serve REST API (proper HTTP, async)\n9. Add watchdog for serve --refresh (file events instead of polling)\n10. Remove hand-rolled validation, parsing, and rendering code one area at a time\n\nDepends on T-414 (build modernization must bundle 3rd-party deps into plugin/scripts/atm.py).\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "skipped",
+      "dependencies": [
+        "6ae00513-55fe-8ea7-b630-00cae1e601a2"
+      ],
+      "files": [
+        "docs/cli-improvements-with-3p.md"
+      ],
+      "created_at": "2026-11-05T07:21:08Z",
+      "updated_at": "2026-11-06T06:52:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli"
+      ],
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "skipped_at": "2026-11-06T06:52:05Z",
+      "notes": [
+        {
+          "at": "2026-11-06T06:52:05Z",
+          "kind": "note",
+          "text": "Skipped: Typer (atm2) and `transitions` (the state machine) are in; the rest of the survey isn’t worth doing in Python with the Rust port coming (T-415).",
+          "by": "claude:34798264"
+        }
+      ]
+    },
+    {
+      "id": "3e75638f-62fe-8fc0-be26-0adbb7257a3c",
+      "number": 418,
+      "name": "Fix the status-command refusal scenarios failing since the T-417 state machine",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "atm2"
+      ],
+      "description": "23 scenarios in `npm run test:scripts` fail on `dev/0.31.0`, all on refusal paths of the status commands: `done` on a todo task, `reopen` on an open one, `review` on a task that isn't in progress, `skip` on one in progress, `start` with unfinished dependencies, and so on (`block.json`, `lease.json`, `notes.json`, `reopen.json`, `review*.json`, `skip.json`, `status.json`, `vocab.json`).\n\nThey failed before T-412's atm2 work (the rebuilt `plugin/scripts/atm.py` was byte-identical), so they most likely come from replacing the hand-rolled transitions with `TaskMachine` in [lib/state.py](atm-cli/atm/lib/state.py) (T-417): its refusals don't give the messages or exit codes the scenarios expect.\n\n## Change\nMake `TaskMachine.transition` refuse exactly as `change_status` did: the same message and exit code for each refusal. Don't change the scenarios to match new messages unless the old message was wrong.\n\n## Tests\n`npm run test:scripts` is green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/lib/state.py"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "started_at": "2026-11-06T05:36:07Z",
+      "started_by": "claude:34798264",
+      "commit": "c6e4a035563accf4eaf4569b2ed3020c932d91a2",
+      "completed_at": "2026-11-06T05:52:19Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T05:52:19Z",
+          "kind": "review",
+          "text": "Check `atm-cli/atm/lib/state.py`: the machine still declares the transitions and guards, but the state check runs first with the old message (exit 1), guards raise unwrapped, and the effects run once in `_apply`, in the old order. This also fixes two T-417 bugs: duplicated `fail`/`release`/`reject` notes, and the lost review interval on `reject`. All 23 scenarios pass; only `tests/lib` fails (T-419).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "0ecc5286-f4dc-8d2a-b8d0-0482da64481d",
+      "number": 419,
+      "name": "Make the atm-lib unit tests run without transitions installed system-wide",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "atm2"
+      ],
+      "description": "The atm-lib unit tests (`tests/lib`, run by [lib.test.mjs](tests/scripts/lib.test.mjs)) fail to import: `lib/state.py` imports `transitions` (T-417), and the tests run the modules with plain `python3`, which doesn't have it. The bundled `plugin/scripts/atm.py` works because it carries its third-party code.\n\n## Change\nGive the unit tests the same third-party code the bundle has, so they pass with Python 3.9 and no packages installed (as CI runs them): e.g. put `atm-cli/vendored/` on the path in `lib.test.mjs`, or run them through `uv`. Coordinate with T-416 (third-party libraries in atm-cli), which decides how they are vendored.\n\n## Tests\n`npm run test:scripts` runs `tests/lib` green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "tests/scripts/lib.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "related": [
+        "4ebd2acb-4dc5-8e87-9803-92b1bece1735"
+      ],
+      "components": [
+        "cli"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "started_at": "2026-11-06T05:52:45Z",
+      "started_by": "claude:34798264",
+      "commit": "8e723bf361cf0252bdc1fc58789568b7f67fdd43",
+      "completed_at": "2026-11-06T06:09:13Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T06:09:13Z",
+          "kind": "review",
+          "text": "Check `tests/lib/support.py`: it puts `atm-cli/vendored/` (and `vendored/six/`, since `six` is one module in a folder) on the path, the same copy the bundle carries. Also check `tests/scripts/test_architecture.test.mjs`: since T-417 it read `atm-cli/atm` relative to the current directory, so under the suite it never checked the layer rules and made the run exit 1. It now uses `REPO` and is a real `node:test`. `test:scripts`: 561 pass, exit 0. Not tried on Python 3.9.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "58b511f2-8914-8030-abbc-4cc3748d594a",
+      "number": 420,
+      "name": "atm2: loop and claim groups via atm-lib",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "Port `atm2 loop next`, `loop run`, `claim list` and `claim heartbeat` (with `--auto`, the PostToolUse hook's mode) in [atm2.py](atm-cli/atm/cli/atm2.py) from running `atm` (`run_atm`) to calling atm-lib directly: copy what `cmd_next`, `cmd_run`, `cmd_claims`, `cmd_heartbeat` and `auto_heartbeat` in [cli/claims.py](atm-cli/atm/cli/claims.py) do, as T-412 did for the `task` group (commit `7f44e21`). `loop next` takes `--status` as `atm next` does; its selections (`--sprint`, `--tasks`, `--all`, `--backlog`) exclude each other; no task is exit code 3.\n\n## Tests\nParity steps in [atm2.test.mjs](tests/scripts/atm2.test.mjs): `next`, `next --claim`, `claims`, `heartbeat`, `run <id> -- <command>` (exit code passed through).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli/atm2.py",
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "started_at": "2026-11-06T06:09:18Z",
+      "started_by": "claude:34798264",
+      "commit": "62461cacfaf13cea9223ffe955048e59a72ad9c2",
+      "completed_at": "2026-11-06T06:12:14Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T06:12:14Z",
+          "kind": "review",
+          "text": "Check `atm-cli/atm/cli/atm2.py`: `loop next` (now with `--status`, and refusing two selections), `loop run` (with `--agent`), `claim list` and `claim heartbeat [--auto]` call atm-lib as `cli/claims.py` does, with no `run_atm`. Parity steps in `tests/scripts/atm2.test.mjs`; `parity()` now writes each project’s folder as `<root>`, since claims name their worktree. `heartbeat --auto` is silent, so it has no parity step.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "595dd440-206b-8ca5-80ba-8c38c9ac760f",
+      "number": 421,
+      "name": "atm2: project and sprint groups via atm-lib, then remove _delegate.py",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "Port the last groups of [atm2.py](atm-cli/atm/cli/atm2.py) that run `atm` to atm-lib, copying what atm does:\n\n- `project config` (`cmd_paths`), `project status` (`cmd_status`), `project workflow [set …]` (`cmd_workflow`), `project logo [set|unset]` (`cmd_logo`), and `project list|add|remove|prune` (`cmd_projects`);\n- `sprint list|add|edit|start|close|delete` (`cmd_sprints`), `sprint move <id>… --to` (`cmd_move`) and `sprint backlog` (`cmd_backlog`); only `list` and `add` exist in atm2 now.\n\nThen nothing uses `run_atm`: delete [_delegate.py](atm-cli/atm/cli/_delegate.py), its entry in `EXCLUDED_MODULES` in [test_architecture.test.mjs](tests/scripts/test_architecture.test.mjs), and the \"delegates to atm\" wording in atm2's help and docstrings.\n\n## Tests\nParity steps for each command in [atm2.test.mjs](tests/scripts/atm2.test.mjs).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "58b511f2-8914-8030-abbc-4cc3748d594a"
+      ],
+      "files": [
+        "atm-cli/atm/cli/atm2.py",
+        "atm-cli/atm/cli/_delegate.py",
+        "tests/scripts/test_architecture.test.mjs",
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "started_at": "2026-11-06T06:12:19Z",
+      "started_by": "claude:34798264",
+      "commit": "53e3ae4fda8a84318cd072ee86392335801b9949",
+      "completed_at": "2026-11-06T06:23:02Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T06:23:02Z",
+          "kind": "review",
+          "text": "Check `atm-cli/atm/cli/atm2.py`: `project config|status|workflow|logo|list|add|remove|prune` and `sprint list|add|edit|start|close|delete|move|backlog` call atm-lib; nothing runs `atm` any more, and `_delegate.py` is gone. Four atm commands render through new shared helpers (`show_status`, `show_paths`, `logo_action`, `projects_action`), so both CLIs print the same text. `parity()` gives each side its own `ATM_HOME`. 569 tests pass.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "aa078e29-1354-8eed-86c4-a77f76f16b19",
+      "number": 422,
+      "name": "atm2: parity tests for the groups ported earlier, run in CI",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "[atm2.test.mjs](tests/scripts/atm2.test.mjs) checks only the `task` group. Add parity steps (same exit code, stdout, stderr and tasks.json as atm) for the groups ported before it: `vcs commit|pr|pushed|repository`, `db migrate|archive|unarchive|init`, `release list|add|edit|archive|notes`, `component list|add|edit`, `doctor` and `service status`. Fix what they find. `release list` and `component list` print a dry-run message under `--dry-run` although they change nothing: reads should just run.\n\nThe tests skip where atm2 can't run (no Typer), which is CI today. Decide with the user how CI gets Typer (uv in the workflow, or the vendored copy from T-416); this changes the CI workflow, so it is done together with the user, and `docs/security-architecture.md` is updated if a permission changes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "with": "user",
+      "related": [
+        "4ebd2acb-4dc5-8e87-9803-92b1bece1735"
+      ],
+      "components": [
+        "cli"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "started_at": "2026-11-06T07:30:33Z",
+      "started_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T07:30:34Z",
+          "kind": "note",
+          "text": "The user decided the CI question (2026-11-06): CI installs Typer with `pip`, at the versions and hashes pinned from `uv.lock`.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T07:48:35Z",
+          "kind": "review",
+          "text": "Check: CI’s Python jobs pip-install Typer by hash from `atm-cli/atm2-requirements.txt` (exported from `uv.lock`) and set `ATM2_REQUIRED`, so atm2 tests fail rather than skip. `atm2_main` takes `transitions` from `vendored/`. New parity steps: `vcs`, `db`, `release`, `component`, `doctor`, `service status`. They found 2 differences, fixed: `db archive -n` didn’t preview; `release archive` used straight quotes. Reads run under `-n`. 582 pass; CI not run yet.",
+          "by": "claude:34798264"
+        }
+      ],
+      "commit": "76efd8362db52fea30d6b209606f7112eba4efd7",
+      "completed_at": "2026-11-06T07:48:35Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "75c15d3a-88f8-8d81-a777-5fd0df296653",
+      "number": 423,
+      "name": "atm2: shell completion for zsh, bash and fish",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "T-412 work item 4. Typer installs completion scripts (`--install-completion`, `--show-completion`) for zsh, bash and fish; make it complete atm's own values too, read through atm-lib: task IDs (with their names) for every `<id>` argument, sprint names for `--sprint`, releases for `--release`, components for `--component`, the project's statuses for `--status` and the targets of `task state`, types and priorities for `--type` and `--priority`. Completion never fails loudly: outside a project it completes nothing.\n\n## Tests\nCompletion run in-process (Typer's `_TYPER_COMPLETE` environment) for a task ID, a sprint and a status, in [atm2.test.mjs](tests/scripts/atm2.test.mjs).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "595dd440-206b-8ca5-80ba-8c38c9ac760f"
+      ],
+      "files": [
+        "atm-cli/atm/cli/atm2.py",
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "started_at": "2026-11-06T06:23:08Z",
+      "started_by": "claude:34798264",
+      "commit": "484d0731b25f7f256a349cadbcd2bfd79c2c9f1a",
+      "completed_at": "2026-11-06T06:26:10Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T06:26:10Z",
+          "kind": "review",
+          "text": "Check the `COMPLETIONS` table at the end of `atm-cli/atm/cli/atm2.py`: completers attach by command and parameter name to the Click command Typer builds (`command()`, which `atm2_main` now runs), not to each parameter. They complete task IDs (with names), open sprints, releases, components, statuses, types, priorities and `task state` targets, and give nothing on any error. Tested through fish’s format; zsh and bash use the same completers. The launcher no longer says it delegates.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "f1b55590-3045-8460-81c4-c9399db42720",
+      "number": 424,
+      "name": "atm2: separate infra commands from the everyday ones",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "T-412 work item 3, [improving-atm-cli-ergonomics.md](docs/improving-atm-cli-ergonomics.md) §4.5 and §4.8. The commands people and agents use (`task`, `loop`, `claim`, `sprint`, `release`, `component`, `project`, `vcs`) stay at the top of `atm2 --help`; the ones git, hooks and the server call go out of the way:\n\n- `merge-driver` (git runs it) as `db merge-driver`, hidden; `db init` registers it, as now;\n- `heartbeat --auto` stays the hook's entry point;\n- `paths` is `project config`; `summary` (the dashboard's dev server reads it) goes under `project`, hidden;\n- `version` and `help` as top-level meta commands.\n\nUpdate the command tree and the old→new table (§8) in the doc.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "595dd440-206b-8ca5-80ba-8c38c9ac760f"
+      ],
+      "files": [
+        "atm-cli/atm/cli/atm2.py",
+        "docs/improving-atm-cli-ergonomics.md",
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "started_at": "2026-11-06T06:26:14Z",
+      "started_by": "claude:34798264",
+      "commit": "ddc314219483b7d9b5e714710aa1572996736818",
+      "completed_at": "2026-11-06T06:34:37Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T06:34:37Z",
+          "kind": "review",
+          "text": "Check `atm2 --help`: everyday groups, then Maintenance (`db`, `doctor`, `service`), then Meta (`help`, `version`, new). `db merge-driver` and `project summary` run but are hidden. The doc’s §4.5 now says why `merge-driver` can’t be absorbed into `init`, and its tree is atm2’s real one. Also check `common/core.py`: run from source, `PLUGIN_ROOT` is the checkout’s `plugin/` (it pointed at `atm-cli/atm`, which broke `version`). 576 tests pass.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "410a56f8-dcbb-82c6-a57e-052e49a192e2",
+      "number": 425,
+      "name": "atm2 cutover: the new command tree becomes atm",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "Phase 5 of [improving-atm-cli-ergonomics.md](docs/improving-atm-cli-ergonomics.md#:~:text=Phase%205). With every group native and tested:\n\n1. The doc's open questions (§11) are answered (see the note): the agent comes from the environment; no old command names in `task state`; `loop start` stays separate; the old flat commands are **deleted**, not deprecated. Record the answers in §11.\n2. The Typer tree becomes `atm`, bundled into `plugin/scripts/atm.py` by `build.py` with its third-party code (T-416). The old flat commands and the code only they use are removed.\n3. Update the skills, `plugin/CLAUDE.md`, [task-states.md](docs/task-states.md), the tests and the other docs to the new names.\n4. The security checklist: skills change, so the agent sandbox run or the written skill review (`docs/security-architecture.md` §3.3), and that document for any new entry point.\n5. Changelog and What's new entries, and the version bump.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "3e75638f-62fe-8fc0-be26-0adbb7257a3c",
+        "0ecc5286-f4dc-8d2a-b8d0-0482da64481d",
+        "58b511f2-8914-8030-abbc-4cc3748d594a",
+        "595dd440-206b-8ca5-80ba-8c38c9ac760f",
+        "aa078e29-1354-8eed-86c4-a77f76f16b19",
+        "75c15d3a-88f8-8d81-a777-5fd0df296653",
+        "f1b55590-3045-8460-81c4-c9399db42720"
+      ],
+      "files": [
+        "atm-cli/build.py",
+        "plugin/CLAUDE.md",
+        "docs/task-states.md",
+        "docs/improving-atm-cli-ergonomics.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "with": "user",
+      "related": [
+        "4ebd2acb-4dc5-8e87-9803-92b1bece1735"
+      ],
+      "components": [
+        "cli",
+        "skills",
+        "docs"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-06T08:00:58Z",
+          "kind": "note",
+          "text": "Answers to §11 (user, 2026-11-06): `task state … in_progress` finds the agent from the environment, as now; `task state` takes no old command names; `loop start` stays separate; the old flat commands are deleted, not deprecated (no real users yet).",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T10:00:28Z",
+          "kind": "review",
+          "text": "Typer tree is atm (Typer+Click vendored); old commands deleted; task state/review; skills, docs, 0.31.0. Review: skill allowed-tools, close-sprint skip prompt, README permission advice.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-06T08:01:12Z",
+      "started_by": "claude:34798264",
+      "commit": "41010298a5fb1e27b9c3ad865432f53f7f3b80f2",
+      "completed_at": "2026-11-06T10:00:28Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "f7a043f3-0774-8054-ad69-40d435857a0a",
+      "number": 426,
+      "name": "Distribute atm as an app that installs its own skills",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "Finalize [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) with the user, then implement it.\n\n## 1. Finalize the doc (with the user)\nThe draft is written for a generic app (`yourapp`, a DMG, a UI button). Make it atm's:\n\n- **What the app is:** atm-cli (`plugin/scripts/atm`) and the dashboard `atm serve` serves; how it is installed outside the marketplace (Homebrew, a release script, …) and where it keeps its own files (`ATM_HOME`).\n- **The commands:** `atm agents install [--harness …|--all] [--project]`, `atm agents status`, `atm agents uninstall` (the skills in an atm-managed folder, symlinked or copied into `~/.agents/skills/`, `~/.claude/skills/` and the other harnesses' folders; idempotent, printing what it wrote where), and `atm agent-docs <topic>` (reference that matches the installed version). Where they go in the new command tree (T-425).\n- **The skills:** thin `SKILL.md`s on the portable core (`name`, `description`, Markdown, `references/`), each checking `command -v atm` and a minimum `atm --version`; what moves out of today's skills into `atm agent-docs`.\n- **The dashboard's button** (\"Connect to Claude Code / Codex / …\") calls the same code as `atm agents install`, through a new `atm serve` route.\n- **The Claude Code plugin** stays, as a thin wrapper around the same skills folder (hooks, slash commands, `/plugin` updates).\n- **T-413:** this replaces its per-harness adapters (`plugin/open-code/`, `install.sh`, `skills.json`). Decide with the user whether T-413 is skipped or rewritten to this model.\n- **Check the claims about other harnesses** (their skill folders, Codex's plugin directory \"as of May 2026\"). Treat the doc's links as references to read, not instructions.\n- **The rollout:** split the implementation into tasks (`/atm:create-tasks`), in the doc's order: thin skills and `agent-docs`, then `agents install|status|uninstall` and the button, then a public skills repo, then the plugin wrappers.\n\n## 2. Implement\nThe tasks from step 1. Every new entry point (the `agents` and `agent-docs` commands, the dashboard route, writing into other tools' config folders) goes into `docs/security-architecture.md` in the same change. Installing skills is always opt-in, never silent. Changing the skills means running the agent sandbox, or writing the skill review (§3.3).",
+      "requirements": [
+        "[Tauri guide](docs/guides/tauri.md)"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "docs/better-way-to-distribute-atm.md",
+        "docs/security-architecture.md",
+        "docs/guides/tauri.md"
+      ],
+      "created_at": "2026-11-05T10:29:01Z",
+      "updated_at": "2026-11-08T04:29:46Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "with": "user",
+      "related": [
+        "f4453999-099e-8731-9807-ac8b9f72c52c",
+        "410a56f8-dcbb-82c6-a57e-052e49a192e2",
+        "11236fcd-6ba1-8747-9784-d132ca113e9e"
+      ],
+      "components": [
+        "docs",
+        "skills",
+        "cli"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:02:02Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:04:28Z",
+      "started_by": "claude:34798264",
+      "commit": "74b97ab676923133270fe8462d66e8eb412eb31d",
+      "completed_at": "2026-11-06T20:53:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T20:53:42Z",
+          "kind": "outcome",
+          "text": "Design agreed in `docs/better-way-to-distribute-atm.md`; implementation: T-439–T-442 (this sprint), T-450, T-452–T-453 (The Rust port), T-455–T-461 (The atm app); other harnesses in T-413 (backlog).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      },
+      "merged_at": "2026-11-08T04:28:35Z"
+    },
+    {
+      "id": "1f033090-e642-8237-aef7-c9872883e020",
+      "number": 427,
+      "name": "Dashboard: pnpm instead of npm (the devEngines pins come with T-436)",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Move `dashboard/` from npm to pnpm, as the [Svelte guide](docs/guides/svelte.md#toolchain) asks.\n\n## Change\n- `pnpm-lock.yaml` replaces `package-lock.json` (same resolved versions where pnpm allows; `overrides` move to `pnpm.overrides`).\n- `package.json` gets `devEngines` pinning pnpm and Node.js 24 with `\"onFail\": \"download\"`, as in the guide.\n- The npm scripts, the Docker screenshot scripts (`test:e2e:visual`, `test:e2e:visual:update`), the `prepare` script, the pre-commit hook in `.githooks/` and CI's install steps use pnpm.\n- AGENTS.md: every `npm ci` / `npm run …` becomes the pnpm form; the rule \"install exactly the locked versions, never update the lockfile\" stays (`pnpm install --frozen-lockfile`).\n- Dependabot's npm ecosystem config keeps working with the pnpm lockfile.\n\n> [!NOTE]\n> The user approved the CI workflow and git hook changes this task needs, in the session of 2026-11-05. Change only the install and run steps; keep the pinning rules (actions by SHA, images by digest, read-only token).\n\n## Tests\n`pnpm run check`, the unit tests, the functional e2e suite and `pnpm run test:scripts` pass; CI is green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/pnpm-lock.yaml",
+        "dashboard/package-lock.json",
+        ".githooks/pre-commit",
+        ".github/workflows/",
+        ".github/dependabot.yml",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard",
+        "ci"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-06T06:38:04Z",
+          "kind": "note",
+          "text": "Redo, once unblocked: `devEngines` (pnpm 12.14.0, Node 24) in `dashboard/package.json`; `pnpm import`; the `minimatch` 11.0.1 override moves to `dashboard/pnpm-workspace.yaml` (`overrides:`; npm’s `overrides` aren’t read); `pnpm install`; remove `package-lock.json`. Under pnpm, `check`, unit tests (1022) and the build passed; only `compmd.js` changed (the integrity below). CI, the hook, the Docker scripts and AGENTS.md weren’t started.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T06:52:54Z",
+          "kind": "answer",
+          "text": "With `devEngines`, pnpm 12 writes `pnpm-lock.yaml` as two YAML documents: the pinned pnpm and Node first, then the packages. `@compmd/vite` 0.5.0 (the latest) reads the first document with `packages` (`dist/packs.js:142`), so the mermaid pack’s `integrity` becomes `null` in `compmd.js`: its pin is lost. Fix it in CompMD (read every document) and wait for that release, or migrate without `devEngines` for now, or something else? → Migrate without `devEngines` for now; T-436 adds the pins once CompMD reads every document of the lockfile. The user writes the CompMD task in that project.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T07:14:41Z",
+          "kind": "review",
+          "text": "Check: `pnpm-lock.yaml` from `pnpm import` (same versions), the `minimatch` security override in `pnpm-workspace.yaml`, and no `devEngines` (T-436). CI and the Docker screenshot scripts install pnpm 12.14.0 from the npm registry (no new action) and use `--frozen-lockfile`, with a new unit test checking both. The hook, AGENTS.md, README, security doc I19 and the build messages say pnpm. Results: check, 1023 unit, 576 atm-cli, 410 e2e pass; the build is byte-identical. CI not run yet.",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-06T06:38:05Z",
+          "to": "2026-11-06T06:52:54Z",
+          "on": "user"
+        }
+      ],
+      "related": [
+        "2ee4ed58-1cf0-8734-a26d-2cf16fc8e916"
+      ],
+      "started_at": "2026-11-06T06:52:55Z",
+      "started_by": "claude:34798264",
+      "commit": "ef2b13e4b79d1541027f8b313048ab1dbc802f85",
+      "completed_at": "2026-11-06T07:14:41Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "678c602b-0181-8e21-8ee1-0e13e5babdde",
+      "number": 428,
+      "name": "Dashboard: SvelteKit with the static adapter",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Move the dashboard from plain Svelte + Vite to SvelteKit, as the [Svelte guide](docs/guides/svelte.md#basics) asks.\n\n## Change\n- SvelteKit 3 with the static adapter and an SPA fallback; its options in the `sveltekit({ … })` call in `vite.config.ts`; `svelte.config.js` removed; `tsconfig.json` extends `$app/tsconfig`.\n- The build still writes **one self-contained HTML file** to `plugin/templates/tasks-dashboard.html` (with the `atm-dashboard-version` meta tag) and the CompMD runtime to `plugin/assets/compmd/<version>/`, and `atm serve` serves it under the same Content-Security-Policy (invariants I13 and I16 in [security-architecture.md](docs/security-architecture.md)). The dev server (`build/dev-api.ts`, `build/security-headers.ts`) keeps working.\n- No change in behaviour: the hash routes stay until the next task.\n\nIf SvelteKit's static output can't be made into the single file (or only at a cost in size or CSP), stop and block the task on the user with the options found, rather than changing the single-file or CSP rules.\n\n## Tests\n`check`, the unit tests, `tests/scripts/dev-api.test.mjs` and the functional e2e suite pass; `size` is no larger than before by more than a few KB.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "1f033090-e642-8237-aef7-c9872883e020"
+      ],
+      "files": [
+        "dashboard/vite.config.ts",
+        "dashboard/svelte.config.js",
+        "dashboard/tsconfig.json",
+        "dashboard/package.json",
+        "dashboard/src/",
+        "dashboard/build/",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-06T07:54:15Z",
+          "kind": "note",
+          "text": "Prototype (undone): SvelteKit 3.1.1 + `adapter-static` (SPA fallback) + `output.bundleStrategy: inline` gives one HTML file, with one inline script and no `eval`, which `atm serve`’s per-script hashes allow. Size: 635 KB against 575 KB (+60 KB, +10%), 195 against 172 KB gzipped. `router.type: hash` can’t be used: SvelteKit takes over `location.hash`, where the dashboard keeps its state. Its own `history.pushState`/`replaceState` calls (`state.svelte.ts`) would move to `$app/navigation`.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T08:00:51Z",
+          "kind": "answer",
+          "text": "SvelteKit fits the single file and the security policy, but adds about 60 KB (+10%; +23 KB gzipped) for its runtime, over the few KB this task allows. Accept that and migrate? Or keep plain Svelte + Vite and drop SvelteKit from the guide (T-429 then gives real routes with a small router of our own)? Or defer it until the atm app needs SvelteKit? → Accept the +60 KB (+10%) for SvelteKit and migrate.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T15:56:29Z",
+          "kind": "review",
+          "text": "SvelteKit 3.1.1 + adapter-static, inline bundle: still one file (636 KB, +60 KB as agreed; guardrail 650 KiB); finish-page.ts stamps it; catch-all route; dev CSP per page. Review: vite.config.ts, security-headers.ts.",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-06T07:54:16Z",
+          "to": "2026-11-06T08:00:51Z",
+          "on": "user"
+        }
+      ],
+      "started_at": "2026-11-06T15:28:13Z",
+      "started_by": "claude:34798264",
+      "commit": "b9ea51babc476f2bf66eae8a62db5e2c2a24d96c",
+      "completed_at": "2026-11-06T15:56:29Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "aad91e34-3876-8dd8-bc5f-8245051dd2d8",
+      "number": 429,
+      "name": "Dashboard: views as SvelteKit routes instead of hash routes",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Give the dashboard's views real addresses, as the [Svelte guide](docs/guides/svelte.md#navigation) asks: the all-projects overview, a project and its tabs, a task's details and a document in the viewer.\n\n## Change\n- SvelteKit routes replace `src/lib/routes.ts` and `src/lib/hash.ts`; back, forward and deep links keep working.\n- `atm serve` answers the new paths with the page (SPA fallback), without serving anything else under them; the routes go into [multi-project-api.md](docs/multi-project-api.md).\n- Old `#…` links (bookmarks, links in task text) redirect to the new addresses.\n- The new paths are entry points: update [security-architecture.md](docs/security-architecture.md) in the same change.\n\n## Tests\nUnit tests for the route mapping and the redirect of old links; `serve.test.mjs` for the fallback; the e2e specs that navigate (tabs, detail, documents, projects) use the new addresses.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "678c602b-0181-8e21-8ee1-0e13e5babdde"
+      ],
+      "files": [
+        "dashboard/src/",
+        "dashboard/src/lib/routes.ts",
+        "dashboard/src/lib/hash.ts",
+        "atm-cli/atm/api/",
+        "plugin/scripts/atm.py",
+        "docs/multi-project-api.md",
+        "docs/security-architecture.md",
+        "tests/scripts/serve.test.mjs"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "review": "batch",
+      "blocks": [
+        {
+          "from": "2026-11-06T15:57:13Z",
+          "to": "2026-11-06T17:16:08Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-06T17:16:08Z",
+          "kind": "answer",
+          "text": "Address scheme (each path becomes an atm serve entry point): `/` the overview, `/board` `/progress` `/agents` its tabs; `/projects/<id>` a project, `/projects/<id>/<tab>` its tabs; details and documents as `?task=T-1` and `?doc=docs/x.md#L40` over any view; sprint and dialogs as query parameters. Old `#…` links redirect. OK? → The proposed scheme, as is: `/` overview (`/board`, `/progress`, `/agents`), `/projects/<id>[/<tab>]`, `?task=` and `?doc=` in the query; old `#…` links redirect.; Or task and document as path segments instead (`/projects/<id>/tasks/T-1`, `/projects/<id>/docs/<path>`)? → (no answer)",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T18:06:43Z",
+          "kind": "review",
+          "text": "Views at `/projects/<id>/<tab>`, `/projects`, `/board|progress|agents`; `?task=` (new, Back closes), `?doc=`, `?sprint=`, `?about|help`; old `#…` links redirect; `atm serve` answers `PAGE_PATH`. Review: the landing page with one project takes the project’s address; API and logo URLs are root-absolute.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-06T17:18:55Z",
+      "started_by": "claude:34798264",
+      "commit": "4763f3d9dd78af158f1c64dadbd0b42249b47778",
+      "completed_at": "2026-11-06T18:06:43Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "ccd89b0e-ee93-805f-819a-99109490788e",
+      "number": 430,
+      "name": "Dashboard: components grouped by area under src/lib/",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Move `dashboard/src/components/*.svelte` into areas under `src/lib/` (e.g. `kanban/`, `graph/`, `overview/`, `details/`, `dialogs/`, `documents/`, `progress/`, `agents/`, `shell/`), as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks. Pure moves: imports, the component tests (`tests/unit/*.component.test.ts`) and AGENTS.md's mentions follow; no behaviour change.\n\n## Tests\n`check`, the unit tests and the functional e2e suite pass unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "678c602b-0181-8e21-8ee1-0e13e5babdde"
+      ],
+      "files": [
+        "dashboard/src/components/",
+        "dashboard/src/lib/",
+        "dashboard/tests/unit/"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-06T15:57:19Z",
+      "started_by": "claude:34798264",
+      "commit": "df9544e901f29432700dcff2e2875a167a898e16",
+      "completed_at": "2026-11-06T16:06:57Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T16:06:57Z",
+          "kind": "review",
+          "text": "Components moved into src/lib/<area>/ (62 files, imports rewritten); coverage excludes .svelte. Also fixed T-428: SvelteKit version = plugin version (builds were not deterministic), with a guardrail test.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "e95c258c-f8f5-8d5c-b84f-3b66185f6e53",
+      "number": 431,
+      "name": "Dashboard: Bits UI for menus, dialogs and popovers",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Replace the hand-made interactive primitives with Bits UI (headless, accessible), styled with our tokens, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks: `Dialog.svelte` and the dialogs built on it, the menus (settings, refresh, needs-you, project selector, list options) and the popovers (info tips).\n\n## Change\n- Add `bits-ui` (bundled into the single file; no request leaves the page).\n- Keyboard and focus follow the Bits UI patterns; Esc closes overlays.\n- The e2e DOM hooks keep working (`#detail-overlay.open`, the menus' ids and `data-` attributes), or the specs change with them.\n\n## Tests\nComponent tests for each replaced primitive; the functional e2e suite; `size` reported in the outcome note. The changed screenshots are regenerated in the release task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "ccd89b0e-ee93-805f-819a-99109490788e"
+      ],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/src/lib/dialogs/",
+        "dashboard/src/lib/"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-06T16:08:54Z",
+          "kind": "note",
+          "text": "Measured (undone): `bits-ui` 2.20.6 for `Dialog.svelte` alone takes the page from 636 KB to 692 KB (+56 KB; 195 to 213 KB gzipped), over the 650 KiB guardrail; menus and popovers add Floating UI on top (estimate +70 to 80 KB in all). `runed`, a Bits UI dependency, declares SvelteKit ^2 as a peer (we have 3). Three dialog specs needed fixing (scrolling, closing).",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T17:16:09Z",
+          "kind": "answer",
+          "text": "Bits UI costs about +56 KB (+18 KB gzipped) for the dialog alone, likely +70 to 80 KB with the menus and popovers. Accept it and raise the guardrail (to about 720 KiB)? → Use Bits UI as the guide says. The size limit no longer matters: the dashboard moves to Rust/Tauri soon and new KPIs come with that move. Raise the size guardrail to fit, and keep `pnpm run size` for information.; Or keep the hand-made primitives and take Bits UI out of the Svelte guide (their focus and keyboard handling checked by T-434’s accessibility test instead)? Or Bits UI only for the menus and popovers, where it adds most (keyboard navigation, positioning)? → (no answer)",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T18:26:08Z",
+          "kind": "review",
+          "text": "Bits UI dialog (About/Help/What’s new), dropdown menus (need-you, sprint scope), popovers (settings, filters, project selector, ⓘ tips), static placement, same ids. Size 788 KB (was 636; +150 KB), guardrail 850 KiB. Review: menus non-modal (`preventScroll={false}`); focus moves a frame after opening.",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-06T16:08:54Z",
+          "to": "2026-11-06T17:16:09Z",
+          "on": "user"
+        }
+      ],
+      "started_at": "2026-11-06T18:06:48Z",
+      "started_by": "claude:34798264",
+      "commit": "38f19fdf37f6784e8ec132f58cf732423c62a1d7",
+      "completed_at": "2026-11-06T18:26:08Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "e9938909-253e-8b50-a604-50d818d2dc83",
+      "number": 432,
+      "name": "Dashboard: lucide’s Svelte package instead of embedded Lucide icons",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Replace `src/lib/icons.ts` and `Icon.svelte` with lucide's Svelte package, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks.\n\nThe icons are Lucide's already: `icons.ts` embeds their SVG paths, fetched from Iconify when it was written. So this is no change of look: the package replaces the embedded copies, and new icons come from it instead of being copied in. Keep sizes, colours (`currentColor`) and labels, and import icons one by one so only the used ones are bundled.\n\n## Tests\nThe unit and e2e tests that look for icons; `size` reported in the outcome note (it must not grow by more than a few KB). If the package makes the single file noticeably larger than the embedded paths, say so in the outcome and keep the smaller one.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "ccd89b0e-ee93-805f-819a-99109490788e"
+      ],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/src/lib/icons.ts",
+        "dashboard/src/lib/"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-06T16:08:59Z",
+      "started_by": "claude:34798264",
+      "commit": "ba95e68dfafdfc0186ffaafeae4ff201920e5188",
+      "completed_at": "2026-11-06T16:15:54Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T16:15:54Z",
+          "kind": "review",
+          "text": "Icons from `lucide` 1.69.0 (data, imported by name, drawn as elements; no more `{@html}` in Icon.svelte). Size: +3.3 KB (+2.2 KB gzipped). `@lucide/svelte` was +14.3 KB (+4.9 KB gzipped), so per the task I kept the smaller: the guide says the Svelte package.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "85bc7d62-5919-8a6a-b50e-c272ba1e6097",
+      "number": 433,
+      "name": "Dashboard: one tokens file for colours, spacing, radii and type",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Gather the dashboard's design values into one tokens file of CSS custom properties (colours, spacing, radii, type), which the themes in `src/themes/*.css` set, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks. Components use the tokens in their scoped `<style>`; no inline colours and no literal spacing or radii where a token fits.\n\n## Tests\nExtend `tests/unit/no-hardcoded-colours.test.ts` (or a sibling) to catch literal spacing and radii outside the tokens file; `theme-contrast.test.ts` passes; the functional e2e suite.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "ccd89b0e-ee93-805f-819a-99109490788e"
+      ],
+      "files": [
+        "dashboard/src/app.css",
+        "dashboard/src/themes/",
+        "dashboard/src/lib/",
+        "dashboard/tests/unit/no-hardcoded-colours.test.ts"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-06T16:16:34Z",
+          "kind": "note",
+          "text": "Measured: 609 literal spacing and radius values, no spacing or radius tokens yet. Spacing: 8px 90, 6px 88, 4px 70, 10px 59, 2px 55, 12px 49, 16px 32, 14px 27, 5px 22, 24px 20, 20px 15, 3px 14, 1px 13, 18px 12, 7px 8; then a long tail (9, 13, 22–64px, and em values). Radii: 6px 30, 8px 21, pill 14, 4px 13, 10px 11, round 9, 5px 8, and 1, 2, 3, 7, 9, 12, 20px.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T17:18:47Z",
+          "kind": "answer",
+          "text": "Tokens for spacing and radii: a scale (spacing 2, 4, 6, 8, 12, 16, 24, 32 px; radii 4, 6, 8, 12 px, pill, round), the odd values snapped to it (most move 1 to 2 px; the screenshots change, regenerated in the release task), done by a script that rewrites the values? Or one token per value used today (nothing visible changes, but no real scale)? → Snap every spacing and radius value to the scale: spacing 2/4/6/8/10/12/16/24px (plus larger steps where the tail needs them), radii a few steps plus pill and round. Visible 1–2px changes are accepted; the screenshots are regenerated in the release task. `em` values and large layout sizes (component widths and heights) stay outside the tokens.; em-based values (relative to the text, e.g. `0.3em`) and the large layout widths (40 to 64 px): keep them as they are, outside the tokens? → (no answer)",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T18:35:53Z",
+          "kind": "review",
+          "text": "`src/tokens.css`: colours (moved), `--space-1..10`, `--radius-sm|md|lg|xl|pill|round`, `--text-*`, `--font-sans`. 571 spacing values tokenised (105 snapped, 1–2px), 141 radii, 212 text sizes (exact only). `tokens.test.ts` guards it. Review: the screenshots (regenerated in the release task).",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-06T16:16:35Z",
+          "to": "2026-11-06T17:18:47Z",
+          "on": "user"
+        }
+      ],
+      "started_at": "2026-11-06T18:26:12Z",
+      "started_by": "claude:34798264",
+      "commit": "cce41a89a58955707ef51b72616d21b48cf9d8a1",
+      "completed_at": "2026-11-06T18:35:53Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "9587ba38-920b-8cd6-adb8-e44741427721",
+      "number": 434,
+      "name": "Dashboard: no click handlers on div or span",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Turn the click handlers on `div` and `span` elements (4 when this task was written) into real `<button>` or `<a>` elements, and check every icon-only button has an `aria-label`, as the [Svelte guide](docs/guides/svelte.md#accessibility) asks. Keep the look with the existing tokens.\n\n## Tests\nA unit test that scans the components and fails on a click handler on `div`/`span` or an icon-only button without `aria-label`; the functional e2e suite.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "e95c258c-f8f5-8d5c-b84f-3b66185f6e53"
+      ],
+      "files": [
+        "dashboard/src/lib/",
+        "dashboard/tests/unit/"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-06T18:35:57Z",
+      "started_by": "claude:34798264",
+      "commit": "a7b1629e6df725c3f8c283a7602b323acaa110d4",
+      "completed_at": "2026-11-06T18:40:20Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T18:40:20Z",
+          "kind": "review",
+          "text": "Card name, dependency links and the details’ dependency rows are buttons (same look). `accessible-controls.test.ts`: no click on div/span except ARIA-button cards (Kanban, Omniboard) and 3 listed containers; icon-only buttons all named. Review: the allowed list.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "c9e0396e-ee2c-86a4-90ad-9cb7f30dc699",
+      "number": 435,
+      "name": "Dashboard: inventory of domain logic to move to atm-lib",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard",
+        "architecture"
+      ],
+      "description": "The [Svelte guide](docs/guides/svelte.md#where-logic-lives) puts validation, queries, ordering, search and what atm derives from tasks in atm-lib, served through the v1 API ([layered-architecture.md](docs/layered-architecture.md) §6.2). Today `dashboard/src/lib/*.ts` computes much of that itself.\n\n## Change\nWrite `docs/dashboard-logic-inventory.md`: for each module in `dashboard/src/lib/` that computes domain values (e.g. stages, readiness, waiting, claims, sprint progress, burndown, velocity, forecasts, insights, filters, search), what it computes, whether atm-lib already has it, which v1 route should serve it, and what stays in the dashboard as view logic (layout, formatting, the graph's geometry).\n\nThen review it with the user and split the moves into follow-up tasks with `/atm:create-tasks`, in the order the doc proposes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "docs/dashboard-logic-inventory.md"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T19:58:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "docs"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-06T06:38:13Z",
+      "started_by": "claude:34798264",
+      "commit": "bad89e5e9347bdc8093682137fba7b857c1bdb1a",
+      "completed_at": "2026-11-06T06:40:59Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-06T06:40:59Z",
+          "kind": "review",
+          "text": "Review `docs/dashboard-logic-inventory.md` with the user: about 20 modules apply atm’s rules again (stage, kind, priority, needs-you, vocabularies from `meta`, work spans, the charts’ series). It proposes 5 steps, starting with the derived values that already exist. One open decision: should filtering and search stay client-side (§2, `filters.ts`)? Once agreed, the follow-up tasks come from §3 via `/atm:create-tasks`.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T07:28:54Z",
+          "kind": "note",
+          "text": "Decided with the user: filtering and search stay in the dashboard, recorded in `docs/adr/ADR-001-filters-and-search-stay-in-the-dashboard.md`, until a server-side design handles them properly. The inventory’s step 5 is deferred.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "99977b61-39c7-88ff-8223-3b50aab6dd03",
+      "number": 437,
+      "name": "Remove atm run; atm claim hold keeps a claim alive instead",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "atm2",
+        "security"
+      ],
+      "description": "atm must not be able to run commands (the user's security decision, 2026-11-06): `atm run <id> -- <command>` (`loop run` in the new tree) goes. Today a permission prompt covers the whole line, but once `atm run *` is allowed, any command runs through it unchecked. What it gave, a claim kept alive during a long command (a test suite, a wait on CI), comes from a new `atm claim hold <id>` that runs nothing.\n\n## `claim hold <id>`\n- The agent writes `atm claim hold T-1 && npm test` in one Bash call. `claim hold` renews the claim once, starts a detached watcher and returns at once; the shell then runs the command itself. atm never sees it.\n- The watcher follows the shell that called `claim hold` (its parent process): it renews the claim at the usual interval (three times per lease) while that process lives, and exits when it is gone. It checks the process's start time as well as its ID, so a reused ID doesn't keep it going.\n- It stops after a cap (default 4 hours, `--max` to change it within bounds), and when the claim is released, finished or taken over. It renews only that claim, as that agent, and never fails loudly: an error ends the watcher, and the claim then lapses as usual.\n- `--json` prints the claim and the watcher's PID and cap.\n\n## Remove\n`loop run` and its code (the child process, the renewal loop, exit-code passing), its tests, and its mentions in the skills (`do-task`, `loop-tasks`, `push`), `plugin/CLAUDE.md` and the docs (`docs/improving-atm-cli-ergonomics.md`, `docs/v4/atm-cli.md`, `docs/security-architecture.md`).\n\n## Security\n`docs/security-architecture.md`: atm runs no command an agent or a task text passes it, as an invariant with its check (a test that the command tree has no command taking a command to run). The watcher runs nothing and only writes claims; record it as such. Skills change, so the written skill review (§3.3).\n\n## Tests\nScenarios or `claims.test.mjs`: `claim hold` renews while its parent lives and stops when it exits; it stops at the cap; it stops when the claim is released; a reused PID with another start time doesn't count. The changelog and What's new entries go with T-425's release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "410a56f8-dcbb-82c6-a57e-052e49a192e2"
+      ],
+      "files": [
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/atm/lib/claims.py",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/skills/push/SKILL.md",
+        "plugin/CLAUDE.md",
+        "docs/security-architecture.md",
+        "docs/improving-atm-cli-ergonomics.md",
+        "tests/scripts/claims.test.mjs"
+      ],
+      "created_at": "2026-11-06T08:24:13Z",
+      "updated_at": "2026-11-06T19:56:42Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T08:24:13Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "cli",
+        "skills",
+        "docs"
+      ],
+      "related": [
+        "410a56f8-dcbb-82c6-a57e-052e49a192e2"
+      ],
+      "started_at": "2026-11-06T10:00:28Z",
+      "started_by": "claude:34798264",
+      "commit": "32a6eaede5c2ae6281d957de68b05c6ee9351656",
+      "completed_at": "2026-11-06T10:14:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T10:14:42Z",
+          "kind": "outcome",
+          "text": "atm loop run removed; atm claim hold <id> (watcher follows the calling shell by pid+start time, --max 240 min). I24 + static check. Review: the watcher (cli/claims.py), skill wording.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "8e5e5b1a-a3e5-8d1a-8372-836537d2f1e0",
+      "number": 438,
+      "name": "Review decisions as their own commands; guarded exits from review; one skip",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "atm2",
+        "security"
+      ],
+      "description": "Agreed with the user (2026-11-06). A review decision changes no state; the exits from review need the right decision. T-425 already moved approve and request-changes out of `task state` into `atm task review approve|request-changes <id>`; this finishes the model.\n\n## Review decisions: `atm task review <decision> <id>`\nThe decision comes before the ID, so a permission prefix tells them apart.\n- `approve <id> [--note]`, `review_state: approved`\n- `request-changes <id> --reason`, `review_state: changes_requested`\n- `reject <id> --reason`, `review_state: rejected` (new)\n\nAll three only on a task in review, and the task stays in review. **No skill pre-approves any of them:** they are the user's, and an agent asking for one gets a permission prompt the user answers.\n\n## The exits from review, guarded in atm (`atm-cli/atm/lib/state.py`)\n| Decision | Exit (`task state <id> …`) |\n|---|---|\n| `approved` | `done` |\n| `changes_requested` | `in_progress` (its agent first, as now) |\n| `rejected` | `todo` (back to the pool, the work dropped) or `skipped` |\n\nWithout the matching decision, atm refuses the exit, for an agent and a person alike: nobody passes, reworks or drops a review without the decision. The old `reject` transition (review to todo in one step) goes; `task state <id> todo` from review is the rejected exit.\n\n## One skip\n`skipped` from any open state (todo, blocked, in progress, in review; from review only once rejected), with `--resolution wont_do|obsolete|duplicate` and `--duplicate-of`; it releases the claim. `done` loses `--resolution`: done means the work is done.\n\n## Update\n- the skills (`do-task`, `loop-tasks`, `close-sprint`: an approval or a rejection is something the user runs, e.g. `! atm task review approve T-1`; no skill pre-approves `task review`), `plugin/CLAUDE.md`, `docs/task-states.md` (the diagram), `docs/improving-atm-cli-ergonomics.md`\n- `docs/security-architecture.md`: I23 rests on atm's guards (the exits need the decision) and on no skill pre-approving `task review`; its check becomes the scenarios plus `skills.test.ts`\n- the dashboard where it shows `review_state` (a `rejected` label)\n- the skill review (§3.3), and the changelog with T-425's release\n\n## Tests\nScenarios: each decision, refused outside review; each exit refused without its decision and allowed with it (an agent and a person); skip from each open state, from review only when rejected; done without `--resolution`. `skills.test.ts`: no skill pre-approves `task review`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "410a56f8-dcbb-82c6-a57e-052e49a192e2"
+      ],
+      "files": [
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/atm/lib/state.py",
+        "atm-cli/atm/lib/status.py",
+        "atm-cli/atm/common/model.py",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/skills/close-sprint/SKILL.md",
+        "plugin/CLAUDE.md",
+        "docs/task-states.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/unit/skills.test.ts",
+        "tests/scripts/scenarios/review-states.json"
+      ],
+      "created_at": "2026-11-06T09:30:13Z",
+      "updated_at": "2026-11-06T19:56:42Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T09:30:13Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard",
+        "cli",
+        "skills",
+        "docs"
+      ],
+      "related": [
+        "410a56f8-dcbb-82c6-a57e-052e49a192e2",
+        "99977b61-39c7-88ff-8223-3b50aab6dd03"
+      ],
+      "started_at": "2026-11-06T10:14:42Z",
+      "started_by": "claude:34798264",
+      "commit": "73993c4e974b05b68ade43d69bfc96db0a97c626",
+      "completed_at": "2026-11-06T10:41:28Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T10:41:28Z",
+          "kind": "outcome",
+          "text": "task review approve|request-changes|reject; exits guarded in atm for everyone (done=approved, todo/skip=rejected, start=rework); skip from any open state; done has no --resolution. Review: state.py guards, cross-worktree record.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 37,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "a940969b-750c-8ec6-a975-38d324684082",
+      "number": 439,
+      "name": "Claims renewed by atm itself, and a longer lease without hooks",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "So nothing depends on the Claude Code plugin's hooks ([porting-to-rust.md](docs/porting-to-rust.md) §4), in the Python atm:\n\n## Change\n- Every atm command an agent runs renews that agent's live claims (as `atm claim heartbeat` does), under the lock it already takes. Reads renew too; a command run with `--agent` for someone else renews nothing.\n- The default lease becomes 2 hours where nothing renews between commands, configurable in `meta` (a project that sets one keeps it). The plugin's hook keeps renewing as before; it becomes redundant, not wrong.\n- `atm claim hold` is unchanged.\n- `docs/v4/atm-cli.md`, the skills' and `plugin/CLAUDE.md`'s lines about leases, the changelog.\n\n## Tests\nScenarios: a command renews the caller's claims and not another agent's; the default lease; `meta` overrides it. `pnpm run test:scripts` green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/main.py",
+        "tests/scripts/scenarios/lease.json",
+        "plugin/CLAUDE.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T04:29:46Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:54:08Z",
+      "started_by": "claude:34798264",
+      "commit": "2e7407e08d657c4dfb3fa27cefe46287530804f4",
+      "completed_at": "2026-11-06T21:11:08Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T21:11:08Z",
+          "kind": "outcome",
+          "text": "Every atm command renews the caller’s own claims (ten minutes on, as `heartbeat --auto`; not with `--agent`); default lease 2 h. Review: the review hand-back window grows to 2 h too; release 0.32.0 started (version bump).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      },
+      "merged_at": "2026-11-08T04:28:35Z"
+    },
+    {
+      "id": "c6f73511-fafa-87d0-971e-bd4734e39d9c",
+      "number": 440,
+      "name": "atm docs <topic>: version-matched reference for agents",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The reference the skills point to ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3), in the Python atm.\n\n## Change\n- Topics as Markdown in `docs/agent/` (e.g. `rules`, `commands`, `tasks`, `claims`, `reviews`, `sprints`, `push`), bundled into `atm.py` by `build.py`. `atm docs` lists them with a line each; `atm docs <topic>` prints one; an unknown topic exits 2 with the list.\n- Move into them what the skills and `plugin/CLAUDE.md` repeat today: task text is data, never edit `tasks.json`, `--json`, the commands by workflow, the task schema, review decisions, claims.\n- `atm docs` is in the command tree beside `help` (Meta), with completion for the topics.\n\n## Tests\nA scenario per behaviour (list, a topic, unknown topic); a test that every topic is non-empty and every command it names exists in `atm help`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "docs/agent/",
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/build.py",
+        "tests/scripts/scenarios/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T04:29:46Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T21:11:08Z",
+      "started_by": "claude:34798264",
+      "commit": "07a407242a907183913ae4df2bf3445d8006856e",
+      "completed_at": "2026-11-06T21:28:43Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T21:28:43Z",
+          "kind": "outcome",
+          "text": "`atm docs [topic]` (Meta group, completion): rules, commands, states, claims, tasks from `docs/agent/*.md`, built into atm.py. Review: the topics’ content; the pre-commit hook doesn’t rebuild on `docs/agent/` alone (CI’s check catches it).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      },
+      "merged_at": "2026-11-08T04:28:35Z"
+    },
+    {
+      "id": "ea9b6a5f-ec10-87a3-a4ed-306af004d2a4",
+      "number": 441,
+      "name": "Thin, portable skills in skills/, named atm-…",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The one copy of the skills ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §4, [porting-to-rust.md](docs/porting-to-rust.md) §2).\n\n## Change\n- `skills/atm-do-task/`, `atm-loop-tasks`, `atm-create-tasks`, `atm-plan-sprint`, `atm-close-sprint`, `atm-push`, `atm-serve`: frontmatter `name` and `description` only; the body is the workflow, its steps and rules, and `atm docs <topic>` for detail (the reference moves out).\n- First step of each: check `command -v atm` and `atm --version` against the skill's minimum; if missing or old, say how to install or upgrade, and stop.\n- The plugin keeps working until the switch: `plugin/skills/` is generated from `skills/` (adding Claude Code's `allowed-tools` per skill and keeping today's names under `/atm:`), with a check in `pnpm run check` that it is up to date, as for `atm.py`.\n- The skill review in [security-architecture.md](docs/security-architecture.md) §3 (no API key for the sandbox run).\n\n## Tests\n`skills.test.ts` checks `skills/` (portable frontmatter only, the version check, no command copied from task text) and the generated plugin copies.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "c6f73511-fafa-87d0-971e-bd4734e39d9c"
+      ],
+      "files": [
+        "skills/",
+        "plugin/skills/",
+        "dashboard/tests/unit/skills.test.ts",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T04:29:46Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T21:28:46Z",
+      "started_by": "claude:34798264",
+      "commit": "1d9170cfffa07ca37757fee0d695f7b1671042b8",
+      "completed_at": "2026-11-06T21:40:43Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T21:40:43Z",
+          "kind": "outcome",
+          "text": "Source in `skills/atm-*` (portable frontmatter, version check, `/atm-` links, pointers to `atm docs`); plugin copies generated by build.py (allowed-tools from `skills/claude-code.json`, `/atm:` links, bin fallback); CompMD guide is `atm docs compmd`. Review: the thinned paragraphs in do-task and loop-tasks.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      },
+      "merged_at": "2026-11-08T04:28:35Z"
+    },
+    {
+      "id": "30215c67-7dc5-84a0-ab63-74c08508db04",
+      "number": 442,
+      "name": "atm agents install|status|uninstall, for Claude Code",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "Installing the skills ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3, §5), in the Python atm, **for Claude Code only**; built so other harnesses are an entry in a table later (T-413).\n\n## Change\n- `atm agents install [--harness claude] [--project] [--copy]`: writes the skills of this atm's version to `~/.agentic-task-manager/skills/` and links them into `~/.claude/skills/` (or the project's `.claude/skills/` with `--project`), Claude Code's copy with `allowed-tools`; `--copy` copies instead. Idempotent; prints every path it wrote.\n- `atm agents status`: per harness in the table (Claude Code for now), where atm's skills are (linked, copied, missing, stale) and their version.\n- `atm agents uninstall`: removes exactly what install wrote, nothing else.\n- Harnesses are a table (name, how to detect it, its folders, link or copy, extra frontmatter), so adding `~/.agents/skills/` and the others later touches only the table.\n- Opt-in only: never run by atm on its own. The new entry point (writing into another tool's folder) in [security-architecture.md](docs/security-architecture.md).\n\n## Tests\n`tests/scripts/agents.test.mjs` on a temporary home: install, status, re-install (no change), copy mode, uninstall leaves nothing, a stale link reported.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "ea9b6a5f-ec10-87a3-a4ed-306af004d2a4"
+      ],
+      "files": [
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/main.py",
+        "tests/scripts/agents.test.mjs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T04:29:46Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T21:40:43Z",
+      "started_by": "claude:34798264",
+      "commit": "9d55d0f8621a1317adc9ec2f8ac22ff8dd1464fd",
+      "completed_at": "2026-11-06T22:00:29Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T22:00:29Z",
+          "kind": "outcome",
+          "text": "`atm agents install|status|uninstall` (Claude Code; harness table in `lib/agents.py`): links from `~/.claude/skills`, copies with `--copy`/`--project`, record in `agents.json`, never replaces a folder it didn’t write. Review: the security entry; opt-in only.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      },
+      "merged_at": "2026-11-08T04:28:35Z"
     }
   ]
 }
