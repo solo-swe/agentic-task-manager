@@ -19996,7 +19996,7 @@
       "description": "`packaging/release.sh` tagged `HEAD`, so it needed a checked-out, clean `main` equal to `origin/main`. Any untracked file stopped it, though none of that changes what gets tagged; 0.42.0 had to be tagged by hand. The tag is plain `git tag`, and `release.yml` already checked the version. Agreed with Hakan in CR-83: tag with plain git, and let CI check it (option 1). If that becomes a pain again, switch to tagging on merge (release-please or release-plz style), which needs a deploy key.\n\n## Change\n- Delete `packaging/release.sh` and its tests (`tests/scripts/packaging.test.mjs`).\n- In `.github/workflows/release.yml`, add a first job, `tag`, that the build jobs need. It checks two things:\n  - the tag is the version in the tagged commit's `Cargo.toml` (moved here from the two build jobs);\n  - the commit is on `main` (`git merge-base --is-ancestor`, with full history).\n- In `packaging/README.md` (*A release*) and `AGENTS.md`, document the commands: `git fetch origin main`, `git tag -a v<version> origin/main -m 'atm <version>'`, `git push origin v<version>`. Also say how to remove a wrong tag.\n\n## Tests\n`dashboard/tests/unit/ci-workflow.test.ts`: the `tag` job checks the version and `main`, and both build jobs need it.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "packaging/README.md",
@@ -20006,7 +20006,7 @@
         "dashboard/tests/unit/ci-workflow.test.ts"
       ],
       "created_at": "2026-11-20T16:31:59Z",
-      "updated_at": "2026-11-20T17:16:06Z",
+      "updated_at": "2026-11-20T17:17:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "number": 705,
@@ -20024,7 +20024,6 @@
         }
       ],
       "review_requested_at": "2026-11-20T16:33:19Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-20T16:33:19Z",
@@ -20037,16 +20036,36 @@
           "kind": "note",
           "text": "Approved: in CR-83 (round 2)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T17:17:25Z",
+          "kind": "note",
+          "text": "Approved: in CR-84 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T17:17:39Z",
+          "kind": "outcome",
+          "text": "Approved in CR-84: a release is tagged with plain git (`git tag -a v<version> origin/main`), and the Release workflow's first job checks the tag is main's version, on main, before anything builds. release.sh is gone.",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-20T17:11:14Z",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
           "from": "2026-11-20T17:16:06Z"
         }
       ],
-      "sprint": "Audit and tabs"
+      "sprint": "Audit and tabs",
+      "reviews": [
+        {
+          "from": "2026-11-20T16:33:19Z",
+          "to": "2026-11-20T17:17:25Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T17:17:39Z",
+      "completed_by": "claude:0f56a916"
     }
   ]
 }
