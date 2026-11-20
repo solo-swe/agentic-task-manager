@@ -1371,7 +1371,11 @@ mod tests {
             (body(Some("  \n"), None), 2, "the text is empty"),
             (body(None, Some("blank.md")), 2, "the text is empty"),
             // A file that can't be used is a usage error, as every --*-file option says it (ATM-662)
-            (body(None, Some("gone.md")), 2, "--body-file gone.md: can't read it"),
+            (
+                body(None, Some("gone.md")),
+                2,
+                "--body-file gone.md: can't read it",
+            ),
         ] {
             let e = text_of(given, &dir).unwrap_err();
             assert_eq!(e.code(), code, "{says}");

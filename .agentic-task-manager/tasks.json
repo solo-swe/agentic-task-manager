@@ -17971,7 +17971,7 @@
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225e61ea5857",
-      "name": "Files named by --*-file options: inside the project or the temp folder, never a key file, at most 1 MiB",
+      "name": "Files named by --*-file options: never a key or environment file, nor in a credentials folder, at most 1 MiB, from any folder",
       "type": "bugfix",
       "priority": "P1",
       "labels": [
@@ -17982,7 +17982,7 @@
       "description": "Audit findings A2, C1 and C17's file part ([the report](docs/codebase-audit-2026-11.md#c1-medium-security-every---file-option-reads-any-path-of-any-size-checked-see-a2)).\n\n`cwd.join(file)` with an absolute path is that path, so `atm task edit X --description-file ~/.ssh/id_ed25519` (a pre-approved command) puts a key in `tasks.json`, which `atm vcs commit` commits. No size cap either. Seven call sites: `task/add.rs:117`, `:189`, `task/edit.rs:99`, `review.rs:317`, `:752`, `:841`, `db.rs:191`; they also report a missing file three different ways.\n\n## Change\nOne `read_option_file(cwd, option, file) -> Result<String>` and `read_option_json(...)` in `atm-cli`: canonicalize; allow only paths inside the project or the system temp folder; refuse dot-folders and key files (the same check as `atm-docs`' key-file rule); cap at 1 MiB; one wording and exit code (2) for a file that can't be used. Use it at every call site. Update `docs/security-architecture.md` (B1/B2: a new entry point rule).\n\n## Tests\n`tests/scripts/` cases: an absolute path outside the project, `~/.ssh/...`, a symlink out of the project, a 2 MiB file, `/dev/zero`: each refused with exit 2; a scratch file in the temp folder and one in the project accepted.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/task/add.rs",
@@ -17992,7 +17992,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T20:36:51Z",
+      "updated_at": "2026-11-20T20:43:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18016,10 +18016,25 @@
           "kind": "answer",
           "text": "Skills tell agents to write scratch files outside the repo; Claude Code jobs use ~/.claude/jobs/<id>/tmp (not the project or system temp, and a dot-folder), so this rule would refuse every --summary-file and --json-file agents pass today. (a) keep the 1 MiB cap and key-file refusal for any path, drop the inside-project-or-temp rule (recommended); (b) the rule as written, skills write scratch files in a gitignored folder in .agentic-task-manager/; (c) also allow an ATM_SCRATCH_DIR. Which? → (a): keep the 1 MiB cap and the key-file refusal for any path; drop the inside-the-project-or-temp rule, so scratch files outside the repository still work",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T20:43:00Z",
+          "kind": "review",
+          "text": "CR-91: The --*-file options read no secret: one door, from any folder",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-20T20:36:51Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "efdde4e58a5e14fc70ec9bcb627ec22ee0d17d32",
+      "code_reviews": [
+        {
+          "id": "01a1fab2-bd94-7110-88e2-988e857f440c",
+          "ref": "CR-91"
+        }
+      ],
+      "review_requested_at": "2026-11-20T20:43:00Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225f960376f7",
@@ -18137,7 +18152,7 @@
       "description": "Audit findings C3 and L13 ([the report](docs/codebase-audit-2026-11.md#c3-medium-security-status-type-and-priority-ids-and-sprint-names-arent-shell-safe-checked)).\n\n`crates/atm-common/src/vocabulary.rs:211-215` accepts any non-empty status, type or priority ID, and sprint names only refuse outer spaces and length, while releases and components use `valid_short_id`. Agents paste these into commands (`atm task state … <status>`, `--sprint '<name>'`). And `backlog`, `new`, `active`, `next` are accepted as sprint names (`crates/atm-lib/src/sprints.rs:263`, and `rename_sprint`), after which `--to backlog` can never mean that sprint.\n\n## Change\n- `valid_short_id` on the IDs in `terms()`.\n- Sprint names: letters, digits, space, `.`, `_`, `-`, `&` (the current sprint has one) and the like; no `$`, backtick, `;`, `|`, quotes, newlines. Decide the set from the existing names (`atm sprint list --all`) so nothing existing breaks.\n- Refuse the four reserved words, case-insensitively, in `checked_name` and `rename_sprint`.\n- Note it in `docs/security-architecture.md` I8.\n\n## Tests\n`tests/scripts/scenarios/security.json`: a status `done$(x)` and a sprint `s1;x` are refused on load and on add; `atm sprint add backlog` is refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/vocabulary.rs",
@@ -18146,7 +18161,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T20:36:45Z",
+      "updated_at": "2026-11-20T20:43:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18163,7 +18178,9 @@
           "kind": "failure",
           "text": "lease expired (claude:0f56a916)"
         }
-      ]
+      ],
+      "started_at": "2026-11-20T20:43:03Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2262499c2829",

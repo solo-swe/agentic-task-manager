@@ -1,5 +1,52 @@
 [
   {
+    "name": "a status ID with shell characters is refused on load (ATM-665)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "statuses": [
+              { "id": "todo", "label": "To Do", "kind": "todo" },
+              { "id": "in_progress", "label": "In Progress", "kind": "active" },
+              { "id": "done$(x)", "label": "Done", "kind": "done" }
+            ]
+          },
+          "tasks": []
+        }
+      }
+    },
+    "args": ["task", "list"],
+    "expect": { "exit": 1, "stderrIncludes": ["meta.statuses: 'done$(x)' is not an ID atm takes"] }
+  },
+  {
+    "name": "a sprint name with shell characters is refused on load (ATM-665)",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "s1;x" }] }, "tasks": [] } }
+    },
+    "args": ["sprint", "list"],
+    "expect": { "exit": 1, "stderrIncludes": ["meta.sprints: 's1;x' is not a sprint name: ';' not allowed"] }
+  },
+  {
+    "name": "sprint add refuses a name with shell characters, and writes nothing (ATM-665)",
+    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "args": ["sprint", "add", "s1;x"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["'s1;x' is not a sprint name: ';' not allowed"],
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    }
+  },
+  {
+    "name": "sprint add refuses a word atm takes for itself, in any case (ATM-665)",
+    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "args": ["sprint", "add", "Backlog"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["'Backlog' is a word atm takes for itself (backlog, new, active, next)"],
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    }
+  },
+  {
     "name": "workflow set refuses a base branch with shell characters (T-222, F5)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
     "args": ["project", "workflow", "set", "pull-request", "--base", "main$(touch x)"],

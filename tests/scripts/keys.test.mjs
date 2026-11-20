@@ -212,9 +212,10 @@ test('every line for people names tasks by key, never by UUID; --json has the ke
     // Doctor's grouped warning: its tasks' keys
     assert.match(ok(['doctor']), /its files match no component.*\n {2}ATM-1 ATM-2/);
     // Moving into a sprint says which task moved, by key
-    ok(['sprint', 'add', 'Next']);
-    assert.match(ok(['sprint', 'move', 'ATM-2', '--to', 'Next']), /^ATM-2: backlog -> Next$/m);
-    ok(['sprint', 'start', 'Next']);
+    // Not "Next": a word atm takes for itself (ATM-665)
+    ok(['sprint', 'add', 'Later']);
+    assert.match(ok(['sprint', 'move', 'ATM-2', '--to', 'Later']), /^ATM-2: backlog -> Later$/m);
+    ok(['sprint', 'start', 'Later']);
     for (const args of [
       ['sprint', 'list'],
       ['project', 'status'],

@@ -267,12 +267,30 @@ fn checked_name(
             py_repr(&json!(sprint_id(existing)))
         )));
     }
+    usable_name(&name)?;
+    Ok(name)
+}
+
+/// A new name for a sprint, checked (ATM-665): at most [`MAX_SPRINT_NAME`] characters, shell-safe, and none of the
+/// words the loop and `sprint move --to` take (`backlog`, `new`, `active`, `next`), which the sprint could never be
+/// named by.
+fn usable_name(name: &str) -> Result<()> {
     if name.chars().count() > MAX_SPRINT_NAME {
         return Err(invalid(format!(
             "a sprint name is at most {MAX_SPRINT_NAME} characters"
         )));
     }
-    Ok(name)
+    if let Some(problem) = atm_common::vocabulary::sprint_name_problem(name) {
+        return Err(invalid(problem));
+    }
+    if atm_common::vocabulary::reserved_sprint_name(name) {
+        return Err(invalid(format!(
+            "{} is a word atm takes for itself ({}): name the sprint otherwise",
+            repr_str(name),
+            atm_common::vocabulary::RESERVED_SPRINT_NAMES.join(", ")
+        )));
+    }
+    Ok(())
 }
 
 /// `atm sprint add`: a planned sprint, named `name` (generated without one), after the sprint `after` (default: last),
@@ -407,11 +425,7 @@ pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Ren
         if to.is_empty() {
             return Err(invalid("a sprint needs a name"));
         }
-        if to.chars().count() > MAX_SPRINT_NAME {
-            return Err(invalid(format!(
-                "a sprint name is at most {MAX_SPRINT_NAME} characters"
-            )));
-        }
+        usable_name(&to)?;
         if to == from {
             return Err(invalid(format!(
                 "the sprint is already called {}",
