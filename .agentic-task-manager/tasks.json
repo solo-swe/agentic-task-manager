@@ -17015,15 +17015,15 @@
       "description": "Hakan (2026-11-19): a review's rendered Markdown looks very dark. It should simply look right, as a top-level document editor shows a document (Microsoft Word, Google Docs, Apple Pages, Notion): a page you read and comment on, not a dark panel.\n\n## Research\nWrite `docs/rendered-document-research.md`, reviewed as a CR:\n- **How editors show a document:** the page (its colour in light and dark modes, its paper, margins, width and shadow), the canvas around it, the text's type and size, headings, tables, code, images; how each handles dark mode (Word's and Docs' dark canvas with a light page, or a dark page; Pages; Notion's in-canvas text). Screenshots or precise descriptions, each sourced.\n- **What atm shows now:** the review's rendered side and the document viewer's page (`DocumentPage.svelte`, ATM-645), in each theme and mode, with screenshots; why it looks dark (the page's colours, the theme tokens, CompMD's styles: atm's own CSS, per the boundary).\n- **The gap:** what is missing to get there, as a list of concrete changes with where each lives (atm's CSS and components, the theme tokens; anything that would be CompMD's, named as such and not built here).\n- **A recommendation**, and the follow-up tasks it implies.\n\nThe diff's own marks (added, removed, changed blocks) and the comments must still read on the page.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/rendered-document-research.md"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-20T09:45:22Z",
+      "updated_at": "2026-11-20T09:48:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17032,7 +17032,7 @@
       ],
       "sprint": "Task&review state machine",
       "number": 649,
-      "started_at": "2026-11-19T18:10:04Z",
+      "started_at": "2026-11-20T09:48:57Z",
       "started_by": "claude:0f56a916",
       "commit": "bd75d5a173e5d0d7dbf0e3b87f93b6e9159b4426",
       "code_reviews": [
@@ -17041,8 +17041,6 @@
           "ref": "CR-60"
         }
       ],
-      "review_requested_at": "2026-11-19T18:14:28Z",
-      "review_state": "changes_requested",
       "notes": [
         {
           "at": "2026-11-19T18:14:28Z",
@@ -17057,7 +17055,13 @@
           "by": "Hakan Serce"
         }
       ],
-      "reviewed_at": "2026-11-20T09:45:22Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T18:14:28Z",
+          "to": "2026-11-20T09:45:22Z",
+          "outcome": "changes_requested"
+        }
+      ]
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848990a501dd",
@@ -17071,7 +17075,7 @@
       "description": "Hakan (2026-11-19): commenting on a review's rendered Markdown doesn't work as on code: there is no **+** button, and so on.\n\n## Expected\nThe rendered view takes comments the way the source view does: hovering a block (or a line of it) shows the **+** at its line number in the gutter; a click opens the comment box under it; a drag over several lines' + picks them; a text selection may start one too. The comment anchors to the source lines the block came from (CompMD's source-line map, as the gutter uses it), so it shows in the source view as well and moves with the code across rounds.\n\n## Check\n- Where the source view's + and drag live (`DiffCode.svelte`, `DiffView.svelte`) and what the rendered side (`RenderedSide.svelte`, `DocumentPage.svelte`) lacks; reuse the same component, not a copy.\n- Tests: e2e on a rendered Markdown file: the + appears on hover, a click opens the box anchored to the block's lines, a drag over two blocks anchors to their lines, the comment shows in the source view on the same lines.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/RenderedSide.svelte",
@@ -17079,9 +17083,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-20T09:48:18Z",
+      "updated_at": "2026-11-20T09:48:55Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17100,7 +17104,6 @@
         }
       ],
       "review_requested_at": "2026-11-19T18:22:01Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T18:22:01Z",
@@ -17113,9 +17116,23 @@
           "kind": "note",
           "text": "Approved: in CR-61 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T09:48:55Z",
+          "kind": "outcome",
+          "text": "Approved in CR-61: rendered Markdown, comment with the + on a line or a drag over lines",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-20T09:48:18Z"
+      "reviews": [
+        {
+          "from": "2026-11-19T18:22:01Z",
+          "to": "2026-11-20T09:48:18Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T09:48:55Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848aa5d26e23",
@@ -17289,9 +17306,9 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-19T19:55:50Z",
+      "updated_at": "2026-11-20T09:48:48Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17313,15 +17330,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T19:55:50Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T19:55:50Z",
           "kind": "review",
           "text": "CR-64: The timed e2e tests one at a time",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:48:48Z",
+          "kind": "note",
+          "text": "Approved: in CR-64 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-20T09:48:48Z"
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e632884fe3f",
@@ -17343,9 +17367,9 @@
         "dashboard/playwright.config.ts"
       ],
       "created_at": "2026-11-19T19:46:35Z",
-      "updated_at": "2026-11-19T21:19:34Z",
+      "updated_at": "2026-11-20T09:49:03Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17367,15 +17391,22 @@
         }
       ],
       "review_requested_at": "2026-11-19T21:19:34Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-19T21:19:34Z",
           "kind": "review",
           "text": "CR-65: WebKit: the + on a wrapped line keeps the pane where it is; tests in WebKit",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T09:49:03Z",
+          "kind": "note",
+          "text": "Approved: in CR-65 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-20T09:49:03Z"
     },
     {
       "id": "01a1f558-bc0a-762d-9c45-4e642f23672e",
@@ -18642,7 +18673,7 @@
       "description": "Reported by Hakan (2026-11-20, e.g. CR-60's screenshots): a binary file is rightly not copied into a review's round as a diff, but a file of a known type should still show when opened. Every image the viewer knows (png, jpeg, gif, webp, svg) shows its old and new image on the review's Diffs tab, instead of *A binary file: listed, not shown.*\n\n## Change\n- **atm-docs:** `read_image_at(vcs, revision, path)`: an image's bytes as a commit or tree has it, with `read_document_at`'s checks (the path's, a regular file, not ignored, the size limit) and `read_image`'s (only the image types, bytes matching their name); the two share one lookup.\n- **atm-lib / atm-api:** `…/files?path=&at=<revision>`, as `…/documents?path=&at=` (kept by the browser when `at` is a full object ID); the app's `file_of` command takes `at` too (I27).\n- **Dashboard:** a binary file of an image type shows its sides (removed: the old; added: the new; modified: both, side by side, labelled), each loaded from its revision; another binary file stays listed, not shown.\n- **Docs:** `docs/security-architecture.md` I11 (the files route takes `at`, its checks) and `docs/multi-project-api.md`.\n\n## Tests\natm-docs unit tests (an image at a revision; refused when it isn't one, or isn't an image); the route's tests on its fake; the app command's; an e2e test that a review's added and modified images show.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-docs/src/lib.rs",
@@ -18653,7 +18684,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T09:39:58Z",
-      "updated_at": "2026-11-20T09:40:03Z",
+      "updated_at": "2026-11-20T09:48:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18668,7 +18699,24 @@
       ],
       "number": 689,
       "started_at": "2026-11-20T09:40:03Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "22d5cb787d66bb5774e5ff246ba0f08b261e443f",
+      "code_reviews": [
+        {
+          "id": "01a1f85b-beb5-74b2-a2a5-f69d531ee913",
+          "ref": "CR-73"
+        }
+      ],
+      "review_requested_at": "2026-11-20T09:48:44Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T09:48:44Z",
+          "kind": "review",
+          "text": "CR-73: A review shows its image files: before and after",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }

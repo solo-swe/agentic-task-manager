@@ -1,6 +1,6 @@
 # Rendered Markdown as a document editor shows it (ATM-649)
 
-**Status:** research, for review with Hakan (CR). The changes it recommends become tasks of their own (§6).
+**Status:** research, reviewed with Hakan (CR-60). His decisions are in §7; the changes become tasks of their own (§6).
 
 Hakan (2026-11-19): a review's rendered Markdown looks very dark. It should look as a top-level document editor shows a
 document (Microsoft Word, Google Docs, Apple Pages, Notion): a page you read and comment on, not a dark panel.
@@ -94,9 +94,10 @@ are already written that way.
 | G3 | **A page toggle, as Word's Switch Modes:** one button on the page (and in Settings) that turns this page dark or light, remembered | `DocumentViewer.svelte`, the diff viewer's toolbar (`DiffView.svelte`), `state.svelte.ts` (a preference) |
 | G4 | **Reading type for the default:** text at 16 px, line height 1.6, a measure of about 70 characters (the page about 760 px wide), headings in a scale (2, 1.5, 1.25 em), not muted, margins of 56–64 px | `themes/doc-styles.css` |
 | G5 | **Changes as an editor marks them:** a bar in the left margin beside each changed block (green, red, or both for a change), and one light tint per block instead of a box per line. A new file is marked once, as new (the file header says so), not line by line | `RenderedSide.svelte` |
-| G6 | **The line numbers in the margin, outside the text:** fainter, and hidden in the document viewer unless asked for (the viewer is for reading; a review needs them) | `DocumentPage.svelte`, `app.css`; alignment is ATM-652 |
+| G6 | **The line numbers in the margin, outside the text:** fainter; on by default, in the viewer and in a review, with a switch to turn them off, remembered (Hakan, CR-60) | `DocumentPage.svelte`, `app.css`, `state.svelte.ts` (a preference); alignment is ATM-652 |
 | G7 | **Comments in the right margin**, level with their block, the block's text highlighted | ATM-651 (and ATM-650 to make them) |
 | G8 | **Auto, kept as a choice:** the theme's own page for those who want the app's colours, without its inverted desk (the page `--surface` on a `--bg` desk, as the viewer has) | `RenderedSide.svelte` |
+| G9 | **The final version, without the diff's marks** (Hakan, CR-60): a toggle on each document in a review that shows it as it will read, its new side alone, with no change marks, bars or tints; the comments stay. Per document, off by default (the marks show), remembered per review and document as *Viewed* is | `RenderedSide.svelte`, `DiffView.svelte`'s rendered view, `review-data.ts` |
 
 The diff's marks and the comments must still read on the light page: G1 sets `--red`, `--green` and `--yellow` for the
 light page, and the screenshot tests cover each of them, in each mode.
@@ -111,7 +112,8 @@ light page, and the screenshot tests cover each of them, in each mode.
 - **Type:** the system's sans-serif at 16 px, line height 1.6, about 70 characters a line, headings in a clear scale.
   The GitHub, Docs and Magazine styles stay, as alternatives; Auto stays as *Theme*, with its desk fixed (G8).
 - **Marks:** changes as bars in the left margin and a light tint per block; comments in the right margin (ATM-651);
-  line numbers faint in the left margin, on in a review, off in the viewer.
+  line numbers faint in the left margin, on by default everywhere, with a switch to turn them off (CR-60). A toggle on
+  each reviewed document shows its final version, without the marks (G9).
 
 Why light by default and not a better dark page: a document in a review is read as its readers will read it, mostly on
 GitHub and in editors, in light. Word and Google say the same about previewing a document. A reviewer who prefers dark
@@ -126,14 +128,18 @@ has the toggle.
 2. **A page toggle (G3):** the page dark or light, from the viewer and the diff viewer, remembered.
 3. **Changes marked as an editor marks them (G5):** bars in the margin and one tint per block; a new file marked once.
    The e2e tests on the marks updated.
-4. **The line numbers (G6):** faint, off in the viewer by default; together with ATM-652 (their alignment).
+4. **The line numbers (G6):** faint, on by default, a switch to turn them off, remembered; their alignment was ATM-652.
 5. **Comments on the page:** ATM-650 and ATM-651, as planned; ATM-651 takes the right margin (G7).
+6. **The final version in a review (G9):** a toggle on each document showing it without the diff's marks.
 
-## 7. Questions for Hakan
+## 7. Decisions (Hakan, CR-60)
 
-1. **A light page in dark mode by default,** with a toggle to make it dark (recommended), or a dark page by default
-   with a toggle to make it light?
-2. **Line numbers in the document viewer:** off by default (recommended), or on as now?
+1. **A light page in both modes, with the toggle:** "light page is good in both modes, toggle makes it better." As
+   recommended (§5, G1, G3).
+2. **Line numbers on by default, with an option to turn them off** (not off in the viewer, as recommended). G6 and
+   task 4 say so now.
+3. **Added: the final version in a review.** A toggle per document to see it as it will read, without the diff's
+   highlights (G9, task 6).
 
 [^word-dark]: Microsoft Support, [Dark Mode in Word](https://support.microsoft.com/en-us/word/dark-mode-in-word); Microsoft 365 Insider blog, [Try Dark Mode in Word](https://techcommunity.microsoft.com/blog/microsoft365insiderblog/try-dark-mode-in-word/4211941).
 [^docs-web]: How-To Geek, [How to turn on dark mode in Google Docs](https://www.howtogeek.com/721117/how-to-turn-on-dark-mode-in-google-docs/) (the dark theme is the mobile apps'; the web app has none).
