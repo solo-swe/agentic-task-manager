@@ -850,7 +850,7 @@
               <button
                 aria-pressed={rendered === 'rendered'}
                 aria-label="Rendered"
-                title="Rendered"
+                title="Rendered, as the document viewer shows it. Its document style and text size are in Settings (⋯)"
                 onclick={() => (rendered = 'rendered')}><Icon name="eye" size={15} /></button
               >
             </div>

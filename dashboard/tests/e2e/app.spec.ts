@@ -481,6 +481,13 @@ test.describe('the dashboard in the atm app', () => {
     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
     // The window's own bar and sidebar toggle are there, as on every tab
     await expect(page.locator('#app-titlebar')).toBeVisible();
+    // ATM-691 (Hakan): and the ⋯ at its right end, which opens Settings, the document's text size with them
+    await page.locator('#app-titlebar-end #settings-btn').click();
+    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
+    await page.locator('#settings-sheet #doc-size-select').selectOption('large');
+    await expect(page.locator('html')).toHaveAttribute('data-doc-size', 'large');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#settings-overlay')).not.toHaveClass(/open/);
     // The selected tab joins the review's top bar under it, in one colour, as a project's tab joins its page (ATM-608)
     const colours = await page.evaluate(() => {
       const of = (selector: string) => getComputedStyle(document.querySelector(selector)!).backgroundColor;

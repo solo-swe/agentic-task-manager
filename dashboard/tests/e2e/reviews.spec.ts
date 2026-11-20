@@ -718,11 +718,14 @@ test.describe('a review’s page', () => {
             now: rows('new'),
           };
         });
-      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level
+      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level,
+      // and the old side's rows placed from its taller line (they follow CompMD's layout, a moment after its text's)
       await expect
         .poll(async () => {
           const s = await sides();
-          return s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
+          const text = s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
+          const rows = s.old[1] && s.now[1] ? Math.abs(s.old[1].height - s.now[1].height) : 999;
+          return Math.max(text, rows);
         })
         .toBeLessThan(2);
       const s = await sides();
@@ -819,9 +822,16 @@ test.describe('a review’s page', () => {
             });
           }),
         );
+      // Once the rows are placed: they follow CompMD's layout, which comes a moment after a switch (Wrap's rows from the
+      // wrapped text's boxes; read at once, the lines after the long one were still one visual line apart)
       const level = async (what: string) => {
+        await expect
+          .poll(async () => {
+            const found = await offsets();
+            return found.length >= 4 && found.every((d) => Math.abs(d) <= 1);
+          })
+          .toBe(true);
         const found = await offsets();
-        expect(found.length, what).toBeGreaterThanOrEqual(4);
         for (const d of found) expect(Math.abs(d), `${what}: ${JSON.stringify(found)}`).toBeLessThanOrEqual(1);
         return found;
       };
@@ -1479,6 +1489,11 @@ test.describe('the diff viewer on a review’s page', () => {
     await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
     const view = diffOf(page, 'docs/plan.md');
     await expect(view.locator('.diff-line').first()).toBeVisible();
+    // ATM-691 (Hakan): its tooltip says where its look is set
+    await expect(page.getByRole('button', { name: 'Rendered' })).toHaveAttribute(
+      'title',
+      /document style and text size are in Settings/,
+    );
     await page.getByRole('button', { name: 'Rendered' }).click();
     await expect(view).toHaveAttribute('data-view', 'rendered');
     await expect(view.locator('.diff-pane')).toHaveCount(2);
@@ -1500,6 +1515,19 @@ test.describe('the diff viewer on a review’s page', () => {
     const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
     const heading = (await newSide.locator('.compmd-page h1').boundingBox())!;
     expect(number.x + number.width).toBeLessThanOrEqual(heading.x);
+    // ATM-691: the text size from Settings (on <html>) scales the rendered side's text; its numbers follow it
+    const text = newSide.locator('.compmd').first();
+    const fontSize = () => text.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const medium = await fontSize();
+    await page.evaluate(() => (document.documentElement.dataset.docSize = 'huge'));
+    await expect.poll(fontSize).toBeCloseTo(medium * 1.3, 1);
+    await expect
+      .poll(async () => {
+        const n = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
+        const h = (await newSide.locator('.compmd-page h1').boundingBox())!;
+        return Math.abs(n.y + n.height / 2 - (h.y + h.height / 2));
+      })
+      .toBeLessThan(4);
     await page.getByRole('button', { name: 'Unified' }).click();
     await expect(view.locator('.diff-pane')).toHaveCount(1);
     await expect(view.locator('.diff-pane')).toHaveClass(/diff-new/);

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAppearance,
+  DOC_SIZES,
   DOC_STYLES,
   isModePref,
+  knownDocSize,
   knownDocStyle,
   knownTheme,
   resolveMode,
@@ -37,9 +39,20 @@ describe('appearance', () => {
     for (const bad of ['terminal', '', null, 3]) expect(knownDocStyle(bad)).toBe('auto');
   });
 
-  it('applies theme and mode as attributes on the root element', () => {
+  it('text sizes: Tiny to Huge, growing, Medium as written; an unknown one is Medium (ATM-691)', () => {
+    expect(DOC_SIZES.map((s) => s.id)).toEqual(['tiny', 'small', 'medium', 'large', 'huge']);
+    const scales = DOC_SIZES.map((s) => s.scale);
+    expect([...scales].sort((a, b) => a - b)).toEqual(scales);
+    expect(DOC_SIZES.find((s) => s.id === 'medium')?.scale).toBe(1);
+    expect(knownDocSize('tiny')).toBe('tiny');
+    for (const bad of ['gigantic', '', null, 2]) expect(knownDocSize(bad)).toBe('medium');
+  });
+
+  it('applies theme, mode and text size as attributes on the root element', () => {
     const root = document.createElement('html');
     applyAppearance(root, 'default', 'light');
-    expect(root.dataset).toMatchObject({ theme: 'default', mode: 'light' });
+    expect(root.dataset).toMatchObject({ theme: 'default', mode: 'light', docSize: 'medium' });
+    applyAppearance(root, 'default', 'dark', 'large');
+    expect(root.dataset).toMatchObject({ mode: 'dark', docSize: 'large' });
   });
 });

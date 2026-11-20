@@ -1765,7 +1765,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 691
+    "next_number": 692
   },
   "tasks": [
     {
@@ -17192,7 +17192,7 @@
       "description": "Hakan (2026-11-19): a comment entered on rendered Markdown isn't shown on the screen.\n\n## Two ways to show them (Hakan's)\n1. **In a margin on the right**, beside the block they are about, as Word and Google Docs show comments; a line or a highlight ties each to its block.\n2. **Cut the page at that point and split it in two**, the comment in the space between, as the source view shows a chain under its lines.\n\nPropose one (or both, by width) with a mockup in the CR, then build it: every chain on the file shows at its block, open ones and resolved ones as the source view shows them, with reply, resolve and edit; a comment being written shows where it will land. Follows from ATM-650 (commenting there) and fits the look the research task settles (ATM-649).\n\n## Tests\ne2e: a chain on a rendered block shows at that block, in both views; a new comment shows once sent; a resolved one folds as in the source view.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f4fd-42b5-741f-92a8-848990a501dd"
       ],
@@ -17202,7 +17202,7 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-20T09:49:37Z",
+      "updated_at": "2026-11-20T10:07:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17214,7 +17214,24 @@
       "sprint": "Task&review state machine",
       "number": 651,
       "started_at": "2026-11-20T09:49:37Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "0b2da4d1df03ca5fd5323f8f9bd020a87ca494e3",
+      "code_reviews": [
+        {
+          "id": "01a1f86c-76ca-7359-989a-45682d3ed2ff",
+          "ref": "CR-76"
+        }
+      ],
+      "review_requested_at": "2026-11-20T10:07:00Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T10:07:00Z",
+          "kind": "review",
+          "text": "CR-76: A comment on rendered Markdown shows on the page, under its block",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848b9d6a97b8",
@@ -18943,16 +18960,16 @@
       "description": "Hakan: lines were drawn between each line of a review's source view.\n\n## Cause\nEach line's row (its tint and its number) is placed at the code's measured line height, a fraction of a pixel (20.8 px). Where two rows meet, both half cover the same pixel, so their tints blend into a line between every two lines.\n\n## Change\n`dashboard/src/lib/reviews/DiffCode.svelte`: `rowOf` puts each row's edges on whole pixels, so the rows tile.\n\n## Tests\nThe Split Wrap test in `reviews.spec.ts` checks that every row is on whole pixels and starts where the one before it ends, wrapped and not.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/DiffCode.svelte",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-20T10:06:40Z",
-      "updated_at": "2026-11-20T10:06:44Z",
+      "updated_at": "2026-11-20T10:43:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -18963,7 +18980,68 @@
       "number": 690,
       "started_at": "2026-11-20T10:06:43Z",
       "started_by": "claude:0f56a916",
-      "commit": "2ba58595dde3e662041e9b73261a98352a0046f0"
+      "commit": "2ba58595dde3e662041e9b73261a98352a0046f0",
+      "code_reviews": [
+        {
+          "id": "01a1f86c-74ad-71b0-ad10-bfa792277388",
+          "ref": "CR-75"
+        }
+      ],
+      "review_requested_at": "2026-11-20T10:06:59Z",
+      "review_state": "changes_requested",
+      "notes": [
+        {
+          "at": "2026-11-20T10:06:59Z",
+          "kind": "review",
+          "text": "CR-75: A review’s source view draws no line between two lines",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T10:43:57Z",
+          "kind": "rejection",
+          "text": "CR-75 round 1: 1 open comment",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviewed_at": "2026-11-20T10:43:57Z"
+    },
+    {
+      "id": "01a1f893-8835-72bd-99d7-203cfa1f3f02",
+      "name": "Document text size in Settings (tiny to huge); the ⋯ settings on a review's tab; a tooltip on Rendered saying where to change its look",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan asked for three things.\n\n## Text size\nA **Text size** setting under Document style in Settings: Tiny, Small, Medium (the default), Large, Huge. It scales a Markdown document's text on the document viewer's page and on a review's rendered sides, in every document style and theme. The headings scale with it. It is kept in the browser, like the other settings.\n\n## The ⋯ settings on a review's tab\nIn the app, a review's tab has no ⋯ at the title bar's right end, so Settings can't be opened from there. Show it as every other tab does.\n\n## A tooltip on Rendered\nThe review's Rendered button says that the page's look (its document style and text size) is set in Settings (⋯).\n\n## Tests\n- unit: the setting is kept, and an unknown value falls back to Medium;\n- e2e: a size changes the text's size in the viewer and on a rendered side, and the line numbers stay level with the text; the ⋯ shows on a review's tab; Rendered's tooltip.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/appearance.ts",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/lib/prefs.ts",
+        "dashboard/src/lib/shell/SettingsPanel.svelte",
+        "dashboard/src/App.svelte",
+        "dashboard/src/themes/doc-styles.css",
+        "dashboard/src/lib/reviews/ReviewPage.svelte"
+      ],
+      "created_at": "2026-11-20T10:49:40Z",
+      "updated_at": "2026-11-20T10:49:45Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T10:49:40Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 691,
+      "started_at": "2026-11-20T10:49:45Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { inApp } from '../api/http';
-  import { DOC_STYLES, MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../appearance';
+  import { DOC_SIZES, DOC_STYLES, MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../appearance';
   import type { IconName } from '../ui/Icon.svelte';
   import { dashboard } from '../state.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -97,6 +97,19 @@
     onchange={(e) => dashboard.setDocStyle((e.currentTarget as HTMLSelectElement).value)}
   >
     {#each DOC_STYLES as style (style.id)}<option value={style.id}>{style.name}</option>{/each}
+  </select>
+</div>
+<!-- How large a document's text is (ATM-691): in the viewer and a review's rendered sides -->
+<label class="menu-label" for="doc-size-select">Text size</label>
+<div class="theme-picker doc-size-picker">
+  <span class="doc-style-sample doc-size-sample" aria-hidden="true">A</span>
+  <span class="select-chevron"><Icon name="chevron-down" size={14} /></span>
+  <select
+    id="doc-size-select"
+    value={dashboard.docSize}
+    onchange={(e) => dashboard.setDocSize((e.currentTarget as HTMLSelectElement).value)}
+  >
+    {#each DOC_SIZES as size (size.id)}<option value={size.id}>{size.name}</option>{/each}
   </select>
 </div>
 <!-- What needs you, from the app: the count on its icon (T-518) and a notification when it goes up (T-520) -->

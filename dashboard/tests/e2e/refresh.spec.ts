@@ -132,6 +132,7 @@ test('the ⋯ settings menu: auto-refresh, mode and theme; closes on Escape and 
     'Mode',
     'Theme',
     'Document style',
+    'Text size',
     'This project',
   ]);
   await expect(button).toHaveAttribute('aria-expanded', 'true');
