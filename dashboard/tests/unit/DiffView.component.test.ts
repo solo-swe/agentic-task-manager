@@ -224,8 +224,14 @@ describe('DiffView: the layout', () => {
     expect(screen.queryByText('Loading…')).toBeNull();
     expect(container.querySelector('[data-chain="t1"]')).not.toBeNull();
     expect(screen.getAllByRole('button', { name: /^Line \d+$/ }).length).toBeGreaterThan(0);
-    // Other sides: loaded, and Loading shown meanwhile
+    // Another revision of the same file (a live review's working copy, a new tree at each change, ATM-687): what is
+    // shown stays while it loads, never Loading
     await rerender({ after: at('head2', NEW) });
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^Line \d+$/ }).length).toBeGreaterThan(0);
+    await numbers();
+    // Another file: Loading until its sides are there
+    await rerender({ path: 'g.txt', oldPath: 'g.txt', after: at('head3', NEW) });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
     await numbers();
   });

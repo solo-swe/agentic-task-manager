@@ -273,8 +273,30 @@
     const card = cards().find((c) => c.getBoundingClientRect().bottom > box.top + 48);
     atFile = card?.dataset.file ?? null;
   }
+  // A live review keeps the place read itself (ATM-687): its files change under the reader, and WebKit's own scroll
+  // anchoring, anchored inside a card a live update drew again, moved the pane by the card's height (1,033 px). Its
+  // pane has the browser's anchoring off (`.live`), and the first card in view is kept where it is when a card above
+  // it changes size (the cards' ResizeObserver, below); a card that grows below the place read moves nothing anyway
+  let reading: { path: string; top: number } | null = null;
+  /** The first card in view, and how far its top is from the pane's: what a live update keeps in place */
+  function remember() {
+    const el = list;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const card = cards().find((c) => c.getBoundingClientRect().bottom > top + 1);
+    reading = card?.dataset.file ? { path: card.dataset.file, top: card.getBoundingClientRect().top - top } : null;
+  }
+  /** That card back where it was, the list scrolled by the difference */
+  function keepReading() {
+    const el = list;
+    const card = reading ? cardOf(reading.path) : null;
+    if (!el || !card || !reading) return remember();
+    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top - reading.top;
+    if (Math.abs(off) >= 1) el.scrollTop += off;
+  }
   let scrolling = 0;
   function onscroll() {
+    if (live) remember();
     if (scrolling) return;
     scrolling = requestAnimationFrame(() => {
       scrolling = 0;
@@ -338,6 +360,7 @@
     const unpin = () => (pinned = null);
     const settle = new ResizeObserver(() => {
       if (pinned) toTop(cardOf(pinned));
+      else if (live) keepReading();
     });
     for (const card of el.querySelectorAll('.review-file-card')) settle.observe(card);
     const events = ['wheel', 'touchstart', 'mousedown', 'keydown'] as const;
@@ -1064,7 +1087,7 @@
         onpointerdown={drag}
         onkeydown={nudge}
       ></div>
-      <div class="review-diffs" bind:this={list} {onscroll}>
+      <div class="review-diffs" class:live bind:this={list} {onscroll}>
         {#each files as f (f.path)}
           <ReviewFile
             file={f}
@@ -1765,6 +1788,10 @@
   .review-splitter:focus-visible {
     background: color-mix(in srgb, var(--accent) 35%, transparent);
     outline: none;
+  }
+  /* A live review's pane keeps the place read itself (ATM-687, keepReading): the browser's scroll anchoring off */
+  .review-diffs.live {
+    overflow-anchor: none;
   }
   .review-diffs {
     overflow: auto;

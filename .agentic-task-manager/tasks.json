@@ -1765,7 +1765,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 687
+    "next_number": 688
   },
   "tasks": [
     {
@@ -18344,14 +18344,14 @@
       "description": "Asked by Hakan (2026-11-20): when the title bar's tab strip is full, put a **More ⌄** button at its end that opens a menu of the tabs that don't fit; choosing one shows it (scrolled into view, or moved into the visible part).\n\n## Change\n- `dashboard/src/lib/ui/TitleBarTabs.svelte`: measure which tabs are fully visible; when some aren't, show **More ⌄** (a Bits UI menu) listing those, each with its label, the current one marked.\n- Decide whether the scroll arrows stay next to it or the button replaces them (as browsers' tab overflow lists do); keep tab dragging working.\n\n## Tests\nComponent tests for which tabs the menu lists at a few widths; an e2e test that opens a hidden tab from the menu, tagged for WebKit too.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/ui/TitleBarTabs.svelte",
         "dashboard/src/lib/shell/AppTitleBar.svelte"
       ],
       "created_at": "2026-11-20T07:11:57Z",
-      "updated_at": "2026-11-20T07:31:46Z",
+      "updated_at": "2026-11-20T07:38:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18366,7 +18366,24 @@
         "dashboard"
       ],
       "started_at": "2026-11-20T07:31:46Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "4b89971a24bb0575b846a18c4e95d371eaefacdd",
+      "code_reviews": [
+        {
+          "id": "01a1f7e4-5d10-7415-b9b9-9dd191163544",
+          "ref": "CR-69"
+        }
+      ],
+      "review_requested_at": "2026-11-20T07:38:20Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T07:38:20Z",
+          "kind": "review",
+          "text": "CR-69: More ⌄ lists the tabs that do not fit",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83dd79ff17ea",
@@ -18424,6 +18441,44 @@
           "by": "claude:0f56a916"
         }
       ]
+    },
+    {
+      "id": "01a1f819-6c2f-774b-923c-6b97a9827afd",
+      "name": "Live review: an update to the diff never flickers or moves either pane; the file or document being read stays where it is",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Reported by Hakan (2026-11-20): in a live review, the diff updates as the working copy changes (`ReviewsTab.svelte` asks again every 2 s in the browser, on a change in the app). Those updates must never flicker, and never move the scroll of the file tree (left) or the diffs (right). A document being read, or a file chosen on the left, stays where it is, as far as the update allows.\n\n## Change\n- Measure first: an e2e test on a live review that changes the working copy while a file is chosen and the pane is scrolled into it, sampling every frame (as ATM-656's test does): the pane's scroll, the chosen file's top, and whether any drawn block goes blank or is replaced.\n- Then fix what the measurement shows: keep the files' components and their drawn code and documents across an update (keyed by path, the same text not drawn again), keep the scroll of both panes, and hold the file or line being read in place when files above it grow or shrink.\n\n## Tests\nThat e2e test, for a change in another file, in the file being read (above and below the place read), and a file added above; in Chromium and WebKit (`@webkit`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/reviews/ReviewFile.svelte",
+        "dashboard/src/lib/reviews/DiffView.svelte",
+        "dashboard/src/lib/shell/ReviewsTab.svelte"
+      ],
+      "created_at": "2026-11-20T08:36:18Z",
+      "updated_at": "2026-11-20T08:36:22Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T08:36:18Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "components": [
+        "dashboard"
+      ],
+      "number": 687,
+      "started_at": "2026-11-20T08:36:22Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

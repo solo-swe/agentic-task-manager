@@ -85,12 +85,15 @@
     onprevfile?: () => void;
   } = $props();
 
-  // The two sides, kept while the same ones load again (a refresh): nothing flickers
+  // The two sides, kept while the same ones load again (a refresh), and while the same file's next revisions load (a
+  // live review's working copy is a new tree at each change, ATM-687): what is shown stays until the new text is
+  // there, and is drawn again only where that text differs. Nothing flickers
   let oldDoc = $state.raw<ProjectDocument | null>(null);
   let newDoc = $state.raw<ProjectDocument | null>(null);
   let problem = $state<string | null>(null);
   let loaded = $state(false);
-  let loadedFor = '';
+  /** The files (old path and path) whose sides are shown */
+  let loadedFiles = '';
 
   async function side(source: DocumentSource | null, file: string) {
     if (!source) return null;
@@ -100,29 +103,33 @@
   }
 
   $effect(() => {
-    const [b, a, from, to] = [before, after, oldPath, path];
-    const key = `${b?.id ?? ''}:${from}|${a?.id ?? ''}:${to}`;
-    if (untrack(() => key !== loadedFor)) {
+    const [b, a, from, to, p] = [before, after, oldPath, path, patch];
+    const files = `${from}|${to}`;
+    // Another file (not another revision of this one): loading until its sides are there
+    if (files !== loadedFiles) {
       loaded = false;
       problem = null;
     }
     void Promise.all([side(b, from), side(a, to)])
       .then(([o, n]) => {
-        if (b !== before || a !== after) return; // another file meanwhile
+        if (b !== before || a !== after || p !== patch) return; // another file or revision meanwhile
         if (oldDoc?.text !== o?.text || oldDoc?.path !== o?.path) oldDoc = o;
         if (newDoc?.text !== n?.text || newDoc?.path !== n?.path) newDoc = n;
+        shownPatch = p;
         problem = null;
         loaded = true;
-        loadedFor = key;
+        loadedFiles = files;
       })
       .catch((e: unknown) => {
         problem = e instanceof Error ? e.message : String(e);
         loaded = true;
-        loadedFor = key;
+        loadedFiles = files;
       });
   });
 
-  const hunks = $derived(parseHunks(patch));
+  /** The patch of the sides shown: a new one waits for its sides, so the rows never pair one with the other's text */
+  let shownPatch = $state(untrack(() => patch));
+  const hunks = $derived(parseHunks(shownPatch));
   const language = $derived(newDoc?.language ?? oldDoc?.language ?? null);
   const markdown = $derived((newDoc ?? oldDoc)?.kind === 'markdown');
   const shownView = $derived(view === 'rendered' && markdown ? 'rendered' : 'source');

@@ -2183,6 +2183,104 @@ test.describe('a live review (ATM-576)', () => {
       .toMatchObject({ method: 'POST', path: '/CR-5/comments', body: { body: 'Keep going.' } });
   });
 
+  // ATM-687 (Hakan): the working copy changing under a reader moves nothing and blanks nothing. Each change is a new
+  // tree, so every file's `after` is another revision, its text mostly the same
+  for (const view of ['source', 'rendered'] as const)
+    for (const grown of ['far above', 'just above', 'here'] as const)
+      test(
+        `an update never blanks a file or moves either pane: the file being read stays put (${view}, ${grown === 'here' ? 'it grown below the place read' : `a file ${grown} it grown`})`,
+        WEBKIT_TOO,
+        async ({ page, tasksServer }) => {
+          const head = ['line 1', 'line 2', 'line 3'];
+          const added = (n: number, more = 0) => Array.from({ length: n + more }, (_, k) => `let value_${k} = ${k};`);
+          /** File i: a Rust file adding 30 lines (more, `more`), or the plan, a Markdown document; its after side `rev` */
+          const entry = (i: number, rev: string, more = 0) => {
+            const md = i === 8;
+            const path = md ? 'docs/plan.md' : `src/f${String(i).padStart(2, '0')}.rs`;
+            const lines = md
+              ? Array.from({ length: 30 + more }, (_, k) =>
+                  k % 3 === 0 ? `## Part ${k}` : `Paragraph ${k} of the plan.`,
+                )
+              : added(30, more);
+            const body = lines.map((l) => `+${l}`).join('\n');
+            const patch = `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,${lines.length + 3} @@\n line 1\n line 2\n line 3\n${body}\n`;
+            const doc = (text: string) =>
+              md
+                ? projectDocument(path, text)
+                : projectDocument(path, text, { kind: 'code', language: 'rust', line_offset: 1 });
+            tasksServer
+              .setRevisionDocument(`b${i}`, doc(head.join('\n') + '\n'))
+              .setRevisionDocument(rev, doc([...head, ...lines].join('\n') + '\n'));
+            return { ...file(path, patch, 'modified', `b${i}`), after: rev };
+          };
+          const files = (rev: string, grown = -1) =>
+            Array.from({ length: 14 }, (_, i) => entry(i, `${rev}${i}`, i === grown ? 20 : 0));
+          tasksServer.setReview('CR-5', livePage(...files('a')));
+          await openReviews(page, tasksServer, 'CR-5');
+          await page.getByRole('tab', { name: /^Diffs/ }).click();
+          if (view === 'rendered') await page.getByRole('button', { name: 'Rendered', exact: true }).click();
+          const reading = files('a')[8].path;
+          // The plan chosen on the left, then read a little into it
+          await page.locator('.review-file-name', { hasText: 'plan.md' }).first().click();
+          await expect(diffOf(page, reading)).toBeInViewport();
+          await page.waitForTimeout(600);
+          const box = (await page.locator('.review-diffs').boundingBox())!;
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await page.mouse.wheel(0, 150);
+          await page.waitForTimeout(400);
+          /** Every frame for `ms`: the read card's top in the pane, both panes' scroll, and whether any diff is blank */
+          const sample = (ms: number) =>
+            page.evaluate(
+              ([p, ms]) =>
+                new Promise<{ top: number; list: number; tree: number; blank: number; changed: number }[]>((done) => {
+                  const pane = document.querySelector<HTMLElement>('.review-diffs')!;
+                  const tree = document.querySelector<HTMLElement>('.review-files')!;
+                  const card = () => document.querySelector(`.review-file-card[data-file="${CSS.escape(p)}"]`)!;
+                  let changed = 0;
+                  const seen = new MutationObserver((records) => (changed += records.length));
+                  seen.observe(card(), { childList: true, subtree: true, characterData: true });
+                  const out: { top: number; list: number; tree: number; blank: number; changed: number }[] = [];
+                  const start = performance.now();
+                  const read = () => {
+                    out.push({
+                      top: Math.round(card().getBoundingClientRect().top - pane.getBoundingClientRect().top),
+                      list: Math.round(pane.scrollTop),
+                      tree: Math.round(tree.scrollTop),
+                      blank: document.querySelectorAll('.diff-loading').length,
+                      changed,
+                    });
+                    if (performance.now() - start < ms) requestAnimationFrame(read);
+                    else {
+                      seen.disconnect();
+                      done(out);
+                    }
+                  };
+                  requestAnimationFrame(read);
+                }),
+              [reading, ms] as const,
+            );
+          // The working copy changes: a new tree (every file's after side renamed, its text the same), and a file grows
+          // by 20 lines at its end: one far above the one read (not drawn), the one just above it (drawn), or the one
+          // read, below the place read (in WebKit, anchored inside the card, the pane jumped 1,033 px). The page asks
+          // again within LIVE_MS
+          const which = { 'far above': 2, 'just above': 7, here: 8 }[grown];
+          const frames = sample(4500);
+          tasksServer.setReview('CR-5', livePage(...files('n', which)));
+          const all = await frames;
+          // The update arrived: the grown file's header counts its 50 lines
+          await expect(card(page, files('n')[which].path).locator('.review-file-head')).toContainText('+50');
+          const first = all[0];
+          const why = JSON.stringify(all.filter((f, i) => i === 0 || JSON.stringify(f) !== JSON.stringify(all[i - 1])));
+          for (const f of all) {
+            expect(f.blank, why).toBe(0);
+            expect(Math.abs(f.top - first.top), why).toBeLessThan(3);
+            expect(f.tree, why).toBe(first.tree);
+          }
+          // The plan's own text didn't change: nothing in its card was drawn again
+          if (grown !== 'here') expect(all.at(-1)!.changed, why).toBe(0);
+        },
+      );
+
   test('ends with Approve or Close review, never sent back; Close sends why', async ({ page, tasksServer }) => {
     tasksServer.setReview('CR-5', livePage(file('README.md', PATCH_C)));
     await openReviews(page, tasksServer, 'CR-5');
