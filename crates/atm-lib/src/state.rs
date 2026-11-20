@@ -236,7 +236,7 @@ fn check_guards(
     vocab: &Vocabulary,
     tasks: &[&Task],
     agent: Option<&str>,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<()> {
     let id = text(task, "id").unwrap_or_default();
     let review_state = text(task, "review_state");
@@ -307,7 +307,7 @@ pub fn change_status(
     tasks: &[&Task],
     agent: Option<&str>,
     stamp: &str,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<Value> {
     let id = text(task, "id").unwrap_or_default();
     let current = task.get("status").cloned().unwrap_or(Value::Null);

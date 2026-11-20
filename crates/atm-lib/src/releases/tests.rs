@@ -158,8 +158,9 @@ fn the_release_list_counts_each_tasks_effective_release_by_kind_and_stage() {
     let one = &listed[0];
     assert_eq!(one["tasks"], json!(6));
     assert_eq!(one["by_kind"], json!({"todo": 1, "done": 5}));
-    // merged needs a PR: a merged_at without one is just done
-    assert_eq!(one["by_stage"], json!({"done": 3, "in_pr": 1, "merged": 1}));
+    // Merged once pushed or its PR merged, as the task views and the dashboard say it (ATM-667, audit L11): a
+    // merged_at without a PR is a direct push's
+    assert_eq!(one["by_stage"], json!({"done": 2, "in_pr": 1, "merged": 2}));
     assert_eq!(listed[1]["by_kind"], json!({"todo": 1}));
     assert_eq!(list_releases(&p, true).unwrap().0.len(), 3);
     let none = project(json!([]), json!({}));

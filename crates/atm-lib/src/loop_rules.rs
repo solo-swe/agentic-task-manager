@@ -285,7 +285,7 @@ pub fn loop_order<'t>(
     sel: &Selection,
     agent: Option<&str>,
     with_user: bool,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<LoopOrder<'t>> {
     let selected = select(vocab, tasks, sel)?;
     if let Some(problem) = selected.problem {
@@ -381,7 +381,7 @@ pub fn next_task<'t>(
     sel: &Selection,
     agent: Option<&str>,
     with_user: bool,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<(Option<&'t Task>, Option<String>)> {
     let order = loop_order(
         vocab, document, tasks, store, here, sel, agent, with_user, archived,

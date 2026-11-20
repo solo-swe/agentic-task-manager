@@ -55,7 +55,7 @@ impl Fixture {
             sel,
             None,
             false,
-            &|_| Ok(false),
+            &|_| Ok(None),
         )
         .unwrap();
         order
@@ -78,7 +78,7 @@ impl Fixture {
             sel,
             None,
             false,
-            &|_| Ok(false),
+            &|_| Ok(None),
         )
         .unwrap_err()
     }
@@ -96,7 +96,7 @@ impl Fixture {
             Value::Object(map) => map,
             other => panic!("not a store: {other}"),
         };
-        let archived = |_: &str| Ok(false);
+        let archived = |_: &str| Ok(None);
         let (t, reason) = next_task(
             &vocab,
             &self.document,
@@ -322,7 +322,7 @@ fn a_wait_recorded_in_this_worktree_doesnt_hold_a_task_back_one_in_another_does(
             &Selection::default(),
             None,
             false,
-            &|_| Ok(false),
+            &|_| Ok(None),
         )
         .unwrap()
         .ready
@@ -448,7 +448,7 @@ fn an_archived_dependency_is_done() {
         &Selection::default(),
         None,
         false,
-        &|id| Ok(id == "T-0"),
+        &|id| Ok((id == "T-0").then(|| task(json!({"id": "T-0", "status": "done"})))),
     )
     .unwrap();
     assert!(task.is_some());
@@ -666,7 +666,7 @@ fn listed_tasks_go_in_their_order_and_unknown_ones_are_refused() {
         &bad,
         None,
         false,
-        &|_| Ok(false),
+        &|_| Ok(None),
     )
     .unwrap_err();
     assert_eq!(

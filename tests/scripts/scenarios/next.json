@@ -1,5 +1,34 @@
 [
   {
+    "name": "project status names the task loop next would, an expired claim not holding it (ATM-667)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "project": "N" },
+          "tasks": [
+            { "id": "T-1", "name": "Urgent", "type": "feature", "status": "todo", "priority": "P0" },
+            { "id": "T-2", "name": "Later", "type": "feature", "status": "todo", "priority": "P2" }
+          ]
+        },
+        ".agentic-task-manager/claims-store.json": {
+          "claims": {
+            "T-1": {
+              "task": "T-1",
+              "agent": "bob",
+              "branch": "agent-2",
+              "worktree": "/elsewhere",
+              "claimed_at": "2026-05-01T10:00:00Z",
+              "lease_expires_at": "2026-05-01T11:00:00Z"
+            }
+          }
+        }
+      }
+    },
+    "args": ["project", "status"],
+    "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T11:00:01Z" },
+    "expect": { "stdoutIncludes": ["Next\n  T-1  Urgent"] }
+  },
+  {
     "name": "lowest id in natural order (T-2 before T-5 and T-10); unmet or missing dependencies skipped",
     "setup": {
       "files": {

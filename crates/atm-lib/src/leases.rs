@@ -11,6 +11,29 @@ use serde_json::{Map, Value, json};
 
 use crate::loop_rules::lease_minutes;
 
+/// A claim's agent while its lease runs, none once it has run out.
+pub(crate) fn holder(claim: &Value, now: i64) -> Option<&str> {
+    let until = claim
+        .get("lease_expires_at")
+        .and_then(Value::as_str)
+        .and_then(atm_common::time::parse_iso)?;
+    (until > now)
+        .then(|| claim.get("agent").and_then(Value::as_str))
+        .flatten()
+}
+
+/// The claims store as the loop's rule reads it (ATM-667, audit L7): its claims whose lease still runs at `now`, the
+/// rest of the store as it is. Read only: `atm project status` and the dashboard's Next up name the task `atm loop
+/// next` would, which drops expired claims first (and writes that it did).
+#[must_use]
+pub fn live_claims(store: &Map<String, Value>, now: i64) -> Map<String, Value> {
+    let mut live = store.clone();
+    if let Some(Value::Object(claims)) = live.get_mut("claims") {
+        claims.retain(|_, claim| holder(claim, now).is_some());
+    }
+    live
+}
+
 /// When a lease taken now runs out.
 #[must_use]
 pub fn lease_until(document: &Value) -> String {

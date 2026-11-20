@@ -14,7 +14,7 @@ fn vocab() -> Vocabulary {
 }
 
 fn run(t: &mut Task, command: Command, options: &Options, agent: Option<&str>) -> Result<Value> {
-    let none = |_: &str| Ok(false);
+    let none = |_: &str| Ok(None);
     change_status(
         t,
         command,
@@ -125,7 +125,7 @@ fn the_destinations_agree_with_the_table() {
 
 #[test]
 fn start_needs_done_dependencies_and_records_who() {
-    let none = |_: &str| Ok(false);
+    let none = |_: &str| Ok(None);
     let dep = task(json!({"id": "T-0", "status": "todo"}));
     let mut t = task(json!({"id": "T-1", "status": "todo", "dependencies": ["T-0"]}));
     let error = change_status(
@@ -341,7 +341,7 @@ fn run_in(
     options: &Options,
     agent: Option<&str>,
 ) -> Result<Value> {
-    let none = |_: &str| Ok(false);
+    let none = |_: &str| Ok(None);
     change_status(t, command, options, vocab, &[], agent, "S", &none)
 }
 
@@ -557,7 +557,8 @@ fn a_task_without_a_known_status_counts_as_to_do() {
 
 #[test]
 fn a_dependency_is_done_when_it_is_finished_or_archived() {
-    let archived = |id: &str| Ok(id == "T-A");
+    let archived =
+        |id: &str| Ok((id == "T-A").then(|| task(json!({"id": "T-A", "status": "done"}))));
     for (deps, waiting) in [
         (json!(["T-D"]), None),
         (json!(["T-A"]), None),

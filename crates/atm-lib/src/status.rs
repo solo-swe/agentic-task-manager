@@ -116,11 +116,7 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
     let all = store.list_tasks()?;
     let claims = store.read_claims();
     let (file_bytes, archive_bytes) = store.sizes();
-    let archived = |id: &str| {
-        store
-            .get_archived_task(id)
-            .map(|t| t.is_some_and(|t| !t.is_empty()))
-    };
+    let archived = |id: &str| crate::query::archived_task(store, id);
     let in_scope = Scope::new(vocab, scope)?;
     let tasks: Vec<&Task> = all
         .iter()
@@ -237,11 +233,13 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
         }
     }
 
+    // Live claims only, as `atm loop next` reads them (ATM-667)
+    let live = crate::leases::live_claims(&claims, atm_common::time::now());
     let (next, reason) = next_task(
         vocab,
         document,
         &all,
-        &claims,
+        &live,
         here.as_str(),
         &Selection::default(),
         None,

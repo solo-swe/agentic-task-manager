@@ -318,11 +318,27 @@ pub fn status(reference: &str) -> Option<(bool, Value)> {
     let snapshot = &other.snapshot;
     let found = resolve(&snapshot.document, &snapshot.archive, uuid).ok()?;
     let status = found.task.get("status").cloned().unwrap_or(Value::Null);
-    let done = found.archived
-        || snapshot
+    // The one rule (ATM-667, `rules::dependency_met`), on that project's tasks: an archived task is finished, done
+    // unless skipped; a skipped one is met only as a done task's duplicate
+    let kind_of = |task: &Task, archived: bool| {
+        let kind = snapshot
             .vocabulary
             .as_ref()
-            .is_some_and(|v| v.kind_of(found.task.get("status")) == Some(Kind::Done));
+            .and_then(|v| v.kind_of(task.get("status")));
+        match (archived, kind) {
+            (true, Some(Kind::Skipped)) | (false, _) => kind,
+            (true, _) => Some(Kind::Done),
+        }
+    };
+    let duplicate_done = |id: &str| {
+        resolve(&snapshot.document, &snapshot.archive, id)
+            .is_ok_and(|d| kind_of(d.task, d.archived) == Some(Kind::Done))
+    };
+    let done = atm_common::rules::dependency_met(
+        kind_of(found.task, found.archived),
+        found.task,
+        &duplicate_done,
+    );
     Some((done, status))
 }
 

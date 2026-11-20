@@ -304,7 +304,7 @@ fn todo_order<'t>(
     all: &[&'t Task],
     kinds: &[Option<Kind>],
     loop_ready: &[&Task],
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<Vec<Todo<'t>>> {
     let rank = |t: &Task| {
         let id = t.get("id");
@@ -599,11 +599,7 @@ pub fn project_summary(project: &Project) -> Result<Value> {
     let document = store.document()?;
     let vocab = store.vocabulary()?;
     let tasks = store.list_tasks()?;
-    let archived = |id: &str| {
-        store
-            .get_archived_task(id)
-            .map(|t| t.is_some_and(|t| !t.is_empty()))
-    };
+    let archived = |id: &str| crate::query::archived_task(store, id);
     let kinds: Vec<Option<Kind>> = tasks
         .iter()
         .map(|t| vocab.kind_of(t.get("status")))
@@ -673,11 +669,13 @@ pub fn project_summary(project: &Project) -> Result<Value> {
     };
     // What the loop takes next with its default selection, by the very rule `atm loop next` follows
     let here = store.working_copy().map(atm_common::Shown::shown);
+    // Live claims only, as `atm loop next` reads them (ATM-667)
+    let live_claims = crate::leases::live_claims(&claims, atm_common::time::now());
     let order = loop_order(
         vocab,
         document,
         &tasks,
-        &claims,
+        &live_claims,
         here.as_deref(),
         &Selection::default(),
         None,

@@ -418,16 +418,7 @@ enum Opening {
     Link,
 }
 
-/// A claim's agent while its lease runs, none once it has run out.
-fn holder(claim: &Value, now: i64) -> Option<&str> {
-    let until = claim
-        .get("lease_expires_at")
-        .and_then(Value::as_str)
-        .and_then(atm_common::time::parse_iso)?;
-    (until > now)
-        .then(|| claim.get("agent").and_then(Value::as_str))
-        .flatten()
-}
+use crate::leases::holder;
 
 /// The open review, other than a draft or a live one, that already carries `task`'s review, if one does.
 fn waiting_review(project: &Project, task: &Task) -> Result<Option<String>> {
@@ -713,7 +704,7 @@ fn check_decision(
             &tasks,
             project.actor(),
             &stamp,
-            &|_| Ok(false),
+            &|id| crate::query::archived_task(project.store(), id),
         )
         .map_err(|e| {
             Error::failed(format!(

@@ -59,14 +59,25 @@ fn id_of(task: &Task) -> Option<&str> {
 /// # Errors
 /// When the archive has to be read and can't be.
 pub fn ready_ids(project: &Project) -> Result<HashSet<String>> {
+    ready_ids_of(project)
+}
+
+/// The archive's task with an ID, for the dependency rules (`rules::ArchivedTask`, ATM-667): an empty entry is none.
+///
+/// # Errors
+/// When the archive has to be read and can't be.
+pub(crate) fn archived_task(store: &dyn atm_db::Store, id: &str) -> Result<Option<Task>> {
+    Ok(store
+        .get_archived_task(id)?
+        .filter(|t| !t.is_empty())
+        .cloned())
+}
+
+fn ready_ids_of(project: &Project) -> Result<HashSet<String>> {
     let store = project.store();
     let vocab = store.vocabulary()?;
     let tasks = store.list_tasks()?;
-    let archived = |id: &str| {
-        store
-            .get_archived_task(id)
-            .map(|t| t.is_some_and(|t| !t.is_empty()))
-    };
+    let archived = |id: &str| archived_task(store, id);
     let mut ready = HashSet::new();
     for t in &tasks {
         if vocab.kind_of(t.get("status")) == Some(Kind::Todo)
@@ -330,11 +341,7 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
     let vocab = store.vocabulary()?;
     let tasks = store.list_tasks()?;
     let ready = ready_ids(project)?;
-    let archived = |id: &str| {
-        store
-            .get_archived_task(id)
-            .map(|t| t.is_some_and(|t| !t.is_empty()))
-    };
+    let archived = |id: &str| archived_task(store, id);
     // A task a tolerant read found wrong (T-377) says so; what its broken fields would decide isn't decided
     let troubled = if filters.archived {
         Map::new()

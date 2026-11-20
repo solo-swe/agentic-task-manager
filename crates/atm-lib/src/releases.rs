@@ -19,18 +19,6 @@ fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
 }
 
-/// A done task's stage: merged once its PR merged, `in_pr` while its PR is open, else done; none when it isn't done.
-fn stage_of(vocab: &Vocabulary, task: &Task) -> Option<&'static str> {
-    if vocab.kind_of(task.get("status")) != Some(Kind::Done) {
-        return None;
-    }
-    let pr = task.get("pr").is_some_and(Value::is_object);
-    if pr && task.get("merged_at").is_some_and(atm_common::py::truthy) {
-        return Some("merged");
-    }
-    Some(if pr { "in_pr" } else { "done" })
-}
-
 fn release_id(release: &Map<String, Value>) -> String {
     release.get("id").map(py_str).unwrap_or_default()
 }
@@ -74,7 +62,8 @@ fn release_overview(vocab: &Vocabulary, tasks: &[&Task], include_archived: bool)
                 {
                     by_kind[at] += 1;
                 }
-                if let Some(stage) = stage_of(vocab, task)
+                // The one stage rule, the task views' (ATM-667, audit L11): merged once pushed or its PR merged
+                if let Some(stage) = crate::query::task_stage(vocab, task)
                     && let Some(at) = STAGES.iter().position(|s| *s == stage)
                 {
                     by_stage[at] += 1;

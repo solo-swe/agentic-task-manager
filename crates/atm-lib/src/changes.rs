@@ -128,7 +128,7 @@ fn archived_tasks(work: &mut Working) -> Result<Vec<Task>> {
 fn apply_resolutions(
     work: &mut Working,
     vocab: &Vocabulary,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) {
     let here = work.here().worktree.clone();
     let resolved = section(&mut work.claims_store, "resolved").clone();
@@ -237,7 +237,7 @@ fn newly_ready(
     vocab: &Vocabulary,
     tasks: &[&Task],
     task_id: &str,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<Vec<String>> {
     let mut ready = Vec::new();
     for t in tasks {
@@ -271,11 +271,15 @@ pub fn change_task_status(
     project.store_mut().change(&mut |work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archive = archived_tasks(work)?;
-        let in_archive = |id: &str| -> Result<bool> { Ok(archive.iter().any(|t| id_of(t) == Some(id) && !t.is_empty())) };
+        // The archived task with an ID, for the dependency rules (ATM-667); whether there is one, for the messages
+        let archived_of = |id: &str| -> Result<Option<Task>> {
+            Ok(archive.iter().rev().find(|t| id_of(t) == Some(id) && !t.is_empty()).cloned())
+        };
+        let in_archive = |id: &str| -> Result<bool> { Ok(archived_of(id)?.is_some()) };
         let mut claims = section(&mut work.claims_store, "claims").clone();
         let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
         *section(&mut work.claims_store, "claims") = claims;
-        apply_resolutions(work, &vocab, &in_archive);
+        apply_resolutions(work, &vocab, &archived_of);
         let here = work.here().clone();
         let (tasks, at) = snapshot(&work.document, task_id);
         let Some(at) = at else {
@@ -300,7 +304,7 @@ pub fn change_task_status(
         let mut task = tasks[at].clone();
         let waits_in = adopt_waiting(&mut task, &vocab, &work.claims_store, here.worktree.as_deref(), command);
         let others: Vec<&Task> = tasks.iter().collect();
-        let previous = change_status(&mut task, command, options, &vocab, &others, agent, &now_iso(), &in_archive)?;
+        let previous = change_status(&mut task, command, options, &vocab, &others, agent, &now_iso(), &archived_of)?;
         work.tasks()[at] = Value::Object(task.clone());
 
         let document = work.document.clone();
@@ -343,7 +347,7 @@ pub fn change_task_status(
         }
         let (all, _) = snapshot(&work.document, task_id);
         let all_refs: Vec<&Task> = all.iter().collect();
-        let unblocked = if command == Command::Done { newly_ready(&vocab, &all_refs, task_id, &in_archive)? } else { Vec::new() };
+        let unblocked = if command == Command::Done { newly_ready(&vocab, &all_refs, task_id, &archived_of)? } else { Vec::new() };
         // The archive hint after done, at most once a day per clone (CLI-5.2), so a loop doesn't repeat it
         let today: String = now_iso().chars().take(10).collect();
         let mut hint = if command == Command::Done { archive_hint(&work.document, &vocab, work.size()) } else { None };
@@ -398,7 +402,10 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
         Some(Kind::Done) // otherwise it is archived: finished
     };
     if kind == Some(Kind::Todo) {
-        let store = project.store().read_claims();
+        // Live claims only, and the project's own statuses (ATM-667, audit L10): an expired claim held nothing, and a
+        // project's status IDs aren't the default ones
+        let store =
+            crate::leases::live_claims(&project.store().read_claims(), atm_common::time::now());
         let in_claims = store
             .get("claims")
             .and_then(Value::as_object)
@@ -413,8 +420,7 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
         } else if let Some(record) =
             record.filter(|r| r.get("worktree").and_then(Value::as_str) != here.as_deref())
         {
-            // The project's settings, without its lists: the default statuses' kinds
-            kind = Vocabulary::of_meta(&Map::new())?.kind_of(record.get("status"));
+            kind = project.store().vocabulary()?.kind_of(record.get("status"));
         }
     }
     match kind {
@@ -465,10 +471,12 @@ pub fn next_task_for(
     project.store_mut().change(&mut |work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archive = archived_tasks(work)?;
-        let in_archive = |id: &str| -> Result<bool> {
+        let in_archive = |id: &str| -> Result<Option<Task>> {
             Ok(archive
                 .iter()
-                .any(|t| id_of(t) == Some(id) && !t.is_empty()))
+                .rev()
+                .find(|t| id_of(t) == Some(id) && !t.is_empty())
+                .cloned())
         };
         let mut claims = section(&mut work.claims_store, "claims").clone();
         let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
