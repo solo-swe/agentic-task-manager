@@ -268,7 +268,6 @@ export function renderedParts(
   total: number,
   opened: ReadonlySet<number> = new Set(),
   context = CONTEXT,
-  cuts: ReadonlySet<number> = new Set(),
 ): RenderedPart[] {
   if (!blocks.length || total < 1) return [{ type: 'shown', from: 1, to: Math.max(total, 1) }];
   const near = (b: { from: number; to: number }) => {
@@ -298,33 +297,7 @@ export function renderedParts(
     if (last && last.type === 'shown' && part.type === 'shown') last.to = part.to;
     else merged.push({ ...part });
   }
-  return cutAfter(merged, blocks, cuts);
-}
-
-/** `parts` with each shown one cut after the block a line of `cuts` is in (ATM-651: a comment's chain shows in the gap,
- * under its block, as the source view shows a chain under its lines); a line in no block cuts right after itself. A
- * block is never cut, nor a fold */
-function cutAfter(
-  parts: RenderedPart[],
-  blocks: readonly { from: number; to: number }[],
-  cuts: ReadonlySet<number>,
-): RenderedPart[] {
-  if (!cuts.size) return parts;
-  const ends = new Set([...cuts].map((c) => blocks.find((b) => b.from <= c && c <= b.to)?.to ?? c));
-  const out: RenderedPart[] = [];
-  for (const part of parts) {
-    if (part.type !== 'shown') {
-      out.push(part);
-      continue;
-    }
-    let from = part.from;
-    for (const end of [...ends].filter((e) => e >= part.from && e < part.to).sort((a, b) => a - b)) {
-      out.push({ type: 'shown', from, to: end });
-      from = end + 1;
-    }
-    out.push({ type: 'shown', from, to: part.to });
-  }
-  return out;
+  return merged;
 }
 
 /** `lines` as a fenced code block of `language`, the fence longer than any run of backticks in them: every line, an

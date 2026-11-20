@@ -313,8 +313,8 @@
   });
 
   // The rendered view's pick: the lines picked by their + (ATM-650) or under the text selected. Its comment box goes
-  // where the comment will show (ATM-651): under the block its last line is in, the page cut there (RenderedSide);
-  // not after the document, where a comment on its first lines was written a document away (ATM-627)
+  // where the comment will show (ATM-651): in a balloon in the margin beside its lines, as Word's (RenderedSide); not
+  // after the document, where a comment on its first lines was written a document away (ATM-627)
   let renderedPick = $state<Picked | null>(null);
   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
 
@@ -562,6 +562,7 @@
             side={s}
             changed={s === 'old' ? changed.old : changed.new}
             selected={selectedChain?.anchor.side === s ? selectedChain.anchor.lines : null}
+            selectedChain={selectedId}
             picking={renderedPick?.side === s ? renderedPick.lines : null}
             {docStyle}
             chains={chains.filter((c) => c.anchor.side === s && c.anchor.lines)}
@@ -733,8 +734,10 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
   }
+  /* Wrapping, whole buttons, when the box is narrow (a rendered document's margin, ATM-651) */
   .diff-composer-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-3);
@@ -751,6 +754,7 @@
     background: var(--bg);
     color: var(--text);
     font: inherit;
+    white-space: nowrap;
     cursor: pointer;
   }
   .diff-composer-actions :global(button.primary) {
@@ -762,16 +766,20 @@
     opacity: 0.5;
     cursor: default;
   }
-  /* Its own stacking context: the comment box is above the pages, their marks and folds, and under the card's
-     sticky header */
+  /* The two sides, their pages as wide as each other: a side with comments (ATM-651) takes its margin's room on top of
+     its share, so its page isn't the narrower one. Its own stacking context: the comment box is above the pages, their
+     marks and folds, and under the card's sticky header */
   .diff-rendered {
     position: relative;
     isolation: isolate;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    align-items: stretch;
   }
-  .diff-rendered.single {
-    grid-template-columns: 1fr;
+  .diff-rendered > :global(.diff-pane) {
+    flex: 1 1 0%;
+  }
+  .diff-rendered > :global(.diff-pane.with-margin) {
+    flex: 1 1 var(--doc-margin-room);
   }
   .diff-rendered :global(.diff-pane.diff-old) {
     border-right: 1px solid var(--border);

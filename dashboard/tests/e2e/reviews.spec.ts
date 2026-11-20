@@ -1554,10 +1554,12 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(view.locator('.diff-pane')).toHaveClass(/diff-new/);
   });
 
-  // ATM-651 (Hakan): a comment on rendered Markdown shows on the page, under its block (the page cut there), as the
-  // source view shows a chain under its lines: open and resolved ones, in Split and Unified; a new one once sent
+  // ATM-651 (Hakan): a comment on rendered Markdown shows beside the page, "like a callout from the line, like MS Word":
+  // each chain in a balloon in a margin right of the page, level with its text, a line from the text to it; the page
+  // whole (cut under each block, it drew its footnotes in every piece). Open and resolved ones, in Split and Unified; a
+  // new one written there, and shown there once sent
   test(
-    'Rendered: each chain shows under its block, open or resolved; a new comment shows there once sent',
+    'Rendered: each chain in a balloon in the margin, beside its text, a callout to it; the page whole; a new comment there too',
     WEBKIT_TOO,
     async ({ page, tasksServer }) => {
       const chain = (id: string, lines: [number, number], body: string, resolved: boolean | null = false) => ({
@@ -1578,29 +1580,49 @@ test.describe('the diff viewer on a review’s page', () => {
       await expect(view.locator('.diff-line').first()).toBeVisible();
       await page.getByRole('button', { name: 'Rendered' }).click();
       const newSide = view.locator('.diff-pane.diff-new');
-      /** The chain's box right under the paragraph it is on, on that side's page; none after the document */
-      const under = async (id: string, text: string, room = 60) => {
-        const box = newSide.locator(`.doc-after [data-chain="${id}"]`);
-        await expect(box).toBeVisible();
-        const para = (await newSide.locator('.compmd-page p', { hasText: text }).boundingBox())!;
-        const at = (await box.boundingBox())!;
-        expect(at.y).toBeGreaterThanOrEqual(para.y + para.height - 1);
-        expect(at.y - (para.y + para.height)).toBeLessThan(room);
+      const pageBox = newSide.locator('.doc-page');
+      /** The balloon right of the page, level with its paragraph (its top within a line of the text's) or below the
+       * balloon above it, and its callout drawn */
+      const beside = async (id: string, text: string, below = 0) => {
+        const balloon = newSide.locator(`.doc-balloon[data-balloon="${id}"]`);
+        await expect(balloon.locator(id === 'new' ? '.diff-composer' : `[data-chain="${id}"]`)).toBeVisible();
+        await expect
+          .poll(async () => {
+            const [para, at, sheet] = [
+              (await newSide.locator('.compmd-page p', { hasText: text }).boundingBox())!,
+              (await balloon.boundingBox())!,
+              (await pageBox.boundingBox())!,
+            ];
+            const level = Math.abs(at.y - (para.y + para.height / 2 - 16)) < 4;
+            return { right: at.x >= sheet.x + sheet.width, placed: level || at.y >= below };
+          })
+          .toEqual({ right: true, placed: true });
+        return (await balloon.boundingBox())!;
       };
       for (const layout of ['Split', 'Unified'] as const) {
         await page.getByRole('button', { name: layout }).click();
-        await under('t5', 'New ending.');
-        await under('t6', 'First step.');
+        const first = await beside('t6', 'First step.');
+        await beside('t5', 'New ending.', first.y + first.height);
+        // A callout per chain, from its text to its balloon
+        await expect(newSide.locator('.doc-callouts polyline')).toHaveCount(2);
         // The resolved one folded, as in the source view; nothing after the document
         await expect(newSide.locator('[data-chain="t6"]')).toHaveAttribute('data-resolved', '');
         await expect(view.locator('.diff-elsewhere [data-chain]')).toHaveCount(0);
+        // The page whole: one part, the paragraphs as close as without comments
+        await expect(newSide.locator('.doc-part')).toHaveCount(1);
+        const [step, ending] = [
+          (await newSide.locator('.compmd-page p', { hasText: 'First step.' }).boundingBox())!,
+          (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!,
+        ];
+        expect(ending.y - (step.y + step.height)).toBeLessThan(60);
       }
-      // A new comment: written under its block, and shown there once the page has it
+      // A new comment: written in a balloon beside its text, and shown there once the page has it
       await page.getByRole('button', { name: 'Split' }).click();
       const plus = newSide.locator('.doc-gutter-lines [data-line="3"]');
       await plus.hover();
       await newSide.getByRole('button', { name: 'Comment on line 3' }).click();
-      const composer = view.locator('.doc-after .diff-composer');
+      await beside('new', 'First step.');
+      const composer = newSide.locator('.doc-balloon[data-balloon="new"] .diff-composer');
       await expect(composer).toBeVisible();
       await composer.getByRole('textbox').fill('Say why.');
       tasksServer.setReview(
@@ -1612,16 +1634,25 @@ test.describe('the diff viewer on a review’s page', () => {
       );
       await composer.getByRole('button', { name: 'Comment' }).click();
       await expect.poll(() => tasksServer.reviewChanges.at(-1)?.path).toBe('/CR-2/comments');
-      // Under the same block as the resolved one there, after it
-      await under('t7', 'First step.', 140);
-      // The lines below the chains numbered and marked where their text is now, not where it was before them
-      const ending = (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!;
+      // Beside the same text as the resolved one there, under its balloon; the balloons never overlap
+      const resolved = (await newSide.locator('.doc-balloon[data-balloon="t6"]').boundingBox())!;
+      await beside('t7', 'First step.', resolved.y + resolved.height);
+      const boxes = await newSide
+        .locator('.doc-balloon')
+        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).sort((a, b) => a.top - b.top));
+      for (let i = 1; i < boxes.length; i++) expect(boxes[i].top).toBeGreaterThanOrEqual(boxes[i - 1].bottom);
+      // The lines' numbers and marks beside their text (both read together: the pane may have scrolled). The pointer
+      // off the balloons: one under it selects its chain, whose lines are then marked as the chain's, not as changed
+      await page.mouse.move(0, 0);
+      const endingText = newSide.locator('.compmd-page p', { hasText: 'New ending.' });
       await expect
         .poll(async () => {
           const number = (await newSide.locator('.doc-gutter-lines [data-line="5"]').boundingBox())!;
-          return Math.abs(number.y + number.height / 2 - (ending.y + ending.height / 2));
+          const text = (await endingText.boundingBox())!;
+          return Math.abs(number.y + number.height / 2 - (text.y + text.height / 2));
         })
         .toBeLessThan(4);
+      const ending = (await endingText.boundingBox())!;
       // Its change mark on its text (the glyphs' box, inside the paragraph's line), not where the text was
       await expect
         .poll(() =>
@@ -1865,10 +1896,11 @@ test.describe('the diff viewer on a review’s page', () => {
         [centre.x + centre.width / 2, centre.y + centre.height / 2],
       );
       expect(top).toBe(true);
-      // Under the text it comments on, not at the end of the document
+      // Beside the text it comments on, in the margin right of the page (ATM-651), not at the end of the document
       const text = (await picked.boundingBox())!;
-      expect(centre.y).toBeGreaterThanOrEqual(text.y + text.height - 1);
-      expect(centre.y - (text.y + text.height)).toBeLessThan(200);
+      const sheet = (await view.locator(`.diff-pane.diff-new .doc-page`).boundingBox())!;
+      expect(centre.x).toBeGreaterThanOrEqual(sheet.x + sheet.width);
+      expect(Math.abs(centre.y - (text.y + text.height / 2 - 16))).toBeLessThan(40);
     });
 
   // ATM-650 (Hakan): the rendered view takes comments as the source view does: the + of the line under the pointer
@@ -1910,9 +1942,11 @@ test.describe('the diff viewer on a review’s page', () => {
     const composer = view.locator('.diff-composer');
     await expect(composer).toContainText('Line 1');
     await expect(page.getByRole('textbox', { name: 'Comment on line 1' })).toBeFocused();
+    // Beside the heading, in the margin right of the page (ATM-651), level with it
     const box = (await composer.boundingBox())!;
-    expect(box.y).toBeGreaterThanOrEqual(text.y + text.height - 1);
-    expect(box.y - (text.y + text.height)).toBeLessThan(40);
+    const sheet = (await newSide.locator('.doc-page').boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(sheet.x + sheet.width);
+    expect(Math.abs(box.y - (text.y + text.height / 2 - 16))).toBeLessThan(4);
     await page.mouse.move(0, 0);
     await expect(newSide.locator('.diff-plus.held')).toHaveCount(1);
     await expect(newSide.locator('.diff-block-mark.diff-picked')).not.toHaveCount(0);
