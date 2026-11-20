@@ -1770,7 +1770,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 702
+    "next_number": 703
   },
   "tasks": [
     {
@@ -17197,7 +17197,7 @@
       "description": "Hakan (2026-11-19): a comment entered on rendered Markdown isn't shown on the screen.\n\n## Two ways to show them (Hakan's)\n1. **In a margin on the right**, beside the block they are about, as Word and Google Docs show comments; a line or a highlight ties each to its block.\n2. **Cut the page at that point and split it in two**, the comment in the space between, as the source view shows a chain under its lines.\n\nPropose one (or both, by width) with a mockup in the CR, then build it: every chain on the file shows at its block, open ones and resolved ones as the source view shows them, with reply, resolve and edit; a comment being written shows where it will land. Follows from ATM-650 (commenting there) and fits the look the research task settles (ATM-649).\n\n## Tests\ne2e: a chain on a rendered block shows at that block, in both views; a new comment shows once sent; a resolved one folds as in the source view.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f4fd-42b5-741f-92a8-848990a501dd"
       ],
@@ -17207,9 +17207,9 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-19T18:06:40Z",
-      "updated_at": "2026-11-20T11:58:03Z",
+      "updated_at": "2026-11-20T12:04:49Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -17220,15 +17220,18 @@
       "number": 651,
       "started_at": "2026-11-20T09:49:37Z",
       "started_by": "claude:0f56a916",
-      "commit": "0b2da4d1df03ca5fd5323f8f9bd020a87ca494e3",
+      "commit": "53aeba0394cf6361fd4f41869d0ef913977eb51a",
       "code_reviews": [
         {
           "id": "01a1f86c-76ca-7359-989a-45682d3ed2ff",
           "ref": "CR-76"
+        },
+        {
+          "id": "01a1f8d4-2189-7329-a1da-dc9eb10d49da",
+          "ref": "CR-79"
         }
       ],
       "review_requested_at": "2026-11-20T10:07:00Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-20T10:07:00Z",
@@ -17241,9 +17244,29 @@
           "kind": "note",
           "text": "Approved: in CR-76 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T12:04:35Z",
+          "kind": "note",
+          "text": "Approved: in CR-79 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T12:04:49Z",
+          "kind": "outcome",
+          "text": "Approved in CR-79: comments on rendered Markdown in a margin beside the page, a callout from the text to each balloon, like Word; the page stays whole",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-20T11:58:03Z"
+      "reviews": [
+        {
+          "from": "2026-11-20T10:07:00Z",
+          "to": "2026-11-20T12:04:35Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T12:04:49Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f4fd-42b5-741f-92a8-848b9d6a97b8",
@@ -19515,6 +19538,39 @@
       ],
       "sprint": "Tabs & navigation",
       "number": 701
+    },
+    {
+      "id": "01a1f8d9-79c7-7484-b094-c9afad23fb21",
+      "name": "A card's code review badge wraps between its parts on a narrow card, never inside one",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "Hakan: on a narrow Kanban card the review badge broke inside its parts: `CR-` over `79`, `Waiting for` over `review`, `needs` over `you`.\n\n## Change\n`ReviewLink.svelte`: the badge wraps between its parts (the reference, where the review stands, *needs you*), each kept on one line, and stays inside the card; wrapped, the prominent badge is a rounded box rather than a pill.\n\n## Tests\ne2e (`kanban.spec.ts`): a card narrowed to 200 px, every part of its badge on one line, the badge inside the card.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/details/ReviewLink.svelte",
+        "dashboard/tests/e2e/kanban.spec.ts"
+      ],
+      "created_at": "2026-11-20T12:06:04Z",
+      "updated_at": "2026-11-20T12:06:08Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Task&review state machine",
+          "from": "2026-11-20T12:06:04Z"
+        }
+      ],
+      "sprint": "Task&review state machine",
+      "number": 702,
+      "started_at": "2026-11-20T12:06:08Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

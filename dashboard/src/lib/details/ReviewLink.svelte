@@ -70,20 +70,28 @@
 >
 
 <style>
+  /* On a narrow card it wraps between its parts (the reference, where it stands, needs you), each kept whole: each
+     broke inside itself, "CR-" over "79" (Hakan) */
   .review-link {
     align-items: center;
     color: var(--accent);
     display: inline-flex;
+    flex-wrap: wrap;
     font-size: var(--text-xs);
-    gap: var(--space-2);
+    gap: 0 var(--space-2);
+    max-width: 100%;
     text-decoration: none;
+  }
+  .review-link > * {
+    white-space: nowrap;
   }
   .review-link:hover .review-link-ref {
     text-decoration: underline;
   }
   .review-link.prominent {
     border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-    border-radius: var(--radius-pill);
+    /* A pill on one line; wrapped, a rounded box, not a lozenge */
+    border-radius: var(--radius-lg);
     font-size: var(--text-sm);
     font-weight: 600;
     padding: var(--space-1) var(--space-5);
