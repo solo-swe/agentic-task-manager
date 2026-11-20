@@ -127,6 +127,17 @@ describe('release workflows (I18, I19; T-452)', () => {
     expect(release).toMatch(/^on:\n {2}push:\n {4}tags: \["v\*"\]$/m);
     expect(homebrew).toMatch(/^on:\n {2}release:\n {4}types: \[published\]$/m);
   });
+
+  // The tag is a plain `git tag` (ATM-705): the release checks it before building
+  it('builds only once the tag is checked: the version Cargo.toml has, on a commit on main', () => {
+    const job = (name: string) => release.split(/^ {2}(?=[\w-]+:\n)/m).find((j) => j.startsWith(`${name}:`)) ?? '';
+    const tag = job('tag');
+    expect(tag).toMatch(/fetch-depth: 0/);
+    expect(tag).toMatch(/grep -qx "version = \\"\$version\\"" Cargo\.toml/);
+    expect(tag).toMatch(/git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
+    for (const name of ['build', 'app-macos']) expect(job(name)).toMatch(/^ {4}needs: tag$/m);
+    expect(job('release')).toMatch(/^ {4}needs: \[build, app-macos\]$/m);
+  });
 });
 
 describe('Dependabot (I19, T-275)', () => {
