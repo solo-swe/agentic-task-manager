@@ -353,12 +353,6 @@
        laying out those near the view costs nothing measurable). Never shrunk (ATM-615) */
     flex: none;
   }
-  /* The pane's scroll anchor is a card, never anything in it (ATM-687): the card read keeps its top as its file grows
-     or changes below the place read, and one above that grows moves nothing under the reader. Anchored inside a card,
-     on a node a live update re-cut or drew again, WebKit moved the pane a thousand pixels */
-  .review-file-card > :global(*) {
-    overflow-anchor: none;
-  }
   /* A card not made yet stands at its estimate, an empty box (ATM-646): contained, so a restyle or repaint of the rest
      of the review has nothing to do in it; a long review is mostly these (CMD CR-7: ~500,000 px). Empty, so none of
      ATM-620's leak (that was content-visibility keeping made cards' old layout) */
