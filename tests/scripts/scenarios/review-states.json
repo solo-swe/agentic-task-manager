@@ -149,6 +149,42 @@
     }
   },
   {
+    "name": "through the real commands: in review, changes requested, then next --claim hands it back to its agent (ATM-657)",
+    "setup": {
+      "git": true,
+      "commit": true,
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] }
+      },
+      "commands": [
+        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_progress"],
+        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_review --note 'Check the columns'"],
+        ["sh", "-c", "ATM_AGENT=Hakan \"$ATM\" task review request-changes T-1 --reason 'Name the columns'"]
+      ]
+    },
+    "args": ["loop", "next", "--claim", "--json"],
+    "env": { "ATM_AGENT": "claude:aaaa1111" },
+    "expect": { "stdoutIncludes": ["\"id\": \"T-1\"", "\"status\": \"in_progress\"", "\"reason\": null"] }
+  },
+  {
+    "name": "through the real commands: in review, approved, then next --claim hands it back to its agent (ATM-657)",
+    "setup": {
+      "git": true,
+      "commit": true,
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] }
+      },
+      "commands": [
+        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_progress"],
+        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_review --note 'Check the columns'"],
+        ["sh", "-c", "ATM_AGENT=Hakan \"$ATM\" task review approve T-1"]
+      ]
+    },
+    "args": ["loop", "next", "--claim", "--json"],
+    "env": { "ATM_AGENT": "claude:aaaa1111" },
+    "expect": { "stdoutIncludes": ["\"id\": \"T-1\"", "\"status\": \"in_progress\"", "\"reason\": null"] }
+  },
+  {
     "name": "dependents keep waiting in every review state (SR-6.2)",
     "setup": {
       "files": {

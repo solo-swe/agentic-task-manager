@@ -242,6 +242,7 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
         document,
         &all,
         &claims,
+        here.as_str(),
         &Selection::default(),
         None,
         false,

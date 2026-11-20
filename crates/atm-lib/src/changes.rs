@@ -8,7 +8,7 @@ use atm_common::py::{repr_str, truthy};
 use atm_common::rules::unfinished_dependencies;
 use atm_common::time::now_iso;
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
-use atm_db::working::Working;
+use atm_db::working::{Here, Working};
 use serde_json::{Map, Value, json};
 
 use crate::leases::{
@@ -216,6 +216,22 @@ fn adopt_waiting(
     Some(record.get("worktree").cloned().unwrap_or(Value::Null))
 }
 
+/// A task started (`task state <id> in_progress` or `loop next --claim`): its claim, and it is no longer done or
+/// waiting anywhere (ATM-657: the loop's claim left both records behind). Returns the claim.
+fn record_start(
+    store: &mut Map<String, Value>,
+    here: &Here,
+    document: &Value,
+    task_id: &str,
+    agent: Option<&str>,
+) -> Value {
+    let record = claim_record(here, document, task_id, agent);
+    section(store, "claims").insert(task_id.into(), record.clone());
+    section(store, "completed").shift_remove(task_id); // starting a task again on purpose
+    section(store, "waiting").shift_remove(task_id);
+    record
+}
+
 /// The to-do tasks waiting on `task_id` whose dependencies are now all done.
 fn newly_ready(
     vocab: &Vocabulary,
@@ -288,18 +304,16 @@ pub fn change_task_status(
         work.tasks()[at] = Value::Object(task.clone());
 
         let document = work.document.clone();
-        let claims = section(&mut work.claims_store, "claims");
         match command {
             Command::Start => {
-                claims.insert(task_id.into(), claim_record(&here, &document, task_id, agent));
-                section(&mut work.claims_store, "completed").shift_remove(task_id); // starting a task again on purpose
+                record_start(&mut work.claims_store, &here, &document, task_id, agent);
             }
             Command::Reopen => {
-                claims.shift_remove(task_id);
+                section(&mut work.claims_store, "claims").shift_remove(task_id);
                 section(&mut work.claims_store, "completed").shift_remove(task_id); // not done any more, anywhere
             }
             _ => {
-                claims.shift_remove(task_id);
+                section(&mut work.claims_store, "claims").shift_remove(task_id);
             }
         }
         if command == Command::Done {
@@ -462,11 +476,13 @@ pub fn next_task_for(
         apply_resolutions(work, &vocab, &in_archive);
         let (tasks, _) = snapshot(&work.document, "");
         let refs: Vec<&Task> = tasks.iter().collect();
+        let here = work.here().clone();
         let (found, reason) = next_task(
             &vocab,
             &work.document,
             &refs,
             &work.claims_store,
+            here.worktree.as_deref(),
             sel,
             agent,
             with_user,
@@ -496,10 +512,14 @@ pub fn next_task_for(
             }) {
                 work.tasks()[at] = Value::Object(t.clone());
             }
-            let here = work.here().clone();
-            let record = claim_record(&here, &work.document, &task_id, agent);
-            section(&mut work.claims_store, "claims").insert(task_id, record.clone());
-            new = Some(record);
+            let document = work.document.clone();
+            new = Some(record_start(
+                &mut work.claims_store,
+                &here,
+                &document,
+                &task_id,
+                agent,
+            ));
         }
         outcome = NextTask {
             // As it is shown: its key with it (ATM-557), never stored

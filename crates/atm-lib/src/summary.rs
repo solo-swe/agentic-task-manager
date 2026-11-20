@@ -672,11 +672,13 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         label: &label,
     };
     // What the loop takes next with its default selection, by the very rule `atm loop next` follows
+    let here = store.working_copy().map(atm_common::Shown::shown);
     let order = loop_order(
         vocab,
         document,
         &tasks,
         &claims,
+        here.as_deref(),
         &Selection::default(),
         None,
         false,

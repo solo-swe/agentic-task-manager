@@ -249,8 +249,25 @@ pub struct LoopOrder<'t> {
     pub problem: Option<String>,
 }
 
+/// The tasks blocked or in review in another worktree than `here` (T-204): this worktree's copy doesn't say so until
+/// the branches merge. A wait recorded here is the task's own status here, which the loop reads from the task itself
+/// (ATM-657: a review decided here left a record that kept the task from its agent).
+fn waiting_elsewhere<'s>(
+    store: &'s Map<String, Value>,
+    here: Option<&str>,
+) -> impl Iterator<Item = &'s String> {
+    store
+        .get("waiting")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter(move |(_, record)| record.get("worktree").and_then(Value::as_str) != here)
+        .map(|(id, _)| id)
+}
+
 /// Every task the loop could take now, in the order it takes them (tasks back from review first, then the
-/// selection's own order, the most urgent priority and the lowest ID): `loop next` hands out the first.
+/// selection's own order, the most urgent priority and the lowest ID): `loop next` hands out the first. `here` is the
+/// worktree it runs in (the working copy's folder; none outside git).
 ///
 /// # Errors
 /// A selection naming a task or sprint the project doesn't have (exit code 2); an archive that can't be read.
@@ -260,6 +277,7 @@ pub fn loop_order<'t>(
     document: &Value,
     tasks: &[&'t Task],
     store: &Map<String, Value>,
+    here: Option<&str>,
     sel: &Selection,
     agent: Option<&str>,
     with_user: bool,
@@ -311,9 +329,10 @@ pub fn loop_order<'t>(
             .map(|m| m.keys().cloned().collect::<Vec<_>>())
             .unwrap_or_default()
     };
-    let taken: HashSet<String> = [section("claims"), section("completed"), section("waiting")]
+    let taken: HashSet<String> = [section("claims"), section("completed")]
         .concat()
         .into_iter()
+        .chain(waiting_elsewhere(store, here).cloned())
         .collect();
     let mut ready = Vec::new();
     for c in &candidates {
@@ -354,13 +373,14 @@ pub fn next_task<'t>(
     document: &Value,
     tasks: &[&'t Task],
     store: &Map<String, Value>,
+    here: Option<&str>,
     sel: &Selection,
     agent: Option<&str>,
     with_user: bool,
     archived: &dyn Fn(&str) -> Result<bool>,
 ) -> Result<(Option<&'t Task>, Option<String>)> {
     let order = loop_order(
-        vocab, document, tasks, store, sel, agent, with_user, archived,
+        vocab, document, tasks, store, here, sel, agent, with_user, archived,
     )?;
     if let Some(problem) = order.problem {
         return Ok((None, Some(problem)));
@@ -451,8 +471,14 @@ pub fn next_task<'t>(
             .copied()
             .collect::<Vec<_>>()
     };
-    let (claimed, done_elsewhere, waiting_elsewhere) =
-        (pick("claims"), pick("completed"), pick("waiting"));
+    let elsewhere: HashSet<&String> = waiting_elsewhere(store, here).collect();
+    let (claimed, done_elsewhere) = (pick("claims"), pick("completed"));
+    let waiting_elsewhere: Vec<&Task> = order
+        .candidates
+        .iter()
+        .filter(|t| id_of(t).is_some_and(|id| elsewhere.contains(&id.to_string())))
+        .copied()
+        .collect();
     let mut parts = vec![format!(
         "{} todo task(s) waiting on dependencies",
         order.candidates.len()
