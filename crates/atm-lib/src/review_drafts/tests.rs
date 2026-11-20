@@ -36,7 +36,12 @@ fn round() -> NewRound {
             head: "b".into(),
         },
         submodule: None,
-        files: Vec::new(),
+        // The file the drafts are on: a comment is on one of its round's files (ATM-658)
+        files: vec![atm_review::model::FileChange {
+            path: "src/a.rs".into(),
+            status: reviews::FileStatus::Modified,
+            binary: false,
+        }],
         patch: Patch(String::new()),
         by: "claude:1".into(),
     }

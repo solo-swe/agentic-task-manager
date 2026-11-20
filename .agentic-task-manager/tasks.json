@@ -17750,7 +17750,7 @@
       "description": "Audit finding L1 ([the report](docs/codebase-audit-2026-11.md#l1-high-bug-a-task-back-from-review-is-never-handed-out-by-atm-loop-next-checked)).\n\n`Approve`, `RequestChanges` and `Reject` are in `WAITING_COMMANDS` (`crates/atm-lib/src/changes.rs:34`), so a decision, also one made on a code review (`reviews::submit`), writes a `waiting` record. `loop_order` (`crates/atm-lib/src/loop_rules.rs:314`) then skips every task with a `waiting` record from any worktree, so rework candidates never reach `ready`, and the reason says the task waits in another worktree.\n\n## Change\n- In `loop_order`, ignore `waiting` records whose `worktree` is this one, as `status.rs:208` does (pass `here` in).\n- Stop recording `Approve` and `RequestChanges` as a wait, or clear the record when the task is handed back.\n- `next_task_for` (`changes.rs:499-501`) inserts the claim but doesn't clear `completed` and `waiting` as `change_task_status`'s Start arm does: share one `record_start(work, here, task_id, agent)`.\n\nCoordinate with ATM-633 (the state machine): if it already replaced this code, make this a test of it.\n\n## Tests\n- A scenario in `tests/scripts/scenarios/` that goes through the real commands: start, `in_review`, `atm task review request-changes`, then `atm loop next --claim` hands the task back to its agent; the same after approve.\n- A `loop_rules` unit test with a `waiting` record from this worktree and one from another.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/loop_rules.rs",
@@ -17758,7 +17758,7 @@
         "tests/scripts/scenarios/review-states.json"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T17:18:43Z",
+      "updated_at": "2026-11-20T17:24:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17773,7 +17773,24 @@
       ],
       "number": 657,
       "started_at": "2026-11-20T17:18:43Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "2412bff84d041999c8c8f20fc61ea320ce8b9509",
+      "code_reviews": [
+        {
+          "id": "01a1f9fc-900e-777f-89ab-b2c8b1ddda9e",
+          "ref": "CR-85"
+        }
+      ],
+      "review_requested_at": "2026-11-20T17:24:01Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-20T17:24:01Z",
+          "kind": "review",
+          "text": "CR-85: loop next hands a task back from review to its agent",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225a241bf702",
@@ -17788,7 +17805,7 @@
       "description": "Audit findings R1 and R2 ([the report](docs/codebase-audit-2026-11.md#r1-high-security-a-comment-body-can-forge-a-reply-from-anyone-checked)).\n\n- **Body:** `crates/atm-review/src/files.rs:219-224` writes body lines verbatim, one level deeper than the comment, which is where a reply's `- **author** · at · cN` line goes. A body line of that shape is read back (`files.rs:436-446`) as a reply by whoever it names; the watch tells it to agents as a person's word.\n- **Path:** `files.rs:186-204` writes `## {path}:{a}-{b} · round N · tK` with the path as given; nothing refuses a newline in it, so a path can add a heading or a resolved comment by the user.\n\n## Change\n- Escape, when writing, every body line that `read_item` or `read_heading` would accept (a marker the reader strips), or keep bodies in fenced blocks; existing files still read as before.\n- Refuse a comment `path` with control characters, and one not among the round's files, in `rules::comment` (CLI and REST alike, `review_requests.rs:265-272`).\n- Record the rule in `docs/security-architecture.md` (B2, I6's row or a new invariant).\n\n## Tests\natm-review unit tests: a body containing a reply-shaped line and a heading-shaped line round-trips as one comment's body; a path with `\\n` is refused; a path not in the round is refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/files.rs",
@@ -17796,9 +17813,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-20T17:24:05Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17806,7 +17823,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 658
+      "number": 658,
+      "started_at": "2026-11-20T17:24:05Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225bee272d5d",

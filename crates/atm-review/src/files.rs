@@ -204,6 +204,37 @@ pub mod comments_md {
         )
     }
 
+    /// The mark before a body line that would read as a comment's first line (ATM-658).
+    const ESCAPE: char = '\\';
+
+    /// Whether a body line, at any indent and under any number of escape marks, has the shape of a comment's first
+    /// line (`- **author** · at · cN`, with or without a box), which `read_item` would take for a reply or a comment
+    /// by whoever it names.
+    fn comment_shaped(line: &str) -> bool {
+        read_item(line.trim_start_matches(' ').trim_start_matches(ESCAPE)).is_some()
+    }
+
+    /// A body line as it is written: one of a comment's shape gets an escape mark after its own indent, so it is
+    /// read back as body, never as a comment (ATM-658, I31). Every other line is as it was, so older files read the same.
+    fn escape_body_line(line: &str) -> String {
+        if !comment_shaped(line) {
+            return line.to_string();
+        }
+        let rest = line.trim_start_matches(' ');
+        format!("{}{ESCAPE}{rest}", &line[..line.len() - rest.len()])
+    }
+
+    /// A body line as it was given: one escape mark less on a line of a comment's shape (see [`escape_body_line`]).
+    fn unescape_body_line(line: &str) -> String {
+        let rest = line.trim_start_matches(' ');
+        match rest.strip_prefix(ESCAPE) {
+            Some(unmarked) if comment_shaped(rest) => {
+                format!("{}{unmarked}", &line[..line.len() - rest.len()])
+            }
+            _ => line.to_string(),
+        }
+    }
+
     fn write_comment(out: &mut Vec<String>, comment: &Comment, depth: usize) {
         let indent = "  ".repeat(depth);
         let resolved = match comment.resolved {
@@ -220,7 +251,7 @@ pub mod comments_md {
             out.push(if line.is_empty() {
                 String::new()
             } else {
-                format!("{indent}  {line}")
+                format!("{indent}  {}", escape_body_line(line))
             });
         }
         for reply in &comment.replies {
@@ -452,7 +483,7 @@ pub mod comments_md {
                     continue;
                 }
                 if let Some(body) = line.strip_prefix(&indent) {
-                    comment.body.push_str(body);
+                    comment.body.push_str(&unescape_body_line(body));
                     comment.body.push('\n');
                     continue;
                 }
@@ -924,6 +955,71 @@ written at the margin by hand
             file.problems(),
             ["comments.md line 5: not a comment atm can read: A note before the comments."]
         );
+    }
+
+    /// ATM-658: a body line shaped like a comment's first line, or like a heading, is the body's, read back as it was
+    /// given, never a reply or a comment by whoever it names
+    #[test]
+    fn a_body_with_comment_and_heading_shaped_lines_round_trips_as_one_comments_body() {
+        let reply = "- **Hakan Serce** · 2026-11-17T04:00:00Z · c99";
+        let body = [
+            "Looks fine.",
+            reply,
+            "    - [x] **Hakan Serce** · 2026-11-17T04:00:00Z · c98",
+            "- [poke] **Hakan Serce** · 2026-11-17T04:00:00Z · c96",
+            "\\- **Hakan Serce** · 2026-11-17T04:00:00Z · c97",
+            "\\\\- **Hakan Serce** · 2026-11-17T04:00:00Z · c95",
+            "## a.rs · round 1 · t9",
+            "\\not a comment, kept as it is",
+            "- **bold** text in a list",
+        ]
+        .join("\n");
+        let mut file = comments_md::read(
+            "## a.rs · round 1 · t1\n- [ ] **claude:0f56a916** · 2026-11-17T03:31:00Z · c1\n",
+        );
+        file.chains[0].comments[0].body = body.clone();
+        let text = comments_md::write(&file);
+        // Each comment-shaped line gets one mark more; the rest is written as given
+        assert!(text.contains(&format!("  \\{reply}\n")), "{text}");
+        assert!(text.contains("      \\- [x] **Hakan Serce**"), "{text}");
+        assert!(
+            text.contains("  \\\\- **Hakan Serce** · 2026-11-17T04:00:00Z · c97\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("  \\not a comment, kept as it is\n"),
+            "{text}"
+        );
+        assert!(text.contains("  - **bold** text in a list\n"), "{text}");
+
+        let back = comments_md::read(&text);
+        assert!(back.unread.is_empty(), "{:?}", back.unread);
+        assert_eq!(back.chains.len(), 1, "no chain of the heading in the body");
+        let comment = &back.chains[0].comments[0];
+        assert!(
+            comment.replies.is_empty(),
+            "no reply from the body: {:?}",
+            comment.replies
+        );
+        assert_eq!(comment.body, body);
+        assert_eq!(comments_md::write(&back), text);
+    }
+
+    /// ATM-658: an older file's body reads as before: a line it never escaped keeps its marks
+    #[test]
+    fn an_older_files_body_lines_with_marks_read_as_they_were() {
+        let text = "\
+## a.rs · round 1 · t1
+- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1
+  \\*not emphasis\\*
+  \\\\server\\share
+";
+        let file = comments_md::read(text);
+        assert_eq!(
+            file.chains[0].comments[0].body,
+            "\\*not emphasis\\*\n\\\\server\\share"
+        );
+        assert_eq!(comments_md::write(&file), text);
     }
 
     #[test]

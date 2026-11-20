@@ -646,7 +646,8 @@ mod tests {
     use super::{FileStore, folder_name, list_everywhere};
     use crate::files::review_md;
     use crate::model::{
-        Actor, Anchor, Patch, ReviewHeader, ReviewId, ReviewRef, RoundKind, Status,
+        Actor, Anchor, FileChange, FileStatus, Patch, ReviewHeader, ReviewId, ReviewRef, RoundKind,
+        Status,
     };
     use crate::rules::{Reviews, Verdict};
     use crate::store::{NewReview, NewRound, ReviewFilter, ReviewStore};
@@ -672,7 +673,11 @@ mod tests {
                     head: "b2".into(),
                 },
                 submodule: None,
-                files: Vec::new(),
+                files: vec![FileChange {
+                    path: "src/a.rs".into(),
+                    status: FileStatus::Modified,
+                    binary: false,
+                }],
                 patch: Patch("diff --git a/x b/x\n+one\n".into()),
                 by: agent(),
             },

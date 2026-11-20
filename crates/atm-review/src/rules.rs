@@ -4,7 +4,7 @@
 
 use atm_common::{Error, Result};
 
-use crate::model::{Actor, Anchor, CommentId, Review, ReviewHeader, ReviewRef, Status};
+use crate::model::{Actor, Anchor, CommentId, FileStatus, Review, ReviewHeader, ReviewRef, Status};
 use crate::store::{NewReview, NewRound, ReviewStore};
 
 /// What a reviewer submits (§3.11's *Submit*).
@@ -184,11 +184,30 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
         by: &Actor,
     ) -> Result<CommentId> {
         let review = self.not_ended(reference, "be commented on")?;
-        if !review.rounds.iter().any(|r| r.number == anchor.round) {
+        let Some(round) = review.rounds.iter().find(|r| r.number == anchor.round) else {
             return Err(Error::Invalid(format!(
                 "{} has no round {}",
                 review.header.reference, anchor.round
             )));
+        };
+        // A path is one of the round's files, and has no control character: comments.md's heading carries it, so a
+        // newline in it could add a heading or a comment of its own (ATM-658, I31)
+        if let Some(path) = &anchor.path {
+            if path.chars().any(char::is_control) {
+                return Err(Error::Invalid(
+                    "a comment's file can't have a control character (a newline, a tab, …) in its path".into(),
+                ));
+            }
+            // A renamed file's old path is the round's too (its old side)
+            let in_round = round.files.iter().any(|f| {
+                &f.path == path || matches!(&f.status, FileStatus::Renamed { from } if from == path)
+            });
+            if !in_round {
+                return Err(Error::Invalid(format!(
+                    "{} isn't one of round {}'s files in {}",
+                    path, anchor.round, review.header.reference
+                )));
+            }
         }
         if body.trim().is_empty() {
             return Err(Error::Invalid("a comment needs some text".into()));
@@ -510,7 +529,8 @@ mod tests {
     use super::{Reviews, Verdict, decides, is_author};
     use crate::memory::MemoryStore;
     use crate::model::{
-        Actor, Anchor, Chain, CommentId, Patch, ReviewHeader, ReviewRef, RoundKind, Status,
+        Actor, Anchor, Chain, CommentId, FileChange, FileStatus, Patch, ReviewHeader, ReviewRef,
+        RoundKind, Status,
     };
     use crate::store::{NewReview, NewRound, ReviewFilter, ReviewStore};
 
@@ -520,6 +540,14 @@ mod tests {
     fn hakan() -> Actor {
         Actor::from("Hakan Serce")
     }
+    /// A round's file, changed.
+    fn changed(path: &str) -> FileChange {
+        FileChange {
+            path: path.into(),
+            status: FileStatus::Modified,
+            binary: false,
+        }
+    }
     fn round(by: &Actor) -> NewRound {
         NewRound {
             kind: RoundKind::Range {
@@ -527,7 +555,9 @@ mod tests {
                 head: "b2".into(),
             },
             submodule: None,
-            files: Vec::new(),
+            files: ["a.rs", "x", "crates/atm-cli/src/process.rs"]
+                .map(changed)
+                .to_vec(),
             patch: Patch("diff --git a/x b/x\n".into()),
             by: by.clone(),
         }
@@ -1193,6 +1223,55 @@ mod tests {
         let review = reviews.store().get_review(&cr(1)).unwrap();
         assert_eq!(review.header.author, Some(agent()));
         assert_eq!(review.rounds[1].by, someone());
+    }
+
+    #[test]
+    /// ATM-658: comments.md's heading carries the path, so it is one of the round's files and has no control character
+    fn a_comment_is_on_one_of_its_rounds_files_whose_path_has_no_control_character() {
+        let mut store = MemoryStore::new();
+        let mut reviews = Reviews::new(&mut store);
+        let mut first = round(&agent());
+        first.files.push(FileChange {
+            path: "src/new.rs".into(),
+            status: FileStatus::Renamed {
+                from: "src/old.rs".into(),
+            },
+            binary: false,
+        });
+        reviews
+            .create(NewReview {
+                first,
+                ..new_review(Status::Waiting)
+            })
+            .unwrap();
+        // One of its files, a renamed one by either path, or the review as a whole
+        for path in ["a.rs", "src/new.rs", "src/old.rs"] {
+            reviews
+                .comment(&cr(1), on(path, 1), "Fine.", &hakan())
+                .unwrap();
+        }
+        let whole = Anchor {
+            round: 1,
+            ..Anchor::default()
+        };
+        reviews
+            .comment(&cr(1), whole, "Overall fine.", &hakan())
+            .unwrap();
+        // A file the round doesn't have, and one whose path would add lines to comments.md
+        for (path, says) in [
+            ("b.rs", "b.rs isn't one of round 1's files in CR-1"),
+            ("a.rs\n## (the review) · round 1 · t9", "control character"),
+            ("a.rs\r", "control character"),
+            ("a\tb.rs", "control character"),
+        ] {
+            match reviews.comment(&cr(1), on(path, 1), "Hm.", &hakan()) {
+                Err(Error::Invalid(message)) => {
+                    assert!(message.contains(says), "{path:?}: {message}");
+                }
+                other => panic!("{path:?}: {other:?}"),
+            }
+        }
+        assert_eq!(reviews.store().get_review(&cr(1)).unwrap().chains.len(), 4);
     }
 
     #[test]
