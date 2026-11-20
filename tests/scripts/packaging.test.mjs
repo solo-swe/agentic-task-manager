@@ -262,8 +262,43 @@ describe('packaging', () => {
 
         const out = run('release.sh', ['1.2.4'], r.root);
         assert.equal(out.status, 1);
-        assert.match(out.stderr, /origin\/main's Cargo\.toml says 1\.2\.3, not 1\.2\.4: is the release PR merged\?/);
+        assert.match(out.stderr, /origin\/main's Cargo\.toml says 1\.2\.3, not 1\.2\.4: merge the release PR \(or push main\) first/);
         assert.equal(git(['tag', '--list'], r.root), '');
+      } finally {
+        cleanUp(r);
+      }
+    });
+
+    test('on a main with commits not pushed, tags origin/main and says they aren’t in it', () => {
+      const r = repos();
+      try {
+        commit(r.root, '1.2.3', 'the release');
+        git(['push', '-q', 'origin', 'main'], r.root);
+        const pushed = git(['rev-parse', 'HEAD'], r.root);
+        fs.writeFileSync(path.join(r.root, 'notes.txt'), 'one');
+        git(['add', 'notes.txt'], r.root);
+        git(['commit', '-qm', 'not pushed'], r.root);
+        const local = git(['rev-parse', 'HEAD'], r.root);
+
+        const out = run('release.sh', ['1.2.3'], r.root);
+        assert.equal(out.status, 0, out.stderr);
+        assert.equal(git(['rev-parse', 'v1.2.3^{commit}'], r.root), pushed);
+        assert.match(out.stdout, /Not in it: main's 1 commit\(s\) not pushed to origin yet\./);
+        assert.equal(git(['rev-parse', 'HEAD'], r.root), local);
+      } finally {
+        cleanUp(r);
+      }
+    });
+
+    test('on a main that is origin/main, says nothing about unpushed commits', () => {
+      const r = repos();
+      try {
+        commit(r.root, '1.2.3', 'the release');
+        git(['push', '-q', 'origin', 'main'], r.root);
+
+        const out = run('release.sh', ['1.2.3'], r.root);
+        assert.equal(out.status, 0, out.stderr);
+        assert.doesNotMatch(out.stdout, /Not in it/);
       } finally {
         cleanUp(r);
       }

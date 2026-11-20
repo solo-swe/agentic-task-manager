@@ -30,13 +30,18 @@ commit=$(git rev-parse origin/main)
 
 # atm's version on main: the workspace's, in the commit to tag
 main_version=$(git show "$commit:Cargo.toml" | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)
-[ "$main_version" = "$version" ] || fail "origin/main's Cargo.toml says $main_version, not $version: is the release PR merged?"
+[ "$main_version" = "$version" ] || fail "origin/main's Cargo.toml says $main_version, not $version: merge the release PR (or push main) first"
 
 if git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null; then fail "$tag exists already"; fi
 [ -z "$(git ls-remote --tags origin "refs/tags/$tag")" ] || fail "$tag exists already on origin"
 
 git tag -a "$tag" -m "atm $version" "$commit"
 echo "Tagged $tag: origin/main, $(git log -1 --format='%h %s' "$commit")."
+# On a local main with commits not pushed yet: they aren't in the release, and are left as they are
+if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+  ahead=$(git rev-list --count "$commit..HEAD")
+  [ "$ahead" = "0" ] || echo "Not in it: main's $ahead commit(s) not pushed to origin yet."
+fi
 if [ "$push" = "--push" ]; then
   git push origin "$tag"
   echo "Pushed $tag: the Release workflow builds it and drafts the release."

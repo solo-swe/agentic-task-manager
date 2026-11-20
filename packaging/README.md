@@ -28,7 +28,7 @@ server with its own `atm service stop`.
 
 | File | What it does |
 |---|---|
-| `release.sh <version> [--push]` | Fetches `main` and tags its commit on GitHub (`origin/main`) `v<version>`, once that commit's `Cargo.toml` has the version and the tag exists nowhere yet (and pushes the tag with `--push`). It never tags `HEAD`, so it runs from any branch and working tree (ATM-705) |
+| `release.sh <version> [--push]` | Fetches `main` and tags its commit on GitHub (`origin/main`) `v<version>`, once that commit's `Cargo.toml` has the version and the tag exists nowhere yet (and pushes the tag with `--push`). It never tags `HEAD`, so it runs from any branch and working tree (ATM-705); on a local `main` with commits not pushed yet, it tags what is pushed and says those commits aren't in it (a version bump not pushed yet: it refuses, as `origin/main` doesn't have the version) |
 | `keychain-macos.sh` | Imports the Developer ID certificate into a keychain of the release job's own; the macOS jobs run it first |
 | `sign-macos.sh <binary>` | Signs a macOS build with the Developer ID (hardened runtime) and notarizes it; the release workflow runs it |
 | `notarize-dmg.sh <dmg>` | Signs the app's DMG, notarizes it and staples the ticket to it (Tauri's bundler has signed and notarized the app inside) |
