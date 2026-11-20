@@ -19253,16 +19253,16 @@
       "description": "The e2e test *a jump to a file stays on it while the files above it are drawn* (`reviews.spec.ts`, ATM-656) fails in WebKit about 3 runs in 24, at the commit before ATM-690's changes too, so it is not new with them.\n\n## What it shows\nThe file jumped to arrives, then sits 18 to 19 px off (one line's height) for 2 to 8 frames before it comes back:\n\n```\nf047.rs: [1,-18,-18,-18,-18,-18,-18,1,1,…]\n```\n\nOnce it was 5,803 px off for a frame:\n\n```\nf093.rs: [1,-5803,1,1,…]\n```\n\n## To do\nFind which file above it grows by a line after the jump (and what makes it 5,803 px once), and why the place read isn't kept for those frames, as ATM-656 and ATM-687 meant. Measure in WebKit with `--repeat-each=24`; never only rerun it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-20T11:24:08Z",
-      "updated_at": "2026-11-20T11:24:08Z",
+      "updated_at": "2026-11-20T12:06:51Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Task&review state machine",
@@ -19270,7 +19270,9 @@
         }
       ],
       "sprint": "Task&review state machine",
-      "number": 693
+      "number": 693,
+      "started_at": "2026-11-20T12:06:51Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15508e8883f",
@@ -19551,14 +19553,14 @@
       "description": "Hakan: on a narrow Kanban card the review badge broke inside its parts: `CR-` over `79`, `Waiting for` over `review`, `needs` over `you`.\n\n## Change\n`ReviewLink.svelte`: the badge wraps between its parts (the reference, where the review stands, *needs you*), each kept on one line, and stays inside the card; wrapped, the prominent badge is a rounded box rather than a pill.\n\n## Tests\ne2e (`kanban.spec.ts`): a card narrowed to 200 px, every part of its badge on one line, the badge inside the card.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/details/ReviewLink.svelte",
         "dashboard/tests/e2e/kanban.spec.ts"
       ],
       "created_at": "2026-11-20T12:06:04Z",
-      "updated_at": "2026-11-20T12:06:08Z",
+      "updated_at": "2026-11-20T12:14:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19570,7 +19572,44 @@
       "sprint": "Task&review state machine",
       "number": 702,
       "started_at": "2026-11-20T12:06:08Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "d73fa513eaf213be36ce2891b0ee4e589eb5a06a",
+      "code_reviews": [
+        {
+          "id": "01a1f8da-2070-701f-b4c6-d6608bc439f7",
+          "ref": "CR-80"
+        }
+      ],
+      "review_requested_at": "2026-11-20T12:06:47Z",
+      "notes": [
+        {
+          "at": "2026-11-20T12:06:47Z",
+          "kind": "review",
+          "text": "CR-80: A card’s review badge wraps between its parts, never inside one",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-20T12:13:32Z",
+          "kind": "note",
+          "text": "Approved: in CR-80 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-20T12:14:28Z",
+          "kind": "outcome",
+          "text": "Approved in CR-80: a card review badge wraps between its parts, never inside one",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-20T12:06:47Z",
+          "to": "2026-11-20T12:13:32Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-20T12:14:28Z",
+      "completed_by": "claude:0f56a916"
     }
   ]
 }

@@ -354,12 +354,33 @@
 
   // The file gone to stays at the top while the cards around it are made (each as tall as its diff, not its
   // estimate), until the user scrolls, clicks or presses a key in the list, or another jump
-  let pinned: string | null = null;
+  // While it is held (ATM-693), nothing moves it: the cards above it keep their heights (ReviewFile `frozen`: out of view
+  // above it, so not seen), and the browser's scroll anchoring is off in the pane (`.held`). WebKit, anchoring, scrolled
+  // the pane a line when the held card's content was drawn again, which changed no card's size, so this observer never
+  // put it back (19 px for a few frames, 1 jump in 8); and the observer's own correction, when a card above changed
+  // size, came a frame late in WebKit (96 px off for that frame). Once the reader moves, both are back
+  let pinned = $state<string | null>(null);
+  const pinnedAt = $derived(pinned === null ? -1 : files.findIndex((f) => f.path === pinned));
+  /** The hold ended: the cards above take their own heights again, in the same update the pane's anchoring comes back,
+   * so no anchor has seen them change; the file held stays where it was, the pane scrolled by what they changed */
+  function release() {
+    const el = list;
+    const card = pinned ? cardOf(pinned) : null;
+    const before = card ? card.getBoundingClientRect().top : null;
+    pinned = null;
+    if (!el || !card || before === null) return;
+    void tick().then(() => {
+      const off = card.getBoundingClientRect().top - before;
+      if (Math.abs(off) >= 1) el.scrollTop += off;
+    });
+  }
   $effect(() => {
     const el = list;
     void files;
     if (!el) return;
-    const unpin = () => (pinned = null);
+    const unpin = () => {
+      if (pinned) release();
+    };
     const settle = new ResizeObserver(() => {
       if (pinned) toTop(cardOf(pinned));
       else if (live) keepReading();
@@ -409,7 +430,7 @@
   async function jump(back: boolean, kind: keyof typeof TARGETS = 'change') {
     tab = 'diffs';
     holdNearCards();
-    pinned = null;
+    if (pinned) release();
     await tick();
     if (!list) return;
     const target = TARGETS[kind];
@@ -1088,8 +1109,8 @@
         onpointerdown={drag}
         onkeydown={nudge}
       ></div>
-      <div class="review-diffs" class:live bind:this={list} {onscroll}>
-        {#each files as f (f.path)}
+      <div class="review-diffs" class:live class:held={pinned !== null} bind:this={list} {onscroll}>
+        {#each files as f, i (f.path)}
           <ReviewFile
             file={f}
             {imageAt}
@@ -1106,6 +1127,7 @@
             {docStyle}
             root={list}
             wanted={f.path === wanted}
+            frozen={pinnedAt >= 0 && i < pinnedAt}
             onfold={() => (folds = { ...folds, [f.path]: !folded(f) })}
             onviewed={() => toggleViewed(f)}
             oncomment={(picked, body) => oncomment({ path: f.path, picked, body })}
@@ -1792,7 +1814,8 @@
     outline: none;
   }
   /* A live review's pane keeps the place read itself (ATM-687, keepReading): the browser's scroll anchoring off */
-  .review-diffs.live {
+  .review-diffs.live,
+  .review-diffs.held {
     overflow-anchor: none;
   }
   .review-diffs {

@@ -47,6 +47,7 @@
 </script>
 
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { DocumentSource } from '../documents/source';
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
@@ -76,6 +77,7 @@
     docStyle = null,
     root = null,
     wanted = false,
+    frozen = false,
     imageAt,
     onfold,
     onviewed,
@@ -102,6 +104,9 @@
     root?: HTMLElement | null;
     /** The file just gone to: made at once */
     wanted?: boolean;
+    /** Above the file a jump went to, while that file is held at the pane's top (ATM-693): this card keeps the height
+     * it had, so the held file never moves, whatever is drawn in it meanwhile; its own height once the reader moves */
+    frozen?: boolean;
     /** An image's address as revision `revision` has it, at `path` (ATM-689): a binary image file shows its sides */
     imageAt?: (revision: string, path: string) => string;
     onfold: () => void;
@@ -140,6 +145,17 @@
   // A card in view is made at once; one only near it (within MARGIN), once the page is idle. Right after a jump, only
   // the file gone to (`wanted`) is made at once, the others a moment later: its sides load first
   let el = $state<HTMLElement>();
+  /** The height kept while the card is `frozen` (ATM-693): as it was when the file below it was gone to */
+  let frozenAt = $state<number | null>(null);
+  // Measured before anything else is drawn in the update that froze it, so it is the height the reader's place was
+  // computed with
+  $effect.pre(() => {
+    const on = frozen;
+    untrack(() => {
+      if (on && frozenAt === null && el) frozenAt = el.getBoundingClientRect().height;
+      else if (!on && frozenAt !== null) frozenAt = null;
+    });
+  });
   let near = $state(typeof IntersectionObserver === 'undefined');
   $effect(() => {
     if (wanted) near = true;
@@ -218,6 +234,10 @@
 <section
   class="review-file-card"
   class:folded
+  class:frozen={frozenAt !== null}
+  style:height={frozenAt !== null ? `${frozenAt}px` : undefined}
+  style:min-height={frozenAt !== null ? `${frozenAt}px` : undefined}
+  style:max-height={frozenAt !== null ? `${frozenAt}px` : undefined}
   bind:this={el}
   data-file={file.path}
   data-pending={!folded && !near && !file.binary && !moved ? '' : undefined}
@@ -363,6 +383,11 @@
        layout, rows long given back, alive: up to 175 MB on CMD CR-1; the rows made are bounded by FAR and CHUNK, so
        laying out those near the view costs nothing measurable). Never shrunk (ATM-615) */
     flex: none;
+  }
+  /* A card above the file a jump went to, while it is held there (ATM-693): its height kept as it was, its content
+     clipped to it, so nothing above the held file changes size; out of view above it, so not seen */
+  .review-file-card.frozen {
+    overflow: clip;
   }
   /* A card not made yet stands at its estimate, an empty box (ATM-646): contained, so a restyle or repaint of the rest
      of the review has nothing to do in it; a long review is mostly these (CMD CR-7: ~500,000 px). Empty, so none of
