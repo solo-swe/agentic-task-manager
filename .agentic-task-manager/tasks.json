@@ -14244,7 +14244,7 @@
       "description": "Hakan (2026-11-19): the rules for how a task's status and its reviews change together are spread across commands and keep breaking. Today's three bugs: a review's approval lost when the task's key changed (ATM-630), a review opened beside a task that didn't move (ATM-631), and a lapsed claim leaving a task half in review (ATM-632). They should be one explicit state machine.\n\nDesigned **with Hakan**: propose it, agree on it, then build it.\n\n## Design (a document in `docs/`, reviewed with Hakan as a CR)\n- **States:** a task's status kinds (`todo`, `active`, `review`, `blocked`, `done`, `skipped`), each with its claim (none, held, lapsed) and its reviews (none, open, rounds, changes requested, approved, closed, live).\n- **Events:** claim, a claim lapsing, release, commit, review created, a round added, a comment, request changes, approve, reject, close, push or merge, the task's number moved at a merge (ADR-009: its old key an alias), and a user's answer.\n- **The table:** for each state and event, the next state or a refusal with its message. No event leaves a task and its review disagreeing.\n- A diagram of it (Mermaid), and where it lives in the layers: one module in `atm-lib` that every command and the dashboard's API go through.\n- Today's rules mapped onto it: what changes, and what an existing project's tasks and reviews look like after the move (a migration if any).\n\n## Build (after the design is agreed)\n- One module holds the transitions; the CLI commands, the REST routes and the app call it, and none sets a status on its own.\n- Unit tests: a table of every state × event, each with its expected next state or refusal, including the three bugs above as cases.\n- The agent docs (`atm docs states`, `atm docs reviews`) are written from the same table.\n\nMay be split into design and build tasks once the design is agreed.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
         "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
@@ -14258,9 +14258,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-21T13:50:39Z",
+      "updated_at": "2026-11-21T14:01:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -14319,6 +14319,12 @@
           "kind": "note",
           "text": "Approved: in CR-105 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-21T14:01:41Z",
+          "kind": "outcome",
+          "text": "Design approved (CR-58), build part 1 approved (CR-105). The other parts are their own tasks: ATM-712 (entry points), ATM-713 (composed table test), ATM-714 (dashboard copies) and ATM-715 (agent docs).",
+          "by": "claude:0f56a916"
         }
       ],
       "pr": {
@@ -14332,17 +14338,22 @@
           "from": "2026-11-19T09:12:57Z",
           "to": "2026-11-20T23:11:28Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-21T00:28:09Z",
+          "to": "2026-11-21T13:50:39Z",
+          "outcome": "approved"
         }
       ],
       "review_requested_at": "2026-11-21T00:28:09Z",
-      "review_state": "approved",
       "related": [
         "01a1fe3a-d2ba-736d-80e3-4b81a73b4404",
         "01a1fe3a-d2ba-736d-80e3-4b823592de68",
         "01a1fe3a-d2ba-736d-80e3-4b83d40322b2",
         "01a1fe3a-d2ba-736d-80e3-4b843b52bc96"
       ],
-      "reviewed_at": "2026-11-21T13:50:39Z"
+      "completed_at": "2026-11-21T14:01:41Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-23995623df35",
@@ -17004,16 +17015,16 @@
       "description": "Audit finding L5 ([the report](docs/codebase-audit-2026-11.md#l5-medium-bug-atm-db-init---meta-file-on-an-existing-project-overwrites-any-meta-key-checked)).\n\n`crates/atm-lib/src/settings.rs:80-85` inserts every key of the file into an existing project's `meta`, checking only the vocabularies. A re-run (what `/atm-create-tasks` does) with `key` changes the project key without `key_history` (bypassing `set_project_key`); `format`, `next_number`, `next_id`, `key_history`, `sprints`, `releases` or `archived` are replaced too.\n\n## Change\nOn an existing project accept an allow-list (project, description, statuses, types, priorities, default_priority, labels, components, review, workflow, archive settings, lease_minutes and the like); refuse the others with a message naming the command that changes each (`atm project key`, `atm sprint …`). Also: `vocab rename` rebuilds entries from `id`, `label`, `kind` and drops other keys (`settings.rs:450-477`): edit the stored entry in place.\n\n## Tests\nScenarios: `key`, `format` and `sprints` in the file of an existing project are refused, nothing written; `description` is changed.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/settings.rs",
         "tests/scripts/scenarios/init.json"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-21T14:01:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17021,7 +17032,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 669
+      "number": 669,
+      "started_at": "2026-11-21T14:01:42Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2266a85bd4f8",
@@ -19618,7 +19631,7 @@
       "description": "Part 2 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §5.3, §7 step 1). Part 1 (CR-105) put `submit`, `close` and `add_round` through `atm_lib::lifecycle::check`.\n\n## Change\nThe other entry points check first through `lifecycle`, then write, and none sets a status on its own:\n- `reviews::create`, with ATM-631's openings (a review opened beside a task that doesn't move is refused);\n- `reviews::set_tasks` (a task added or removed);\n- the task commands (`state::change_status`: `atm task state`, `atm task review approve|request-changes|reject`);\n- `apply_live_approval` and `drop_expired_claims` (ATM-632: a lapse never leaves a task half in review).\n\n## Tests\nEach entry point refusing with nothing written, and moving its tasks when allowed, on the real store (`crates/atm-lib/tests/reviews/lifecycle.rs`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/lifecycle.rs",
@@ -19626,7 +19639,7 @@
         "crates/atm-lib/src/state.rs"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T13:57:36Z",
+      "updated_at": "2026-11-21T14:01:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19642,7 +19655,7 @@
       "number": 712,
       "started_at": "2026-11-21T13:57:36Z",
       "started_by": "claude:0f56a916",
-      "commit": "47644fcc7763eb4529b49a9fc26da906df63c132",
+      "commit": "4b6b3a9d42dd203d3af057aa63d7525f97817f8e",
       "code_reviews": [
         {
           "id": "01a1fe5e-302b-72a0-ba8d-14d5ef24dbb7",
@@ -19661,6 +19674,12 @@
           "kind": "rejection",
           "text": "CR-107 round 1: 1 open comment",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-21T14:01:33Z",
+          "kind": "review",
+          "text": "CR-107: round 2",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -19669,7 +19688,9 @@
           "to": "2026-11-21T13:56:09Z",
           "outcome": "changes_requested"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-21T14:01:33Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b823592de68",

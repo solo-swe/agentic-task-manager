@@ -56,7 +56,9 @@ it, is still taken and ignored.)
   commit (a check done with the user) keeps `atm vcs pushed` from doing it; refused while a task of it is open, unless
   `--force`; `--planned` takes it back. Only when the user says the release is out
 - `atm db init --meta-file F`: the project and its vocabularies (a new project gets task keys: give `key`, 3 to 6
-  letters and digits, in the file); `atm project workflow set`: how it pushes
+  letters and digits, in the file). On an existing project it changes only its name, description, settings and
+  vocabularies; a new `key`, sprints, releases or atm's own counters in the file are refused, naming the command that
+  changes each (`atm project key set`, `atm sprint …`); `atm project workflow set`: how it pushes
 - `atm project key show|set <KEY>`: the project's key, its tasks' prefix. `set` on a project of IDs (`T-527`) gives
   every task a key, keeping its number (`ATM-527`; `T-527` still finds it); on one with keys it changes the prefix.
   Only with the user's say: it rewrites every task's ID
