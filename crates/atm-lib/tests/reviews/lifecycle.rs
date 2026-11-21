@@ -5,7 +5,137 @@ use atm_lib::lifecycle::{Event, Outcome, can, check};
 use atm_lib::reviews::{ReviewStore, Status, Verdict};
 use atm_lib::state::Command;
 
-use crate::fixtures::{dir, open_review, project, reopen, task};
+use crate::fixtures::{dir, open_review, project, project_of, reopen, round, task};
+
+/// The task file with `id`'s status set to `status`, as a lapse or another branch's merge leaves it
+fn set_status(root: &std::path::Path, id: &str, status: &str) {
+    let file = root.join(".agentic-task-manager/tasks.json");
+    let mut tasks: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    for t in tasks["tasks"].as_array_mut().unwrap() {
+        if t["id"] == id {
+            t["status"] = status.into();
+            t.as_object_mut().unwrap().remove("review_state");
+        }
+    }
+    std::fs::write(&file, tasks.to_string()).unwrap();
+}
+
+/// ATM-712, the design's hole 1 (ATM-632's class): a round on a review whose task its lapse sent back to to do took
+/// the round and left the task there; the author's own task is taken back first, then goes in review with it
+#[test]
+fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
+    let dir = dir();
+    let mut agent = project(&dir.0, "claude:1");
+    let header = open_review(&mut agent, &["T-1"]);
+    let mut hakan = reopen(&dir.0, "Hakan");
+    atm_lib::reviews::submit(
+        &mut hakan,
+        &header.reference,
+        Verdict::RequestChanges,
+        Some("Fix it."),
+        None,
+    )
+    .unwrap();
+    // The agent took it back, then its claim lapsed: the task is to do, started by the agent
+    set_status(&dir.0, "T-1", "todo");
+    let agent = reopen(&dir.0, "claude:1");
+    let review = review_of(&agent, &header.reference);
+    let outcome = check(&agent, &review, &Event::Round, &"claude:1".into()).unwrap();
+    assert_eq!(outcome.take_back, ["T-1"]);
+    // Checking wrote nothing
+    assert_eq!(task(&agent, "T-1")["status"], "todo");
+    let mut agent = reopen(&dir.0, "claude:1");
+    atm_lib::reviews::add_round(&mut agent, &header.reference, round()).unwrap();
+    let t = task(&reopen(&dir.0, "claude:1"), "T-1");
+    assert_eq!(
+        (t["status"].as_str(), t["review_state"].as_str()),
+        (Some("in_review"), Some("waiting"))
+    );
+    assert!(
+        t["notes"]
+            .to_string()
+            .contains("round 2 (its claim had lapsed: taken back for this round)"),
+        "{}",
+        t["notes"]
+    );
+    assert_eq!(
+        review_of(&agent, &header.reference).header.status,
+        Status::Waiting
+    );
+}
+
+/// ATM-712: a person's to-do task in the review isn't the author's to take back; the round leaves it as it is
+#[test]
+fn a_round_takes_back_only_the_authors_own_task() {
+    let dir = dir();
+    let mut agent = project(&dir.0, "claude:1");
+    let header = open_review(&mut agent, &["T-1"]);
+    let mut hakan = reopen(&dir.0, "Hakan");
+    atm_lib::reviews::submit(
+        &mut hakan,
+        &header.reference,
+        Verdict::RequestChanges,
+        Some("Fix."),
+        None,
+    )
+    .unwrap();
+    set_status(&dir.0, "T-1", "todo");
+    // Another agent's round (a review whose author isn't known yet would take it; this one has its author)
+    let other = reopen(&dir.0, "claude:2");
+    let review = review_of(&other, &header.reference);
+    let mut by_other = round();
+    by_other.by = "claude:2".into();
+    assert!(check(&other, &review, &Event::Round, &by_other.by).is_err());
+    assert_eq!(task(&other, "T-1")["status"], "todo");
+}
+
+/// ATM-712: tasks added to an agent's review waiting on its reviewers are checked as a new review checks its tasks
+/// (ATM-631): one that can't go in review refuses the change, and nothing is written
+#[test]
+fn tasks_added_to_a_waiting_review_are_checked_first_and_a_refusal_writes_nothing() {
+    let dir = dir();
+    let tasks = serde_json::json!([
+        { "id": "T-1", "name": "One", "type": "feature", "status": "in_progress", "started_by": "claude:1" },
+        { "id": "T-2", "name": "Two", "type": "feature", "status": "in_progress", "started_by": "claude:1" },
+        { "id": "T-3", "name": "Three", "type": "feature", "status": "blocked" },
+    ]);
+    let mut agent = project_of(&dir.0, "claude:1", &tasks, &serde_json::json!({}));
+    let header = open_review(&mut agent, &["T-1"]);
+    let refused = atm_lib::reviews::set_tasks(
+        &mut agent,
+        &header.reference,
+        &["T-2".into(), "T-3".into()],
+        &[],
+    )
+    .unwrap_err();
+    assert!(refused.to_string().contains("it is blocked"), "{refused}");
+    let agent = reopen(&dir.0, "claude:1");
+    assert_eq!(review_of(&agent, &header.reference).header.tasks, ["T-1"]);
+    assert_eq!(task(&agent, "T-2")["status"], "in_progress");
+    assert!(task(&agent, "T-2").get("code_reviews").is_none());
+    // T-2 alone: added, in review
+    let mut agent = reopen(&dir.0, "claude:1");
+    atm_lib::reviews::set_tasks(&mut agent, &header.reference, &["T-2".into()], &[]).unwrap();
+    let t = task(&reopen(&dir.0, "claude:1"), "T-2");
+    assert_eq!(t["status"], "in_review");
+}
+
+/// ATM-712: a live review's approval reaches its task in two moves, into review then approved, both tried first
+#[test]
+fn a_live_approval_that_cant_reach_its_task_writes_nothing() {
+    let dir = dir();
+    let tasks = serde_json::json!([
+        { "id": "T-1", "name": "One", "type": "feature", "status": "blocked" },
+    ]);
+    let project = project_of(&dir.0, "claude:1", &tasks, &serde_json::json!({}));
+    let options = atm_lib::state::Options {
+        note: Some("approved in the live review CR-1".into()),
+        ..atm_lib::state::Options::default()
+    };
+    assert!(atm_lib::lifecycle::check_live_approval(&project, "T-1", &options).is_err());
+    assert_eq!(task(&project, "T-1")["status"], "blocked");
+}
 
 fn review_of(
     project: &atm_lib::Project,
@@ -36,6 +166,7 @@ fn check_says_what_a_decision_does_to_the_review_and_its_tasks_and_writes_nothin
             review: Some(Status::Approved),
             tasks: vec![("T-1".into(), Command::Approve)],
             named: vec!["T-1".into()],
+            take_back: vec![],
         }
     );
     // Nothing written: the review waits, the task is still in review, waiting

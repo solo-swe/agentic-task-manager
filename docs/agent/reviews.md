@@ -11,6 +11,7 @@
   does, goes in review; one whose claim of yours lapsed (back in to do while your checks ran) is taken back and goes in
   review, its note saying so; one already in review is linked, unless another review already waits on it (add a round
   to that one); one claimed by another agent (exit code 4), not started by you, blocked, done or skipped is refused.
+  Naming more tasks later (`atm review tasks CR-7 --add <key>`, `--remove <key>`) checks each added one the same way.
 - **Submodules:** work in a submodule is the project's: atm run in a submodule's folder finds the project it is a
   submodule of (unless the submodule has a task folder of its own). A round made there (`--range`, `--uncommitted`)
   is of the submodule's commits, its files named as the project has them (`lib/b.txt`); `--file` paths in one
@@ -27,7 +28,9 @@
   to make it readable, say so to the user (`atm doctor` reports it too).
 - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
-  tasks back in review. A round is the whole change as it now is, not the fix alone: a range round keeps the
+  tasks back in review; a task of yours whose claim lapsed meanwhile (back in to do) is taken back first, its note
+  saying so, and a round that can't reach its tasks writes nothing. A round is the whole change as it now is, not the
+  fix alone: a range round keeps the
   review's first base (`--range <the first round's base>..HEAD`, never the fix commit's own range), and a files round
   keeps the files the last one reviewed (naming more adds them). The reviewer sees what the fix changed as *since round
   N*; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to

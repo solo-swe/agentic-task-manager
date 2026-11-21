@@ -2,7 +2,6 @@
 //! who holds a claim, an agent's own lease that just expired, and the records a change leaves in the claims store
 //! (a claim, a completion, a task waiting in this working copy).
 
-use atm_common::edits::{add_note, back_to_todo};
 use atm_common::py::py_str_opt;
 use atm_common::time::{format_iso, now, now_iso, parse_iso};
 use atm_common::{Error, Kind, Result, Vocabulary};
@@ -85,14 +84,11 @@ pub fn drop_expired_claims(
         let Some(claim) = claims.shift_remove(&task_id) else {
             continue;
         };
+        // The lapse's transition is the machine's (ATM-712, docs/task-review-state-machine.md §3.3)
         if let Some(task) = task_at(document, &task_id)
             && vocab.kind_of(task.get("status")) == Some(Kind::Active)
         {
-            let stamp = now_iso();
-            back_to_todo(task, vocab, None, &stamp, true);
-            let text = format!("lease expired ({})", py_str_opt(claim.get("agent")));
-            // A note built by atm, short by construction
-            let _ = add_note(task, "failure", &text, None, &stamp, false);
+            crate::lifecycle::lapse(task, vocab, &claim);
         }
         expired.push(claim);
     }

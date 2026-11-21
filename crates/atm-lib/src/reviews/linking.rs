@@ -128,7 +128,7 @@ pub(super) fn ask_review(
 
 /// What opening a review that waits on its reviewers does to one of its tasks (ATM-631).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Opening {
+pub(crate) enum Opening {
     /// In progress, held by the author or by no one: into review.
     Review,
     /// The author's own claim lapsed (the task back in to do, or about to be): started again, then into review.
@@ -170,7 +170,7 @@ pub(super) fn waiting_review(project: &Project, task: &Task) -> Result<Option<St
 /// # Errors
 /// A task another agent holds, one blocked, done or skipped, one in to do that the author didn't start, or one
 /// another review already waits on: each says what to do instead.
-pub(super) fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>> {
+pub(crate) fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>> {
     let me = project.actor().map(String::from);
     let now = atm_common::time::now();
     let claims = crate::query::list_claims(project);

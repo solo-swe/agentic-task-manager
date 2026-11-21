@@ -133,6 +133,8 @@ pub fn apply_live_approval(project: &mut Project, task: &str) -> Result<Option<R
             note: Some(note),
             ..Options::default()
         };
+        // Both moves tried first (ATM-712): never in review without the approval
+        crate::lifecycle::check_live_approval(project, &id, &options)?;
         change_task_status(project, Command::Review, &id, &options)?;
         change_task_status(project, Command::Approve, &id, &options)?;
     }

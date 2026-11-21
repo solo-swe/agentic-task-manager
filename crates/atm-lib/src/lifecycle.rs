@@ -6,11 +6,13 @@
 
 use std::collections::BTreeMap;
 
+use atm_common::edits::is_agent;
 use atm_common::{Error, Kind, Result};
 use atm_review::rules::{ReviewEvent, review_next};
+use serde_json::Value;
 
 use crate::project::Project;
-use crate::reviews::{self, Actor, Review, ReviewRef, ReviewStore, Status, Verdict};
+use crate::reviews::{self, Actor, Opening, Review, ReviewRef, ReviewStore, Status, Verdict};
 use crate::state::{Command, Options};
 
 /// What a review event asks for, as the commands ask it (ATM-633). The review's own events, and with them what they
@@ -38,6 +40,113 @@ pub struct Outcome {
     pub tasks: Vec<(String, Command)>,
     /// Every task the review names, by ID, as it meant each (ATM-630): what a round puts back in review.
     pub named: Vec<String>,
+    /// The author's own tasks whose claim lapsed (ATM-632, the design's hole 1): started again before a round puts
+    /// them back in review, so the round is never kept beside a task left in to do.
+    pub take_back: Vec<String>,
+}
+
+/// Whether each task's `moves`, in order, are allowed by the task table, tried on a copy (ATM-670, ATM-712): the
+/// first refusal, worded by `refused` with the task's key; nothing is written.
+fn check_moves(
+    project: &Project,
+    moves: &[(String, Vec<Command>)],
+    options: &Options,
+    refused: &dyn Fn(&str, &Error) -> Error,
+) -> Result<()> {
+    if moves.is_empty() {
+        return Ok(());
+    }
+    let vocab = project.store().vocabulary()?;
+    let tasks = project.store().list_tasks()?;
+    let stamp = atm_common::time::now_iso();
+    for (id, commands) in moves {
+        let Some(task) = project.store().get_task(id)? else {
+            return Err(Error::NotFound(format!("no task {id}")));
+        };
+        let mut copy = task.clone();
+        for &command in commands {
+            crate::state::change_status(
+                &mut copy,
+                command,
+                options,
+                vocab,
+                &tasks,
+                project.actor(),
+                &stamp,
+                &|id| crate::query::archived_task(project.store(), id),
+            )
+            .map_err(|e| refused(&project.task_key(task), &e))?;
+        }
+    }
+    Ok(())
+}
+
+/// The moves that put a task in review from where it is: in progress, into review; the author's own task whose claim
+/// lapsed (`take_back`), started again first (from to do; one still in progress, its claim run out but not dropped
+/// yet, goes straight in).
+fn into_review(project: &Project, id: &str, take_back: bool) -> Result<Vec<Command>> {
+    let active = reviews::kind_of(project, id)?.is_some_and(|(kind, _)| kind == Kind::Active);
+    Ok(if take_back && !active {
+        vec![Command::Start, Command::Review]
+    } else {
+        vec![Command::Review]
+    })
+}
+
+/// What opening a review in `status` with the tasks `ids` does to them (§4.2's create, and tasks added to a review):
+/// an agent's review waiting on its reviewers has every task checked first (ATM-631's openings), and each one's move
+/// into review tried through the task table; a person's, or a draft or a live one, links them as they are. The tasks
+/// to take back first (the author's own whose claim lapsed). Writes nothing.
+///
+/// # Errors
+/// A task the openings refuse (claimed by another agent, never started by the author, blocked, finished, in another
+/// open review), or one the task table won't put in review.
+pub fn check_open(project: &Project, status: Status, ids: &[String]) -> Result<Vec<String>> {
+    if status != Status::Waiting || !is_agent(project.actor()) {
+        return Ok(Vec::new());
+    }
+    let planned = reviews::openings(project, ids)?;
+    let mut take_back = Vec::new();
+    let mut moves = Vec::new();
+    for (id, opening) in ids.iter().zip(planned) {
+        match opening {
+            Opening::TakeBack => {
+                take_back.push(id.clone());
+                moves.push((id.clone(), into_review(project, id, true)?));
+            }
+            Opening::Review => moves.push((id.clone(), vec![Command::Review])),
+            Opening::Link => {}
+        }
+    }
+    check_moves(project, &moves, &Options::default(), &|key, e| {
+        Error::failed(format!(
+            "{key} can't go in review, so the review isn't opened: {e}"
+        ))
+    })?;
+    Ok(take_back)
+}
+
+/// What naming more tasks in `review` does (§4.2's tasks added): the review's rules first (its author or a decider,
+/// not an ended review), then the added tasks it doesn't name yet as [`check_open`] checks a new review's. The tasks
+/// to take back first. Writes nothing.
+///
+/// # Errors
+/// What the review's rules refuse, or what [`check_open`] refuses for an added task.
+pub fn check_set_tasks(
+    project: &Project,
+    review: &Review,
+    added: &[String],
+    by: &Actor,
+) -> Result<Vec<String>> {
+    review_next(review, &ReviewEvent::SetTasks, by)?;
+    let store = reviews::store(project)?;
+    let named = reviews::named(project, &store, &review.header).unwrap_or_default();
+    let fresh: Vec<String> = added
+        .iter()
+        .filter(|id| !named.contains(id))
+        .cloned()
+        .collect();
+    check_open(project, review.header.status, &fresh)
 }
 
 /// What a decision's note and reason say of the review: the round it was made on, and its open comments.
@@ -105,6 +214,32 @@ pub fn check(project: &Project, review: &Review, event: &Event, by: &Actor) -> R
         Event::Close { reject: true } => Some(Command::Reject),
         Event::Close { reject: false } | Event::Round => None,
     };
+    // A round puts its tasks in progress back in review, and first takes back the author's own task its lapse sent to
+    // to do (the design's hole 1): each move tried before the round is kept, so it never waits on a task in to do
+    let mut take_back = Vec::new();
+    if let Event::Round = event {
+        let mut moves = Vec::new();
+        for id in &ids {
+            let Some(task) = project.store().get_task(id)? else {
+                continue;
+            };
+            let own = is_agent(Some(&by.0))
+                && task.get("started_by").and_then(Value::as_str) == Some(by.0.as_str());
+            match reviews::kind_of(project, id)?.map(|(kind, _)| kind) {
+                Some(Kind::Active) => moves.push((id.clone(), vec![Command::Review])),
+                Some(Kind::Todo) if own => {
+                    take_back.push(id.clone());
+                    moves.push((id.clone(), into_review(project, id, true)?));
+                }
+                _ => {}
+            }
+        }
+        check_moves(project, &moves, &Options::default(), &|key, e| {
+            Error::failed(format!(
+                "{reference}'s round can't reach {key}, so it isn't added: {e}"
+            ))
+        })?;
+    }
     let mut tasks = Vec::new();
     if let Some(command) = command {
         let options = match event {
@@ -126,7 +261,39 @@ pub fn check(project: &Project, review: &Review, event: &Event, by: &Actor) -> R
         review: next.status,
         tasks,
         named: ids,
+        take_back,
     })
+}
+
+/// Whether a live review's approval can reach task `id` (§3.5): into review, then approved, both tried before either
+/// is written, so the task is never left in review without the approval (ATM-712). Writes nothing.
+///
+/// # Errors
+/// The task table refuses one of the two moves.
+pub fn check_live_approval(project: &Project, id: &str, options: &Options) -> Result<()> {
+    check_moves(
+        project,
+        &[(id.to_string(), vec![Command::Review, Command::Approve])],
+        options,
+        &|key, e| Error::failed(format!("the live review's approval can't reach {key}: {e}")),
+    )
+}
+
+/// What a lapse does to a task in progress (§3.3): back to to do, with a failure note naming the agent whose claim
+/// ran out, its commit kept. An event, never refused; `drop_expired_claims` applies it as it drops the claim.
+pub fn lapse(
+    task: &mut serde_json::Map<String, Value>,
+    vocab: &atm_common::Vocabulary,
+    claim: &Value,
+) {
+    let stamp = atm_common::time::now_iso();
+    atm_common::edits::back_to_todo(task, vocab, None, &stamp, true);
+    let text = format!(
+        "lease expired ({})",
+        atm_common::py::py_str_opt(claim.get("agent"))
+    );
+    // A note built by atm, short by construction
+    let _ = atm_common::edits::add_note(task, "failure", &text, None, &stamp, false);
 }
 
 /// The actions the review page offers (§5.2): each one's [`check`] for `by`, `Ok` when it may, else the refusal whose

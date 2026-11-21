@@ -3,10 +3,10 @@
 use crate::lifecycle::Event;
 
 use super::{
-    Command, Error, Kind, NewReview, NewRound, Opening, Options, Project, Result, ReviewHeader,
-    ReviewRef, ReviewStore, Reviews, Status, Verdict, Vocabulary, actor_of, agent_at_work,
-    agent_of_tasks, ask_review, change_task_status, checkpoint_now, is_agent, key_of_id, link,
-    openings, resolve, review_keys, store,
+    Command, Error, Kind, NewReview, NewRound, Options, Project, Result, ReviewHeader, ReviewRef,
+    ReviewStore, Reviews, Status, Verdict, Vocabulary, actor_of, agent_at_work, agent_of_tasks,
+    ask_review, change_task_status, checkpoint_now, is_agent, key_of_id, link, resolve,
+    review_keys, store,
 };
 
 /// Open a review, link its tasks, and put them in review (one waiting on its reviewers; a draft or a live one leaves
@@ -21,19 +21,10 @@ use super::{
 /// error.
 pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader> {
     let ids = resolve(project, &new.tasks)?;
-    // An agent opening a review of its work: checked first (ATM-631). A person may open one of files for a task not
-    // started yet, for an agent to answer when it takes the task (the sandbox's red-team review): it is linked, as it is
-    let by_agent = is_agent(project.actor());
-    let taken_back: Vec<String> = if new.status == Status::Waiting && by_agent {
-        let planned = openings(project, &ids)?;
-        ids.iter()
-            .zip(planned)
-            .filter(|(_, opening)| *opening == Opening::TakeBack)
-            .map(|(id, _)| id.clone())
-            .collect()
-    } else {
-        Vec::new()
-    };
+    // An agent opening a review of its work: every task checked first, through the machine (ATM-631, ATM-712). A
+    // person may open one of files for a task not started yet, for an agent to answer when it takes the task (the
+    // sandbox's red-team review): it is linked, as it is
+    let taken_back = crate::lifecycle::check_open(project, new.status, &ids)?;
     for id in &taken_back {
         change_task_status(project, Command::Start, id, &Options::default())?;
     }
@@ -83,7 +74,18 @@ pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) 
     let outcome = crate::lifecycle::check(project, &before, &Event::Round, &round.by)?;
     let number = Reviews::new(&mut reviews).add_round(reference, round)?;
     let header = reviews.get_review(reference)?.header;
-    ask_review(project, &outcome.named, &header, &format!("round {number}"))?;
+    // The author's own task its lapse sent back to to do, started again first (the design's hole 1); its review note
+    // says so, as opening a review does
+    for id in &outcome.take_back {
+        change_task_status(project, Command::Start, id, &Options::default())?;
+    }
+    let (back, rest): (Vec<String>, Vec<String>) = outcome
+        .named
+        .into_iter()
+        .partition(|id| outcome.take_back.contains(id));
+    ask_review(project, &rest, &header, &format!("round {number}"))?;
+    let lapsed = format!("round {number} (its claim had lapsed: taken back for this round)");
+    ask_review(project, &back, &header, &lapsed)?;
     Ok(number)
 }
 
@@ -218,8 +220,12 @@ pub fn set_tasks(
 ) -> Result<ReviewHeader> {
     let by = actor_of(project);
     let mut reviews = store(project)?;
-    let header = reviews.get_review(reference)?.header;
+    let before = reviews.get_review(reference)?;
+    let header = before.header.clone();
     let (added, removed) = (resolve(project, add)?, resolve(project, remove)?);
+    // Checked whole first (ATM-712): the review's rules, then each added task as a new review checks its tasks
+    // (ATM-631), so it is never named beside a task that can't follow it
+    let taken_back = crate::lifecycle::check_set_tasks(project, &before, &added, &by)?;
     // A key stays unless the task the review meant by it is removed (ATM-630: an old key may mean the task that moved)
     let mut tasks: Vec<String> = header
         .tasks
@@ -247,6 +253,9 @@ pub fn set_tasks(
         reviews.set_author(&header.id, &agent)?;
     }
     let header = reviews.get_review(reference)?.header;
+    for id in &taken_back {
+        change_task_status(project, Command::Start, id, &Options::default())?;
+    }
     link(project, &header, &added, true)?;
     link(project, &header, &removed, false)?;
     for id in &removed {
