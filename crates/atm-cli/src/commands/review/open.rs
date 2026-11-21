@@ -9,7 +9,7 @@ use super::{
 
 /// The commands that open a review and add to it (in `atm review`'s list, ATM-711).
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub enum OpenCommand {
     /// Open a review of a change: a commit range, uncommitted changes, or files as they are.
     Create {
         /// One line saying what it is
@@ -85,9 +85,9 @@ pub enum Command {
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: OpenCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        Command::Create {
+        OpenCommand::Create {
             title,
             tasks,
             change,
@@ -132,7 +132,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("Opened {}", summary_line(&header));
             }
         }
-        Command::Live {
+        OpenCommand::Live {
             base,
             tasks,
             title,
@@ -170,7 +170,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("Opened {}", summary_line(&header));
             }
         }
-        Command::Round {
+        OpenCommand::Round {
             review,
             change,
             summary_file,
@@ -210,7 +210,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("{}: round {number}", found.header.reference);
             }
         }
-        Command::Tasks {
+        OpenCommand::Tasks {
             review,
             add,
             remove,

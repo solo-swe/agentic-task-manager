@@ -8,7 +8,7 @@ use super::{
 
 /// The commands that listen to the reviews (in `atm review`'s list, ATM-711).
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub enum ListenCommand {
     /// Wait until a reviewer submits on a review (or decides it): what happened, and the comments added meanwhile.
     /// Exit code 3 when the time is up first.
     Wait {
@@ -61,9 +61,9 @@ pub enum Command {
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: ListenCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        Command::Wait {
+        ListenCommand::Wait {
             review,
             until,
             timeout,
@@ -104,7 +104,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
             }
             Ok(0)
         }
-        Command::Watch {
+        ListenCommand::Watch {
             timeout,
             once,
             since,
@@ -132,12 +132,12 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
             // --once with nothing told by the time up: exit code 3, as `atm review wait` (ATM-624)
             Ok(if once && told == 0 { 3 } else { 0 })
         }
-        Command::Inbox {
+        ListenCommand::Inbox {
             peek: _,
             hook: true,
             agent,
         } => Ok(hook_inbox(cwd, agent.as_deref())),
-        Command::Inbox {
+        ListenCommand::Inbox {
             peek,
             hook: false,
             agent,

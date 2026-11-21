@@ -10,7 +10,7 @@ use super::{
 
 /// The commands that read the reviews (in `atm review`'s list, ATM-711).
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub enum ReadCommand {
     /// List the reviews, of every working copy, newest first.
     List {
         /// Only these statuses (repeatable): open (any not decided yet: draft, waiting, live or changes_requested), or
@@ -54,9 +54,9 @@ pub enum Command {
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: ReadCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        Command::List {
+        ReadCommand::List {
             statuses,
             task,
             mine,
@@ -144,7 +144,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 }
             }
         }
-        Command::Show {
+        ReadCommand::Show {
             review,
             round,
             against,
@@ -223,7 +223,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
             let open = found.open_comments().count();
             println!("  {} chain(s), {open} open", found.chains.len());
         }
-        Command::Comments { review, open } => {
+        ReadCommand::Comments { review, open } => {
             let project = opened(cwd, None)?;
             let store = reviews::store(&project)?;
             let found = store.get_review(&reference(&review))?;

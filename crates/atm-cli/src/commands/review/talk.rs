@@ -9,7 +9,7 @@ use super::{
 
 /// The commands that talk in a review: comments, replies, pokes and drafts (in `atm review`'s list, ATM-711).
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub enum TalkCommand {
     /// Start a chain: on a file's lines, a whole file, or (without --file) the review as a whole.
     Comment {
         /// The review (CR-7)
@@ -160,9 +160,9 @@ pub enum DraftCommand {
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        Command::Comment {
+        TalkCommand::Comment {
             review,
             file,
             lines,
@@ -196,7 +196,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("{}: {id}", found.header.reference);
             }
         }
-        Command::Poke {
+        TalkCommand::Poke {
             review,
             body,
             agent,
@@ -217,8 +217,8 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("{review}: poked ({id})");
             }
         }
-        Command::Draft { command } => return run_draft(command, ctx, cwd),
-        Command::Reply {
+        TalkCommand::Draft { command } => return run_draft(command, ctx, cwd),
+        TalkCommand::Reply {
             review,
             comment,
             body,
@@ -243,7 +243,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("{review}: {id}, in reply to {comment}");
             }
         }
-        Command::Edit {
+        TalkCommand::Edit {
             review,
             comment,
             body,
@@ -268,7 +268,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("{review}: {comment} changed");
             }
         }
-        Command::Resolve {
+        TalkCommand::Resolve {
             review,
             comment,
             reopen,

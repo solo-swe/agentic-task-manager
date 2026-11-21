@@ -52,19 +52,19 @@ pub struct Body {
 pub enum ReviewCommand {
     // create, live, round, tasks
     #[command(flatten)]
-    Open(open::Command),
+    Open(open::OpenCommand),
     // list, show, comments
     #[command(flatten)]
-    Read(read::Command),
+    Read(read::ReadCommand),
     // comment, poke, draft, reply, edit, resolve
     #[command(flatten)]
-    Talk(talk::Command),
+    Talk(talk::TalkCommand),
     // submit, close
     #[command(flatten)]
-    Decide(decide::Command),
+    Decide(decide::DecideCommand),
     // wait, watch, inbox
     #[command(flatten)]
-    Listen(listen::Command),
+    Listen(listen::ListenCommand),
 }
 
 fn opened(cwd: &Path, agent: Option<&str>) -> Result<Project> {

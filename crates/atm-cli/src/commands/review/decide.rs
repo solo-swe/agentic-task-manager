@@ -9,7 +9,7 @@ use super::{
 
 /// The commands that decide a review (in `atm review`'s list, ATM-711).
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub enum DecideCommand {
     /// A reviewer's verdict: approve (every top-level comment resolved), request changes, or a comment on the whole.
     Submit {
         /// The review (CR-7)
@@ -53,9 +53,9 @@ pub enum Command {
 ///
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: DecideCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        Command::Submit {
+        DecideCommand::Submit {
             review,
             approve,
             request_changes,
@@ -101,7 +101,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
                 println!("{}", summary_line(&header));
             }
         }
-        Command::Close {
+        DecideCommand::Close {
             review,
             reason,
             reject_tasks,
