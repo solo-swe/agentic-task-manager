@@ -587,6 +587,20 @@ mod integration_tests {
         home
     }
 
+    /// The project's commit in a state from [`a_state_with_a_project`], by its full object ID: a page names a revision
+    /// so (ATM-671)
+    fn head_of(home: &Path) -> String {
+        let done = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(home.join("project"))
+            .output()
+            .expect("git");
+        String::from_utf8(done.stdout)
+            .expect("utf-8")
+            .trim()
+            .to_string()
+    }
+
     /// What the REST API answers for `path?query`: its status, and its body (as JSON, without `generated_at`, when
     /// it is JSON).
     fn rest(home: &Path, path: &str, query: &str) -> (u16, Value, Vec<u8>) {
@@ -652,11 +666,23 @@ mod integration_tests {
         let (status, _, bytes) = rest(&home, &format!("{p}/files"), "path=pixel.png");
         let image = file_of(&workspaces, "work", "abcd1234", "pixel.png", None).expect("the image");
         assert_eq!((status, bytes), (200, image.data));
-        // At a revision too (a review's image file's side, ATM-689)
-        let (status, _, bytes) = rest(&home, &format!("{p}/files"), "path=pixel.png&at=HEAD");
+        // At a revision too (a review's image file's side, ATM-689), named by its full object ID (ATM-671)
+        let head = head_of(&home);
+        let (status, _, bytes) = rest(
+            &home,
+            &format!("{p}/files"),
+            &format!("path=pixel.png&at={head}"),
+        );
         let then =
-            file_of(&workspaces, "work", "abcd1234", "pixel.png", Some("HEAD")).expect("at HEAD");
+            file_of(&workspaces, "work", "abcd1234", "pixel.png", Some(&head)).expect("at HEAD");
         assert_eq!((status, bytes), (200, then.data));
+        // A name that moves is refused by both, the same way
+        let (status, _, _) = rest(&home, &format!("{p}/files"), "path=pixel.png&at=HEAD");
+        assert_eq!(status, 400);
+        assert!(matches!(
+            file_of(&workspaces, "work", "abcd1234", "pixel.png", Some("HEAD")),
+            Err(AppError::Invalid(_))
+        ));
         let (status, _, bytes) = rest(&home, &format!("{p}/logo"), "");
         let logo = logo_of(&workspaces, "work", "abcd1234")
             .expect("the logo")
@@ -695,8 +721,11 @@ mod integration_tests {
     }
 
     /// Each read command, its arguments, and what the plain function behind it answers (for a state folder made by
-    /// `a_state_with_a_project`); `list_projects` last, as it opens `work`
-    fn expected_answers(workspaces: &atm_lib::Workspaces) -> Vec<(&'static str, Value, Value)> {
+    /// `a_state_with_a_project`, its commit `head`); `list_projects` last, as it opens `work`
+    fn expected_answers(
+        workspaces: &atm_lib::Workspaces,
+        head: &str,
+    ) -> Vec<(&'static str, Value, Value)> {
         let at = json!({"workspace": "work", "project": "abcd1234"});
         let with = |extra: Value| {
             let mut args = at.clone();
@@ -759,9 +788,9 @@ mod integration_tests {
             ),
             (
                 "file",
-                with(json!({"path": "pixel.png", "at": "HEAD"})),
+                with(json!({"path": "pixel.png", "at": head})),
                 serde_json::to_value(
-                    file_of(workspaces, "work", "abcd1234", "pixel.png", Some("HEAD"))
+                    file_of(workspaces, "work", "abcd1234", "pixel.png", Some(head))
                         .expect("file at HEAD"),
                 )
                 .expect("json"),
@@ -829,7 +858,7 @@ mod integration_tests {
         // Each command reaches its atm-lib call: it answers what the plain function does. `work` is opened first, as
         // list_projects (last) opens it
         workspaces.opened("work").expect("recent.json");
-        for (command, args, expected) in expected_answers(&workspaces) {
+        for (command, args, expected) in expected_answers(&workspaces, &head_of(&home)) {
             let answer = tauri::test::get_ipc_response(
                 &window,
                 request(command, &args, "tauri://localhost"),

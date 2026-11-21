@@ -68,13 +68,9 @@ pub(super) fn get_document(
 /// What a file at a full object ID is sent with: this browser only, for a year, never asked again
 const KEPT: (&str, &str) = ("Cache-Control", "private, max-age=31536000, immutable");
 
-/// A full git object ID: 40 hex digits (SHA-1) or 64 (SHA-256), in lower case as git writes them. Anything shorter
-/// could name another object later; a name (`HEAD`, a branch) moves.
+/// The one rule for a revision a page names (ATM-671): atm-lib's, which the app's commands keep too
 fn is_object_id(revision: &str) -> bool {
-    matches!(revision.len(), 40 | 64)
-        && revision
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    atm_lib::workspaces::is_object_id(revision)
 }
 
 /// `GET …/projects/<p>/files?path=`: an image's bytes (whose bytes match its type), sandboxed. The `ETag` is the
