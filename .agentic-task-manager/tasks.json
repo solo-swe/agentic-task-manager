@@ -19568,7 +19568,7 @@
       "description": "Hakan on CR-99 and CR-100 (2026-11-21): the files are too large. Split them into logical modules, give them unit tests that use fakes for what they depend on, and move the integration tests into their own files, by [the Rust guide](docs/guides/rust.md) (§Crates and modules, §Tests).\n\n## The files (lines of code / lines of tests, 2026-11-21)\n| File | Code | Tests |\n|---|---|---|\n| `crates/atm-cli/src/commands/review.rs` | 1,386 | 100 |\n| `app/src-tauri/src/commands.rs` | 1,114 | 425 |\n| `crates/atm-lib/src/review_listen.rs` | 974 | 538 |\n| `crates/atm-lib/src/reviews.rs` | 937 | 1,300 |\n| `crates/atm-vcs/src/lib.rs` | 771 | 642 |\n| `crates/atm-lib/src/review_pages.rs` | 724 | 371 |\n| `crates/atm-review/src/folder.rs` | 651 | 648 |\n| `crates/atm-docs/src/lib.rs` | 535 | 836 |\n| `crates/atm-review/src/rules.rs` | 529 | 1,162 |\n| `crates/atm-review/src/files.rs` | 511 | 565 |\n| `crates/atm-review/src/rounds.rs` | 455 | 742 |\n| `crates/atm-api/src/routes/reviews.rs` | 391 | 778 |\n| `app/src-tauri/src/lib.rs` | 236 | 1,283 |\n\n## Rules (the guide)\n- **Module files:** `foo.rs` next to a `foo/` directory, never `foo/mod.rs`. Public APIs stay the same (re-exported).\n- **Unit tests** stay with their code while it reads well, else `foo/tests.rs`, else `foo/tests/` by group. They test the unit alone, with hand-written fakes behind a trait (atm-review's `ReviewStore` already has a memory store).\n- **Integration tests** (a real git repository, the real store, several layers) go to the crate's `tests/` directory, one file per area.\n- About 400 lines is when a file reads badly, not a threshold.\n\n## How\n- One file at a time, the reviews area first (`reviews.rs`, `review_pages.rs`, `review_listen.rs`, `commands/review.rs`), before ATM-633's build changes them.\n- Each a move only: no logic changed, the same tests passing (`cargo test`, the CLI suite), the plan for it agreed first, as on CR-100.\n- Where a unit test today needs a real repository only because nothing is faked, add the fake and keep the real-repository version as an integration test.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -19577,7 +19577,7 @@
         "crates/atm-cli/src/commands/review.rs"
       ],
       "created_at": "2026-11-20T23:29:46Z",
-      "updated_at": "2026-11-21T17:03:56Z",
+      "updated_at": "2026-11-21T19:51:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19588,7 +19588,7 @@
       ],
       "sprint": "Audit and tabs",
       "number": 711,
-      "commit": "4b73a02a1b365acc008b0ff9f1490b3e663413c6",
+      "commit": "95a59ccd9a1ddd2059f2ba4cc60c213a2f5a8c8d",
       "code_reviews": [
         {
           "id": "01a1fb5d-1e5d-7580-a346-5f2f710794be",
@@ -19605,6 +19605,10 @@
         {
           "id": "01a1fefe-9266-75fc-8b98-7e02a16ae144",
           "ref": "CR-110"
+        },
+        {
+          "id": "01a1ff18-69c7-7052-a3b5-4ad3fc11d8e7",
+          "ref": "CR-111"
         }
       ],
       "notes": [
@@ -19673,6 +19677,24 @@
           "kind": "note",
           "text": "Approved: in CR-110 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-21T17:12:32Z",
+          "kind": "review",
+          "text": "CR-111: Split the large files, part 5: the app’s commands.rs and lib.rs",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-21T19:50:04Z",
+          "kind": "note",
+          "text": "Approved: in CR-111 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-21T19:51:52Z",
+          "kind": "outcome",
+          "text": "All thirteen files split; CR-103, 104, 106, 110 and 111 approved by Hakan",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -19700,6 +19722,11 @@
           "from": "2026-11-21T16:44:19Z",
           "to": "2026-11-21T17:02:41Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-21T17:12:32Z",
+          "to": "2026-11-21T19:50:04Z",
+          "outcome": "approved"
         }
       ],
       "blocks": [
@@ -19710,7 +19737,10 @@
         }
       ],
       "started_at": "2026-11-21T17:03:56Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "review_requested_at": "2026-11-21T17:12:32Z",
+      "completed_at": "2026-11-21T19:51:52Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b81a73b4404",
@@ -20029,7 +20059,7 @@
       "description": "Step 1 of [the plan](docs/dashboard-derived-state.md), group A (§3, §4.2). ATM-711's card showed *Approved* and *Waiting for review · 1 h 21 m*.\n\n## atm-lib\nOne function, with a table of cases over every kind × `review_state` × `waiting_on` × `with` × readiness. It adds to `task_views`' `derived`:\n- `waiting`: `{on, since, why?}`. Its values:\n  - `reviewer` while the review waits, since `review_requested_at`;\n  - `agent` once approved or sent back, since `reviewed_at`;\n  - `user` or `agent` when blocked, since `blocked_at`, with the questions;\n  - `dependencies` for a to-do task that isn't ready;\n  - none otherwise.\n- `needs_you`: a reason or none. `summary.rs`'s `needs_you_tasks` is built from this field (delete its copy).\n- `agent_work`: whether agent work is left.\n- `review`: `{id, ref, status}`, the code review it waits on, not the latest link.\n\nThe TypeScript type is generated (`TaskDerived`); the app's commands return the same views.\n\n## Dashboard\n- `waiting.ts` shows `derived.waiting`. Delete `reviewWait`, `blockWait`'s rule and `needsYouReason`.\n- The cards and the panel show one line: the review-state chip and the waiting line agree.\n- `code_reviews.at(-1)` becomes `derived.review`.\n- `forecast.ts` `NO_AGENT_WORK`, `burndown.ts` and `component-progress.ts` use `agent_work`.\n- `timeuse.ts` `waitingIntervals` counts waiting on you only while `waiting.on` is `reviewer` or `user`.\n\n## Tests\n- atm-lib: the table.\n- The tasks route: the fields.\n- Unit tests: an approved task's card says it waits on its agent; the forecast counts it as remaining.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/query.rs",
@@ -20041,9 +20071,9 @@
         "dashboard/src/lib/timeuse.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T19:52:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -20054,7 +20084,9 @@
       "related": [
         "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
       ],
-      "number": 717
+      "number": 717,
+      "started_at": "2026-11-21T19:52:31Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d03168db17",

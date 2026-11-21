@@ -40,11 +40,14 @@ describe('security invariants (docs/security-architecture.md)', () => {
         'atm-cli/src/commands/claim.rs: own_binary',
         'atm-cli/src/commands/maintenance.rs: own_binary',
         'atm-cli/src/commands/maintenance.rs: opener',
+        // Its unit test's process to stop: the test binary itself (ATM-673)
+        'atm-cli/src/commands/maintenance.rs: own_binary',
         // atm-db's questions to git, shared with the review store since ATM-563
         'atm-fs/src/git.rs: "git"',
         // A code review's diffs, on a temporary index (ATM-564)
         'atm-vcs/src/diff.rs: "git"',
-        'atm-vcs/src/lib.rs: "git"',
+        // atm-vcs's runner (ATM-711: lib.rs's, moved)
+        'atm-vcs/src/git.rs: "git"',
       ].sort(),
     );
     // The watcher and the server are started with atm's own path, never one from the command line or a task; the

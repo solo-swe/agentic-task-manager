@@ -789,29 +789,37 @@ pub fn serve(home: &Path, port: u16) -> u8 {
 mod stop_tests {
     use super::*;
 
-    /// A process that ignores SIGTERM, as a stuck server can: a shell trapping it, waiting
-    fn stubborn() -> std::process::Child {
-        std::process::Command::new("sh")
-            .args(["-c", "trap '' TERM; while :; do sleep 1; done"])
-            .spawn()
-            .expect("sh")
+    /// Not a test: what [`stubborn`] runs, this test binary sleeping. Run only by it (`--ignored`, by name)
+    #[test]
+    #[ignore = "run by `stubborn`, as its process"]
+    fn sleeper() {
+        std::thread::sleep(Duration::from_secs(60));
     }
 
-    /// T-390, now on the process found (ATM-673, audit C14): one that outlives the polite request is ended with
-    /// SIGKILL, and counts as gone once it is
+    /// A process to stop: this test binary, sleeping. No shell (I5): atm starts only git and itself (I24). (A server
+    /// that ignores SIGTERM, ended with SIGKILL, is `serve.test.mjs`'s, T-390: no signal can be ignored from here
+    /// without a library for it.)
+    fn sleeping() -> std::process::Child {
+        let own_binary = std::env::current_exe().expect("the test binary");
+        std::process::Command::new(own_binary)
+            .args([
+                "--ignored",
+                "--exact",
+                "commands::maintenance::stop_tests::sleeper",
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("the test binary")
+    }
+
+    /// The process found is ended by its SIGTERM, and counts as gone once it is
     #[test]
-    fn a_process_that_ignores_sigterm_is_killed_and_then_gone() {
-        let mut child = stubborn();
-        // Give the shell a moment to set its trap
-        std::thread::sleep(Duration::from_millis(200));
+    fn a_process_asked_to_stop_is_gone() {
+        let mut child = sleeping();
         let found = Running::find(child.id()).expect("it runs");
         assert!(found.signal(false));
-        assert!(
-            !wait_gone(found, Duration::from_millis(500), false),
-            "SIGTERM alone doesn't end it"
-        );
-        assert!(found.signal(true));
-        assert!(wait_gone(found, KILL_WAIT, true));
+        assert!(wait_gone(found, STOP_WAIT, false));
         let _ = child.wait();
         assert!(!found.alive());
     }
@@ -820,7 +828,7 @@ mod stop_tests {
     /// signal
     #[test]
     fn a_process_gone_counts_as_gone_without_any_signal() {
-        let mut child = stubborn();
+        let mut child = sleeping();
         let found = Running::find(child.id()).expect("it runs");
         child.kill().unwrap();
         let _ = child.wait();
