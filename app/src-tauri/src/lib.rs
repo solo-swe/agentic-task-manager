@@ -590,15 +590,7 @@ mod integration_tests {
     /// The project's commit in a state from [`a_state_with_a_project`], by its full object ID: a page names a revision
     /// so (ATM-671)
     fn head_of(home: &Path) -> String {
-        let done = std::process::Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(home.join("project"))
-            .output()
-            .expect("git");
-        String::from_utf8(done.stdout)
-            .expect("utf-8")
-            .trim()
-            .to_string()
+        atm_lib::code::head_commit(&home.join("project")).expect("the project's commit")
     }
 
     /// What the REST API answers for `path?query`: its status, and its body (as JSON, without `generated_at`, when

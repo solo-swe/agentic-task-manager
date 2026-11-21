@@ -591,6 +591,13 @@ pub fn default_base(cwd: &std::path::Path) -> String {
     .unwrap_or_else(|| "main".into())
 }
 
+/// The commit the project's working copy at `root` is on, by its full object ID, through the project's version
+/// control; none outside a repository. A front end names a revision so (ATM-671) without knowing which VCS it is.
+#[must_use]
+pub fn head_commit(root: &std::path::Path) -> Option<String> {
+    GitVcs::new(root).head()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
