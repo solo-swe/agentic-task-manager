@@ -159,7 +159,14 @@ export interface ReviewPageData {
   view: { round: number; against: number | null; now?: boolean; files: ViewFile[] };
   needs_you: boolean;
   you: string;
+  /** What this reader may do, and why not (ATM-633, docs/task-review-state-machine.md §5.2): the server's state
+   * machine answering for each action, so the page shows a button for what it allows and never repeats the rules.
+   * Optional, for an older atm's pages */
+  can?: Partial<Record<ReviewAction, { ok: boolean; why?: string }>>;
 }
+
+/** The actions a review's page offers, as the server's `can` names them */
+export type ReviewAction = 'approve' | 'request_changes' | 'comment' | 'round' | 'close';
 
 /** What the reviews page lists by: each one given (not empty) must fit */
 export interface ListQuery {

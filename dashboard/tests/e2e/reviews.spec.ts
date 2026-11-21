@@ -2490,6 +2490,39 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(diffOf(page, 'src/a.rs').locator('.diff-new .diff-line.commented')).toHaveCount(1);
   });
 
+  // ATM-633 (docs/task-review-state-machine.md §5.2): the page shows what the server's state machine allows, with its
+  // words, and never repeats the rules
+  test('Approve is as the server’s can says: blocked with its why, then allowed; Request changes too', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const why = 'CR-2 can’t be approved while comments are open: c1';
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        can: {
+          approve: { ok: false, why },
+          request_changes: { ok: false, why: 'CR-2 is changes requested: it can’t be sent back' },
+          comment: { ok: true },
+        },
+      }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('button', { name: 'Submit review' }).click();
+    await expect(page.locator('#review-approve, [data-decision="approve"]').first()).toBeDisabled();
+    await expect(page.locator('#review-approve-why')).toContainText(why);
+    await expect(page.locator('[data-decision="request_changes"]')).toHaveCount(0);
+    // The server allows it now (the comment resolved elsewhere): the page follows its next answer
+    const allowed = { approve: { ok: true }, request_changes: { ok: true }, comment: { ok: true } };
+    tasksServer.setReview('CR-2', reviewPage({ can: allowed }));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('button', { name: 'Submit review' }).click();
+    await expect(page.locator('[data-decision="approve"]')).toBeEnabled();
+    await expect(page.locator('#review-approve-why')).toHaveCount(0);
+    await expect(page.locator('[data-decision="request_changes"]')).toBeVisible();
+  });
+
   test('every comment resolved: Submit review is Approve, and one click approves', async ({ page, tasksServer }) => {
     await openReviews(page, tasksServer);
     const resolved = reviewPage().chains.map((c) => ({

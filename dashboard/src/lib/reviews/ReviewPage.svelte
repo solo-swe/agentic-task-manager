@@ -561,6 +561,9 @@
   /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can. A review
    * sent back can be approved too (ATM-609) */
   const approveBlocked = $derived.by(() => {
+    // The server's answer when it gives one (ATM-633): the machine's own words
+    const can = page.can?.approve;
+    if (can) return can.ok ? null : (can.why ?? 'not allowed now');
     const drafted = draftedComments(page.drafts);
     const open = chainCounts.open - drafted;
     if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
@@ -723,7 +726,7 @@
                       }}>Close review</button
                     >
                   {/if}
-                {:else if !sentBack}
+                {:else if page.can?.request_changes ? page.can.request_changes.ok : !sentBack}
                   <!-- Sent back already, it isn't sent back again (CR-2): more words are published as comments -->
                   <button
                     class="review-button danger"
