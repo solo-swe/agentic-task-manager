@@ -1,18 +1,93 @@
 //! Opening a review and its rounds: `create`, `live`, `round`, `tasks`.
 
+use clap::Subcommand;
+
 use super::{
-    Actor, Change, Context, NewReview, Path, Result, ReviewCommand, ReviewStore, Status, Value,
-    actor, json, new_round, opened, print_json, reference, reviews, summary_line,
+    Actor, Change, Context, NewReview, Path, Result, ReviewStore, Status, Value, actor, json,
+    new_round, opened, print_json, reference, reviews, summary_line,
 };
 
-/// Run one of this group's review commands in `cwd` (`super::run` gives it only these).
+/// The commands that open a review and add to it (in `atm review`'s list, ATM-711).
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Open a review of a change: a commit range, uncommitted changes, or files as they are.
+    Create {
+        /// One line saying what it is
+        #[arg(long)]
+        title: String,
+        /// A task it reviews (repeatable; its key)
+        #[arg(long = "task", value_name = "KEY")]
+        tasks: Vec<String>,
+        #[command(flatten)]
+        change: Change,
+        /// The summary, in Markdown, from a file
+        #[arg(long, value_name = "FILE")]
+        summary_file: Option<String>,
+        /// Who decides it (repeatable); none: anyone but its author
+        #[arg(long = "reviewer", value_name = "NAME")]
+        reviewers: Vec<String>,
+        /// Keep it a draft, not waiting on anyone yet
+        #[arg(long)]
+        draft: bool,
+        /// Who opens it
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Open a live review: the working tree against --base, as it is being made.
+    Live {
+        /// The commit it is against (HEAD by default)
+        #[arg(long, value_name = "REV")]
+        base: Option<String>,
+        /// A task it reviews (repeatable; its key)
+        #[arg(long = "task", value_name = "KEY")]
+        tasks: Vec<String>,
+        /// One line saying what it is
+        #[arg(long, default_value = "Live review")]
+        title: String,
+        /// Who decides it (repeatable)
+        #[arg(long = "reviewer", value_name = "NAME")]
+        reviewers: Vec<String>,
+        /// Who opens it
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// The author's next round, after addressing the comments (the same kind as the last one unless given).
+    Round {
+        /// The review (CR-7)
+        review: String,
+        #[command(flatten)]
+        change: Change,
+        /// A new summary (the review's Description), in Markdown, from a file: what the reviewers should check now
+        #[arg(long, value_name = "FILE")]
+        summary_file: Option<String>,
+        /// Who adds it
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Name more tasks in a review, or fewer.
+    Tasks {
+        /// The review (CR-7)
+        review: String,
+        /// A task to add (repeatable)
+        #[arg(long, value_name = "KEY")]
+        add: Vec<String>,
+        /// A task to take out (repeatable)
+        #[arg(long, value_name = "KEY")]
+        remove: Vec<String>,
+        /// Who changes them
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
+/// Run a command that opens a review or adds to it, in `cwd`.
 ///
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        ReviewCommand::Create {
+        Command::Create {
             title,
             tasks,
             change,
@@ -57,7 +132,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("Opened {}", summary_line(&header));
             }
         }
-        ReviewCommand::Live {
+        Command::Live {
             base,
             tasks,
             title,
@@ -95,7 +170,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("Opened {}", summary_line(&header));
             }
         }
-        ReviewCommand::Round {
+        Command::Round {
             review,
             change,
             summary_file,
@@ -135,7 +210,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("{}: round {number}", found.header.reference);
             }
         }
-        ReviewCommand::Tasks {
+        Command::Tasks {
             review,
             add,
             remove,
@@ -161,7 +236,6 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 );
             }
         }
-        _ => unreachable!("review::run gives open::run only its own commands"),
     }
     Ok(0)
 }

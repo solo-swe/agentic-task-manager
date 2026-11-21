@@ -1,18 +1,69 @@
 //! Listening to the reviews: `wait`, `watch` and `inbox` (with Claude Code's hook).
 
+use clap::Subcommand;
+
 use super::{
-    Context, Error, Path, Result, ReviewCommand, Value, actor, json, opened, print_json, reference,
-    summary_line,
+    Context, Error, Path, Result, Value, actor, json, opened, print_json, reference, summary_line,
 };
 
-/// Run one of this group's review commands in `cwd` (`super::run` gives it only these).
+/// The commands that listen to the reviews (in `atm review`'s list, ATM-711).
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Wait until a reviewer submits on a review (or decides it): what happened, and the comments added meanwhile.
+    /// Exit code 3 when the time is up first.
+    Wait {
+        /// The review (CR-7)
+        review: String,
+        /// What to wait for: submitted (a decision, or a comment on the whole) or decision
+        #[arg(long = "for", default_value = "submitted", value_parser = ["submitted", "decision"])]
+        until: String,
+        /// How long at most: 90s, 30m, 2h (seconds without a unit)
+        #[arg(long, default_value = "2h")]
+        timeout: String,
+        /// Who waits (their own comments aren't news)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// The agent's one watch for its session: each person's comment about the agent's work, from any review, as it is
+    /// added (a JSON object a line with --json), until the time is up. Names no review and no task.
+    Watch {
+        /// How long at most: 90s, 30m, 8h (seconds without a unit)
+        #[arg(long, default_value = "8h")]
+        timeout: String,
+        /// Stop once something was told (exit code 3 if nothing was, at the time up)
+        #[arg(long)]
+        once: bool,
+        /// Tell what came since this time (2026-10-24T18:00:00Z), whatever the last watch told
+        #[arg(long)]
+        since: Option<String>,
+        /// Who watches
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// What you haven't read about your work in the reviews (ATM-708): each person's comment and decision since you
+    /// last read them, as a watch prints them (a JSON object a line with --json), oldest first; read from then on. A
+    /// watch with --once counts as read; one that runs on doesn't (its lines may never be read).
+    Inbox {
+        /// Only look: leave them unread
+        #[arg(long)]
+        peek: bool,
+        /// Run as Claude Code's hook (`atm agents hooks install`): its input on stdin, its answer on stdout
+        #[arg(long, conflicts_with = "peek")]
+        hook: bool,
+        /// Whose inbox
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
+/// Run a command that listens to the reviews, in `cwd`.
 ///
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        ReviewCommand::Wait {
+        Command::Wait {
             review,
             until,
             timeout,
@@ -53,7 +104,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
             }
             Ok(0)
         }
-        ReviewCommand::Watch {
+        Command::Watch {
             timeout,
             once,
             since,
@@ -81,12 +132,12 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
             // --once with nothing told by the time up: exit code 3, as `atm review wait` (ATM-624)
             Ok(if once && told == 0 { 3 } else { 0 })
         }
-        ReviewCommand::Inbox {
+        Command::Inbox {
             peek: _,
             hook: true,
             agent,
         } => Ok(hook_inbox(cwd, agent.as_deref())),
-        ReviewCommand::Inbox {
+        Command::Inbox {
             peek,
             hook: false,
             agent,
@@ -119,7 +170,6 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
             }
             Ok(0)
         }
-        _ => unreachable!("review::run gives listen::run only its own commands"),
     }
 }
 

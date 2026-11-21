@@ -1,17 +1,61 @@
 //! Deciding a review: `submit`, `close`.
 
+use clap::Subcommand;
+
 use super::{
-    Context, Error, Path, Result, ReviewCommand, ReviewStore, Value, opened, print_json, reference,
-    reviews, summary_line, text_of,
+    Body, Context, Error, Path, Result, ReviewStore, Value, opened, print_json, reference, reviews,
+    summary_line, text_of,
 };
 
-/// Run one of this group's review commands in `cwd` (`super::run` gives it only these).
+/// The commands that decide a review (in `atm review`'s list, ATM-711).
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// A reviewer's verdict: approve (every top-level comment resolved), request changes, or a comment on the whole.
+    Submit {
+        /// The review (CR-7)
+        review: String,
+        /// Approve it
+        #[arg(long, conflicts_with_all = ["request_changes", "comment"])]
+        approve: bool,
+        /// Send it back for fixes
+        #[arg(long, conflicts_with = "comment")]
+        request_changes: bool,
+        /// Only comment on it as a whole
+        #[arg(long)]
+        comment: bool,
+        #[command(flatten)]
+        body: Body,
+        /// Override who may decide it (your own review, say), with why: recorded in the review. A person's call: no
+        /// skill pre-approves it, so an agent's harness asks the user every time
+        #[arg(long, value_name = "REASON")]
+        override_rules: Option<String>,
+        /// Who submits
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// End a review without approval.
+    Close {
+        /// The review (CR-7)
+        review: String,
+        /// Why
+        #[arg(long)]
+        reason: String,
+        /// Reject its tasks in review too
+        #[arg(long)]
+        reject_tasks: bool,
+        /// Who closes it
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
+/// Run a command that decides a review, in `cwd`.
 ///
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
-pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        ReviewCommand::Submit {
+        Command::Submit {
             review,
             approve,
             request_changes,
@@ -57,7 +101,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("{}", summary_line(&header));
             }
         }
-        ReviewCommand::Close {
+        Command::Close {
             review,
             reason,
             reject_tasks,
@@ -78,7 +122,6 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("{}", summary_line(&header));
             }
         }
-        _ => unreachable!("review::run gives decide::run only its own commands"),
     }
     Ok(0)
 }

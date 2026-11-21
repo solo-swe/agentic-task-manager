@@ -1,19 +1,62 @@
 //! Reading the reviews: `list`, `show`, `comments`.
 
+use clap::Subcommand;
+
 use super::{
-    CommentFilter, CommentsFile, Context, Error, FileStore, Path, Result, ReviewCommand,
-    ReviewFilter, ReviewRef, ReviewStore, RoundKind, Value, actor, comments_md, json, opened,
-    print_json, reference, reviews, rounds, status_of, summary_line, vcs_of,
+    CommentFilter, CommentsFile, Context, Error, FileStore, Path, Result, ReviewFilter, ReviewRef,
+    ReviewStore, RoundKind, Value, actor, comments_md, json, opened, print_json, reference,
+    reviews, rounds, status_of, summary_line, vcs_of,
 };
 
-/// Run one of this group's review commands in `cwd` (`super::run` gives it only these).
+/// The commands that read the reviews (in `atm review`'s list, ATM-711).
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// List the reviews, of every working copy, newest first.
+    List {
+        /// Only these statuses (repeatable): open (any not decided yet: draft, waiting, live or changes_requested), or
+        /// one of draft, waiting, live, changes_requested, approved, closed
+        #[arg(long = "status", value_name = "STATUS")]
+        statuses: Vec<String>,
+        /// Only the reviews of this task
+        #[arg(long, value_name = "KEY")]
+        task: Option<String>,
+        /// Only the ones you opened or decide
+        #[arg(long)]
+        mine: bool,
+        /// Only the ones whose title, summary or comments hold every word
+        #[arg(long, value_name = "TEXT")]
+        search: Option<String>,
+    },
+    /// A review: its header, summary, rounds and comments; with --round, that round's diff (--against M: what
+    /// changed since round M).
+    Show {
+        /// The review (CR-7)
+        review: String,
+        /// The round whose diff to print
+        #[arg(long, value_name = "N")]
+        round: Option<u32>,
+        /// With --round: only what changed since this round
+        #[arg(long, value_name = "M", requires = "round")]
+        against: Option<u32>,
+    },
+    /// A review's comments, as comments.md has them.
+    Comments {
+        /// The review (CR-7)
+        review: String,
+        /// Only the chains still open
+        #[arg(long)]
+        open: bool,
+    },
+}
+
+/// Run a command that reads the reviews, in `cwd`.
 ///
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        ReviewCommand::List {
+        Command::List {
             statuses,
             task,
             mine,
@@ -101,7 +144,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 }
             }
         }
-        ReviewCommand::Show {
+        Command::Show {
             review,
             round,
             against,
@@ -180,7 +223,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
             let open = found.open_comments().count();
             println!("  {} chain(s), {open} open", found.chains.len());
         }
-        ReviewCommand::Comments { review, open } => {
+        Command::Comments { review, open } => {
             let project = opened(cwd, None)?;
             let store = reviews::store(&project)?;
             let found = store.get_review(&reference(&review))?;
@@ -204,7 +247,6 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 );
             }
         }
-        _ => unreachable!("review::run gives read::run only its own commands"),
     }
     Ok(0)
 }

@@ -209,14 +209,7 @@ impl Command {
     /// with, not the watch or a wait on a review (they are the watching), nor the hook's heartbeat.
     fn reminds_to_watch(&self) -> bool {
         self.renews_claims()
-            && !matches!(
-                self,
-                Command::Review(
-                    ReviewCommand::Watch { .. }
-                        | ReviewCommand::Wait { .. }
-                        | ReviewCommand::Inbox { .. }
-                )
-            )
+            && !matches!(self, Command::Review(ReviewCommand::Listen(_)))
     }
 
     /// Whether running it first brings an outdated dashboard server along (after an update, the first atm command

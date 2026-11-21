@@ -1,18 +1,168 @@
 //! Talking in a review: `comment`, `poke`, `reply`, `edit`, `resolve`, and the drafts.
 
+use clap::Subcommand;
+
 use super::{
-    CommentId, Context, DraftCommand, Error, Path, Result, ReviewCommand, ReviewStore, Reviews,
-    Side, Value, actor, json, opened, print_json, reference, reviews, text_of,
+    Body, CommentId, Context, Error, Path, Result, ReviewStore, Reviews, Side, Value, actor, json,
+    opened, print_json, reference, reviews, text_of,
 };
 
-/// Run one of this group's review commands in `cwd` (`super::run` gives it only these).
+/// The commands that talk in a review: comments, replies, pokes and drafts (in `atm review`'s list, ATM-711).
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Start a chain: on a file's lines, a whole file, or (without --file) the review as a whole.
+    Comment {
+        /// The review (CR-7)
+        review: String,
+        /// The file it is about
+        #[arg(long, value_name = "PATH")]
+        file: Option<String>,
+        /// Its lines, A-B (or A)
+        #[arg(long, value_name = "A-B", requires = "file")]
+        lines: Option<String>,
+        /// The text it is about
+        #[arg(long)]
+        quote: Option<String>,
+        /// On the old side of the change
+        #[arg(long)]
+        old: bool,
+        /// The round it is on (the latest by default)
+        #[arg(long, value_name = "N")]
+        round: Option<u32>,
+        #[command(flatten)]
+        body: Body,
+        /// Who writes it
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Poke a review: a person's nudge to its agent, which hears it through its review watch and answers it.
+    Poke {
+        /// The review (CR-7)
+        review: String,
+        /// What to say with it (optional)
+        #[arg(long)]
+        body: Option<String>,
+        /// Who pokes (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Your drafts on a review: comments and replies only you see, sent together with your next `atm review submit`
+    /// (`--comment` alone sends them). Kept in your atm state folder, never in the repository; a person's, not an
+    /// agent's.
+    Draft {
+        #[command(subcommand)]
+        command: DraftCommand,
+    },
+    /// Reply to a comment.
+    Reply {
+        /// The review (CR-7)
+        review: String,
+        /// The comment answered (c9)
+        comment: String,
+        #[command(flatten)]
+        body: Body,
+        /// Who writes it
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Change one's own comment.
+    Edit {
+        /// The review (CR-7)
+        review: String,
+        /// The comment (c9)
+        comment: String,
+        #[command(flatten)]
+        body: Body,
+        /// Whose comment it is
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Resolve a top-level comment (a reviewer's, or its own author's), or reopen it.
+    Resolve {
+        /// The review (CR-7)
+        review: String,
+        /// The top-level comment (c9)
+        comment: String,
+        /// Open it again
+        #[arg(long)]
+        reopen: bool,
+        /// Who resolves it
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
+/// `atm review draft …` (ATM-612).
+#[derive(Debug, Subcommand)]
+pub enum DraftCommand {
+    /// Draft a comment (on a file's lines, a whole file, or the review as a whole), or with --reply-to, a reply.
+    Add {
+        /// The review (CR-7)
+        review: String,
+        /// The comment it answers (c9): a reply
+        #[arg(long, value_name = "ID", conflicts_with_all = ["file", "lines", "quote", "old", "round"])]
+        reply_to: Option<String>,
+        /// The file it is about
+        #[arg(long, value_name = "PATH")]
+        file: Option<String>,
+        /// Its lines, A-B (or A)
+        #[arg(long, value_name = "A-B", requires = "file")]
+        lines: Option<String>,
+        /// The text it is about
+        #[arg(long)]
+        quote: Option<String>,
+        /// On the old side of the change
+        #[arg(long)]
+        old: bool,
+        /// The round it is on (the latest by default)
+        #[arg(long, value_name = "N")]
+        round: Option<u32>,
+        #[command(flatten)]
+        body: Body,
+        /// Who drafts (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Your drafts on a review, the oldest first.
+    List {
+        /// The review (CR-7)
+        review: String,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Change a draft's text.
+    Edit {
+        /// The review (CR-7)
+        review: String,
+        /// The draft (d2)
+        draft: String,
+        #[command(flatten)]
+        body: Body,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Throw a draft away.
+    Remove {
+        /// The review (CR-7)
+        review: String,
+        /// The draft (d2)
+        draft: String,
+        /// Whose (a person)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
+/// Run a command that talks in a review, in `cwd`.
 ///
 /// # Errors
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 #[allow(clippy::too_many_lines)] // reason: one arm per command
-pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        ReviewCommand::Comment {
+        Command::Comment {
             review,
             file,
             lines,
@@ -46,7 +196,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("{}: {id}", found.header.reference);
             }
         }
-        ReviewCommand::Poke {
+        Command::Poke {
             review,
             body,
             agent,
@@ -67,8 +217,8 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("{review}: poked ({id})");
             }
         }
-        ReviewCommand::Draft { command } => return run_draft(command, ctx, cwd),
-        ReviewCommand::Reply {
+        Command::Draft { command } => return run_draft(command, ctx, cwd),
+        Command::Reply {
             review,
             comment,
             body,
@@ -93,7 +243,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("{review}: {id}, in reply to {comment}");
             }
         }
-        ReviewCommand::Edit {
+        Command::Edit {
             review,
             comment,
             body,
@@ -118,7 +268,7 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 println!("{review}: {comment} changed");
             }
         }
-        ReviewCommand::Resolve {
+        Command::Resolve {
             review,
             comment,
             reopen,
@@ -148,7 +298,6 @@ pub(super) fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8
                 );
             }
         }
-        _ => unreachable!("review::run gives talk::run only its own commands"),
     }
     Ok(0)
 }

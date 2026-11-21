@@ -46,275 +46,25 @@ pub struct Body {
     body_file: Option<String>,
 }
 
-/// The review commands.
+/// The review commands, a group each (ATM-711), each group's enum in its module with its `run`; flattened, so the
+/// command line is the same (`atm review comment …`).
 #[derive(Debug, Subcommand)]
 pub enum ReviewCommand {
-    /// Open a review of a change: a commit range, uncommitted changes, or files as they are.
-    Create {
-        /// One line saying what it is
-        #[arg(long)]
-        title: String,
-        /// A task it reviews (repeatable; its key)
-        #[arg(long = "task", value_name = "KEY")]
-        tasks: Vec<String>,
-        #[command(flatten)]
-        change: Change,
-        /// The summary, in Markdown, from a file
-        #[arg(long, value_name = "FILE")]
-        summary_file: Option<String>,
-        /// Who decides it (repeatable); none: anyone but its author
-        #[arg(long = "reviewer", value_name = "NAME")]
-        reviewers: Vec<String>,
-        /// Keep it a draft, not waiting on anyone yet
-        #[arg(long)]
-        draft: bool,
-        /// Who opens it
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Open a live review: the working tree against --base, as it is being made.
-    Live {
-        /// The commit it is against (HEAD by default)
-        #[arg(long, value_name = "REV")]
-        base: Option<String>,
-        /// A task it reviews (repeatable; its key)
-        #[arg(long = "task", value_name = "KEY")]
-        tasks: Vec<String>,
-        /// One line saying what it is
-        #[arg(long, default_value = "Live review")]
-        title: String,
-        /// Who decides it (repeatable)
-        #[arg(long = "reviewer", value_name = "NAME")]
-        reviewers: Vec<String>,
-        /// Who opens it
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// The author's next round, after addressing the comments (the same kind as the last one unless given).
-    Round {
-        /// The review (CR-7)
-        review: String,
-        #[command(flatten)]
-        change: Change,
-        /// A new summary (the review's Description), in Markdown, from a file: what the reviewers should check now
-        #[arg(long, value_name = "FILE")]
-        summary_file: Option<String>,
-        /// Who adds it
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Name more tasks in a review, or fewer.
-    Tasks {
-        /// The review (CR-7)
-        review: String,
-        /// A task to add (repeatable)
-        #[arg(long, value_name = "KEY")]
-        add: Vec<String>,
-        /// A task to take out (repeatable)
-        #[arg(long, value_name = "KEY")]
-        remove: Vec<String>,
-        /// Who changes them
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// List the reviews, of every working copy, newest first.
-    List {
-        /// Only these statuses (repeatable): open (any not decided yet: draft, waiting, live or changes_requested), or
-        /// one of draft, waiting, live, changes_requested, approved, closed
-        #[arg(long = "status", value_name = "STATUS")]
-        statuses: Vec<String>,
-        /// Only the reviews of this task
-        #[arg(long, value_name = "KEY")]
-        task: Option<String>,
-        /// Only the ones you opened or decide
-        #[arg(long)]
-        mine: bool,
-        /// Only the ones whose title, summary or comments hold every word
-        #[arg(long, value_name = "TEXT")]
-        search: Option<String>,
-    },
-    /// A review: its header, summary, rounds and comments; with --round, that round's diff (--against M: what
-    /// changed since round M).
-    Show {
-        /// The review (CR-7)
-        review: String,
-        /// The round whose diff to print
-        #[arg(long, value_name = "N")]
-        round: Option<u32>,
-        /// With --round: only what changed since this round
-        #[arg(long, value_name = "M", requires = "round")]
-        against: Option<u32>,
-    },
-    /// A review's comments, as comments.md has them.
-    Comments {
-        /// The review (CR-7)
-        review: String,
-        /// Only the chains still open
-        #[arg(long)]
-        open: bool,
-    },
-    /// Start a chain: on a file's lines, a whole file, or (without --file) the review as a whole.
-    Comment {
-        /// The review (CR-7)
-        review: String,
-        /// The file it is about
-        #[arg(long, value_name = "PATH")]
-        file: Option<String>,
-        /// Its lines, A-B (or A)
-        #[arg(long, value_name = "A-B", requires = "file")]
-        lines: Option<String>,
-        /// The text it is about
-        #[arg(long)]
-        quote: Option<String>,
-        /// On the old side of the change
-        #[arg(long)]
-        old: bool,
-        /// The round it is on (the latest by default)
-        #[arg(long, value_name = "N")]
-        round: Option<u32>,
-        #[command(flatten)]
-        body: Body,
-        /// Who writes it
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Poke a review: a person's nudge to its agent, which hears it through its review watch and answers it.
-    Poke {
-        /// The review (CR-7)
-        review: String,
-        /// What to say with it (optional)
-        #[arg(long)]
-        body: Option<String>,
-        /// Who pokes (a person)
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Your drafts on a review: comments and replies only you see, sent together with your next `atm review submit`
-    /// (`--comment` alone sends them). Kept in your atm state folder, never in the repository; a person's, not an
-    /// agent's.
-    Draft {
-        #[command(subcommand)]
-        command: DraftCommand,
-    },
-    /// Reply to a comment.
-    Reply {
-        /// The review (CR-7)
-        review: String,
-        /// The comment answered (c9)
-        comment: String,
-        #[command(flatten)]
-        body: Body,
-        /// Who writes it
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Change one's own comment.
-    Edit {
-        /// The review (CR-7)
-        review: String,
-        /// The comment (c9)
-        comment: String,
-        #[command(flatten)]
-        body: Body,
-        /// Whose comment it is
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Resolve a top-level comment (a reviewer's, or its own author's), or reopen it.
-    Resolve {
-        /// The review (CR-7)
-        review: String,
-        /// The top-level comment (c9)
-        comment: String,
-        /// Open it again
-        #[arg(long)]
-        reopen: bool,
-        /// Who resolves it
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// A reviewer's verdict: approve (every top-level comment resolved), request changes, or a comment on the whole.
-    Submit {
-        /// The review (CR-7)
-        review: String,
-        /// Approve it
-        #[arg(long, conflicts_with_all = ["request_changes", "comment"])]
-        approve: bool,
-        /// Send it back for fixes
-        #[arg(long, conflicts_with = "comment")]
-        request_changes: bool,
-        /// Only comment on it as a whole
-        #[arg(long)]
-        comment: bool,
-        #[command(flatten)]
-        body: Body,
-        /// Override who may decide it (your own review, say), with why: recorded in the review. A person's call: no
-        /// skill pre-approves it, so an agent's harness asks the user every time
-        #[arg(long, value_name = "REASON")]
-        override_rules: Option<String>,
-        /// Who submits
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Wait until a reviewer submits on a review (or decides it): what happened, and the comments added meanwhile.
-    /// Exit code 3 when the time is up first.
-    Wait {
-        /// The review (CR-7)
-        review: String,
-        /// What to wait for: submitted (a decision, or a comment on the whole) or decision
-        #[arg(long = "for", default_value = "submitted", value_parser = ["submitted", "decision"])]
-        until: String,
-        /// How long at most: 90s, 30m, 2h (seconds without a unit)
-        #[arg(long, default_value = "2h")]
-        timeout: String,
-        /// Who waits (their own comments aren't news)
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// The agent's one watch for its session: each person's comment about the agent's work, from any review, as it is
-    /// added (a JSON object a line with --json), until the time is up. Names no review and no task.
-    Watch {
-        /// How long at most: 90s, 30m, 8h (seconds without a unit)
-        #[arg(long, default_value = "8h")]
-        timeout: String,
-        /// Stop once something was told (exit code 3 if nothing was, at the time up)
-        #[arg(long)]
-        once: bool,
-        /// Tell what came since this time (2026-10-24T18:00:00Z), whatever the last watch told
-        #[arg(long)]
-        since: Option<String>,
-        /// Who watches
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// What you haven't read about your work in the reviews (ATM-708): each person's comment and decision since you
-    /// last read them, as a watch prints them (a JSON object a line with --json), oldest first; read from then on. A
-    /// watch with --once counts as read; one that runs on doesn't (its lines may never be read).
-    Inbox {
-        /// Only look: leave them unread
-        #[arg(long)]
-        peek: bool,
-        /// Run as Claude Code's hook (`atm agents hooks install`): its input on stdin, its answer on stdout
-        #[arg(long, conflicts_with = "peek")]
-        hook: bool,
-        /// Whose inbox
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// End a review without approval.
-    Close {
-        /// The review (CR-7)
-        review: String,
-        /// Why
-        #[arg(long)]
-        reason: String,
-        /// Reject its tasks in review too
-        #[arg(long)]
-        reject_tasks: bool,
-        /// Who closes it
-        #[arg(long)]
-        agent: Option<String>,
-    },
+    // create, live, round, tasks
+    #[command(flatten)]
+    Open(open::Command),
+    // list, show, comments
+    #[command(flatten)]
+    Read(read::Command),
+    // comment, poke, draft, reply, edit, resolve
+    #[command(flatten)]
+    Talk(talk::Command),
+    // submit, close
+    #[command(flatten)]
+    Decide(decide::Command),
+    // wait, watch, inbox
+    #[command(flatten)]
+    Listen(listen::Command),
 }
 
 fn opened(cwd: &Path, agent: Option<&str>) -> Result<Project> {
@@ -440,69 +190,6 @@ use listen::duration_of;
 #[cfg(test)]
 use talk::parse_lines;
 
-/// `atm review draft …` (ATM-612).
-#[derive(Debug, Subcommand)]
-pub enum DraftCommand {
-    /// Draft a comment (on a file's lines, a whole file, or the review as a whole), or with --reply-to, a reply.
-    Add {
-        /// The review (CR-7)
-        review: String,
-        /// The comment it answers (c9): a reply
-        #[arg(long, value_name = "ID", conflicts_with_all = ["file", "lines", "quote", "old", "round"])]
-        reply_to: Option<String>,
-        /// The file it is about
-        #[arg(long, value_name = "PATH")]
-        file: Option<String>,
-        /// Its lines, A-B (or A)
-        #[arg(long, value_name = "A-B", requires = "file")]
-        lines: Option<String>,
-        /// The text it is about
-        #[arg(long)]
-        quote: Option<String>,
-        /// On the old side of the change
-        #[arg(long)]
-        old: bool,
-        /// The round it is on (the latest by default)
-        #[arg(long, value_name = "N")]
-        round: Option<u32>,
-        #[command(flatten)]
-        body: Body,
-        /// Who drafts (a person)
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Your drafts on a review, the oldest first.
-    List {
-        /// The review (CR-7)
-        review: String,
-        /// Whose (a person)
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Change a draft's text.
-    Edit {
-        /// The review (CR-7)
-        review: String,
-        /// The draft (d2)
-        draft: String,
-        #[command(flatten)]
-        body: Body,
-        /// Whose (a person)
-        #[arg(long)]
-        agent: Option<String>,
-    },
-    /// Throw a draft away.
-    Remove {
-        /// The review (CR-7)
-        review: String,
-        /// The draft (d2)
-        draft: String,
-        /// Whose (a person)
-        #[arg(long)]
-        agent: Option<String>,
-    },
-}
-
 /// The statuses `--status <name>` stands for: `open`, every review not decided yet (ATM-613); any other, its own.
 fn status_of(name: &str) -> Result<Vec<Status>> {
     Status::filter_named(name).ok_or_else(|| {
@@ -518,25 +205,11 @@ fn status_of(name: &str) -> Result<Vec<Status>> {
 /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
 pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        ReviewCommand::Wait { .. } | ReviewCommand::Watch { .. } | ReviewCommand::Inbox { .. } => {
-            listen::run(command, ctx, cwd)
-        }
-        ReviewCommand::Create { .. }
-        | ReviewCommand::Live { .. }
-        | ReviewCommand::Round { .. }
-        | ReviewCommand::Tasks { .. } => open::run(command, ctx, cwd),
-        ReviewCommand::List { .. }
-        | ReviewCommand::Show { .. }
-        | ReviewCommand::Comments { .. } => read::run(command, ctx, cwd),
-        ReviewCommand::Comment { .. }
-        | ReviewCommand::Poke { .. }
-        | ReviewCommand::Draft { .. }
-        | ReviewCommand::Reply { .. }
-        | ReviewCommand::Edit { .. }
-        | ReviewCommand::Resolve { .. } => talk::run(command, ctx, cwd),
-        ReviewCommand::Submit { .. } | ReviewCommand::Close { .. } => {
-            decide::run(command, ctx, cwd)
-        }
+        ReviewCommand::Open(command) => open::run(command, ctx, cwd),
+        ReviewCommand::Read(command) => read::run(command, ctx, cwd),
+        ReviewCommand::Talk(command) => talk::run(command, ctx, cwd),
+        ReviewCommand::Decide(command) => decide::run(command, ctx, cwd),
+        ReviewCommand::Listen(command) => listen::run(command, ctx, cwd),
     }
 }
 
