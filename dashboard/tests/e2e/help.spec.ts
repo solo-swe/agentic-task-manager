@@ -11,7 +11,8 @@ test.describe('Help', () => {
     await expect(page.locator(overlay)).toBeVisible();
     await expect(page.locator('#help-panel .compmd')).toHaveAttribute('data-compmd', 'ready');
     await expect(page.locator('#help-panel h2', { hasText: 'Statuses and kinds' })).toBeVisible();
-    await expect(page).toHaveURL(/\?(.*&)?help(&|$)/);
+    // App-wide, above every tab (ATM-697): not in the address
+    expect(new URL(page.url()).search).not.toContain('help');
     await page.keyboard.press('Escape');
     await expect(page.locator(overlay)).toBeHidden();
     await expect(page.locator('#footer-help')).toBeFocused();
@@ -67,7 +68,10 @@ test.describe('Help', () => {
     await expect(svg).toContainText('In progress');
   });
 
-  test('?help in the address opens it; its links within the page keep it open', async ({ page, tasksServer }) => {
+  test('an older address’s ?help opens it and leaves the address; its links within the page keep it open', async ({
+    page,
+    tasksServer,
+  }) => {
     tasksServer.use('standard');
     await page.goto('/projects/fixture/list?help');
     await expect(page.locator(overlay)).toBeVisible();
@@ -75,8 +79,8 @@ test.describe('Help', () => {
     await page.locator('#help-panel').getByRole('link', { name: 'priorities and labels' }).click();
     await expect(page.locator('#help-panel h2', { hasText: 'Priorities and labels' })).toBeInViewport();
     await expect(page.locator(overlay)).toBeVisible();
-    // The Sprint filter follows in the address (?sprint=, T-323)
-    expect(addressOf(page)).toMatch(/^\/projects\/fixture\/list\?(sprint=[^&]+&)?help(&sprint=[^&]+)?$/);
+    // The Sprint filter follows in the address (?sprint=, T-323); the dialog's flag is gone from it (ATM-697)
+    expect(addressOf(page)).toMatch(/^\/projects\/fixture\/list(\?sprint=[^&]+)?$/);
   });
 
   test('links off the page go to the repository, CompMD and Mermaid, in a new tab, and are never fetched', async ({

@@ -43,7 +43,8 @@ describe('HelpDialog', () => {
     expect(dialog.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready');
     expect(heading(dialog, 'Statuses and kinds')?.tagName).toBe('H2');
     expect(dialog).toHaveTextContent('/atm-loop-tasks');
-    expect(location.search).toBe('?help');
+    // App-wide (ATM-697): the address stays as it was
+    expect(location.search).toBe('');
     // Headings have no IDs: an element with the ID "help" would make the browser jump to it on "#help"
     expect(document.getElementById('help')).toBeNull();
   });
@@ -78,7 +79,7 @@ describe('HelpDialog', () => {
     target.scrollIntoView = () => (scrolled = true);
     await fireEvent.click(screen.getByRole('link', { name: 'priorities and labels' }));
     expect(scrolled).toBe(true);
-    expect(location.search).toBe('?help');
+    expect(location.search).toBe('');
   });
 });
 

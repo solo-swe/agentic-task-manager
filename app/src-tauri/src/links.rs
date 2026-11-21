@@ -14,7 +14,7 @@ pub const SCHEME: &str = "atm";
 /// A link longer than this is refused: no page's address comes near it.
 const MAX_LINK: usize = 4096;
 /// The first part of a page's path: the dashboard's pages (`docs/multi-project-api.md` §2.7).
-const PAGES: [&str; 5] = ["projects", "board", "progress", "agents", "w"];
+const PAGES: [&str; 6] = ["projects", "board", "progress", "agents", "reviews", "w"];
 
 /// The dashboard address an `atm://` link opens (`/projects/abc/list?task=T-1`), or none for anything else: another
 /// scheme, a path that isn't one of the dashboard's pages, `.` or `..` segments, a fragment, characters an address
@@ -185,6 +185,16 @@ mod tests {
         assert_eq!(
             link_address("atm://progress?sprint=S+1&release=0.41.0").as_deref(),
             Some("/progress?sprint=S+1&release=0.41.0")
+        );
+        // A review's sub-tab and a comment in view (ATM-697), the Reviews list's filter
+        assert_eq!(
+            link_address("atm://projects/abc/reviews/CR-7/diffs?file=docs/x.md&comment=c12")
+                .as_deref(),
+            Some("/projects/abc/reviews/CR-7/diffs?file=docs/x.md&comment=c12")
+        );
+        assert_eq!(
+            link_address("atm://projects/abc/reviews?status=waiting&q=tabs").as_deref(),
+            Some("/projects/abc/reviews?status=waiting&q=tabs")
         );
     }
 

@@ -225,14 +225,16 @@ text the page reads, never a file it looks up.
 |---|---|
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
 | `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs |
-| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`) |
-| `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64), with `?round=&against=&file=` the view and the file gone to: a window of its own, without the dashboard's title bar and tabs, titled by the project's key, the reference and the title; the Reviews tab opens it in place (with ⌘ or Ctrl, in a browser tab) |
+| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
+| `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64) on its Overview, `…/<CR>/diffs` and `…/<CR>/comments` its other sub-tabs (ATM-697), with `?round=&against=&file=` the view and the file gone to and `?comment=c12` a comment in view (never a `#` anchor: the app's `atm://` links carry none): a window of its own, without the dashboard's title bar and tabs, titled by the project's key, the reference and the title; the Reviews tab opens it in place (with ⌘ or Ctrl, in a browser tab) |
 | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
 
 What is open over a page is in the query: `?task=T-1` a task's details, `?doc=docs/x.md:L40` (or `#heading`, encoded) a
-document in the viewer, `?sprint=active` the Sprint filter, `?about` and `?help` the dialogs. The server ignores the
-query. The paths are atm-api's `pages.rs` (and `PAGE_PATH` in `dashboard/src/lib/address.ts`): a tab is lowercase
-letters, nothing deeper than a tab but a review under `reviews`; any other path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
+document in the viewer, `?sprint=active` the Sprint filter. Settings, Help, What's new and About are the app's own,
+above every tab, in no address (ATM-697); an older address's `?about` or `?help` opens its dialog and leaves the
+address. The server ignores the query. The paths are atm-api's `pages.rs` (and `PAGE_PATH` in
+`dashboard/src/lib/address.ts`): a tab is lowercase letters, nothing deeper than a tab but a review under `reviews`
+and its `diffs` or `comments`; any other path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
 old parameters from its hash and moves to the new address.
 
 ### 2.8 `api/v2/workspaces`: the workspaces (ADR-003, T-456)

@@ -21,9 +21,13 @@ export function isOverviewTab(value: unknown): value is OverviewTab {
 }
 
 /** Parameters in the path, not the query */
-const PATH_KEYS = ['workspace', 'project', 'overview', 'view', 'review'];
+const PATH_KEYS = ['workspace', 'project', 'overview', 'view', 'review', 'section'];
 /** The project tab a review's page is under: /projects/<id>/reviews/<CR> (ATM-574) */
 const REVIEWS = 'reviews';
+/** A review page's sub-tabs (ATM-697): the Overview at the review's own path, the others after it (…/<CR>/diffs) */
+export const REVIEW_SECTIONS = ['overview', 'diffs', 'comments'] as const;
+export type ReviewSection = (typeof REVIEW_SECTIONS)[number];
+const isSection = (value: unknown): value is ReviewSection => REVIEW_SECTIONS.includes(value as ReviewSection);
 /** Parameters an old `#…` link may hold (the hash routes before T-429) */
 const LEGACY_KEYS = ['project', 'overview', 'view', 'sprint', 'doc', 'about', 'help'];
 const PROJECTS = 'projects';
@@ -63,10 +67,15 @@ export function addressParams(address: string): URLSearchParams {
     } else if (first === PROJECTS && rest.length === 0) {
       params.set('project', id);
       if (tab !== undefined) params.set('view', tab);
-    } else if (first === PROJECTS && tab === REVIEWS && rest.length === 1) {
+    } else if (
+      first === PROJECTS &&
+      tab === REVIEWS &&
+      (rest.length === 1 || (rest.length === 2 && isSection(rest[1]) && rest[1] !== 'overview'))
+    ) {
       params.set('project', id);
       params.set('view', REVIEWS);
       params.set('review', rest[0]);
+      if (rest[1]) params.set('section', rest[1]);
     } else if (segments.length === 1 && isOverviewTab(first)) {
       params.set('overview', '');
       params.set('view', first);
@@ -91,11 +100,13 @@ export function formatAddress(params: URLSearchParams): string {
   let path = prefix || '/';
   let pathView = false;
   const review = view === REVIEWS ? params.get('review') : null;
+  const section = review ? params.get('section') : null;
   if (project) {
     path =
       `${prefix}/${PROJECTS}/${encodeURIComponent(project)}` +
       (view ? `/${encodeURIComponent(view)}` : '') +
-      (review ? `/${encodeURIComponent(review)}` : '');
+      (review ? `/${encodeURIComponent(review)}` : '') +
+      (isSection(section) && section !== 'overview' ? `/${section}` : '');
     pathView = true;
   } else if (params.has('overview')) {
     path = `${prefix}/` + (view && isOverviewTab(view) ? view : PROJECTS);
@@ -109,8 +120,9 @@ export function formatAddress(params: URLSearchParams): string {
           key === 'project' ||
           key === 'overview' ||
           (key === 'view' && pathView) ||
-          // A review is a path's alone, on the reviews tab
-          key === 'review'
+          // A review is a path's alone, on the reviews tab, and so is its sub-tab
+          key === 'review' ||
+          key === 'section'
         ),
     )
     .map(([key, value]) =>
@@ -122,17 +134,22 @@ export function formatAddress(params: URLSearchParams): string {
 }
 
 /** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (atm-api's pages.rs):
- * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/projects/<id>/reviews/<CR>`, `/board`, `/progress`,
- * `/agents`, `/reviews` (ATM-575), each also under `/w/<w>` (and `/w/<w>` itself) */
+ * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/projects/<id>/reviews/<CR>` (and its sub-tabs,
+ * `…/<CR>/diffs` and `…/<CR>/comments`, ATM-697), `/board`, `/progress`, `/agents`, `/reviews` (ATM-575), each also
+ * under `/w/<w>` (and `/w/<w>` itself) */
 export const PAGE_PATH =
-  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents|reviews)?\/?)?$/;
+  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64}(?:\/(?:diffs|comments))?)?)?|board|progress|agents|reviews)?\/?)?$/;
 
-/** The review a review's page shows (/projects/<id>/reviews/<CR>), and the view of it its query names */
+/** The review a review's page shows (/projects/<id>/reviews/<CR>), its sub-tab (the path's end, ATM-697), and the view
+ * of it its query names: the round, the round against, the file, the comment in view (`?comment=c12`, never a `#`
+ * anchor: the app's links refuse fragments) */
 export interface ReviewAddress {
   review: string | null;
+  section: ReviewSection;
   round: number | null;
   against: number | null;
   file: string | null;
+  comment: string | null;
 }
 
 const roundParam = (value: string | null) => {
@@ -143,25 +160,79 @@ const roundParam = (value: string | null) => {
 export function reviewOf(address: string): ReviewAddress {
   const params = addressParams(address);
   const review = params.get('view') === REVIEWS ? params.get('review') : null;
+  const section = params.get('section');
   return {
     review,
+    section: review && isSection(section) ? section : 'overview',
     round: review ? roundParam(params.get('round')) : null,
     against: review ? roundParam(params.get('against')) : null,
     file: review ? params.get('file') : null,
+    comment: review ? params.get('comment') || null : null,
   };
 }
 
-/** `address` showing `at` on its project's reviews tab: a review (and its round, the round against, the file), or the
- * list (`review` null) */
+/** `address` showing `at` on its project's reviews tab: a review (and its sub-tab, its round, the round against, the
+ * file, the comment in view), or the list (`review` null, the list's filter kept) */
 export function withReview(address: string, at: Partial<ReviewAddress> & { review: string | null }): string {
   const params = addressParams(address);
   params.set('view', REVIEWS);
-  for (const key of ['review', 'round', 'against', 'file'] as const) params.delete(key);
+  for (const key of ['review', 'section', 'round', 'against', 'file', 'comment'] as const) params.delete(key);
   if (at.review) {
+    for (const key of LIST_KEYS) params.delete(key);
     params.set('review', at.review);
+    if (at.section && at.section !== 'overview') params.set('section', at.section);
     if (at.round) params.set('round', String(at.round));
     if (at.against) params.set('against', String(at.against));
     if (at.file) params.set('file', at.file);
+    if (at.comment) params.set('comment', at.comment);
+  }
+  return formatAddress(params);
+}
+
+/** What the Reviews list lists by, in its address (ATM-697): `?q=…&status=waiting,live&author=…&reviewer=…&tasks=…
+ * &branch=…` (`tasks`, as `task` is a task's details over the page) */
+export interface ReviewListAddress {
+  q: string;
+  status: string[];
+  author: string;
+  reviewer: string;
+  task: string;
+  branch: string;
+}
+
+/** Each of the list's fields, by its parameter */
+const LIST_PARAMS = {
+  q: 'q',
+  status: 'status',
+  author: 'author',
+  reviewer: 'reviewer',
+  task: 'tasks',
+  branch: 'branch',
+};
+const LIST_KEYS = Object.values(LIST_PARAMS);
+
+/** The Reviews list's filter and search `address` names; none when it names none (the list opens with the one kept) */
+export function reviewListOf(address: string): ReviewListAddress | null {
+  const params = addressParams(address);
+  if (params.get('view') !== REVIEWS || params.has('review') || !LIST_KEYS.some((k) => params.has(k))) return null;
+  const text = (key: string) => params.get(key) ?? '';
+  return {
+    q: text(LIST_PARAMS.q),
+    status: text(LIST_PARAMS.status).split(',').filter(Boolean),
+    author: text(LIST_PARAMS.author),
+    reviewer: text(LIST_PARAMS.reviewer),
+    task: text(LIST_PARAMS.task),
+    branch: text(LIST_PARAMS.branch),
+  };
+}
+
+/** `address` (the Reviews list's) listing by `query`: each field given in the query, the empty ones left out */
+export function withReviewList(address: string, query: ReviewListAddress): string {
+  const params = addressParams(address);
+  for (const key of LIST_KEYS) params.delete(key);
+  for (const [field, key] of Object.entries(LIST_PARAMS) as [keyof ReviewListAddress, string][]) {
+    const value = field === 'status' ? query.status.join(',') : query[field];
+    if (value) params.set(key, value);
   }
   return formatAddress(params);
 }

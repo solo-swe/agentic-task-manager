@@ -25,8 +25,9 @@ export type EntryState = {
   atmPrev?: string;
 };
 
-/** An address's page: its path, without what is open over it (the query) */
-const pathOf = (address: string) => address.split(/[?#]/)[0];
+/** An address's page: its path, without what is open over it (the query); a review's sub-tabs (…/CR-7/diffs, ATM-697)
+ * are its one page */
+const pathOf = (address: string) => address.split(/[?#]/)[0].replace(/(\/reviews\/[^/]+)\/(?:diffs|comments)$/, '$1');
 
 export interface Router {
   go(address: string, options: { replace: boolean; state: EntryState }): void;

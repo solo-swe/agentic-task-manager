@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
+  import type { ReviewSection } from '../address';
   import CompMd from '../documents/CompMd.svelte';
   import type { DocumentRef } from '../documents';
   import type { DocumentSource } from '../documents/source';
@@ -46,6 +47,9 @@
     page,
     project = null,
     file = null,
+    section,
+    comment = null,
+    onsection,
     side,
     imageAt,
     isViewed,
@@ -75,6 +79,12 @@
     project?: string | null;
     /** The file in view (its path): the Diffs tab opens at it */
     file?: string | null;
+    /** The sub-tab shown, the address's (ATM-697); none: Diffs with a file, else Overview */
+    section?: ReviewSection;
+    /** A comment in view (the address's `?comment=`, ATM-697): brought into view on the tab shown, and marked */
+    comment?: string | null;
+    /** Another sub-tab chosen: a step in the tab's history; without it, the page keeps its sub-tab itself */
+    onsection?: (section: ReviewSection) => void;
     /** A side's files: the commit or tree a round's side is read from */
     side: (revision: string) => DocumentSource;
     /** An image's address at a revision (ATM-689): a review's image file shows its sides; without it, listed only */
@@ -94,7 +104,8 @@
     /** The document style picked in Settings, for a Markdown file's rendered view */
     docStyle?: string | null;
     onback?: () => void;
-    onfile: (path: string) => void;
+    /** The file gone to, and the comment in it gone to (from the Comments tab), for the address */
+    onfile: (path: string, comment?: string | null) => void;
     /** `round` null: the latest (a live review's working copy now) */
     onround: (round: number | null, against: number | null) => void;
     onviewed: (file: ViewFile) => void;
@@ -168,11 +179,44 @@
     return Number.isNaN(ts) ? at : formatWhen(ts, Date.now());
   };
 
-  // The tab: Diffs when the address names a file, else Overview
-  let tab = $state<'overview' | 'diffs' | 'comments'>('overview');
-  onMount(() => {
-    if (file) tab = 'diffs';
+  // The sub-tab: the address's (ATM-697), followed when it changes (Back, Forward); without one, Diffs when the address
+  // names a file, else Overview. Another chosen is the address's to show, through `onsection`
+  const sectionOf = (named: ReviewSection | undefined) => named ?? (file ? 'diffs' : 'overview');
+  let tab = $state<ReviewSection>(untrack(() => sectionOf(section)));
+  $effect.pre(() => {
+    const next = sectionOf(section);
+    untrack(() => (tab = next));
   });
+  function chooseTab(next: ReviewSection) {
+    if (next === tab) return;
+    tab = next;
+    onsection?.(next);
+  }
+
+  // The comment in view (ATM-697): once its tab has drawn it, scrolled to the middle and marked; each comment once
+  let commentShown: string | null = null;
+  $effect(() => {
+    const id = comment;
+    void tab;
+    void allChains;
+    if (!id || id === commentShown) return;
+    untrack(() => void showComment(id));
+  });
+  async function showComment(id: string) {
+    for (let i = 0; i < 120; i++) {
+      const el = document.querySelector<HTMLElement>(`#review-page [data-comment="${CSS.escape(id)}"]`);
+      if (el) {
+        commentShown = id;
+        if (pinned) release();
+        for (const old of document.querySelectorAll('.review-comment-in-view'))
+          old.classList.remove('review-comment-in-view');
+        el.classList.add('review-comment-in-view');
+        el.scrollIntoView({ block: 'center' });
+        return;
+      }
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+  }
 
   // The layout and view of every diff, and the tree's width: kept in this browser
   const LAYOUT_KEY = 'atm-review-layout';
@@ -340,7 +384,9 @@
     const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top;
     if (Math.abs(off) >= 1) el.scrollTop += off;
   }
-  async function showFile(path: string, address = true) {
+  /** Go to file `path` on the Diffs tab; with `address`, the address follows (the sub-tab and file, and the comment gone
+   * to from the Comments tab) */
+  async function showFile(path: string, address = true, comment: string | null = null) {
     tab = 'diffs';
     holdNearCards();
     wanted = path;
@@ -349,7 +395,7 @@
     atFile = chosen = pinned = path;
     // The address follows once the page is idle: the file is drawn first (a navigation re-renders the layout)
     writing?.();
-    if (address) writing = whenIdle(() => onfile(path));
+    if (address) writing = whenIdle(() => (comment ? onfile(path, comment) : onfile(path)));
   }
 
   // The file gone to stays at the top while the cards around it are made (each as tall as its diff, not its
@@ -428,7 +474,7 @@
     return [];
   }
   async function jump(back: boolean, kind: keyof typeof TARGETS = 'change') {
-    tab = 'diffs';
+    chooseTab('diffs');
     holdNearCards();
     if (pinned) release();
     await tick();
@@ -765,7 +811,7 @@
             role="tab"
             id="review-tab-{t.id}"
             aria-selected={tab === t.id}
-            onclick={() => (tab = t.id)}
+            onclick={() => chooseTab(t.id)}
             aria-label={t.open ? `${t.label}: ${t.count}, ${t.open} open` : undefined}
             ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
                 class="review-count">{t.count}</span
@@ -1161,7 +1207,9 @@
           detailed
           {onreply}
           {onresolve}
-          onwhere={chain.anchor.path ? () => showFile(chain.anchor.path!) : () => (tab = 'overview')}
+          onwhere={chain.anchor.path
+            ? () => showFile(chain.anchor.path!, true, chain.comments[0]?.id ?? null)
+            : () => chooseTab('overview')}
         />
       {/each}
     </div>
@@ -1829,7 +1877,8 @@
     padding: var(--space-7) var(--space-8) 50vh;
     background: var(--bg);
   }
-  .review-diffs :global(.review-current-change) {
+  .review-diffs :global(.review-current-change),
+  .review-page :global(.review-comment-in-view) {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }

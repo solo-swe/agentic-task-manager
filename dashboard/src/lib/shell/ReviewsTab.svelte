@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page as router } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
-  import { addressOf, reviewOf, withReview } from '../address';
+  import { addressOf, reviewListOf, reviewOf, withReview, withReviewList } from '../address';
   import { watchWorkingCopy } from '../api/changes';
   import { inApp, v1FileUrl } from '../api/http';
   import { setWindowTitle } from '../api/shell';
@@ -31,7 +31,7 @@
     toggleViewed,
     viewedKeys,
   } from '../review-data';
-  import { keepFilter, keptFilter } from '../review-filter';
+  import { isEmptyQuery, keepFilter, keptFilter, queryFrom } from '../review-filter';
   import type { TaskLinks } from '../compmd';
   import { learnReviews, learnUnreadable } from '../reviews/known.svelte';
   import ReviewList from '../reviews/ReviewList.svelte';
@@ -59,21 +59,29 @@
   const project = $derived(dashboard.projectId);
   const at = $derived(reviewOf(addressOf(router.url)));
 
-  // The list
+  // The list, by the filter and search its address names (ATM-697: Back, Forward, a reload and a link bring it back);
+  // an address naming none opens it with the project's last filter, kept in this browser (ATM-604), written into the
+  // address in place
   let query = $state<ListQuery>({ ...NO_QUERY });
-  // Opened with the project's last filter, kept in this browser (ATM-604), and again on going to another project
-  let queryOf: string | null = null;
+  const listNamed = $derived(at.review ? null : reviewListOf(addressOf(router.url)));
   $effect.pre(() => {
     const id = project;
+    const named = listNamed;
+    const reviewing = !!at.review;
     untrack(() => {
-      if (!id || id === queryOf) return;
-      queryOf = id;
-      query = keptFilter(id);
+      if (!id || reviewing) return;
+      const next = named ? queryFrom(named) : keptFilter(id);
+      if (JSON.stringify(next) !== JSON.stringify(query)) query = next;
+      if (!named && !isEmptyQuery(next)) navigate(withReviewList(currentAddress(), next), { replace: true });
     });
   });
+  /** Another filter or search: kept, and in the address; another filter, or a search begun or cleared, a step in the
+   * tab's history; more words typed in a search, in place */
   function chooseQuery(next: ListQuery) {
+    const typed = !!query.q && !!next.q && JSON.stringify({ ...next, q: '' }) === JSON.stringify({ ...query, q: '' });
     query = next;
     if (project) keepFilter(project, next);
+    navigate(withReviewList(currentAddress(), next), { replace: typed });
   }
   let entries = $state.raw<ReviewEntry[]>([]);
   // The reviews atm can't read (ATM-617), listed after them
@@ -224,6 +232,9 @@
     return null;
   }
 
+  /** The review's sub-tab shown (ATM-697): the address's; on its Overview's path with a file (a link from before the
+   * sub-tabs had addresses), Diffs */
+  const shownSection = $derived(at.section === 'overview' && at.file ? 'diffs' : at.section);
   const review = $derived(shown?.review.reference ?? at.review ?? '');
   const listAddress = $derived(withReview(currentAddress(), { review: null }));
   /** Where the review was opened from in this tab (ATM-686): its back button goes Back there, saying where; a review
@@ -270,6 +281,17 @@
           {page}
           project={shortName}
           file={at.file}
+          section={shownSection}
+          comment={at.comment}
+          onsection={(section) =>
+            go(
+              withReview(currentAddress(), {
+                ...at,
+                section,
+                file: section === 'diffs' ? at.file : null,
+                comment: null,
+              }),
+            )}
           side={(revision) => revisionDocuments(project, revision)}
           imageAt={(revision, path) => v1FileUrl(project, path, revision)}
           isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
@@ -281,8 +303,14 @@
           {busy}
           {problem}
           docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
-          onfile={(path) => go(withReview(currentAddress(), { ...at, file: path }), true)}
-          onround={(round, against) => go(withReview(currentAddress(), { ...at, round, against }))}
+          onfile={(path, comment) =>
+            go(
+              withReview(currentAddress(), { ...at, section: 'diffs', file: path, comment: comment ?? null }),
+              // Another file on the Diffs tab, in place; from another tab, or to a comment, a step
+              shownSection === 'diffs' && !comment,
+            )}
+          onround={(round, against) =>
+            go(withReview(currentAddress(), { ...at, section: 'diffs', round, against, comment: null }))}
           onviewed={(file) => (viewed = toggleViewed(page.review.id, page.view.round, page.view.against, file))}
           oncomment={({ path, picked, body }) =>
             change(

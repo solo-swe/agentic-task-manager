@@ -29,7 +29,8 @@ describe('AboutDialog', () => {
     expect(dialog).toHaveTextContent('Author Hakan Serce');
     expect(dialog).toHaveTextContent('Licence MIT');
     expect(screen.getByRole('link', { name: pluginInfo.repository })).toHaveAttribute('target', '_blank');
-    expect(location.search).toBe('?about');
+    // App-wide (ATM-697): the address stays as it was
+    expect(location.search).toBe('');
   });
 
   it('names what renders Markdown: CompMD, with its version, licence and site', () => {

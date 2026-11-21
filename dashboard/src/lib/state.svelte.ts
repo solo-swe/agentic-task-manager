@@ -372,7 +372,7 @@ export class DashboardState {
   viewKey = $state<string | null>(null);
 
   whatsNewOpen = $state(false);
-  /** The open About or Help dialog; mirrored in the address ("?about") so it can be linked */
+  /** The open About or Help dialog: app-wide, not in the address (ATM-697); an older address's flag opens it */
   dialog = $state<DialogId | null>(dialogOf(currentAddress()));
   /** The file open in the document viewer, from the address (?doc=<path>:L<n>), so it can be linked and Reload
    * keeps it (docs/compmd-viewer-design.md V2) */
@@ -645,8 +645,14 @@ export class DashboardState {
   /** The address changed (a link, Back, or the dashboard's own move): pick up the dialog, the document, the tab and
    * the task, and the page when it names another one. */
   onNavigate() {
-    const address = currentAddress();
-    this.dialog = dialogOf(address);
+    let address = currentAddress();
+    // An older address's dialog flag (?about): its dialog opens, and the address is the page's without it
+    const named = dialogOf(address);
+    if (named) {
+      this.dialog = named;
+      address = withDialog(address, null);
+      navigate(address, { replace: true, state: entryState() });
+    }
     // The same document stays the same reference (its own moves land here too): the viewer doesn't load it again
     const docRef = docOf(address);
     if (JSON.stringify(docRef) !== JSON.stringify(this.docRef)) this.docRef = docRef;
@@ -1051,15 +1057,13 @@ export class DashboardState {
     this.whatsNewOpen = false;
   }
 
+  /** Opens an app-wide dialog, above every tab: no step in any history (ATM-697) */
   openDialog(id: DialogId) {
     this.dialog = id;
-    navigate(withDialog(currentAddress(), id));
   }
 
-  /** Closes the dialog without a new history entry, so Back doesn't reopen it. */
   closeDialog() {
     this.dialog = null;
-    navigate(withDialog(currentAddress(), null), { replace: true });
   }
 
   /** Opens a file of the project in the document viewer: a new history entry, marked as the viewer's, so the

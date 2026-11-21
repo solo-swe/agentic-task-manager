@@ -297,13 +297,20 @@ test.describe('the reviews tab', () => {
   }) => {
     await openReviews(page, tasksServer);
     const open = page.getByRole('button', { name: 'Open', exact: true });
-    await page.getByRole('searchbox', { name: 'Search reviews' }).fill('names');
+    const search = page.getByRole('searchbox', { name: 'Search reviews' });
+    await search.fill('names');
     await open.click();
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
+    // A reload keeps both: they are the address's (ATM-697)
     await page.reload();
     await expect(open).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('');
+    await expect(search).toHaveValue('names');
+    // The list opened afresh (an address naming no filter): the filter kept in the browser, not the words
+    await page.goto(reviewPath(tasksServer));
+    await expect(open).toHaveAttribute('aria-pressed', 'true');
+    await expect(search).toHaveValue('');
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?status=open');
+    await expect.poll(() => shown(page)).toBe(`${reviewPath(tasksServer)}?status=open`);
     await page.getByRole('button', { name: 'Clear' }).click();
     await expect(open).toHaveAttribute('aria-pressed', 'false');
     await page.reload();
@@ -417,6 +424,71 @@ test.describe('the reviews tab', () => {
       await expect(page.locator('#review-list')).toBeVisible();
       await page.goForward();
       await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    });
+  });
+
+  // ATM-697 (docs/tabs-and-navigation-design.md §4.4): everything a review's page and the list show has an address
+  test.describe('an address for everything the reviews tab shows', () => {
+    const selected = (page: Page, name: RegExp) =>
+      expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
+
+    test('a review’s sub-tab is in its path: kept over a reload, and each a step for Back and Forward', async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer, 'CR-2');
+      await selected(page, /^Overview/);
+      await page.getByRole('tab', { name: /^Comments/ }).click();
+      await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2/comments'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2/diffs'));
+      await page.reload();
+      await selected(page, /^Diffs/);
+      await page.goBack();
+      await selected(page, /^Comments/);
+      await page.goBack();
+      await selected(page, /^Overview/);
+      await page.goForward();
+      await selected(page, /^Comments/);
+      // A sub-tab is the review's own page: its back button still says where the review came from
+      await expect(page.locator('.review-back')).toHaveText('Reviews');
+    });
+
+    test('a comment in view is in the query: going to it from the Comments tab, a link to it, Back', async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer, 'CR-2/comments');
+      await selected(page, /^Comments/);
+      await page.getByRole('button', { name: 'src/a.rs · Line 3' }).click();
+      await expect.poll(() => shown(page)).toBe(`${reviewPath(tasksServer, '/CR-2/diffs')}?file=src/a.rs&comment=c1`);
+      await expect(page.locator('.review-comment-in-view')).toHaveAttribute('data-comment', 'c1');
+      await page.goBack();
+      await selected(page, /^Comments/);
+      // A link from outside (as an atm:// link opens it): the review at the comment, on its tab, marked
+      await page.goto(`${reviewPath(tasksServer, '/CR-2/diffs')}?file=src/a.rs&comment=c1`);
+      await selected(page, /^Diffs/);
+      const marked = page.locator('.review-comment-in-view');
+      await expect(marked).toHaveAttribute('data-comment', 'c1');
+      await expect(marked).toBeInViewport();
+    });
+
+    test('the list’s filter and search are in its address: kept over a reload, and Back goes to the one before', async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer);
+      await page.getByRole('searchbox', { name: 'Search reviews' }).fill('names');
+      await expect.poll(() => shown(page)).toBe(`${reviewPath(tasksServer)}?q=names`);
+      await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names');
+      await page.reload();
+      await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('names');
+      // Words typed are the entry's own: Back goes to before the search
+      await page.goBack();
+      await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer));
+      await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('');
+      await page.goForward();
+      await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('names');
     });
   });
 
@@ -1436,14 +1508,14 @@ test.describe('a review’s page', () => {
     await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'README.md');
     await expect(card(page, 'README.md')).toBeInViewport();
     // The address follows once the page is idle
-    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2?file=README.md'));
+    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2/diffs?file=README.md'));
     // The address's file opens the Diffs tab at it
     await page.reload();
     await expect(page.getByRole('tab', { name: /^Diffs/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'README.md');
     await page.selectOption('#review-against', '1');
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=3&against=1');
-    expect(shown(page)).toBe(reviewPath(tasksServer, '/CR-2?round=3&against=1&file=README.md'));
+    expect(shown(page)).toBe(reviewPath(tasksServer, '/CR-2/diffs?round=3&against=1&file=README.md'));
     await page.selectOption('#review-round', '2');
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=2');
   });

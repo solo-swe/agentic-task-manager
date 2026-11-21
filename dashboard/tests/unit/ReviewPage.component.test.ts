@@ -662,7 +662,8 @@ describe('ReviewPage: Comments', () => {
     await fireEvent.click(tab(/^Comments/));
     await fireEvent.click(screen.getByRole('button', { name: 'src/a.rs · Line 2' }));
     expect(tab(/^Diffs/)).toHaveAttribute('aria-selected', 'true');
-    await vi.waitFor(() => expect(onfile).toHaveBeenCalledWith('src/a.rs'));
+    // The file and the chain's first comment, for the address (ATM-697: the comment in view)
+    await vi.waitFor(() => expect(onfile).toHaveBeenCalledWith('src/a.rs', 'c-t1'));
     await fireEvent.click(tab(/^Comments/));
     await fireEvent.click(screen.getByRole('button', { name: 'The review' }));
     expect(tab('Overview')).toHaveAttribute('aria-selected', 'true');
