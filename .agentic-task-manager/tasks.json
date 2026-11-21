@@ -1830,7 +1830,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 717
+    "next_number": 726
   },
   "tasks": [
     {
@@ -19557,7 +19557,7 @@
       "description": "Hakan on CR-99 and CR-100 (2026-11-21): the files are too large. Split them into logical modules, give them unit tests that use fakes for what they depend on, and move the integration tests into their own files, by [the Rust guide](docs/guides/rust.md) (§Crates and modules, §Tests).\n\n## The files (lines of code / lines of tests, 2026-11-21)\n| File | Code | Tests |\n|---|---|---|\n| `crates/atm-cli/src/commands/review.rs` | 1,386 | 100 |\n| `app/src-tauri/src/commands.rs` | 1,114 | 425 |\n| `crates/atm-lib/src/review_listen.rs` | 974 | 538 |\n| `crates/atm-lib/src/reviews.rs` | 937 | 1,300 |\n| `crates/atm-vcs/src/lib.rs` | 771 | 642 |\n| `crates/atm-lib/src/review_pages.rs` | 724 | 371 |\n| `crates/atm-review/src/folder.rs` | 651 | 648 |\n| `crates/atm-docs/src/lib.rs` | 535 | 836 |\n| `crates/atm-review/src/rules.rs` | 529 | 1,162 |\n| `crates/atm-review/src/files.rs` | 511 | 565 |\n| `crates/atm-review/src/rounds.rs` | 455 | 742 |\n| `crates/atm-api/src/routes/reviews.rs` | 391 | 778 |\n| `app/src-tauri/src/lib.rs` | 236 | 1,283 |\n\n## Rules (the guide)\n- **Module files:** `foo.rs` next to a `foo/` directory, never `foo/mod.rs`. Public APIs stay the same (re-exported).\n- **Unit tests** stay with their code while it reads well, else `foo/tests.rs`, else `foo/tests/` by group. They test the unit alone, with hand-written fakes behind a trait (atm-review's `ReviewStore` already has a memory store).\n- **Integration tests** (a real git repository, the real store, several layers) go to the crate's `tests/` directory, one file per area.\n- About 400 lines is when a file reads badly, not a threshold.\n\n## How\n- One file at a time, the reviews area first (`reviews.rs`, `review_pages.rs`, `review_listen.rs`, `commands/review.rs`), before ATM-633's build changes them.\n- Each a move only: no logic changed, the same tests passing (`cargo test`, the CLI suite), the plan for it agreed first, as on CR-100.\n- Where a unit test today needs a real repository only because nothing is faked, add the fake and keep the real-repository version as an integration test.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -19566,9 +19566,9 @@
         "crates/atm-cli/src/commands/review.rs"
       ],
       "created_at": "2026-11-20T23:29:46Z",
-      "updated_at": "2026-11-21T13:57:54Z",
+      "updated_at": "2026-11-21T16:09:13Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19663,6 +19663,11 @@
           "from": "2026-11-21T13:38:37Z",
           "to": "2026-11-21T13:54:30Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-21T13:57:07Z",
+          "to": "2026-11-21T13:57:54Z",
+          "outcome": "approved"
         }
       ],
       "blocks": [
@@ -19672,11 +19677,8 @@
           "on": "user"
         }
       ],
-      "started_at": "2026-11-21T13:55:17Z",
-      "started_by": "claude:0f56a916",
-      "review_requested_at": "2026-11-21T13:57:07Z",
-      "review_state": "approved",
-      "reviewed_at": "2026-11-21T13:57:54Z"
+      "started_at": "2026-11-21T16:09:13Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b81a73b4404",
@@ -19925,15 +19927,15 @@
       "description": "Hakan, 2026-11-21: ATM-711's card showed CR-106 approved and, above it, *Waiting for review · 1 h 21 m*. `reviewWait` in `dashboard/src/lib/waiting.ts` decides from the status kind alone and ignores `review_state`, while `needsYouReason` in the same file reads it. Rules like these live in the dashboard as well as in atm, and they drift.\n\n## The scan\nGo through `dashboard/src` for every place that derives meaning from task, review, sprint, claim or project fields instead of reading what atm computes. For example:\n- states and kinds;\n- waiting and needs-you;\n- readiness and blocking;\n- durations and timers;\n- labels chosen from field combinations;\n- review and decision states;\n- sprint progress and counts;\n- what an agent or the user may do next.\n\nFor each place, record:\n- the file and function;\n- what it decides and from which fields;\n- whether atm already computes it (`derived`, a summary, a route) and where;\n- where it disagrees with atm, or could.\n\n## The doc\n`docs/dashboard-derived-state.md`:\n- the inventory, grouped by concern;\n- the cases where the dashboard and atm disagree today, each with an example;\n- the proposal: what atm-lib computes and the REST routes and app commands return (fields, shapes, names, the one place each rule lives), and what the dashboard keeps (presentation only: formatting, layout);\n- the order to move them in, and how the tests change (unit tests of atm-lib's rule; the dashboard's tests read the API's fields).\n\nOpen it as a code review held with Hakan (`atm review create --file`). After his approval, create the follow-up tasks in this sprint, one per group, prioritized.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/dashboard-derived-state.md"
       ],
       "created_at": "2026-11-21T15:24:48Z",
-      "updated_at": "2026-11-21T15:49:36Z",
+      "updated_at": "2026-11-21T15:50:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19944,7 +19946,7 @@
       "number": 716,
       "started_at": "2026-11-21T15:25:06Z",
       "started_by": "claude:0f56a916",
-      "commit": "f3610984bb7e505fee9bb030aa4ee671ea093de1",
+      "commit": "44d4a0e6e246f7c30fcd418e9f552200bba0112c",
       "code_reviews": [
         {
           "id": "01a1febe-c88f-73a1-a13a-84f20551d97c",
@@ -19952,7 +19954,6 @@
         }
       ],
       "review_requested_at": "2026-11-21T15:34:38Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-21T15:34:38Z",
@@ -19965,9 +19966,374 @@
           "kind": "note",
           "text": "Approved: in CR-109 (round 1)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-21T15:50:44Z",
+          "kind": "outcome",
+          "text": "CR-109 approved: docs/dashboard-derived-state.md, the inventory (groups A-H), the proposal and the order. Decisions in §6. Follow-ups ATM-717 (P0) to ATM-724 in this sprint",
+          "by": "claude:0f56a916"
         }
       ],
-      "reviewed_at": "2026-11-21T15:49:36Z"
+      "reviews": [
+        {
+          "from": "2026-11-21T15:34:38Z",
+          "to": "2026-11-21T15:49:36Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-21T15:50:44Z",
+      "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a1fecd-5725-722d-8d45-22cf65ee6177",
+      "name": "Who a task waits on, from atm: derived waiting, needs_you, agent_work and its review",
+      "type": "bugfix",
+      "priority": "P0",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "api"
+      ],
+      "description": "Step 1 of [the plan](docs/dashboard-derived-state.md), group A (§3, §4.2). ATM-711's card showed *Approved* and *Waiting for review · 1 h 21 m*.\n\n## atm-lib\nOne function, with a table of cases over every kind × `review_state` × `waiting_on` × `with` × readiness. It adds to `task_views`' `derived`:\n- `waiting`: `{on, since, why?}`. Its values:\n  - `reviewer` while the review waits, since `review_requested_at`;\n  - `agent` once approved or sent back, since `reviewed_at`;\n  - `user` or `agent` when blocked, since `blocked_at`, with the questions;\n  - `dependencies` for a to-do task that isn't ready;\n  - none otherwise.\n- `needs_you`: a reason or none. `summary.rs`'s `needs_you_tasks` is built from this field (delete its copy).\n- `agent_work`: whether agent work is left.\n- `review`: `{id, ref, status}`, the code review it waits on, not the latest link.\n\nThe TypeScript type is generated (`TaskDerived`); the app's commands return the same views.\n\n## Dashboard\n- `waiting.ts` shows `derived.waiting`. Delete `reviewWait`, `blockWait`'s rule and `needsYouReason`.\n- The cards and the panel show one line: the review-state chip and the waiting line agree.\n- `code_reviews.at(-1)` becomes `derived.review`.\n- `forecast.ts` `NO_AGENT_WORK`, `burndown.ts` and `component-progress.ts` use `agent_work`.\n- `timeuse.ts` `waitingIntervals` counts waiting on you only while `waiting.on` is `reviewer` or `user`.\n\n## Tests\n- atm-lib: the table.\n- The tasks route: the fields.\n- Unit tests: an approved task's card says it waits on its agent; the forecast counts it as remaining.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/query.rs",
+        "crates/atm-lib/src/summary.rs",
+        "dashboard/src/lib/waiting.ts",
+        "dashboard/src/lib/forecast.ts",
+        "dashboard/src/lib/burndown.ts",
+        "dashboard/src/lib/component-progress.ts",
+        "dashboard/src/lib/timeuse.ts"
+      ],
+      "created_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T15:50:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:50:32Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "related": [
+        "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
+      ],
+      "number": 717
+    },
+    {
+      "id": "01a1fecd-5725-722d-8d45-22d03168db17",
+      "name": "Kinds and the vocabulary from atm: derived.kind everywhere, atm's resolved vocabulary, vocab.ts's parser gone",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "api"
+      ],
+      "description": "Step 2 of [the plan](docs/dashboard-derived-state.md), group B.\n\n## Change\n- atm serves the vocabulary as it resolved it: statuses with kinds and labels, types, priorities in order with the default, labels, components, workflow, and its problems. It is a project route or part of the tasks response, with the matching app command.\n- The dashboard reads `derived.kind` instead of `kindOf` (about 40 calls), and atm's vocabulary instead of `resolveVocabulary`, `workflowOf` and `projectComponents`.\n- A broken vocabulary shows what atm serves, with atm's problems in the footer (decision 3).\n- `overview-data.ts` `mergedTasks` stops rewriting statuses: the charts read kinds.\n\n## Tests\n- The route test.\n- Unit tests on fixtures with atm's fields.\n- A vocabulary atm reports as broken shows its problems.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/vocab.ts",
+        "dashboard/src/lib/overview-data.ts",
+        "crates/atm-api/src/routes/tasks.rs"
+      ],
+      "created_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T15:50:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:50:32Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "related": [
+        "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
+      ],
+      "number": 718
+    },
+    {
+      "id": "01a1fecd-5725-722d-8d45-22d11482de0b",
+      "name": "Stage, release, resolution and reverse links from atm",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "api"
+      ],
+      "description": "Step 3 of [the plan](docs/dashboard-derived-state.md), group C.\n\n## Change\n- The dashboard reads `derived.stage` and `derived.effective_release`, for archived tasks and worktree copies too. Delete `stageOf` and `effectiveRelease`'s fallback.\n- `derived` gains:\n  - `resolution`;\n  - `required_by`, `related_by` and `duplicated_by` (the links pointing at the task);\n  - `in_closed_sprint`.\n- Delete `resolutionOf`, `relationsOf`, `requiredBy` and `scope.ts` `leftovers`.\n\n## Tests\natm-lib's cases for each field; the panel's unit tests on atm's fields.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1fecd-5725-722d-8d45-22d03168db17"
+      ],
+      "files": [
+        "crates/atm-lib/src/query.rs",
+        "dashboard/src/lib/stages.ts",
+        "dashboard/src/lib/relations.ts",
+        "dashboard/src/lib/scope.ts"
+      ],
+      "created_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T15:50:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:50:32Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "related": [
+        "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
+      ],
+      "number": 719
+    },
+    {
+      "id": "01a1fecd-5725-722d-8d45-22d2f1a2543f",
+      "name": "Sprints and releases routes: counts by one rule, one due-date rule, the backlog as atm counts it",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "api"
+      ],
+      "description": "Step 4 of [the plan](docs/dashboard-derived-state.md), group E.\n\n## atm\n- `…/sprints`: each sprint in atm's order, with:\n  - its state;\n  - done, total and percent (one rule: an empty sprint is the same everywhere);\n  - added, carried and sprint review pending;\n  - its due date and days left (one rule, the project's day);\n  - its close report;\n  - the backlog's size as `atm sprint list` counts it (unfinished only).\n- `…/releases`: each release with its sprints, counts by stage, and its notes from `release_notes`.\n- The matching app commands.\n\n## Dashboard\nDelete:\n- `sprintModel`, `readSprints`, `sprintsFromPhases`;\n- `sprintSummary`, `addedMidSprint`, `carriedCount`, `lastClosed`;\n- `velocity`'s fallback;\n- `daysUntil` and `endOfDay` as rules;\n- `vocabCounts`' sprints and backlog;\n- `readReleases`, `releaseSummaries`, `releaseNotes`.\n\n## Tests\n- atm-lib tables: an empty sprint, a sprint with skipped tasks, a task added mid-sprint, one carried, a due date today and yesterday.\n- The route tests.\n- The scope bar and the overview card show the same percent.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1fecd-5725-722d-8d45-22d03168db17"
+      ],
+      "files": [
+        "crates/atm-lib/src/sprints.rs",
+        "crates/atm-lib/src/releases.rs",
+        "dashboard/src/lib/sprints.ts",
+        "dashboard/src/lib/releases.ts",
+        "dashboard/src/lib/velocity.ts",
+        "dashboard/src/lib/projectinfo.ts"
+      ],
+      "created_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T15:50:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:50:32Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "related": [
+        "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
+      ],
+      "number": 720
+    },
+    {
+      "id": "01a1fecd-5725-722d-8d45-22d3de5844fe",
+      "name": "Work time by one rule in atm, over every attempt and round; with: user decides \"with you\"",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "api"
+      ],
+      "description": "Step 5 of [the plan](docs/dashboard-derived-state.md), group D, decisions 1 and 4.\n\n## atm-lib\n- One work rule over a task's attempts and rounds (`reviews`, `blocks`, the start and lapse notes): `derived.work` `{minutes, live, spans}`.\n- `summary.rs` `work_span` and `agent_minutes` use it, with `is_agent` instead of the `claude:` literal.\n- `with: user` decides \"with you\". `atm db migrate` moves the `interactive` label to `with: user` once, and says so.\n\n## Dashboard\nThe uses go to `derived.work`:\n- `work.ts` `workSpan` and `taskTimes`;\n- `cardfacts.ts`;\n- `timeHistogram`, `taskDurations`, the cycle times;\n- `agentTimeline`, `timeUse`.\n\n`INTERACTIVE_LABEL` goes.\n\n## Tests\n- atm-lib's table: one attempt; taken back after a lapse; two review rounds; blocked between; active now.\n- The migration scenario.\n- Unit tests on atm's fields.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/summary.rs",
+        "crates/atm-lib/src/query.rs",
+        "dashboard/src/lib/work.ts",
+        "dashboard/src/lib/cardfacts.ts",
+        "dashboard/src/lib/agents.ts",
+        "dashboard/src/lib/timeuse.ts",
+        "dashboard/src/lib/forecast.ts"
+      ],
+      "created_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T15:50:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:50:32Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "related": [
+        "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
+      ],
+      "number": 721
+    },
+    {
+      "id": "01a1fecd-5725-722d-8d45-22d426cb480e",
+      "name": "Stats, progress and the forecast from atm: a stats route, the overview's Progress from summaries",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "api"
+      ],
+      "description": "Step 6 of [the plan](docs/dashboard-derived-state.md), group F, decision 2.\n\n## atm\n- `…/stats`, with the matching app command. It holds:\n  - the project's stats;\n  - the time histogram;\n  - people and agents;\n  - the agents' lanes;\n  - progress overall, by type and by sprint (archived tasks counted as they are);\n  - the pace and the forecast per sprint, in the loop's order.\n- The CLI can print the forecast (`atm project status`).\n- `api/projects`' summaries carry what the overview's Progress tab shows.\n\n## Dashboard\nDelete:\n- `projectStats`, `progressBreakdown` (and its phase grouping);\n- `forecastSprints`, `pace`, `nextInLoop`;\n- `actors`;\n- `projectProgress`, `velocityByPeriod`.\n\nThe overview no longer loads every project's tasks for its Progress tab.\n\n## Tests\n- atm-lib's tables: archived skipped tasks; the loop's order.\n- The route test.\n- The overview's Progress e2e on summaries.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1fecd-5725-722d-8d45-22d2f1a2543f",
+        "01a1fecd-5725-722d-8d45-22d3de5844fe"
+      ],
+      "files": [
+        "dashboard/src/lib/insights.ts",
+        "dashboard/src/lib/projectstats.ts",
+        "dashboard/src/lib/forecast.ts",
+        "dashboard/src/lib/overview-data.ts",
+        "dashboard/src/lib/projectinfo.ts"
+      ],
+      "created_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T15:50:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:50:32Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "related": [
+        "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
+      ],
+      "number": 722
+    },
+    {
+      "id": "01a1fecd-5725-722d-8d45-22d54f6238cf",
+      "name": "The review page's controls from atm's can, for every action; comments say if they are editable",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "reviews"
+      ],
+      "description": "Step 7 of [the plan](docs/dashboard-derived-state.md), group G.\n\n## Change\n- `ReviewPage.svelte` shows Approve, Request changes, Comment (Publish comments), Round and Close only as `can` allows, with its reason.\n- The page's own rules go: `ended`, `live`, `sentBack` and `settled` as rules, and `approveBlocked`'s fallback.\n- Each comment carries `editable` from atm. `ChainBox`'s rule goes.\n\n## Tests\n- `can`'s table (atm-lib).\n- The page's unit tests for each answer.\n- `reviews.spec.ts` for a waiting, a live, a sent-back and an approved review.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/reviews/ChainBox.svelte",
+        "crates/atm-lib/src/review_pages/page.rs"
+      ],
+      "created_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T15:50:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:50:32Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "related": [
+        "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
+      ],
+      "number": 723
+    },
+    {
+      "id": "01a1fecd-5725-722d-8d45-22d689547b76",
+      "name": "Claims and worktrees decided by atm, and a guard test against rules in the dashboard",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "api"
+      ],
+      "description": "Step 8 of [the plan](docs/dashboard-derived-state.md), group H and §4.6.\n\n## Change\n- The claims route leaves out an expired lease, by atm's clock. `parseClaims` stops filtering.\n- The worktrees route says which copy of each task is shown, and from which branch, with one ranking shared with the merge driver (`merge.rs` `kind_rank`). `mergeWorktrees`' `PROGRESS` goes.\n- A guard test (like `tokens.test.ts`) fails when `dashboard/src` decides something from a raw state field: `kindOf(`, `.review_state`, `.started_at`, `.completed_at`, `.review_requested_at`, `.blocked_at`, `meta.sprints`, `meta.statuses` and so on. The files that only show them are on an allow-list.\n\n## Tests\n- The routes' tests.\n- The guard test, failing on a sample that breaks the rule.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a1fecd-5725-722d-8d45-22cf65ee6177",
+        "01a1fecd-5725-722d-8d45-22d03168db17",
+        "01a1fecd-5725-722d-8d45-22d11482de0b",
+        "01a1fecd-5725-722d-8d45-22d2f1a2543f",
+        "01a1fecd-5725-722d-8d45-22d3de5844fe",
+        "01a1fecd-5725-722d-8d45-22d426cb480e",
+        "01a1fecd-5725-722d-8d45-22d54f6238cf"
+      ],
+      "files": [
+        "crates/atm-api/src/routes/claims.rs",
+        "dashboard/src/lib/claims.ts",
+        "dashboard/src/lib/worktrees.ts"
+      ],
+      "created_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T15:50:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:50:32Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "related": [
+        "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
+      ],
+      "number": 724
+    },
+    {
+      "id": "01a1fefc-742e-7272-a4bb-2be34486ecf7",
+      "name": "Review rounds are incremental diffs: round N is diffN, \"since round M\" is diffM+1 … diffN, \"whole\" is diff1 … diffN",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Hakan, 2026-11-21: the diff rounds are completely messed up.\n\n## The model\nA review is a chain of incremental diffs, one per round: **diff1 → diff2 → diff3 …**.\n- **diff1** is round 1's change, from the review's base to round 1's head.\n- **diffN** (N > 1) is what round N changed on top of round N−1, from round N−1's head to round N's head.\n\nWhat the page and the API show, for the round shown N:\n\n| View | Is |\n|---|---|\n| Round 1 | diff1 |\n| Round N, since round N−1 | diffN |\n| Round N, since round M (M < N) | diffM+1 + … + diffN, from round M's head to round N's head |\n| Round N, whole | diff1 + … + diffN, from the review's base to round N's head |\n\nThe whole change is always measured from **the review's base** (round 1's base), never from a base a later round happened to name.\n\n## Where it goes wrong now\n- Each round stores whatever range it was opened with: `RoundKind::Range {base, head}` and `rounds/N.diff`.\n  - An author who passes `base..HEAD` makes round N cumulative.\n  - One who passes `HEAD~1..HEAD` makes it incremental.\n  - A rebased or moved base makes it neither.\n- \"Whole change\" (`crates/atm-lib/src/review_pages/view.rs:30`, `against: None`) shows round N's own stored diff from its own base. So it is diffN on one review and diff1…diffN on another.\n- \"Since round M\" (`rounds::compare`, `view.rs:47`) compares the two rounds' trees. It does not add up with \"whole\", and comments anchored on a round move between views.\n- The page's picker (`dashboard/src/lib/reviews/ReviewPage.svelte:845`) offers \"Whole change\" and \"Since round n\" over these.\n\n## The change\n- **Model it in the code.** In atm-review, a round records its increment: the previous round's head (round 1: the review's base) and its own head, or the tree for a working or files round. Make it a type, `Increment` or `RoundDiff`, that can't be built otherwise.\n- **One function** composes a view from increments: `diff(review, from: Base | Round(M), to: Round(N))`, the only way a view is made.\n  - `whole(N)` = `diff(Base, N)`.\n  - `since(M, N)` = `diff(Round(M), N)`.\n  - `round(1)` = `whole(1)`.\n- **`atm review round` and `create`** record the increment whatever range is given. They take the head, or the range's end; a range whose start isn't the previous round's head (or the review's base for round 1) is recorded from the previous head, and atm says so. Live and working rounds alike.\n- **Existing reviews:** their stored rounds are read through the model.\n  - Round N's head is kept.\n  - Its increment is worked out from round N−1's head.\n  - The review's base is round 1's base.\n  - Nothing is rewritten in the review folders unless a migration is agreed.\n- **Comments:** a comment stays on the round it was written on, and is placed in a view the same way whichever view it is: shown in a view that contains its round's increment, else listed as on another round.\n- **The API and the page:** the route's `round` and `against` keep their meaning: `against=M` is since round M, and none is whole. The page labels its picker \"Round N (whole)\", \"Since round M\" and \"Round N only\" (= since N−1). The view says which it shows, from the API.\n- **Docs:** `docs/code-review-design.md` (rounds) and `atm docs reviews` say it in these words.\n\n## Tests\n- atm-review: a table over a three-round review (a commit range each round; a working round; a files round), checking for every N and M:\n  - whole(N) = diff1…diffN;\n  - since(M, N) = diffM+1…diffN;\n  - round 1 = diff1;\n  - whole(N) = whole(M) + since(M, N), file by file.\n- A round opened with a cumulative range and one with an incremental range give the same increments.\n- An existing review folder (rounds stored cumulatively, and incrementally) reads the same.\n- A comment on round 2 shows in whole(3) and since(1, 3), not in since(2, 3).\n- `reviews.spec.ts`: the picker's three views on a three-round review.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-review/src/model.rs",
+        "crates/atm-review/src/rounds.rs",
+        "crates/atm-lib/src/review_pages/view.rs",
+        "crates/atm-lib/src/reviews.rs",
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "docs/code-review-design.md"
+      ],
+      "created_at": "2026-11-21T16:42:00Z",
+      "updated_at": "2026-11-21T16:42:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T16:42:00Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "number": 725
     }
   ]
 }
