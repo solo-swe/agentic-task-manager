@@ -144,7 +144,7 @@ impl Drafts {
             std::fs::create_dir_all(dir)
                 .map_err(|e| Error::failed(format!("{} can't be made: {e}", dir.display())))?;
         }
-        atm_common::home::write_text_atomic(file, &text).map_err(|e| {
+        atm_common::home::write_private_atomic(file, &text).map_err(|e| {
             Error::failed(format!(
                 "the drafts in {} can't be written: {e}",
                 file.display()

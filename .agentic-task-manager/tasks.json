@@ -17255,7 +17255,7 @@
       "description": "Audit findings C6, C7, C10, C14 and C15 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-2)).\n\n- **C6:** `atm service stop` signals whatever pid a local port's whoami names (`crates/atm-cli/src/commands/maintenance.rs:464`, `:518`); another local user can answer on the port. Signal only a pid whose executable is atm and which owns the listening socket, or only report stray servers.\n- **C14:** `wait_gone` sends SIGKILL by pid alone (`:404`): record the process's start time and signal only while it matches.\n- **C7:** breaking a stale server lock (`:276`) races, so two runs can start two servers: rename the lock to a unique name atomically, then re-check, or use an OS file lock.\n- **C10:** the state folder's 0700 is set only on creation (`crates/atm-common/src/home.rs:110`): set it on an existing or moved folder too, and create its files 0600.\n- **C15:** `--open` runs `xdg-open` on Windows: use `explorer.exe <url>` (no shell; I24 lists the openers).\n\n## Tests\n`tests/scripts/serve.test.mjs`: a fake whoami on another port naming a pid isn't killed; two concurrent `atm service start` leave one server; an existing 0755 state folder becomes 0700.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/maintenance.rs",
@@ -17263,9 +17263,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-21T14:36:26Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17273,7 +17273,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 673
+      "number": 673,
+      "started_at": "2026-11-21T14:36:26Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226a1f68bb2a",
@@ -19745,7 +19747,7 @@
       "description": "Part 3 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §4, §7 step 2).\n\n## Change\nOne test over the composed table: a row for each task state (kind, claim) × review state × event, built from the tables, each with its expected next state or refusal, failing on a pair without a row. The three bugs are rows of their own:\n- ATM-630: an approval kept when the task's key changed (its old key an alias);\n- ATM-631: a review opened beside a task that didn't move;\n- ATM-632: a lapsed claim leaving a task half in review.\n\n## Tests\nThe table test itself, in `crates/atm-lib/src/lifecycle/tests.rs`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1fe3a-d2ba-736d-80e3-4b81a73b4404"
       ],
@@ -19753,7 +19755,7 @@
         "crates/atm-lib/src/lifecycle/tests.rs"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T14:23:05Z",
+      "updated_at": "2026-11-21T14:36:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19768,7 +19770,24 @@
       ],
       "number": 713,
       "started_at": "2026-11-21T14:23:05Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "5c5cca785b7a772320aa922125b5fc249caff513",
+      "code_reviews": [
+        {
+          "id": "01a1fe89-7ec5-7096-9536-a983c150483e",
+          "ref": "CR-108"
+        }
+      ],
+      "review_requested_at": "2026-11-21T14:36:26Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-21T14:36:26Z",
+          "kind": "review",
+          "text": "CR-108: State machine, part 3: the composed table test, and the two bugs it found",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b83d40322b2",

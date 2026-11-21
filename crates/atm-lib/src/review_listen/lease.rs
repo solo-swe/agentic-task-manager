@@ -65,7 +65,7 @@ impl Lease {
             let _ = std::fs::create_dir_all(dir);
         }
         let until = atm_common::time::real_now() + LEASE_SECS;
-        let _ = atm_common::home::write_text_atomic(&self.0, &until.to_string());
+        let _ = atm_common::home::write_private_atomic(&self.0, &until.to_string());
     }
 }
 
@@ -234,7 +234,7 @@ pub fn reminder(project: &Project, me: &str) -> Option<String> {
     };
     if let (Some(dir), Ok(text)) = (file.parent(), serde_json::to_string(&reminded)) {
         let _ = std::fs::create_dir_all(dir);
-        let _ = atm_common::home::write_text_atomic(&file, &text);
+        let _ = atm_common::home::write_private_atomic(&file, &text);
     }
     Some(line)
 }

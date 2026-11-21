@@ -25,7 +25,7 @@ use std::time::Duration;
 use atm_common::dashboard::{
     PAGE, SERVER_RECORD, WHOAMI, home_id, page_csp, page_tags, script_hashes,
 };
-use atm_common::home::write_text_atomic;
+use atm_common::home::write_private_atomic;
 use atm_common::py::to_json;
 use atm_common::time::now_iso;
 use axum::Router;
@@ -470,7 +470,8 @@ pub fn serve(home: &Path, first_port: u16) -> Result<(), String> {
             "home": served.home,
             "started_at": now_iso(),
         });
-        write_text_atomic(&record_path, &(to_json(&record) + "\n")).map_err(|e| e.to_string())?;
+        write_private_atomic(&record_path, &(to_json(&record) + "\n"))
+            .map_err(|e| e.to_string())?;
         stopped().await;
         forget(&record_path);
         Ok(())

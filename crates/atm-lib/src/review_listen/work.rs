@@ -89,7 +89,7 @@ pub(super) fn work_of(project: &Project, me: &str) -> Work {
     }
     if learned && let (Some(dir), Ok(text)) = (known_file.parent(), serde_json::to_string(&known)) {
         let _ = std::fs::create_dir_all(dir);
-        let _ = atm_common::home::write_text_atomic(&known_file, &text);
+        let _ = atm_common::home::write_private_atomic(&known_file, &text);
     }
     if let Some(vcs) = &vcs
         && let Ok(diff) = vcs.diff_working(&atm_vcs::Rev::head(), &[atm_common::TASK_DIR])

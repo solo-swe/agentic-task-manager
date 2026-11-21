@@ -1589,39 +1589,66 @@ describe('serve', () => {
       child.on('close', (code) => resolve({ code, stdout }));
     });
 
-  test('stop ends a server that ignores SIGTERM, and forgets it only once it is gone (T-390)', async () => {
+  // ATM-673 (audit C6): anyone on the machine may answer whoami on a local port, naming any pid; stop signals only a
+  // process that is `atm _serve`. (Its SIGTERM-then-SIGKILL, T-390, is `wait_gone`'s unit test in maintenance.rs.)
+  test('stop signals only an atm server: a stand-in answering as this folder’s, naming itself or another process, keeps running', async () => {
     const atmHome = home();
     const port = ports();
-    // A stand-in for a server that outlives the polite request: it answers whoami as this folder's, and ignores SIGTERM
-    const script =
-      "const http = require('http'); process.on('SIGTERM', () => {});" +
+    // Another process, which the stand-in names as the server on the second port
+    const victim = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+    cleanups.push(() => alive(victim.pid) && process.kill(victim.pid, 'SIGKILL'));
+    const standIn = (on, pid) =>
+      "const http = require('http');" +
       `http.createServer((q, r) => { r.setHeader('content-type', 'application/json');` +
-      ` r.end(JSON.stringify({ atm: true, pid: process.pid, port: ${port}, home: ${JSON.stringify(homeId(atmHome))} })); })` +
-      `.listen(${port}, () => console.log('ready'));`;
-    const stubborn = spawn(process.execPath, ['-e', script], {
+      ` r.end(JSON.stringify({ atm: true, pid: ${pid}, port: ${on}, home: ${JSON.stringify(homeId(atmHome))} })); })` +
+      `.listen(${on}, () => console.log('ready'));`;
+    const itself = spawn(process.execPath, ['-e', standIn(port, 'process.pid')], {
       stdio: ['ignore', 'pipe', 'inherit'],
     });
-    cleanups.push(() => alive(stubborn.pid) && process.kill(stubborn.pid, 'SIGKILL'));
-    await new Promise((resolve) => stubborn.stdout.once('data', resolve));
+    const other = spawn(process.execPath, ['-e', standIn(port + 1, victim.pid)], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    for (const p of [itself, other]) {
+      cleanups.push(() => alive(p.pid) && process.kill(p.pid, 'SIGKILL'));
+      await new Promise((resolve) => p.stdout.once('data', resolve));
+    }
+    // The record names the first stand-in's pid, but a server that started an hour ago (audit C14: an earlier server's
+    // record, its pid another process's since); the second answers without a record, a stray
+    const earlier = new Date(Date.now() - 3600_000).toISOString();
     fs.writeFileSync(
       path.join(atmHome, 'server.json'),
-      JSON.stringify({
-        pid: stubborn.pid,
-        port,
-        version: '0.0.1',
-        build: 'x',
-        started_at: new Date().toISOString(),
-      }),
+      JSON.stringify({ pid: itself.pid, port, version: '0.0.1', build: 'x', started_at: earlier }),
     );
     const root = project();
-    // Not spawnSync: the stand-in is this process's child, which Node reaps only while its event loop runs (a real
-    // server is detached, and the system reaps it)
     const stopped = await atmAsync(['service', 'stop', '--port', String(port)], root, atmHome);
-    assert.equal(stopped.code, 0);
-    assert.match(stopped.stdout, new RegExp(`stopped \\(pid ${stubborn.pid}\\)`));
-    assert.equal(alive(stubborn.pid), false);
-    assert.equal(fs.existsSync(path.join(atmHome, 'server.json')), false);
+    assert.notEqual(stopped.code, 0);
+    // Neither process was signalled, and the record of the one still running is kept
+    assert.equal(alive(itself.pid), true);
+    assert.equal(alive(victim.pid), true);
+    assert.equal(alive(other.pid), true);
+    assert.equal(fs.existsSync(path.join(atmHome, 'server.json')), true);
   });
+
+  // ATM-673 (audit C10): the state folder is its owner's only, however it got there, and so are the files atm keeps in it
+  test(
+    'an existing state folder another user could read is made its owner’s only; its server record too',
+    { skip: process.platform === 'win32' },
+    () => {
+      const atmHome = home();
+      fs.mkdirSync(atmHome, { recursive: true });
+      fs.chmodSync(atmHome, 0o755);
+      const root = project();
+      const port = ports();
+      const atm = atmIn(atmHome);
+      assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+      try {
+        assert.equal(fs.statSync(atmHome).mode & 0o777, 0o700);
+        assert.equal(fs.statSync(path.join(atmHome, 'server.json')).mode & 0o777, 0o600);
+      } finally {
+        atm(['service', 'stop', '--port', String(port)], root);
+      }
+    },
+  );
 
   test('two `atm serve start` at once start one server (T-390)', async () => {
     const atmHome = home();

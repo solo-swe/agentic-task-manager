@@ -48,12 +48,12 @@ describe('security invariants (docs/security-architecture.md)', () => {
       ].sort(),
     );
     // The watcher and the server are started with atm's own path, never one from the command line or a task; the
-    // browser opener is `open` or `xdg-open`, with the URL atm made
+    // browser opener is `open`, `explorer.exe` (Windows, ATM-673) or `xdg-open`, with the URL atm made
     for (const file of ['claim.rs', 'maintenance.rs']) {
       expect(read(`crates/atm-cli/src/commands/${file}`)).toContain('let own_binary = std::env::current_exe()');
     }
     expect(read('crates/atm-cli/src/commands/maintenance.rs')).toMatch(
-      /let opener = if cfg!\(target_os = "macos"\) \{\s*"open"\s*\} else \{\s*"xdg-open"\s*\};/,
+      /let opener = if cfg!\(target_os = "macos"\) \{\s*"open"\s*\} else if cfg!\(windows\) \{\s*"explorer\.exe"\s*\} else \{\s*"xdg-open"\s*\};/,
     );
   });
 

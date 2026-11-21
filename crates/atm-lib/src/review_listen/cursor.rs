@@ -67,7 +67,7 @@ pub(super) fn save_cursor(
     };
     if let Ok(text) = serde_json::to_string(&cursor) {
         let _ = std::fs::create_dir_all(dir);
-        let _ = atm_common::home::write_text_atomic(file, &text);
+        let _ = atm_common::home::write_private_atomic(file, &text);
     }
 }
 

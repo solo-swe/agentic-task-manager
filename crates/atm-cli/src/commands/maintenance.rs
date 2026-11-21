@@ -11,12 +11,12 @@ use std::time::{Duration, Instant};
 
 use atm_lib::Project;
 
-use crate::process::{pid_alive, pid_exists, signal_process};
+use crate::process::{Running, is_atm_server, pid_exists};
 use atm_common::dashboard::{
     PAGE, SCAN_PORTS, SERVER_LOG, SERVER_RECORD, home_id, page_tags, parse_version, whoami,
 };
 use atm_common::home::{ensure_home, legacy_folder_of, state_dir};
-use atm_common::py::{py_str_opt, to_json};
+use atm_common::py::py_str_opt;
 use atm_common::time::{parse_iso, real_now};
 use atm_common::{Error, Result};
 use atm_lib::check::check_project;
@@ -255,45 +255,41 @@ fn live_server(home: &Path) -> Option<Map<String, Value>> {
     None
 }
 
-/// Only one `atm service` at a time looks for a running server and starts one: a folder, which `mkdir` creates for
-/// exactly one process. A lock whose holder is gone (its pid isn't running) or that outlived the wait is broken.
-struct ServerLock(PathBuf);
+/// Only one `atm service` at a time looks for a running server and starts one: the OS's lock on a file of the state
+/// folder (ATM-673, audit C7). The OS lets it go when its holder ends, however it ends, so there is never a stale lock
+/// to break, nor two runs breaking one and both starting a server (as the folder lock let them).
+struct ServerLock(#[allow(dead_code)] std::fs::File); // reason: held for its lock, let go when dropped
 
 impl ServerLock {
     fn take(home: &Path) -> Result<Self> {
         ensure_home(home).map_err(|e| Error::failed(format!("{}: {e}", home.shown())))?;
-        let lock = home.join(SERVER_LOCK);
+        let path = home.join(SERVER_LOCK);
+        let failed = |e: &dyn std::fmt::Display| Error::failed(format!("{}: {e}", path.shown()));
+        // A folder an older atm's lock left there: no one holds it now that this lock is a file
+        if path.is_dir() {
+            let _ = std::fs::remove_dir_all(&path);
+        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .map_err(|e| failed(&e))?;
         let deadline = Instant::now() + SERVER_LOCK_WAIT;
         loop {
-            match std::fs::create_dir(&lock) {
-                Ok(()) => break,
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    let holder = std::fs::read_to_string(lock.join("pid.json"))
-                        .ok()
-                        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-                        .and_then(|h| h.get("pid").and_then(Value::as_u64))
-                        .and_then(|p| u32::try_from(p).ok());
-                    let gone = holder.is_some_and(|pid| !pid_alive(pid));
-                    if gone || Instant::now() >= deadline {
-                        let _ = std::fs::remove_dir_all(&lock);
-                        continue;
-                    }
+            match file.try_lock() {
+                Ok(()) => return Ok(Self(file)),
+                Err(std::fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
                     std::thread::sleep(POLL);
                 }
-                Err(e) => return Err(Error::failed(format!("{}: {e}", lock.shown()))),
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    return Err(failed(
+                        &"another `atm service` has been starting the server for too long; try again",
+                    ));
+                }
+                Err(std::fs::TryLockError::Error(e)) => return Err(failed(&e)),
             }
         }
-        let _ = std::fs::write(
-            lock.join("pid.json"),
-            to_json(&json!({"pid": std::process::id()})),
-        );
-        Ok(Self(lock))
-    }
-}
-
-impl Drop for ServerLock {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -397,17 +393,19 @@ const GONE_CHECKS: u32 = 3;
 /// Whether process `pid` ends within `wait`, sending it `signal` again (SIGKILL) each time it is still seen. One that
 /// ended is given a moment more to be reaped by its parent, so that whoever started it sees it gone too; one nobody
 /// reaps (a container without an init) counts as gone then.
-fn wait_gone(pid: u32, wait: Duration, kill: bool) -> bool {
+fn wait_gone(server: Running, wait: Duration, kill: bool) -> bool {
     let deadline = Instant::now() + wait;
     let mut missed = 0;
     while missed < GONE_CHECKS {
-        if pid_alive(pid) {
+        // The process found, by its start time too (ATM-673, audit C14): a later process given its pid isn't it, and is
+        // never sent a SIGKILL
+        if server.alive() {
             missed = 0;
             if Instant::now() >= deadline {
                 return false;
             }
             if kill {
-                let _ = signal_process(pid, true);
+                let _ = server.signal(true);
             }
         } else {
             missed += 1;
@@ -415,20 +413,67 @@ fn wait_gone(pid: u32, wait: Duration, kill: bool) -> bool {
         std::thread::sleep(POLL);
     }
     let reaped = Instant::now() + REAP_WAIT;
-    while Instant::now() < reaped && pid_exists(pid) {
+    while Instant::now() < reaped
+        && pid_exists(server.pid)
+        && !Running::find(server.pid).is_some_and(|now| now != server)
+    {
         std::thread::sleep(POLL);
     }
     true
 }
 
-/// Stop a server of the user's (whose pid whoami confirmed): SIGTERM, then SIGKILL if it outlives the wait. Its record
-/// goes only once it is gone, and only if it is that server's: a server still running is never forgotten.
-fn stop_server(home: &Path, pid: u32) -> Result<()> {
+/// How long before a server's record says it started its process may have started: the server writes the record once
+/// it listens, a few seconds at most after its start on a busy machine.
+const RECORD_SLACK: i64 = 30;
+
+/// Whether `server` is the process `record` names: the record's server, started when it says (ATM-673, audit C14: its
+/// pid alone may be a later process's)
+fn started_as_recorded(server: Running, record: &Map<String, Value>) -> bool {
+    // To the second: a record written elsewhere may carry fractions of one (`…:05.123Z`)
+    let at = record
+        .get("started_at")
+        .and_then(Value::as_str)
+        .and_then(|text| text.get(..19))
+        .and_then(|seconds| parse_iso(&format!("{seconds}Z")));
+    let Some(at) = at else {
+        return false;
+    };
+    let started = i64::try_from(server.started()).unwrap_or(i64::MAX);
+    (at - RECORD_SLACK..=at + RECORD_SLACK).contains(&started)
+}
+
+/// Stop a server of the user's (whose pid whoami confirmed): SIGTERM, then SIGKILL if it outlives the wait. Only a
+/// process known to be the server (ATM-673): the one its `record` names, started when the record says (atm wrote it,
+/// in a folder only its owner reads); or, found by asking the ports (no record), an atm server, `atm _serve` (audit
+/// C6: anyone may answer whoami on a local port, naming any pid). Its record goes only once it is gone, and only if it
+/// is that server's: a server still running is never forgotten.
+fn stop_server(home: &Path, pid: u32, record: Option<&Map<String, Value>>) -> Result<()> {
+    let Some(server) = Running::find(pid) else {
+        // Gone already
+        if read_record(home).is_some_and(|r| pid_of(&r) == Some(pid)) {
+            let _ = std::fs::remove_file(record_path(home));
+        }
+        return Ok(());
+    };
+    let known = match record {
+        Some(record) => started_as_recorded(server, record),
+        None => is_atm_server(pid),
+    };
+    if !known {
+        let why = if record.is_some() {
+            "isn't the server its record names (it started at another time)"
+        } else {
+            "answered as a dashboard server but isn't one (not `atm _serve`)"
+        };
+        return Err(Error::failed(format!(
+            "pid {pid} {why}: it is left running"
+        )));
+    }
     // Where there is no SIGTERM to send (Windows), straight to ending it, rather than waiting out STOP_WAIT for nothing
-    let asked = signal_process(pid, false);
-    if !asked || !wait_gone(pid, STOP_WAIT, false) {
-        let _ = signal_process(pid, true);
-        if !wait_gone(pid, KILL_WAIT, true) {
+    let asked = server.signal(false);
+    if !asked || !wait_gone(server, STOP_WAIT, false) {
+        let _ = server.signal(true);
+        if !wait_gone(server, KILL_WAIT, true) {
             return Err(Error::failed(format!(
                 "the dashboard server (pid {pid}) didn't stop; its record is kept"
             )));
@@ -507,23 +552,30 @@ fn serve_stop(home: &Path, port: u16) -> Result<()> {
             return Ok(());
         }
     } else if let Some(pid) = pid_of(&record) {
-        stop_server(home, pid)?;
+        stop_server(home, pid, Some(&record))?;
         println!("Dashboard server stopped (pid {pid}).");
     }
     stop_strays(home, &strays)
 }
 
+/// Stop the servers the record doesn't name: each one that is an atm server; any other answering as one is only
+/// reported (ATM-673, audit C6), and the others are still stopped.
 fn stop_strays(home: &Path, strays: &[Map<String, Value>]) -> Result<()> {
+    let mut failed = None;
     for info in strays {
-        if let Some(pid) = pid_of(info) {
-            stop_server(home, pid)?;
-            println!(
+        let Some(pid) = pid_of(info) else { continue };
+        match stop_server(home, pid, None) {
+            Ok(()) => println!(
                 "Stopped a dashboard server the record didn't name (pid {pid}, port {}).",
                 py_str_opt(info.get("port"))
-            );
+            ),
+            Err(e) => {
+                eprintln!("atm: port {}: {e}", py_str_opt(info.get("port")));
+                failed = Some(e);
+            }
         }
     }
-    Ok(())
+    failed.map_or(Ok(()), Err)
 }
 
 fn real_path(path: &str) -> PathBuf {
@@ -578,7 +630,7 @@ pub fn refresh_server(home: &Path) -> Result<Option<Map<String, Value>>> {
         return Ok(None);
     };
     if let Some(pid) = pid_of(&live) {
-        stop_server(home, pid)?;
+        stop_server(home, pid, Some(&live))?;
     }
     start_server(home, port_of(&live)).map(Some)
 }
@@ -649,10 +701,13 @@ fn serve_status(home: &Path, as_json: bool, port: u16) {
     }
 }
 
-/// Open `url` in the user's browser (`open` on macOS, `xdg-open` elsewhere): atm's own command, with the URL it made.
+/// Open `url` in the user's browser (`open` on macOS, `explorer.exe` on Windows, `xdg-open` elsewhere; ATM-673, audit
+/// C15: Windows has no `xdg-open`): atm's own command, with the URL it made, never through a shell.
 fn open_browser(url: &str) {
     let opener = if cfg!(target_os = "macos") {
         "open"
+    } else if cfg!(windows) {
+        "explorer.exe"
     } else {
         "xdg-open"
     };
@@ -727,5 +782,49 @@ pub fn serve(home: &Path, port: u16) -> u8 {
             eprintln!("atm: {message}");
             1
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod stop_tests {
+    use super::*;
+
+    /// A process that ignores SIGTERM, as a stuck server can: a shell trapping it, waiting
+    fn stubborn() -> std::process::Child {
+        std::process::Command::new("sh")
+            .args(["-c", "trap '' TERM; while :; do sleep 1; done"])
+            .spawn()
+            .expect("sh")
+    }
+
+    /// T-390, now on the process found (ATM-673, audit C14): one that outlives the polite request is ended with
+    /// SIGKILL, and counts as gone once it is
+    #[test]
+    fn a_process_that_ignores_sigterm_is_killed_and_then_gone() {
+        let mut child = stubborn();
+        // Give the shell a moment to set its trap
+        std::thread::sleep(Duration::from_millis(200));
+        let found = Running::find(child.id()).expect("it runs");
+        assert!(found.signal(false));
+        assert!(
+            !wait_gone(found, Duration::from_millis(500), false),
+            "SIGTERM alone doesn't end it"
+        );
+        assert!(found.signal(true));
+        assert!(wait_gone(found, KILL_WAIT, true));
+        let _ = child.wait();
+        assert!(!found.alive());
+    }
+
+    /// A process found earlier and gone since: a later process given its pid isn't it, so it counts as gone and gets no
+    /// signal
+    #[test]
+    fn a_process_gone_counts_as_gone_without_any_signal() {
+        let mut child = stubborn();
+        let found = Running::find(child.id()).expect("it runs");
+        child.kill().unwrap();
+        let _ = child.wait();
+        assert!(wait_gone(found, Duration::from_millis(500), true));
+        assert!(!found.signal(true));
     }
 }
