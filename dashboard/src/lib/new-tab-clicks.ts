@@ -14,8 +14,7 @@ export function newTabAddress(target: Element | null, address: string): string |
   if (doc) return withDoc(address, doc);
   // `#…` links are the text's own (a task's key): the text opens them. Another link to one of the dashboard's pages,
   // resolved from the page shown
-  const own =
-    href && !href.startsWith('#') ? dashboardAddress(new URL(href, location.origin + address).href) : null;
+  const own = href && !href.startsWith('#') ? dashboardAddress(new URL(href, location.origin + address).href) : null;
   if (own) return own;
   const task = target?.closest<HTMLElement>('.kanban-card[data-id], .task-card[data-id]')?.dataset.id;
   return task ? withTask(address, task) : null;
