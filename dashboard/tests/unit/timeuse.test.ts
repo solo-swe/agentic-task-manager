@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mergeIntervals, timeUse, waitingIntervals } from '../../src/lib/timeuse';
 import type { Task } from '../../src/lib/types';
+import { viewed } from './views';
 
 // Times in minutes from T0
 const T0 = Date.parse('2026-05-01T08:00:00Z');
@@ -108,9 +109,11 @@ describe('timeUse (T-245)', () => {
 
 describe('waitingIntervals', () => {
   it('a current review or block on you runs to now; a block on an agent is not waiting on you', () => {
-    expect(waitingIntervals(task('T1', { status: 'in_review', review_requested_at: at(10) }), NOW)).toEqual([
-      { start: t(10), end: NOW },
-    ]);
+    // In review, as atm says who it waits on (ATM-717): its reviewer, or, approved or sent back, its agent
+    const inReview = (on: 'reviewer' | 'agent') =>
+      viewed(task('T1', { status: 'in_review', review_requested_at: at(10) }), { waiting: { on } });
+    expect(waitingIntervals(inReview('reviewer'), NOW)).toEqual([{ start: t(10), end: NOW }]);
+    expect(waitingIntervals(inReview('agent'), NOW)).toEqual([]);
     expect(waitingIntervals(task('T1', { status: 'blocked', waiting_on: 'user', blocked_at: at(20) }), NOW)).toEqual([
       { start: t(20), end: NOW },
     ]);

@@ -87,7 +87,10 @@ export function waitingIntervals(task: Task, now: number, vocab: Vocabulary = DE
   for (const r of task.reviews ?? []) add(r.from, ms(r.to));
   for (const b of task.blocks ?? []) if (b.on === 'user') add(b.from, ms(b.to));
   const recorded = (from: string | undefined) => (task.reviews ?? []).some((r) => r.from === from);
-  if (kind === 'review') add(task.review_requested_at, now);
+  // Waiting on you now only while atm says it waits on its reviewer or you (ATM-717): approved or sent back, it is
+  // back with its agent
+  const onYou = task.derived?.waiting?.on === 'reviewer' || task.derived?.waiting?.on === 'user';
+  if (kind === 'review' && onYou) add(task.review_requested_at, now);
   else if (kind === 'done' && !recorded(task.review_requested_at)) add(task.review_requested_at, ms(task.completed_at));
   if (kind === 'blocked' && task.waiting_on === 'user') add(task.blocked_at, now);
   return out;

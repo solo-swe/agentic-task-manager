@@ -149,6 +149,24 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
   review this working copy doesn't have is left out. The tasks' `ETag` already moves with the reviews' files
   (ATM-606), so a decision shows on the next refresh. The task cards' and the details' review badges show them.
 
+- **Who it waits on** (ATM-717, atm-lib's `waiting`, one rule for every front end and the summary's needs-you count;
+  docs/dashboard-derived-state.md):
+  - `derived.waiting` `{ on, since?, questions? }`: `on` is
+    - `reviewer` while its review waits (since the request);
+    - `agent` once approved or sent back (since the decision), or blocked on an agent;
+    - `user` when blocked on them, rejected, or to do together;
+    - `dependencies` when to do and not ready;
+    - `unknown` when blocked by hand.
+
+    Absent when it waits on nobody.
+  - `derived.needs_you`: `review`, `blocked` or `together`, or absent.
+  - `derived.agent_work`: whether agent work is left on it. An approved or sent-back task's is.
+  - `derived.review` `{ id, ref, status }`: the code review it waits on. That is the latest one still open, else the
+    latest, never simply the latest link.
+
+  The cards' waiting line, the needs-you chips, the forecast, the burndown, the component table and the "waiting on
+  you" time read these, and work none of it out.
+
 - **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
   `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,
   found }`, and when found, the project's `project_name` and `places` (`[{ workspace, project }]`, where it is

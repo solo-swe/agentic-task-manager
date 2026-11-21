@@ -10,7 +10,7 @@
   import { markdownPlainText } from '../plain-text';
   import { noteKindLabel } from '../notes';
   import { kindOf, statusLabel, typeLabel } from '../vocab';
-  import { blockSummary, blockWait, reviewSummary, reviewWait } from '../waiting';
+  import { waitLine } from '../waiting';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
   import LabelChips from '../ui/LabelChips.svelte';
@@ -33,10 +33,10 @@
   const ss = $derived(kindStyle(kind));
   const deps = $derived(task.dependencies ?? []);
   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
-  const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
-  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
-  const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
-  const block = $derived(blockWait(task, dashboard.loadedAt, dashboard.vocab));
+  // Who it waits on, as atm says it (ATM-717): one line, agreeing with its review's chip
+  const wait = $derived(waitLine(task, dashboard.loadedAt));
+  // Its code review, while it is in review (ATM-619): the one it waits on, as atm says it (ATM-717)
+  const codeReview = $derived(kind === 'review' ? (task.derived?.review ?? null) : null);
   // The row's width (T-338): the description's start and the latest note on the left, who and when on the right
   const excerpt = $derived(task.description ? markdownPlainText(task.description) : '');
   const note = $derived(cardNote(task));
@@ -92,28 +92,18 @@
     {#if claim}
       <div class="task-claim" title="Claimed by {claim.agent}">{claimSummary(claim, dashboard.loadedAt)}</div>
     {/if}
-    {#if review}
-      <div class="task-waiting review-wait" title={review.note && markdownPlainText(review.note.text)}>
-        {reviewSummary(review)}
+    {#if wait}
+      <div
+        class="task-waiting {wait.kind}-wait"
+        class:on-user={wait.onUser}
+        title={wait.note ? markdownPlainText(wait.note.text) : wait.questions.map(markdownPlainText).join('\n')}
+      >
+        {wait.text}
       </div>
     {/if}
     {#if codeReview && dashboard.projectId}
       <div class="card-review">
-        <ReviewLink
-          project={dashboard.projectId}
-          reference={codeReview.ref}
-          status={task.derived?.review_statuses?.[codeReview.id]}
-          prominent
-        />
-      </div>
-    {/if}
-    {#if block}
-      <div
-        class="task-waiting block-wait"
-        class:on-user={block.on === 'user'}
-        title={block.questions.map(markdownPlainText).join('\n')}
-      >
-        {blockSummary(block)}
+        <ReviewLink project={dashboard.projectId} reference={codeReview.ref} status={codeReview.status} prominent />
       </div>
     {/if}
     {#if note}

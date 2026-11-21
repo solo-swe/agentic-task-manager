@@ -13,23 +13,16 @@ import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
 import progress from '../fixtures/progress.json';
+import { progressTasks, taskWith } from './views';
 
-// Expected numbers: tests/fixtures/progress.md
+// Expected numbers: tests/fixtures/progress.md; atm's answers for its tasks (ATM-717): views.ts
 const NOW = Date.parse('2026-04-06T12:00:00Z');
-const tasks = progress.tasks as Task[];
+const tasks = progressTasks;
 // Not migrated: its phases read as the sprints "Phase 0" (closed: all done), "Phase 1" and "Phase 2" (planned)
 const model = sprintModel(progress.meta, tasks, resolveVocabulary(progress.meta));
 const forecast = (list: Task[], history: Task[] = list) =>
   forecastSprints(list, NOW, history, DEFAULT_VOCABULARY, model);
-const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
-  id,
-  name: id,
-  phase: 0,
-  type: 'feature',
-  description: '',
-  status,
-  ...extra,
-});
+const t = taskWith;
 
 describe('taskDurations', () => {
   it('uses start/complete times, falls back to the gap since the previous completion, and caps idle gaps', () => {
@@ -152,7 +145,7 @@ describe('forecastSprints', () => {
   });
 
   it('gives no estimate for a sprint where only blocked work is left', () => {
-    const blockedOnly = [...tasks.filter((x) => x.phase !== 1), t('x', 'blocked', { phase: 1 })];
+    const blockedOnly = [...tasks.filter((x) => x.phase !== 1), t('x', 'blocked', { phase: 1 }, false)];
     const p1 = forecast(blockedOnly).sprints[1];
     expect([p1.key, p1.state, p1.remaining, p1.blocked, p1.estimate]).toEqual([
       'Phase 1',
@@ -207,7 +200,7 @@ describe('status kinds', () => {
     ],
   });
   const done = (id: string, start: string, end: string, extra: Partial<Task> = {}) =>
-    t(id, 'shipped', { started_at: start, completed_at: end, ...extra });
+    t(id, 'shipped', { started_at: start, completed_at: end, ...extra }, false);
   const history = [
     done('a', '2026-04-01T10:00:00Z', '2026-04-01T10:10:00Z'),
     done('b', '2026-04-01T11:00:00Z', '2026-04-01T11:10:00Z'),
@@ -219,13 +212,13 @@ describe('status kinds', () => {
     expect(taskDurations(history, vocab).map((d) => d.minutes)).toEqual([10, 10, 10]);
   });
 
-  it('counts only tasks that need agent work as remaining: in review and blocked are waiting on someone', () => {
+  it('counts as remaining the tasks atm says agent work is left on: in review for the reviewer and blocked are not', () => {
     const phase = [
       ...history,
       t('d', 'backlog'),
       t('e', 'doing'),
-      t('f', 'awaiting_user'),
-      t('g', 'on_hold'),
+      t('f', 'awaiting_user', {}, false),
+      t('g', 'on_hold', {}, false),
       t('h', 'mystery'),
     ];
     const [row] = forecastSprints(phase, NOW, phase, vocab).sprints;
@@ -233,8 +226,15 @@ describe('status kinds', () => {
     expect(row.estimate!.minutes.likely).toBe(3 * 10);
   });
 
-  it('a sprint with only reviews left is not finished, and has nothing to estimate', () => {
+  // ATM-717: approved or sent back, a task in review is back with its agent: work left, not waiting for a review
+  it('a task in review that atm says is back with its agent is remaining work, not in review', () => {
     const [row] = forecastSprints([...history, t('f', 'awaiting_user')], NOW, history, vocab).sprints;
+    expect(row).toMatchObject({ remaining: 1, inReview: 0 });
+    expect(row.estimate!.minutes.likely).toBe(10);
+  });
+
+  it('a sprint with only reviews left is not finished, and has nothing to estimate', () => {
+    const [row] = forecastSprints([...history, t('f', 'awaiting_user', {}, false)], NOW, history, vocab).sprints;
     expect(row).toMatchObject({ remaining: 0, inReview: 1, state: 'in_progress' });
     expect(row.estimate).toBeUndefined();
   });

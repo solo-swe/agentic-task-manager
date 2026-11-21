@@ -8,7 +8,7 @@
   import { markdownPlainText } from '../plain-text';
   import { REVIEW_STATE_LABELS } from '../review';
   import { kindOf, priorityOf } from '../vocab';
-  import { blockSummary, blockWait, reviewSummary, reviewWait } from '../waiting';
+  import { waitLine } from '../waiting';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
   import LabelChips from '../ui/LabelChips.svelte';
@@ -29,8 +29,8 @@
   const stranded = $derived(dashboard.leftovers.includes(task));
   const kind = $derived(kindOf(dashboard.vocab, task.status));
   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
-  const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
-  const block = $derived(blockWait(task, dashboard.loadedAt, dashboard.vocab));
+  // Who it waits on, as atm says it (ATM-717): one line, agreeing with its review's chip
+  const wait = $derived(waitLine(task, dashboard.loadedAt));
   // The tasks it waits for, by their keys (ADR-007)
   const waitingOn = $derived(
     card.readiness && !card.readiness.ready
@@ -39,7 +39,7 @@
   );
 
   // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
-  const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
+  const codeReview = $derived(kind === 'review' ? (task.derived?.review ?? null) : null);
   const href = $derived(dashboard.taskAddress(task));
 </script>
 
@@ -84,28 +84,18 @@
   {#if claim}
     <div class="kanban-claim" title="Claimed by {claim.agent}">{claimSummary(claim, dashboard.loadedAt)}</div>
   {/if}
-  {#if review}
-    <div class="kanban-waiting review-wait" title={review.note && markdownPlainText(review.note.text)}>
-      {reviewSummary(review)}
+  {#if wait}
+    <div
+      class="kanban-waiting {wait.kind}-wait"
+      class:on-user={wait.onUser}
+      title={wait.note ? markdownPlainText(wait.note.text) : wait.questions.map(markdownPlainText).join('\n')}
+    >
+      {wait.text}
     </div>
   {/if}
   {#if codeReview && dashboard.projectId}
     <div class="card-review">
-      <ReviewLink
-        project={dashboard.projectId}
-        reference={codeReview.ref}
-        status={task.derived?.review_statuses?.[codeReview.id]}
-        prominent
-      />
-    </div>
-  {/if}
-  {#if block}
-    <div
-      class="kanban-waiting block-wait"
-      class:on-user={block.on === 'user'}
-      title={block.questions.map(markdownPlainText).join('\n')}
-    >
-      {blockSummary(block)}
+      <ReviewLink project={dashboard.projectId} reference={codeReview.ref} status={codeReview.status} prominent />
     </div>
   {/if}
   {#if card.readiness}

@@ -43,8 +43,9 @@ export function componentProgress(
         continue;
       }
       r.total++;
+      // Back with its agent (approved, sent back) is open work, as atm says (ATM-717: `derived.agent_work`)
       if (kind === 'done') r.done++;
-      else if (kind === 'review') r.inReview++;
+      else if (kind === 'review' && t.derived?.agent_work !== true) r.inReview++;
       else if (kind === 'blocked') r.blocked++;
       else r.open++;
     }

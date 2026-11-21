@@ -45,9 +45,8 @@
   const reviewsNeedingYou = $derived(
     dashboard.projects.find((p) => p.id === dashboard.projectId)?.summary?.needs_you_reviews ?? [],
   );
-  const needYou = $derived(
-    needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints }, reviewsNeedingYou),
-  );
+  // As atm says each task needs you (ATM-717: `derived.needs_you`)
+  const needYou = $derived(needsYouItems(dashboard.tasks, reviewsNeedingYou));
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 

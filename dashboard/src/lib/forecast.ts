@@ -5,7 +5,7 @@ import { BACKLOG } from './filters';
 import { NO_SPRINTS, type Sprint, type SprintModel } from './sprints';
 import { completedAt } from './timeline';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type StatusKind, type Vocabulary } from './vocab';
+import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
 
 /** A gap between completions longer than this is idle time, not work. */
 export const GAP_CAP_MINUTES = 30;
@@ -128,8 +128,9 @@ export function pace(durations: TimedCompletion[]): Pace | null {
   };
 }
 
-/** Kinds that need no more agent work: finished, or waiting on someone else */
-const NO_AGENT_WORK = new Set<StatusKind | undefined>(['done', 'skipped', 'blocked', 'review']);
+/** Whether agent work is left on the task, as atm says (ATM-717: `derived.agent_work`; an approved or sent-back task's
+ * is); a task atm says nothing of counts as work left */
+const agentWork = (t: Task) => t.derived?.agent_work ?? true;
 
 /**
  * Per-sprint progress and estimates, the work accumulating in the loop's order (the active sprint, the planned ones
@@ -173,9 +174,10 @@ export function forecastSprints(
       total: own.length - skipped,
       done: done.length,
       skipped,
-      remaining: own.filter((t) => !NO_AGENT_WORK.has(kind(t))).length,
+      remaining: own.filter(agentWork).length,
       blocked: own.filter((t) => kind(t) === 'blocked').length,
-      inReview: own.filter((t) => kind(t) === 'review').length,
+      // Waiting for the reviewer (or the user), not back with its agent
+      inReview: own.filter((t) => kind(t) === 'review' && !agentWork(t)).length,
       state: finished ? 'done' : started ? 'in_progress' : 'not_started',
     };
     if (finished) {

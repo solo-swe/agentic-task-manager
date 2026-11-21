@@ -34,8 +34,6 @@ const BOARD_CAP: usize = 30;
 /// To-do tasks per project, so one project's new batch doesn't fill the To Do column.
 const BOARD_READY_CAP: usize = 10;
 const BOARD_DONE_HOURS: i64 = 24;
-/// The review states in which a task in review waits for its agent, not the reviewer.
-const REWORK_STATES: [&str; 2] = ["changes_requested", "approved"];
 
 fn time_of(value: Option<&Value>) -> Option<i64> {
     value.and_then(Value::as_str).and_then(parse_iso)
@@ -765,21 +763,32 @@ pub fn project_summary(project: &Project) -> Result<Value> {
     let active = active_sprint(vocab);
     let mut needs_you_tasks = Vec::new();
     for (t, k) in tasks.iter().zip(&kinds) {
-        let reason = match k {
-            Some(Kind::Review) if through_review(t) => None,
-            Some(Kind::Review) => {
-                let state = t.get("review_state").and_then(Value::as_str);
-                (!state.is_some_and(|s| REWORK_STATES.contains(&s))).then_some("review")
-            }
-            Some(Kind::Blocked) if t.get("waiting_on").and_then(Value::as_str) == Some("user") => {
-                Some("blocked")
-            }
-            Some(Kind::Todo) if t.get("with").and_then(Value::as_str) == Some("user") => {
-                let in_scope = active.is_none_or(|a| in_sprint(vocab, t, a));
-                (in_scope && unfinished_dependencies(vocab, &tasks, t, &archived)?.is_empty())
-                    .then_some("together")
-            }
-            _ => None,
+        // atm's one rule (ATM-717, `waiting`), as each task's view has it; its dependencies looked up only for work
+        // with the user, the one case they decide
+        let with_user = t.get("with").and_then(Value::as_str) == Some("user");
+        let waiting_for: Vec<String> = if *k == Some(Kind::Todo) && with_user {
+            unfinished_dependencies(vocab, &tasks, t, &archived)?
+                .into_iter()
+                .map(|(d, _)| d)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let answer = crate::waiting::of(
+            vocab,
+            t,
+            crate::waiting::Context {
+                ready: *k == Some(Kind::Todo) && waiting_for.is_empty(),
+                waiting_for: &waiting_for,
+                in_scope: crate::waiting::in_active_scope(vocab, t),
+            },
+        );
+        let reason = match answer.needs_you {
+            Some(crate::waiting::NeedsYou::Review) if through_review(t) => None,
+            Some(crate::waiting::NeedsYou::Review) => Some("review"),
+            Some(crate::waiting::NeedsYou::Blocked) => Some("blocked"),
+            Some(crate::waiting::NeedsYou::Together) => Some("together"),
+            None => None,
         };
         if let Some(reason) = reason {
             let entry = json!({"id": t.get("id"), "name": capped(t.get("name")), "reason": reason});

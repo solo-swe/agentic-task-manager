@@ -807,8 +807,9 @@ export class TasksServer {
   }
 
   /** Where the default project's code reviews stand, by review ID (ATM-621): what atm reads from its reviews folder
-   * into each task's `derived.review_statuses`. The fixture's views come from atm run outside git, with no reviews
-   * folder, so a test sets them here; atm's own reading is tested by atm-lib and the CLI suite */
+   * into each task's `derived.review_statuses`, and into the status of the review it waits on (`derived.review`,
+   * ATM-717). The fixture's views come from atm run outside git, with no reviews folder, so atm names the review
+   * without a status and a test sets them here; atm's own reading and choice are tested by atm-lib and the CLI suite */
   reviewStatuses: Record<string, string> = {};
 
   /** Task views (as text) with the statuses of the reviews each task links, as atm serves them */
@@ -822,7 +823,13 @@ export class TasksServer {
       const known = Object.fromEntries(
         links.filter((l) => l.id in this.reviewStatuses).map((l) => [l.id, this.reviewStatuses[l.id]]),
       );
-      if (Object.keys(known).length) view.derived = { ...view.derived, review_statuses: known };
+      if (!Object.keys(known).length) continue;
+      const review = view.derived.review as { id: string } | undefined;
+      view.derived = {
+        ...view.derived,
+        review_statuses: known,
+        ...(review && review.id in known ? { review: { ...review, status: known[review.id] } } : {}),
+      };
     }
     return JSON.stringify(parsed);
   }

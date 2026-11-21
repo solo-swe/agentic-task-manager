@@ -439,11 +439,20 @@ fn views_derive_what_applies_and_leave_out_the_rest() {
     assert_eq!(
         views[0]["derived"],
         json!({
-            "kind": "todo", "ready": true, "waiting_for": [], "priority": "P2", "effective_review": "none", "archived": false
+            "kind": "todo", "ready": true, "waiting_for": [], "priority": "P2", "effective_review": "none", "archived": false,
+            "agent_work": true
         })
     );
     assert_eq!(views[1]["derived"]["waiting_for"], json!(["T-2"]));
+    // Who each waits on, from atm's one rule (ATM-717): its dependency, the user (a need of theirs)
+    assert_eq!(
+        views[1]["derived"]["waiting"],
+        json!({"on": "dependencies"})
+    );
     assert_eq!(views[2]["derived"]["waiting_on"], json!("user"));
+    assert_eq!(views[2]["derived"]["waiting"], json!({"on": "user"}));
+    assert_eq!(views[2]["derived"]["needs_you"], json!("blocked"));
+    assert_eq!(views[2]["derived"]["agent_work"], json!(false));
     assert_eq!(views[3]["derived"]["stage"], json!("in_pr"));
     assert_eq!(
         views[0]["derived"]
@@ -457,7 +466,8 @@ fn views_derive_what_applies_and_leave_out_the_rest() {
             "waiting_for",
             "priority",
             "effective_review",
-            "archived"
+            "archived",
+            "agent_work"
         ]
     );
 }

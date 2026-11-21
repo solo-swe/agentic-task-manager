@@ -1282,6 +1282,19 @@ The two CompMD upgrades, as they were made:
   - `minimumReleaseAgeExclude` names the 0.9.0 packages, released today by CompMD's author.
   - **CompMD's guide for agents** is its `spec/llms.txt` at `v0.9.0`, unchanged since `v0.8.0`.
 
+**Release 0.43.0 (the sprint Audit and tabs), in progress.** The audit's fixes record their invariants in §2 as they
+land (I11, I13, I24, I25). Fields:
+
+- **The task views' `derived` gains `waiting`, `needs_you`, `agent_work` and `review`** (ATM-717):
+  - who a task waits on, since when, and its questions;
+  - why it needs the user;
+  - whether agent work is left;
+  - the code review it waits on.
+
+  This is atm's own data: words from a fixed set, times, review IDs and references, and the task's questions as
+  stored, which the dashboard already showed. The dashboard and the summary's needs-you count only show them.
+  `atm task list --derived` prints them. No skill reads them, and no command reads a new path or URL.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

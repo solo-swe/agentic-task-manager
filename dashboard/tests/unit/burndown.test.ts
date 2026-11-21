@@ -5,10 +5,11 @@ import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
 import progress from '../fixtures/progress.json';
+import { progressTasks, taskWith } from './views';
 
-// Expected numbers: tests/fixtures/progress.md
+// Expected numbers: tests/fixtures/progress.md; atm's answers for its tasks (ATM-717): views.ts
 const NOW = Date.parse('2026-04-06T12:00:00Z');
-const tasks = progress.tasks as Task[];
+const tasks = progressTasks;
 const at = (iso: string) => Date.parse(iso);
 // Not migrated: its phases read as the sprints "Phase 0" (closed), "Phase 1" and "Phase 2"
 const model = sprintModel(progress.meta, tasks, resolveVocabulary(progress.meta));
@@ -79,16 +80,8 @@ describe('burndown', () => {
   });
 
   it('uses the earliest known time for tasks without created_at', () => {
-    const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
-      id,
-      name: id,
-      phase: 0,
-      type: 'feature',
-      description: '',
-      status,
-      ...extra,
-    });
-    const old = [t('a', 'done', { updated_at: '2026-04-02T10:00:00Z' }), t('b', 'todo')];
+    const t = taskWith;
+    const old = [t('a', 'done', { updated_at: '2026-04-02T10:00:00Z' }, false), t('b', 'todo')];
     const b = burndown(old, forecastAll(old, NOW), NOW);
     expect(series(b)).toEqual([
       ['04-02T10:00', 2, 1],
@@ -110,29 +103,22 @@ describe('burndown', () => {
         { id: 'dropped', kind: 'skipped' },
       ],
     });
-    const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
-      id,
-      name: id,
-      phase: 0,
-      type: 'feature',
-      description: '',
-      status,
-      ...extra,
-    });
+    const t = taskWith;
     const created = { created_at: '2026-04-01T09:00:00Z' };
     const shipped = (id: string, h: number) =>
-      t(id, 'shipped', {
-        ...created,
-        started_at: `2026-04-01T${h}:00:00Z`,
-        completed_at: `2026-04-01T${h}:10:00Z`,
-      });
+      t(
+        id,
+        'shipped',
+        { ...created, started_at: `2026-04-01T${h}:00:00Z`, completed_at: `2026-04-01T${h}:10:00Z` },
+        false,
+      );
     const all = [
       shipped('a', 10),
       shipped('b', 11),
       shipped('c', 12),
       t('d', 'backlog', created),
-      t('e', 'awaiting_user', created),
-      t('f', 'dropped', created),
+      t('e', 'awaiting_user', created, false),
+      t('f', 'dropped', created, false),
     ];
     const b = burndown(all, forecastSprints(all, NOW, all, vocab), NOW, undefined, vocab);
     expect(b.points.at(-1)).toMatchObject({ scope: 5, remaining: 2 });

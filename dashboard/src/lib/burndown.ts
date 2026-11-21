@@ -130,8 +130,9 @@ export function burndown(
     undefined,
   );
   const current = points[points.length - 1];
-  // What the estimate doesn't cover: tasks waiting on someone rather than on agent work
-  const waiting = tasks.filter((t) => kind(t) === 'blocked' || kind(t) === 'review').length;
+  // What the estimate doesn't cover: open tasks waiting on someone rather than on agent work, as atm says (ATM-717:
+  // `derived.agent_work`; an approved or sent-back task is agent work)
+  const waiting = tasks.filter((t) => kind(t) !== 'done' && t.derived?.agent_work === false).length;
   return {
     points,
     ...(untimed ? { untimed } : {}),

@@ -79,12 +79,54 @@
           "additionalProperties": { "$ref": "#/$defs/ForeignTask" },
           "description": "The other projects' tasks it names (<project id>:<UUID> in dependencies, related or duplicate_of), by reference, as they are there (ADR-007 §7); absent when it names none"
         },
+        "waiting": {
+          "$ref": "#/$defs/TaskWaiting",
+          "description": "Who the task waits on now, and since when (ATM-717); absent when it waits on nobody (to do and ready, active, finished)"
+        },
+        "needs_you": {
+          "enum": ["review", "blocked", "together"],
+          "description": "Why it needs the user, by atm's one rule (ATM-717): in review and waiting for the reviewer (or rejected), blocked on a question for them, or to do together now (ready, in the active sprint or with none active). Absent when it doesn't"
+        },
+        "agent_work": {
+          "type": "boolean",
+          "description": "Whether agent work is left on it (ATM-717): to do or active, sent back or approved but not finished, or a status atm doesn't know; not while it waits on a reviewer, the user or a decision, nor once finished"
+        },
+        "review": {
+          "$ref": "#/$defs/TaskReview",
+          "description": "The code review it waits on (ATM-717); absent without one"
+        },
         "review_statuses": {
           "type": "object",
           "additionalProperties": {
             "enum": ["draft", "waiting", "live", "changes_requested", "approved", "closed", "unreadable"]
           },
           "description": "Where each of its code reviews stands (ATM-621), by the review's ID as its code_reviews link it: the review's status, or unreadable for one atm can't read (ATM-617); one this working copy doesn't have is left out, and the field is absent when it has none"
+        }
+      }
+    },
+    "TaskWaiting": {
+      "type": "object",
+      "description": "Who a task waits on, by atm-lib's one rule (`waiting`, ATM-717): its reviewer while its review waits (since the request); its agent once approved or sent back (since the decision), or blocked on an agent; the user when blocked on them, rejected, or to do together; its dependencies when to do and not ready; unknown when blocked by hand",
+      "required": ["on"],
+      "properties": {
+        "on": { "enum": ["reviewer", "agent", "user", "dependencies", "unknown"] },
+        "since": { "type": "string", "description": "ISO 8601, when known" },
+        "questions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "A blocked task's open questions; absent when none"
+        }
+      }
+    },
+    "TaskReview": {
+      "type": "object",
+      "description": "The code review a task waits on (ATM-717): of its linked reviews, the latest one still open here (draft, waiting, live or sent back), else the latest link; without a status when this working copy doesn't have it (another branch's)",
+      "required": ["id", "ref"],
+      "properties": {
+        "id": { "type": "string" },
+        "ref": { "type": "string" },
+        "status": {
+          "enum": ["draft", "waiting", "live", "changes_requested", "approved", "closed", "unreadable"]
         }
       }
     },

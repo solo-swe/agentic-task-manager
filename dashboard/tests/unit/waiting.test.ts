@@ -1,20 +1,21 @@
+// The words for who a task waits on. Who it waits on, whether it needs you and whether agent work is left are atm's
+// (atm-lib's `waiting`, its own table of cases, ATM-717): these tests give the tasks atm's values and check what shows.
 import { describe, expect, it } from 'vitest';
-import { sprintModel } from '../../src/lib/sprints';
+import type { TaskDerived, TaskWaiting } from '$generated/types';
 import type { Task } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
-import {
-  blockSummary,
-  blockWait,
-  latestNote,
-  needingUser,
-  needsYouItems,
-  reviewSummary,
-  reviewWait,
-} from '../../src/lib/waiting';
+import { latestNote, needingUser, needsYouItems, waitLine, waitText } from '../../src/lib/waiting';
 
 const M = 60_000;
 const T0 = Date.parse('2026-04-01T08:00:00Z');
 const iso = (ms: number) => new Date(ms).toISOString().replace('.000Z', 'Z');
+const derived = (kind: string, more: Partial<TaskDerived> = {}): TaskDerived => ({
+  kind,
+  ready: false,
+  waiting_for: [],
+  priority: 'P2',
+  archived: false,
+  ...more,
+});
 const task = (status: string, fields: Partial<Task> = {}): Task => ({
   id: 'T-1',
   name: 'x',
@@ -24,86 +25,77 @@ const task = (status: string, fields: Partial<Task> = {}): Task => ({
   status,
   ...fields,
 });
+const waiting = (on: TaskWaiting['on'], minutesAgo?: number, questions?: string[]): TaskWaiting => ({
+  on,
+  ...(minutesAgo === undefined ? {} : { since: iso(T0 - minutesAgo * M) }),
+  ...(questions ? { questions } : {}),
+});
 
-describe('reviewWait', () => {
-  it('measures from the review request, with the latest review note', () => {
-    const t = task('in_review', {
-      review_requested_at: iso(T0),
-      notes: [
-        { at: iso(T0 - 90 * M), kind: 'review', text: 'first try' },
-        { at: iso(T0), by: 'claude:1', kind: 'review', text: 'please check the API names' },
-        { at: iso(T0 + M), kind: 'note', text: 'unrelated' },
-      ],
-    });
-    expect(reviewWait(t, T0 + 130 * M)).toEqual({
-      since: T0,
-      minutes: 130,
-      note: { at: iso(T0), by: 'claude:1', kind: 'review', text: 'please check the API names' },
+describe('waitLine', () => {
+  it('says who a task in review or blocked waits on, as atm says it, for how long and how many questions', () => {
+    const line = (kind: string, w: TaskWaiting) => waitLine(task('x', { derived: derived(kind, { waiting: w }) }), T0);
+    for (const [kind, w, text] of [
+      ['review', waiting('reviewer', 130), 'Waiting for review · 2 h 10 m'],
+      ['review', waiting('reviewer', 0.2), 'Waiting for review · just now'],
+      // ATM-711's card: approved, or sent back, it is back with its agent, not waiting for the review
+      ['review', waiting('agent', 10), 'Back with its agent · 10 m'],
+      ['review', waiting('user', 5), 'Waiting on you · 5 m'],
+      ['blocked', waiting('user', 125, ['a', 'b']), 'Waiting on you · 2 h 5 m · 2 questions'],
+      ['blocked', waiting('agent', undefined, ['x']), 'Waiting on an agent · 1 question'],
+      ['blocked', waiting('unknown', 3), 'Blocked · 3 m'],
+    ] as const)
+      expect(line(kind, w)?.text, `${kind} ${w.on}`).toBe(text);
+    expect(line('review', waiting('reviewer'))).toMatchObject({ kind: 'review', onUser: false });
+    expect(line('blocked', waiting('user', 1, ['a', 'b']))).toMatchObject({
+      kind: 'block',
+      onUser: true,
+      questions: ['a', 'b'],
     });
   });
 
-  it('falls back to the last update for a task set to review by hand, and is null for other kinds', () => {
-    expect(reviewWait(task('in_review', { updated_at: iso(T0) }), T0 + 5 * M)).toEqual({ since: T0, minutes: 5 });
-    expect(reviewWait(task('in_review'), T0)).toBeNull();
-    expect(reviewWait(task('in_progress', { review_requested_at: iso(T0) }), T0)).toBeNull();
+  it('comes with the review note while the review waits for the reviewer', () => {
+    const notes = [
+      { at: iso(T0 - 9 * M), kind: 'review', text: 'Old' },
+      { at: iso(T0 - 2 * M), kind: 'review', text: 'Check the toolbar' },
+    ];
+    const at = (on: TaskWaiting['on']) =>
+      waitLine(task('in_review', { notes, derived: derived('review', { waiting: waiting(on, 2) }) }), T0);
+    expect(at('reviewer')?.note?.text).toBe('Check the toolbar');
+    expect(at('agent')?.note).toBeUndefined();
   });
 
-  it("follows a project's statuses by kind", () => {
-    const vocab = resolveVocabulary({
-      statuses: [
-        { id: 'todo', kind: 'todo' },
-        { id: 'doing', kind: 'active' },
-        { id: 'awaiting_user', kind: 'review' },
-        { id: 'done', kind: 'done' },
-      ],
-    });
-    expect(reviewWait(task('awaiting_user', { review_requested_at: iso(T0) }), T0, vocab)?.minutes).toBe(0);
+  it('is none for a task atm says waits on nobody, on its dependencies or on work with you, or says nothing of', () => {
+    expect(waitLine(task('todo', { derived: derived('todo') }), T0)).toBeNull();
+    expect(waitLine(task('todo', { derived: derived('todo', { waiting: waiting('dependencies') }) }), T0)).toBeNull();
+    expect(waitLine(task('todo', { derived: derived('todo', { waiting: waiting('user') }) }), T0)).toBeNull();
+    expect(waitLine(task('in_review', { review_requested_at: iso(T0) }), T0)).toBeNull();
   });
 });
 
-describe('blockWait', () => {
-  it('says who decides, since when, and the questions', () => {
-    const t = task('blocked', {
-      waiting_on: 'user',
-      blocked_at: iso(T0),
-      questions: ['REST or GraphQL?', 'Which DB?'],
-    });
-    const wait = blockWait(t, T0 + 125 * M)!;
-    expect(wait).toEqual({ on: 'user', minutes: 125, questions: ['REST or GraphQL?', 'Which DB?'] });
-    expect(blockSummary(wait)).toBe('Waiting on you · 2 h 5 m · 2 questions');
-    expect(blockSummary(blockWait(task('blocked', { waiting_on: 'agent', questions: ['x'] }), T0)!)).toBe(
-      'Waiting on an agent · 1 question',
+describe('waitText', () => {
+  it('the All projects board’s cards, from a summary’s card: the same words', () => {
+    expect(waitText({ on: 'reviewer', since: iso(T0 - 60 * M) }, 'review', T0)).toBe('Waiting for review · 1 h');
+    expect(waitText({ on: 'user', since: iso(T0 - 60 * M), questions: ['', ''] }, 'blocked', T0)).toBe(
+      'Waiting on you · 1 h · 2 questions',
     );
-  });
-
-  it('a task blocked by hand says only what it has; with nothing to add, or of another kind, null', () => {
-    expect(blockSummary(blockWait(task('blocked', { blocked_at: iso(T0) }), T0 + 3 * M)!)).toBe('Blocked · 3 m');
-    expect(blockWait(task('blocked', { waiting_on: 'boss' }), T0)).toBeNull();
-    expect(blockWait(task('todo', { waiting_on: 'user' }), T0)).toBeNull();
+    expect(waitText({ on: 'reviewer' }, 'review', T0)).toBe('Waiting for review');
   });
 });
 
 describe('needingUser', () => {
-  it('counts tasks in review and tasks blocked on the user, not those blocked on an agent', () => {
-    const tasks = [
-      task('in_review', { id: 'A' }),
-      task('blocked', { id: 'B', waiting_on: 'user' }),
-      task('blocked', { id: 'C', waiting_on: 'agent' }),
-      task('blocked', { id: 'D' }),
-      task('todo', { id: 'E', waiting_on: 'user' }),
-    ];
-    expect(needingUser(tasks).map((t) => t.id)).toEqual(['A', 'B']);
-  });
+  const needs = (id: string, reason?: TaskDerived['needs_you'], more: Partial<Task> = {}) =>
+    task('x', { id, name: id.toLowerCase(), derived: derived('review', reason ? { needs_you: reason } : {}), ...more });
 
-  it('lists them for the chips with why, as atm serve does', () => {
-    const tasks = [
-      task('in_review', { id: 'A', name: 'Alpha' }),
-      task('blocked', { id: 'B', name: 'Beta', waiting_on: 'user' }),
-      task('todo', { id: 'E', name: 'Eps' }),
-    ];
+  it('lists the tasks atm says need you, with why, for the chips', () => {
+    const tasks = [needs('A', 'review'), needs('B', 'blocked'), needs('C'), needs('D', 'together'), task('todo')];
+    expect(needingUser(tasks).map((t) => t.id)).toEqual(['A', 'B', 'D']);
     expect(needsYouItems(tasks)).toEqual([
-      { id: 'A', name: 'Alpha', reason: 'review' },
-      { id: 'B', name: 'Beta', reason: 'blocked' },
+      { id: 'A', name: 'a', reason: 'review' },
+      { id: 'B', name: 'b', reason: 'blocked' },
+      { id: 'D', name: 'd', reason: 'together' },
+    ]);
+    expect(needsYouItems([needs('K', 'review', { key: 'ATM-7' })])).toEqual([
+      { id: 'K', key: 'ATM-7', name: 'k', reason: 'review' },
     ]);
   });
 
@@ -111,66 +103,17 @@ describe('needingUser', () => {
   it('a task in review through a review waiting on you is left out; through another, or blocked, it stays', () => {
     const cr = (id: string) => ({ id, ref: 'CR-1' });
     const tasks = [
-      task('in_review', { id: 'A', name: 'Alpha', code_reviews: [cr('r-old'), cr('r1')] }),
-      task('in_review', { id: 'C', name: 'Gamma', code_reviews: [cr('r2')] }),
-      task('in_review', { id: 'D', name: 'Delta' }),
-      task('blocked', { id: 'B', name: 'Beta', waiting_on: 'user', code_reviews: [cr('r1')] }),
+      needs('A', 'review', { code_reviews: [cr('r-old'), cr('r1')] }),
+      needs('C', 'review', { code_reviews: [cr('r2')] }),
+      needs('D', 'review'),
+      needs('B', 'blocked', { code_reviews: [cr('r1')] }),
     ];
-    expect(needsYouItems(tasks, undefined, undefined, [{ id: 'r1' }]).map((t) => t.id)).toEqual(['C', 'D', 'B']);
-    expect(needsYouItems(tasks, undefined, undefined, []).map((t) => t.id)).toEqual(['A', 'C', 'D', 'B']);
-  });
-
-  const derived = (ready: boolean) => ({ kind: 'todo', ready, waiting_for: [], priority: 'P2', archived: false });
-
-  it('with you: only the active sprint’s, ready as atm says it (T-347, T-366)', () => {
-    const tasks = [
-      task('todo', { id: 'W1', with: 'user', sprint: 'Now', derived: derived(true) }),
-      task('todo', { id: 'W2', with: 'user', sprint: 'Later', derived: derived(true) }),
-      task('todo', { id: 'W3', with: 'user', derived: derived(true) }),
-      task('todo', { id: 'W4', with: 'user', sprint: 'Now', dependencies: ['D1'], derived: derived(false) }),
-      // Waits on a done task and an archived one, which atm counts as done
-      task('todo', { id: 'W5', with: 'user', sprint: 'Now', dependencies: ['D2', 'ARCHIVED'], derived: derived(true) }),
-      task('in_progress', { id: 'D1', sprint: 'Now' }),
-      task('done', { id: 'D2', sprint: 'Now' }),
-      task('in_review', { id: 'R', sprint: 'Later' }),
-    ];
-    const meta = {
-      sprints: [
-        { id: 'Now', state: 'active' },
-        { id: 'Later', state: 'planned' },
-      ],
-    };
-    const vocab = resolveVocabulary(meta);
-    const scope = { model: sprintModel(meta, tasks, vocab) };
-    // Reviews count wherever they are; W2 is in a planned sprint, W3 in the backlog, W4 waits on D1
-    expect(needingUser(tasks, vocab, scope).map((t) => t.id)).toEqual(['W1', 'W5', 'R']);
-    // Without an active sprint, any sprint's, still only when ready
-    const none = { sprints: [{ id: 'Now', state: 'planned' }] };
-    const idle = { model: sprintModel(none, tasks, resolveVocabulary(none)) };
-    expect(needingUser(tasks, vocab, idle).map((t) => t.id)).toEqual(['W1', 'W2', 'W3', 'W5', 'R']);
-    // Without a scope (older callers), every with-you task, as before
-    expect(needingUser(tasks, vocab).map((t) => t.id)).toEqual(['W1', 'W2', 'W3', 'W4', 'W5', 'R']);
-  });
-
-  it('with you: a task without atm’s values isn’t ready now; the dashboard doesn’t judge its dependencies (T-387)', () => {
-    const tasks = [
-      // Its dependency looks done here, but atm says it isn't ready
-      task('todo', { id: 'W1', with: 'user', sprint: 'Now', dependencies: ['D'], derived: derived(false) }),
-      task('todo', { id: 'W2', with: 'user', sprint: 'Now' }),
-      task('done', { id: 'D', sprint: 'Now' }),
-    ];
-    const meta = { sprints: [{ id: 'Now', state: 'active' }] };
-    const vocab = resolveVocabulary(meta);
-    expect(needingUser(tasks, vocab, { model: sprintModel(meta, tasks, vocab) })).toEqual([]);
+    expect(needsYouItems(tasks, [{ id: 'r1' }]).map((t) => t.id)).toEqual(['C', 'D', 'B']);
+    expect(needsYouItems(tasks, []).map((t) => t.id)).toEqual(['A', 'C', 'D', 'B']);
   });
 });
 
-describe('summaries', () => {
-  it('says how long', () => {
-    expect(reviewSummary({ since: T0, minutes: 130 })).toBe('Waiting for review · 2 h 10 m');
-    expect(reviewSummary({ since: T0, minutes: 0.2 })).toBe('Waiting for review · just now');
-  });
-
+describe('latestNote', () => {
   it('finds no note when there is none of that kind', () => {
     expect(latestNote(task('todo'), 'review')).toBeUndefined();
   });

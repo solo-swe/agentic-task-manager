@@ -16,7 +16,7 @@
   import { dashboard } from '../state.svelte';
   import { kindStyle, priorityStyle, typeStyle } from '../theme';
   import { DEFAULT_VOCABULARY, priorityRank } from '../vocab';
-  import { blockSummary, reviewSummary } from '../waiting';
+  import { waitText } from '../waiting';
   import KanbanScroll from '../kanban/KanbanScroll.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
   import TaskKey from '../ui/TaskKey.svelte';
@@ -67,20 +67,16 @@
   const KINDS = { todo: 'todo', active: 'active', review: 'review', blocked: 'blocked', done: 'done' } as const;
   const LABELS_SHOWN = 2;
 
-  const minutesSince = (iso: string | null | undefined) => {
-    const t = Date.parse(iso ?? '');
-    return Number.isNaN(t) ? null : Math.max(0, (dashboard.loadedAt - t) / 60_000);
-  };
-
   /** The card's last line, by column: who works on it, how long it waits, or when it was finished */
   function status({ card }: AllBoardCard, column: string): string | null {
     if (column === 'active' && card.by)
       return [shortAgent(card.by), card.since && formatAgo(card.since, dashboard.loadedAt)].filter(Boolean).join(' · ');
-    if (column === 'review') return reviewSummary({ since: 0, minutes: minutesSince(card.since) ?? 0 });
+    if (column === 'review')
+      return waitText({ on: 'reviewer', since: card.since ?? undefined }, 'review', dashboard.loadedAt);
     if (column === 'blocked') {
-      const on = card.waiting_on === 'user' || card.waiting_on === 'agent' ? card.waiting_on : null;
+      const on = card.waiting_on === 'user' || card.waiting_on === 'agent' ? card.waiting_on : 'unknown';
       const questions = Array.from({ length: card.questions ?? 0 }, () => '');
-      return blockSummary({ on, minutes: minutesSince(card.since), questions });
+      return waitText({ on, since: card.since ?? undefined, questions }, 'blocked', dashboard.loadedAt);
     }
     if (column === 'done' && card.completed_at) return `Done ${formatAgo(card.completed_at, dashboard.loadedAt)}`;
     // To do, but not for the loop now (T-349): waiting on dependencies, or done with you

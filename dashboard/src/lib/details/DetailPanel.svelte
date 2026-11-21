@@ -8,7 +8,7 @@
   import { kindOf, statusLabel } from '../vocab';
   import { actorsLine, earlierAttempts } from '../actors';
   import { noteKindLabel, shortSha, taskNotes } from '../notes';
-  import { blockSummary, blockWait, reviewSummary, reviewWait } from '../waiting';
+  import { waitLine } from '../waiting';
   import { taskTimes } from '../work';
   import { commitRef } from '../repo';
   import { referenceTo, type DocumentRef } from '../documents';
@@ -64,8 +64,8 @@
     task && kindOf(dashboard.vocab, task.status) === 'active' ? dashboard.claims.get(task.id) : undefined,
   );
   const statusStyle = (status: string) => kindStyle(kindOf(dashboard.vocab, status));
-  const review = $derived(task ? reviewWait(task, dashboard.loadedAt, dashboard.vocab) : null);
-  const block = $derived(task ? blockWait(task, dashboard.loadedAt, dashboard.vocab) : null);
+  // Who it waits on, as atm says it (ATM-717)
+  const wait = $derived(task ? waitLine(task, dashboard.loadedAt) : null);
   const notes = $derived(task ? taskNotes(task) : []);
   // Its sprint (or the backlog), its release (its own, else its sprint's), and the sprints it was carried through
   // (SR-7.6, SR-4.5): shown when it was in more than one; flagged once carried twice or more
@@ -74,11 +74,11 @@
   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
   const carried = $derived(task && sprint ? carriedCount(task, sprint) : 0);
   const reviewMode = $derived(task ? effectiveReview(task) : 'none');
-  // Its code reviews (ATM-585: `code_reviews`, oldest first): the latest to open, the others after it, in the project
-  // shown
+  // Its code reviews (ATM-585: `code_reviews`, oldest first): the one it waits on to open, as atm says it (ATM-717),
+  // the others after it, latest first, in the project shown
   const codeReviews = $derived(task?.code_reviews ?? []);
-  const latestReview = $derived(codeReviews.at(-1) ?? null);
-  const earlierReviews = $derived(codeReviews.slice(0, -1).reverse());
+  const latestReview = $derived(task?.derived?.review ?? codeReviews.at(-1) ?? null);
+  const earlierReviews = $derived(codeReviews.filter((r) => r.id !== latestReview?.id).reverse());
   /** Where a review of the task stands, as its view from atm says (ATM-621) */
   const reviewStatusOf = (id: string) => task?.derived?.review_statuses?.[id];
   const reviewProject = $derived(dashboard.projectId);
@@ -494,11 +494,11 @@
 
 <!-- Why the task waits, if it does: above the description, the first thing to read -->
 {#snippet waiting(task: Task)}
-  {#if review}
+  {#if wait?.kind === 'review'}
     <div class="detail-section" id="detail-review">
       <div class="label">In review</div>
       <div class="value" style="font-size:13px">
-        <div><strong>{reviewSummary(review)}</strong></div>
+        <div><strong>{wait.text}</strong></div>
         {#if latestReview && reviewProject}
           <!-- Its code review, the latest it names, to open (ATM-585); the earlier ones after it -->
           <div class="detail-review-links">
@@ -515,9 +515,11 @@
               />{/each}
           </div>
         {/if}
-        <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
-        {#if review.note}<div class="review-note">
-            <CompMd text={review.note.text} {task} onopen={openDocument} />
+        {#if task.derived?.waiting?.since}
+          <div style="color:var(--text-muted)">Since {new Date(task.derived.waiting.since).toLocaleString()}</div>
+        {/if}
+        {#if wait.note}<div class="review-note">
+            <CompMd text={wait.note.text} {task} onopen={openDocument} />
           </div>{/if}
       </div>
     </div>
@@ -534,17 +536,17 @@
       </div>
     </div>
   {/if}
-  {#if block}
+  {#if wait?.kind === 'block'}
     <div class="detail-section" id="detail-blocked">
       <div class="label">Blocked</div>
       <div class="value" style="font-size:13px">
-        <div><strong>{blockSummary(block)}</strong></div>
-        {#if task.blocked_at}
-          <div style="color:var(--text-muted)">Since {new Date(task.blocked_at).toLocaleString()}</div>
+        <div><strong>{wait.text}</strong></div>
+        {#if task.derived?.waiting?.since}
+          <div style="color:var(--text-muted)">Since {new Date(task.derived.waiting.since).toLocaleString()}</div>
         {/if}
-        {#if block.questions.length}
+        {#if wait.questions.length}
           <ol class="block-questions">
-            {#each block.questions as question, i (i)}<li>
+            {#each wait.questions as question, i (i)}<li>
                 <CompMd text={question} {task} inline onopen={openDocument} />
               </li>{/each}
           </ol>

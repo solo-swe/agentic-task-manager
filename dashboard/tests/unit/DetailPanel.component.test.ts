@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DetailPanel from '../../src/lib/details/DetailPanel.svelte';
 import { compmdSettled } from './compmd.helpers';
 import { dashboard } from '../../src/lib/state.svelte';
+import type { TaskDerived } from '$generated/types';
 import type { TasksFile } from '../../src/lib/types';
 import archiveFile from '../fixtures/archive.json';
 import sprints from '../fixtures/sprints.json';
@@ -18,6 +19,13 @@ vi.mock('../../src/lib/compmd', async (actual) => ({
 
 // The archive's meta (archived_at) isn't part of tasks.json's
 const archive = archiveFile as unknown as TasksFile;
+
+/** What atm derives for the task, as its tasks route would serve it (stubbed; atm-lib's rules have their own tests) */
+const atmSays = (derived: Partial<TaskDerived>) => ({
+  derived: { kind: '', ready: false, waiting_for: [], priority: '', archived: false, ...derived },
+});
+/** atm's answer for a task in review waiting for its reviewer */
+const forReview = atmSays({ kind: 'review', waiting: { on: 'reviewer' } });
 
 function open(fields: Record<string, unknown>, id = 'T-005') {
   const tasks = standard.tasks.map((t) => (t.id === id ? { ...t, ...fields } : t));
@@ -218,10 +226,12 @@ describe('DetailPanel', () => {
   });
 
   it('a blocked task lists its questions and how to answer them', async () => {
+    const questions = ['REST or GraphQL?', 'Which DB?'];
     const container = open({
       status: 'blocked',
       waiting_on: 'user',
-      questions: ['REST or GraphQL?', 'Which DB?'],
+      questions,
+      ...atmSays({ kind: 'blocked', waiting: { on: 'user', questions } }),
     });
     await compmdSettled();
     const section = container.querySelector('#detail-blocked')!;
@@ -330,6 +340,7 @@ describe('DetailPanel', () => {
   it('renders notes, the review note and questions with CompMD, with HTML kept as text (T-219)', async () => {
     const container = open({
       status: 'in_review',
+      ...forReview,
       notes: [
         { at: '2026-04-01T08:00:00Z', by: 'Hakan', kind: 'done', text: 'Ran `npm test`; see [CI](https://ci.example)' },
         { at: '2026-04-02T08:00:00Z', by: 'claude:aaaa', kind: 'review', text: 'Check **the toolbar** <i>x</i>' },
@@ -345,7 +356,13 @@ describe('DetailPanel', () => {
     expect(notes[1].querySelector('a')).toHaveAttribute('target', '_blank');
     expect(container.querySelector('#detail-review .review-note strong')).toHaveTextContent('the toolbar');
 
-    const blocked = open({ status: 'blocked', waiting_on: 'user', questions: ['Keep `--force`? [why](javascript:x)'] });
+    const asked = ['Keep `--force`? [why](javascript:x)'];
+    const blocked = open({
+      status: 'blocked',
+      waiting_on: 'user',
+      questions: asked,
+      ...atmSays({ kind: 'blocked', waiting: { on: 'user', questions: asked } }),
+    });
     await compmdSettled();
     const question = blocked.querySelector('.block-questions li')!;
     expect(question.querySelector('code')).toHaveTextContent('--force');
@@ -373,9 +390,9 @@ describe('DetailPanel', () => {
     });
 
     it('in review with one: it, prominent, linking to its page; with two, the latest first and the other after it', () => {
-      const one = open({ status: 'in_review', code_reviews: reviews.slice(1) });
+      const one = open({ status: 'in_review', ...forReview, code_reviews: reviews.slice(1) });
       expect(links(one, '#detail-review')).toEqual([['CR-7', true, '/projects/p1/reviews/CR-7']]);
-      const two = open({ status: 'in_review', code_reviews: reviews });
+      const two = open({ status: 'in_review', ...forReview, code_reviews: reviews });
       expect(links(two, '#detail-review')).toEqual([
         ['CR-7', true, '/projects/p1/reviews/CR-7'],
         ['CR-3', false, '/projects/p1/reviews/CR-3'],
@@ -383,8 +400,22 @@ describe('DetailPanel', () => {
       expect(two.querySelector('#detail-code-reviews')).toBeNull();
     });
 
+    // ATM-717: the review it waits on, as atm says it, is the prominent one, even when a later one is linked
+    it('in review: the review atm says it waits on first, prominent, the others after it', () => {
+      const waitsOnOlder = atmSays({
+        kind: 'review',
+        waiting: { on: 'reviewer' },
+        review: { id: 'u1', ref: 'CR-3', status: 'waiting' },
+      });
+      const container = open({ status: 'in_review', ...waitsOnOlder, code_reviews: reviews });
+      expect(links(container, '#detail-review')).toEqual([
+        ['CR-3', true, '/projects/p1/reviews/CR-3'],
+        ['CR-7', false, '/projects/p1/reviews/CR-7'],
+      ]);
+    });
+
     it('in review without one: no link, as before', () => {
-      const container = open({ status: 'in_review' });
+      const container = open({ status: 'in_review', ...forReview });
       expect(container.querySelector('#detail-review')).not.toBeNull();
       expect(container.querySelector('.review-link')).toBeNull();
     });
@@ -401,7 +432,7 @@ describe('DetailPanel', () => {
 
     it('the status the page knows, never asked for; needs you when the project’s summary says so', async () => {
       const { learnReviews } = await import('../../src/lib/reviews/known.svelte');
-      const container = open({ status: 'in_review', code_reviews: reviews });
+      const container = open({ status: 'in_review', ...forReview, code_reviews: reviews });
       const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
       expect(latest().textContent).toBe('CR-7');
       learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
@@ -425,7 +456,7 @@ describe('DetailPanel', () => {
     it('a review atm can’t read says so, with why, instead of its status; readable again, its status', async () => {
       const { learnReviews, learnUnreadable } = await import('../../src/lib/reviews/known.svelte');
       learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
-      const container = open({ status: 'in_review', code_reviews: reviews });
+      const container = open({ status: 'in_review', ...forReview, code_reviews: reviews });
       const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
       learnUnreadable('p1', [{ reference: 'CR-7', problem: 'no status frozen' }]);
       learnUnreadable('p2', [{ reference: 'CR-3', problem: 'another project’s' }]);

@@ -44,7 +44,8 @@
             "waiting_for": [],
             "priority": "P2",
             "effective_review": "none",
-            "archived": false
+            "archived": false,
+            "agent_work": true
           }
         },
         {
@@ -62,7 +63,9 @@
             "waiting_for": ["T-2"],
             "priority": "P0",
             "effective_review": "none",
-            "archived": false
+            "archived": false,
+            "waiting": { "on": "dependencies" },
+            "agent_work": true
           }
         }
       ]

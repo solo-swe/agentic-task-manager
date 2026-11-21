@@ -366,10 +366,8 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         if let Some(kind) = kind {
             derived.insert("kind".into(), json!(kind.as_str()));
         }
-        derived.insert(
-            "ready".into(),
-            json!(id_of(t).is_some_and(|id| ready.contains(id)) && problems.is_none()),
-        );
+        let is_ready = id_of(t).is_some_and(|id| ready.contains(id)) && problems.is_none();
+        derived.insert("ready".into(), json!(is_ready));
         derived.insert("waiting_for".into(), json!(waiting_for));
         if let Some(problems) = problems {
             derived.insert("problems".into(), problems.clone());
@@ -396,6 +394,27 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         }
         // Where each of its code reviews stands (ATM-621), so its badge says so from the first load
         let reviews = statuses.of_task(t);
+        // Who it waits on, whether it needs the user, whether agent work is left, and the review it waits on
+        // (ATM-717): atm's one rule, so no front end works them out
+        let answer = crate::waiting::of(
+            vocab,
+            t,
+            crate::waiting::Context {
+                ready: is_ready,
+                waiting_for: &waiting_for,
+                in_scope: crate::waiting::in_active_scope(vocab, t),
+            },
+        );
+        if let Some(waiting) = &answer.waiting {
+            derived.insert("waiting".into(), json!(waiting));
+        }
+        if let Some(reason) = answer.needs_you {
+            derived.insert("needs_you".into(), json!(reason));
+        }
+        derived.insert("agent_work".into(), json!(answer.agent_work));
+        if let Some(review) = crate::waiting::review_of(t, &reviews) {
+            derived.insert("review".into(), review);
+        }
         if !reviews.is_empty() {
             derived.insert("review_statuses".into(), Value::Object(reviews));
         }
