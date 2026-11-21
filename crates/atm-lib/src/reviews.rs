@@ -48,7 +48,7 @@ mod repo;
 
 pub use commands::*;
 pub use doctor::*;
-pub(crate) use linking::{Opening, kind_of, named, openings};
+pub(crate) use linking::{Opening, asked_into_review, kind_of, named, openings};
 use linking::{actor_of, agent_at_work, agent_of_tasks, ask_review, id_of, link, resolve};
 pub use live::*;
 pub use naming::*;

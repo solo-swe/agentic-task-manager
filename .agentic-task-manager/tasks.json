@@ -17207,7 +17207,7 @@
       "description": "Audit findings H9, H11, H12 and H13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-3)).\n\n- **H11:** `crates/atm-api/src/lib.rs:195-200` falls back to a 200 without headers when the builder fails: fall back to a bare 500 with the security headers.\n- **H12:** CompMD's bundle answers carry no `nosniff` or CORP and refuse HEAD, other assets send `Access-Control-Allow-Origin: *` with CORP same-origin (`assets.rs:80`, `:108`): one policy for `/assets/`, stated in I11 and I13.\n- **H9:** a document at a revision is cached a year as `immutable` across atm upgrades (`routes/documents.rs:34`): put atm's version in its tag.\n- **H13:** stamp search with `generated_at`; `build.rs:109` must find exactly one CompMD version folder.\n\n## Tests\n`serve.test.mjs` \"security headers\": every `/assets/` answer, 404s included, has `nosniff`; a document's ETag changes with the version.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-api/src/lib.rs",
@@ -17217,7 +17217,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-21T14:07:47Z",
+      "updated_at": "2026-11-21T14:22:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17229,7 +17229,18 @@
       "sprint": "Audit and tabs",
       "number": 672,
       "started_at": "2026-11-21T14:07:47Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "5fbbd011c48f0beb654663793a0027ab6276f68f",
+      "completed_at": "2026-11-21T14:22:58Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-21T14:22:58Z",
+          "kind": "outcome",
+          "text": "H11: a response that cannot be built is a bare 500 with the security headers. H12: every /assets/ answer, the bundle and 404s too, has nosniff, CORP cross-origin and ACAO *, and HEAD is answered. H9: a document or image at a revision is kept per atm version (the page adds v, the tag names it). H13: search is stamped, and build.rs wants one CompMD folder. I11 and I13 updated.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2269b785e51b",
@@ -19644,7 +19655,7 @@
       "description": "Part 2 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §5.3, §7 step 1). Part 1 (CR-105) put `submit`, `close` and `add_round` through `atm_lib::lifecycle::check`.\n\n## Change\nThe other entry points check first through `lifecycle`, then write, and none sets a status on its own:\n- `reviews::create`, with ATM-631's openings (a review opened beside a task that doesn't move is refused);\n- `reviews::set_tasks` (a task added or removed);\n- the task commands (`state::change_status`: `atm task state`, `atm task review approve|request-changes|reject`);\n- `apply_live_approval` and `drop_expired_claims` (ATM-632: a lapse never leaves a task half in review).\n\n## Tests\nEach entry point refusing with nothing written, and moving its tasks when allowed, on the real store (`crates/atm-lib/tests/reviews/lifecycle.rs`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/lifecycle.rs",
@@ -19652,9 +19663,9 @@
         "crates/atm-lib/src/state.rs"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T14:08:58Z",
+      "updated_at": "2026-11-21T14:23:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19699,6 +19710,12 @@
           "kind": "note",
           "text": "Approved: in CR-107 (round 2)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-21T14:23:04Z",
+          "kind": "outcome",
+          "text": "Approved in CR-107 round 2. Opening, rounds, added tasks, live approvals and lapses go through lifecycle. A real lapse is now recognised by its note. Hole 2 (task review around an open CR) and question 4 (a task removed from its review) wait on the user, asked in CR-107.",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -19706,11 +19723,16 @@
           "from": "2026-11-21T13:49:08Z",
           "to": "2026-11-21T13:56:09Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-21T14:01:33Z",
+          "to": "2026-11-21T14:08:58Z",
+          "outcome": "approved"
         }
       ],
       "review_requested_at": "2026-11-21T14:01:33Z",
-      "review_state": "approved",
-      "reviewed_at": "2026-11-21T14:08:58Z"
+      "completed_at": "2026-11-21T14:23:04Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b823592de68",
@@ -19723,7 +19745,7 @@
       "description": "Part 3 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §4, §7 step 2).\n\n## Change\nOne test over the composed table: a row for each task state (kind, claim) × review state × event, built from the tables, each with its expected next state or refusal, failing on a pair without a row. The three bugs are rows of their own:\n- ATM-630: an approval kept when the task's key changed (its old key an alias);\n- ATM-631: a review opened beside a task that didn't move;\n- ATM-632: a lapsed claim leaving a task half in review.\n\n## Tests\nThe table test itself, in `crates/atm-lib/src/lifecycle/tests.rs`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1fe3a-d2ba-736d-80e3-4b81a73b4404"
       ],
@@ -19731,9 +19753,9 @@
         "crates/atm-lib/src/lifecycle/tests.rs"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T13:10:30Z",
+      "updated_at": "2026-11-21T14:23:05Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19744,7 +19766,9 @@
       "related": [
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
-      "number": 713
+      "number": 713,
+      "started_at": "2026-11-21T14:23:05Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b83d40322b2",

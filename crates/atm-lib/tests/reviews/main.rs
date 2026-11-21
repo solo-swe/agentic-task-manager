@@ -10,3 +10,4 @@ mod listing;
 mod live;
 mod opening;
 mod submodules;
+mod table;

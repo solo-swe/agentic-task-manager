@@ -87,8 +87,10 @@ impl Command {
     pub fn sources(self) -> &'static [Kind] {
         match self {
             Command::Start => &[Kind::Todo, Kind::Review],
-            Command::Review | Command::Fail | Command::Release => &[Kind::Active],
-            Command::Done => &[Kind::Active, Kind::Review],
+            // Review from review: in review again once changes were requested, a round (ATM-713,
+            // docs/task-review-state-machine.md §3.2)
+            Command::Review | Command::Done => &[Kind::Active, Kind::Review],
+            Command::Fail | Command::Release => &[Kind::Active],
             Command::Approve | Command::RequestChanges | Command::Reject | Command::Drop => {
                 &[Kind::Review]
             }
@@ -278,6 +280,18 @@ fn check_guards(
                 )));
             }
         }
+        // From review, only a review sent back asks for it again (its round); waiting, or decided otherwise, it is
+        // the review's to decide
+        Command::Review if kind == Kind::Review && !state_is("changes_requested") => {
+            return Err(fail(format!(
+                "can't ask for {id}'s review again: it is in review, {} (a round asks again only once changes are \
+                 requested)",
+                review_state
+                    .as_deref()
+                    .unwrap_or("waiting")
+                    .replace('_', " ")
+            )));
+        }
         Command::Drop | Command::Skip if kind == Kind::Review && !state_is("rejected") => {
             let way = if command == Command::Drop {
                 "send back to to do"
@@ -382,7 +396,7 @@ fn apply(
         let (from, on) = (task["blocked_at"].clone(), task.get("waiting_on").cloned());
         add_interval(task, "blocks", &from, &now, on.as_ref(), None);
     } else if old == Kind::Review
-        && new != Kind::Review
+        && (new != Kind::Review || command == Command::Review)
         && task.get("review_requested_at").is_some_and(truthy)
     {
         // The round ends when the reviewer decided, with its outcome (SR-3.9)
@@ -395,7 +409,8 @@ fn apply(
             .unwrap_or_else(|| now.clone());
         add_interval(task, "reviews", &from, &to, None, decided.as_deref());
     }
-    if new != Kind::Review {
+    // A new round of review (from changes requested too) starts without the last one's decision
+    if new != Kind::Review || command == Command::Review {
         task.shift_remove("review_state");
         task.shift_remove("reviewed_at");
     }

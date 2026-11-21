@@ -110,6 +110,23 @@ pub fn lapse(project: &mut Project, id: &str) {
     atm_lib::claims::expire_claims(project).unwrap();
 }
 
+/// Task `id`'s number moved to `to` at a merge (ADR-009): its old key kept as an alias, as the merge driver leaves it.
+pub fn renumber(project: &mut Project, id: &str, to: u64) {
+    let key = project.task_key(project.store().get_task(id).unwrap().unwrap());
+    project
+        .store_mut()
+        .change(&mut |work| {
+            for task in work.tasks() {
+                if task.get("id").and_then(Value::as_str) == Some(id) {
+                    task["number"] = to.into();
+                    task["aliases"] = json!([key]);
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+}
+
 /// Task `id` gone from the project's task file, as another branch's merge or a hand edit can leave it.
 pub fn drop_task(project: &mut Project, id: &str) {
     project

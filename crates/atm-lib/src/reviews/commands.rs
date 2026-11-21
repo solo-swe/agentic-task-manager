@@ -74,6 +74,10 @@ pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) 
     let outcome = crate::lifecycle::check(project, &before, &Event::Round, &round.by)?;
     let number = Reviews::new(&mut reviews).add_round(reference, round)?;
     let header = reviews.get_review(reference)?.header;
+    // A draft waits on no one yet: its tasks stay as they are (ATM-713)
+    if header.status == Status::Draft {
+        return Ok(number);
+    }
     // The author's own task its lapse sent back to to do, started again first (the design's hole 1); its review note
     // says so, as opening a review does
     for id in &outcome.take_back {

@@ -107,7 +107,13 @@ pub(crate) fn named(
         .collect()
 }
 
-/// Put the in-progress tasks among `ids` in review, with the review's link in their note (§3.8).
+/// Whether a task in `kind` with `review_state` goes in review when a review asks for it: in progress, or in review
+/// sent back (its review asked again, ATM-713: never a review waiting beside a task still marked sent back).
+pub(crate) fn asked_into_review(kind: Kind, review_state: Option<&str>) -> bool {
+    kind == Kind::Active || (kind == Kind::Review && review_state == Some("changes_requested"))
+}
+
+/// Put the tasks among `ids` that [`asked_into_review`] in review, with the review's link in their note (§3.8).
 pub(super) fn ask_review(
     project: &mut Project,
     ids: &[String],
@@ -115,7 +121,9 @@ pub(super) fn ask_review(
     what: &str,
 ) -> Result<()> {
     for id in ids {
-        if kind_of(project, id)?.is_some_and(|(kind, _)| kind == Kind::Active) {
+        if kind_of(project, id)?
+            .is_some_and(|(kind, state)| asked_into_review(kind, state.as_deref()))
+        {
             let options = Options {
                 note: Some(format!("{}: {what}", header.reference)),
                 ..Options::default()

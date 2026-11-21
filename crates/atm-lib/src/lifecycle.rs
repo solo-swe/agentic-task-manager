@@ -229,19 +229,22 @@ pub fn check(project: &Project, review: &Review, event: &Event, by: &Actor) -> R
         Event::Close { reject: true } => Some(Command::Reject),
         Event::Close { reject: false } | Event::Round => None,
     };
-    // A round puts its tasks in progress back in review, and first takes back the author's own task its lapse sent to
-    // to do (the design's hole 1): each move tried before the round is kept, so it never waits on a task in to do
+    // A round puts its tasks in progress, or sent back, in review again, and first takes back the author's own task its
+    // lapse sent to to do (the design's hole 1): each move tried before the round is kept, so it never waits on a task
+    // in to do. A draft's round leaves its tasks as they are (ATM-713): it waits on no one yet
     let mut take_back = Vec::new();
-    if let Event::Round = event {
+    if matches!(event, Event::Round) && review.header.status != Status::Draft {
         let mut moves = Vec::new();
         for id in &ids {
             let Some(task) = project.store().get_task(id)? else {
                 continue;
             };
             let own = is_agent(Some(&by.0)) && lapsed_for(task, &by.0);
-            match reviews::kind_of(project, id)?.map(|(kind, _)| kind) {
-                Some(Kind::Active) => moves.push((id.clone(), vec![Command::Review])),
-                Some(Kind::Todo) if own => {
+            match reviews::kind_of(project, id)? {
+                Some((kind, state)) if reviews::asked_into_review(kind, state.as_deref()) => {
+                    moves.push((id.clone(), vec![Command::Review]));
+                }
+                Some((Kind::Todo, _)) if own => {
                     take_back.push(id.clone());
                     moves.push((id.clone(), into_review(project, id, true)?));
                 }
