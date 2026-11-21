@@ -69,6 +69,22 @@ fn a_live_reviews_page_follows_the_working_copy_and_a_comment_makes_it_a_checkpo
     );
     // Nothing changed since its first round: that round, now
     let unchanged = page();
+    // ATM-633 (§5.2): what the reader may do, the machine's answer: Hakan reviews it, its rounds are the agent's
+    assert_eq!(
+        unchanged["can"]["approve"],
+        json!({"ok": true}),
+        "{}",
+        unchanged["can"]
+    );
+    assert_eq!(unchanged["can"]["comment"]["ok"], json!(true));
+    assert_eq!(unchanged["can"]["round"]["ok"], json!(false));
+    assert!(
+        unchanged["can"]["round"]["why"]
+            .as_str()
+            .is_some_and(|why| why.contains("rounds")),
+        "{}",
+        unchanged["can"]
+    );
     assert_eq!(
         (
             unchanged["view"]["round"].clone(),

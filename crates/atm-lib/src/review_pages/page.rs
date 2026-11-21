@@ -91,6 +91,12 @@ pub fn review_page(
     // Unchanged since the last checkpoint, there is no round after it: that one is the working copy
     let round = round.filter(|r| working.is_some() || *r != latest + 1 || !now);
     let drafts = drafts_of(project, &review);
+    // The reader's drafts sent with a decision count as open, as `submit_decision_with` counts them
+    let open_drafts: Vec<String> = drafts
+        .iter()
+        .filter(|d| d.is_top_level())
+        .map(|d| format!("{} (your draft)", d.id))
+        .collect();
     let (mut view, chains, drafts) = match working {
         Some(new) => {
             let number = latest + 1;
@@ -121,6 +127,19 @@ pub fn review_page(
         .and_then(|all| all.into_iter().find(|f| f.header.id == review.header.id))
         .and_then(|f| f.branch);
     let me = me(project);
+    // What this reader may do, and why not (ATM-633, docs/task-review-state-machine.md §5.2): the machine's answer,
+    // so the page shows a button for what the server allows and never repeats the rules
+    let can: serde_json::Map<String, Value> =
+        crate::lifecycle::can(project, &review.header.reference, &me, &open_drafts)?
+            .into_iter()
+            .map(|(action, answer)| {
+                let value = match answer {
+                    Ok(()) => json!({"ok": true}),
+                    Err(why) => json!({"ok": false, "why": why.to_string()}),
+                };
+                (action.to_string(), value)
+            })
+            .collect();
     Ok(json!({
         "review": review.header,
         "summary": review.summary,
@@ -131,5 +150,6 @@ pub fn review_page(
         "view": view,
         "needs_you": needs(&review.header, &me),
         "you": me.0,
+        "can": can,
     }))
 }
