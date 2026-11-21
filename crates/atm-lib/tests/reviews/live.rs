@@ -51,6 +51,27 @@ fn the_working_copy_is_watched_for_changes_a_live_review_shows() {
     drop(subscription);
 }
 
+/// ATM-633 (docs/task-review-state-machine.md §5.2): the page says what its reader may do, the machine's answer:
+/// Hakan reviews it; its rounds are the agent's
+#[test]
+fn a_live_reviews_page_says_what_its_reader_may_do_and_why_not() {
+    let dir = dir();
+    let (hakan, cr) = live(&dir.0);
+    let can = atm_lib::review_pages::review_page(&hakan, &cr, None, None).unwrap()["can"].clone();
+    assert_eq!(can["approve"], json!({"ok": true}), "{can}");
+    assert_eq!(can["comment"]["ok"], json!(true));
+    assert_eq!(can["close"]["ok"], json!(true));
+    // A live review isn't sent back: it is approved, or ended with its author's round
+    assert_eq!(can["request_changes"]["ok"], json!(false));
+    assert_eq!(can["round"]["ok"], json!(false));
+    assert!(
+        can["round"]["why"]
+            .as_str()
+            .is_some_and(|why| why.contains("rounds")),
+        "{can}"
+    );
+}
+
 /// ATM-576: the page shows a live review's working copy as it is now, after its checkpoints, not stored; a
 /// comment on it makes it a checkpoint first, and is anchored there; a named round is that round
 #[test]
@@ -69,22 +90,6 @@ fn a_live_reviews_page_follows_the_working_copy_and_a_comment_makes_it_a_checkpo
     );
     // Nothing changed since its first round: that round, now
     let unchanged = page();
-    // ATM-633 (§5.2): what the reader may do, the machine's answer: Hakan reviews it, its rounds are the agent's
-    assert_eq!(
-        unchanged["can"]["approve"],
-        json!({"ok": true}),
-        "{}",
-        unchanged["can"]
-    );
-    assert_eq!(unchanged["can"]["comment"]["ok"], json!(true));
-    assert_eq!(unchanged["can"]["round"]["ok"], json!(false));
-    assert!(
-        unchanged["can"]["round"]["why"]
-            .as_str()
-            .is_some_and(|why| why.contains("rounds")),
-        "{}",
-        unchanged["can"]
-    );
     assert_eq!(
         (
             unchanged["view"]["round"].clone(),
