@@ -2,7 +2,7 @@
 // report (what /atm-close-sprint recorded) or, without one, its tasks done.
 import type { SprintModel } from './sprints';
 import type { Task } from './types';
-import { kindOf, type Vocabulary } from './vocab';
+import { taskKind, type Vocabulary } from './vocab';
 
 export interface SprintVelocity {
   id: string;
@@ -33,7 +33,7 @@ export function velocity(
       id: s.id,
       done: s.report?.done
         ? count(s.report.done)
-        : tasks.filter((t) => model.sprintOf(t) === s.id && kindOf(vocab, t.status) === 'done').length,
+        : tasks.filter((t) => model.sprintOf(t) === s.id && taskKind(t) === 'done').length,
       carried: count(s.report?.carried),
       added: count(s.report?.added),
       ...(s.end ? { end: s.end } : {}),

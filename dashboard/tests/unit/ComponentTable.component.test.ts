@@ -2,13 +2,16 @@ import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import ComponentTable from '../../src/lib/progress/ComponentTable.svelte';
 import { dashboard } from '../../src/lib/state.svelte';
-import type { Task, TasksFile } from '../../src/lib/types';
+import type { Component } from '../../src/lib/components';
+import type { Task } from '../../src/lib/types';
 import { loadIntoDashboard } from './components.helpers';
+import { vocabulary, withKinds } from './views';
 
 // The Progress tab's "By component" table (T-323): a row per component, 'No component' last; a row filters by it
 
+/** A task as atm serves it: with its kind */
 const task = (id: string, fields: Partial<Task>): Task =>
-  ({ id, name: id, phase: 0, type: 'feature', description: '', status: 'todo', ...fields }) as Task;
+  withKinds([{ id, name: id, phase: 0, type: 'feature', description: '', status: 'todo', ...fields } as Task])[0];
 
 const TASKS = [
   task('T-1', { components: ['api', 'ui'], status: 'done' }),
@@ -19,8 +22,14 @@ const TASKS = [
   task('T-6', {}),
 ];
 
-function project(components: unknown[] = [{ id: 'ui', label: 'Dashboard' }, { id: 'api' }]) {
-  loadIntoDashboard({ meta: { components }, tasks: TASKS } as unknown as TasksFile);
+/** The project with `components`, as atm serves them with its vocabulary */
+function project(
+  components: Component[] = [
+    { id: 'ui', label: 'Dashboard', paths: [] },
+    { id: 'api', label: 'api', paths: [] },
+  ],
+) {
+  loadIntoDashboard({ meta: {}, tasks: TASKS }, undefined, vocabulary({ components }));
 }
 
 function show(tasks: readonly Task[] = TASKS) {

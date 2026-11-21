@@ -12,6 +12,7 @@
       "type": "integer",
       "description": "How big the project's working task data is (tasks.json), for the archive notice"
     },
+    "vocabulary": { "$ref": "#/$defs/ProjectVocabulary" },
     "tasks": { "type": "array", "items": { "$ref": "#/$defs/TaskView" } },
     "problems": {
       "type": "array",
@@ -21,6 +22,92 @@
     "archive_hint": { "$ref": "#/$defs/ArchiveHint" }
   },
   "$defs": {
+    "ProjectVocabulary": {
+      "type": "object",
+      "description": "The project's vocabulary as atm resolved it (ATM-718): what meta defines, the defaults for the rest; a list a tolerant read couldn't use is its default, and `problems` says so",
+      "required": [
+        "statuses",
+        "types",
+        "priorities",
+        "default_priority",
+        "labels",
+        "components",
+        "workflow",
+        "review",
+        "phases"
+      ],
+      "properties": {
+        "statuses": { "type": "array", "items": { "$ref": "#/$defs/ServedStatus" } },
+        "types": { "type": "array", "items": { "$ref": "#/$defs/ServedTerm" } },
+        "priorities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ServedTerm" },
+          "description": "Most urgent first"
+        },
+        "default_priority": { "type": "string", "description": "The priority of a task without one; one of `priorities`" },
+        "labels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ServedTerm" },
+          "description": "meta.labels, in their order, each with its text (its ID when it has none)"
+        },
+        "components": { "type": "array", "items": { "$ref": "#/$defs/ServedComponent" } },
+        "workflow": {
+          "description": "The project's workflow with its defaults filled in, or null without one",
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/ServedWorkflow" }]
+        },
+        "review": { "type": "string", "description": "The project's review mode" },
+        "phases": {
+          "type": "array",
+          "description": "The named phases of a project from before sprints (meta.phases)",
+          "items": { "$ref": "#/$defs/ServedPhase" }
+        }
+      }
+    },
+    "ServedStatus": {
+      "type": "object",
+      "required": ["id", "label", "kind"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "kind": { "enum": ["todo", "active", "review", "blocked", "done", "skipped"] }
+      }
+    },
+    "ServedPhase": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": { "id": { "type": "integer" }, "name": { "type": "string" } }
+    },
+    "ServedTrailers": {
+      "type": "object",
+      "properties": { "require": { "type": "array", "items": { "type": "string" } } }
+    },
+    "ServedTerm": {
+      "type": "object",
+      "required": ["id", "label"],
+      "properties": { "id": { "type": "string" }, "label": { "type": "string" } }
+    },
+    "ServedComponent": {
+      "type": "object",
+      "required": ["id", "label", "paths"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "paths": { "type": "array", "items": { "type": "string" } },
+        "review": { "type": "string" }
+      }
+    },
+    "ServedWorkflow": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "base": { "type": "string" },
+        "verify": {},
+        "max_rounds": { "type": "integer" },
+        "commit_template": { "type": "string" },
+        "trailers": { "$ref": "#/$defs/ServedTrailers" }
+      }
+    },
     "ArchiveHint": {
       "type": "object",
       "description": "atm's suggestion to archive (CLI-5.1), present when the working tasks are over meta.archive's thresholds (T-372)",

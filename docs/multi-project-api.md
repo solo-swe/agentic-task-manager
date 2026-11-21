@@ -161,11 +161,24 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
     Absent when it waits on nobody.
   - `derived.needs_you`: `review`, `blocked` or `together`, or absent.
   - `derived.agent_work`: whether agent work is left on it. An approved or sent-back task's is.
-  - `derived.review` `{ id, ref, status }`: the code review it waits on. That is the latest one still open, else the
-    latest, never simply the latest link.
+  - `derived.review` `{ id, ref, status? }`: the code review it waits on. That is the latest one still open, else the
+    latest, never simply the latest link. A review this working copy doesn't have (another branch's) comes without
+    its `status`.
 
   The cards' waiting line, the needs-you chips, the forecast, the burndown, the component table and the "waiting on
   you" time read these, and work none of it out.
+
+- **The vocabulary** (ATM-718, atm-lib's `vocabulary`): the response's `vocabulary` (`ProjectVocabulary`) is the
+  project's vocabulary as atm resolved it:
+  - `statuses` `{ id, label, kind }`, `types` and `priorities` `{ id, label }` (most urgent first), `default_priority`;
+  - `labels` (`meta.labels`, each with its text);
+  - `components` `{ id, label, paths, review? }`;
+  - `workflow` (with its defaults filled in, or null);
+  - `review` (the project's review mode);
+  - `phases` (a project from before sprints: the named ones).
+
+  The dashboard reads it, and each task's `derived.kind`, instead of parsing `meta`. A list a tolerant read can't use
+  is its default here (below).
 
 - **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
   `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,

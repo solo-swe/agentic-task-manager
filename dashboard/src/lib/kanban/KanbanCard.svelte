@@ -7,7 +7,7 @@
   import { phaseColor, typeStyle } from '../theme';
   import { markdownPlainText } from '../plain-text';
   import { REVIEW_STATE_LABELS } from '../review';
-  import { kindOf, priorityOf } from '../vocab';
+  import { priorityOf, taskKind } from '../vocab';
   import { waitLine } from '../waiting';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
@@ -27,7 +27,7 @@
   const ts = $derived(typeStyle(task.type));
   // Open in a closed sprint (reopened after it closed, T-323): the badge says so
   const stranded = $derived(dashboard.leftovers.includes(task));
-  const kind = $derived(kindOf(dashboard.vocab, task.status));
+  const kind = $derived(taskKind(task));
   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
   // Who it waits on, as atm says it (ATM-717): one line, agreeing with its review's chip
   const wait = $derived(waitLine(task, dashboard.loadedAt));

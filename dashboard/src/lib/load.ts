@@ -12,8 +12,9 @@ import {
   type Validators,
 } from './api/http';
 import { DEFAULT_WORKSPACE } from './api/workspace';
-import type { ArchiveHint, ProjectBoard, ProjectSummary } from '$generated/types';
+import type { ArchiveHint, ProjectBoard, ProjectSummary, ProjectVocabulary } from '$generated/types';
 import type { Task, TasksFile } from './types';
+import { DEFAULT_VOCABULARY, fromServed, type Vocabulary } from './vocab';
 
 export { fetchProjectFile, projectFileUrl, type ProjectFile, type Validators } from './api/http';
 
@@ -51,6 +52,8 @@ export interface LoadedTasks {
   problems: string[];
   /** atm's suggestion to archive, when the task file is over meta.archive's thresholds (T-372); null otherwise */
   archiveHint: ArchiveHint | null;
+  /** The project's vocabulary as atm resolved it (ATM-718) */
+  vocab: Vocabulary;
 }
 
 export function parseTasksFile(
@@ -58,6 +61,7 @@ export function parseTasksFile(
   bytes = 0,
   problems: string[] = [],
   archiveHint: ArchiveHint | null = null,
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
 ): LoadedTasks {
   const tasks = data.tasks ?? [];
   return {
@@ -68,6 +72,7 @@ export function parseTasksFile(
     bytes,
     problems,
     archiveHint,
+    vocab,
   };
 }
 
@@ -203,6 +208,7 @@ export type LoadResult = { unchanged: true } | { unchanged: false; loaded: Loade
  * and the project's meta and size, one snapshot */
 interface TaskViewList {
   meta?: TasksFile['meta'];
+  vocabulary?: ProjectVocabulary;
   bytes?: number;
   tasks?: { task: Task; derived?: Task['derived'] }[];
   problems?: unknown;
@@ -237,6 +243,7 @@ export async function loadTasks(
       typeof list.bytes === 'number' ? list.bytes : file.text.length,
       problems,
       isHint(list.archive_hint) ? list.archive_hint : null,
+      fromServed(list.vocabulary),
     ),
     validators: file.validators,
   };

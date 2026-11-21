@@ -155,7 +155,7 @@ function valuesOf(group: FilterGroup, t: Task, vocab: Vocabulary, model: SprintM
     return Array.isArray(t.components) ? t.components.filter((c) => typeof c === 'string') : [];
   if (group === 'label') return labelsOf(vocab, t);
   if (group === 'stage') {
-    const stage = stageOf(t, vocab);
+    const stage = stageOf(t);
     return stage ? [stage] : [];
   }
   if (group === 'agent') {

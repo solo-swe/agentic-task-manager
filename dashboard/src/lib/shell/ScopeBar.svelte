@@ -6,7 +6,7 @@
   import { countKinds, scopeTasks } from '../scope';
   import { backlog, dueText, sprintSummary, sprintTasks, type Sprint } from '../sprints';
   import { dashboard } from '../state.svelte';
-  import { kindOf } from '../vocab';
+  import { taskKind } from '../vocab';
   import Icon from '../ui/Icon.svelte';
   import ListOptions from '../tasks/ListOptions.svelte';
   import SprintMarker from '../progress/SprintMarker.svelte';
@@ -18,7 +18,7 @@
   const scope = $derived(dashboard.scope);
   const model = $derived(dashboard.sprints);
   const own = $derived(scopeTasks(dashboard.history, model, dashboard.sprintSelection));
-  const counts = $derived(countKinds(own, dashboard.vocab));
+  const counts = $derived(countKinds(own));
   const percent = $derived(counts.total ? Math.round((counts.done / counts.total) * 100) : 0);
   const summary = $derived(
     scope.kind === 'sprint'
@@ -26,7 +26,7 @@
       : undefined,
   );
   const open = (tasks: typeof dashboard.tasks) =>
-    tasks.filter((t) => !['done', 'skipped'].includes(kindOf(dashboard.vocab, t.status) ?? '')).length;
+    tasks.filter((t) => !['done', 'skipped'].includes(taskKind(t) ?? '')).length;
   const backlogOpen = $derived(open(backlog(model, dashboard.tasks)));
   const sizeOf = (sprint: Sprint) => sprintTasks(model, dashboard.tasks, sprint.id).length;
   // The active sprint with nothing left to start: all done, or the rest waiting on a review or a decision

@@ -6,7 +6,7 @@
 import { browserFetch, fetchProjectFile, type Fetch, type Validators } from './api/http';
 import { compareTasks } from './keys';
 import type { Task } from './types';
-import { kindOf, type StatusKind, type Vocabulary } from './vocab';
+import { taskKind, type StatusKind } from './vocab';
 
 export interface Worktree {
   path: string;
@@ -28,8 +28,8 @@ function viewedCopies(list: unknown[]): Task[] {
 /** How far a task got, by its status's kind: a linked worktree's copy wins only when it got further */
 const PROGRESS: Record<StatusKind, number> = { todo: 0, blocked: 1, active: 2, review: 3, done: 4, skipped: 4 };
 
-function progress(vocab: Vocabulary, task: Task): number {
-  const kind = kindOf(vocab, task.status);
+function progress(task: Task): number {
+  const kind = taskKind(task);
   return kind ? PROGRESS[kind] : -1;
 }
 
@@ -43,7 +43,7 @@ export interface Merged {
  * The main worktree's tasks, each replaced by a linked worktree's copy that got further (the furthest one; the first
  * listed on a tie), plus the tasks only linked worktrees have, after the others in ID order.
  */
-export function mergeWorktrees(tasks: Task[], worktrees: readonly Worktree[], vocab: Vocabulary): Merged {
+export function mergeWorktrees(tasks: Task[], worktrees: readonly Worktree[]): Merged {
   const shown = new Map(tasks.map((t) => [t.id, t]));
   const branches = new Map<string, string>();
   for (const tree of worktrees) {
@@ -51,7 +51,7 @@ export function mergeWorktrees(tasks: Task[], worktrees: readonly Worktree[], vo
     for (const task of tree.tasks ?? []) {
       if (!task || typeof task.id !== 'string') continue;
       const current = shown.get(task.id);
-      if (current && progress(vocab, task) <= progress(vocab, current)) continue;
+      if (current && progress(task) <= progress(current)) continue;
       shown.set(task.id, task);
       branches.set(task.id, tree.branch ?? tree.path);
     }

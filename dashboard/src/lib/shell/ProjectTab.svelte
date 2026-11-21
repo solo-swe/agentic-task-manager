@@ -1,6 +1,6 @@
 <script lang="ts">
   import { formatMinutes } from '../format';
-  import { actors, vocabCounts, workflowOf } from '../projectinfo';
+  import { actors, vocabCounts } from '../projectinfo';
   import { projectStats, timeHistogram } from '../projectstats';
   import { repositoryOf } from '../repo';
   import { dashboard } from '../state.svelte';
@@ -29,8 +29,8 @@
     logo: dashboard.projects.find((p) => p.id === dashboard.projectId)?.logo,
   });
   const repository = $derived(repositoryOf(dashboard.meta));
-  const workflow = $derived(workflowOf(dashboard.meta));
-  const who = $derived(actors(tasks, now, vocab));
+  const workflow = $derived(dashboard.vocab.workflow);
+  const who = $derived(actors(tasks, now));
   const counts = $derived(vocabCounts(tasks, vocab, dashboard.sprints));
   // Each component with how many tasks (archived ones too) are in it
   const componentCounts = $derived(
@@ -284,7 +284,7 @@
           {stats.parallelism.toFixed(1)} agents working on average while any works
         </p>
       {/if}
-      <TaskTimeHistogram histogram={timeHistogram(tasks, vocab)} />
+      <TaskTimeHistogram histogram={timeHistogram(tasks)} />
     </section>
   </div>
 </div>

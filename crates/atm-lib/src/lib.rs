@@ -34,6 +34,7 @@ pub mod state;
 pub mod status;
 pub mod summary;
 pub mod tasks;
+pub mod vocabulary;
 pub mod waiting;
 pub mod workspaces;
 pub mod worktrees;

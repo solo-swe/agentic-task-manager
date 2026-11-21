@@ -17,6 +17,7 @@ import archive from '../fixtures/archive.json';
 import standard from '../fixtures/standard.json';
 import noMeta from '../fixtures/no-meta.json';
 import { asTaskViews, v1Tasks } from './api.helpers';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
@@ -265,6 +266,36 @@ describe('loadTasks', () => {
       vi.fn().mockResolvedValue(new Response(JSON.stringify(asTaskViews(standard, 4321)))),
     );
     expect(!result.unchanged && result.loaded.bytes).toBe(4321);
+  });
+
+  it('takes the vocabulary as atm resolved it (ATM-718); the defaults from a server that sends none', async () => {
+    const vocabulary = {
+      statuses: [
+        { id: 'open', label: 'Open', kind: 'todo' },
+        { id: 'shipped', label: 'Shipped', kind: 'done' },
+      ],
+      types: [{ id: 'chore', label: 'Chore' }],
+      priorities: [{ id: 'must', label: 'Must' }],
+      default_priority: 'must',
+      labels: [],
+      components: [{ id: 'api', label: 'API', paths: [] }],
+      workflow: { type: 'direct' },
+      review: 'none',
+      phases: [],
+    };
+    const served = await loadTasks(
+      'p1',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...asTaskViews(standard), vocabulary }))),
+    );
+    const vocab = !served.unchanged ? served.loaded.vocab : null;
+    expect(vocab?.statuses.map((s) => s.id)).toEqual(['open', 'shipped']);
+    expect([vocab?.defaultPriority, vocab?.components[0].label, vocab?.workflow?.type]).toEqual([
+      'must',
+      'API',
+      'direct',
+    ]);
+    const none = await loadTasks('p1', vi.fn().mockResolvedValue(new Response(JSON.stringify(asTaskViews(standard)))));
+    expect(!none.unchanged && none.loaded.vocab).toBe(DEFAULT_VOCABULARY);
   });
 
   it('a 304 without having asked is an error', async () => {

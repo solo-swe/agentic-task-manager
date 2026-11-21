@@ -1,40 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Task } from '../../src/lib/types';
-import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
 import { loadWorktrees, mergeWorktrees, type Worktree } from '../../src/lib/worktrees';
+import { vocabulary, withKinds } from './views';
 
-const task = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
-  id,
-  name: id,
-  phase: 1,
-  type: 'feature',
-  description: '',
-  status,
-  ...extra,
-});
+/** A task as atm serves it: with its kind in `vocab` */
+const task = (id: string, status: string, extra: Partial<Task> = {}, vocab: Vocabulary = DEFAULT_VOCABULARY): Task =>
+  withKinds([{ id, name: id, phase: 1, type: 'feature', description: '', status, ...extra } as Task], vocab)[0];
 const main: Worktree = { path: '/p', branch: 'main', main: true };
 const linked = (branch: string, tasks: Task[]): Worktree => ({ path: `/p-${branch}`, branch, main: false, tasks });
 
 describe('mergeWorktrees', () => {
   it('without linked worktrees: the main tasks as they are, and no branches', () => {
     const tasks = [task('T-1', 'todo')];
-    const merged = mergeWorktrees(tasks, [main], DEFAULT_VOCABULARY);
+    const merged = mergeWorktrees(tasks, [main]);
     expect(merged.tasks).toBe(tasks);
     expect(merged.branches.size).toBe(0);
-    expect(mergeWorktrees(tasks, [main, linked('a', [])], DEFAULT_VOCABULARY).tasks).toBe(tasks);
+    expect(mergeWorktrees(tasks, [main, linked('a', [])]).tasks).toBe(tasks);
   });
 
   it("shows a task from the worktree where it got furthest, with that worktree's branch", () => {
     const tasks = [task('T-1', 'todo'), task('T-2', 'todo'), task('T-3', 'done')];
-    const merged = mergeWorktrees(
-      tasks,
-      [
-        main,
-        linked('agent-1', [task('T-1', 'in_progress'), task('T-3', 'todo')]),
-        linked('agent-2', [task('T-1', 'done'), task('T-2', 'in_review')]),
-      ],
-      DEFAULT_VOCABULARY,
-    );
+    const merged = mergeWorktrees(tasks, [
+      main,
+      linked('agent-1', [task('T-1', 'in_progress'), task('T-3', 'todo')]),
+      linked('agent-2', [task('T-1', 'done'), task('T-2', 'in_review')]),
+    ]);
     expect(merged.tasks.map((t) => [t.id, t.status])).toEqual([
       ['T-1', 'done'],
       ['T-2', 'in_review'],
@@ -54,7 +45,6 @@ describe('mergeWorktrees', () => {
         linked('a', [task('T-1', 'in_progress', { name: 'renamed' }), task('T-2', 'in_progress')]),
         linked('b', [task('T-2', 'in_progress', { name: 'other' })]),
       ],
-      DEFAULT_VOCABULARY,
     );
     expect(merged.tasks.map((t) => t.name)).toEqual(['T-1', 'T-2']);
     expect([...merged.branches]).toEqual([['T-2', 'a']]);
@@ -64,22 +54,26 @@ describe('mergeWorktrees', () => {
     const merged = mergeWorktrees(
       [task('T-1', 'todo')],
       [main, linked('a', [task('T-10', 'todo'), task('T-9', 'in_progress')])],
-      DEFAULT_VOCABULARY,
     );
     expect(merged.tasks.map((t) => t.id)).toEqual(['T-1', 'T-9', 'T-10']);
     expect(merged.branches.get('T-10')).toBe('a');
   });
 
   it("goes by the project's status kinds; a detached worktree is named by its folder", () => {
-    const vocab = resolveVocabulary({
+    const vocab = vocabulary({
       statuses: [
         { id: 'open', label: 'Open', kind: 'todo' },
         { id: 'doing', label: 'Doing', kind: 'active' },
         { id: 'shipped', label: 'Shipped', kind: 'done' },
       ],
     });
-    const detached: Worktree = { path: '/p-tmp', branch: null, main: false, tasks: [task('T-1', 'shipped')] };
-    const merged = mergeWorktrees([task('T-1', 'doing')], [main, detached], vocab);
+    const detached: Worktree = {
+      path: '/p-tmp',
+      branch: null,
+      main: false,
+      tasks: [task('T-1', 'shipped', {}, vocab)],
+    };
+    const merged = mergeWorktrees([task('T-1', 'doing', {}, vocab)], [main, detached]);
     expect(merged.tasks[0].status).toBe('shipped');
     expect(merged.branches.get('T-1')).toBe('/p-tmp');
   });

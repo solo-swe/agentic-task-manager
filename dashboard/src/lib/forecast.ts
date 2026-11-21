@@ -5,7 +5,7 @@ import { BACKLOG } from './filters';
 import { NO_SPRINTS, type Sprint, type SprintModel } from './sprints';
 import { completedAt } from './timeline';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 
 /** A gap between completions longer than this is idle time, not work. */
 export const GAP_CAP_MINUTES = 30;
@@ -88,9 +88,9 @@ const time = (iso: string | undefined) => {
  * when known; otherwise the gap since the previous completion, capped. The first completion without a start has
  * nothing to measure from and is left out.
  */
-export function taskDurations(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULARY): TimedCompletion[] {
+export function taskDurations(tasks: Task[]): TimedCompletion[] {
   const finished = tasks
-    .filter((t) => kindOf(vocab, t.status) === 'done')
+    .filter((t) => taskKind(t) === 'done')
     .map((t) => ({ task: t, end: time(completedAt(t)) }))
     .filter((x): x is { task: Task; end: number } => x.end !== undefined)
     .sort((a, b) => a.end - b.end);
@@ -141,14 +141,13 @@ export function forecastSprints(
   tasks: Task[],
   now: number,
   history: Task[] = tasks,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
   model: SprintModel = NO_SPRINTS,
 ): Forecast {
   // Tasks done together with the user (labelled interactive) include the time spent waiting on them: they would slow
   // the pace agents keep when they work alone (docs/progress-tab-review.md §1.4, T-240)
   const interactive = new Set(history.filter((t) => t.labels?.includes(INTERACTIVE_LABEL)).map((t) => t.id));
-  const p = pace(taskDurations(history, vocab).filter((d) => !interactive.has(d.id)));
-  const kind = (t: Task) => kindOf(vocab, t.status);
+  const p = pace(taskDurations(history).filter((d) => !interactive.has(d.id)));
+  const kind = taskKind;
   const groups = new Map<string, Task[]>();
   for (const t of tasks) {
     const key = sprintKey(model, t);

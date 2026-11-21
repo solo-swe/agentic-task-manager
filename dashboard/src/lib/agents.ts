@@ -4,7 +4,7 @@
 import type { ClaimMap } from './claims';
 import { median } from './insights';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 import { startedBy, workSpan } from './work';
 
 export const UNATTRIBUTED = '';
@@ -51,11 +51,10 @@ export function agentTimeline(
   claims: ClaimMap,
   now: number,
   matching?: ReadonlySet<string>,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
 ): AgentTimeline | null {
   const byAgent = new Map<string, AgentBar[]>();
   for (const task of tasks) {
-    const span = workSpan(task, now, vocab);
+    const span = workSpan(task, now);
     if (!span) continue;
     const agent = (span.live ? claims.get(task.id)?.agent : undefined) ?? startedBy(task) ?? UNATTRIBUTED;
     byAgent.set(agent, [...(byAgent.get(agent) ?? []), { task, ...span }]);
@@ -70,7 +69,7 @@ export function agentTimeline(
       agent,
       bars: all.sort((a, b) => a.start - b.start),
       matches: bars.length > 0,
-      done: finished.filter((b) => kindOf(vocab, b.task.status) === 'done').length,
+      done: finished.filter((b) => taskKind(b.task) === 'done').length,
       medianMinutes: median(finished.map((b) => (b.end - b.start) / 60_000)),
       current: bars.filter((b) => b.live).map((b) => b.task),
       lastActive: Math.max(...all.map((b) => b.end)),

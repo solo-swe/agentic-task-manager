@@ -10,7 +10,6 @@
   import { phaseColor } from '../theme';
   import { dueText, NO_SPRINTS } from '../sprints';
   import { dashboard } from '../state.svelte';
-  import { DEFAULT_VOCABULARY } from '../vocab';
   import BurndownChart from '../progress/BurndownChart.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
 
@@ -24,17 +23,9 @@
   // Every project's tasks as one project's, without sprints: the burndown of all of them, last 14 days or all time
   const merged = $derived(mergedTasks(sources));
   let range = $state<'14d' | 'all'>('14d');
-  const forecast = $derived(forecastSprints(merged.tasks, now, merged.tasks, DEFAULT_VOCABULARY, NO_SPRINTS));
+  const forecast = $derived(forecastSprints(merged.tasks, now, merged.tasks, NO_SPRINTS));
   const chart = $derived(
-    burndown(
-      merged.tasks,
-      forecast,
-      now,
-      undefined,
-      DEFAULT_VOCABULARY,
-      range === '14d' ? now - 14 * 86_400_000 : undefined,
-      NO_SPRINTS,
-    ),
+    burndown(merged.tasks, forecast, now, undefined, range === '14d' ? now - 14 * 86_400_000 : undefined, NO_SPRINTS),
   );
   // Tasks done per day, week or month (the projects' sprints don't line up), stacked by project
   let unit = $state<VelocityUnit>('week');

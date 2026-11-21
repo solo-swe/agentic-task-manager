@@ -33,8 +33,8 @@
   // of full rings, are one chip (✓ 12 closed) that opens the Progress tab on the last of them.
   const source = $derived(dashboard.archiveLoaded ? dashboard.history : dashboard.tasks);
   // The finished tasks that weren't done, by resolution (SR-2.8)
-  const ended = $derived(notDone(source, dashboard.vocab));
-  const rows = $derived(forecastSprints(source, Date.now(), source, dashboard.vocab, dashboard.sprints).sprints);
+  const ended = $derived(notDone(source));
+  const rows = $derived(forecastSprints(source, Date.now(), source, dashboard.sprints).sprints);
   const openRows = $derived(rows.filter((r) => r.sprint?.state !== 'closed'));
   const closedRows = $derived(rows.filter((r) => r.sprint?.state === 'closed'));
   const closedTitle = $derived.by(() => {

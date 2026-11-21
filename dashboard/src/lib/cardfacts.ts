@@ -5,7 +5,7 @@ import { formatAgo, shortAgent } from './claims';
 import { formatMinutes } from './format';
 import { taskNotes } from './notes';
 import type { Note, Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 import { ms, startedBy, workSpan } from './work';
 
 export interface CardPerson {
@@ -21,8 +21,8 @@ export interface CardFacts {
   took: string | null;
 }
 
-export function cardFacts(task: Task, now: number, vocab: Vocabulary = DEFAULT_VOCABULARY): CardFacts {
-  const kind = kindOf(vocab, task.status);
+export function cardFacts(task: Task, now: number): CardFacts {
+  const kind = taskKind(task);
   const people: CardPerson[] = [];
   if (task.created_by) people.push({ role: 'created', who: shortAgent(task.created_by) });
   const worker = startedBy(task);
@@ -38,7 +38,7 @@ export function cardFacts(task: Task, now: number, vocab: Vocabulary = DEFAULT_V
   else if (kind === 'active' || kind === 'review') when = ago('started', task.started_at);
   else when = ago('created', task.created_at);
 
-  const span = workSpan(task, now, vocab);
+  const span = workSpan(task, now);
   const minutes = span ? (span.end - span.start) / 60_000 : 0;
   const took =
     !span || (!span.live && minutes < 1)

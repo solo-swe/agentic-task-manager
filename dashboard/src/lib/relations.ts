@@ -2,7 +2,7 @@
 // atm stores a resolution only when it isn't the default, and `related` on one side only, so the dashboard reads
 // both the way `atm show` prints them.
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 
 export const RESOLUTION_LABELS: Record<string, string> = {
   done: 'done',
@@ -13,8 +13,8 @@ export const RESOLUTION_LABELS: Record<string, string> = {
 
 /** How a finished task ended: its own resolution, else the default (done, or won't do for a skipped task);
  * undefined while it isn't finished */
-export function resolutionOf(task: Task, vocab: Vocabulary = DEFAULT_VOCABULARY): string | undefined {
-  const kind = kindOf(vocab, task.status);
+export function resolutionOf(task: Task): string | undefined {
+  const kind = taskKind(task);
   if (kind === 'done') return task.resolution || 'done';
   if (kind === 'skipped') return task.resolution || 'wont_do';
   return undefined;
@@ -44,13 +44,10 @@ const NOT_DONE_ORDER = ['wont_do', 'obsolete', 'duplicate'];
 
 /** The finished tasks that weren't done, by resolution (won't do, obsolete, duplicate), for the Progress panel,
  * which counts them apart from done; resolutions it doesn't know come last */
-export function notDone(
-  tasks: Task[],
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
-): { resolution: string; count: number }[] {
+export function notDone(tasks: Task[]): { resolution: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const t of tasks) {
-    const resolution = resolutionOf(t, vocab);
+    const resolution = resolutionOf(t);
     if (resolution && resolution !== 'done') counts.set(resolution, (counts.get(resolution) ?? 0) + 1);
   }
   const rank = (r: string) => (NOT_DONE_ORDER.includes(r) ? NOT_DONE_ORDER.indexOf(r) : NOT_DONE_ORDER.length);

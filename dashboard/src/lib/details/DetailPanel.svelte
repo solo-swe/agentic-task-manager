@@ -5,7 +5,7 @@
   import { effectiveReview, REVIEW_STATE_LABELS } from '../review';
   import { carriedCount, effectiveRelease } from '../sprints';
   import { RESOLUTION_LABELS, relationsOf, resolutionOf } from '../relations';
-  import { kindOf, statusLabel } from '../vocab';
+  import { kindOf, statusLabel, taskKind } from '../vocab';
   import { actorsLine, earlierAttempts } from '../actors';
   import { noteKindLabel, shortSha, taskNotes } from '../notes';
   import { waitLine } from '../waiting';
@@ -60,9 +60,7 @@
     )
       dashboard.wantArchive();
   });
-  const claim = $derived(
-    task && kindOf(dashboard.vocab, task.status) === 'active' ? dashboard.claims.get(task.id) : undefined,
-  );
+  const claim = $derived(task && taskKind(task) === 'active' ? dashboard.claims.get(task.id) : undefined);
   const statusStyle = (status: string) => kindStyle(kindOf(dashboard.vocab, status));
   // Who it waits on, as atm says it (ATM-717)
   const wait = $derived(task ? waitLine(task, dashboard.loadedAt) : null);
@@ -86,7 +84,7 @@
   const attempts = $derived(task ? earlierAttempts(task) : []);
   const requiredBy = $derived(task ? dashboard.tasks.filter((t) => (t.dependencies ?? []).includes(task.id)) : []);
   // How it ended, when not done, and its links that don't block, both ways (SR-2.8, SR-7.6)
-  const resolution = $derived(task ? resolutionOf(task, dashboard.vocab) : undefined);
+  const resolution = $derived(task ? resolutionOf(task) : undefined);
   const relations = $derived(task ? relationsOf(task, dashboard.tasks) : { related: [], duplicatedBy: [] });
   const linked = $derived(
     (task?.dependencies ?? []).length ||
@@ -96,7 +94,7 @@
       relations.duplicatedBy.length,
   );
   // Created, started, sent for review, finished, how long the work took, last updated
-  const times = $derived(task ? taskTimes(task, dashboard.loadedAt, dashboard.vocab) : []);
+  const times = $derived(task ? taskTimes(task, dashboard.loadedAt) : []);
 
   // The sections in groups, one rail entry each (T-280); only the groups the task has
   const groups = $derived.by(() => {

@@ -7,6 +7,7 @@ import { pluginInfo } from '../../src/lib/plugin-info';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard, press, settled } from './components.helpers';
+import { vocabulary } from './views';
 
 const overlay = () => document.querySelector('#about-overlay')!;
 
@@ -49,7 +50,7 @@ describe('AboutDialog', () => {
     expect(dialog).not.toHaveTextContent('Mermaid');
   });
 
-  it("shows the project's vocabularies, short: statuses, phases and types, the defaults or meta's lists (T-255)", () => {
+  it("shows the project's vocabularies, short: statuses, phases and types, the defaults or atm's lists (T-255)", () => {
     render(AboutDialog);
     dashboard.openDialog('about');
     flushSync();
@@ -59,19 +60,21 @@ describe('AboutDialog', () => {
     // Priorities and the workflow are on the Project tab
     expect(vocab()).not.toHaveTextContent('Priorities');
 
-    loadIntoDashboard({
-      ...standard,
-      meta: {
+    // The project's own vocabulary, as atm serves it
+    loadIntoDashboard(
+      standard,
+      undefined,
+      vocabulary({
         statuses: [
           { id: 'todo', label: 'Backlog', kind: 'todo' },
           { id: 'doing', label: 'Doing', kind: 'active' },
           { id: 'shipped', label: 'Shipped', kind: 'done' },
         ],
-        phases: [{ id: 1, name: 'Core' }],
+        phaseNames: new Map([[1, 'Core']]),
         types: [{ id: 'spike', label: 'Spike' }],
-        workflow: { type: 'pull-request' },
-      },
-    });
+        workflow: { type: 'pull-request', verify: true, trailers: [] },
+      }),
+    );
     flushSync();
     expect(vocab()).toHaveTextContent('Statuses Backlog (todo) · Doing (active) · Shipped (done)');
     expect(vocab()).toHaveTextContent('Phases 1 Core');

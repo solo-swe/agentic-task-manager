@@ -2,7 +2,7 @@
 // migrated to sprints (tasks with phases, no meta.sprints) is read as read-only sprints named after its phases, the
 // names atm migrate gives them, so a dashboard serving several projects shows them all the same way (SR-7.8).
 import type { Task, TasksFile } from './types';
-import { kindOf, type Vocabulary } from './vocab';
+import { taskKind, type Vocabulary } from './vocab';
 
 export type SprintState = 'planned' | 'active' | 'closed';
 
@@ -67,7 +67,7 @@ function sprintsFromPhases(tasks: Task[], vocab: Vocabulary) {
   }
   const sprints: Sprint[] = [...names].map(([phase, id]) => {
     const own = tasks.filter((t) => t.phase === phase);
-    const finished = own.length > 0 && own.every((t) => ['done', 'skipped'].includes(kindOf(vocab, t.status) ?? ''));
+    const finished = own.length > 0 && own.every((t) => ['done', 'skipped'].includes(taskKind(t) ?? ''));
     return { id, state: finished ? 'closed' : 'planned' };
   });
   return { sprints, sprintOf: (t: Task) => (typeof t.phase === 'number' ? names.get(t.phase) : undefined) };
@@ -171,7 +171,7 @@ export function sprintSummary(
   now: number,
 ): SprintSummary {
   const own = sprintTasks(model, tasks, sprint.id);
-  const kinds = own.map((t) => kindOf(vocab, t.status));
+  const kinds = own.map(taskKind);
   return {
     sprint,
     done: kinds.filter((k) => k === 'done').length,

@@ -17,7 +17,7 @@
   } from './view';
   import { dashboard } from '../state.svelte';
   import { graphNodeBg, KIND_EMOJI, TYPE_EMOJI, typeStyle } from '../theme';
-  import { kindOf } from '../vocab';
+  import { kindOf, taskKind } from '../vocab';
   import { taskLabel } from '../keys';
   import GraphControls from './GraphControls.svelte';
   import Minimap from './Minimap.svelte';
@@ -40,10 +40,7 @@
   const dimmed = $derived(
     new Set(
       layout.nodes
-        .filter(
-          ({ task }) =>
-            !matching.has(task.id) || (dashboard.graphDimDone && kindOf(dashboard.vocab, task.status) === 'done'),
-        )
+        .filter(({ task }) => !matching.has(task.id) || (dashboard.graphDimDone && taskKind(task) === 'done'))
         .map(({ task }) => task.id),
     ),
   );

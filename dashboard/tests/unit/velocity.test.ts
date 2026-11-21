@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { velocity } from '../../src/lib/velocity';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { withKinds } from './views';
 
-const vocab = resolveVocabulary({});
-const task = (id: string, sprint: string, status: string) => ({ id, sprint, status, type: 'feature' }) as Task;
+const vocab = DEFAULT_VOCABULARY;
+const task = (id: string, sprint: string, status: string) =>
+  withKinds([{ id, sprint, status, type: 'feature' } as Task])[0];
 
 describe('velocity (T-323)', () => {
   const meta = {

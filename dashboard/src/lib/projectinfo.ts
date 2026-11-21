@@ -41,11 +41,7 @@ const count = <K>(map: Map<K, number>, key: K) => map.set(key, (map.get(key) ?? 
  * active first; and the agents in one summary. Tasks from before atm recorded who started them (`agent`, or nobody)
  * count as agent work, as on the Agents tab.
  */
-export function actors(
-  tasks: Task[],
-  now: number,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
-): { people: Person[]; agents: AgentsSummary } {
+export function actors(tasks: Task[], now: number): { people: Person[]; agents: AgentsSummary } {
   const people = new Map<string, Person>();
   const person = (name: string) => {
     if (!people.has(name)) people.set(name, { name, created: 0, started: 0, completed: 0 });
@@ -68,38 +64,15 @@ export function actors(
     else if (t.completed_by) {
       agents.completed++;
       sessions.add(t.completed_by);
-    } else if (isDone(t, vocab) && agentWork.at(-1) === t) agents.completed++;
+    } else if (isDone(t) && agentWork.at(-1) === t) agents.completed++;
     if (t.created_by && isAgent(t.created_by)) sessions.add(t.created_by);
   }
   agents.sessions = sessions.size;
-  agents.agentMs = timeUse(agentWork, null, now, vocab)?.agentMs ?? 0;
+  agents.agentMs = timeUse(agentWork, null, now)?.agentMs ?? 0;
   const total = (p: Person) => p.created + p.started + p.completed;
   return {
     people: [...people.values()].sort((a, b) => total(b) - total(a) || a.name.localeCompare(b.name)),
     agents,
-  };
-}
-
-export interface Workflow {
-  type: string;
-  base?: string;
-  verify: boolean;
-  commitTemplate?: string;
-  /** Trailer lines every commit must carry */
-  trailers: string[];
-}
-
-/** meta.workflow, or null when the project has none yet */
-export function workflowOf(meta: { workflow?: unknown } | undefined): Workflow | null {
-  const w = meta?.workflow as Record<string, unknown> | undefined;
-  if (!w || typeof w !== 'object' || typeof w.type !== 'string') return null;
-  const trailers = (w.trailers as { require?: unknown } | undefined)?.require;
-  return {
-    type: w.type,
-    base: typeof w.base === 'string' ? w.base : undefined,
-    verify: w.verify !== false,
-    commitTemplate: typeof w.commit_template === 'string' ? w.commit_template : undefined,
-    trailers: Array.isArray(trailers) ? trailers.filter((l): l is string => typeof l === 'string') : [],
   };
 }
 

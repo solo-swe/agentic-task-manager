@@ -3,14 +3,15 @@ import { BACKLOG } from '../../src/lib/filters';
 import { groupList } from '../../src/lib/list-groups';
 import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { vocabulary, withKinds } from './views';
 import sprintsFile from '../fixtures/sprints.json';
 
 // fixtures/sprints.json: Foundations closed (T-001), Ada Lovelace active (T-002–T-004), Alan Turing planned (none),
 // T-005 in the backlog
 const file = sprintsFile as TasksFile;
-const tasks = file.tasks as Task[];
-const vocab = resolveVocabulary(file.meta);
+const tasks = withKinds(file.tasks as Task[]);
+const vocab = DEFAULT_VOCABULARY;
 const model = sprintModel(file.meta, tasks, vocab);
 const shape = (groups: ReturnType<typeof groupList>) => groups.map((g) => [g.key, g.tasks.map((t) => t.id)]);
 
@@ -56,7 +57,7 @@ describe('groupList (T-323)', () => {
 
   it("by label: meta.labels' text and order; a task with several is in each; those with none last", () => {
     const labelled = [{ ...tasks[0], labels: ['ux', 'api'] }, { ...tasks[1], labels: ['api'] }, tasks[2]];
-    const v = resolveVocabulary({ labels: [{ id: 'ux', label: 'UX' }] });
+    const v = vocabulary({ labels: [{ id: 'ux', label: 'UX' }] });
     const groups = groupList(labelled, 'label', model, v);
     expect(shape(groups)).toEqual([
       ['ux', ['T-001']],

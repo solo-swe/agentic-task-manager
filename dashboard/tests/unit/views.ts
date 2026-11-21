@@ -3,6 +3,7 @@
 // answers: the rest are empty, so a component that reads one the test didn't give shows nothing for it.
 import type { TaskDerived } from '$generated/types';
 import type { Task } from '../../src/lib/types';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
 import progress from '../fixtures/progress.json';
 
 export function viewed(task: Task, derived: Partial<TaskDerived>): Task {
@@ -10,6 +11,19 @@ export function viewed(task: Task, derived: Partial<TaskDerived>): Task {
     ...task,
     derived: { kind: '', ready: false, waiting_for: [], priority: '', archived: false, ...task.derived, ...derived },
   };
+}
+
+/** A project's vocabulary as atm serves it (ATM-718): the defaults, with the lists the test gives */
+export const vocabulary = (lists: Partial<Vocabulary>): Vocabulary => ({ ...DEFAULT_VOCABULARY, ...lists });
+
+/** `tasks` with the kind atm gives each (`derived.kind`): its status's in `vocab` (the defaults unless given); none
+ * for a status the vocabulary doesn't define */
+export function withKinds<T extends Task>(tasks: readonly T[], vocab: Vocabulary = DEFAULT_VOCABULARY): T[] {
+  return tasks.map((t) => {
+    const kind = vocab.statuses.find((s) => s.id === t.status)?.kind;
+    // Only the kind: a test that gives atm's other answers gives them itself
+    return kind ? { ...t, derived: { ...t.derived, kind } as Task['derived'] } : t;
+  }) as T[];
 }
 
 /** The tasks of `fixtures/progress.json` (its numbers: `progress.md`) as atm serves them: agent work is left on all of
@@ -26,10 +40,12 @@ const PROGRESS_NO_AGENT_WORK = new Set([
   'T-010',
   'T-016',
 ]);
-export const progressTasks: Task[] = (progress.tasks as Task[]).map((x) =>
-  viewed(x, { agent_work: !PROGRESS_NO_AGENT_WORK.has(x.id) }),
+export const progressTasks: Task[] = withKinds(
+  (progress.tasks as Task[]).map((x) => viewed(x, { agent_work: !PROGRESS_NO_AGENT_WORK.has(x.id) })),
 );
 
 /** A task, with atm's answer of whether agent work is left on it */
 export const taskWith = (id: string, status: string, extra: Partial<Task> = {}, agentWork = true): Task =>
-  viewed({ id, name: id, phase: 0, type: 'feature', description: '', status, ...extra }, { agent_work: agentWork });
+  withKinds([
+    viewed({ id, name: id, phase: 0, type: 'feature', description: '', status, ...extra }, { agent_work: agentWork }),
+  ])[0];

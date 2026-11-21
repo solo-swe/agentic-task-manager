@@ -1294,6 +1294,11 @@ land (I11, I13, I24, I25). Fields:
   This is atm's own data: words from a fixed set, times, review IDs and references, and the task's questions as
   stored, which the dashboard already showed. The dashboard and the summary's needs-you count only show them.
   `atm task list --derived` prints them. No skill reads them, and no command reads a new path or URL.
+- **The tasks response gains `vocabulary`** (ATM-718): the project's vocabulary as atm resolved it from `meta`, which
+  the same response carries already. It holds the statuses with their kinds, the types, the priorities, the labels,
+  the components, the workflow, the review mode and the phases' names. The dashboard reads it instead of parsing
+  `meta`, and shows its labels as text, as it showed `meta`'s. A list a tolerant read can't use is its default here,
+  and `problems` says why. No skill reads it, and no command reads a new path or URL.
 
 ## 4. Keeping it current
 

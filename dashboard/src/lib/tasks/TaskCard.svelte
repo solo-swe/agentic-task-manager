@@ -9,7 +9,7 @@
   import { cardFacts, cardNote } from '../cardfacts';
   import { markdownPlainText } from '../plain-text';
   import { noteKindLabel } from '../notes';
-  import { kindOf, statusLabel, typeLabel } from '../vocab';
+  import { statusLabel, taskKind, typeLabel } from '../vocab';
   import { waitLine } from '../waiting';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
@@ -29,7 +29,7 @@
   const ts = $derived(typeStyle(task.type));
   // Open in a closed sprint (reopened after it closed, T-323): the badge says so
   const stranded = $derived(dashboard.leftovers.includes(task));
-  const kind = $derived(kindOf(dashboard.vocab, task.status));
+  const kind = $derived(taskKind(task));
   const ss = $derived(kindStyle(kind));
   const deps = $derived(task.dependencies ?? []);
   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
@@ -40,7 +40,7 @@
   // The row's width (T-338): the description's start and the latest note on the left, who and when on the right
   const excerpt = $derived(task.description ? markdownPlainText(task.description) : '');
   const note = $derived(cardNote(task));
-  const facts = $derived(cardFacts(task, dashboard.loadedAt, dashboard.vocab));
+  const facts = $derived(cardFacts(task, dashboard.loadedAt));
   const ROLE = { created: 'Created by', worked: 'Worked on by', finished: 'Finished by' } as const;
 </script>
 

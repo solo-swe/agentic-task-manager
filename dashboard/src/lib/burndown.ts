@@ -5,7 +5,7 @@ import { nextInLoop, sprintKey, type Forecast } from './forecast';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import { completedAt } from './timeline';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 
 export interface BurndownPoint {
   t: number;
@@ -90,11 +90,10 @@ export function burndown(
   forecast: Forecast,
   now: number,
   focus?: string,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
   from?: number,
   model: SprintModel = NO_SPRINTS,
 ): Burndown {
-  const kind = (t: Task) => kindOf(vocab, t.status);
+  const kind = taskKind;
   const tasks = allTasks.filter((t) => kind(t) !== 'skipped' && (focus === undefined || sprintKey(model, t) === focus));
   if (tasks.length === 0) return { points: [] };
   // A focused closed sprint is drawn from its start to its end; an open one gets its due date marked

@@ -23,7 +23,6 @@ import {
   type WorkspaceEntry,
 } from './load';
 import { compareVersions } from './changelog';
-import { projectComponents } from './components';
 import { getPref, setPref, storageAvailable } from './prefs';
 import { dashboardBuild, dashboardVersion } from './release-notes';
 import {
@@ -85,7 +84,7 @@ import { loadProjectSources, type ProjectSource } from './overview-data';
 import { leftovers as leftoversOf, scopeOf } from './scope';
 import { sprintParamOf, withSprintParam } from './sprint-param';
 import { sprintModel } from './sprints';
-import { DEFAULT_VOCABULARY, resolveVocabulary, type Vocabulary } from './vocab';
+import { DEFAULT_VOCABULARY, type Vocabulary } from './vocab';
 import { loadWorktrees, mergeWorktrees, type Worktree, type WorktreesResult } from './worktrees';
 import { clearView, defaultView, projectKey, readView, sanitizeView, writeView, type SavedView } from './view-store';
 
@@ -246,10 +245,10 @@ export class DashboardState {
   );
   /** The project's sprints and which sprint each task is in (lib/sprints.ts); read from phases until it is migrated */
   sprints = $derived(sprintModel(this.meta, this.history, this.vocab));
-  /** The project's components (meta.components), in their order; tasks name them by ID (T-323) */
-  components = $derived(projectComponents(this.meta));
+  /** The project's components, as atm serves them with the vocabulary, in their order; tasks name them by ID (T-323) */
+  components = $derived(this.vocab.components);
   /** Open tasks left in closed sprints, which no loop takes until they are moved (lib/scope.ts, T-323) */
-  leftovers = $derived(leftoversOf(this.tasks, this.sprints, this.vocab));
+  leftovers = $derived(leftoversOf(this.tasks, this.sprints));
   // Archived tasks by ID, for dependency stubs in the detail panel
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   archiveMap = $derived<ReadonlyMap<string, Task>>(new Map(this.archive.map((t) => [t.id, t])));
@@ -1205,7 +1204,7 @@ export class DashboardState {
     this.archiveHint = loaded.archiveHint ?? null;
     this.meta = loaded.meta;
     this.#loaded = loaded;
-    this.vocab = resolveVocabulary(loaded.meta);
+    this.vocab = loaded.vocab ?? DEFAULT_VOCABULARY;
     this.#mainTasks = loaded.tasks;
     this.tasks = loaded.tasks;
     this.taskMap = loaded.taskMap;
@@ -1217,7 +1216,7 @@ export class DashboardState {
 
   /** Show each task from the worktree where it got furthest (lib/worktrees.ts) */
   private mergeWorktrees() {
-    const merged = mergeWorktrees(this.#mainTasks, this.#worktrees, this.vocab);
+    const merged = mergeWorktrees(this.#mainTasks, this.#worktrees);
     if (merged.tasks !== this.tasks) {
       this.tasks = merged.tasks;
       // eslint-disable-next-line svelte/prefer-svelte-reactivity

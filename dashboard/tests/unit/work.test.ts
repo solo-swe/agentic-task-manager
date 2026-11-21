@@ -1,21 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
 import { isDone, startedBy, taskTimes, workSpan } from '../../src/lib/work';
+import { vocabulary, withKinds } from './views';
 
 const H = 3_600_000;
 const T0 = Date.parse('2026-04-01T08:00:00Z');
 const iso = (ms: number) => new Date(ms).toISOString();
-const task = (status: string, fields: Partial<Task> = {}): Task => ({
-  id: 'T-1',
-  name: 'x',
-  phase: 0,
-  type: 'feature',
-  description: '',
-  status,
-  started_at: iso(T0),
-  ...fields,
-});
+/** A task as atm serves it: with its kind in `vocab` */
+const task = (status: string, fields: Partial<Task> = {}, vocab: Vocabulary = DEFAULT_VOCABULARY): Task =>
+  withKinds(
+    [{ id: 'T-1', name: 'x', phase: 0, type: 'feature', description: '', status, started_at: iso(T0), ...fields }],
+    vocab,
+  )[0];
 const NOW = T0 + 10 * H;
 
 describe('startedBy', () => {
@@ -58,16 +55,17 @@ describe('workSpan', () => {
   });
 
   it("follows a project's statuses by kind", () => {
-    const vocab = resolveVocabulary({
+    const vocab = vocabulary({
       statuses: [
-        { id: 'backlog', kind: 'todo' },
-        { id: 'doing', kind: 'active' },
-        { id: 'shipped', kind: 'done' },
+        { id: 'backlog', label: 'Backlog', kind: 'todo' },
+        { id: 'doing', label: 'Doing', kind: 'active' },
+        { id: 'shipped', label: 'Shipped', kind: 'done' },
       ],
     });
-    expect(workSpan(task('doing'), NOW, vocab)?.live).toBe(true);
-    expect(workSpan(task('shipped', { completed_at: iso(T0 + H) }), NOW, vocab)?.end).toBe(T0 + H);
-    expect(isDone(task('shipped'), vocab)).toBe(true);
+    expect(workSpan(task('doing', {}, vocab), NOW)?.live).toBe(true);
+    expect(workSpan(task('shipped', { completed_at: iso(T0 + H) }, vocab), NOW)?.end).toBe(T0 + H);
+    expect(isDone(task('shipped', {}, vocab))).toBe(true);
+    // A status nobody defines has no kind: not done
     expect(isDone(task('shipped'))).toBe(false);
   });
 });

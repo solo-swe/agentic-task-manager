@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { readReleases, releaseNotes, releaseSummaries, splitReleases } from '../../src/lib/releases';
 import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { withKinds } from './views';
 import fixture from '../fixtures/sprints.json';
 
 const file = fixture as TasksFile;
-const tasks = file.tasks as Task[];
-const vocab = resolveVocabulary(file.meta);
+const tasks = withKinds(file.tasks as Task[]);
+const vocab = DEFAULT_VOCABULARY;
 const model = sprintModel(file.meta, tasks, vocab);
 
 describe('releases', () => {

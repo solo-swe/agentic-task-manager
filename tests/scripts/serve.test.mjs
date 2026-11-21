@@ -2242,6 +2242,17 @@ describe('serve', () => {
     assert.equal(body.problems.length, 2); // the entry left out, and the priorities
     assert.match(body.problems.join('\n'), /isn't a task/);
     assert.match(body.problems.join('\n'), /meta\.priorities/);
+    // The vocabulary as atm resolved it (ATM-718): the priorities it couldn't use are the defaults, the rest the
+    // project's; the dashboard shows this and the problems, never meta again
+    assert.deepEqual(
+      body.vocabulary.priorities.map((p) => p.id),
+      ['P0', 'P1', 'P2', 'P3'],
+    );
+    assert.equal(body.vocabulary.default_priority, 'P2');
+    assert.deepEqual(
+      body.vocabulary.statuses.map((s) => `${s.id}:${s.kind}`),
+      ['todo:todo', 'in_progress:active', 'in_review:review', 'blocked:blocked', 'done:done', 'skipped:skipped'],
+    );
     atm(['service', 'stop'], root);
   });
 

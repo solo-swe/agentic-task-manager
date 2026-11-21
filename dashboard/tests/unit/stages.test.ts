@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { KanbanCard } from '../../src/lib/kanban';
-import { doneSections, hasStage, stageOf, workflowType } from '../../src/lib/stages';
+import { doneSections, hasStage, stageOf } from '../../src/lib/stages';
 import type { Task } from '../../src/lib/types';
+import { withKinds } from './views';
 
-const task = (id: string, fields: Partial<Task> = {}): Task => ({
-  id,
-  name: id,
-  phase: 0,
-  type: 'feature',
-  description: '',
-  status: 'done',
-  ...fields,
-});
+/** A task as atm serves it: with its kind */
+const task = (id: string, fields: Partial<Task> = {}): Task =>
+  withKinds([{ id, name: id, phase: 0, type: 'feature', description: '', status: 'done', ...fields } as Task])[0];
 const card = (t: Task): KanbanCard => ({ task: t, nextUp: false });
 
 describe('stageOf', () => {
@@ -48,13 +43,5 @@ describe('doneSections', () => {
     expect(sections[1].url).toBe('https://example.com/pr/7');
     expect(sections[0].url).toBeUndefined(); // a javascript: URL is never a link (T-225)
     expect(doneSections([card(task('B'))]).map((s) => s.id)).toEqual(['done']);
-  });
-});
-
-describe('workflowType', () => {
-  it('reads meta.workflow.type', () => {
-    expect(workflowType({ workflow: { type: 'pull-request' } })).toBe('pull-request');
-    expect(workflowType({ workflow: 'direct' })).toBeUndefined();
-    expect(workflowType(undefined)).toBeUndefined();
   });
 });

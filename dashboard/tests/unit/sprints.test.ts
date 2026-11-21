@@ -12,13 +12,14 @@ import {
   sprintTasks,
 } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { vocabulary, withKinds } from './views';
 import fixture from '../fixtures/sprints.json';
 import standard from '../fixtures/standard.json';
 
 const file = fixture as TasksFile;
-const tasks = file.tasks as Task[];
-const model = sprintModel(file.meta, tasks, resolveVocabulary(file.meta));
+const tasks = withKinds(file.tasks as Task[]);
+const model = sprintModel(file.meta, tasks, DEFAULT_VOCABULARY);
 const byId = (id: string) => tasks.find((t) => t.id === id)!;
 const ids = (list: Task[]) => list.map((t) => t.id);
 
@@ -67,13 +68,13 @@ describe('a migrated project', () => {
 
   it('is lenient: entries without a name are left out, an unknown state is planned, a duplicate name is dropped', () => {
     const meta = { sprints: [{ id: '' }, { id: 'A', state: 'finished' }, { id: 'a' }, 'x'] };
-    const m = sprintModel(meta, [], resolveVocabulary(meta));
+    const m = sprintModel(meta, [], DEFAULT_VOCABULARY);
     expect(m.sprints).toEqual([{ id: 'A', state: 'planned' }]);
   });
 });
 
 describe('the sprint header', () => {
-  const vocab = resolveVocabulary(file.meta);
+  const vocab = DEFAULT_VOCABULARY;
   const noon = (date: string) => new Date(`${date}T12:00:00`).getTime();
 
   it('counts days to the due date from the local day', () => {
@@ -95,7 +96,7 @@ describe('the sprint header', () => {
 
   it('sums up a sprint: done of total, added mid-sprint, carried in, days to due', () => {
     const sprint = activeSprint(model)!;
-    const withDone = tasks.map((t) => (t.id === 'T-002' ? { ...t, status: 'done' } : t));
+    const withDone = withKinds(tasks.map((t) => (t.id === 'T-002' ? { ...t, status: 'done' } : t)));
     expect(sprintSummary(model, withDone, sprint, vocab, noon('2026-04-09'))).toEqual({
       sprint,
       done: 1,
@@ -109,7 +110,7 @@ describe('the sprint header', () => {
 
   it('leaves skipped tasks out of the total, and a closed sprint has no due date to count', () => {
     const closed = { ...activeSprint(model)!, state: 'closed' as const };
-    const skipped = tasks.map((t) => (t.id === 'T-004' ? { ...t, status: 'skipped' } : t));
+    const skipped = withKinds(tasks.map((t) => (t.id === 'T-004' ? { ...t, status: 'skipped' } : t)));
     expect(sprintSummary(model, skipped, closed, vocab, noon('2026-04-09'))).toMatchObject({
       done: 0,
       total: 2,
@@ -120,8 +121,8 @@ describe('the sprint header', () => {
 
 describe('a project not migrated yet: its phases read as sprints', () => {
   const file = standard as TasksFile;
-  const vocab = resolveVocabulary(file.meta);
-  const m = sprintModel(file.meta, file.tasks as Task[], vocab);
+  const vocab = DEFAULT_VOCABULARY;
+  const m = sprintModel(file.meta, withKinds(file.tasks as Task[]), vocab);
 
   it('one sprint per phase, named "Phase n" or after its name, closed when all its tasks are finished', () => {
     expect(m.derived).toBe(true);
@@ -136,17 +137,17 @@ describe('a project not migrated yet: its phases read as sprints', () => {
   });
 
   it('as atm migrate names them: a name taken by an earlier phase gets " (phase n)"', () => {
-    const meta = {
-      phases: [
-        { id: 1, name: 'Polish' },
-        { id: 2, name: 'polish' },
-      ],
-    };
-    const phased = [
+    const phased = withKinds([
       { id: 'T-1', name: 'a', phase: 1, type: 'feature', description: '', status: 'done' },
       { id: 'T-2', name: 'b', phase: 2, type: 'feature', description: '', status: 'todo' },
-    ] as Task[];
-    const m2 = sprintModel(meta, phased, resolveVocabulary(meta));
+    ] as Task[]);
+    const named = vocabulary({
+      phaseNames: new Map([
+        [1, 'Polish'],
+        [2, 'polish'],
+      ]),
+    });
+    const m2 = sprintModel({}, phased, named);
     expect(m2.sprints).toEqual([
       { id: 'Polish', state: 'closed' },
       { id: 'polish (phase 2)', state: 'planned' },
@@ -155,7 +156,7 @@ describe('a project not migrated yet: its phases read as sprints', () => {
   });
 
   it('a project with neither sprints nor phases has none', () => {
-    const m3 = sprintModel({}, [], resolveVocabulary({}));
+    const m3 = sprintModel({}, [], DEFAULT_VOCABULARY);
     expect(m3).toMatchObject({ sprints: [], derived: false });
   });
 });

@@ -6,7 +6,7 @@ import { dashboard } from '../../src/lib/state.svelte';
 import type { Task } from '../../src/lib/types';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';
-import { viewed } from './views';
+import { viewed, vocabulary, withKinds } from './views';
 
 vi.mock('../../src/lib/scroll', () => ({ scrollToTask: vi.fn() }));
 const navigate = vi.hoisted(() => vi.fn());
@@ -54,7 +54,7 @@ describe('TaskCard', () => {
           { id: 'u2', ref: 'CR-7' },
         ],
       },
-      { review: { id: 'u1', ref: 'CR-3', status: 'waiting' } },
+      { kind: 'review', review: { id: 'u1', ref: 'CR-3', status: 'waiting' } },
     );
     const { container } = render(TaskCard, { task: reviewed });
     const links = container.querySelectorAll<HTMLAnchorElement>('.card-review .review-link');
@@ -100,18 +100,17 @@ describe('TaskCard', () => {
   });
 
   it("labels and styles the status from the project's vocabulary, by kind", () => {
-    loadIntoDashboard({
-      ...standard,
-      meta: {
-        statuses: [
-          { id: 'todo', label: 'Backlog', kind: 'todo' },
-          { id: 'in_progress', label: 'Doing', kind: 'active' },
-          { id: 'done', label: 'Shipped', kind: 'done' },
-          { id: 'awaiting_user', label: 'Awaiting you', kind: 'review' },
-        ],
-      },
+    const vocab = vocabulary({
+      statuses: [
+        { id: 'todo', label: 'Backlog', kind: 'todo' },
+        { id: 'in_progress', label: 'Doing', kind: 'active' },
+        { id: 'done', label: 'Shipped', kind: 'done' },
+        { id: 'awaiting_user', label: 'Awaiting you', kind: 'review' },
+      ],
     });
-    const { container } = render(TaskCard, { task: { ...task('T-001'), status: 'awaiting_user' } });
+    loadIntoDashboard(standard, undefined, vocab);
+    const [awaiting] = withKinds([{ ...task('T-001'), status: 'awaiting_user' }], vocab);
+    const { container } = render(TaskCard, { task: awaiting });
     const card = container.querySelector('.task-card')!;
     expect(card).toHaveClass('kind-review');
     expect(card.querySelectorAll('.task-meta .badge')[1].textContent).toBe('Awaiting you');
@@ -184,22 +183,23 @@ describe('TaskCard', () => {
   });
 
   it("shows the task's labels as chips, in meta.labels' order and text", () => {
-    loadIntoDashboard({ ...standard, meta: { labels: [{ id: 'ux', label: 'UX' }] } });
+    loadIntoDashboard(standard, undefined, vocabulary({ labels: [{ id: 'ux', label: 'UX' }] }));
     const { container } = render(TaskCard, { task: { ...task('T-001'), labels: ['spike-2', 'ux'] } });
     expect([...container.querySelectorAll('.label-chip')].map((c) => c.textContent)).toEqual(['UX', 'spike-2']);
     expect(container.querySelector('.label-chip[data-label="ux"]')).toHaveAttribute('title', 'Label: ux');
   });
 
   it("shows the task's components by their labels, in the project's order (T-323)", () => {
-    loadIntoDashboard({
-      ...standard,
-      meta: {
+    loadIntoDashboard(
+      standard,
+      undefined,
+      vocabulary({
         components: [
           { id: 'web', label: 'Web app', paths: [] },
           { id: 'api', label: 'REST API', paths: [] },
         ],
-      },
-    });
+      }),
+    );
     const { container } = render(TaskCard, { task: { ...task('T-001'), components: ['api', 'web', 'gone'] } });
     expect([...container.querySelectorAll('.component-chip')].map((c) => c.textContent)).toEqual([
       'Web app',

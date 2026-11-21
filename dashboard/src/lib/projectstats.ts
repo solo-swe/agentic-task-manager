@@ -7,7 +7,7 @@ import { completions } from './timeline';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import { mergeIntervals, timeUse } from './timeuse';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
+import { DEFAULT_VOCABULARY, taskKind, type Vocabulary } from './vocab';
 import { ms, startedBy, workSpan } from './work';
 import { isAgent } from './actors';
 
@@ -36,14 +36,14 @@ export interface ProjectStats {
 
 export function projectStats(
   tasks: Task[],
-  meta: { created?: unknown; workflow?: unknown } | undefined,
+  meta: { created?: unknown } | undefined,
   now: number,
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   /** Archived tasks not in `tasks` (the archive isn't loaded yet): meta.archived */
   unloadedArchived = 0,
   model: SprintModel = NO_SPRINTS,
 ): ProjectStats {
-  const kind = (t: Task) => kindOf(vocab, t.status);
+  const kind = taskKind;
   const min = (values: (number | null)[]) => {
     const known = values.filter((v): v is number => v !== null);
     return known.length ? Math.min(...known) : null;
@@ -53,7 +53,7 @@ export function projectStats(
   const metaCreated = typeof meta?.created === 'string' ? ms(meta.created) : null;
   const firstStart = min(tasks.map((t) => ms(t.started_at)));
   const open = tasks.filter((t) => kind(t) !== 'done' && kind(t) !== 'skipped').length;
-  const lastDone = completions(tasks, vocab).at(-1)?.time ?? null;
+  const lastDone = completions(tasks).at(-1)?.time ?? null;
   const duration =
     firstStart === null
       ? null
@@ -62,20 +62,20 @@ export function projectStats(
         : { from: firstStart, to: Math.max(firstStart, lastDone ?? firstStart), ongoing: false };
 
   const prs = new Set(tasks.map((t) => t.pr?.number).filter((n): n is number => typeof n === 'number'));
-  const workflow = (meta?.workflow as { type?: unknown } | undefined)?.type;
+  const workflow = vocab.workflow?.type;
 
   // Agent work: tasks an agent started, or nobody recorded (before v4), as in the Information's Agents line
   const agentTasks = tasks.filter((t) => {
     const starter = startedBy(t);
     return !starter || isAgent(starter);
   });
-  const use = timeUse(agentTasks, null, now, vocab);
+  const use = timeUse(agentTasks, null, now);
   const withYou = agentTasks.filter((t) => t.labels?.includes(INTERACTIVE_LABEL));
   const alone = agentTasks.filter((t) => !t.labels?.includes(INTERACTIVE_LABEL));
   // Time with at least one agent at work: the union of the work spans (short pauses not included)
   const working = mergeIntervals(
     agentTasks.flatMap((t) => {
-      const span = workSpan(t, now, vocab);
+      const span = workSpan(t, now);
       return span ? [span] : [];
     }),
   ).reduce((sum, iv) => sum + iv.end - iv.start, 0);
@@ -93,8 +93,8 @@ export function projectStats(
     taskCommits: tasks.filter((t) => typeof t.commit === 'string' && t.commit).length,
     pullRequests: prs.size === 0 && workflow === 'direct' ? null : prs.size,
     agentMs: use?.agentMs ?? 0,
-    aloneMs: timeUse(alone, null, now, vocab)?.agentMs ?? 0,
-    withYouMs: timeUse(withYou, null, now, vocab)?.agentMs ?? 0,
+    aloneMs: timeUse(alone, null, now)?.agentMs ?? 0,
+    withYouMs: timeUse(withYou, null, now)?.agentMs ?? 0,
     maxAgents: use?.maxAgents ?? 0,
     parallelism: use && working > 0 ? use.agentMs / working : null,
   };
@@ -143,9 +143,9 @@ const binLabel = (m: number) => (m < 60 ? `${m} m` : `${m / 60} h`);
  * Every done task's work time (start until it asked for a review, or was done), binned. Tasks without a start are left
  * out; a task restarted after an expired lease, or reopened, counts its latest attempt.
  */
-export function timeHistogram(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULARY): TimeHistogram {
+export function timeHistogram(tasks: Task[]): TimeHistogram {
   const timed: TimedTask[] = tasks.flatMap((t) => {
-    if (kindOf(vocab, t.status) !== 'done') return [];
+    if (taskKind(t) !== 'done') return [];
     const start = ms(t.started_at);
     const end = ms(t.review_requested_at) ?? ms(t.completed_at);
     return start === null || end === null || end < start

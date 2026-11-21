@@ -6,7 +6,7 @@
 // Agent time adds up parallel agents: each agent's own overlapping spans merged, then summed.
 import { MIN_IDLE_MS, gaps } from './insights';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 import { ms, startedBy, workSpan } from './work';
 
 export interface Interval {
@@ -77,8 +77,8 @@ export function coveredMs(intervals: Interval[], from: number, to: number): numb
  * When the task waited on you: each review (the `reviews` atm keeps; the current one to now; for older files, a done
  * task's `review_requested_at` to its completion) and each block on the user (`blocks`; the current one to now).
  */
-export function waitingIntervals(task: Task, now: number, vocab: Vocabulary = DEFAULT_VOCABULARY): Interval[] {
-  const kind = kindOf(vocab, task.status);
+export function waitingIntervals(task: Task, now: number): Interval[] {
+  const kind = taskKind(task);
   const out: Interval[] = [];
   const add = (from: string | undefined, to: number | null) => {
     const start = ms(from);
@@ -101,17 +101,12 @@ export function waitingIntervals(task: Task, now: number, vocab: Vocabulary = DE
  * no work falls in it.
  * `split` gives the same three-way split for part of it (a chart's bucket).
  */
-export function timeUse(
-  tasks: Task[],
-  period: Interval | null,
-  now: number,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
-): TimeUseWithSplit | null {
+export function timeUse(tasks: Task[], period: Interval | null, now: number): TimeUseWithSplit | null {
   const work = tasks.flatMap((t) => {
-    const span = workSpan(t, now, vocab);
+    const span = workSpan(t, now);
     return span && span.end > span.start ? [{ agent: startedBy(t) ?? '', start: span.start, end: span.end }] : [];
   });
-  const waitingAll = mergeIntervals(tasks.flatMap((t) => waitingIntervals(t, now, vocab)));
+  const waitingAll = mergeIntervals(tasks.flatMap((t) => waitingIntervals(t, now)));
   const firstWork = Math.min(...work.map((w) => w.start));
   const from = Math.max(period?.start ?? -Infinity, firstWork);
   const to = period ? Math.min(period.end, now) : now;

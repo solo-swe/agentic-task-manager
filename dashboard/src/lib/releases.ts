@@ -4,7 +4,7 @@ import { effectiveRelease, type SprintModel } from './sprints';
 import { stageOf } from './stages';
 import { taskLabel } from './keys';
 import type { Task, TasksFile } from './types';
-import { kindOf, type Vocabulary } from './vocab';
+import { taskKind, type Vocabulary } from './vocab';
 
 export interface Release {
   id: string;
@@ -56,8 +56,8 @@ const outcomeOf = (task: Task) => [...(task.notes ?? [])].reverse().find((n) => 
 
 /** The notes draft (§3.3): done tasks by type in the project's order, with their outcome notes; then what's open */
 export function releaseNotes(release: Release, tasks: Task[], vocab: Vocabulary): string {
-  const done = tasks.filter((t) => kindOf(vocab, t.status) === 'done');
-  const open = tasks.filter((t) => !['done', 'skipped'].includes(kindOf(vocab, t.status) ?? ''));
+  const done = tasks.filter((t) => taskKind(t) === 'done');
+  const open = tasks.filter((t) => !['done', 'skipped'].includes(taskKind(t) ?? ''));
   const types = [...vocab.types.map((t) => [t.id, t.label]), ...done.map((t) => [t.type, t.type])];
   const seen = new Set<string>();
   const lines = [`# ${release.id}${release.name ? ` “${release.name}”` : ''}`];
@@ -100,8 +100,8 @@ export function releaseSummaries(
     .filter((r) => withArchived || r.state !== 'archived')
     .map((release) => {
       const own = tasks.filter((t) => effectiveRelease(model, t) === release.id);
-      const counted = own.filter((t) => kindOf(vocab, t.status) !== 'skipped');
-      const stages = counted.map((t) => stageOf(t, vocab));
+      const counted = own.filter((t) => taskKind(t) !== 'skipped');
+      const stages = counted.map((t) => stageOf(t));
       return {
         release,
         sprints: model.sprints.filter((s) => s.release === release.id).map((s) => s.id),

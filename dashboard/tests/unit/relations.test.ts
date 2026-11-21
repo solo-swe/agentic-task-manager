@@ -1,18 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { notDone, relationsOf, resolutionOf } from '../../src/lib/relations';
 import type { Task } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
+import { vocabulary, withKinds } from './views';
 
-const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
-  id,
-  name: id,
-  phase: 0,
-  type: 'feature',
-  description: '',
-  status,
-  dependencies: [],
-  ...extra,
-});
+/** A task as atm serves it: with its kind in `vocab` */
+const t = (id: string, status: string, extra: Partial<Task> = {}, vocab: Vocabulary = DEFAULT_VOCABULARY): Task =>
+  withKinds(
+    [{ id, name: id, phase: 0, type: 'feature', description: '', status, dependencies: [], ...extra } as Task],
+    vocab,
+  )[0];
 
 describe('resolutionOf', () => {
   it('a stored resolution, else the default: done for a done task, won’t do for a skipped one', () => {
@@ -24,16 +21,16 @@ describe('resolutionOf', () => {
 
   it('none while the task isn’t finished; by kind in a project’s own statuses', () => {
     expect(resolutionOf(t('a', 'todo', { resolution: 'obsolete' }))).toBeUndefined();
-    const vocab = resolveVocabulary({
+    const vocab = vocabulary({
       statuses: [
-        { id: 'open', kind: 'todo' },
-        { id: 'doing', kind: 'active' },
-        { id: 'shipped', kind: 'done' },
-        { id: 'dropped', kind: 'skipped' },
+        { id: 'open', label: 'Open', kind: 'todo' },
+        { id: 'doing', label: 'Doing', kind: 'active' },
+        { id: 'shipped', label: 'Shipped', kind: 'done' },
+        { id: 'dropped', label: 'Dropped', kind: 'skipped' },
       ],
     });
-    expect(resolutionOf(t('a', 'shipped'), vocab)).toBe('done');
-    expect(resolutionOf(t('a', 'dropped'), vocab)).toBe('wont_do');
+    expect(resolutionOf(t('a', 'shipped', {}, vocab))).toBe('done');
+    expect(resolutionOf(t('a', 'dropped', {}, vocab))).toBe('wont_do');
   });
 });
 

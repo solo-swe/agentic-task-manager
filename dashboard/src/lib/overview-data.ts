@@ -11,7 +11,7 @@ import { loadArchive, loadTasks, type ProjectEntry, type Validators } from './lo
 import { releaseSummaries, splitReleases } from './releases';
 import { activeSprint, sprintModel, sprintSummary, type SprintSummary } from './sprints';
 import type { Task, TasksFile } from './types';
-import { DEFAULT_VOCABULARY, kindOf, resolveVocabulary, type StatusKind, type Vocabulary } from './vocab';
+import { taskKind, type Vocabulary } from './vocab';
 
 export interface ProjectSource {
   project: ProjectEntry;
@@ -67,7 +67,7 @@ export async function loadProjectSources(
             project,
             tasks: withArchive(live, archived),
             claims,
-            vocab: result.unchanged ? old!.vocab : resolveVocabulary(meta),
+            vocab: result.unchanged ? old!.vocab : result.loaded.vocab,
             meta,
             live,
             archived,
@@ -85,8 +85,8 @@ export async function loadProjectSources(
 
 /** Every source's tasks as one project's, for the charts a project's page has (Activity, Progress) */
 export interface MergedTasks {
-  /** Each task with a key for an ID ("Project: T-1"), unique across projects, and its status as the default
-   * vocabulary's of the same kind (projects name their statuses differently) */
+  /** Each task with a key for an ID ("Project: T-1"), unique across projects; the charts read its kind, atm's
+   * (projects name their statuses differently) */
   tasks: Task[];
   /** The live claims, by those keys */
   claims: ClaimMap;
@@ -94,21 +94,16 @@ export interface MergedTasks {
   origin: ReadonlyMap<string, { project: ProjectEntry; id: string }>;
 }
 
-const DEFAULT_STATUS = new Map<StatusKind, string>(
-  [...DEFAULT_VOCABULARY.statuses].reverse().map((s) => [s.kind, s.id]),
-);
-
 export function mergedTasks(sources: readonly ProjectSource[]): MergedTasks {
   const tasks: Task[] = [];
   const claims = new Map<string, Claim>();
   const origin = new Map<string, { project: ProjectEntry; id: string }>();
-  for (const { project, tasks: own, claims: live, vocab } of sources) {
+  for (const { project, tasks: own, claims: live } of sources) {
     for (const task of own) {
       const key = `${project.name}: ${task.id}`;
-      const kind = kindOf(vocab, task.status);
       // Shown by its project's name and its key, with task keys (ADR-007)
       const shown = task.key ? { key: `${project.name}: ${task.key}` } : {};
-      tasks.push({ ...task, id: key, ...shown, status: (kind && DEFAULT_STATUS.get(kind)) ?? task.status });
+      tasks.push({ ...task, id: key, ...shown });
       origin.set(key, { project, id: task.id });
       const claim = live.get(task.id);
       if (claim) claims.set(key, { ...claim, task: key });
@@ -130,7 +125,7 @@ export interface ProjectProgress {
 }
 
 export function projectProgress({ project, tasks, vocab, meta }: ProjectSource, now: number): ProjectProgress {
-  const kinds = tasks.map((t) => kindOf(vocab, t.status));
+  const kinds = tasks.map(taskKind);
   const model = sprintModel(meta, tasks, vocab);
   const active = activeSprint(model);
   return {
@@ -172,9 +167,9 @@ export function velocityByPeriod(
   unit: VelocityUnit = 'week',
 ): { bars: VelocityBar[]; average: number } {
   const { ms, count } = VELOCITY_UNITS.find((u) => u.unit === unit)!;
-  const done = sources.map(({ tasks, vocab }) =>
+  const done = sources.map(({ tasks }) =>
     tasks
-      .filter((t) => kindOf(vocab, t.status) === 'done')
+      .filter((t) => taskKind(t) === 'done')
       .map((t) => Date.parse(t.completed_at ?? ''))
       .filter((t) => !Number.isNaN(t)),
   );
@@ -210,8 +205,8 @@ export function projectOfWorker(worker: string): string {
 /** One timeline of every source's agents: a lane per agent across projects, most recently active first */
 export function combinedTimeline(sources: readonly ProjectSource[], now: number): AgentTimeline | null {
   const lanes = new Map<string, AgentLane & { names: Set<string> }>();
-  for (const { project, tasks, claims, vocab } of sources) {
-    const timeline = agentTimeline(tasks, claims, now, undefined, vocab);
+  for (const { project, tasks, claims } of sources) {
+    const timeline = agentTimeline(tasks, claims, now);
     if (!timeline) continue;
     const named = { id: project.id, name: project.name };
     for (const lane of timeline.lanes) {

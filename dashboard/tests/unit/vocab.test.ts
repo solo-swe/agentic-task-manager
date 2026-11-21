@@ -1,41 +1,58 @@
 import { describe, expect, it } from 'vitest';
+import type { ProjectVocabulary } from '$generated/types';
 import {
   DEFAULT_PRIORITIES,
   DEFAULT_STATUSES,
   DEFAULT_TYPES,
   DEFAULT_VOCABULARY,
+  fromServed,
   humanize,
   kindOf,
   phaseLabel,
   priorityLabel,
   priorityOf,
   priorityRank,
-  resolveVocabulary,
   statusLabel,
   statusRank,
+  taskKind,
   typeLabel,
 } from '../../src/lib/vocab';
 
-const custom = {
+// A project's vocabulary as atm serves it (the tasks response's `vocabulary`, ATM-718): atm-lib resolves meta
+const custom: ProjectVocabulary = {
   statuses: [
     { id: 'backlog', label: 'Backlog', kind: 'todo' },
     { id: 'doing', label: 'Doing', kind: 'active' },
     { id: 'awaiting_user', label: 'Awaiting you', kind: 'review' },
     { id: 'shipped', label: 'Shipped', kind: 'done' },
   ],
-  types: [{ id: 'spike', label: 'Spike' }, { id: 'chore' }],
+  types: [
+    { id: 'spike', label: 'Spike' },
+    { id: 'chore', label: 'Chore' },
+  ],
   priorities: [
     { id: 'must', label: 'Must' },
     { id: 'should', label: 'Should' },
     { id: 'could', label: 'Could' },
   ],
   default_priority: 'should',
-  phases: [{ id: 1, name: 'Foundations' }, { id: 2 }, { id: 'x', name: 'ignored' }],
+  labels: [{ id: 'ux', label: 'UX' }],
+  components: [{ id: 'api', label: 'API', paths: ['crates/**'], review: 'async' }],
+  workflow: {
+    type: 'pull-request',
+    base: 'main',
+    verify: true,
+    max_rounds: 3,
+    commit_template: 'feat({id}): {name}',
+    trailers: { require: ['Signed-off-by: x'] },
+  },
+  review: 'blocker',
+  phases: [{ id: 1, name: 'Foundations' }],
 };
 
-describe('resolveVocabulary', () => {
-  it('uses the defaults without meta, in_review included', () => {
-    expect(resolveVocabulary(undefined)).toEqual(DEFAULT_VOCABULARY);
+describe('fromServed', () => {
+  it('the defaults until atm has served a vocabulary, in_review included', () => {
+    expect(fromServed(undefined)).toBe(DEFAULT_VOCABULARY);
     expect(DEFAULT_STATUSES.map((s) => `${s.id}:${s.kind}`)).toEqual([
       'todo:todo',
       'in_progress:active',
@@ -57,40 +74,42 @@ describe('resolveVocabulary', () => {
     expect(DEFAULT_VOCABULARY.defaultPriority).toBe('P2');
   });
 
-  it("takes the project's lists, filling in missing labels", () => {
-    const v = resolveVocabulary(custom);
+  it("takes the project's lists as atm serves them", () => {
+    const v = fromServed(custom);
     expect(v.statuses.map((s) => s.id)).toEqual(['backlog', 'doing', 'awaiting_user', 'shipped']);
-    expect(v.types).toEqual([
-      { id: 'spike', label: 'Spike' },
-      { id: 'chore', label: 'Chore' },
-    ]);
+    expect(v.types).toEqual(custom.types);
     expect(v.priorities.map((p) => p.id)).toEqual(['must', 'should', 'could']);
     expect(v.defaultPriority).toBe('should');
     expect([...v.phaseNames]).toEqual([[1, 'Foundations']]);
+    expect(v.labels).toEqual([{ id: 'ux', label: 'UX' }]);
+    expect(v.components).toEqual(custom.components);
   });
 
-  it('replaces a list it cannot use by the default, list by list', () => {
-    const noDone = custom.statuses.filter((s) => s.kind !== 'done');
-    expect(resolveVocabulary({ ...custom, statuses: noDone }).statuses).toBe(DEFAULT_STATUSES);
-    const badKind = [...custom.statuses, { id: 'x', label: 'X', kind: 'waiting' }];
-    expect(resolveVocabulary({ ...custom, statuses: badKind }).statuses).toBe(DEFAULT_STATUSES);
-    const duplicate = [...custom.types, { id: 'spike' }];
-    expect(resolveVocabulary({ ...custom, types: duplicate }).types).toBe(DEFAULT_TYPES);
-    expect(resolveVocabulary({ ...custom, types: [] }).types).toBe(DEFAULT_TYPES);
-    expect(resolveVocabulary({ ...custom, types: [{ label: 'no id' }] }).types).toBe(DEFAULT_TYPES);
-    // The other lists are still the project's
-    expect(resolveVocabulary({ ...custom, types: [] }).statuses[0].id).toBe('backlog');
+  it('the workflow: verify on unless atm says false, and the trailers commits must carry; none without one', () => {
+    expect(fromServed(custom).workflow).toEqual({
+      type: 'pull-request',
+      base: 'main',
+      verify: true,
+      commitTemplate: 'feat({id}): {name}',
+      trailers: ['Signed-off-by: x'],
+    });
+    const direct = fromServed({ ...custom, workflow: { type: 'direct', verify: false } }).workflow;
+    expect(direct).toMatchObject({ type: 'direct', verify: false, trailers: [] });
+    expect(fromServed({ ...custom, workflow: null }).workflow).toBeNull();
   });
+});
 
-  it('picks a default priority that exists', () => {
-    expect(resolveVocabulary({ ...custom, default_priority: 'nope' }).defaultPriority).toBe('should');
-    expect(resolveVocabulary({ priorities: custom.priorities }).defaultPriority).toBe('should');
-    expect(resolveVocabulary({ default_priority: 'P1' }).defaultPriority).toBe('P1');
+describe('taskKind', () => {
+  it("is atm's kind for the task; none for one atm gives none, or a kind it doesn't know", () => {
+    expect(taskKind({ derived: { kind: 'review' } })).toBe('review');
+    expect(taskKind({ derived: { kind: '' } })).toBeUndefined();
+    expect(taskKind({ derived: { kind: 'waiting' } })).toBeUndefined();
+    expect(taskKind({})).toBeUndefined();
   });
 });
 
 describe('lookups', () => {
-  const v = resolveVocabulary(custom);
+  const v = fromServed(custom);
 
   it('finds kinds, falling back to the default statuses, else none', () => {
     expect(kindOf(v, 'awaiting_user')).toBe('review');

@@ -13,8 +13,9 @@ import {
   type ProjectSource,
 } from '../../src/lib/overview-data';
 import type { Task } from '../../src/lib/types';
-import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
 import { asTaskViews, v1Tasks } from './api.helpers';
+import { vocabulary, withKinds } from './views';
 
 const NOW = Date.parse('2026-01-02T12:00:00Z');
 const project = (id: string, missing = false): ProjectEntry => ({
@@ -34,12 +35,13 @@ const task = (id: string, by: string, start: string, end: string | null, status 
     started_at: start,
     completed_at: end ?? undefined,
   }) as Task;
-const source = (p: ProjectEntry, tasks: Task[], claims = new Map<string, Claim>()): ProjectSource => ({
-  project: p,
-  tasks,
-  claims,
-  vocab: DEFAULT_VOCABULARY,
-});
+/** A project's source as atm serves it: its tasks with their kinds in its vocabulary */
+const source = (
+  p: ProjectEntry,
+  tasks: Task[],
+  claims = new Map<string, Claim>(),
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
+): ProjectSource => ({ project: p, tasks: withKinds(tasks, vocab), claims, vocab });
 
 describe('combinedTimeline', () => {
   it('one lane per agent across projects; bars name their project and are keyed by it', () => {
@@ -81,15 +83,15 @@ describe('combinedTimeline', () => {
 });
 
 describe('mergedTasks (T-328)', () => {
-  it('every project’s tasks as one project’s: keyed by project, statuses by kind, claims re-keyed', () => {
+  it('every project’s tasks as one project’s: keyed by project, each with its status and atm’s kind, claims re-keyed', () => {
     // A project naming its own statuses: "shipped" is done
-    const vocab = resolveVocabulary({
+    const vocab = vocabulary({
       statuses: [
         { id: 'open', label: 'Open', kind: 'todo' },
         { id: 'doing', label: 'Doing', kind: 'active' },
         { id: 'shipped', label: 'Shipped', kind: 'done' },
       ],
-    } as never);
+    });
     const claim: Claim = {
       task: 'T-2',
       agent: 'claude:x',
@@ -99,22 +101,21 @@ describe('mergedTasks (T-328)', () => {
     };
     const merged = mergedTasks([
       source(project('a'), [task('T-1', 'Ada', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z')]),
-      {
-        ...source(
-          project('b'),
-          [
-            { ...task('T-1', 'Bo', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'), status: 'shipped' },
-            { ...task('T-2', 'claude:x', '2026-01-02T11:00:00Z', null), status: 'doing' },
-          ],
-          new Map([['T-2', claim]]),
-        ),
+      source(
+        project('b'),
+        [
+          { ...task('T-1', 'Bo', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'), status: 'shipped' },
+          { ...task('T-2', 'claude:x', '2026-01-02T11:00:00Z', null), status: 'doing' },
+        ],
+        new Map([['T-2', claim]]),
         vocab,
-      },
+      ),
     ]);
-    expect(merged.tasks.map((t) => [t.id, t.status])).toEqual([
-      ['A: T-1', 'done'],
-      ['B: T-1', 'done'],
-      ['B: T-2', 'in_progress'],
+    // The charts go by kind: the statuses stay each project's own
+    expect(merged.tasks.map((t) => [t.id, t.status, t.derived?.kind])).toEqual([
+      ['A: T-1', 'done', 'done'],
+      ['B: T-1', 'shipped', 'done'],
+      ['B: T-2', 'doing', 'active'],
     ]);
     expect([...merged.claims.keys()]).toEqual(['B: T-2']);
     expect(merged.claims.get('B: T-2')?.task).toBe('B: T-2');

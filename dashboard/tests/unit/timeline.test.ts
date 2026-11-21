@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { completedAt, completions, formatDate, formatDateTime } from '../../src/lib/timeline';
 import type { Task } from '../../src/lib/types';
+import { withKinds } from './views';
 
 const done = (id: string, updated_at?: string): Task => ({
   id,
@@ -21,7 +22,7 @@ describe('completions', () => {
       done('bad', 'not a date'),
       { ...done('todo', '2026-04-01T00:00:00Z'), status: 'todo' },
     ];
-    expect(completions(tasks).map((c) => c.id)).toEqual(['a', 'b']);
+    expect(completions(withKinds(tasks)).map((c) => c.id)).toEqual(['a', 'b']);
   });
 });
 
@@ -31,7 +32,7 @@ describe('completion time', () => {
       { ...done('a', '2026-04-09T00:00:00Z'), completed_at: '2026-04-01T00:00:00Z' },
       done('b', '2026-04-02T00:00:00Z'),
     ];
-    expect(completions(tasks).map((c) => [c.id, new Date(c.time).toISOString()])).toEqual([
+    expect(completions(withKinds(tasks)).map((c) => [c.id, new Date(c.time).toISOString()])).toEqual([
       ['a', '2026-04-01T00:00:00.000Z'],
       ['b', '2026-04-02T00:00:00.000Z'],
     ]);

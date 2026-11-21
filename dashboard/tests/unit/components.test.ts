@@ -1,34 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { componentProgress } from '../../src/lib/component-progress';
-import { componentLabel, componentOrder, projectComponents, taskComponents } from '../../src/lib/components';
-import type { Task, TasksFile } from '../../src/lib/types';
-import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { componentLabel, componentOrder, taskComponents, type Component } from '../../src/lib/components';
+import type { Task } from '../../src/lib/types';
+import { withKinds } from './views';
 
+/** A task as atm serves it: with its kind */
 const task = (id: string, fields: Partial<Task>): Task =>
-  ({ id, name: id, type: 'feature', description: '', status: 'todo', ...fields }) as Task;
+  withKinds([{ id, name: id, type: 'feature', description: '', status: 'todo', ...fields } as Task])[0];
 
-const meta = {
-  components: [
-    { id: 'dashboard', label: 'Dashboard', paths: ['dashboard/**'], review: 'async' },
-    { id: 'api', label: 'REST API', paths: ['server.py', 7] },
-    { id: 'cli' },
-    { label: 'no id' },
-    'not an object',
-  ],
-} as unknown as TasksFile['meta'];
-const components = projectComponents(meta);
+// The project's components as atm serves them with its vocabulary (ATM-718: atm-lib reads meta.components)
+const components: Component[] = [
+  { id: 'dashboard', label: 'Dashboard', paths: ['dashboard/**'], review: 'async' },
+  { id: 'api', label: 'REST API', paths: ['server.py'] },
+  { id: 'cli', label: 'cli', paths: [] },
+];
 
-describe('projectComponents (T-323)', () => {
-  it('read leniently: entries without an ID left out, the label defaults to the ID, paths kept if strings', () => {
-    expect(components).toEqual([
-      { id: 'dashboard', label: 'Dashboard', paths: ['dashboard/**'], review: 'async' },
-      { id: 'api', label: 'REST API', paths: ['server.py'] },
-      { id: 'cli', label: 'cli', paths: [] },
-    ]);
-    expect(projectComponents(undefined)).toEqual([]);
-    expect(projectComponents({ components: 'x' } as unknown as TasksFile['meta'])).toEqual([]);
-  });
-
+describe('components (T-323)', () => {
   it('labels by ID; an unknown ID shows as itself', () => {
     expect(componentLabel(components, 'api')).toBe('REST API');
     expect(componentLabel(components, 'gone')).toBe('gone');
@@ -58,7 +45,6 @@ describe('componentProgress (T-323)', () => {
         task('T-6', {}),
       ],
       components,
-      DEFAULT_VOCABULARY,
     );
     expect(rows).toEqual([
       { id: 'dashboard', label: 'Dashboard', total: 4, done: 1, skipped: 1, open: 1, inReview: 1, blocked: 1 },

@@ -1,10 +1,12 @@
-// A project's vocabularies (docs/v4/data-model.md §2-3): statuses with kinds, phases, types and priorities, from
-// tasks.json meta, each falling back to the defaults when absent. The dashboard is lenient where atm-cli is strict: a
-// list it can't use is replaced by the default rather than reported. The kinds and the defaults are common's, the same
-// data atm-cli uses (crates/atm-common/schema/vocabularies.json, generated into $generated/vocabularies.ts, T-367).
+// A project's vocabularies (docs/v4/data-model.md §2-3): statuses with kinds, types, priorities, labels, components
+// and the workflow, as atm resolved them (the tasks response's `vocabulary`, ATM-718): the dashboard never parses meta
+// for them. A vocabulary atm reads as broken is served as far as it works, with its problems (the footer shows them).
+// A task's kind is atm's (`derived.kind`). The kinds and the defaults are common's, the data atm uses
+// (crates/atm-common/schema/vocabularies.json, generated into $generated/vocabularies.ts, T-367).
+import type { ProjectVocabulary } from '$generated/types';
 import * as common from '$generated/vocabularies';
 import type { StatusKind } from '$generated/vocabularies';
-import type { TasksFile } from './types';
+import type { Component } from './components';
 
 export type { StatusKind } from '$generated/vocabularies';
 export const KINDS = common.KINDS;
@@ -19,22 +21,36 @@ export interface Term {
   label: string;
 }
 
+export interface Workflow {
+  type: string;
+  base?: string;
+  verify: boolean;
+  commitTemplate?: string;
+  /** Trailer lines every commit must carry */
+  trailers: string[];
+}
+
 export interface Vocabulary {
   statuses: StatusDef[];
   types: Term[];
   /** Most urgent first */
   priorities: Term[];
   defaultPriority: string;
-  /** Phase names, where meta gives them */
+  /** Phase names, of a project from before sprints */
   phaseNames: ReadonlyMap<number, string>;
   /** meta.labels: the text and order of labels it lists (others show as they are, after them) */
   labels: Term[];
+  /** The project's components, in order */
+  components: Component[];
+  /** The project's workflow, or null when it has none yet */
+  workflow: Workflow | null;
 }
 
 export const DEFAULT_STATUSES: StatusDef[] = common.DEFAULT_STATUSES;
 export const DEFAULT_TYPES: Term[] = common.DEFAULT_TYPES;
 export const DEFAULT_PRIORITIES: Term[] = common.DEFAULT_PRIORITIES;
 
+/** The vocabulary of a project that defines none: atm's defaults, until atm has said */
 export const DEFAULT_VOCABULARY: Vocabulary = {
   statuses: DEFAULT_STATUSES,
   types: DEFAULT_TYPES,
@@ -42,7 +58,40 @@ export const DEFAULT_VOCABULARY: Vocabulary = {
   defaultPriority: common.DEFAULT_PRIORITY,
   phaseNames: new Map(),
   labels: [],
+  components: [],
+  workflow: null,
 };
+
+/** The vocabulary atm serves (the tasks response's `vocabulary`), as the dashboard uses it; the defaults before atm
+ * has served one */
+export function fromServed(served: ProjectVocabulary | undefined): Vocabulary {
+  if (!served) return DEFAULT_VOCABULARY;
+  const w = served.workflow;
+  return {
+    statuses: served.statuses,
+    types: served.types,
+    priorities: served.priorities,
+    defaultPriority: served.default_priority,
+    phaseNames: new Map(served.phases.map((p) => [p.id, p.name])),
+    labels: served.labels,
+    components: served.components,
+    workflow: w
+      ? {
+          type: w.type,
+          base: w.base,
+          verify: w.verify !== false,
+          commitTemplate: w.commit_template,
+          trailers: w.trailers?.require ?? [],
+        }
+      : null,
+  };
+}
+
+/** A task's kind, as atm says (`derived.kind`); undefined for a status nobody defines (the Kanban's Other column) */
+export function taskKind(task: { derived?: { kind?: string } }): StatusKind | undefined {
+  const kind = task.derived?.kind;
+  return kind && (KINDS as readonly string[]).includes(kind) ? (kind as StatusKind) : undefined;
+}
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -51,54 +100,6 @@ function capitalize(s: string): string {
 /** "in_progress" → "In progress": the label of an ID no vocabulary names. */
 export function humanize(id: string): string {
   return capitalize(id.replace(/_/g, ' '));
-}
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
-const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v !== '';
-
-function terms(value: unknown): Term[] | null {
-  if (!Array.isArray(value) || value.length === 0) return null;
-  const list: Term[] = [];
-  for (const item of value) {
-    if (!isRecord(item) || !nonEmpty(item.id)) return null;
-    list.push({ id: item.id, label: nonEmpty(item.label) ? item.label : humanize(item.id) });
-  }
-  return new Set(list.map((t) => t.id)).size === list.length ? list : null;
-}
-
-function statuses(value: unknown): StatusDef[] | null {
-  const list = terms(value);
-  if (!list) return null;
-  const defs = list.map((t, i) => ({ ...t, kind: (value as Record<string, unknown>[])[i].kind as StatusKind }));
-  if (!defs.every((d) => KINDS.includes(d.kind))) return null;
-  // The kinds every workflow needs (atm-cli refuses a vocabulary without them)
-  if (!(['todo', 'active', 'done'] as const).every((k) => defs.some((d) => d.kind === k))) return null;
-  return defs;
-}
-
-export function resolveVocabulary(meta: TasksFile['meta']): Vocabulary {
-  const m: Record<string, unknown> = isRecord(meta) ? meta : {};
-  const priorities = terms(m.priorities) ?? DEFAULT_PRIORITIES;
-  const phaseNames = new Map<number, string>();
-  if (Array.isArray(m.phases)) {
-    for (const p of m.phases)
-      if (isRecord(p) && typeof p.id === 'number' && nonEmpty(p.name)) phaseNames.set(p.id, p.name);
-  }
-  const defaultPriority =
-    nonEmpty(m.default_priority) && priorities.some((p) => p.id === m.default_priority)
-      ? m.default_priority
-      : (
-          priorities.find((p) => p.id === common.DEFAULT_PRIORITY) ??
-          priorities[Math.floor((priorities.length - 1) / 2)]
-        ).id;
-  return {
-    statuses: statuses(m.statuses) ?? DEFAULT_STATUSES,
-    types: terms(m.types) ?? DEFAULT_TYPES,
-    priorities,
-    defaultPriority,
-    phaseNames,
-    labels: terms(m.labels) ?? [],
-  };
 }
 
 /** A label's text: meta.labels' label for it, else the label itself (labels aren't humanized: they are tags) */
@@ -123,7 +124,8 @@ export function statusDef(vocab: Vocabulary, status: string): StatusDef | undefi
   return vocab.statuses.find((s) => s.id === status) ?? DEFAULT_STATUSES.find((s) => s.id === status);
 }
 
-/** The status's kind; undefined for a status nobody defines (shown in the Kanban's Other column). */
+/** A status's kind in the vocabulary (a column's, a legend's; a task's is `taskKind`); undefined for a status nobody
+ * defines */
 export function kindOf(vocab: Vocabulary, status: string): StatusKind | undefined {
   return statusDef(vocab, status)?.kind;
 }

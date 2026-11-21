@@ -11,17 +11,16 @@ import {
 } from '../../src/lib/forecast';
 import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
-import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
 import progress from '../fixtures/progress.json';
-import { progressTasks, taskWith } from './views';
+import { progressTasks, taskWith, vocabulary, withKinds } from './views';
 
 // Expected numbers: tests/fixtures/progress.md; atm's answers for its tasks (ATM-717): views.ts
 const NOW = Date.parse('2026-04-06T12:00:00Z');
 const tasks = progressTasks;
 // Not migrated: its phases read as the sprints "Phase 0" (closed: all done), "Phase 1" and "Phase 2" (planned)
-const model = sprintModel(progress.meta, tasks, resolveVocabulary(progress.meta));
-const forecast = (list: Task[], history: Task[] = list) =>
-  forecastSprints(list, NOW, history, DEFAULT_VOCABULARY, model);
+const model = sprintModel(progress.meta, tasks, DEFAULT_VOCABULARY);
+const forecast = (list: Task[], history: Task[] = list) => forecastSprints(list, NOW, history, model);
 const t = taskWith;
 
 describe('taskDurations', () => {
@@ -122,8 +121,8 @@ describe('forecastSprints', () => {
       t('c', 'todo', { sprint: 'Now' }),
       t('d', 'todo'),
     ];
-    const m = sprintModel(meta, work, resolveVocabulary(meta));
-    const rows = forecastSprints(work, NOW, work, DEFAULT_VOCABULARY, m).sprints;
+    const m = sprintModel(meta, work, DEFAULT_VOCABULARY);
+    const rows = forecastSprints(work, NOW, work, m).sprints;
     // Listed in that order too, the closed ones first (T-323): Now was started after Next was planned
     expect(rows.map((s) => [s.key, s.estimate?.minutes.likely])).toEqual([
       ['Old', undefined],
@@ -190,15 +189,18 @@ describe('forecastSprints', () => {
 });
 
 describe('status kinds', () => {
-  const vocab = resolveVocabulary({
+  // A project's own statuses: atm gives each task its kind
+  const vocab = vocabulary({
     statuses: [
-      { id: 'backlog', kind: 'todo' },
-      { id: 'doing', kind: 'active' },
-      { id: 'awaiting_user', kind: 'review' },
-      { id: 'shipped', kind: 'done' },
-      { id: 'on_hold', kind: 'blocked' },
+      { id: 'backlog', label: 'Backlog', kind: 'todo' },
+      { id: 'doing', label: 'Doing', kind: 'active' },
+      { id: 'awaiting_user', label: 'Awaiting you', kind: 'review' },
+      { id: 'shipped', label: 'Shipped', kind: 'done' },
+      { id: 'on_hold', label: 'On hold', kind: 'blocked' },
     ],
   });
+  const t = (id: string, status: string, extra: Partial<Task> = {}, agentWork = true) =>
+    withKinds([taskWith(id, status, extra, agentWork)], vocab)[0];
   const done = (id: string, start: string, end: string, extra: Partial<Task> = {}) =>
     t(id, 'shipped', { started_at: start, completed_at: end, ...extra }, false);
   const history = [
@@ -209,7 +211,7 @@ describe('status kinds', () => {
   ];
 
   it('measures work until the review was requested', () => {
-    expect(taskDurations(history, vocab).map((d) => d.minutes)).toEqual([10, 10, 10]);
+    expect(taskDurations(history).map((d) => d.minutes)).toEqual([10, 10, 10]);
   });
 
   it('counts as remaining the tasks atm says agent work is left on: in review for the reviewer and blocked are not', () => {
@@ -221,20 +223,20 @@ describe('status kinds', () => {
       t('g', 'on_hold', {}, false),
       t('h', 'mystery'),
     ];
-    const [row] = forecastSprints(phase, NOW, phase, vocab).sprints;
+    const [row] = forecastSprints(phase, NOW, phase).sprints;
     expect(row).toMatchObject({ total: 8, done: 3, remaining: 3, blocked: 1, inReview: 1, state: 'in_progress' });
     expect(row.estimate!.minutes.likely).toBe(3 * 10);
   });
 
   // ATM-717: approved or sent back, a task in review is back with its agent: work left, not waiting for a review
   it('a task in review that atm says is back with its agent is remaining work, not in review', () => {
-    const [row] = forecastSprints([...history, t('f', 'awaiting_user')], NOW, history, vocab).sprints;
+    const [row] = forecastSprints([...history, t('f', 'awaiting_user')], NOW, history).sprints;
     expect(row).toMatchObject({ remaining: 1, inReview: 0 });
     expect(row.estimate!.minutes.likely).toBe(10);
   });
 
   it('a sprint with only reviews left is not finished, and has nothing to estimate', () => {
-    const [row] = forecastSprints([...history, t('f', 'awaiting_user', {}, false)], NOW, history, vocab).sprints;
+    const [row] = forecastSprints([...history, t('f', 'awaiting_user', {}, false)], NOW, history).sprints;
     expect(row).toMatchObject({ remaining: 0, inReview: 1, state: 'in_progress' });
     expect(row.estimate).toBeUndefined();
   });

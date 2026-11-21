@@ -7,7 +7,7 @@
   // component. A row filters by its component: the board views and this tab then show only its tasks; again to undo.
   let { tasks, scope }: { tasks: readonly Task[]; scope: string } = $props();
 
-  const rows = $derived(componentProgress(tasks, dashboard.components, dashboard.vocab));
+  const rows = $derived(componentProgress(tasks, dashboard.components));
   const selected = $derived(dashboard.filters.component);
   const pct = (r: { done: number; total: number; skipped: number }) =>
     r.total ? Math.round((r.done / r.total) * 100) : r.skipped ? 100 : 0;

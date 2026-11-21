@@ -3,28 +3,31 @@ import { emptyFilters } from '../../src/lib/filters';
 import { parseTasksFile } from '../../src/lib/load';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { TasksFile } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
+import { withKinds } from './views';
 
 /**
- * Put the shared dashboard state into a freshly loaded state for a component test. `archive` stands for a loaded
+ * Put the shared dashboard state into a freshly loaded state for a component test, as atm serves the project: its
+ * vocabulary (`vocab`, the defaults unless given) and each task's kind (ATM-718). `archive` stands for a loaded
  * tasks-archive.json; without it there is none loaded.
  */
-export function loadIntoDashboard(data: TasksFile, archive?: TasksFile) {
-  const { tasks, taskMap, projectName, meta, bytes } = parseTasksFile(data, JSON.stringify(data).length);
+export function loadIntoDashboard(data: TasksFile, archive?: TasksFile, vocab: Vocabulary = DEFAULT_VOCABULARY) {
+  const served = { ...data, tasks: withKinds(data.tasks ?? [], vocab) };
+  const { tasks, taskMap, projectName, meta, bytes } = parseTasksFile(served, JSON.stringify(data).length);
   Object.assign(dashboard, {
     tasks,
     taskMap,
     projectName,
     meta,
     tasksBytes: bytes,
-    vocab: resolveVocabulary(meta),
+    vocab,
     loaded: true,
     loadError: null,
     filters: emptyFilters(),
     query: '',
     detailId: null,
     detailOpen: false,
-    archive: archive?.tasks ?? [],
+    archive: withKinds(archive?.tasks ?? [], vocab),
     archiveLoaded: !!archive,
     includeArchived: false,
     // Keep component tests free of background reloads (the real default is on)

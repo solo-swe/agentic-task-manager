@@ -18,7 +18,6 @@
   import { dashboard } from '../state.svelte';
   import { timeUse } from '../timeuse';
   import type { Task } from '../types';
-  import { DEFAULT_VOCABULARY } from '../vocab';
   import ActivityDeepDive from './ActivityDeepDive.svelte';
   import Icon from '../ui/Icon.svelte';
   import InfoTip from '../ui/InfoTip.svelte';
@@ -42,7 +41,6 @@
     onopen?: (id: string) => void;
   } = $props();
   const tasks = $derived(source ? source.tasks : dashboard.history);
-  const vocab = $derived(source ? DEFAULT_VOCABULARY : dashboard.vocab);
   const claims = $derived(source ? source.claims : dashboard.claims);
   // The overview's charts are by project, in the projects' colours (T-328 review)
   const charted = $derived(source ? source.byProject : tasks);
@@ -59,7 +57,7 @@
 
   // Compact: completions per period (bars) with their rolling average (line, same scale). Click: the deep dive.
   // Archived completions count too once the archive is loaded (dashboard.history)
-  const series = $derived(activitySeries(charted, null, dashboard.loadedAt, vocab));
+  const series = $derived(activitySeries(charted, null, dashboard.loadedAt));
   let open = $state(false);
 
   // The panel shows the chosen period (saved with the view); the pill always shows all time
@@ -74,14 +72,13 @@
           charted,
           rangeAxis(range, dashboard.loadedAt),
           dashboard.loadedAt,
-          vocab,
           PRESET_BUCKET_MS[range.preset],
         ),
   );
   const phrase = $derived(periodPhrase(range, dashboard.loadedAt));
   // Where the time went in the period (timeuse.ts, shared with the Progress tab), and who works now: from the live
   // claims, only for a period that runs up to now (T-246)
-  const use = $derived(open ? timeUse(tasks, period, dashboard.loadedAt, vocab) : null);
+  const use = $derived(open ? timeUse(tasks, period, dashboard.loadedAt) : null);
   const workingNow = $derived(
     !period || period.end >= dashboard.loadedAt ? new Set([...claims.values()].map((c) => c.agent)).size : null,
   );

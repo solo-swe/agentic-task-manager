@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { actors, vocabCounts, workflowOf } from '../../src/lib/projectinfo';
+import { actors, vocabCounts } from '../../src/lib/projectinfo';
 import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { vocabulary, withKinds } from './views';
 
 const T0 = Date.parse('2026-05-01T08:00:00Z');
 const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
+/** A task as atm serves it: with its kind */
 const task = (id: string, fields: Partial<Task>): Task =>
-  ({ id, name: id, phase: 0, type: 'feature', description: '', status: 'todo', ...fields }) as Task;
+  withKinds([{ id, name: id, phase: 0, type: 'feature', description: '', status: 'todo', ...fields } as Task])[0];
 
 describe('actors (T-252)', () => {
   const tasks = [
@@ -58,36 +60,12 @@ describe('actors (T-252)', () => {
   });
 });
 
-describe('workflowOf', () => {
-  it('reads meta.workflow, verify on unless it says false, and the trailers commits must carry', () => {
-    expect(
-      workflowOf({
-        workflow: {
-          type: 'pull-request',
-          base: 'main',
-          commit_template: 'feat({id}): {name}',
-          trailers: { require: ['Signed-off-by: x', 3] },
-        },
-      }),
-    ).toEqual({
-      type: 'pull-request',
-      base: 'main',
-      verify: true,
-      commitTemplate: 'feat({id}): {name}',
-      trailers: ['Signed-off-by: x'],
-    });
-    expect(workflowOf({ workflow: { type: 'direct', verify: false } })).toMatchObject({ verify: false, trailers: [] });
-    expect(workflowOf({ workflow: { base: 'main' } })).toBeNull();
-    expect(workflowOf(undefined)).toBeNull();
-  });
-});
-
 describe('vocabCounts', () => {
-  const vocab = resolveVocabulary({
-    phases: [
-      { id: 0, name: 'Foundations' },
-      { id: 3, name: 'Later' },
-    ],
+  const vocab = vocabulary({
+    phaseNames: new Map([
+      [0, 'Foundations'],
+      [3, 'Later'],
+    ]),
     labels: [
       { id: 'ux', label: 'User experience' },
       { id: 'unused', label: 'Not used yet' },
@@ -117,11 +95,7 @@ describe('vocabCounts', () => {
       task('T-3', { sprint: 'Three' }),
       task('T-4', {}),
     ];
-    const counted = vocabCounts(
-      inSprints,
-      resolveVocabulary(meta),
-      sprintModel(meta, inSprints, resolveVocabulary(meta)),
-    );
+    const counted = vocabCounts(inSprints, DEFAULT_VOCABULARY, sprintModel(meta, inSprints, DEFAULT_VOCABULARY));
     expect(counted.sprints).toEqual([
       { id: 'Three', state: 'active', count: 2 },
       { id: 'Four', state: 'planned', count: 0 },

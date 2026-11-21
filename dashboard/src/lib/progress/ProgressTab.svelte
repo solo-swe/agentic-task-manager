@@ -38,11 +38,9 @@
     ].join(' · '),
   );
   const model = $derived(dashboard.sprints);
-  const whole = $derived(forecastSprints(dashboard.history, now, dashboard.history, dashboard.vocab, model));
+  const whole = $derived(forecastSprints(dashboard.history, now, dashboard.history, model));
   const forecast = $derived(
-    filtered
-      ? withWholeSprintEstimates(forecastSprints(tasks, now, dashboard.history, dashboard.vocab, model), whole)
-      : whole,
+    filtered ? withWholeSprintEstimates(forecastSprints(tasks, now, dashboard.history, model), whole) : whole,
   );
   // Clicking a sprint row focuses the burndown on that sprint (FR-4.6); a filter that hides it resets the focus
   // The focused sprint is part of the project's saved view (dashboard state)
@@ -63,12 +61,10 @@
     '14d': 'Last 14 days',
     all: 'All time',
   });
-  const chart = $derived(burndown(tasks, forecast, now, focus, dashboard.vocab, from, model));
+  const chart = $derived(burndown(tasks, forecast, now, focus, from, model));
   // Agent time, waiting on you and idle over the burndown's range, for the matching tasks (T-242; shared with the
   // Activity popup, timeuse.ts)
-  const use = $derived(
-    timeUse(tasks, from === undefined ? null : { start: from, end: chart.end ?? now }, now, dashboard.vocab),
-  );
+  const use = $derived(timeUse(tasks, from === undefined ? null : { start: from, end: chart.end ?? now }, now));
 
   // The By component table: the focused sprint's tasks, else all of them (T-323)
   const focusTasks = $derived(

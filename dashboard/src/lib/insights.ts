@@ -5,7 +5,7 @@ import { INTERACTIVE_LABEL } from './forecast';
 import { keyOf } from './keys';
 import { completions, type Completion } from './timeline';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type StatusKind, type Vocabulary } from './vocab';
+import { DEFAULT_VOCABULARY, kindOf, taskKind, type StatusKind, type Vocabulary } from './vocab';
 import { startedBy, workSpan } from './work';
 
 export interface Share {
@@ -40,9 +40,9 @@ const KIND_ORDER: StatusKind[] = ['done', 'active', 'review', 'todo', 'blocked',
 
 /** Completion of a group of tasks, as atm counts it: done / (total − skipped). A group of only skipped tasks is
  * finished (nothing is left to do). */
-export function share(key: string, label: string, tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULARY): Share {
-  const done = tasks.filter((t) => kindOf(vocab, t.status) === 'done').length;
-  const skipped = tasks.filter((t) => kindOf(vocab, t.status) === 'skipped').length;
+export function share(key: string, label: string, tasks: Task[]): Share {
+  const done = tasks.filter((t) => taskKind(t) === 'done').length;
+  const skipped = tasks.filter((t) => taskKind(t) === 'skipped').length;
   const total = tasks.length - skipped;
   return { key, label, done, total, skipped, ratio: total ? done / total : skipped ? 1 : 0 };
 }
@@ -71,7 +71,7 @@ export function progressBreakdown(
     const kind = kindOf(vocab, s);
     return kind ? KIND_ORDER.indexOf(kind) : KIND_ORDER.length;
   };
-  const current = share('all', 'All tasks', tasks, vocab);
+  const current = share('all', 'All tasks', tasks);
   const done = current.done + unloadedArchived;
   const total = current.total + unloadedArchived;
   return {
@@ -82,10 +82,10 @@ export function progressBreakdown(
       .sort((a, b) => rank(a.status) - rank(b.status) || a.status.localeCompare(b.status)),
     byPhase: [...groupBy(tasks, (t) => t.phase)]
       .sort(([a], [b]) => a - b)
-      .map(([phase, list]) => share(String(phase), `Phase ${phase}`, list, vocab)),
+      .map(([phase, list]) => share(String(phase), `Phase ${phase}`, list)),
     byType: [...groupBy(tasks, (t) => t.type)]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([type, list]) => share(type, type, list, vocab)),
+      .map(([type, list]) => share(type, type, list)),
   };
 }
 
@@ -370,11 +370,10 @@ export function activitySeries(
   tasks: Task[],
   period?: { start: number; end: number } | null,
   now = Date.now(),
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
   bucket?: number,
 ): ActivitySeries | null {
-  const kind = (t: Task) => kindOf(vocab, t.status);
-  const all = completions(tasks, vocab);
+  const kind = taskKind;
+  const all = completions(tasks);
   if (all.length === 0) return null;
   const done = period ? all.filter((c) => c.time >= period.start && c.time < period.end) : all;
   const starts = tasks.map((t) => ms(t.started_at)).filter((t): t is number => t !== null);
@@ -394,7 +393,7 @@ export function activitySeries(
   const typeOf = new Map(tasks.map((t) => [t.id, t.type]));
   // Work intervals per agent (work.ts): start to completion or review request, or to now while active
   const work = tasks.flatMap((t) => {
-    const span = workSpan(t, now, vocab);
+    const span = workSpan(t, now);
     return !span || span.end <= span.start ? [] : [{ agent: startedBy(t) ?? '', start: span.start, end: span.end }];
   });
   const buckets: ActivityBucket[] = [];

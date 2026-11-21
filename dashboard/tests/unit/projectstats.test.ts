@@ -2,14 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { projectStats, timeHistogram } from '../../src/lib/projectstats';
 import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, type Workflow } from '../../src/lib/vocab';
+import { vocabulary, withKinds } from './views';
 
 // Times in minutes from T0
 const T0 = Date.parse('2026-05-01T08:00:00Z');
 const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
 const t = (min: number) => T0 + min * 60_000;
+/** A task as atm serves it: with its kind */
 const task = (id: string, fields: Partial<Task>): Task =>
-  ({ id, name: id, phase: 0, type: 'feature', description: '', status: 'todo', ...fields }) as Task;
+  withKinds([{ id, name: id, phase: 0, type: 'feature', description: '', status: 'todo', ...fields } as Task])[0];
+/** A project whose workflow is `type`, as atm serves its vocabulary */
+const flow = (type: string) => vocabulary({ workflow: { type, verify: true, trailers: [] } satisfies Workflow });
 
 // A (a) 0–30 and B (b, interactive) 10–40 then in review until 60, both with a commit in PR #5; C skipped, D open
 const TASKS = [
@@ -39,7 +43,7 @@ const TASKS = [
 const NOW = t(120);
 
 describe('projectStats (T-253)', () => {
-  const s = projectStats(TASKS, { workflow: { type: 'pull-request' } }, NOW, undefined, 2);
+  const s = projectStats(TASKS, {}, NOW, flow('pull-request'), 2);
 
   it('started: the earliest created_at; duration from the first start, ongoing while tasks are open', () => {
     expect(s.started).toBe(t(-60));
@@ -58,7 +62,7 @@ describe('projectStats (T-253)', () => {
         { id: 'Two', state: 'active' },
       ],
     };
-    const model = sprintModel(meta, TASKS, resolveVocabulary(meta));
+    const model = sprintModel(meta, TASKS, DEFAULT_VOCABULARY);
     expect(projectStats(TASKS, {}, NOW, undefined, 0, model).sprints).toEqual({ total: 2, closed: 1 });
   });
 
@@ -79,12 +83,10 @@ describe('projectStats (T-253)', () => {
   });
 
   it("without created_at, meta.created; a direct project's pull requests are –", () => {
-    const s2 = projectStats([task('X', {})], { created: '2026-04-01', workflow: { type: 'direct' } }, NOW);
+    const s2 = projectStats([task('X', {})], { created: '2026-04-01' }, NOW, flow('direct'));
     expect(s2.started).toBe(Date.parse('2026-04-01'));
     expect(s2.pullRequests).toBeNull();
-    expect(projectStats([task('X', { pr: { number: 3 } })], { workflow: { type: 'direct' } }, NOW).pullRequests).toBe(
-      1,
-    );
+    expect(projectStats([task('X', { pr: { number: 3 } })], {}, NOW, flow('direct')).pullRequests).toBe(1);
   });
 
   it("a person's own work isn't agent time", () => {
