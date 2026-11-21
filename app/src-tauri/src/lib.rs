@@ -9,6 +9,7 @@ pub mod commands;
 pub mod external;
 pub mod links;
 pub mod menu;
+pub mod navigation;
 pub mod session;
 pub mod updates;
 pub mod windows;
@@ -111,12 +112,17 @@ pub fn run() {
         }));
     let app = with_plugins(first)
         .manage(AppState::new(atm_lib::Workspaces::open()))
-        .invoke_handler(commands.invoke_handler())
+        // Only the app's page calls the commands (ATM-677, audit A6): Tauri counts CompMD's frames as local too
+        .invoke_handler(navigation::guarded(commands.invoke_handler()))
         // A window's page loading again (a reload) ends that page's subscriptions (T-506, T-511): it can't say so
-        // itself; other windows' stay
+        // itself; other windows' stay. Its links and menu channels too (ATM-677, audit A8), so a link sent meanwhile
+        // waits for the new page
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started {
-                webview.state::<AppState>().unwatch_window(webview.label());
+                let state = webview.state::<AppState>();
+                state.unwatch_window(webview.label());
+                state.links().page_started(webview.label());
+                state.menus().page_started(webview.label());
             }
         })
         .setup(move |app| {
@@ -194,6 +200,8 @@ pub fn run() {
 /// app's context with them, so a plugin that can't start (its configuration, T-483) fails a test, not the app.
 fn with_plugins<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     builder
+        // Every webview loads only the app's own origins (ATM-677, audit A6, A10)
+        .plugin(navigation::plugin())
         // CompMD's bundle (the sandbox's frames, the packs' modules), embedded by build.rs, on a scheme of its own,
         // `compmd:`, so the frames keep their own policy and origin; the plugin gives the page that origin (ADR-006)
         .plugin(tauri_plugin_compmd::init(
@@ -811,6 +819,62 @@ mod integration_tests {
         "atm://localhost",
         "http://atm.localhost",
     ];
+
+    /// ATM-677, audit A6: Tauri counts every scheme the app registers as local, `compmd:` among them, so the window's
+    /// capability alone lets a call from the `CompMD` frames through; the app's guard refuses it by its `Origin`, and still
+    /// answers the app's page
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn a_call_from_compmds_frames_is_refused_though_the_capability_covers_it() {
+        let home = scratch("frames");
+        let from = |origin: &str| {
+            let mut request = ipc_request("version", &json!({}), origin);
+            request.headers.insert(
+                "origin",
+                tauri::http::HeaderValue::from_str(origin).expect("a header"),
+            );
+            request
+        };
+        let serving_compmd = |builder: tauri::Builder<tauri::test::MockRuntime>| {
+            builder
+                .manage(AppState::new(atm_lib::Workspaces::at(&home)))
+                .register_uri_scheme_protocol("compmd", |_context, _request| {
+                    tauri::http::Response::new(Vec::new())
+                })
+        };
+        // Without the guard: the capability lets CompMD's frames call the app
+        let open = serving_compmd(tauri::test::mock_builder())
+            .invoke_handler(tauri::generate_handler![version])
+            .build(context())
+            .expect("the mock app");
+        let window = tauri::WebviewWindowBuilder::new(&open, "main", tauri::WebviewUrl::default())
+            .build()
+            .expect("a window");
+        assert!(
+            tauri::test::get_ipc_response(&window, from("compmd://localhost")).is_ok(),
+            "Tauri counts compmd: as local: without the guard a frame calls the app"
+        );
+        // With it, as the app runs: refused, and the page still answered
+        let guarded = serving_compmd(tauri::test::mock_builder())
+            .invoke_handler(navigation::guarded(tauri::generate_handler![version]))
+            .build(context())
+            .expect("the mock app");
+        let window =
+            tauri::WebviewWindowBuilder::new(&guarded, "main", tauri::WebviewUrl::default())
+                .build()
+                .expect("a window");
+        let refused = tauri::test::get_ipc_response(&window, from("compmd://localhost"))
+            .expect_err("a call from CompMD's frames");
+        assert!(
+            refused.to_string().contains("only the app's page"),
+            "{refused}"
+        );
+        assert!(tauri::test::get_ipc_response(&window, from("tauri://localhost")).is_ok());
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
 
     /// Through the app's own context, so its capability is what lets the window call them
     #[test]

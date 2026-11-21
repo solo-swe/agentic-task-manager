@@ -72,13 +72,48 @@ pub fn notice(name: &str, count: u32) -> String {
     }
 }
 
-/// The counts seen last, per workspace, so a notification says only what is new.
+/// The counts seen last, per workspace, so a notification says only what is new; and each window's workspace and its
+/// total, for the badge.
 #[derive(Default)]
 pub struct NeedsYou {
     seen: Mutex<HashMap<String, HashMap<String, u32>>>,
+    shown: Mutex<Shown>,
+}
+
+/// Which workspace each window shows, and each workspace's total as last read.
+#[derive(Default)]
+struct Shown {
+    windows: HashMap<String, String>,
+    totals: HashMap<String, u32>,
 }
 
 impl NeedsYou {
+    /// `window` shows `workspace`, `total` things needing the user: what the app's one badge shows, the totals of the
+    /// workspaces the windows show, each workspace once (ATM-677, audit A9: the badge is the app's, not the window's
+    /// that asked last).
+    pub fn badge_total(&self, window: &str, workspace: &str, total: u32) -> u32 {
+        let mut shown = self
+            .shown
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        shown
+            .windows
+            .insert(window.to_owned(), workspace.to_owned());
+        shown.totals.insert(workspace.to_owned(), total);
+        // A workspace in two windows counts once, as its latest total (the same projects)
+        let Shown { windows, totals } = &mut *shown;
+        totals.retain(|w, _| windows.values().any(|v| v == w));
+        totals.values().fold(0, |sum, n| sum.saturating_add(*n))
+    }
+
+    /// `window` closed: its workspace counts no more, unless another window shows it.
+    pub fn forget(&self, window: &str) {
+        self.shown
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .windows
+            .remove(window);
+    }
     /// `workspace`'s projects wait as `now` says: what to notify, a notice per project whose count went up since the
     /// last time. The first time for a workspace (the app's start, a switch) only sets what was seen.
     pub fn update(&self, workspace: &str, now: &[Waiting]) -> Vec<String> {
@@ -204,8 +239,11 @@ pub async fn needs_you<R: Runtime>(
 ) -> Result<(), AppError> {
     let now = waiting_of(&listed_projects(state.workspaces(), &workspace)?);
     let notices = state.needs_you().update(&workspace, &now);
-    let total: u32 = now.iter().map(|w| w.count).sum();
-    show_badge(&window, badge.then_some(total)).map_err(|e| AppError::Failed(e.to_string()))?;
+    let total = now.iter().fold(0u32, |sum, w| sum.saturating_add(w.count));
+    let all = state
+        .needs_you()
+        .badge_total(window.label(), &workspace, total);
+    show_badge(&window, badge.then_some(all)).map_err(|e| AppError::Failed(e.to_string()))?;
     let app = window.app_handle();
     let in_front = app
         .webview_windows()
@@ -357,6 +395,30 @@ mod tests {
             notice(&"x".repeat(200), 1).chars().count(),
             MAX_NAME + ": 1 thing needs you".len()
         );
+    }
+
+    /// ATM-677, audit A9: the badge is the sum of what the windows show, a workspace in two windows once, a closed
+    /// window's no more, and never past what a `u32` holds
+    #[test]
+    fn the_badge_sums_the_windows_workspaces_each_once() {
+        let needs = NeedsYou::default();
+        assert_eq!(needs.badge_total("main", "default", 3), 3);
+        assert_eq!(needs.badge_total("window-1", "work", 2), 5);
+        // Another window on the same workspace: counted once, at its latest total
+        assert_eq!(needs.badge_total("window-2", "work", 4), 7);
+        // The window that asks shows a smaller count now
+        assert_eq!(needs.badge_total("main", "default", 1), 5);
+        needs.forget("window-1");
+        assert_eq!(
+            needs.badge_total("main", "default", 1),
+            5,
+            "window-2 shows work"
+        );
+        needs.forget("window-2");
+        assert_eq!(needs.badge_total("main", "default", 1), 1);
+        // A window switching workspace counts only the new one
+        assert_eq!(needs.badge_total("main", "work", 6), 6);
+        assert_eq!(needs.badge_total("window-3", "big", u32::MAX), u32::MAX);
     }
 
     #[test]

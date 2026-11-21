@@ -468,14 +468,14 @@ pub fn places_of(workspaces: &atm_lib::Workspaces, workspace: Option<&str>) -> P
     let shown = workspace
         .map(str::to_owned)
         .or_else(|| summary["recent"].as_str().map(str::to_owned));
+    // From the workspace's entries alone (ATM-677, audit A7): the menu is rebuilt on every focus change, on the main
+    // thread, and a listing reads every project's tasks for an ID and a name the entries have
     let projects = shown
         .and_then(|id| workspaces.get(&id))
         .map(|found| {
-            let listing = serde_json::json!(found.listing().projects());
-            listing
-                .as_array()
-                .into_iter()
-                .flatten()
+            found
+                .entries()
+                .iter()
                 .filter_map(|p| {
                     let id = p["id"].as_str()?;
                     let name = p["name"].as_str().unwrap_or(id);
@@ -531,6 +531,12 @@ impl Menus {
     #[must_use]
     pub fn state(&self, window: &str) -> MenuState {
         self.inner().1.get(window).cloned().unwrap_or_default()
+    }
+
+    /// `window`'s page started loading (a reload, ATM-677, audit A8): the old page's channel is dropped until the new
+    /// one subscribes; what its menu shows stays until the new page says.
+    pub fn page_started(&self, window: &str) {
+        self.inner().0.remove(window);
     }
 
     /// `window` closed.

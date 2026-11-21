@@ -116,6 +116,7 @@ impl AppState {
     pub fn window_closed(&self, window: &str) -> usize {
         self.links.forget(window);
         self.menus.forget(window);
+        self.needs_you().forget(window);
         let mut front = self
             .front
             .lock()

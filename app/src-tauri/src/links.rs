@@ -99,6 +99,13 @@ impl Links {
         inner.waiting.remove(window)
     }
 
+    /// `window`'s page started loading (a reload, ATM-677, audit A8): the old page's channel is dropped, so an address
+    /// sent before the new page subscribes waits for it rather than going to a page that is gone. What already waits
+    /// stays.
+    pub fn page_started(&self, window: &str) {
+        self.inner().channels.remove(window);
+    }
+
     /// `window` closed: nothing more goes to it.
     pub fn forget(&self, window: &str) {
         let mut inner = self.inner();
@@ -318,6 +325,27 @@ mod tests {
         assert!(links.open("main", "atm://board"));
         assert_eq!(text(to_new.recv().expect("a link")), "\"/board\"");
         assert!(to_old.try_recv().is_err());
+    }
+
+    /// ATM-677, audit A8: a link sent while the page reloads (after its load started, before the new page subscribed)
+    /// waits for the new page, never reaching the old page's channel; one waiting already stays
+    #[test]
+    fn a_link_sent_while_the_page_reloads_waits_for_the_new_page() {
+        let links = Links::default();
+        let (old, to_old) = recorded();
+        links.subscribe("main", old);
+        links.page_started("main");
+        assert!(links.open("main", "atm://board"));
+        assert!(to_old.try_recv().is_err(), "the page that is gone got it");
+        let (new, _) = recorded();
+        assert_eq!(links.subscribe("main", new).as_deref(), Some("/board"));
+        // Waiting before the page started: kept for it
+        links.send("window-1", "/projects/abc".into());
+        links.page_started("window-1");
+        assert_eq!(
+            links.subscribe("window-1", recorded().0).as_deref(),
+            Some("/projects/abc")
+        );
     }
 
     /// A link the app doesn't open changes nothing: the address waiting stays

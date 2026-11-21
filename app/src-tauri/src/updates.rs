@@ -53,6 +53,32 @@ fn updater<R: Runtime>(app: &AppHandle<R>) -> Result<Option<Updater>, AppError> 
     Ok(Some(updater))
 }
 
+/// A version as atm's releases have them, `MAJOR.MINOR.PATCH` (a leading `v` allowed): its numbers, or none.
+fn release_of(version: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = version.strip_prefix('v').unwrap_or(version).split('.');
+    let mut number = || parts.next()?.parse::<u64>().ok();
+    let release = (number()?, number()?, number()?);
+    parts.next().is_none().then_some(release)
+}
+
+/// Whether the manifest's `offered` version may replace the `current` one (ATM-677, audit A10): a release of atm's
+/// form, newer than the one running, so neither a downgrade nor a version that isn't a release is ever installed,
+/// whatever the manifest says. Why not, when it may not.
+fn installable(current: &str, offered: &str) -> Result<(), String> {
+    let Some(offered_release) = release_of(offered) else {
+        return Err(format!(
+            "the update's version {offered:?} isn't a release's"
+        ));
+    };
+    match release_of(current) {
+        Some(running) if offered_release > running => Ok(()),
+        Some(_) => Err(format!(
+            "the update's version {offered} isn't newer than this one, {current}"
+        )),
+        None => Err(format!("this app's version {current:?} isn't a release's")),
+    }
+}
+
 /// Whether a newer version is published: it, or nothing (up to date, or a build without updates).
 ///
 /// # Errors
@@ -147,6 +173,7 @@ pub async fn install_update(
     let Some(update) = updater.check().await.map_err(failed)? else {
         return Ok(false);
     };
+    installable(&update.current_version, &update.version).map_err(AppError::Failed)?;
     let mut download = Progress::new();
     update
         .download_and_install(
@@ -281,6 +308,37 @@ mod tests {
             downloaded(progress.chunk(chunk, Some(2 * huge))),
             Some((u32::MAX, Some(u32::MAX)))
         );
+    }
+
+    /// ATM-677, audit A10: only a release newer than the running one is installed
+    #[test]
+    fn only_a_newer_release_is_installable() {
+        for (current, offered) in [
+            ("0.42.0", "0.43.0"),
+            ("0.42.0", "v0.42.1"),
+            ("0.9.9", "0.10.0"),
+            ("0.42.0", "1.0.0"),
+        ] {
+            assert_eq!(
+                installable(current, offered),
+                Ok(()),
+                "{current} → {offered}"
+            );
+        }
+        for (current, offered, why) in [
+            ("0.42.0", "0.42.0", "isn't newer"),
+            ("0.42.0", "0.41.9", "isn't newer"),
+            ("0.10.0", "0.9.9", "isn't newer"),
+            ("0.42.0", "0.43.0-rc.1", "isn't a release's"),
+            ("0.42.0", "0.43", "isn't a release's"),
+            ("0.42.0", "0.43.0.1", "isn't a release's"),
+            ("0.42.0", "", "isn't a release's"),
+            ("0.42.0", "x.y.z", "isn't a release's"),
+            ("dev", "0.43.0", "this app's version"),
+        ] {
+            let refused = installable(current, offered).expect_err(offered);
+            assert!(refused.contains(why), "{current} → {offered}: {refused}");
+        }
     }
 
     /// What the check answers the page: the versions and the notes, by these names
