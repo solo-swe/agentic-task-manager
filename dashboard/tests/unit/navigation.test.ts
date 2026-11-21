@@ -38,12 +38,12 @@ describe('without a router (the browser’s history)', () => {
     const before = history.length;
     navigate('/projects/abc/list?task=T-1', { state: { atmDocument: true } });
     expect([location.pathname + location.search, history.length]).toEqual(['/projects/abc/list?task=T-1', before + 1]);
-    expect(history.state).toEqual({ atmFrom: '/', atmDocument: true });
+    expect(history.state).toEqual({ atmFrom: '/', atmPrev: '/', atmDocument: true });
     expect(currentAddress()).toBe('/projects/abc/list?task=T-1');
     navigate('/board', { replace: true });
     expect([location.pathname, history.length]).toEqual(['/board', before + 1]);
-    // Replaced, the entry keeps where it was reached from, and nothing else of its state
-    expect(entryState()).toEqual({ atmFrom: '/' });
+    // Replaced, the entry keeps where it was reached from and the entry before it, and nothing else of its state
+    expect(entryState()).toEqual({ atmFrom: '/', atmPrev: '/' });
   });
 
   it('going to the address shown adds no entry; replacing it still writes it', () => {
@@ -52,7 +52,7 @@ describe('without a router (the browser’s history)', () => {
     navigate('/board');
     expect(history.length).toBe(before);
     navigate('/board', { replace: true, state: { atmDocumentDepth: 2 } });
-    expect(entryState()).toEqual({ atmFrom: '/', atmDocumentDepth: 2 });
+    expect(entryState()).toEqual({ atmFrom: '/', atmPrev: '/', atmDocumentDepth: 2 });
   });
 
   it('the current address is the location as the dashboard writes it (an old #… link’s new one)', () => {
@@ -76,7 +76,7 @@ describe('with the layout’s router', () => {
     nav.navigate('/projects/abc');
     nav.navigate('/projects/abc/graph', { replace: true, state: { atmDocument: true } });
     expect(went).toEqual([
-      ['/projects/abc', { replace: false, state: { atmFrom: '/' } }],
+      ['/projects/abc', { replace: false, state: { atmFrom: '/', atmPrev: '/' } }],
       ['/projects/abc/graph', { replace: true, state: { atmDocument: true } }],
     ]);
     // The router hasn't moved the location yet: the address is the one written
@@ -230,6 +230,34 @@ describe('a tab’s own history (the app)', () => {
       2,
     ]);
     expect(nav.canGo(1)).toBe(false);
+  });
+
+  // ATM-696: closing what is open over a page never leaves that page twice in the tab's history
+  it('closing what was opened over the page under it goes Back to it; another task’s details in place too', async () => {
+    const { nav, tabs, shown } = await app('/projects/abc/list');
+    nav.navigate('/projects/abc/kanban');
+    nav.navigate('/projects/abc/kanban?task=T-1');
+    nav.navigate('/projects/abc/kanban?task=T-2', { replace: true });
+    nav.closeTo('/projects/abc/kanban');
+    expect(shown()).toBe('/projects/abc/kanban');
+    expect(addresses(tabs)).toEqual([
+      ['/projects/abc/list', '/projects/abc/kanban', '/projects/abc/kanban?task=T-2'],
+      1,
+    ]);
+    // Back from there: the page before, not the board again
+    nav.back();
+    expect(shown()).toBe('/projects/abc/list');
+  });
+
+  it('closing what was opened on its own (a link, a new tab) replaces its entry with the page', async () => {
+    const { nav, tabs, shown } = await app('/projects/abc/kanban?task=T-1');
+    nav.closeTo('/projects/abc/kanban');
+    expect(shown()).toBe('/projects/abc/kanban');
+    expect(addresses(tabs)).toEqual([['/projects/abc/kanban'], 0]);
+    // Opened from another page: that page isn't the one under it
+    nav.navigate('/projects/abc/list?task=T-2');
+    nav.closeTo('/projects/abc/list');
+    expect(addresses(tabs)).toEqual([['/projects/abc/kanban', '/projects/abc/list'], 1]);
   });
 
   it('a replace changes the current entry only', async () => {

@@ -14,8 +14,16 @@ import { addressOf } from './address';
 
 /** What the document viewer marks its own history entries with (state.svelte.ts documentDepth), and where an entry
  * was reached from in its tab: `atmFrom`, the address of the page before this one, `atmSteps` entries back (1 when
- * missing; more when this page has had something open over it, or another file or round, since) */
-export type EntryState = { atmDocument?: boolean; atmDocumentDepth?: number; atmFrom?: string; atmSteps?: number };
+ * missing; more when this page has had something open over it, or another file or round, since); `atmPrev`, the
+ * address of the entry just before this one, the one it was pushed from (ATM-696: closing what is open over a page goes
+ * Back when that is the page under it) */
+export type EntryState = {
+  atmDocument?: boolean;
+  atmDocumentDepth?: number;
+  atmFrom?: string;
+  atmSteps?: number;
+  atmPrev?: string;
+};
 
 /** An address's page: its path, without what is open over it (the query) */
 const pathOf = (address: string) => address.split(/[?#]/)[0];
@@ -160,12 +168,12 @@ export function navigate(
   { replace = false, fresh = false, state = {} }: { replace?: boolean; fresh?: boolean; state?: EntryState } = {},
 ) {
   if (address === currentAddress() && !replace) return;
-  const { atmFrom, atmSteps } = router.state();
+  const { atmFrom, atmSteps, atmPrev } = router.state();
   const where: EntryState = fresh
     ? {}
     : replace
-      ? { ...(atmFrom ? { atmFrom } : {}), ...(atmSteps ? { atmSteps } : {}) }
-      : originOf(address, currentAddress(), router.state());
+      ? { ...(atmFrom ? { atmFrom } : {}), ...(atmSteps ? { atmSteps } : {}), ...(atmPrev ? { atmPrev } : {}) }
+      : { ...originOf(address, currentAddress(), router.state()), atmPrev: currentAddress() };
   const entryState = { ...where, ...state };
   if (tabHistory) {
     // The app (ATM-694): a step in the active tab's history; the page's own history stays one entry deep
@@ -219,6 +227,13 @@ export function canGo(delta: number): boolean {
 export function backEntry(): { address: string; steps: number } | null {
   const { atmFrom, atmSteps } = router.state();
   return atmFrom ? { address: atmFrom, steps: atmSteps ?? 1 } : null;
+}
+
+/** Leave what is open over this page for `under`, the page itself (ATM-696): Back when the entry before is that page,
+ * so a Back after it never lands on the same page twice; else this entry replaced by it */
+export function closeTo(under: string) {
+  if (router.state().atmPrev === under && back(1)) return;
+  navigate(under, { replace: true });
 }
 
 /** Back out of this page to the one it was reached from (the page's back button, when `backEntry` names one) */

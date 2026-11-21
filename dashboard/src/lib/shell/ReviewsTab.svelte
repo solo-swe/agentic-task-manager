@@ -227,7 +227,8 @@
   const review = $derived(shown?.review.reference ?? at.review ?? '');
   const listAddress = $derived(withReview(currentAddress(), { review: null }));
   /** Where the review was opened from in this tab (ATM-686): its back button goes Back there, saying where; a review
-   * opened on its own (a new tab, a link from elsewhere) goes up to its reviews list. Another place over the review
+   * opened on its own (a new tab, a link from elsewhere) goes up to its reviews list, in its place (ATM-696: no way
+   * back to a review left that way). Another place over the review
    * (a task's details) or another file or round is the same page: its way back is the review's (navigation.ts) */
   const cameFrom = $derived.by(() => {
     void router.url;
@@ -276,7 +277,7 @@
           tasks={taskLinks}
           backHref={cameFrom ?? listAddress}
           backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
-          onback={() => (cameFrom ? goBack() : go(listAddress))}
+          onback={() => (cameFrom ? goBack() : go(listAddress, true))}
           {busy}
           {problem}
           docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}

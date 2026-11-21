@@ -255,7 +255,7 @@ describe('opening and Back (the dashboard state)', () => {
     dashboard.openDocument({ path: 'docs/x.md', lines: [3, 3] });
     expect(dashboard.docRef).toEqual({ path: 'docs/x.md', lines: [3, 3] });
     expect(location.pathname + location.search).toBe('/projects/p1/list?doc=docs/x.md:L3');
-    expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 1 });
+    expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 1, atmPrev: '/projects/p1/list' });
     // In the browser, the tab's history is the browser's: one entry back (ATM-694: through navigation's back)
     const back = vi.spyOn(history, 'go').mockImplementation(() => {});
     dashboard.documentBack();
@@ -267,7 +267,11 @@ describe('opening and Back (the dashboard state)', () => {
     history.replaceState(null, '', '/projects/p1/list');
     dashboard.openDocument({ path: 'docs/a.md' });
     dashboard.openDocument({ path: 'docs/b.md' });
-    expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 2 });
+    expect(history.state).toEqual({
+      atmDocument: true,
+      atmDocumentDepth: 2,
+      atmPrev: '/projects/p1/list?doc=docs/a.md',
+    });
     const go = vi.spyOn(history, 'go').mockImplementation(() => {});
     dashboard.closeDocument();
     expect(go).toHaveBeenCalledWith(-2);

@@ -51,7 +51,7 @@ import {
 } from './filters';
 import { dialogOf, withDialog, type DialogId } from './dialogs';
 import { docOf, withDoc, type DocumentRef } from './documents';
-import { back, currentAddress, entryState, navigate } from './navigation';
+import { back, closeTo, currentAddress, entryState, navigate } from './navigation';
 
 /** How many of the document viewer's own history entries lead to this one (0: not the viewer's) */
 function documentDepth(): number {
@@ -1031,11 +1031,13 @@ export class DashboardState {
     navigate(withTask(currentAddress(), taskLabel(task)), { replace: true, state: entryState() });
   }
 
+  /** Closes the details: Back, when they were opened over the page under them (ATM-696), so Back after the close
+   * doesn't land on that page twice; else (a link, a reload) the entry replaced by the page */
   closeDetail() {
     this.detailOpen = false;
     this.peeking = false;
     const address = withTask(currentAddress(), null);
-    if (address !== currentAddress()) navigate(address, { replace: true });
+    if (address !== currentAddress()) closeTo(address);
   }
 
   openWhatsNew() {

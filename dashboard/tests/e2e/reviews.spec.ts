@@ -401,8 +401,22 @@ test.describe('the reviews tab', () => {
     }) => {
       await openReviews(page, tasksServer, 'CR-2');
       await expect(back(page)).toHaveText('Reviews');
+      const depth = await page.evaluate(() => history.length);
       await back(page).click();
       await expect(page.locator('#review-list')).toBeVisible();
+      // In the review's place (ATM-696): no entry added, so Back doesn't come back to it
+      expect(await page.evaluate(() => history.length)).toBe(depth);
+    });
+
+    test('from the Reviews list: back to it, through the history', async ({ page, tasksServer }) => {
+      await openReviews(page, tasksServer);
+      await page.locator('.review-row[data-review="CR-2"] .review-link').click();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+      await expect(back(page)).toHaveText('Reviews');
+      await back(page).click();
+      await expect(page.locator('#review-list')).toBeVisible();
+      await page.goForward();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
     });
   });
 
