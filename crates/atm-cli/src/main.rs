@@ -208,8 +208,7 @@ impl Command {
     /// Whether an agent running it is reminded that it isn't watching its reviews (ATM-642): the commands it works
     /// with, not the watch or a wait on a review (they are the watching), nor the hook's heartbeat.
     fn reminds_to_watch(&self) -> bool {
-        self.renews_claims()
-            && !matches!(self, Command::Review(ReviewCommand::Listen(_)))
+        self.renews_claims() && !matches!(self, Command::Review(ReviewCommand::Listen(_)))
     }
 
     /// Whether running it first brings an outdated dashboard server along (after an update, the first atm command
