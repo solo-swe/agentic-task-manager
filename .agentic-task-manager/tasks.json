@@ -17491,7 +17491,7 @@
       "description": "Audit findings A3, A6, A7, A8, A9 and A10 ([the report](docs/codebase-audit-2026-11.md#a3-low-bug-windowsjson-writes-race-checked)).\n\n- **A3:** `app/src-tauri/src/session.rs:283` shares one `windows.json.next` and holds no lock across write and rename: a write mutex, or a unique temporary name.\n- **A8:** a deep link sent while a page reloads goes to the dead page's channel (`links.rs:84`): on `PageLoadEvent::Started` drop the window's links and menu channels, keeping `waiting`.\n- **A6:** CompMD's frames count as local to Tauri, so the window's capability covers them; the guide says no capability lists them. Correct `docs/guides/tauri.md`, add a test that an invoke from a `compmd://` frame is refused, and consider refusing any invoke whose origin isn't the app page's. Add an `on_navigation` guard allowing only the app's own origin (A10's navigation part).\n- **A9:** the Dock badge is app-wide but set from the calling window's workspace (`badge.rs:205`): keep per-window totals and show their sum, with `saturating_add`.\n- **A7:** the menu is rebuilt on the main thread on every focus change, reading every project (`lib.rs:143`, `menu.rs:630`): read the IDs and names from the workspace's entries only.\n- **A10 (updates):** check the downloaded app's version against the manifest's and the current one before installing (`updates.rs:46`).\n\n## Tests\nThe app crate's unit tests for each (the session writes from two threads, the link kept after a page start, the badge sum).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/session.rs",
@@ -17503,7 +17503,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-21T16:44:25Z",
+      "updated_at": "2026-11-21T16:44:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17520,10 +17520,19 @@
           "kind": "handoff",
           "text": "Handoff: A3, A6, A7, A8, A9 and A10 (version check) are edited, not committed: session.rs, links.rs, menu.rs, badge.rs, commands.rs, updates.rs, new navigation.rs, lib.rs, docs/guides/tauri.md, security-architecture.md I25. Left: clippy, cargo test -p atm-app, commit. Reading the bundle version from the archive needs a new dependency (not done)",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-21T16:44:37Z",
+          "kind": "outcome",
+          "text": "A3 session writes one at a time, atomic and private. A8 links and menu channels dropped on page load start. A9 badge = sum of the windows workspaces. A7 Go menu from entries. A10 only a newer release installs, not the bundle version (needs a dependency). A6 invoke guard by Origin plus navigation plugin, tested in the mock app. Not run in the real app: CompMD frames need a check",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-21T16:44:25Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "bfedc1461070ea18cf15ed74028a1e9d215dc2dd",
+      "completed_at": "2026-11-21T16:44:37Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226e82ed29c5",
@@ -19559,7 +19568,7 @@
       "description": "Hakan on CR-99 and CR-100 (2026-11-21): the files are too large. Split them into logical modules, give them unit tests that use fakes for what they depend on, and move the integration tests into their own files, by [the Rust guide](docs/guides/rust.md) (§Crates and modules, §Tests).\n\n## The files (lines of code / lines of tests, 2026-11-21)\n| File | Code | Tests |\n|---|---|---|\n| `crates/atm-cli/src/commands/review.rs` | 1,386 | 100 |\n| `app/src-tauri/src/commands.rs` | 1,114 | 425 |\n| `crates/atm-lib/src/review_listen.rs` | 974 | 538 |\n| `crates/atm-lib/src/reviews.rs` | 937 | 1,300 |\n| `crates/atm-vcs/src/lib.rs` | 771 | 642 |\n| `crates/atm-lib/src/review_pages.rs` | 724 | 371 |\n| `crates/atm-review/src/folder.rs` | 651 | 648 |\n| `crates/atm-docs/src/lib.rs` | 535 | 836 |\n| `crates/atm-review/src/rules.rs` | 529 | 1,162 |\n| `crates/atm-review/src/files.rs` | 511 | 565 |\n| `crates/atm-review/src/rounds.rs` | 455 | 742 |\n| `crates/atm-api/src/routes/reviews.rs` | 391 | 778 |\n| `app/src-tauri/src/lib.rs` | 236 | 1,283 |\n\n## Rules (the guide)\n- **Module files:** `foo.rs` next to a `foo/` directory, never `foo/mod.rs`. Public APIs stay the same (re-exported).\n- **Unit tests** stay with their code while it reads well, else `foo/tests.rs`, else `foo/tests/` by group. They test the unit alone, with hand-written fakes behind a trait (atm-review's `ReviewStore` already has a memory store).\n- **Integration tests** (a real git repository, the real store, several layers) go to the crate's `tests/` directory, one file per area.\n- About 400 lines is when a file reads badly, not a threshold.\n\n## How\n- One file at a time, the reviews area first (`reviews.rs`, `review_pages.rs`, `review_listen.rs`, `commands/review.rs`), before ATM-633's build changes them.\n- Each a move only: no logic changed, the same tests passing (`cargo test`, the CLI suite), the plan for it agreed first, as on CR-100.\n- Where a unit test today needs a real repository only because nothing is faked, add the fake and keep the real-repository version as an integration test.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -19568,7 +19577,7 @@
         "crates/atm-cli/src/commands/review.rs"
       ],
       "created_at": "2026-11-20T23:29:46Z",
-      "updated_at": "2026-11-21T16:44:19Z",
+      "updated_at": "2026-11-21T17:03:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19658,6 +19667,12 @@
           "kind": "review",
           "text": "CR-110: Split the large files, part 4: atm-api routes/reviews, atm-docs, atm-vcs",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-21T17:02:41Z",
+          "kind": "note",
+          "text": "Approved: in CR-110 (round 1)",
+          "by": "Hakan Serce"
         }
       ],
       "reviews": [
@@ -19680,6 +19695,11 @@
           "from": "2026-11-21T13:57:07Z",
           "to": "2026-11-21T13:57:54Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-21T16:44:19Z",
+          "to": "2026-11-21T17:02:41Z",
+          "outcome": "approved"
         }
       ],
       "blocks": [
@@ -19689,10 +19709,8 @@
           "on": "user"
         }
       ],
-      "started_at": "2026-11-21T16:09:13Z",
-      "started_by": "claude:0f56a916",
-      "review_requested_at": "2026-11-21T16:44:19Z",
-      "review_state": "waiting"
+      "started_at": "2026-11-21T17:03:56Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b81a73b4404",
