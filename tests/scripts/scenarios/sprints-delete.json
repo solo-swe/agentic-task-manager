@@ -234,6 +234,35 @@
     }
   },
   {
+    "name": "atm sprints delete: refuses while a task in it is claimed in another worktree, though it is to do here (ATM-668)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "A", "state": "active" }] },
+          "tasks": [{ "id": "T-1", "status": "todo", "sprint": "A" }]
+        },
+        ".agentic-task-manager/claims-store.json": {
+          "claims": {
+            "T-1": {
+              "task": "T-1",
+              "agent": "bob",
+              "branch": "agent-2",
+              "worktree": "/elsewhere",
+              "claimed_at": "2026-05-01T10:00:00Z",
+              "lease_expires_at": "2026-05-01T12:00:00Z"
+            }
+          }
+        }
+      }
+    },
+    "args": ["sprint", "delete", "A"],
+    "env": { "ATM_NOW": "2026-05-01T11:00:00Z" },
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["T-1 is in progress: finish or release it before deleting the sprint"]
+    }
+  },
+  {
     "name": "atm sprints delete: an unknown sprint is an error that lists the sprints",
     "setup": {
       "files": {

@@ -14258,9 +14258,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-21T13:10:34Z",
+      "updated_at": "2026-11-21T13:50:39Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Code reviews in the app",
@@ -14313,6 +14313,12 @@
           "kind": "review",
           "text": "CR-105: The state machine, part 1: the review table, lifecycle::check and can, the page reading can",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-21T13:50:39Z",
+          "kind": "note",
+          "text": "Approved: in CR-105 (round 1)",
+          "by": "Hakan Serce"
         }
       ],
       "pr": {
@@ -14329,13 +14335,14 @@
         }
       ],
       "review_requested_at": "2026-11-21T00:28:09Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "related": [
         "01a1fe3a-d2ba-736d-80e3-4b81a73b4404",
         "01a1fe3a-d2ba-736d-80e3-4b823592de68",
         "01a1fe3a-d2ba-736d-80e3-4b83d40322b2",
         "01a1fe3a-d2ba-736d-80e3-4b843b52bc96"
-      ]
+      ],
+      "reviewed_at": "2026-11-21T13:50:39Z"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-23995623df35",
@@ -16953,7 +16960,7 @@
       "description": "Audit findings L3, L6 and L8 ([the report](docs/codebase-audit-2026-11.md#l6-medium-bug-archiving-drops-batch-tasks-from-the-end-of-sprint-review-checked)).\n\n- **L6:** `archivable_by` (`crates/atm-common/src/archive.rs:101`) moves done batch tasks with `sprint_review: pending`; `close_sprint` then never asks about them. Keep them out of the archive until reviewed.\n- **L8:** sprint close, delete and move decide \"claimed\" from this copy's status only (`crates/atm-lib/src/sprints.rs:658`, `:805`, `:932`): also refuse a task with a live claim in the claims store (another worktree).\n- **L3:** `atm db unarchive T-1 T-1` writes the task twice (`crates/atm-lib/src/archive.rs:345`): deduplicate the IDs keeping order; consider refusing duplicate IDs in `load_tasks` (or have `atm doctor` already catch it).\n\n## Tests\nScenarios for each: a pending batch task stays after `atm db archive`; closing a sprint while a task is claimed in another worktree is refused; `unarchive` of a key and its alias adds one task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/archive.rs",
@@ -16961,9 +16968,9 @@
         "crates/atm-lib/src/archive.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-21T13:49:12Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -16971,7 +16978,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 668
+      "number": 668,
+      "started_at": "2026-11-21T13:49:12Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22651c31b0d9",
@@ -19475,9 +19484,9 @@
         "crates/atm-cli/src/commands/review.rs"
       ],
       "created_at": "2026-11-20T23:29:46Z",
-      "updated_at": "2026-11-21T13:38:37Z",
+      "updated_at": "2026-11-21T13:54:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19537,6 +19546,12 @@
           "kind": "review",
           "text": "CR-106: Split the large files, part 3: atm-review, the CLI command groups; plans for the rest",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-21T13:54:30Z",
+          "kind": "rejection",
+          "text": "CR-106 round 1: 1 open comment",
+          "by": "Hakan Serce"
         }
       ],
       "reviews": [
@@ -19561,7 +19576,8 @@
       "started_at": "2026-11-21T13:25:02Z",
       "started_by": "claude:0f56a916",
       "review_requested_at": "2026-11-21T13:38:37Z",
-      "review_state": "waiting"
+      "review_state": "changes_requested",
+      "reviewed_at": "2026-11-21T13:54:30Z"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b81a73b4404",
@@ -19574,7 +19590,7 @@
       "description": "Part 2 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §5.3, §7 step 1). Part 1 (CR-105) put `submit`, `close` and `add_round` through `atm_lib::lifecycle::check`.\n\n## Change\nThe other entry points check first through `lifecycle`, then write, and none sets a status on its own:\n- `reviews::create`, with ATM-631's openings (a review opened beside a task that doesn't move is refused);\n- `reviews::set_tasks` (a task added or removed);\n- the task commands (`state::change_status`: `atm task state`, `atm task review approve|request-changes|reject`);\n- `apply_live_approval` and `drop_expired_claims` (ATM-632: a lapse never leaves a task half in review).\n\n## Tests\nEach entry point refusing with nothing written, and moving its tasks when allowed, on the real store (`crates/atm-lib/tests/reviews/lifecycle.rs`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/lifecycle.rs",
@@ -19582,7 +19598,7 @@
         "crates/atm-lib/src/state.rs"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T13:38:41Z",
+      "updated_at": "2026-11-21T13:49:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19597,7 +19613,24 @@
       ],
       "number": 712,
       "started_at": "2026-11-21T13:38:41Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "47644fcc7763eb4529b49a9fc26da906df63c132",
+      "code_reviews": [
+        {
+          "id": "01a1fe5e-302b-72a0-ba8d-14d5ef24dbb7",
+          "ref": "CR-107"
+        }
+      ],
+      "review_requested_at": "2026-11-21T13:49:08Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-21T13:49:08Z",
+          "kind": "review",
+          "text": "CR-107: State machine, part 2: opening, rounds, added tasks and live approvals through lifecycle",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b823592de68",

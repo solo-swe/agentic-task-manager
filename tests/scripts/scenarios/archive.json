@@ -421,6 +421,55 @@
     }
   },
   {
+    "name": "unarchive of a task named twice brings it back once (ATM-668, audit L3)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "status": "todo" }] },
+        ".agentic-task-manager/tasks-archive.json": {
+          "meta": { "archived_at": "x" },
+          "tasks": [{ "id": "T-1", "status": "done" }]
+        }
+      }
+    },
+    "args": ["db", "unarchive", "T-1", "T-1"],
+    "expect": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-2", "status": "todo" },
+            { "id": "T-1", "status": "done" }
+          ],
+          "meta": { "archived": 0 }
+        }
+      }
+    }
+  },
+  {
+    "name": "a batch task waiting for its sprint's review stays out of the archive, saying why (ATM-668, audit L6)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-001", "status": "done", "completed_at": "2026-04-01T00:00:00Z", "sprint_review": "pending" },
+            { "id": "T-002", "status": "done", "completed_at": "2026-04-01T00:00:00Z", "sprint_review": "reviewed" }
+          ]
+        }
+      }
+    },
+    "args": ["db", "archive", "--dry-run", "--json"],
+    "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
+    "expect": {
+      "json": {
+        "moved": ["T-002"],
+        "dry_run": true,
+        "tasks_kb": 0,
+        "archive_kb": 0,
+        "duplicates_dropped": [],
+        "kept": [{ "id": "T-001", "reason": "waiting for its sprint's review" }]
+      }
+    }
+  },
+  {
     "name": "unarchive of several tasks at once: all come back, the archive keeps the rest, meta.archived goes down (T-359)",
     "setup": {
       "files": {

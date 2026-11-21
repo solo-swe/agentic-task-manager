@@ -5,7 +5,7 @@
 use atm_common::edits::{set_sprint, touch};
 use atm_common::py::{py_repr, py_str, repr_str, truthy};
 use atm_common::sprint_names::generate_sprint_name;
-use atm_common::time::now_iso;
+use atm_common::time::{now, now_iso};
 use atm_common::vocabulary::{MAX_SPRINT_NAME, is_date};
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
 use atm_db::working::Working;
@@ -666,7 +666,12 @@ pub fn close_sprint(
         let own = indices_in_sprint(document, &id);
         let own_archived: Vec<&Value> = archived.iter().filter(|t| in_sprint(t, &id)).collect();
         let task = |i: &usize| &document["tasks"][*i];
-        let claimed: Vec<usize> = own.iter().copied().filter(|i| kind(task(i)) == Some(Kind::Active)).collect();
+        let when = now();
+        let claimed: Vec<usize> = own
+            .iter()
+            .copied()
+            .filter(|i| worked_on(task(i), kind(task(i)), &work.claims_store, when))
+            .collect();
         if !claimed.is_empty() {
             let n = claimed.len();
             return Err(invalid(format!(
@@ -813,7 +818,12 @@ pub fn delete_sprint(
         let kind = |t: &Value| vocab.kind_of(t.get("status"));
         let task = |i: &usize| &document["tasks"][*i];
         let own = indices_in_sprint(document, &id);
-        let claimed: Vec<usize> = own.iter().copied().filter(|i| kind(task(i)) == Some(Kind::Active)).collect();
+        let when = now();
+        let claimed: Vec<usize> = own
+            .iter()
+            .copied()
+            .filter(|i| worked_on(task(i), kind(task(i)), &work.claims_store, when))
+            .collect();
         if !claimed.is_empty() {
             let n = claimed.len();
             return Err(invalid(format!(
@@ -909,6 +919,20 @@ fn move_target(vocab: &Vocabulary, task: &Task, to: &str) -> Result<Option<Strin
     }
 }
 
+/// Whether `task` is being worked on: in progress in this copy, or with a live claim in the claims store, which every
+/// worktree of the clone shares (ATM-668, audit L8: a task claimed in another worktree is still to do here).
+fn worked_on(
+    task: &Value,
+    kind: Option<Kind>,
+    claims_store: &Map<String, Value>,
+    now: i64,
+) -> bool {
+    kind == Some(Kind::Active)
+        || id_of(task)
+            .and_then(|id| claims_store.get("claims")?.get(id))
+            .is_some_and(|claim| crate::leases::holder(claim, now).is_some())
+}
+
 /// `atm sprint move`: to-do, blocked or in-review tasks into a sprint, the next planned one, the active one, or the
 /// backlog (claimed and finished tasks stay where they are), all or none. Returns `[{id, from, to}]`.
 ///
@@ -939,19 +963,22 @@ pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec
                 .as_object()
                 .cloned()
                 .unwrap_or_default();
-            match vocab.kind_of(task.get("status")) {
-                Some(Kind::Active) => {
-                    return Err(invalid(format!(
-                        "{task_id} is in progress (claimed): it stays where the work is happening"
-                    )));
-                }
-                Some(Kind::Done | Kind::Skipped) => {
-                    return Err(invalid(format!(
-                        "{task_id} is {}: finished work stays in the sprint it was done in",
-                        atm_common::py::py_str_opt(task.get("status"))
-                    )));
-                }
-                _ => {}
+            let kind = vocab.kind_of(task.get("status"));
+            if worked_on(
+                &Value::Object(task.clone()),
+                kind,
+                &work.claims_store,
+                now(),
+            ) {
+                return Err(invalid(format!(
+                    "{task_id} is in progress (claimed): it stays where the work is happening"
+                )));
+            }
+            if let Some(Kind::Done | Kind::Skipped) = kind {
+                return Err(invalid(format!(
+                    "{task_id} is {}: finished work stays in the sprint it was done in",
+                    atm_common::py::py_str_opt(task.get("status"))
+                )));
             }
             plans.push((at, move_target(&vocab, &task, to)?));
         }

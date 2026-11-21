@@ -439,6 +439,32 @@
     "expect": { "exit": 2, "stderrIncludes": ["no sprint is active"] }
   },
   {
+    "name": "a task claimed in another worktree isn't moved, though it is to do here (ATM-668, audit L8)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "A", "state": "active" }, { "id": "B" }] },
+          "tasks": [{ "id": "T-1", "status": "todo", "sprint": "A" }]
+        },
+        ".agentic-task-manager/claims-store.json": {
+          "claims": {
+            "T-1": {
+              "task": "T-1",
+              "agent": "bob",
+              "branch": "agent-2",
+              "worktree": "/elsewhere",
+              "claimed_at": "2026-05-01T10:00:00Z",
+              "lease_expires_at": "2026-05-01T12:00:00Z"
+            }
+          }
+        }
+      }
+    },
+    "args": ["sprint", "move", "T-1", "--to", "B"],
+    "env": { "ATM_NOW": "2026-05-01T11:00:00Z" },
+    "expect": { "exit": 2, "stderrIncludes": ["T-1 is in progress (claimed)"] }
+  },
+  {
     "name": "claimed and finished tasks aren't moved, and nothing is moved when one is refused",
     "setup": {
       "files": {

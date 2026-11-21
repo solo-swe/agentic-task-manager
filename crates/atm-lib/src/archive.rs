@@ -8,7 +8,9 @@
 
 use std::collections::HashSet;
 
-use atm_common::archive::{archivable_by, archive_settings, finished_at, in_open_pr, recent_since};
+use atm_common::archive::{
+    archivable_by, archive_settings, awaits_sprint_review, finished_at, in_open_pr, recent_since,
+};
 use atm_common::keys::{keys_format, next_task_number};
 use atm_common::py::{py_str, py_str_opt};
 use atm_common::time::{format_iso, now_iso, parse_iso};
@@ -101,7 +103,7 @@ fn days_text(document: &Value, keep: Option<f64>) -> String {
 }
 
 /// The finished tasks that stay in `tasks.json`, and why (T-352), as [`archivable_by`] decides: in an open PR,
-/// finished in the last keep days, not before `--before`, not in the `--sprint` chosen. `[{id, reason}]`, in file
+/// waiting for its sprint's review (ATM-668), finished in the last keep days, not before `--before`, not in the `--sprint` chosen. `[{id, reason}]`, in file
 /// order.
 fn kept_finished(
     document: &Value,
@@ -131,6 +133,8 @@ fn kept_finished(
                 "in open PR #{}",
                 py_str_opt(t.get("pr").and_then(|p| p.get("number")))
             )
+        } else if awaits_sprint_review(t) {
+            "waiting for its sprint's review".to_string()
         } else if finished.is_some_and(|f| f > recent) {
             format!("finished in the last {days} days")
         } else if let Some(before) = before
@@ -305,6 +309,14 @@ pub struct Unarchived {
 /// # Errors
 /// A task that isn't in the archive (already back, or never there), a store error.
 pub fn unarchive_tasks(project: &mut Project, ids: &[String]) -> Result<Unarchived> {
+    // A task named twice (its key and an alias, or a repeat) comes back once (ATM-668, audit L3), in the order given
+    let mut seen = HashSet::new();
+    let ids: Vec<String> = ids
+        .iter()
+        .filter(|id| seen.insert(id.as_str()))
+        .cloned()
+        .collect();
+    let ids = ids.as_slice();
     let mut result = None;
     project.store_mut().change(&mut |work: &mut Working| {
         let mut archive = work.archive()?.clone();
