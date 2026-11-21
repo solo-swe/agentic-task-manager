@@ -5,30 +5,16 @@ use atm_lib::lifecycle::{Event, Outcome, can, check};
 use atm_lib::reviews::{ReviewStore, Status, Verdict};
 use atm_lib::state::Command;
 
-use crate::fixtures::{dir, open_review, project, project_of, reopen, round, task};
+use crate::fixtures::{
+    dir, drop_task, lapse, open_review, project, project_of, reopen, round, task,
+};
 
-/// The task file with `id`'s status set to `status`, as a lapse or another branch's merge leaves it
-fn set_status(root: &std::path::Path, id: &str, status: &str) {
-    let file = root.join(".agentic-task-manager/tasks.json");
-    let mut tasks: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    for t in tasks["tasks"].as_array_mut().unwrap() {
-        if t["id"] == id {
-            t["status"] = status.into();
-            t.as_object_mut().unwrap().remove("review_state");
-        }
-    }
-    std::fs::write(&file, tasks.to_string()).unwrap();
-}
-
-/// ATM-712, the design's hole 1 (ATM-632's class): a round on a review whose task its lapse sent back to to do took
-/// the round and left the task there; the author's own task is taken back first, then goes in review with it
-#[test]
-fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
-    let dir = dir();
-    let mut agent = project(&dir.0, "claude:1");
+/// CR-1 of the agent's T-1, sent back by Hakan; the agent takes T-1 back to fix it, then its claim lapses (the task
+/// back in to do): the state ATM-632's class of bug starts from
+fn sent_back_then_lapsed(root: &std::path::Path) -> atm_lib::reviews::ReviewHeader {
+    let mut agent = project(root, "claude:1");
     let header = open_review(&mut agent, &["T-1"]);
-    let mut hakan = reopen(&dir.0, "Hakan");
+    let mut hakan = reopen(root, "Hakan");
     atm_lib::reviews::submit(
         &mut hakan,
         &header.reference,
@@ -37,8 +23,25 @@ fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
         None,
     )
     .unwrap();
-    // The agent took it back, then its claim lapsed: the task is to do, started by the agent
-    set_status(&dir.0, "T-1", "todo");
+    let mut agent = reopen(root, "claude:1");
+    atm_lib::changes::change_task_status(
+        &mut agent,
+        Command::Start,
+        "T-1",
+        &atm_lib::state::Options::default(),
+    )
+    .unwrap();
+    lapse(&mut agent, "T-1");
+    assert_eq!(task(&agent, "T-1")["status"], "todo");
+    header
+}
+
+/// ATM-712, the design's hole 1 (ATM-632's class): a round on a review whose task its lapse sent back to to do took
+/// the round and left the task there; the author's own task is taken back first, then goes in review with it
+#[test]
+fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
+    let dir = dir();
+    let header = sent_back_then_lapsed(&dir.0);
     let agent = reopen(&dir.0, "claude:1");
     let review = review_of(&agent, &header.reference);
     let outcome = check(&agent, &review, &Event::Round, &"claude:1".into()).unwrap();
@@ -65,22 +68,49 @@ fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
     );
 }
 
-/// ATM-712: a person's to-do task in the review isn't the author's to take back; the round leaves it as it is
+/// ATM-712: a real lapse clears who started the task; opening a review of it still finds it the author's, by the
+/// lapse's note, and takes it back (ATM-631)
+#[test]
+fn opening_a_review_takes_back_a_task_its_real_lapse_sent_to_to_do() {
+    let dir = dir();
+    let tasks =
+        serde_json::json!([{ "id": "T-1", "name": "One", "type": "feature", "status": "todo" }]);
+    let mut agent = project_of(&dir.0, "claude:1", &tasks, &serde_json::json!({}));
+    atm_lib::changes::change_task_status(
+        &mut agent,
+        Command::Start,
+        "T-1",
+        &atm_lib::state::Options::default(),
+    )
+    .unwrap();
+    lapse(&mut agent, "T-1");
+    assert!(task(&agent, "T-1").get("started_by").is_none());
+    crate::fixtures::waiting(&mut agent, &["T-1"]).unwrap();
+    assert_eq!(
+        task(&reopen(&dir.0, "claude:1"), "T-1")["status"],
+        "in_review"
+    );
+    // Another agent's lapse isn't this one's to take back
+    let dir = crate::fixtures::dir();
+    let mut other = project_of(&dir.0, "claude:2", &tasks, &serde_json::json!({}));
+    atm_lib::changes::change_task_status(
+        &mut other,
+        Command::Start,
+        "T-1",
+        &atm_lib::state::Options::default(),
+    )
+    .unwrap();
+    lapse(&mut other, "T-1");
+    let mut agent = reopen(&dir.0, "claude:1");
+    assert!(crate::fixtures::waiting(&mut agent, &["T-1"]).is_err());
+}
+
+/// ATM-712: only the review's author takes its own lapsed task back; another agent's round is refused, and the task
+/// stays in to do
 #[test]
 fn a_round_takes_back_only_the_authors_own_task() {
     let dir = dir();
-    let mut agent = project(&dir.0, "claude:1");
-    let header = open_review(&mut agent, &["T-1"]);
-    let mut hakan = reopen(&dir.0, "Hakan");
-    atm_lib::reviews::submit(
-        &mut hakan,
-        &header.reference,
-        Verdict::RequestChanges,
-        Some("Fix."),
-        None,
-    )
-    .unwrap();
-    set_status(&dir.0, "T-1", "todo");
+    let header = sent_back_then_lapsed(&dir.0);
     // Another agent's round (a review whose author isn't known yet would take it; this one has its author)
     let other = reopen(&dir.0, "claude:2");
     let review = review_of(&other, &header.reference);
@@ -241,14 +271,7 @@ fn closing_moves_no_task_unless_it_rejects_them_and_then_reaches_each_first() {
     let mut project = project(&dir.0, "claude:1");
     let header = open_review(&mut project, &["T-1"]);
     // T-1 gone from the task file (another branch's merge, a hand edit): the review names a task atm can't find
-    let file = dir.0.join(".agentic-task-manager/tasks.json");
-    let mut tasks: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    tasks["tasks"]
-        .as_array_mut()
-        .unwrap()
-        .retain(|t| t["id"] != "T-1");
-    std::fs::write(&file, tasks.to_string()).unwrap();
+    drop_task(&mut project, "T-1");
     let hakan = reopen(&dir.0, "Hakan");
     let review = review_of(&hakan, &header.reference);
     // Rejecting its tasks: refused before the review closes

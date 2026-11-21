@@ -90,6 +90,38 @@ pub fn project_of(root: &Path, actor: &str, tasks: &Value, claims: &Value) -> Pr
     reopen(root, actor)
 }
 
+/// The claim on task `id` runs out (§3.3 of docs/task-review-state-machine.md): its lease is put in the past, as two
+/// hours with no renewal leave it, and the next atm command applies the lapse (here `atm claim list`'s): the task back
+/// in to do, with its "lease expired" note.
+pub fn lapse(project: &mut Project, id: &str) {
+    project
+        .store_mut()
+        .change(&mut |work| {
+            if let Some(claim) = work
+                .claims_store
+                .get_mut("claims")
+                .and_then(|claims| claims.get_mut(id))
+            {
+                claim["lease_expires_at"] = LAPSED.into();
+            }
+            Ok(())
+        })
+        .unwrap();
+    atm_lib::claims::expire_claims(project).unwrap();
+}
+
+/// Task `id` gone from the project's task file, as another branch's merge or a hand edit can leave it.
+pub fn drop_task(project: &mut Project, id: &str) {
+    project
+        .store_mut()
+        .change(&mut |work| {
+            work.tasks()
+                .retain(|t| t.get("id").and_then(Value::as_str) != Some(id));
+            Ok(())
+        })
+        .unwrap();
+}
+
 pub fn claim(task: &str, agent: &str, until: &str) -> Value {
     json!({ "task": task, "agent": agent, "lease_expires_at": until, "claimed_at": "2026-11-19T10:00:00Z" })
 }

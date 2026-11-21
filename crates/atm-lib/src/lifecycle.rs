@@ -81,6 +81,21 @@ fn check_moves(
     Ok(())
 }
 
+/// Whether `task`, in to do, is `agent`'s own work its lapse sent back (§3.3): its latest note is the lapse's ("lease
+/// expired (agent)"), which [`lapse`] writes; a lapse clears `started_by` with the rest of the attempt, so that alone
+/// can't tell (ATM-712). A task `agent` started and still names is its own too.
+pub(crate) fn lapsed_for(task: &atm_common::Task, agent: &str) -> bool {
+    let last = task
+        .get("notes")
+        .and_then(Value::as_array)
+        .and_then(|notes| notes.last());
+    let lapse = format!("lease expired ({agent})");
+    last.is_some_and(|n| {
+        n.get("kind").and_then(Value::as_str) == Some("failure")
+            && n.get("text").and_then(Value::as_str) == Some(lapse.as_str())
+    }) || task.get("started_by").and_then(Value::as_str) == Some(agent)
+}
+
 /// The moves that put a task in review from where it is: in progress, into review; the author's own task whose claim
 /// lapsed (`take_back`), started again first (from to do; one still in progress, its claim run out but not dropped
 /// yet, goes straight in).
@@ -223,8 +238,7 @@ pub fn check(project: &Project, review: &Review, event: &Event, by: &Actor) -> R
             let Some(task) = project.store().get_task(id)? else {
                 continue;
             };
-            let own = is_agent(Some(&by.0))
-                && task.get("started_by").and_then(Value::as_str) == Some(by.0.as_str());
+            let own = is_agent(Some(&by.0)) && lapsed_for(task, &by.0);
             match reviews::kind_of(project, id)?.map(|(kind, _)| kind) {
                 Some(Kind::Active) => moves.push((id.clone(), vec![Command::Review])),
                 Some(Kind::Todo) if own => {

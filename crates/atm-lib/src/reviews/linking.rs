@@ -194,7 +194,10 @@ pub(crate) fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>
         let own_lapsed = claim.is_some_and(|c| {
             held_by.is_none() && c.get("agent").and_then(Value::as_str) == me.as_deref()
         });
-        let started_by_me = task.get("started_by").and_then(Value::as_str) == me.as_deref();
+        // Its lapse cleared `started_by`: the lapse's note says whose it was (ATM-712)
+        let started_by_me = me
+            .as_deref()
+            .is_some_and(|me| crate::lifecycle::lapsed_for(task, me));
         let kind = vocab.kind_of(task.get("status")).unwrap_or(Kind::Todo);
         planned.push(match kind {
             Kind::Active if own_lapsed => Opening::TakeBack,
