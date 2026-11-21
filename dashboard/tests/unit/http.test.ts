@@ -7,6 +7,7 @@ import {
   reviewUrl,
   reviewsUrl,
   v1DocumentAtUrl,
+  v1FileUrl,
   v1TasksUrl,
   type Fetch,
   type Validators,
@@ -158,5 +159,20 @@ describe('the review routes’ addresses', () => {
     expect(v1DocumentAtUrl('p1', 'a.md', 'HEAD~1')).toBe('/api/v1/projects/p1/documents?path=a.md&at=HEAD~1');
     setApiWorkspace('w');
     expect(v1DocumentAtUrl('p1', 'a.md', 'r&1')).toBe('/api/v2/workspaces/w/projects/p1/documents?path=a.md&at=r%261');
+  });
+
+  // ATM-672, audit H9: what the browser keeps for good is kept per atm version, the page's own
+  it('a file or an image at a revision names atm’s version, so another atm’s answer is another address', () => {
+    const meta = document.head.appendChild(document.createElement('meta'));
+    meta.name = 'atm-dashboard-version';
+    meta.content = '0.43.0';
+    try {
+      expect(v1DocumentAtUrl('p1', 'a.md', '3fa1')).toBe('/api/v1/projects/p1/documents?path=a.md&at=3fa1&v=0.43.0');
+      expect(v1FileUrl('p1', 'a.png', '3fa1')).toBe('/api/v1/projects/p1/files?path=a.png&at=3fa1&v=0.43.0');
+      // The working copy's file: asked again each time, no version needed
+      expect(v1FileUrl('p1', 'a.png')).toBe('/api/v1/projects/p1/files?path=a.png');
+    } finally {
+      meta.remove();
+    }
   });
 });

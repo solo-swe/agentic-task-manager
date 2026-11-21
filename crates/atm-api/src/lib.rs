@@ -212,9 +212,20 @@ fn send(
     for (name, value) in all {
         response = response.header(name, value);
     }
-    response
-        .body(Body::from(body))
-        .unwrap_or_else(|_| Response::new(Body::empty()))
+    response.body(Body::from(body)).unwrap_or_else(|_| {
+        // A header the builder refused (ATM-672, audit H11): a bare 500, never a 200 without the security headers
+        let mut failed = Response::new(Body::empty());
+        *failed.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        let headers = failed.headers_mut();
+        for (name, value) in [
+            ("cache-control", "no-store"),
+            ("x-content-type-options", "nosniff"),
+            ("cross-origin-resource-policy", "same-origin"),
+        ] {
+            headers.insert(name, header::HeaderValue::from_static(value));
+        }
+        failed
+    })
 }
 
 /// `{"error": message}` with `status`.

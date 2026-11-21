@@ -101,7 +101,7 @@ function rawGet(port, urlPath, host) {
     const req = http.request({ host: '127.0.0.1', port, path: urlPath, headers: { Host: host } }, (res) => {
       let body = '';
       res.on('data', (d) => (body += d));
-      res.on('end', () => resolve({ status: res.statusCode, body }));
+      res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }));
     });
     req.on('error', reject);
     req.end();
@@ -1527,9 +1527,13 @@ describe('serve', () => {
         for (const [name, value] of Object.entries(headers))
           assert.equal(r.headers.get(name), value, `${file}: ${name}`);
       }
-      // The contract's refusals: GET only, and nothing but the hash's frames and the packs, never the manifest
+      // HEAD as for every other asset (ATM-672, audit H12): the contract's GET, its body left out
       const frame = base + `compmd/frames/${hash}/strict.html`;
-      assert.equal((await fetch(frame, { method: 'HEAD' })).status, 405);
+      const head = await fetch(frame, { method: 'HEAD' });
+      assert.equal(head.status, 200);
+      assert.equal(await head.text(), '');
+      assert.equal(head.headers.get('x-content-type-options'), 'nosniff');
+      // The contract's refusals: nothing but the hash's frames and the packs, never the manifest
       assert.equal((await fetch(base + 'compmd/manifest.json')).status, 404);
       assert.equal((await fetch(base + 'compmd/frames/0000000000000000/strict.html')).status, 404);
       assert.equal((await fetch(base + 'compmd/packs/@comp-markdown/mermaid@9.9.9/dist/mermaid.js')).status, 404);
@@ -1554,7 +1558,18 @@ describe('serve', () => {
         [`/assets//compmd/${version}/compmd.js`, 'an empty segment'],
         ['/assets/', 'the folder'],
       ]) {
-        assert.equal((await rawGet(port, p, host)).status, 404, why);
+        const refused = await rawGet(port, p, host);
+        assert.equal(refused.status, 404, why);
+        // One policy for every /assets/ answer, a refusal too (ATM-672, audit H12)
+        assert.equal(refused.headers['x-content-type-options'], 'nosniff', why);
+        assert.equal(refused.headers['cross-origin-resource-policy'], 'cross-origin', why);
+      }
+      // Every answer under /assets/: never sniffed, readable from anywhere (CompMD's frames have an opaque origin)
+      for (const file of [...Object.keys(rows), 'compmd/manifest.json']) {
+        const r = await fetch(base + file.replace('{hash}', hash));
+        assert.equal(r.headers.get('x-content-type-options'), 'nosniff', file);
+        assert.equal(r.headers.get('cross-origin-resource-policy'), 'cross-origin', file);
+        assert.equal(r.headers.get('access-control-allow-origin'), '*', file);
       }
     } finally {
       run(['service', 'stop']);
@@ -1830,8 +1845,14 @@ describe('serve', () => {
     for (const p of [shop, blog]) assert.equal(atm(['workspace', 'add-project'], p).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], shop).code, 0);
-    const search = async (q, extra = '') =>
-      (await fetch(`http://localhost:${port}/api/search?q=${encodeURIComponent(q)}${extra}`)).json();
+    // Stamped as every JSON answer is (ATM-672, audit H13); the projects' lists beside the stamp
+    const search = async (q, extra = '') => {
+      const { generated_at: stamp, ...found } = await (
+        await fetch(`http://localhost:${port}/api/search?q=${encodeURIComponent(q)}${extra}`)
+      ).json();
+      assert.equal(typeof stamp, 'string', q);
+      return found;
+    };
 
     assert.deepEqual(await search('checkout'), { aaaa1111: ['T-1'] });
     assert.deepEqual(await search('card'), { aaaa1111: ['T-2'] });

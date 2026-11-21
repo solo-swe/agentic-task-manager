@@ -5,6 +5,7 @@
 // page is served at several paths (/projects/<id>/…, T-429).
 
 import { isTauri } from '@tauri-apps/api/core';
+import { dashboardVersion } from '../release-notes';
 import { ipcFetch } from './ipc';
 import { workspacePrefix } from './workspace';
 
@@ -54,9 +55,16 @@ export function v1DocumentUrl(project: string, path: string): string {
   return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;
 }
 
-/** A file of the project as a commit or tree has it: a review round's side (ATM-574) */
+/** atm's version, the page's own (the same build serves both): what an answer the browser keeps for good is kept
+ * under (ATM-672, audit H9), so a newer atm's isn't read from an older one's */
+function keptFor(): string {
+  const version = dashboardVersion();
+  return version ? `&v=${encodeURIComponent(version)}` : '';
+}
+
+/** A file of the project as a commit or tree has it: a review round's side (ATM-574), kept per atm version */
 export function v1DocumentAtUrl(project: string, path: string, revision: string): string {
-  return `${v1DocumentUrl(project, path)}&at=${encodeURIComponent(revision)}`;
+  return `${v1DocumentUrl(project, path)}&at=${encodeURIComponent(revision)}${keptFor()}`;
 }
 
 /** What the reviews page lists by (docs/multi-project-api.md §2.9): each one given must fit */
@@ -95,7 +103,8 @@ export function reviewUrl(project: string, review: string, round?: number | null
  * image file's side, ATM-689) */
 export function v1FileUrl(project: string, path: string, at?: string): string {
   return (
-    `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}` + (at ? `&at=${encodeURIComponent(at)}` : '')
+    `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}` +
+    (at ? `&at=${encodeURIComponent(at)}${keptFor()}` : '')
   );
 }
 

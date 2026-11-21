@@ -106,13 +106,21 @@ fn main() {
          (`pnpm install --frozen-lockfile && pnpm run build` in dashboard/)"
     );
     // The bundle: dist/assets/compmd/<version>/compmd/, its paths from its root (manifest.json, frames/…, packs/…)
-    let version = std::fs::read_dir(assets.join("compmd"))
+    // Exactly one version folder (ATM-672, audit H13): an older build's left beside the new one would be taken in
+    // whatever order the folder lists them
+    let versions: Vec<String> = std::fs::read_dir(assets.join("compmd"))
         .into_iter()
         .flatten()
         .flatten()
-        .find(|entry| entry.path().is_dir())
+        .filter(|entry| entry.path().is_dir())
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .unwrap_or_default();
+        .collect();
+    assert!(
+        versions.len() == 1,
+        "dashboard/dist/assets/compmd/ must hold one CompMD version folder, not {versions:?}: build the dashboard \
+         again (`pnpm run build` in dashboard/ clears that folder first)"
+    );
+    let version = versions[0].clone();
     let mut bundle = Vec::new();
     walk_all(
         &assets.join("compmd").join(&version).join("compmd"),

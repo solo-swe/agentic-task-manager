@@ -81,8 +81,15 @@ fn serve_bundle(rest: &str, method: &Method) -> Response {
     let Some(bundle) = bundle() else {
         return send_error(StatusCode::NOT_FOUND, "not found");
     };
+    // HEAD is asked as GET, its body dropped on the way out, as for every other answer (ATM-672, audit H12): the
+    // contract answers GET only
+    let asked = if method == Method::HEAD {
+        Method::GET
+    } else {
+        method.clone()
+    };
     let Ok(request) = axum::http::Request::builder()
-        .method(method.clone())
+        .method(asked)
         .uri(format!("/{rest}"))
         .body(())
     else {
@@ -91,10 +98,29 @@ fn serve_bundle(rest: &str, method: &Method) -> Response {
     compmd_host::respond(bundle, &compmd_host::NoStore, &request).map(axum::body::Body::from)
 }
 
+/// The one policy for every `/assets/` answer (ATM-672, audit H12; docs/security-architecture.md I11, I13): never
+/// sniffed, and readable from anywhere, `CompMD`'s sandbox frames included (their origin is opaque, so CORP is
+/// `cross-origin`; they are atm's published files, nothing of the user's). A 404 or a refusal too.
+fn with_policy(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    for (name, value) in [
+        ("x-content-type-options", "nosniff"),
+        ("cross-origin-resource-policy", "cross-origin"),
+        ("access-control-allow-origin", "*"),
+    ] {
+        headers.insert(name, axum::http::HeaderValue::from_static(value));
+    }
+    response
+}
+
 /// The asset at `path` (after `/assets/`): `CompMD`'s bundle by its contract (`serve_bundle`); any other asked again
 /// each time (no-cache), a 304 while it is unchanged. Its folder is named for the version, so a page never gets
-/// another version's file.
+/// another version's file. Every answer with [`with_policy`].
 pub fn serve(path: &str, method: &Method, request: &HeaderMap) -> Response {
+    with_policy(serve_asset(path, method, request))
+}
+
+fn serve_asset(path: &str, method: &Method, request: &HeaderMap) -> Response {
     if let Some(rest) = path
         .strip_prefix("compmd/")
         .and_then(|p| p.strip_prefix(COMPMD_VERSION))
@@ -105,10 +131,7 @@ pub fn serve(path: &str, method: &Method, request: &HeaderMap) -> Response {
     let Some((bytes, kind)) = find(path) else {
         return send_error(StatusCode::NOT_FOUND, "not found");
     };
-    let mut headers = vec![
-        ("Cache-Control", "no-cache"),
-        ("Access-Control-Allow-Origin", "*"),
-    ];
+    let mut headers = vec![("Cache-Control", "no-cache")];
     if kind.starts_with("text/html") {
         headers.push(("Content-Security-Policy", "sandbox allow-scripts"));
     }

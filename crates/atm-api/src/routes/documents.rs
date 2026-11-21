@@ -32,7 +32,8 @@ pub(super) fn get_document(
                 "at={at}: a revision is a full object ID"
             )));
         }
-        let tag = etag(&json!(["document-at", at, path]));
+        // atm's version in the tag (ATM-672, audit H9): another atm may answer the same revision otherwise
+        let tag = etag(&json!(["document-at", VERSION, at, path]));
         if unchanged(request, &tag) {
             return not_modified(&tag, &[KEPT]);
         }
@@ -65,8 +66,13 @@ pub(super) fn get_document(
     }
 }
 
-/// What a file at a full object ID is sent with: this browser only, for a year, never asked again
+/// What a file at a full object ID is sent with: this browser only, for a year, never asked again. Kept per atm
+/// version (ATM-672, audit H9): the page asks for it with its version (`&v=`, `lib/api/http.ts`), so another atm's
+/// answer is another address, and the tag names the version too
 const KEPT: (&str, &str) = ("Cache-Control", "private, max-age=31536000, immutable");
+
+/// atm's version, which an answer kept for good is tagged with
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The one rule for a revision a page names (ATM-671): atm-lib's, which the app's commands keep too
 fn is_object_id(revision: &str) -> bool {
@@ -87,7 +93,7 @@ pub(super) fn get_file(project: &dyn ProjectSource, query: &str, request: &Heade
             )));
         }
         let kept = true;
-        let tag = etag(&json!(["image-at", at, path]));
+        let tag = etag(&json!(["image-at", VERSION, at, path]));
         if kept && unchanged(request, &tag) {
             return not_modified(&tag, &[IMAGE_HEADERS[0], IMAGE_HEADERS[1], KEPT]);
         }
@@ -376,7 +382,15 @@ mod tests {
                 "private, max-age=31536000, immutable"
             );
             let tag = first.tag();
-            assert_ne!(tag, "");
+            // Tagged with atm's version too (ATM-672, audit H9): another atm's answer is another tag
+            assert_eq!(
+                tag,
+                etag(&json!(["document-at", VERSION, revision, "a.md"]))
+            );
+            assert_ne!(
+                tag,
+                etag(&json!(["document-at", "0.0.0", revision, "a.md"]))
+            );
             assert_eq!(
                 calls.taken(),
                 [Call::DocumentAt("a.md".into(), revision.into())]

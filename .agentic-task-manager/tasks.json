@@ -17015,14 +17015,14 @@
       "description": "Audit finding L5 ([the report](docs/codebase-audit-2026-11.md#l5-medium-bug-atm-db-init---meta-file-on-an-existing-project-overwrites-any-meta-key-checked)).\n\n`crates/atm-lib/src/settings.rs:80-85` inserts every key of the file into an existing project's `meta`, checking only the vocabularies. A re-run (what `/atm-create-tasks` does) with `key` changes the project key without `key_history` (bypassing `set_project_key`); `format`, `next_number`, `next_id`, `key_history`, `sprints`, `releases` or `archived` are replaced too.\n\n## Change\nOn an existing project accept an allow-list (project, description, statuses, types, priorities, default_priority, labels, components, review, workflow, archive settings, lease_minutes and the like); refuse the others with a message naming the command that changes each (`atm project key`, `atm sprint …`). Also: `vocab rename` rebuilds entries from `id`, `label`, `kind` and drops other keys (`settings.rs:450-477`): edit the stored entry in place.\n\n## Tests\nScenarios: `key`, `format` and `sprints` in the file of an existing project are refused, nothing written; `description` is changed.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/settings.rs",
         "tests/scripts/scenarios/init.json"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-21T14:01:42Z",
+      "updated_at": "2026-11-21T14:07:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17034,7 +17034,18 @@
       "sprint": "Audit and tabs",
       "number": 669,
       "started_at": "2026-11-21T14:01:42Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "47c9c0f8e2117797c846427b69b28cfbec4e2349",
+      "completed_at": "2026-11-21T14:07:42Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-21T14:07:42Z",
+          "kind": "outcome",
+          "text": "On an existing project, db init --meta-file sets only the name, description, settings and vocabularies. A changed key, format, numbering, sprints, releases or an unknown key is refused, naming the command that changes it, and nothing is written. An unchanged key is fine. Vocab rename edits the stored entry in place. Scenarios and a unit test.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2266a85bd4f8",
@@ -17196,7 +17207,7 @@
       "description": "Audit findings H9, H11, H12 and H13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-3)).\n\n- **H11:** `crates/atm-api/src/lib.rs:195-200` falls back to a 200 without headers when the builder fails: fall back to a bare 500 with the security headers.\n- **H12:** CompMD's bundle answers carry no `nosniff` or CORP and refuse HEAD, other assets send `Access-Control-Allow-Origin: *` with CORP same-origin (`assets.rs:80`, `:108`): one policy for `/assets/`, stated in I11 and I13.\n- **H9:** a document at a revision is cached a year as `immutable` across atm upgrades (`routes/documents.rs:34`): put atm's version in its tag.\n- **H13:** stamp search with `generated_at`; `build.rs:109` must find exactly one CompMD version folder.\n\n## Tests\n`serve.test.mjs` \"security headers\": every `/assets/` answer, 404s included, has `nosniff`; a document's ETag changes with the version.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-api/src/lib.rs",
@@ -17206,9 +17217,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-21T14:07:47Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17216,7 +17227,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 672
+      "number": 672,
+      "started_at": "2026-11-21T14:07:47Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2269b785e51b",
@@ -19639,9 +19652,9 @@
         "crates/atm-lib/src/state.rs"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T14:01:33Z",
+      "updated_at": "2026-11-21T14:08:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19680,6 +19693,12 @@
           "kind": "review",
           "text": "CR-107: round 2",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-21T14:08:58Z",
+          "kind": "note",
+          "text": "Approved: in CR-107 (round 2)",
+          "by": "Hakan Serce"
         }
       ],
       "reviews": [
@@ -19690,7 +19709,8 @@
         }
       ],
       "review_requested_at": "2026-11-21T14:01:33Z",
-      "review_state": "waiting"
+      "review_state": "approved",
+      "reviewed_at": "2026-11-21T14:08:58Z"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b823592de68",
