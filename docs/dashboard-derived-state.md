@@ -216,12 +216,13 @@ route test, the app's command, then the dashboard switched over with its old rul
   the rules.
 - The e2e fixture already takes its views from the binary, so the specs see atm's answers.
 
-## 6. Questions for you
+## 6. Decisions
 
-1. **"With you":** one notion? Proposed: `with: user` decides, and the `interactive` label is migrated to it once.
-2. **The forecast:** in atm, so the CLI could say "the sprint finishes in about 2 h"? Proposed: yes, in `…/stats`. The
-   dashboard only draws it.
-3. **A broken vocabulary:** the dashboard has shown the defaults where atm reports a problem. Proposed: it shows what
-   atm serves, with atm's problems in the footer, as a malformed task file is shown now.
-4. **Work over several attempts:** count every attempt and every round, or only the last, as both copies do now?
-   Proposed: every attempt and round, from `reviews`, `blocks` and the start and lapse notes.
+Hakan agreed with each proposal on CR-109 (2026-11-21):
+
+1. **"With you"** is one notion: `with: user` decides, and the `interactive` label is migrated to it once.
+2. **The forecast** is atm's, in `…/stats`, so the CLI can say it too; the dashboard only draws it.
+3. **A broken vocabulary:** the dashboard shows what atm serves, with atm's problems in the footer, as a malformed task
+   file is shown now.
+4. **Work over several attempts:** every attempt and every round counts, from `reviews`, `blocks` and the start and
+   lapse notes.

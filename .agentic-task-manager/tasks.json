@@ -19925,15 +19925,15 @@
       "description": "Hakan, 2026-11-21: ATM-711's card showed CR-106 approved and, above it, *Waiting for review · 1 h 21 m*. `reviewWait` in `dashboard/src/lib/waiting.ts` decides from the status kind alone and ignores `review_state`, while `needsYouReason` in the same file reads it. Rules like these live in the dashboard as well as in atm, and they drift.\n\n## The scan\nGo through `dashboard/src` for every place that derives meaning from task, review, sprint, claim or project fields instead of reading what atm computes. For example:\n- states and kinds;\n- waiting and needs-you;\n- readiness and blocking;\n- durations and timers;\n- labels chosen from field combinations;\n- review and decision states;\n- sprint progress and counts;\n- what an agent or the user may do next.\n\nFor each place, record:\n- the file and function;\n- what it decides and from which fields;\n- whether atm already computes it (`derived`, a summary, a route) and where;\n- where it disagrees with atm, or could.\n\n## The doc\n`docs/dashboard-derived-state.md`:\n- the inventory, grouped by concern;\n- the cases where the dashboard and atm disagree today, each with an example;\n- the proposal: what atm-lib computes and the REST routes and app commands return (fields, shapes, names, the one place each rule lives), and what the dashboard keeps (presentation only: formatting, layout);\n- the order to move them in, and how the tests change (unit tests of atm-lib's rule; the dashboard's tests read the API's fields).\n\nOpen it as a code review held with Hakan (`atm review create --file`). After his approval, create the follow-up tasks in this sprint, one per group, prioritized.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/dashboard-derived-state.md"
       ],
       "created_at": "2026-11-21T15:24:48Z",
-      "updated_at": "2026-11-21T15:25:06Z",
+      "updated_at": "2026-11-21T15:49:36Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19943,7 +19943,31 @@
       "sprint": "Audit and tabs",
       "number": 716,
       "started_at": "2026-11-21T15:25:06Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "f3610984bb7e505fee9bb030aa4ee671ea093de1",
+      "code_reviews": [
+        {
+          "id": "01a1febe-c88f-73a1-a13a-84f20551d97c",
+          "ref": "CR-109"
+        }
+      ],
+      "review_requested_at": "2026-11-21T15:34:38Z",
+      "review_state": "approved",
+      "notes": [
+        {
+          "at": "2026-11-21T15:34:38Z",
+          "kind": "review",
+          "text": "CR-109: The dashboard’s own rules, and moving them behind atm’s API",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-21T15:49:36Z",
+          "kind": "note",
+          "text": "Approved: in CR-109 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviewed_at": "2026-11-21T15:49:36Z"
     }
   ]
 }
