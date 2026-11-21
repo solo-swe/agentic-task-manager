@@ -1830,7 +1830,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 716
+    "next_number": 717
   },
   "tasks": [
     {
@@ -17300,7 +17300,7 @@
       "description": "Audit findings R9, R10, R11 and R13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-4)).\n\n- **R9:** a claims store that fails to parse reads as empty (`crates/atm-db/src/jsongit/claims.rs:91`), and the next write drops every live claim: keep the error and refuse to write, as `load_tasks` does.\n- **R10:** a round is written JSON first, diff second (`crates/atm-review/src/folder.rs:390`): write the diff first.\n- **R11:** drafts are read-modify-write without a lock (`crates/atm-lib/src/review_drafts.rs:265`, `:299`, `:336`, `:372`): take `atm_fs::lock` on the drafts folder; after sending a draft, remove it before the next.\n- **R13:** the merge driver takes ours on `meta` scalar conflicts without saying so (`crates/atm-db/src/jsongit/merge.rs:745`): report the conflict as task fields do.\n\n## Tests\nUnit tests: a corrupt claims store makes a change fail and leaves the file; a round folder with a JSON but no diff can't occur after a simulated failure between writes; two concurrent draft adds keep both; a `meta.workflow` conflict is reported.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-db/src/jsongit/claims.rs",
@@ -17309,7 +17309,7 @@
         "crates/atm-db/src/jsongit/merge.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-21T14:51:46Z",
+      "updated_at": "2026-11-21T15:01:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17321,7 +17321,18 @@
       "sprint": "Audit and tabs",
       "number": 674,
       "started_at": "2026-11-21T14:51:46Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "01824382875c930bf90ffbe0fc22529e33e153a8",
+      "completed_at": "2026-11-21T15:01:01Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-21T15:01:01Z",
+          "kind": "outcome",
+          "text": "R9: a change reads the claims store strictly (load_store) and refuses one that is there but unreadable, before writing anything. R10: a round writes its diff before its JSON. R11: drafts read-modify-write under the drafts folder lock, sending too. R13: meta keys both branches changed are reported as a conflict. Unit tests for each",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226b057c6a44",
@@ -17492,9 +17503,9 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-21T15:25:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17502,7 +17513,15 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 677
+      "number": 677,
+      "notes": [
+        {
+          "at": "2026-11-21T15:25:04Z",
+          "kind": "handoff",
+          "text": "Handoff: A3, A6, A7, A8, A9 and A10 (version check) are edited, not committed: session.rs, links.rs, menu.rs, badge.rs, commands.rs, updates.rs, new navigation.rs, lib.rs, docs/guides/tauri.md, security-architecture.md I25. Left: clippy, cargo test -p atm-app, commit. Reading the bundle version from the archive needs a new dependency (not done)",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226e82ed29c5",
@@ -19760,7 +19779,7 @@
       "description": "Part 3 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §4, §7 step 2).\n\n## Change\nOne test over the composed table: a row for each task state (kind, claim) × review state × event, built from the tables, each with its expected next state or refusal, failing on a pair without a row. The three bugs are rows of their own:\n- ATM-630: an approval kept when the task's key changed (its old key an alias);\n- ATM-631: a review opened beside a task that didn't move;\n- ATM-632: a lapsed claim leaving a task half in review.\n\n## Tests\nThe table test itself, in `crates/atm-lib/src/lifecycle/tests.rs`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1fe3a-d2ba-736d-80e3-4b81a73b4404"
       ],
@@ -19768,7 +19787,7 @@
         "crates/atm-lib/src/lifecycle/tests.rs"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T14:36:26Z",
+      "updated_at": "2026-11-21T15:03:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19792,15 +19811,35 @@
         }
       ],
       "review_requested_at": "2026-11-21T14:36:26Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-21T14:36:26Z",
           "kind": "review",
           "text": "CR-108: State machine, part 3: the composed table test, and the two bugs it found",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-21T15:03:11Z",
+          "kind": "note",
+          "text": "Approved: in CR-108 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-21T15:03:38Z",
+          "kind": "outcome",
+          "text": "CR-108 approved: the composed table (42 rows) and the two fixes are in. The two questions in its summary (approval while taken back, close without reject) are left as the table records them, for Hakan to raise if he wants them changed",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-21T14:36:26Z",
+          "to": "2026-11-21T15:03:11Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-21T15:03:38Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b83d40322b2",
@@ -19872,6 +19911,39 @@
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
       "number": 715
+    },
+    {
+      "id": "01a1feb5-c89d-74fd-85a0-3050e2ec1a45",
+      "name": "Scan the dashboard for task and review logic it derives itself, and plan moving it behind atm's APIs",
+      "type": "docs",
+      "priority": "P0",
+      "labels": [
+        "refactor",
+        "dashboard",
+        "api"
+      ],
+      "description": "Hakan, 2026-11-21: ATM-711's card showed CR-106 approved and, above it, *Waiting for review · 1 h 21 m*. `reviewWait` in `dashboard/src/lib/waiting.ts` decides from the status kind alone and ignores `review_state`, while `needsYouReason` in the same file reads it. Rules like these live in the dashboard as well as in atm, and they drift.\n\n## The scan\nGo through `dashboard/src` for every place that derives meaning from task, review, sprint, claim or project fields instead of reading what atm computes. For example:\n- states and kinds;\n- waiting and needs-you;\n- readiness and blocking;\n- durations and timers;\n- labels chosen from field combinations;\n- review and decision states;\n- sprint progress and counts;\n- what an agent or the user may do next.\n\nFor each place, record:\n- the file and function;\n- what it decides and from which fields;\n- whether atm already computes it (`derived`, a summary, a route) and where;\n- where it disagrees with atm, or could.\n\n## The doc\n`docs/dashboard-derived-state.md`:\n- the inventory, grouped by concern;\n- the cases where the dashboard and atm disagree today, each with an example;\n- the proposal: what atm-lib computes and the REST routes and app commands return (fields, shapes, names, the one place each rule lives), and what the dashboard keeps (presentation only: formatting, layout);\n- the order to move them in, and how the tests change (unit tests of atm-lib's rule; the dashboard's tests read the API's fields).\n\nOpen it as a code review held with Hakan (`atm review create --file`). After his approval, create the follow-up tasks in this sprint, one per group, prioritized.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "docs/dashboard-derived-state.md"
+      ],
+      "created_at": "2026-11-21T15:24:48Z",
+      "updated_at": "2026-11-21T15:25:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-21T15:24:48Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "number": 716,
+      "started_at": "2026-11-21T15:25:06Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
