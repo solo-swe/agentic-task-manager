@@ -736,17 +736,26 @@ fn merge_same_format(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<
             let mut meta = Map::new();
             let mut meta_keys: Vec<String> = o.keys().cloned().collect();
             meta_keys.extend(t.keys().filter(|k| !o.contains_key(*k)).cloned());
+            // The keys both branches changed, this branch's kept: reported as a task's fields are (ATM-674, audit R13)
+            let mut both = Vec::new();
             for k in meta_keys {
                 let value = if META_LISTS.contains(&k.as_str()) {
                     let (value, item_conflicts) = merge_items(&k, b.get(&k), o.get(&k), t.get(&k));
                     conflicts.extend(item_conflicts);
                     Some(value)
                 } else {
-                    merge_value(b.get(&k), o.get(&k), t.get(&k)).0
+                    let (value, conflicted) = merge_value(b.get(&k), o.get(&k), t.get(&k));
+                    if conflicted {
+                        both.push(k.clone());
+                    }
+                    value
                 };
                 if let Some(value) = value {
                     meta.insert(k, value);
                 }
+            }
+            if !both.is_empty() {
+                conflicts.push(format!("meta: both branches changed {}", both.join(", ")));
             }
             if meta.contains_key("sprints") {
                 meta.shift_remove("phases"); // a project migrated on either side has no phases left (SR-8.5)

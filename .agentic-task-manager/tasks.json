@@ -17255,7 +17255,7 @@
       "description": "Audit findings C6, C7, C10, C14 and C15 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-2)).\n\n- **C6:** `atm service stop` signals whatever pid a local port's whoami names (`crates/atm-cli/src/commands/maintenance.rs:464`, `:518`); another local user can answer on the port. Signal only a pid whose executable is atm and which owns the listening socket, or only report stray servers.\n- **C14:** `wait_gone` sends SIGKILL by pid alone (`:404`): record the process's start time and signal only while it matches.\n- **C7:** breaking a stale server lock (`:276`) races, so two runs can start two servers: rename the lock to a unique name atomically, then re-check, or use an OS file lock.\n- **C10:** the state folder's 0700 is set only on creation (`crates/atm-common/src/home.rs:110`): set it on an existing or moved folder too, and create its files 0600.\n- **C15:** `--open` runs `xdg-open` on Windows: use `explorer.exe <url>` (no shell; I24 lists the openers).\n\n## Tests\n`tests/scripts/serve.test.mjs`: a fake whoami on another port naming a pid isn't killed; two concurrent `atm service start` leave one server; an existing 0755 state folder becomes 0700.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/maintenance.rs",
@@ -17263,7 +17263,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-21T14:36:26Z",
+      "updated_at": "2026-11-21T14:51:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17275,7 +17275,18 @@
       "sprint": "Audit and tabs",
       "number": 673,
       "started_at": "2026-11-21T14:36:26Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "4603010e75d7597a16ea2a56decd1d38b4a944b5",
+      "completed_at": "2026-11-21T14:51:43Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-21T14:51:43Z",
+          "kind": "outcome",
+          "text": "C6/C14: stop signals only the recorded server (start time matches its record) or, unrecorded, an atm _serve, and only while pid+start time match. C7: OS file lock, never broken. C10: state folder 0700 always, its files 0600. C15: explorer.exe on Windows. Tests in serve.test.mjs, process.rs, maintenance.rs, home.rs; I24 updated",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226a1f68bb2a",
@@ -17289,7 +17300,7 @@
       "description": "Audit findings R9, R10, R11 and R13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-4)).\n\n- **R9:** a claims store that fails to parse reads as empty (`crates/atm-db/src/jsongit/claims.rs:91`), and the next write drops every live claim: keep the error and refuse to write, as `load_tasks` does.\n- **R10:** a round is written JSON first, diff second (`crates/atm-review/src/folder.rs:390`): write the diff first.\n- **R11:** drafts are read-modify-write without a lock (`crates/atm-lib/src/review_drafts.rs:265`, `:299`, `:336`, `:372`): take `atm_fs::lock` on the drafts folder; after sending a draft, remove it before the next.\n- **R13:** the merge driver takes ours on `meta` scalar conflicts without saying so (`crates/atm-db/src/jsongit/merge.rs:745`): report the conflict as task fields do.\n\n## Tests\nUnit tests: a corrupt claims store makes a change fail and leaves the file; a round folder with a JSON but no diff can't occur after a simulated failure between writes; two concurrent draft adds keep both; a `meta.workflow` conflict is reported.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-db/src/jsongit/claims.rs",
@@ -17298,9 +17309,9 @@
         "crates/atm-db/src/jsongit/merge.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-21T14:51:46Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17308,7 +17319,9 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 674
+      "number": 674,
+      "started_at": "2026-11-21T14:51:46Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226b057c6a44",

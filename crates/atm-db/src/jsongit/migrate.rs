@@ -37,7 +37,7 @@ pub fn migrate_to_keys(paths: &Paths) -> Result<Option<KeysReport>> {
         let _locks = super::claims::locked_with_claims(paths)?;
         let mut document = load_tasks(paths)?.document;
         let mut archived = archive_document(paths)?;
-        let mut store = read_store(paths);
+        let mut store = super::claims::load_store(paths)?;
         let before = store.clone();
         let Some(report) = to_keys_format(&mut document, &mut archived, &mut store) else {
             return Ok(None);

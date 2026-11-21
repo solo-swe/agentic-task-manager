@@ -142,9 +142,10 @@ impl JsonGitStore {
             branch: checked_out_branch(&root),
         };
         let paths = self.paths.clone();
+        // Strictly (ATM-674, R9): a store that can't be read would be written back empty, its claims lost
         let mut work = Working::new(
             document,
-            read_store(&self.paths),
+            claims::load_store(&self.paths)?,
             here,
             size,
             Box::new(move || archive_document(&paths)),
@@ -426,6 +427,28 @@ mod tests {
             !store.paths().dir.join(".lock").exists(),
             "the lock is released"
         );
+    }
+
+    /// ATM-674, audit R9: a claims store that can't be read stops a change before anything is written
+    #[test]
+    fn a_change_with_an_unreadable_claims_store_fails_and_writes_nothing() {
+        let tasks = "{\"tasks\":[{\"id\":\"T-1\"}]}";
+        let (_dir, mut store) = project_with(tasks);
+        let file = claims::claims_store_path(store.paths());
+        std::fs::write(&file, "{\"claims\": {").unwrap();
+        let mut ran = false;
+        let result = store.change(&mut |work| {
+            ran = true;
+            work.tasks().push(serde_json::json!({"id": "T-2"}));
+            Ok(())
+        });
+        assert!(result.unwrap_err().to_string().contains("can't be read"));
+        assert!(!ran, "the change never ran");
+        assert_eq!(
+            std::fs::read_to_string(&store.paths().tasks).unwrap(),
+            tasks
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "{\"claims\": {");
     }
 
     #[test]

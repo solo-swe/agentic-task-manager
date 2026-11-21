@@ -399,15 +399,17 @@ impl FileStore {
             .map_err(io(&comments_path))
     }
 
+    /// A round's files: its diff first, then its JSON, which makes it a round (ATM-674, audit R10). Stopped between the
+    /// two, a diff no round names is left, never a round without its diff.
     fn write_round(folder: &Path, round: &Round, patch: &Patch) -> Result<()> {
         let rounds_dir = folder.join(ROUNDS_DIR);
         std::fs::create_dir_all(&rounds_dir).map_err(io(&rounds_dir))?;
-        let json_path = rounds_dir.join(format!("{}.json", round.number));
         let json =
             serde_json::to_string_pretty(round).map_err(|e| Error::failed(e.to_string()))? + "\n";
-        write_text_atomic(&json_path, &json).map_err(io(&json_path))?;
         let diff_path = rounds_dir.join(format!("{}.diff", round.number));
-        write_text_atomic(&diff_path, &patch.0).map_err(io(&diff_path))
+        write_text_atomic(&diff_path, &patch.0).map_err(io(&diff_path))?;
+        let json_path = rounds_dir.join(format!("{}.json", round.number));
+        write_text_atomic(&json_path, &json).map_err(io(&json_path))
     }
 
     /// Change one review under its lock: read again there, apply `edit`, mark it updated, write it.

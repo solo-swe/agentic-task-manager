@@ -115,6 +115,30 @@ fn a_review_is_kept_in_its_folder_and_read_back_by_another_store() {
     assert_eq!(again.problems().unwrap(), Vec::<String>::new());
 }
 
+/// ATM-674, audit R10: a round's diff is written before its JSON, so a round stopped between the two leaves no round
+/// without its diff: here its diff can't be written (a folder is in its place), and no round 2 is there
+#[test]
+fn a_round_whose_diff_cant_be_written_is_no_round() {
+    let dir = TestDir::new();
+    let task_dir = dir.path().join(".agentic-task-manager");
+    let mut store = FileStore::open(&task_dir).unwrap();
+    let mut reviews = Reviews::new(&mut store);
+    let header = reviews.create(new_review("Rounds")).unwrap();
+    let rounds = task_dir
+        .join("reviews")
+        .join(folder_name(1, &header.id))
+        .join("rounds");
+    std::fs::create_dir_all(rounds.join("2.diff")).unwrap();
+    assert!(
+        reviews
+            .add_round(&header.reference, new_review("").first)
+            .is_err()
+    );
+    assert!(!rounds.join("2.json").exists(), "no round without its diff");
+    let again = FileStore::open(&task_dir).unwrap();
+    assert_eq!(again.get_review(&header.reference).unwrap().rounds.len(), 1);
+}
+
 #[test]
 fn worktrees_of_one_clone_never_take_the_same_number_and_are_listed_together() {
     let dir = TestDir::new();
