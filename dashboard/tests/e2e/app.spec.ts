@@ -652,6 +652,91 @@ test.describe('the dashboard in the atm app', () => {
     expect(await page.evaluate(() => history.length)).toBe(depth);
   });
 
+  // ATM-695 (docs/tabs-and-navigation-design.md §4.5): ‹ › left of the sidebar toggle, on the active tab's history
+  test('the ‹ › arrows step through the tab’s history, disabled at its ends, follow the tab switched to, and list its entries', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/list`);
+    await page.goto('/');
+    await expect(page.locator('#panel-list')).toBeVisible();
+    const at = () => addressOf(page).split('?')[0];
+    const base = `/projects/${tasksServer.projectId}`;
+    // The sidebar is open: they are in its top strip, before its toggle
+    const strip = page.locator('#app-sidebar-top');
+    const backArrow = strip.locator('#app-back');
+    const forwardArrow = strip.locator('#app-forward');
+    expect(await strip.locator('button').evaluateAll((all) => all.map((b) => b.id))).toEqual([
+      'app-back',
+      'app-forward',
+      'app-sidebar-toggle',
+    ]);
+    await expect(backArrow).toBeDisabled();
+    await expect(forwardArrow).toBeDisabled();
+
+    // Two steps: the board, the graph
+    await page.locator('#tab-kanban').click();
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    await page.locator('#tab-graph').click();
+    await expect.poll(at).toBe(`${base}/graph`);
+    await expect(backArrow).toBeEnabled();
+    await expect(forwardArrow).toBeDisabled();
+
+    // ‹ steps back, › forward
+    await backArrow.click();
+    await expect.poll(at).toBe(`${base}/kanban`);
+    await expect(forwardArrow).toBeEnabled();
+    await backArrow.click();
+    await expect.poll(at).toBe(`${base}/list`);
+    await expect(backArrow).toBeDisabled();
+    await forwardArrow.click();
+    await expect.poll(at).toBe(`${base}/kanban`);
+
+    // A right-click on › lists what is ahead, nearest first; choosing one jumps there
+    await forwardArrow.click({ button: 'right' });
+    const ahead = page.locator('#app-forward-menu .app-history-menu-item');
+    await expect(ahead).toHaveText(['Graph — Standard Project']);
+    await ahead.first().click();
+    await expect.poll(at).toBe(`${base}/graph`);
+    // On ‹, what is behind, nearest first
+    await backArrow.click({ button: 'right' });
+    const behind = page.locator('#app-back-menu .app-history-menu-item');
+    await expect(behind).toHaveText(['Kanban — Standard Project', 'List — Standard Project']);
+    await behind.nth(1).click();
+    await expect.poll(at).toBe(`${base}/list`);
+    await expect(backArrow).toBeDisabled();
+    await expect(forwardArrow).toBeEnabled();
+
+    // A long press lists them too, and steps nowhere
+    const box = (await forwardArrow.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(page.locator('#app-forward-menu')).toBeVisible();
+    await page.mouse.up();
+    await expect(page.locator('#app-forward-menu .app-history-menu-item')).toHaveCount(2);
+    expect(at()).toBe(`${base}/list`);
+    await page.keyboard.press('Escape');
+
+    // A new tab: its own history, both disabled; back to the first, the arrows follow it
+    await page.locator('#app-tab-new').click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(backArrow).toBeDisabled();
+    await expect(forwardArrow).toBeDisabled();
+    await page.locator('#app-titlebar [role="tab"]').nth(0).click();
+    await expect.poll(at).toBe(`${base}/list`);
+    await expect(forwardArrow).toBeEnabled();
+
+    // The sidebar closed: they move to the title bar, before its toggle
+    await page.locator('#app-sidebar-toggle').click();
+    const bar = page.locator('#app-titlebar');
+    await expect(bar.locator('#app-back + #app-forward')).toHaveCount(1);
+    await expect(bar.locator('.app-history + #app-sidebar-toggle')).toHaveCount(1);
+    await bar.locator('#app-forward').click();
+    await expect.poll(at).toBe(`${base}/kanban`);
+  });
+
   test('the sidebar (T-515): projects open here or, ⌘-clicked, in a new tab; a task too; its button and menu hide it', async ({
     page,
     tasksServer,

@@ -14244,7 +14244,7 @@
       "description": "Hakan (2026-11-19): the rules for how a task's status and its reviews change together are spread across commands and keep breaking. Today's three bugs: a review's approval lost when the task's key changed (ATM-630), a review opened beside a task that didn't move (ATM-631), and a lapsed claim leaving a task half in review (ATM-632). They should be one explicit state machine.\n\nDesigned **with Hakan**: propose it, agree on it, then build it.\n\n## Design (a document in `docs/`, reviewed with Hakan as a CR)\n- **States:** a task's status kinds (`todo`, `active`, `review`, `blocked`, `done`, `skipped`), each with its claim (none, held, lapsed) and its reviews (none, open, rounds, changes requested, approved, closed, live).\n- **Events:** claim, a claim lapsing, release, commit, review created, a round added, a comment, request changes, approve, reject, close, push or merge, the task's number moved at a merge (ADR-009: its old key an alias), and a user's answer.\n- **The table:** for each state and event, the next state or a refusal with its message. No event leaves a task and its review disagreeing.\n- A diagram of it (Mermaid), and where it lives in the layers: one module in `atm-lib` that every command and the dashboard's API go through.\n- Today's rules mapped onto it: what changes, and what an existing project's tasks and reviews look like after the move (a migration if any).\n\n## Build (after the design is agreed)\n- One module holds the transitions; the CLI commands, the REST routes and the app call it, and none sets a status on its own.\n- Unit tests: a table of every state × event, each with its expected next state or refusal, including the three bugs above as cases.\n- The agent docs (`atm docs states`, `atm docs reviews`) are written from the same table.\n\nMay be split into design and build tasks once the design is agreed.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f0a7-f9d3-77df-81fe-542bbe43b428",
         "01a1f0a7-f9d3-77df-81fe-542c5edeee98",
@@ -14258,7 +14258,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-18T21:55:02Z",
-      "updated_at": "2026-11-21T00:22:29Z",
+      "updated_at": "2026-11-21T00:28:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -14284,11 +14284,15 @@
       ],
       "started_at": "2026-11-20T23:49:14Z",
       "started_by": "claude:0f56a916",
-      "commit": "3266c2358b125a66f89124a9ba5fc1c85ad2c71a",
+      "commit": "6b526d95ddcaf9e17c258ebda534e0c230e36327",
       "code_reviews": [
         {
           "id": "01a1f314-9d5d-75ea-b4d4-1165e7bd350b",
           "ref": "CR-58"
+        },
+        {
+          "id": "01a1fb80-df8f-7419-9bb4-37fcdce9097d",
+          "ref": "CR-105"
         }
       ],
       "notes": [
@@ -14303,6 +14307,12 @@
           "kind": "note",
           "text": "Approved: in CR-58 (round 2)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-21T00:28:09Z",
+          "kind": "review",
+          "text": "CR-105: The state machine, part 1: the review table, lifecycle::check and can, the page reading can",
+          "by": "claude:0f56a916"
         }
       ],
       "pr": {
@@ -14317,7 +14327,9 @@
           "to": "2026-11-20T23:11:28Z",
           "outcome": "approved"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-21T00:28:09Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f0b9-f451-744a-956a-23995623df35",
@@ -18528,7 +18540,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.5 (Hakan, CR-63).\n\n## Change\n- ‹ › arrows in the app's title bar, left of the sidebar toggle, after macOS's window buttons, as Safari, Linear and Notion have them; with the sidebar open, in its top strip with the toggle (`AppTitleBar.svelte`, `SidebarToggle.svelte`).\n- They act on the active tab's history (the history of new-1); each is greyed out when there is nowhere to go.\n- A long press or a right-click lists the tab's entries, by their titles, to jump to one.\n- Not in the browser: its own buttons do this.\n\n## Tests\ne2e in the app: the arrows step Back and Forward through a tab's history, disabled at its ends, follow the tab switched to, and list the entries on a right-click.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
@@ -18537,7 +18549,7 @@
         "dashboard/src/lib/shell/SidebarToggle.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T17:16:06Z",
+      "updated_at": "2026-11-21T12:45:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18552,7 +18564,17 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 695
+      "number": 695,
+      "notes": [
+        {
+          "at": "2026-11-21T00:28:58Z",
+          "kind": "handoff",
+          "text": "Not started: the session stopped at its usage limit. Builds on ATM-694 (navigation.ts canGo, back, forward).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-21T12:45:28Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c157a84ef29d",
@@ -19403,7 +19425,7 @@
       "description": "Hakan on CR-99 and CR-100 (2026-11-21): the files are too large. Split them into logical modules, give them unit tests that use fakes for what they depend on, and move the integration tests into their own files, by [the Rust guide](docs/guides/rust.md) (§Crates and modules, §Tests).\n\n## The files (lines of code / lines of tests, 2026-11-21)\n| File | Code | Tests |\n|---|---|---|\n| `crates/atm-cli/src/commands/review.rs` | 1,386 | 100 |\n| `app/src-tauri/src/commands.rs` | 1,114 | 425 |\n| `crates/atm-lib/src/review_listen.rs` | 974 | 538 |\n| `crates/atm-lib/src/reviews.rs` | 937 | 1,300 |\n| `crates/atm-vcs/src/lib.rs` | 771 | 642 |\n| `crates/atm-lib/src/review_pages.rs` | 724 | 371 |\n| `crates/atm-review/src/folder.rs` | 651 | 648 |\n| `crates/atm-docs/src/lib.rs` | 535 | 836 |\n| `crates/atm-review/src/rules.rs` | 529 | 1,162 |\n| `crates/atm-review/src/files.rs` | 511 | 565 |\n| `crates/atm-review/src/rounds.rs` | 455 | 742 |\n| `crates/atm-api/src/routes/reviews.rs` | 391 | 778 |\n| `app/src-tauri/src/lib.rs` | 236 | 1,283 |\n\n## Rules (the guide)\n- **Module files:** `foo.rs` next to a `foo/` directory, never `foo/mod.rs`. Public APIs stay the same (re-exported).\n- **Unit tests** stay with their code while it reads well, else `foo/tests.rs`, else `foo/tests/` by group. They test the unit alone, with hand-written fakes behind a trait (atm-review's `ReviewStore` already has a memory store).\n- **Integration tests** (a real git repository, the real store, several layers) go to the crate's `tests/` directory, one file per area.\n- About 400 lines is when a file reads badly, not a threshold.\n\n## How\n- One file at a time, the reviews area first (`reviews.rs`, `review_pages.rs`, `review_listen.rs`, `commands/review.rs`), before ATM-633's build changes them.\n- Each a move only: no logic changed, the same tests passing (`cargo test`, the CLI suite), the plan for it agreed first, as on CR-100.\n- Where a unit test today needs a real repository only because nothing is faked, add the fake and keep the real-repository version as an integration test.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -19412,9 +19434,9 @@
         "crates/atm-cli/src/commands/review.rs"
       ],
       "created_at": "2026-11-20T23:29:46Z",
-      "updated_at": "2026-11-21T00:08:07Z",
+      "updated_at": "2026-11-21T00:28:46Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19423,7 +19445,7 @@
       ],
       "sprint": "Audit and tabs",
       "number": 711,
-      "started_at": "2026-11-20T23:51:32Z",
+      "started_at": "2026-11-21T00:28:22Z",
       "started_by": "claude:0f56a916",
       "commit": "a316f2e077a3a19e283d2cfa699ff7d2c9ec34cb",
       "code_reviews": [
@@ -19467,11 +19489,18 @@
           "from": "2026-11-20T23:49:06Z",
           "to": "2026-11-20T23:50:47Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-21T00:06:34Z",
+          "to": "2026-11-21T00:08:07Z",
+          "outcome": "approved"
         }
       ],
-      "review_requested_at": "2026-11-21T00:06:34Z",
-      "review_state": "approved",
-      "reviewed_at": "2026-11-21T00:08:07Z"
+      "waiting_on": "user",
+      "questions": [
+        "Next files, plans to agree (each a move): atm-review rules.rs: its table (ReviewEvent, Next, review_next) to rules/table.rs, the tests to rules/tests/ by group (table, deciding, comments, rounds). folder.rs, rounds.rs, files.rs: one concern each under 700 lines of code, so only their tests move out, to foo/tests.rs (unit tests: temp folders, the store alone). OK? Then atm-vcs, atm-docs, atm-api routes/reviews.rs and the app, each planned the same way."
+      ],
+      "blocked_at": "2026-11-21T00:28:46Z"
     }
   ]
 }

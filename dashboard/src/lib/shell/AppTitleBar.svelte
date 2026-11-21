@@ -26,6 +26,7 @@
   import { tabActions } from '../tab-actions';
   import TitleBarTabs from '../ui/TitleBarTabs.svelte';
   import AppMenus from './AppMenus.svelte';
+  import HistoryArrows from './HistoryArrows.svelte';
   import SidebarToggle from './SidebarToggle.svelte';
 
   let { title, end }: { title: string; end?: Snippet } = $props();
@@ -65,8 +66,8 @@
 >
   {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
   <!-- Show the sidebar (T-515; View ▸ Show Sidebar): here while it is closed; open, its own top strip has the button
-       (T-535) -->
-  {#if !dashboard.sidebarOpen}<SidebarToggle />{/if}
+       (T-535); Back and Forward left of it (ATM-695), with it -->
+  {#if !dashboard.sidebarOpen}<HistoryArrows /><SidebarToggle />{/if}
   <!-- The window's tabs (T-514), each an address (lib/app-tabs.svelte.ts), in the reusable strip (ui/TitleBarTabs) -->
   <TitleBarTabs
     tabs={appTabs.tabs}
