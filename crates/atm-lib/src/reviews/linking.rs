@@ -15,7 +15,7 @@ pub(super) fn id_of(task: &Value) -> Option<&str> {
 }
 
 /// A task's kind and review state now, none when it is gone.
-pub(super) fn kind_of(project: &Project, id: &str) -> Result<Option<(Kind, Option<String>)>> {
+pub(crate) fn kind_of(project: &Project, id: &str) -> Result<Option<(Kind, Option<String>)>> {
     let vocab: &Vocabulary = project.store().vocabulary()?;
     Ok(project.store().get_task(id)?.map(|task: &Task| {
         (
@@ -95,7 +95,7 @@ pub(super) fn resolve(project: &Project, keys: &[String]) -> Result<Vec<String>>
 
 /// The task IDs a review in `reviews` names: each key as the review meant it (ATM-630, [`review_keys::task_of`]), so
 /// a decision reaches the task it was about even when a merge gave its old number to another.
-pub(super) fn named(
+pub(crate) fn named(
     project: &Project,
     reviews: &FileStore,
     header: &ReviewHeader,

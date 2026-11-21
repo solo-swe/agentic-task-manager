@@ -5,6 +5,7 @@ mod decisions;
 mod doctor;
 mod fixtures;
 mod keys;
+mod lifecycle;
 mod listing;
 mod live;
 mod opening;

@@ -1,10 +1,12 @@
 //! The review commands: open, round, summary, submit, close, the tasks named.
 
+use crate::lifecycle::Event;
+
 use super::{
-    Command, Error, Kind, NewReview, NewRound, Opening, Options, Project, Result, Review,
-    ReviewHeader, ReviewRef, ReviewStore, Reviews, Status, Verdict, Vocabulary, actor_of,
-    agent_at_work, agent_of_tasks, ask_review, change_task_status, checkpoint_now, is_agent,
-    key_of_id, kind_of, link, named, openings, resolve, review_keys, store,
+    Command, Error, Kind, NewReview, NewRound, Opening, Options, Project, Result, ReviewHeader,
+    ReviewRef, ReviewStore, Reviews, Status, Verdict, Vocabulary, actor_of, agent_at_work,
+    agent_of_tasks, ask_review, change_task_status, checkpoint_now, is_agent, key_of_id, link,
+    openings, resolve, review_keys, store,
 };
 
 /// Open a review, link its tasks, and put them in review (one waiting on its reviewers; a draft or a live one leaves
@@ -76,16 +78,12 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
 /// What the review's rules refuse, or a store error.
 pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) -> Result<u32> {
     let mut reviews = store(project)?;
-    // Its tasks found first (ATM-594): a round is never kept without its tasks going back in review
-    let ids = named(project, &reviews, &reviews.get_review(reference)?.header).map_err(|e| {
-        Error::failed(format!(
-            "{}'s round can't reach its tasks, so it isn't added: {e}",
-            reference.0
-        ))
-    })?;
+    // Checked whole first (ATM-633, ATM-594): a round is never kept without its tasks going back in review
+    let before = reviews.get_review(reference)?;
+    let outcome = crate::lifecycle::check(project, &before, &Event::Round, &round.by)?;
     let number = Reviews::new(&mut reviews).add_round(reference, round)?;
     let header = reviews.get_review(reference)?.header;
-    ask_review(project, &ids, &header, &format!("round {number}"))?;
+    ask_review(project, &outcome.named, &header, &format!("round {number}"))?;
     Ok(number)
 }
 
@@ -115,53 +113,24 @@ pub fn submit(
 ) -> Result<()> {
     let by = actor_of(project);
     let mut reviews = store(project)?;
-    // Every task it names found first (ATM-594): a decision is never kept without reaching its tasks
-    let tasks = named(project, &reviews, &reviews.get_review(reference)?.header).map_err(|e| {
-        Error::failed(format!(
-            "{reference}'s decision can't reach its tasks, so it isn't recorded: {e}",
-            reference = reference.0
-        ))
-    })?;
-    // A live review is approved as the working copy is now (ATM-576): that is the checkpoint its task's change is
-    // compared with when it is done (unless the approval would be refused anyway, with comments open)
+    // Checked whole first (ATM-633): the review's rules, and every task the decision changes, found (ATM-594) and
+    // able to move (ATM-670): all or none
     let before = reviews.get_review(reference)?;
-    let command = match verdict {
-        Verdict::Approve => Some(Command::Approve),
-        Verdict::RequestChanges => Some(Command::RequestChanges),
-        Verdict::Comment => None,
+    let event = Event::Submit {
+        verdict,
+        overriding,
+        also_open: &[],
     };
-    let options_for = |review: &Review| {
-        let round = review.rounds.last().map_or(1, |r| r.number);
-        let open = review.open_comments().count();
-        Options {
-            note: Some(format!("in {} (round {round})", review.header.reference)),
-            reason: Some(format!(
-                "{} round {round}: {open} open comment{}",
-                review.header.reference,
-                if open == 1 { "" } else { "s" }
-            )),
-            ..Options::default()
-        }
-    };
-    // Every task the decision changes checked before the review records it (ATM-670): all or none
-    if let Some(command) = command {
-        check_decision(project, &tasks, command, &options_for(&before))?;
-    }
-    if verdict == Verdict::Approve
-        && before.header.status == Status::Live
-        && before.open_comments().next().is_none()
-    {
+    let outcome = crate::lifecycle::check(project, &before, &event, &by)?;
+    // A live review is approved as the working copy is now (ATM-576): that is the checkpoint its task's change is
+    // compared with when it is done
+    if verdict == Verdict::Approve && before.header.status == Status::Live {
         checkpoint_now(project, reference)?;
     }
     Reviews::new(&mut reviews).submit(reference, verdict, body, overriding, &by)?;
-    let Some(command) = command else {
-        return Ok(());
-    };
-    let options = options_for(&reviews.get_review(reference)?);
-    for id in tasks {
-        if kind_of(project, &id)?.is_some_and(|(kind, _)| kind == Kind::Review) {
-            change_task_status(project, command, &id, &options)?;
-        }
+    let options = crate::lifecycle::decision_options(&reviews.get_review(reference)?);
+    for (id, command) in outcome.tasks {
+        change_task_status(project, command, &id, &options)?;
     }
     Ok(())
 }
@@ -172,7 +141,7 @@ pub fn submit(
 ///
 /// # Errors
 /// The first task the state machine refuses, naming it.
-pub(super) fn check_decision(
+pub(crate) fn check_decision(
     project: &Project,
     ids: &[String],
     command: Command,
@@ -222,18 +191,16 @@ pub fn close(
 ) -> Result<()> {
     let by = actor_of(project);
     let mut reviews = store(project)?;
+    // Checked whole first (ATM-633): with `reject`, every task it rejects found and able to move, before it closes
+    let before = reviews.get_review(reference)?;
+    let outcome = crate::lifecycle::check(project, &before, &Event::Close { reject }, &by)?;
     Reviews::new(&mut reviews).close(reference, reason, &by)?;
-    if reject {
-        let header = reviews.get_review(reference)?.header;
-        let options = Options {
-            reason: Some(format!("{} closed: {reason}", header.reference)),
-            ..Options::default()
-        };
-        for id in named(project, &reviews, &header)? {
-            if kind_of(project, &id)?.is_some_and(|(kind, _)| kind == Kind::Review) {
-                change_task_status(project, Command::Reject, &id, &options)?;
-            }
-        }
+    let options = Options {
+        reason: Some(format!("{} closed: {reason}", before.header.reference)),
+        ..Options::default()
+    };
+    for (id, command) in outcome.tasks {
+        change_task_status(project, command, &id, &options)?;
     }
     Ok(())
 }

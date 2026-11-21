@@ -16,6 +16,7 @@ pub use atm_docs as documents;
 pub mod edit;
 pub mod foreign;
 pub mod leases;
+pub mod lifecycle;
 pub mod loop_rules;
 pub mod maintenance;
 pub mod project;
