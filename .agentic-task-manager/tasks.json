@@ -18657,7 +18657,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.4, task 3 of §7 (§6.4's recommended answer).\n\n## Change\n- A review's sub-tab in its path: `/projects/<id>/reviews/<CR>` (Overview), `…/<CR>/diffs`, `…/<CR>/comments`; choosing one is a step in the tab's history.\n- A comment in view in the query: `…/diffs?file=…&comment=c12`, never a `#` anchor (the app's `atm://` links refuse fragments, `app/src-tauri/src/links.rs`).\n- The Reviews list's filter and search: `/projects/<id>/reviews?status=waiting&q=…`, no longer kept in the browser only.\n- Help and About leave the address (`?help`, `?about`): app-wide, above every tab.\n- `lib/address.ts` reads and writes them all; `atm://` links open them (the app's routes in `links.rs`, if they need a page added).\n\n## Tests\nUnit: `address.ts` reads and writes each. e2e: each restored after a reload and by Back and Forward; an `atm://` link to a comment opens the review at it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
@@ -18667,7 +18667,7 @@
         "dashboard/src/lib/shell/ReviewsTab.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-21T13:01:24Z",
+      "updated_at": "2026-11-21T13:24:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18684,7 +18684,18 @@
       "sprint": "Audit and tabs",
       "number": 697,
       "started_at": "2026-11-21T13:01:24Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "e7a0cb537f99998d76c17e33da700e0643b82c2e",
+      "completed_at": "2026-11-21T13:24:55Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-21T13:24:55Z",
+          "kind": "outcome",
+          "text": "A review sub-tab in its path (/CR-7/diffs, /comments), each a step. The comment in view is ?comment=c12, scrolled to and marked. The Reviews list filter and search are in the query. Help and About are out of the address, and an older ?about still opens it. pages.rs, links.rs (atm://reviews too), the routes and e2e serve.mjs follow. The overview Reviews filter stays browser-kept.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c1592d63e49a",
@@ -19455,7 +19466,7 @@
       "description": "Hakan on CR-99 and CR-100 (2026-11-21): the files are too large. Split them into logical modules, give them unit tests that use fakes for what they depend on, and move the integration tests into their own files, by [the Rust guide](docs/guides/rust.md) (§Crates and modules, §Tests).\n\n## The files (lines of code / lines of tests, 2026-11-21)\n| File | Code | Tests |\n|---|---|---|\n| `crates/atm-cli/src/commands/review.rs` | 1,386 | 100 |\n| `app/src-tauri/src/commands.rs` | 1,114 | 425 |\n| `crates/atm-lib/src/review_listen.rs` | 974 | 538 |\n| `crates/atm-lib/src/reviews.rs` | 937 | 1,300 |\n| `crates/atm-vcs/src/lib.rs` | 771 | 642 |\n| `crates/atm-lib/src/review_pages.rs` | 724 | 371 |\n| `crates/atm-review/src/folder.rs` | 651 | 648 |\n| `crates/atm-docs/src/lib.rs` | 535 | 836 |\n| `crates/atm-review/src/rules.rs` | 529 | 1,162 |\n| `crates/atm-review/src/files.rs` | 511 | 565 |\n| `crates/atm-review/src/rounds.rs` | 455 | 742 |\n| `crates/atm-api/src/routes/reviews.rs` | 391 | 778 |\n| `app/src-tauri/src/lib.rs` | 236 | 1,283 |\n\n## Rules (the guide)\n- **Module files:** `foo.rs` next to a `foo/` directory, never `foo/mod.rs`. Public APIs stay the same (re-exported).\n- **Unit tests** stay with their code while it reads well, else `foo/tests.rs`, else `foo/tests/` by group. They test the unit alone, with hand-written fakes behind a trait (atm-review's `ReviewStore` already has a memory store).\n- **Integration tests** (a real git repository, the real store, several layers) go to the crate's `tests/` directory, one file per area.\n- About 400 lines is when a file reads badly, not a threshold.\n\n## How\n- One file at a time, the reviews area first (`reviews.rs`, `review_pages.rs`, `review_listen.rs`, `commands/review.rs`), before ATM-633's build changes them.\n- Each a move only: no logic changed, the same tests passing (`cargo test`, the CLI suite), the plan for it agreed first, as on CR-100.\n- Where a unit test today needs a real repository only because nothing is faked, add the fake and keep the real-repository version as an integration test.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/reviews.rs",
@@ -19464,7 +19475,7 @@
         "crates/atm-cli/src/commands/review.rs"
       ],
       "created_at": "2026-11-20T23:29:46Z",
-      "updated_at": "2026-11-21T13:06:45Z",
+      "updated_at": "2026-11-21T13:25:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19536,7 +19547,9 @@
           "to": "2026-11-21T13:06:45Z",
           "on": "user"
         }
-      ]
+      ],
+      "started_at": "2026-11-21T13:25:02Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b81a73b4404",
