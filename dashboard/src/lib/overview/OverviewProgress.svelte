@@ -18,7 +18,7 @@
   const shownIds = $derived(new Set(projects.map((p) => p.id)));
   const sources = $derived(dashboard.projectSources.filter((s) => shownIds.has(s.project.id)));
   const now = $derived(dashboard.loadedAt);
-  const rows = $derived(sources.map((s) => projectProgress(s, now)));
+  const rows = $derived(sources.map((s) => projectProgress(s)));
 
   // Every project's tasks as one project's, without sprints: the burndown of all of them, last 14 days or all time
   const merged = $derived(mergedTasks(sources));
@@ -59,13 +59,13 @@
             >
             <span class="overview-progress-count">{row.done} / {row.total} · {pct(row.done, row.total)}%</span>
           </span>
-          <span class="overview-progress-sprint" title={row.sprint?.sprint.goal ?? null}>
+          <span class="overview-progress-sprint" title={row.sprint?.goal ?? null}>
             {#if row.sprint}
               <span class="project-card-label">Sprint</span>
-              <strong>{row.sprint.sprint.id}</strong>
+              <strong>{row.sprint.id}</strong>
               <span>{row.sprint.done} / {row.sprint.total}</span>
-              {#if row.sprint.dueIn !== undefined}<span class="muted" class:overdue={row.sprint.dueIn < 0}
-                  >· {dueText(row.sprint.dueIn)}</span
+              {#if row.sprint.days_left !== undefined}<span class="muted" class:overdue={row.sprint.days_left < 0}
+                  >· {dueText(row.sprint.days_left)}</span
                 >{/if}
             {:else}
               <span class="muted">No active sprint</span>

@@ -180,6 +180,25 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
   The dashboard reads it, and each task's `derived.kind`, instead of parsing `meta`. A list a tolerant read can't use
   is its default here (below).
 
+- **The sprints and releases** (ATM-720; atm-lib's `sprints::sprint_views` and `releases::release_views`):
+  - The response's `sprints` is `{ sprints, backlog, from_phases }`: every sprint in the project's order, closed ones
+    too, with its stored fields and its figures over the working tasks and the archive:
+    - `done`, `total` and `percent`: the summary's one rule, done of the tasks but the skipped, 100 with none;
+    - `added`, `carried` and `review_pending`;
+    - `days_left` and `due_end`: the days to its due date by the project's day (today, local, by atm's clock) and when
+      it has passed, while it is open.
+
+    `backlog` is the unfinished tasks in no sprint, as `atm sprint list` counts them. An unmigrated project's phases
+    are served as the sprints `atm db migrate` would make (the migration's rule, on a copy), with `from_phases`.
+  - The response's `releases` lists every release, archived ones too, with its `sprints`, its tasks by stage (`total`,
+    `done`, `in_pr`, `merged`) and its `notes` (`{ groups, open }`, as `atm release notes` drafts them, with task keys).
+  - Each task's `derived.sprint` is the sprint it is in, and `derived.carried` how many sprints it was carried through
+    before it.
+  - The summary's sprints (`recent_sprints`, `active_sprint`) carry `days_left` and `due_end` by the same rule.
+
+  The scope bar, the overview's card and Progress tab, the burndown, the velocity, the Project tab's counts and the
+  release view read these, and count none of it.
+
 - **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
   `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,
   found }`, and when found, the project's `project_name` and `places` (`[{ workspace, project }]`, where it is

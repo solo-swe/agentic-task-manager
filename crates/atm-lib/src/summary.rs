@@ -61,11 +61,16 @@ fn count(kinds: &[Option<Kind>], kind: Kind) -> usize {
 }
 
 /// A sprint as the overview shows it: its name, state, due date and release, and done of its tasks but the skipped.
-fn sprint_numbers(sprint: &Map<String, Value>, own: &[Option<Kind>]) -> Map<String, Value> {
+/// The one percent rule (ATM-720): done of the tasks but the skipped; a sprint with none left to count is 100 %, here
+/// and in the sprints atm serves with the tasks.
+pub(crate) fn sprint_numbers(
+    sprint: &Map<String, Value>,
+    own: &[Option<Kind>],
+) -> Map<String, Value> {
     let done = count(own, Kind::Done);
     let total = own.len() - count(own, Kind::Skipped);
     let field = |k: &str| sprint.get(k).cloned().unwrap_or(Value::Null);
-    json!({
+    let mut numbers = json!({
         "id": field("id"),
         "state": field("state"),
         "due": field("due"),
@@ -76,7 +81,10 @@ fn sprint_numbers(sprint: &Map<String, Value>, own: &[Option<Kind>]) -> Map<Stri
     })
     .as_object()
     .cloned()
-    .unwrap_or_default()
+    .unwrap_or_default();
+    // Days to its due date, by the one rule (ATM-720)
+    crate::sprints::due_fields(sprint, &mut numbers);
+    numbers
 }
 
 fn sprint_of<'v>(vocab: &'v Vocabulary, task: &Task) -> Option<&'v Map<String, Value>> {

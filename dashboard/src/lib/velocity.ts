@@ -1,8 +1,6 @@
 // Velocity (T-323, SR-7.4): how many tasks each closed sprint got done, the last few in order, from each sprint's
-// report (what /atm-close-sprint recorded) or, without one, its tasks done.
+// report (what /atm-close-sprint recorded) or, without one, atm's count of its tasks done (ATM-720).
 import type { SprintModel } from './sprints';
-import type { Task } from './types';
-import { taskKind, type Vocabulary } from './vocab';
 
 export interface SprintVelocity {
   id: string;
@@ -20,20 +18,13 @@ export const VELOCITY_SPRINTS = 10;
 const count = (list: unknown) => (Array.isArray(list) ? list.length : 0);
 
 /** The last `limit` closed sprints, oldest first, and their average done */
-export function velocity(
-  model: SprintModel,
-  tasks: Task[],
-  vocab: Vocabulary,
-  limit = VELOCITY_SPRINTS,
-): { sprints: SprintVelocity[]; average: number } {
+export function velocity(model: SprintModel, limit = VELOCITY_SPRINTS): { sprints: SprintVelocity[]; average: number } {
   const sprints = model.sprints
     .filter((s) => s.state === 'closed')
     .slice(-limit)
     .map((s) => ({
       id: s.id,
-      done: s.report?.done
-        ? count(s.report.done)
-        : tasks.filter((t) => model.sprintOf(t) === s.id && taskKind(t) === 'done').length,
+      done: s.report?.done ? count(s.report.done) : s.done,
       carried: count(s.report?.carried),
       added: count(s.report?.added),
       ...(s.end ? { end: s.end } : {}),

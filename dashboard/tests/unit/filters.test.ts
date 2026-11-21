@@ -14,10 +14,9 @@ import {
   toggleFilter,
   type Filters,
 } from '../../src/lib/filters';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
-import { vocabulary, withKinds } from './views';
+import { sprintModel, vocabulary, withKinds } from './views';
 import standardFile from '../fixtures/standard.json';
 import edgeFile from '../fixtures/edge-cases.json';
 import sprintsFile from '../fixtures/sprints.json';

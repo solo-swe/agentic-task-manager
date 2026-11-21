@@ -77,9 +77,10 @@ export function actors(tasks: Task[], now: number): { people: Person[]; agents: 
 }
 
 export interface VocabCounts {
-  /** The sprints in the planning order (active, planned, closed most recent first) with their task counts (T-323) */
+  /** The sprints in the planning order (active, planned, closed most recent first) with their task counts (T-323):
+   * atm's (ATM-720), its tasks but the skipped ones */
   sprints: { id: string; state: SprintState; count: number }[];
-  /** Tasks in no sprint */
+  /** Unfinished tasks in no sprint, as `atm sprint list` counts them */
   backlog: number;
   /** meta.labels first, in its order (also unused ones), then labels only the tasks use */
   labels: { id: string; text: string; count: number; listed: boolean }[];
@@ -94,18 +95,12 @@ export function vocabCounts(
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   model: SprintModel = NO_SPRINTS,
 ): VocabCounts {
-  const sprintUse = new Map<string, number>();
-  let backlog = 0;
-  for (const t of tasks) {
-    const sprint = model.sprintOf(t);
-    if (sprint === undefined) backlog++;
-    else count(sprintUse, sprint);
-  }
+  const backlog = model.backlog;
   const inState = (state: SprintState) => model.sprints.filter((s) => s.state === state);
   const sprints = [...inState('active'), ...inState('planned'), ...inState('closed').reverse()].map((s) => ({
     id: s.id,
     state: s.state,
-    count: sprintUse.get(s.id) ?? 0,
+    count: s.total,
   }));
 
   const labelUse = new Map<string, number>();

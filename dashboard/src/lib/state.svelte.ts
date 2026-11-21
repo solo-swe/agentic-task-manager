@@ -83,7 +83,8 @@ import type { ListGroupBy } from './list-groups';
 import { loadProjectSources, type ProjectSource } from './overview-data';
 import { leftovers as leftoversOf, scopeOf } from './scope';
 import { sprintParamOf, withSprintParam } from './sprint-param';
-import { sprintModel } from './sprints';
+import type { Release } from './releases';
+import { NO_SPRINTS, type SprintModel } from './sprints';
 import { DEFAULT_VOCABULARY, type Vocabulary } from './vocab';
 import { loadWorktrees, mergeWorktrees, type Worktree, type WorktreesResult } from './worktrees';
 import { clearView, defaultView, projectKey, readView, sanitizeView, writeView, type SavedView } from './view-store';
@@ -244,7 +245,9 @@ export class DashboardState {
     this.archive.length ? [...this.tasks, ...this.archive.filter((t) => !this.taskMap.has(t.id))] : this.tasks,
   );
   /** The project's sprints and which sprint each task is in (lib/sprints.ts); read from phases until it is migrated */
-  sprints = $derived(sprintModel(this.meta, this.history, this.vocab));
+  sprints = $state.raw<SprintModel>(NO_SPRINTS);
+  /** The project's releases, with their figures, as atm serves them (ATM-720) */
+  releases = $state.raw<Release[]>([]);
   /** The project's components, as atm serves them with the vocabulary, in their order; tasks name them by ID (T-323) */
   components = $derived(this.vocab.components);
   /** Open tasks left in closed sprints, which no loop takes until they are moved (lib/scope.ts, T-323) */
@@ -610,6 +613,8 @@ export class DashboardState {
     this.meta = undefined;
     this.#loaded = undefined;
     this.vocab = DEFAULT_VOCABULARY;
+    this.sprints = NO_SPRINTS;
+    this.releases = [];
     this.projectName = DEFAULT_PROJECT_NAME;
     this.detailOpen = false;
     this.detailId = null;
@@ -1205,6 +1210,8 @@ export class DashboardState {
     this.meta = loaded.meta;
     this.#loaded = loaded;
     this.vocab = loaded.vocab ?? DEFAULT_VOCABULARY;
+    this.sprints = loaded.sprints ?? NO_SPRINTS;
+    this.releases = loaded.releases ?? [];
     this.#mainTasks = loaded.tasks;
     this.tasks = loaded.tasks;
     this.taskMap = loaded.taskMap;

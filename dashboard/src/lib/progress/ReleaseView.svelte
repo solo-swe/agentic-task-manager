@@ -1,19 +1,20 @@
 <script lang="ts">
   import { formatWhen } from '../format';
-  import { releaseSummaries, splitReleases, type ReleaseSummary } from '../releases';
+  import { notesText, splitReleases, type Release } from '../releases';
   import { dashboard } from '../state.svelte';
   import { safeUrl } from '../url';
 
-  // The releases (SR-7.5): each with its sprints, its tasks by stage, its PR and state, and the notes draft to copy.
-  // Over the whole history (archived tasks too, once loaded), whatever the filters: a release ships all its tasks.
-  // The open ones first; the released ones fold into one row (T-323), newest first when opened, as closed sprints do.
-  const releases = $derived(releaseSummaries(dashboard.meta, dashboard.history, dashboard.sprints, dashboard.vocab));
-  const parts = $derived(splitReleases(releases));
+  // The releases (SR-7.5): each with its sprints, its tasks by stage, its PR and state, and the notes draft to copy,
+  // as atm serves them with the tasks (ATM-720): over the whole history (archived tasks too), whatever the filters, as
+  // a release ships all its tasks. The open ones first; the released ones fold into one row (T-323), newest first when
+  // opened, as closed sprints do. Archived releases aren't shown.
+  const parts = $derived(splitReleases(dashboard.releases));
+  const shown = $derived(parts.open.length + parts.released.length);
   const folded = $derived(parts.released.length >= 2);
   let showReleased = $state(false);
   const releasedLabel = $derived.by(() => {
     const last = parts.released[0];
-    return `✓ ${parts.released.length} released` + (last ? ` · last ${last.release.id}` : '');
+    return `✓ ${parts.released.length} released` + (last ? ` · last ${last.id}` : '');
   });
   let copied = $state<string | null>(null);
 
@@ -23,45 +24,46 @@
   }
 </script>
 
-{#snippet row(r: ReleaseSummary)}
-  {@const url = safeUrl(r.release.pr?.url)}
-  <div class="release-row" data-release={r.release.id} data-state={r.release.state}>
+{#snippet row(r: Release)}
+  {@const url = safeUrl(r.pr?.url)}
+  {@const notes = notesText(r)}
+  <div class="release-row" data-release={r.id} data-state={r.state}>
     <div class="release-head">
-      <strong class="release-id">{r.release.id}</strong>
-      {#if r.release.name}<span class="muted">“{r.release.name}”</span>{/if}
-      <span class="sprint-state">{r.release.state}</span>
-      {#if r.release.released_at}<span class="muted release-date"
-          >{formatWhen(Date.parse(r.release.released_at), dashboard.loadedAt)}</span
+      <strong class="release-id">{r.id}</strong>
+      {#if r.name}<span class="muted">“{r.name}”</span>{/if}
+      <span class="sprint-state">{r.state}</span>
+      {#if r.released_at}<span class="muted release-date"
+          >{formatWhen(Date.parse(r.released_at), dashboard.loadedAt)}</span
         >{/if}
-      {#if r.release.pr}
-        {#if url}<a href={url} target="_blank" rel="noopener noreferrer">PR #{r.release.pr.number}</a>{:else}<span
-            >PR #{r.release.pr.number}</span
+      {#if r.pr}
+        {#if url}<a href={url} target="_blank" rel="noopener noreferrer">PR #{r.pr.number}</a>{:else}<span
+            >PR #{r.pr.number}</span
           >{/if}
       {/if}
-      {#if r.release.target && r.release.state === 'planned'}<span class="muted">target {r.release.target}</span>{/if}
+      {#if r.target && r.state === 'planned'}<span class="muted">target {r.target}</span>{/if}
       {#if r.sprints.length}<span class="muted release-sprints">{r.sprints.join(', ')}</span>{/if}
     </div>
     <!-- A release recorded without its tasks (recovered from git history) has nothing to count or draft -->
-    {#if r.total || r.release.state !== 'released'}
+    {#if r.total || r.state !== 'released'}
       <div class="release-counts">
-        {r.done} of {r.total} done · {r.inPr} in PR · {r.merged} merged
+        {r.done} of {r.total} done · {r.in_pr} in PR · {r.merged} merged
       </div>
       <details class="release-notes">
         <summary
-          >Notes draft <button class="link-button" onclick={() => copy(r.release.id, r.notes)}
-            >{copied === r.release.id ? 'Copied' : 'Copy'}</button
+          >Notes draft <button class="link-button" onclick={() => copy(r.id, notes)}
+            >{copied === r.id ? 'Copied' : 'Copy'}</button
           ></summary
         >
-        <pre>{r.notes}</pre>
+        <pre>{notes}</pre>
       </details>
     {/if}
   </div>
 {/snippet}
 
-{#if releases.length}
+{#if shown}
   <section class="release-view" id="release-view" aria-label="Releases">
     <h3 class="burndown-title">Releases</h3>
-    {#each parts.open as r (r.release.id)}{@render row(r)}{/each}
+    {#each parts.open as r (r.id)}{@render row(r)}{/each}
     {#if folded}
       <button
         class="phase-finished-toggle release-released-toggle"
@@ -72,7 +74,7 @@
       >
     {/if}
     {#if !folded || showReleased}
-      {#each parts.released as r (r.release.id)}{@render row(r)}{/each}
+      {#each parts.released as r (r.id)}{@render row(r)}{/each}
     {/if}
   </section>
 {/if}

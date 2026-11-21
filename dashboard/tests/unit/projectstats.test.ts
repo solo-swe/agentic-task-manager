@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { projectStats, timeHistogram } from '../../src/lib/projectstats';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY, type Workflow } from '../../src/lib/vocab';
-import { vocabulary, withKinds } from './views';
+import { sprintModel, vocabulary, withKinds } from './views';
 
 // Times in minutes from T0
 const T0 = Date.parse('2026-05-01T08:00:00Z');

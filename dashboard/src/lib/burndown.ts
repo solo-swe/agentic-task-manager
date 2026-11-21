@@ -79,12 +79,6 @@ export function rangeStart(
   return from !== undefined && from < now ? from : undefined;
 }
 
-/** The end of a YYYY-MM-DD day, UTC */
-const endOfDay = (date: string | undefined) => {
-  const t = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? Date.parse(`${date}T23:59:59Z`) : NaN;
-  return Number.isNaN(t) ? undefined : t;
-};
-
 export function burndown(
   allTasks: Task[],
   forecast: Forecast,
@@ -100,7 +94,8 @@ export function burndown(
   const sprint = forecast.sprints.find((s) => s.key === rangeSprint(forecast, focus))?.sprint;
   const closedAt = focus !== undefined && sprint?.state === 'closed' ? time(sprint.end) : undefined;
   const end = closedAt !== undefined && closedAt < now ? closedAt : undefined;
-  const due = sprint && sprint.state !== 'closed' ? endOfDay(sprint.due) : undefined;
+  // When its due date has passed, by atm's one rule (ATM-720: the end of that day, the project's day)
+  const due = time(sprint?.due_end);
   const until = end ?? now;
   const untimed = !allTasks.some((t) =>
     [t.created_at, t.started_at, t.completed_at].some((x) => time(x) !== undefined),

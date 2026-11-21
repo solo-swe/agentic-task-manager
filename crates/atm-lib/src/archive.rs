@@ -402,7 +402,8 @@ pub fn archive_hint_now(project: &Project) -> Result<Option<Value>> {
 
 /// The project's tasks as the REST API's v1 route gives them (docs/multi-project-api.md §2.5), in one snapshot:
 /// `meta` (as read: a tolerant read leaves out what doesn't work), `vocabulary` (as atm resolved it:
-/// [`crate::vocabulary::served`]), `bytes` (how big the task data is), `tasks` (each with what atm derives for it),
+/// [`crate::vocabulary::served`]), `sprints` and `releases` with their figures ([`crate::sprints::sprint_views`],
+/// [`crate::releases::release_views`]), `bytes` (how big the task data is), `tasks` (each with what atm derives for it),
 /// `problems` (what a tolerant read found wrong with the file) and, for the working tasks, `archive_hint` when atm
 /// suggests archiving.
 ///
@@ -423,6 +424,8 @@ pub fn task_snapshot(project: &Project, filters: &crate::query::Filters) -> Resu
     let mut snapshot = json!({
         "meta": meta,
         "vocabulary": vocabulary,
+        "sprints": crate::sprints::sprint_views(project)?,
+        "releases": crate::releases::release_views(project)?,
         "bytes": store.sizes().0,
         "tasks": crate::query::task_views(project, filters)?,
         "problems": crate::query::read_problems(project)?,

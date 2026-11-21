@@ -2,18 +2,34 @@ import { fireEvent } from '@testing-library/svelte';
 import { emptyFilters } from '../../src/lib/filters';
 import { parseTasksFile } from '../../src/lib/load';
 import { dashboard } from '../../src/lib/state.svelte';
+import type { Release } from '../../src/lib/releases';
+import type { SprintModel } from '../../src/lib/sprints';
 import type { TasksFile } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
-import { withKinds } from './views';
+import { sprintModel, withKinds } from './views';
+
+/** What atm serves beside the tasks, as a test gives it */
+export interface Served {
+  sprints?: SprintModel;
+  releases?: Release[];
+}
 
 /**
  * Put the shared dashboard state into a freshly loaded state for a component test, as atm serves the project: its
- * vocabulary (`vocab`, the defaults unless given) and each task's kind (ATM-718). `archive` stands for a loaded
- * tasks-archive.json; without it there is none loaded.
+ * vocabulary (`vocab`, the defaults unless given), each task's kind (ATM-718), and its sprints and releases (ATM-720:
+ * `served`'s, else the fake's for the fixture's meta, views.ts). `archive` stands for a loaded tasks-archive.json;
+ * without it there is none loaded.
  */
-export function loadIntoDashboard(data: TasksFile, archive?: TasksFile, vocab: Vocabulary = DEFAULT_VOCABULARY) {
-  const served = { ...data, tasks: withKinds(data.tasks ?? [], vocab) };
-  const { tasks, taskMap, projectName, meta, bytes } = parseTasksFile(served, JSON.stringify(data).length);
+export function loadIntoDashboard(
+  data: TasksFile,
+  archive?: TasksFile,
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
+  served: Served = {},
+) {
+  const withTheirKinds = { ...data, tasks: withKinds(data.tasks ?? [], vocab) };
+  const { tasks, taskMap, projectName, meta, bytes } = parseTasksFile(withTheirKinds, JSON.stringify(data).length);
+  const archived = withKinds(archive?.tasks ?? [], vocab);
+  const releases = (meta as { releases?: { id: string }[] } | undefined)?.releases ?? [];
   Object.assign(dashboard, {
     tasks,
     taskMap,
@@ -21,13 +37,26 @@ export function loadIntoDashboard(data: TasksFile, archive?: TasksFile, vocab: V
     meta,
     tasksBytes: bytes,
     vocab,
+    sprints: served.sprints ?? sprintModel(meta, [...tasks, ...archived], vocab),
+    releases:
+      served.releases ??
+      releases.map((r) => ({
+        state: 'planned',
+        sprints: [],
+        total: 0,
+        done: 0,
+        in_pr: 0,
+        merged: 0,
+        ...r,
+        notes: { groups: [], open: [] },
+      })),
     loaded: true,
     loadError: null,
     filters: emptyFilters(),
     query: '',
     detailId: null,
     detailOpen: false,
-    archive: withKinds(archive?.tasks ?? [], vocab),
+    archive: archived,
     archiveLoaded: !!archive,
     includeArchived: false,
     // Keep component tests free of background reloads (the real default is on)

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { velocity } from '../../src/lib/velocity';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
-import { withKinds } from './views';
+import { sprintModel, withKinds } from './views';
 
 const vocab = DEFAULT_VOCABULARY;
 const task = (id: string, sprint: string, status: string) =>
@@ -32,8 +31,8 @@ describe('velocity (T-323)', () => {
   ];
   const model = sprintModel(meta, tasks, vocab);
 
-  it('the closed sprints, oldest first: done from the report (else the tasks), carried, added; the average', () => {
-    const { sprints, average } = velocity(model, tasks, vocab);
+  it('the closed sprints, oldest first: done from the report (else atm’s count), carried, added; the average', () => {
+    const { sprints, average } = velocity(model);
     expect(sprints).toEqual([
       { id: 'A', done: 3, carried: 1, added: 0, end: '2026-04-01T00:00:00Z' },
       { id: 'B', done: 1, carried: 0, added: 2 },
@@ -43,8 +42,8 @@ describe('velocity (T-323)', () => {
   });
 
   it('the last few only; none closed: nothing', () => {
-    expect(velocity(model, tasks, vocab, 2).sprints.map((s) => s.id)).toEqual(['B', 'C']);
+    expect(velocity(model, 2).sprints.map((s) => s.id)).toEqual(['B', 'C']);
     const open = sprintModel({ sprints: [{ id: 'D', state: 'active' }] }, [], vocab);
-    expect(velocity(open, [], vocab)).toEqual({ sprints: [], average: 0 });
+    expect(velocity(open)).toEqual({ sprints: [], average: 0 });
   });
 });

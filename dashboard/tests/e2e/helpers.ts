@@ -66,7 +66,7 @@ export function asTaskViews(
   archived = false,
   registered: readonly string[] = [],
 ): string {
-  const key = JSON.stringify([body, archive, archived, registered]);
+  const key = JSON.stringify([body, archive, archived, registered, atmNow]);
   const cached = viewCache.get(key);
   if (cached !== undefined) return cached;
   const read = atmViews(body, archive, archived, registered);
@@ -75,6 +75,23 @@ export function asTaskViews(
   viewCache.set(key, views);
   return views;
 }
+
+/** The time atm counts by in this test (its `ATM_NOW`, which a debug build heeds), or the real time: what atm says by
+ * the day (a sprint's days to its due date, ATM-720) is then as of the page's fixed clock. Reset after each test */
+let atmNow: string | undefined;
+
+/** Run the fixture's atm at `at` (a spec that fixes the page's clock, `page.clock.setFixedTime`, sets it too) */
+export function atmNowFor(at: Date | undefined) {
+  atmNow = at ? at.toISOString().replace(/\.\d{3}Z$/, 'Z') : undefined;
+}
+
+/** The environment atm runs in for the fixture: its own state folder, and the test's clock */
+const atmEnv = (dir: string) => ({
+  ...process.env,
+  ATM_STATE_DIR: path.join(dir, '.atm-state'),
+  GIT_CEILING_DIRECTORIES: os.tmpdir(),
+  ...(atmNow ? { ATM_NOW: atmNow } : {}),
+});
 
 /** atm's tolerant read of the files (`atm task list --derived --tolerant`: meta, tasks, problems; with `archived`, the
  * archive's tasks, T-372), or null when even that refuses them (not a task file). The `registered` projects' task
@@ -86,7 +103,7 @@ function atmViews(
   registered: readonly string[] = [],
 ): Record<string, unknown> | null {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-views-'));
-  const env = { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: os.tmpdir() };
+  const env = atmEnv(dir);
   const others: string[] = [];
   try {
     mkdirSync(path.join(dir, '.agentic-task-manager'));
@@ -149,7 +166,7 @@ function atmSummary(body: string): Record<string, unknown> {
     const r = spawnSync(program, args, {
       cwd: dir,
       encoding: 'utf8',
-      env: { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      env: { ...atmEnv(dir), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
     if (r.status !== 0) throw new Error(`atm project summary failed: ${r.stderr}`);
     return JSON.parse(r.stdout) as Record<string, unknown>;
@@ -1082,6 +1099,7 @@ export const test = base.extend<Fixtures>({
     const server = new TasksServer(page);
     await server.install();
     await use(server);
+    atmNowFor(undefined);
   },
 
   // The dashboard promises zero external dependencies: any non-localhost request fails the test.

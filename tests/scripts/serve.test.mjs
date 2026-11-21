@@ -607,7 +607,9 @@ describe('serve', () => {
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const summary = api.projects.find((p) => p.id === 'sprinted').summary;
-    assert.deepEqual(summary.active_sprint, {
+    // Its days to the due date by the project's day (ATM-720), negative: it is overdue by now; and when it passed
+    const { days_left: daysLeft, due_end: dueEnd, ...active } = summary.active_sprint;
+    assert.deepEqual(active, {
       id: 'Now',
       state: 'active',
       due: '2026-04-01',
@@ -617,6 +619,8 @@ describe('serve', () => {
       percent: 50,
       goal: 'Ship',
     });
+    assert.ok(Number.isInteger(daysLeft) && daysLeft < 0, String(daysLeft));
+    assert.match(dueEnd, /^2026-04-0[12]T\d\d:59:59Z$/);
     // The open ones with tasks (Now, Next; Empty has none), filled up to four with the latest closed, in the project's order
     assert.deepEqual(
       summary.recent_sprints.map((s) => [s.id, s.state, s.done, s.total]),

@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { burndown, rangeStart } from '../../src/lib/burndown';
 import { forecastSprints } from '../../src/lib/forecast';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
 import progress from '../fixtures/progress.json';
-import { progressTasks, taskWith, vocabulary, withKinds } from './views';
+import { progressTasks, sprintModel, taskWith, vocabulary, withKinds } from './views';
 
 // Expected numbers: tests/fixtures/progress.md; atm's answers for its tasks (ATM-717): views.ts
 const NOW = Date.parse('2026-04-06T12:00:00Z');
@@ -60,7 +59,14 @@ describe('burndown', () => {
     const meta = {
       sprints: [
         { id: 'Old', state: 'closed', start: '2026-04-01T08:00:00Z', end: '2026-04-02T16:00:00Z' },
-        { id: 'Now', state: 'active', start: '2026-04-02T16:00:00Z', due: '2026-04-08' },
+        // atm says when its due date has passed (ATM-720: the end of that day, the project's day)
+        {
+          id: 'Now',
+          state: 'active',
+          start: '2026-04-02T16:00:00Z',
+          due: '2026-04-08',
+          due_end: '2026-04-08T23:59:59Z',
+        },
       ],
     };
     const inSprints = tasks.map((x) => ({ ...x, sprint: x.phase === 0 ? 'Old' : 'Now' }));

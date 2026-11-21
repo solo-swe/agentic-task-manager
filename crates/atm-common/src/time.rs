@@ -65,6 +65,53 @@ pub fn local_now() -> i64 {
     now + i64::from(offset)
 }
 
+/// A `YYYY-MM-DD` date as days since 1970-01-01, or None when the text isn't a date.
+fn date_days(date: &str) -> Option<i64> {
+    let b = date.as_bytes();
+    let shape = b.len() == 10
+        && b.iter().enumerate().all(|(i, c)| {
+            if i == 4 || i == 7 {
+                *c == b'-'
+            } else {
+                c.is_ascii_digit()
+            }
+        });
+    if !shape {
+        return None;
+    }
+    let (year, month, day) = (
+        date[0..4].parse().ok()?,
+        date[5..7].parse().ok()?,
+        date[8..10].parse().ok()?,
+    );
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let days = days_from_civil(year, month, day);
+    // A day the month doesn't have (2026-02-30) isn't one
+    (civil_from_days(days) == (year, month, day)).then_some(days)
+}
+
+/// The one due-date rule (ATM-720): the days from the project's day (today, local, by atm's clock) to `date`
+/// (`YYYY-MM-DD`): 0 on the day, 1 the day before, negative once it has passed; None for a text that isn't a date.
+#[must_use]
+pub fn days_until(date: &str) -> Option<i64> {
+    Some(date_days(date)? - local_now().div_euclid(86_400))
+}
+
+/// When a due date (`YYYY-MM-DD`) has passed: the last second of that day in the local time zone, as atm writes a time;
+/// None for a text that isn't a date.
+#[must_use]
+pub fn end_of_day(date: &str) -> Option<String> {
+    date_days(date)?;
+    let day: jiff::civil::Date = date.parse().ok()?;
+    let end = day
+        .at(23, 59, 59, 0)
+        .to_zoned(jiff::tz::TimeZone::system())
+        .ok()?;
+    Some(format_iso(end.timestamp().as_second()))
+}
+
 /// A time's calendar fields: year, month (1–12), day, hour, minute.
 #[must_use]
 pub fn civil(seconds: i64) -> (i64, i64, i64, i64, i64) {
@@ -155,6 +202,44 @@ mod tests {
             "x026-05-01T08:30:00Z",
         ] {
             assert_eq!(parse_iso(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_due_date_counts_days_from_the_local_day_today_zero_yesterday_minus_one() {
+        let (year, month, day, _, _) = civil(local_now());
+        let today = format!("{year:04}-{month:02}-{day:02}");
+        assert_eq!(days_until(&today), Some(0));
+        let shifted = |by: i64| {
+            let (y, m, d) = civil_from_days(date_days(&today).unwrap() + by);
+            format!("{y:04}-{m:02}-{d:02}")
+        };
+        assert_eq!(days_until(&shifted(1)), Some(1));
+        assert_eq!(days_until(&shifted(-1)), Some(-1));
+        assert_eq!(days_until(&shifted(30)), Some(30));
+        for bad in [
+            "",
+            "2026-5-01",
+            "2026-02-30",
+            "2026-13-01",
+            "12 April",
+            "2026-04-12T00:00:00Z",
+        ] {
+            assert_eq!(days_until(bad), None, "{bad}");
+            assert_eq!(end_of_day(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_due_date_ends_at_the_last_second_of_its_local_day() {
+        // In local time it is 23:59:59 that day, with that day's offset (a summer and a winter date)
+        for date in ["2026-04-08", "2026-12-24"] {
+            let end = parse_iso(&end_of_day(date).unwrap()).unwrap();
+            let local = jiff::Timestamp::from_second(end)
+                .unwrap()
+                .to_zoned(jiff::tz::TimeZone::system())
+                .datetime();
+            assert_eq!(local.to_string(), format!("{date}T23:59:59"));
         }
     }
 

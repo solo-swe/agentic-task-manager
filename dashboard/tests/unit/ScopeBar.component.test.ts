@@ -25,6 +25,13 @@ describe('ScopeBar (T-323)', () => {
   beforeEach(() => load());
 
   it('the active sprint: its goal, due date, release and progress, marked ▶', async () => {
+    // atm's figures for it (ATM-720): due in 3 days by the project's day, one added mid-sprint, one carried in
+    const model = dashboard.sprints;
+    const figures = { days_left: 3, added: 1, carried: 1 };
+    dashboard.sprints = {
+      ...model,
+      sprints: model.sprints.map((s) => (s.id === 'Ada Lovelace' ? { ...s, ...figures } : s)),
+    };
     dashboard.setSprintScope([ACTIVE]);
     const { container } = render(ScopeBar);
     await tick();

@@ -2,11 +2,9 @@
   import { DropdownMenu } from 'bits-ui';
   import { ACTIVE, BACKLOG, FILTER_GROUPS, FILTER_LABELS, filterOptions } from '../filters';
   import { formatWhen } from '../format';
-  import { readReleases } from '../releases';
   import { countKinds, scopeTasks } from '../scope';
-  import { backlog, dueText, sprintSummary, sprintTasks, type Sprint } from '../sprints';
+  import { backlog, dueText, sprintTasks, type Sprint } from '../sprints';
   import { dashboard } from '../state.svelte';
-  import { taskKind } from '../vocab';
   import Icon from '../ui/Icon.svelte';
   import ListOptions from '../tasks/ListOptions.svelte';
   import SprintMarker from '../progress/SprintMarker.svelte';
@@ -19,15 +17,13 @@
   const model = $derived(dashboard.sprints);
   const own = $derived(scopeTasks(dashboard.history, model, dashboard.sprintSelection));
   const counts = $derived(countKinds(own));
-  const percent = $derived(counts.total ? Math.round((counts.done / counts.total) * 100) : 0);
-  const summary = $derived(
-    scope.kind === 'sprint'
-      ? sprintSummary(model, dashboard.history, scope.sprint, dashboard.vocab, dashboard.loadedAt)
-      : undefined,
+  // One sprint: atm's figures (ATM-720), the overview card's too; other scopes count their own tasks
+  const summary = $derived(scope.kind === 'sprint' ? scope.sprint : undefined);
+  const percent = $derived(
+    summary ? summary.percent : counts.total ? Math.round((counts.done / counts.total) * 100) : 0,
   );
-  const open = (tasks: typeof dashboard.tasks) =>
-    tasks.filter((t) => !['done', 'skipped'].includes(taskKind(t) ?? '')).length;
-  const backlogOpen = $derived(open(backlog(model, dashboard.tasks)));
+  // The backlog as `atm sprint list` counts it: its unfinished tasks
+  const backlogOpen = $derived(model.backlog);
   const sizeOf = (sprint: Sprint) => sprintTasks(model, dashboard.tasks, sprint.id).length;
   // The active sprint with nothing left to start: all done, or the rest waiting on a review or a decision
   const sprintEnded = $derived(
@@ -58,13 +54,7 @@
   ]);
   const them = $derived(dashboard.leftovers.length === 1 ? 'it' : 'them');
   // Releases already shipped: a closed sprint's says "released" (T-323)
-  const releasedIds = $derived(
-    new Set(
-      readReleases(dashboard.meta)
-        .filter((r) => r.state !== 'planned')
-        .map((r) => r.id),
-    ),
-  );
+  const releasedIds = $derived(new Set(dashboard.releases.filter((r) => r.state !== 'planned').map((r) => r.id)));
   const dateOf = (iso: string | undefined) =>
     iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : undefined;
 
@@ -275,9 +265,12 @@
               >More work? Pull from the backlog ({tasks(backlogOpen)}) with <code>/atm-plan-sprint</code></span
             >{/if}
         {:else}
-          {#if summary.dueIn !== undefined}
-            <span class="sprint-due" class:overdue={summary.dueIn < 0} title="Due {s.due}" data-days={summary.dueIn}
-              >{dueText(summary.dueIn)}</span
+          {#if summary.days_left !== undefined}
+            <span
+              class="sprint-due"
+              class:overdue={summary.days_left < 0}
+              title="Due {s.due}"
+              data-days={summary.days_left}>{dueText(summary.days_left)}</span
             >
           {/if}
           {#if s.release}<span class="sprint-release">release {s.release}</span>{/if}
@@ -295,10 +288,10 @@
           {#if summary.carried}<span class="sprint-carried" title="Carried over from an earlier sprint"
               >{summary.carried} carried in</span
             >{/if}
-          {#if summary.reviewPending}<span
+          {#if summary.review_pending}<span
               class="sprint-review-pending"
               title="Done, waiting for the end-of-sprint review with you (/atm-close-sprint)"
-              >{summary.reviewPending} waiting for the sprint review</span
+              >{summary.review_pending} waiting for the sprint review</span
             >{/if}
         {/if}
       {:else if scope.kind === 'backlog'}

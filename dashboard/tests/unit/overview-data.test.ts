@@ -15,7 +15,8 @@ import {
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
 import { asTaskViews, v1Tasks } from './api.helpers';
-import { vocabulary, withKinds } from './views';
+import { fromServedSprints, NO_SPRINTS } from '../../src/lib/sprints';
+import { sprint, vocabulary, withKinds } from './views';
 
 const NOW = Date.parse('2026-01-02T12:00:00Z');
 const project = (id: string, missing = false): ProjectEntry => ({
@@ -41,7 +42,7 @@ const source = (
   tasks: Task[],
   claims = new Map<string, Claim>(),
   vocab: Vocabulary = DEFAULT_VOCABULARY,
-): ProjectSource => ({ project: p, tasks: withKinds(tasks, vocab), claims, vocab });
+): ProjectSource => ({ project: p, tasks: withKinds(tasks, vocab), claims, vocab, sprints: NO_SPRINTS, releases: [] });
 
 describe('combinedTimeline', () => {
   it('one lane per agent across projects; bars name their project and are keyed by it', () => {
@@ -138,26 +139,48 @@ describe('mergedTasks (T-328)', () => {
 });
 
 describe('projectProgress and weeklyVelocity (T-329)', () => {
-  it('a project’s done of total (skipped left out), its active sprint and its open releases', () => {
-    const meta = {
-      sprints: [
-        { id: 'One', state: 'closed' },
-        { id: 'Two', state: 'active', goal: 'Ship it', due: '2026-01-05', release: '1.0' },
-      ],
-      releases: [
-        { id: '0.9', state: 'released' },
-        { id: '1.0', state: 'planned', name: 'First' },
-      ],
-    } as never;
+  it('a project’s done of total (skipped left out), its active sprint and its open releases, as atm counts them', () => {
     const tasks = [
-      { ...task('T-1', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z'), sprint: 'One' },
-      { ...task('T-2', 'Ada', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'), sprint: 'Two' },
-      { ...task('T-3', 'Ada', '2026-01-02T10:00:00Z', null), sprint: 'Two' },
-      { id: 'T-4', name: 'Dropped', type: 'feature', status: 'skipped', sprint: 'Two' } as Task,
+      task('T-1', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z'),
+      task('T-2', 'Ada', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'),
+      task('T-3', 'Ada', '2026-01-02T10:00:00Z', null),
+      { id: 'T-4', name: 'Dropped', type: 'feature', status: 'skipped' } as Task,
     ];
-    const row = projectProgress({ ...source(project('a'), tasks), meta }, NOW);
+    // atm's sprints and releases, with their figures (ATM-720)
+    const sprints = fromServedSprints({
+      sprints: [
+        sprint({ id: 'One', state: 'closed' }),
+        sprint({ id: 'Two', state: 'active', goal: 'Ship it', done: 1, total: 2, percent: 50, days_left: 3 }),
+      ],
+      backlog: 0,
+      from_phases: false,
+    });
+    const releases = [
+      {
+        id: '0.9',
+        state: 'released' as const,
+        sprints: [],
+        total: 0,
+        done: 0,
+        in_pr: 0,
+        merged: 0,
+        notes: { groups: [], open: [] },
+      },
+      {
+        id: '1.0',
+        name: 'First',
+        state: 'planned' as const,
+        sprints: ['Two'],
+        total: 2,
+        done: 1,
+        in_pr: 0,
+        merged: 0,
+        notes: { groups: [], open: [] },
+      },
+    ];
+    const row = projectProgress({ ...source(project('a'), tasks), sprints, releases });
     expect([row.done, row.total]).toEqual([2, 3]);
-    expect(row.sprint && [row.sprint.sprint.id, row.sprint.done, row.sprint.total, row.sprint.dueIn]).toEqual([
+    expect(row.sprint && [row.sprint.id, row.sprint.done, row.sprint.total, row.sprint.days_left]).toEqual([
       'Two',
       1,
       2,
@@ -165,7 +188,7 @@ describe('projectProgress and weeklyVelocity (T-329)', () => {
     ]);
     expect(row.releases).toEqual([{ id: '1.0', name: 'First', done: 1, total: 2 }]);
     // Without sprints or releases
-    const plain = projectProgress(source(project('b'), tasks.slice(0, 1)), NOW);
+    const plain = projectProgress(source(project('b'), tasks.slice(0, 1)));
     expect([plain.sprint, plain.releases]).toEqual([undefined, []]);
   });
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { actors, vocabCounts } from '../../src/lib/projectinfo';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
-import { vocabulary, withKinds } from './views';
+import { fromServedSprints } from '../../src/lib/sprints';
+import { sprint, vocabulary, withKinds } from './views';
 
 const T0 = Date.parse('2026-05-01T08:00:00Z');
 const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
@@ -80,22 +80,19 @@ describe('vocabCounts', () => {
   ];
   const v = vocabCounts(tasks, vocab);
 
-  it('sprints (T-323): the active, the planned in order, the closed most recent first, with counts; the backlog', () => {
-    const meta = {
+  it('sprints (T-323): the active, the planned in order, the closed most recent first, with atm’s counts; its backlog', () => {
+    // atm's sprints and backlog (ATM-720): a sprint's tasks but the skipped, the backlog's unfinished tasks
+    const model = fromServedSprints({
       sprints: [
-        { id: 'One', state: 'closed' },
-        { id: 'Two', state: 'closed' },
-        { id: 'Three', state: 'active' },
-        { id: 'Four', state: 'planned' },
+        sprint({ id: 'One', state: 'closed', total: 1 }),
+        sprint({ id: 'Two', state: 'closed' }),
+        sprint({ id: 'Three', state: 'active', total: 2 }),
+        sprint({ id: 'Four' }),
       ],
-    };
-    const inSprints = [
-      task('T-1', { sprint: 'One', status: 'done' }),
-      task('T-2', { sprint: 'Three' }),
-      task('T-3', { sprint: 'Three' }),
-      task('T-4', {}),
-    ];
-    const counted = vocabCounts(inSprints, DEFAULT_VOCABULARY, sprintModel(meta, inSprints, DEFAULT_VOCABULARY));
+      backlog: 1,
+      from_phases: false,
+    });
+    const counted = vocabCounts([], DEFAULT_VOCABULARY, model);
     expect(counted.sprints).toEqual([
       { id: 'Three', state: 'active', count: 2 },
       { id: 'Four', state: 'planned', count: 0 },
@@ -103,9 +100,9 @@ describe('vocabCounts', () => {
       { id: 'One', state: 'closed', count: 1 },
     ]);
     expect(counted.backlog).toBe(1);
-    // Without sprints: none, everything in the backlog
+    // Without sprints: none
     expect(v.sprints).toEqual([]);
-    expect(v.backlog).toBe(5);
+    expect(v.backlog).toBe(0);
   });
 
   it("labels: meta.labels' order and text (unused ones too), then the others by name", () => {

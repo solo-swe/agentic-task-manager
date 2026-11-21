@@ -8,8 +8,8 @@ import { loadClaims, type Claim, type ClaimMap } from './claims';
 import { median } from './insights';
 import { browserFetch, type Fetch } from './api/http';
 import { loadArchive, loadTasks, type ProjectEntry, type Validators } from './load';
-import { releaseSummaries, splitReleases } from './releases';
-import { activeSprint, sprintModel, sprintSummary, type SprintSummary } from './sprints';
+import { splitReleases, type Release } from './releases';
+import { activeSprint, type Sprint, type SprintModel } from './sprints';
 import type { Task, TasksFile } from './types';
 import { taskKind, type Vocabulary } from './vocab';
 
@@ -20,7 +20,10 @@ export interface ProjectSource {
   tasks: Task[];
   claims: ClaimMap;
   vocab: Vocabulary;
-  /** tasks.json's meta: its sprints and releases (T-329) */
+  /** Its sprints and releases as atm serves them with the tasks (T-329, ATM-720) */
+  sprints: SprintModel;
+  releases: Release[];
+  /** tasks.json's meta, for its ID (a reference to another project's task names it by it, ADR-007 §7) */
   meta?: TasksFile['meta'];
   /** The two files as last loaded, and their validators, for the next conditional load */
   live?: Task[];
@@ -61,14 +64,15 @@ export async function loadProjectSources(
           if (result.unchanged && archive.unchanged) return old ? { ...old, project, claims } : null;
           if (result.unchanged && !old) return null;
           const live = result.unchanged ? (old!.live ?? old!.tasks) : result.loaded.tasks;
-          const meta = result.unchanged ? old!.meta : result.loaded.meta;
           const archived = archive.unchanged ? (old?.archived ?? []) : archive.tasks;
           return {
             project,
             tasks: withArchive(live, archived),
             claims,
             vocab: result.unchanged ? old!.vocab : result.loaded.vocab,
-            meta,
+            sprints: result.unchanged ? old!.sprints : result.loaded.sprints,
+            releases: result.unchanged ? old!.releases : result.loaded.releases,
+            meta: result.unchanged ? old!.meta : result.loaded.meta,
             live,
             archived,
             validators: result.unchanged ? old!.validators : result.validators,
@@ -118,24 +122,23 @@ export interface ProjectProgress {
   /** Done-kind tasks, and every task but the skipped ones */
   done: number;
   total: number;
-  /** Its active sprint's figures, if one is active */
-  sprint?: SprintSummary;
-  /** Its releases still open, in its order */
+  /** Its active sprint, with atm's figures, if one is active */
+  sprint?: Sprint;
+  /** Its releases still open, in its order, with atm's figures */
   releases: { id: string; name?: string; done: number; total: number }[];
 }
 
-export function projectProgress({ project, tasks, vocab, meta }: ProjectSource, now: number): ProjectProgress {
+export function projectProgress({ project, tasks, sprints, releases }: ProjectSource): ProjectProgress {
   const kinds = tasks.map(taskKind);
-  const model = sprintModel(meta, tasks, vocab);
-  const active = activeSprint(model);
+  const active = activeSprint(sprints);
   return {
     project,
     done: kinds.filter((k) => k === 'done').length,
     total: kinds.filter((k) => k !== 'skipped').length,
-    ...(active ? { sprint: sprintSummary(model, tasks, active, vocab, now) } : {}),
-    releases: splitReleases(releaseSummaries(meta, tasks, model, vocab)).open.map((r) => ({
-      id: r.release.id,
-      ...(r.release.name ? { name: r.release.name } : {}),
+    ...(active ? { sprint: active } : {}),
+    releases: splitReleases(releases).open.map((r) => ({
+      id: r.id,
+      ...(r.name ? { name: r.name } : {}),
       done: r.done,
       total: r.total,
     })),

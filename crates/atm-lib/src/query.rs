@@ -350,6 +350,8 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
     };
     let mut lookup = crate::foreign::Lookup::default();
     let statuses = ReviewStatuses::of(project);
+    // The sprint each task is in, as the sprints served with the tasks count them (ATM-720): phases too, unmigrated
+    let sprints = crate::sprints::task_sprints(project)?;
     let mut views = Vec::new();
     for t in list_matching(project, filters)? {
         let kind = vocab.kind_of(t.get("status"));
@@ -365,6 +367,12 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         let mut derived = Map::new();
         if let Some(kind) = kind {
             derived.insert("kind".into(), json!(kind.as_str()));
+        }
+        if let Some(place) = id_of(t).and_then(|id| sprints.get(id)) {
+            derived.insert("sprint".into(), json!(place.sprint));
+            if place.carried > 0 {
+                derived.insert("carried".into(), json!(place.carried));
+            }
         }
         let is_ready = id_of(t).is_some_and(|id| ready.contains(id)) && problems.is_none();
         derived.insert("ready".into(), json!(is_ready));

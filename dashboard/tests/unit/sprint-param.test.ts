@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVE, BACKLOG } from '../../src/lib/filters';
 import { sprintParamOf, sprintParamValues, withSprintParam } from '../../src/lib/sprint-param';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
-import { withKinds } from './views';
+import { sprintModel, withKinds } from './views';
 import sprintsFile from '../fixtures/sprints.json';
 
 const file = sprintsFile as TasksFile;

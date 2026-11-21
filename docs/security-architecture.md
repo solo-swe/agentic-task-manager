@@ -1299,6 +1299,11 @@ land (I11, I13, I24, I25). Fields:
   the components, the workflow, the review mode and the phases' names. The dashboard reads it instead of parsing
   `meta`, and shows its labels as text, as it showed `meta`'s. A list a tolerant read can't use is its default here,
   and `problems` says why. No skill reads it, and no command reads a new path or URL.
+- **The tasks response gains `sprints` and `releases`, and each view `derived.sprint` and `derived.carried`**
+  (ATM-720): the sprints' and releases' stored fields, which `meta` in the same response carries already, with counts
+  and dates atm works out of the tasks. The release notes hold the tasks' names and outcome notes, text the dashboard
+  already showed, and show it as text. An unmigrated project's phases are read as sprints on an in-memory copy;
+  nothing is written. No skill reads them, and no command reads a new path or URL.
 
 ## 4. Keeping it current
 

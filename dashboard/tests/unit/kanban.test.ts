@@ -3,10 +3,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BACKLOG } from '../../src/lib/filters';
 import { buildBoard, buildLanes, readiness } from '../../src/lib/kanban';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
-import { vocabulary, withKinds } from './views';
+import { sprintModel, vocabulary, withKinds } from './views';
 import sprintsData from '../fixtures/sprints.json';
 import standard from '../fixtures/standard.json';
 

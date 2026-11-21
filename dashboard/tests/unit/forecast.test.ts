@@ -9,11 +9,10 @@ import {
   taskDurations,
   withWholeSprintEstimates,
 } from '../../src/lib/forecast';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
 import progress from '../fixtures/progress.json';
-import { progressTasks, taskWith, vocabulary, withKinds } from './views';
+import { progressTasks, sprintModel, taskWith, vocabulary, withKinds } from './views';
 
 // Expected numbers: tests/fixtures/progress.md; atm's answers for its tasks (ATM-717): views.ts
 const NOW = Date.parse('2026-04-06T12:00:00Z');

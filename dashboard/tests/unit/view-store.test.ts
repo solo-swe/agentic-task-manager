@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PREFS_KEY, setPref } from '../../src/lib/prefs';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
-import { withKinds } from './views';
+import { sprintModel, withKinds } from './views';
 import {
   clearView,
   defaultView,

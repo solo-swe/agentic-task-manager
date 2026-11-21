@@ -20112,7 +20112,7 @@
       "description": "Step 2 of [the plan](docs/dashboard-derived-state.md), group B.\n\n## Change\n- atm serves the vocabulary as it resolved it: statuses with kinds and labels, types, priorities in order with the default, labels, components, workflow, and its problems. It is a project route or part of the tasks response, with the matching app command.\n- The dashboard reads `derived.kind` instead of `kindOf` (about 40 calls), and atm's vocabulary instead of `resolveVocabulary`, `workflowOf` and `projectComponents`.\n- A broken vocabulary shows what atm serves, with atm's problems in the footer (decision 3).\n- `overview-data.ts` `mergedTasks` stops rewriting statuses: the charts read kinds.\n\n## Tests\n- The route test.\n- Unit tests on fixtures with atm's fields.\n- A vocabulary atm reports as broken shows its problems.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/vocab.ts",
@@ -20120,7 +20120,7 @@
         "crates/atm-api/src/routes/tasks.rs"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T20:52:07Z",
+      "updated_at": "2026-11-21T21:40:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20135,7 +20135,18 @@
       ],
       "number": 718,
       "started_at": "2026-11-21T20:52:07Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "09f38d082cd4101ff9cbc5ad81fda51c6badec93",
+      "completed_at": "2026-11-21T21:40:39Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-21T21:40:39Z",
+          "kind": "outcome",
+          "text": "atm serves the vocabulary it resolved with the tasks (atm-lib vocabulary.rs, ProjectVocabulary in the schema). The dashboard reads it and derived.kind via taskKind, never meta. resolveVocabulary, projectComponents, workflowOf and workflowType are gone, and mergedTasks keeps statuses. Left as is: priorityOf, outside this task. All suites green.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d11482de0b",
@@ -20189,7 +20200,7 @@
       "description": "Step 4 of [the plan](docs/dashboard-derived-state.md), group E.\n\n## atm\n- `…/sprints`: each sprint in atm's order, with:\n  - its state;\n  - done, total and percent (one rule: an empty sprint is the same everywhere);\n  - added, carried and sprint review pending;\n  - its due date and days left (one rule, the project's day);\n  - its close report;\n  - the backlog's size as `atm sprint list` counts it (unfinished only).\n- `…/releases`: each release with its sprints, counts by stage, and its notes from `release_notes`.\n- The matching app commands.\n\n## Dashboard\nDelete:\n- `sprintModel`, `readSprints`, `sprintsFromPhases`;\n- `sprintSummary`, `addedMidSprint`, `carriedCount`, `lastClosed`;\n- `velocity`'s fallback;\n- `daysUntil` and `endOfDay` as rules;\n- `vocabCounts`' sprints and backlog;\n- `readReleases`, `releaseSummaries`, `releaseNotes`.\n\n## Tests\n- atm-lib tables: an empty sprint, a sprint with skipped tasks, a task added mid-sprint, one carried, a due date today and yesterday.\n- The route tests.\n- The scope bar and the overview card show the same percent.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1fecd-5725-722d-8d45-22d03168db17"
       ],
@@ -20202,9 +20213,9 @@
         "dashboard/src/lib/projectinfo.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-21T21:40:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -20215,7 +20226,9 @@
       "related": [
         "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
       ],
-      "number": 720
+      "number": 720,
+      "started_at": "2026-11-21T21:40:44Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d3de5844fe",

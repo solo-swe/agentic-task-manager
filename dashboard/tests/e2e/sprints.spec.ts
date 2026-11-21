@@ -1,5 +1,14 @@
 import type { Page } from '@playwright/test';
-import { expect, filterButton, loadFixture, openDashboard, openFilters, test, type TasksData } from './helpers';
+import {
+  atmNowFor,
+  expect,
+  filterButton,
+  loadFixture,
+  openDashboard,
+  openFilters,
+  test,
+  type TasksData,
+} from './helpers';
 
 const sprintsOf = (data: TasksData) => data.meta!.sprints as { id: string; state: string }[];
 const cardIds = (page: Page) =>
@@ -11,6 +20,8 @@ const NOW = new Date('2026-04-09T12:00:00Z');
 test.describe('scope bar (T-323)', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(NOW);
+    // atm counts the days to a due date by its own clock (ATM-720): the same time
+    atmNowFor(NOW);
   });
 
   test('the board opens on the active sprint, marked ▶, above the Kanban, List and Graph, not on the other tabs', async ({
@@ -274,7 +285,9 @@ test.describe('scope bar (T-323)', () => {
   });
 
   test('an overdue sprint says so, in red', async ({ page, tasksServer }) => {
-    await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
+    const later = new Date('2026-04-14T12:00:00Z');
+    await page.clock.setFixedTime(later);
+    atmNowFor(later);
     await openDashboard(page, tasksServer, 'sprints');
     const due = page.locator('#scope-bar .sprint-due');
     await expect(due).toHaveText('2 days overdue');

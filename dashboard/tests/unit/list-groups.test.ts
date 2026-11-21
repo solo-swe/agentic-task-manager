@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { BACKLOG } from '../../src/lib/filters';
 import { groupList } from '../../src/lib/list-groups';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
-import { vocabulary, withKinds } from './views';
+import { sprintModel, vocabulary, withKinds } from './views';
 import sprintsFile from '../fixtures/sprints.json';
 
 // fixtures/sprints.json: Foundations closed (T-001), Ada Lovelace active (T-002–T-004), Alan Turing planned (none),

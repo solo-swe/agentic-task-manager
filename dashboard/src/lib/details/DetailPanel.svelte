@@ -3,7 +3,7 @@
   import { dashboard } from '../state.svelte';
   import { kindStyle, phaseColor, typeStyle } from '../theme';
   import { effectiveReview, REVIEW_STATE_LABELS } from '../review';
-  import { carriedCount, effectiveRelease } from '../sprints';
+  import { effectiveRelease } from '../sprints';
   import { RESOLUTION_LABELS, relationsOf, resolutionOf } from '../relations';
   import { kindOf, statusLabel, taskKind } from '../vocab';
   import { actorsLine, earlierAttempts } from '../actors';
@@ -70,7 +70,8 @@
   const sprint = $derived(task ? dashboard.sprints.sprintOf(task) : undefined);
   const release = $derived(task ? effectiveRelease(dashboard.sprints, task) : undefined);
   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
-  const carried = $derived(task && sprint ? carriedCount(task, sprint) : 0);
+  // How many sprints it was carried through, as atm counts it (ATM-720)
+  const carried = $derived(task?.derived?.carried ?? 0);
   const reviewMode = $derived(task ? effectiveReview(task) : 'none');
   // Its code reviews (ATM-585: `code_reviews`, oldest first): the one it waits on to open, as atm says it (ATM-717),
   // the others after it, latest first, in the project shown

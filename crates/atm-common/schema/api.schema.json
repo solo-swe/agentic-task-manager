@@ -13,6 +13,12 @@
       "description": "How big the project's working task data is (tasks.json), for the archive notice"
     },
     "vocabulary": { "$ref": "#/$defs/ProjectVocabulary" },
+    "sprints": { "$ref": "#/$defs/ServedSprints" },
+    "releases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ServedRelease" },
+      "description": "Every release in the project's order, archived ones too, with its figures (ATM-720)"
+    },
     "tasks": { "type": "array", "items": { "$ref": "#/$defs/TaskView" } },
     "problems": {
       "type": "array",
@@ -70,6 +76,106 @@
         "id": { "type": "string" },
         "label": { "type": "string" },
         "kind": { "enum": ["todo", "active", "review", "blocked", "done", "skipped"] }
+      }
+    },
+    "ServedSprints": {
+      "type": "object",
+      "description": "The project's sprints as atm counts them (ATM-720): each in its order, closed ones too, and the backlog",
+      "required": ["sprints", "backlog", "from_phases"],
+      "properties": {
+        "sprints": { "type": "array", "items": { "$ref": "#/$defs/ServedSprint" } },
+        "backlog": { "type": "integer", "description": "Unfinished tasks in no sprint, as `atm sprint list` counts them" },
+        "from_phases": {
+          "type": "boolean",
+          "description": "An unmigrated project's phases, read as the sprints `atm db migrate` would make: they can't be changed until it runs"
+        }
+      }
+    },
+    "ServedSprint": {
+      "type": "object",
+      "required": ["id", "state", "done", "total", "percent", "added", "carried", "review_pending"],
+      "properties": {
+        "id": { "type": "string", "description": "Its name" },
+        "state": { "enum": ["planned", "active", "closed"] },
+        "goal": { "type": "string" },
+        "release": { "type": "string" },
+        "start": { "type": "string", "description": "ISO 8601 UTC, when it became active" },
+        "end": { "type": "string", "description": "ISO 8601 UTC, when it closed" },
+        "due": { "type": "string", "description": "The planned end, YYYY-MM-DD" },
+        "report": { "$ref": "#/$defs/ServedSprintReport" },
+        "done": { "type": "integer" },
+        "total": { "type": "integer", "description": "Its tasks but the skipped ones" },
+        "percent": { "type": "integer", "description": "Done of total; 100 with none to count" },
+        "added": { "type": "integer", "description": "Pulled in after it started" },
+        "carried": { "type": "integer", "description": "In another sprint before this one" },
+        "review_pending": { "type": "integer", "description": "Done batch tasks waiting for the end-of-sprint review" },
+        "days_left": {
+          "type": "integer",
+          "description": "Days to its due date by the project's day (0 on it, negative overdue), while it isn't closed"
+        },
+        "due_end": { "type": "string", "description": "ISO 8601 UTC: when its due date has passed, while it isn't closed" }
+      }
+    },
+    "ServedSprintReport": {
+      "type": "object",
+      "description": "What a closed sprint did, as its close recorded it",
+      "properties": {
+        "done": { "type": "array", "items": { "type": "string" } },
+        "carried": { "type": "array", "items": { "type": "string" } },
+        "added": { "type": "array", "items": { "type": "string" } },
+        "to": { "type": "string" }
+      }
+    },
+    "ServedRelease": {
+      "type": "object",
+      "required": ["id", "state", "sprints", "total", "done", "in_pr", "merged", "notes"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "state": { "enum": ["planned", "released", "archived"] },
+        "target": { "type": "string" },
+        "pr": { "$ref": "#/$defs/ReleasePr" },
+        "released_at": { "type": "string" },
+        "sprints": { "type": "array", "items": { "type": "string" }, "description": "The sprints that deliver to it" },
+        "total": { "type": "integer", "description": "Its tasks (own release, or their sprint's) but the skipped" },
+        "done": { "type": "integer" },
+        "in_pr": { "type": "integer" },
+        "merged": { "type": "integer" },
+        "notes": { "$ref": "#/$defs/ReleaseNotes" }
+      }
+    },
+    "ReleasePr": {
+      "type": "object",
+      "required": ["number"],
+      "properties": { "number": { "type": "integer" }, "url": { "type": "string" } }
+    },
+    "ReleaseNotes": {
+      "type": "object",
+      "description": "The notes as `atm release notes` drafts them: the done tasks by type, then those not done yet",
+      "required": ["groups", "open"],
+      "properties": {
+        "groups": { "type": "array", "items": { "$ref": "#/$defs/ReleaseNotesGroup" } },
+        "open": { "type": "array", "items": { "$ref": "#/$defs/ReleaseNotesTask" } }
+      }
+    },
+    "ReleaseNotesGroup": {
+      "type": "object",
+      "required": ["type", "label", "tasks"],
+      "properties": {
+        "type": { "type": "string" },
+        "label": { "type": "string" },
+        "tasks": { "type": "array", "items": { "$ref": "#/$defs/ReleaseNotesTask" } }
+      }
+    },
+    "ReleaseNotesTask": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "key": { "type": "string" },
+        "name": { "type": "string" },
+        "outcome": { "type": ["string", "null"] },
+        "status": { "type": "string" }
       }
     },
     "ServedPhase": {
@@ -154,6 +260,14 @@
           "description": "Its review mode: its own, else its component's, else the project's"
         },
         "effective_release": { "type": "string", "description": "Its release: its own, else its sprint's" },
+        "sprint": {
+          "type": "string",
+          "description": "The sprint it is in, by the sprint's name as the project writes it (ATM-720); an unmigrated project's phase's sprint. Absent in the backlog"
+        },
+        "carried": {
+          "type": "integer",
+          "description": "How many sprints it was carried through before its sprint (SR-4.5); absent when none"
+        },
         "stage": { "type": "string", "description": "A done task's stage: done, in_pr or merged (DM-4.3)" },
         "archived": { "type": "boolean", "description": "From the archive" },
         "problems": {
@@ -359,7 +473,9 @@
         "release": { "type": ["string", "null"] },
         "done": { "type": "integer" },
         "total": { "type": "integer", "description": "Its tasks but the skipped" },
-        "percent": { "type": "integer" }
+        "percent": { "type": "integer" },
+        "days_left": { "type": "integer", "description": "Days to its due date by the project's day, while open (ATM-720)" },
+        "due_end": { "type": "string", "description": "When its due date has passed, while open" }
       }
     },
     "ActiveSprint": {
@@ -374,7 +490,9 @@
         "done": { "type": "integer" },
         "total": { "type": "integer", "description": "Its tasks but the skipped" },
         "percent": { "type": "integer" },
-        "goal": { "type": ["string", "null"] }
+        "goal": { "type": ["string", "null"] },
+        "days_left": { "type": "integer", "description": "Days to its due date by the project's day (ATM-720)" },
+        "due_end": { "type": "string", "description": "When its due date has passed" }
       }
     },
     "WorkingClaim": {

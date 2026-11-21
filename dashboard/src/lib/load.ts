@@ -12,7 +12,9 @@ import {
   type Validators,
 } from './api/http';
 import { DEFAULT_WORKSPACE } from './api/workspace';
-import type { ArchiveHint, ProjectBoard, ProjectSummary, ProjectVocabulary } from '$generated/types';
+import type { ArchiveHint, ProjectBoard, ProjectSummary, ProjectVocabulary, ServedSprints } from '$generated/types';
+import type { Release } from './releases';
+import { fromServedSprints, NO_SPRINTS, type SprintModel } from './sprints';
 import type { Task, TasksFile } from './types';
 import { DEFAULT_VOCABULARY, fromServed, type Vocabulary } from './vocab';
 
@@ -54,6 +56,16 @@ export interface LoadedTasks {
   archiveHint: ArchiveHint | null;
   /** The project's vocabulary as atm resolved it (ATM-718) */
   vocab: Vocabulary;
+  /** Its sprints and releases as atm counts them (ATM-720) */
+  sprints: SprintModel;
+  releases: Release[];
+}
+
+/** What atm serves beside the tasks, for parseTasksFile */
+export interface Served {
+  vocab?: Vocabulary;
+  sprints?: SprintModel;
+  releases?: Release[];
 }
 
 export function parseTasksFile(
@@ -61,7 +73,7 @@ export function parseTasksFile(
   bytes = 0,
   problems: string[] = [],
   archiveHint: ArchiveHint | null = null,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
+  served: Served = {},
 ): LoadedTasks {
   const tasks = data.tasks ?? [];
   return {
@@ -72,7 +84,9 @@ export function parseTasksFile(
     bytes,
     problems,
     archiveHint,
-    vocab,
+    vocab: served.vocab ?? DEFAULT_VOCABULARY,
+    sprints: served.sprints ?? NO_SPRINTS,
+    releases: served.releases ?? [],
   };
 }
 
@@ -209,6 +223,8 @@ export type LoadResult = { unchanged: true } | { unchanged: false; loaded: Loade
 interface TaskViewList {
   meta?: TasksFile['meta'];
   vocabulary?: ProjectVocabulary;
+  sprints?: ServedSprints;
+  releases?: Release[];
   bytes?: number;
   tasks?: { task: Task; derived?: Task['derived'] }[];
   problems?: unknown;
@@ -243,7 +259,11 @@ export async function loadTasks(
       typeof list.bytes === 'number' ? list.bytes : file.text.length,
       problems,
       isHint(list.archive_hint) ? list.archive_hint : null,
-      fromServed(list.vocabulary),
+      {
+        vocab: fromServed(list.vocabulary),
+        sprints: fromServedSprints(list.sprints),
+        releases: Array.isArray(list.releases) ? list.releases : [],
+      },
     ),
     validators: file.validators,
   };

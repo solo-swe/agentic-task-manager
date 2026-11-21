@@ -245,7 +245,10 @@ describe('loadTasks', () => {
     if (result.unchanged) return;
     expect(result.loaded.tasks).toHaveLength(12);
     // The task as stored, with what atm derives for it beside its own fields (T-366)
-    expect(result.loaded.tasks[0]).toEqual({ ...standard.tasks[0], derived: {} });
+    expect(result.loaded.tasks[0]).toEqual({ ...standard.tasks[0], derived: { sprint: 'Phase 0' } });
+    // The sprints atm serves with them (ATM-720): here the fixture's phases
+    expect(result.loaded.sprints.sprints.map((s) => s.id)).toEqual(['Phase 0', 'Phase 1', 'Phase 2']);
+    expect(result.loaded.sprints.sprintOf(result.loaded.tasks[0])).toBe('Phase 0');
     expect(result.loaded.projectName).toBe('Standard Project'); // its meta, in the same snapshot
     expect(result.validators).toEqual({ etag: '"abc"', lastModified: 'Sat, 24 Oct 2026 10:00:00 GMT' });
   });

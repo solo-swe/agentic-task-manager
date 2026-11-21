@@ -14,6 +14,10 @@ use serde_json::{Map, Value, json};
 use crate::edit::open_sprint;
 use crate::project::Project;
 
+mod views;
+pub(crate) use views::due_fields;
+pub use views::{TaskSprint, sprint_views, task_sprints};
+
 /// A refusal of what was asked (exit code 2).
 fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
