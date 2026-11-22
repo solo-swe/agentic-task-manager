@@ -281,6 +281,17 @@ function withAtmAnswers(reference: string, page: ReviewPageFake): ReviewPageFake
   };
 }
 
+/** A reviews list with atm's `ended` on each entry (ATM-714), as the fixture plays atm: approved or closed, unless the
+ * entry gives its own */
+function withEnded(list: unknown): unknown {
+  const reviews = (list as { reviews?: { review: { status: string }; ended?: boolean }[] } | null)?.reviews;
+  if (!Array.isArray(reviews)) return list;
+  return {
+    ...(list as object),
+    reviews: reviews.map((e) => ({ ended: ['approved', 'closed'].includes(e.review.status), ...e })),
+  };
+}
+
 /** A channel's ID in an app command's arguments: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its
  * `id`) as Playwright passes it */
 function channelId(channel: unknown): number {
@@ -365,14 +376,14 @@ export class TasksServer {
 
   /** Serve the reviews list (`GET …/reviews`) */
   setReviews(list: unknown) {
-    this.reviewList = list;
+    this.reviewList = withEnded(list);
     return this;
   }
 
   /** Another project's reviews list (ATM-575, the overview's Reviews over every project); one without is a 404 */
   private projectReviewLists = new Map<string, unknown>();
   setProjectReviews(project: string, list: unknown) {
-    this.projectReviewLists.set(project, list);
+    this.projectReviewLists.set(project, withEnded(list));
     return this;
   }
 

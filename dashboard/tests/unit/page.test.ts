@@ -34,8 +34,10 @@ describe('the reviews list in groups', () => {
   const entry = (
     ref: string,
     status: ReviewStatus,
-    more: { needs_you?: boolean; open?: number; updated?: string; since?: string | null } = {},
+    more: { needs_you?: boolean; open?: number; updated?: string; since?: string | null; ended?: boolean } = {},
   ): ReviewEntry => ({
+    // atm's word (ATM-714), as its list gives it for the status unless a test says otherwise
+    ended: more.ended ?? (status === 'approved' || status === 'closed'),
     review: {
       id: ref,
       reference: ref,
@@ -113,6 +115,14 @@ describe('the reviews list in groups', () => {
     ).toEqual([
       ['recent', ['CR-1']],
       ['older', ['CR-2']],
+    ]);
+  });
+
+  // ATM-714: decided is atm's word, not the page's reading of the status
+  it('decided as atm says it: a status atm calls ended is decided, one it doesn’t is waiting on others', () => {
+    expect(shape([entry('CR-1', 'approved', { ended: false }), entry('CR-2', 'waiting', { ended: true })])).toEqual([
+      ['others', ['CR-1']],
+      ['recent', ['CR-2']],
     ]);
   });
 

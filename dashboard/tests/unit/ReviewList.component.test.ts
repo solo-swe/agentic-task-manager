@@ -29,6 +29,8 @@ const entry = (
   chains: 2,
   open: 1,
   needs_you: false,
+  // atm's word (ATM-714), as its list gives it
+  ended: status === 'approved' || status === 'closed',
   ...extra,
 });
 

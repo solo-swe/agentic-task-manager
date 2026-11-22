@@ -19613,14 +19613,14 @@
       "description": "A full `pnpm test` run (ATM-676, 2026-11-21) passed every test but failed on one unhandled rejection: `ReferenceError: document is not defined` in `@compmd/sandbox`'s `settling.js` (`stylesheetsLoaded(document)`), from `tests/unit/HelpDialog.component.test.ts`. The file passes alone, and the earlier full run that day was clean, so it shows only under load.\n\n## The cause, as far as read\n- `closes with the close button, Escape and the backdrop` opens Help (a real CompMD render), then closes it after `settled()`.\n- The sandbox's `Settling` loop runs on after the view is destroyed, and when the file ends first, jsdom is gone.\n- In jsdom, settling never finishes anyway: `document.fonts` is missing. So waiting for `data-compmd=\"ready\"` doesn't help; that fires on `rendered`, before settling.\n\n## Change\nFind the right end for it:\n- whether `view.destroy()` should stop the settling (CompMD's: report it upstream, from its published package's behaviour);\n- or the test helpers make the sandbox's settling end in jsdom: a `document.fonts` stub in the unit tests' setup, and waiting for the view's `settled` before a component test ends.\n\nNever just rerun the suite or silence the error.\n\n## Tests\nThe full unit run under load, several times, with no unhandled error.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/tests/unit/HelpDialog.component.test.ts",
         "dashboard/tests/unit/compmd.helpers.ts"
       ],
       "created_at": "2026-11-20T22:26:04Z",
-      "updated_at": "2026-11-22T20:35:22Z",
+      "updated_at": "2026-11-22T20:40:01Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19633,7 +19633,24 @@
       "number": 709,
       "review": "async",
       "started_at": "2026-11-22T20:35:22Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "10a1e634ce2413a36a5d4f31adb28305bff863ea",
+      "code_reviews": [
+        {
+          "id": "01a204fc-b912-7488-9ab8-d88ffdc1a598",
+          "ref": "CR-120"
+        }
+      ],
+      "review_requested_at": "2026-11-22T20:40:01Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-22T20:40:01Z",
+          "kind": "review",
+          "text": "CR-120: Unit tests: every file waits CompMD’s settling out before jsdom goes",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1fb32-2d87-77ef-a96b-3882d16be1bc",
@@ -20064,7 +20081,7 @@
       "description": "Part 4 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §5.2, §6.2, §7 step 3).\n\n## Change\n- The review page shows its buttons from `can` only: its own `approveBlocked` and `sentBack` fallbacks go, and the e2e tests' stand-in server sends `can`.\n- `REWORK_STATES` and the open-status lists the dashboard keeps are replaced by what the server answers, or by the one generated list.\n\n## Tests\nThe existing component and e2e tests kept passing, with the stand-in's `can`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1fe3a-d2ba-736d-80e3-4b81a73b4404"
       ],
@@ -20074,7 +20091,7 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-22T16:21:27Z",
+      "updated_at": "2026-11-22T20:40:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20088,7 +20105,9 @@
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
       "number": 714,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-22T20:40:01Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b843b52bc96",

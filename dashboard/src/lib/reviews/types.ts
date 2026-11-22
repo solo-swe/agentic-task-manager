@@ -48,9 +48,6 @@ export type ReviewStatus = 'draft' | 'waiting' | 'live' | 'changes_requested' | 
 /** A status filter: one status, or `open`, every review not decided yet (draft, waiting, live, sent back) */
 export type StatusFilter = ReviewStatus | 'open';
 
-/** The statuses of an open review, one not decided yet (as atm-review's `Status::OPEN`) */
-export const OPEN_STATUSES: readonly ReviewStatus[] = ['draft', 'waiting', 'live', 'changes_requested'];
-
 /** A review's header (`review.md`'s): what lists and searches need */
 export interface ReviewHeader {
   id: string;
@@ -77,6 +74,8 @@ export interface ReviewEntry {
   waiting?: 'review' | 'answered' | null;
   /** When it began waiting on its reviewers, its latest round's time (ATM-610). Optional, for an older atm's lists */
   waiting_since?: string | null;
+  /** Decided: approved or closed, as atm says it (ATM-714) */
+  ended: boolean;
   /** The project it is in, on a list of several projects' reviews (ATM-575, the overview's Reviews); the page's own */
   project?: { id: string; name: string };
 }

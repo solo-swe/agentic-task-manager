@@ -39,7 +39,8 @@ export function groupReviews(entries: ReviewEntry[], now: number): ReviewGroup[]
   const into = (id: ReviewGroup['id'], entry: ReviewEntry) => groups.find((g) => g.id === id)!.entries.push(entry);
   for (const entry of entries) {
     const status = entry.review.status;
-    const decided = status === 'approved' || status === 'closed';
+    // Decided, as atm says it (ATM-714)
+    const decided = entry.ended;
     if (entry.needs_you && (status === 'waiting' || status === 'live')) into('waiting', entry);
     else if (entry.open > 0) into('commented', entry);
     else if (status === 'changes_requested') into('sent-back', entry);

@@ -70,6 +70,23 @@ fn a_projects_summary_counts_the_reviews_waiting_on_the_user_once() {
     assert_eq!(summary(&hakan)["needs_you_reviews"][0]["why"], "answered");
 }
 
+/// ATM-714: the list says whether each review is decided (approved or closed), atm's rule the dashboard groups by
+#[test]
+fn the_list_says_whether_each_review_has_ended() {
+    let dir = dir();
+    let mut project = project(&dir.0, "claude:1");
+    waiting(&mut project, &["T-1"]).unwrap();
+    let ended = |project: &atm_lib::Project| {
+        atm_lib::review_pages::list_reviews(project, &atm_lib::review_pages::ReviewQuery::default())
+            .unwrap()["reviews"][0]["ended"]
+            .clone()
+    };
+    assert_eq!(ended(&project), json!(false));
+    let mut hakan = reopen(&dir.0, "Hakan");
+    atm_lib::reviews::close(&mut hakan, &ReviewRef("CR-1".into()), "Not this.", false).unwrap();
+    assert_eq!(ended(&hakan), json!(true));
+}
+
 /// ATM-610: the list says since when each review waits on its reviewers, its latest round's time
 #[test]
 fn the_list_says_since_when_each_review_waits() {

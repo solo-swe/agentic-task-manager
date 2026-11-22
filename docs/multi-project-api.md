@@ -322,9 +322,10 @@ old parameters from its hash and moves to the new address.
 - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
-  needs_you, waiting, waiting_since}], unreadable: [{folder, reference, problem}], you}`. `waiting_since` (ATM-610) is
-  its latest round's time, when it began waiting on its reviewers: the unfiltered list groups the reviews (what waits
-  for the user first, the longest waiting on top, saying for how long). `unreadable` (ATM-617) lists the project's
+  needs_you, waiting, waiting_since, ended}], unreadable: [{folder, reference, problem}], you}`. `waiting_since`
+  (ATM-610) is its latest round's time, when it began waiting on its reviewers: the unfiltered list groups the reviews
+  (what waits for the user first, the longest waiting on top, saying for how long). `ended` (ATM-714) is whether it is
+  decided, approved or closed: the groups go by it, not by a list of statuses of the dashboard's own. `unreadable` (ATM-617) lists the project's
   review folders atm can't read (a status a newer atm wrote, a broken header), whatever the query: the Reviews tab
   shows each as a row saying why. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
   the status waiting on the reviewers (`open` before 0.41.0). A review needs the user when it is waiting or live with

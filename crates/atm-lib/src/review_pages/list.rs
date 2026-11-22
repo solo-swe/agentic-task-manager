@@ -123,6 +123,8 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
             "waiting": waiting_for(&review, &me),
             // When it began waiting on its reviewers: its latest round (ATM-610, the list's "waited 3 days")
             "waiting_since": review.rounds.last().map(|r| r.at.clone()),
+            // Decided, approved or closed (ATM-714): atm's rule, the list's groups read it instead of their own copy
+            "ended": review.header.status.ended(),
         });
         listed.push((review.header.updated.clone(), entry));
     }
