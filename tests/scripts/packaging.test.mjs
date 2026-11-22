@@ -52,6 +52,53 @@ describe('packaging', () => {
     }
   });
 
+  // ATM-678 (audit A12): the version and the checksums go into Ruby as they are, so anything but MAJOR.MINOR.PATCH and
+  // 64 hex digits is refused, before anything is printed
+  test('a version that isn’t MAJOR.MINOR.PATCH, or a checksum that isn’t a SHA-256, stops the formula and the cask', () => {
+    const dir = tempDir('atm-checked-');
+    try {
+      const sums = path.join(dir, 'SHA256SUMS');
+      const listed = (version, sum) =>
+        [...TARGETS.map((t) => `atm-${version}-${t}.tar.gz`), `atm-app-${version}-universal.dmg`]
+          .map((file) => `${sum}  ${file}`)
+          .join('\n') + '\n';
+      const good = 'a'.repeat(64);
+      for (const version of [
+        '1.2',
+        '1.2.3.4',
+        'v1.2.3',
+        '1.2.3-rc1',
+        '1..3',
+        '.1.2',
+        '1.2.',
+        '1.2.3"; system "x',
+        '',
+      ]) {
+        fs.writeFileSync(sums, listed(version, good));
+        for (const name of ['homebrew-formula.sh', 'homebrew-cask.sh']) {
+          const r = run(name, [version, sums]);
+          assert.notEqual(r.status, 0, `${name} ${version}`);
+          assert.equal(r.stdout, '', `${name} ${version}: nothing printed`);
+        }
+      }
+      for (const sum of ['A'.repeat(64), 'a'.repeat(63), 'a'.repeat(65), `${'a'.repeat(62)}"x`]) {
+        fs.writeFileSync(sums, listed('1.2.3', sum));
+        for (const name of ['homebrew-formula.sh', 'homebrew-cask.sh']) {
+          const r = run(name, ['1.2.3', sums]);
+          assert.notEqual(r.status, 0, `${name} ${sum}`);
+          assert.match(r.stderr, /isn't a SHA-256/, `${name} ${sum}`);
+          assert.equal(r.stdout, '', `${name} ${sum}: nothing printed`);
+        }
+      }
+      fs.writeFileSync(sums, listed('10.20.30', good));
+      for (const name of ['homebrew-formula.sh', 'homebrew-cask.sh']) {
+        assert.equal(run(name, ['10.20.30', sums]).status, 0, name);
+      }
+    } finally {
+      removeDir(dir);
+    }
+  });
+
   // T-460: the app's universal DMG, its own atm on PATH, one or the other with the formula
   test('the Homebrew cask has the universal DMG with its checksum, puts the app’s atm on PATH and says to remove the formula', () => {
     const dir = tempDir('atm-cask-');

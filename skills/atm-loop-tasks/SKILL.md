@@ -172,8 +172,8 @@ while true:
          - 'y' → `atm task state $TASK_ID in_progress`; if that fails (another agent was faster), continue with the next iteration
        - Exit code 3 means the selection has nothing ready; "reason" says why: finished (everything in it is
          done), the rest waiting (on dependencies, a review, a decision, the user), or empty. Relay the reason.
-         - The sprint is finished and --continue is set: take the next planned sprint after it (`atm sprints
-           --json`, the first `planned` one after it in order), make `--sprint <that one>` the selection, say so,
+         - The sprint is finished and --continue is set: take the next planned sprint after it (`atm sprint
+           list --json`, the first `planned` one after it in order), make `--sprint <that one>` the selection, say so,
            and continue with the next iteration. Never close or start a sprint: closing is `/atm-close-sprint`,
            with the user. No planned sprint left → EXIT the loop.
          - Otherwise → EXIT the loop

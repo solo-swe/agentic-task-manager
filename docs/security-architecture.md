@@ -1317,6 +1317,10 @@ land (I11, I13, I24, I25). Fields:
   pathspecs, never shell). `atm review round` records a range from where the round before ended, a commit atm itself
   recorded. `docs/agent/reviews.md` changed: agents no longer need to name the first round's base. No new route, path
   or command.
+- **The Homebrew scripts check what they put into Ruby** (ATM-678, audit A12): `packaging/homebrew-formula.sh` and
+  `homebrew-cask.sh` refuse a version that isn't MAJOR.MINOR.PATCH and a checksum that isn't 64 lowercase hex digits
+  (the characters listed, not a locale-dependent range), printing nothing. The loop skill names `atm sprint list
+  --json` (A4), a command it already used; no instruction runs anything new.
 
 ## 4. Keeping it current
 

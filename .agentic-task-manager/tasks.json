@@ -17548,7 +17548,7 @@
       "description": "Audit findings A4, A11, A12 and A13 ([the report](docs/codebase-audit-2026-11.md#a4-low-bug-the-loop-skill-names-atm-sprints---json-checked-that-the-line-is-there)).\n\n- **A4:** `skills/atm-loop-tasks/SKILL.md:174` names `atm sprints --json`; the command is `atm sprint list --json`.\n- **A13:** every skill starts with `atm version` and points to `atm docs`, neither pre-approved in `skills/claude-code.json`: add both (read-only; check I2 and `skills.test.ts` allow them).\n- **A12:** `packaging/homebrew-formula.sh` and `homebrew-cask.sh` put the version and checksums into Ruby unchecked: require `^[0-9]+\\.[0-9]+\\.[0-9]+$` and `^[0-9a-f]{64}$`. The deploy-key pushes accept a new host key (`homebrew.yml:41`, `skills.yml:43`): pin GitHub's host keys. Both workflows check out the tag and refuse anything not a `v*` tag.\n- **A11:** add Dependabot's `cargo` ecosystem, grouped like npm; pin the sandbox's images (`tests/sandbox/compose.yaml`, `Dockerfile`).\n\nThis changes skills: before the release PR merges, the security checklist (§3) applies.\n\n## Tests\n`dashboard/tests/unit/skills.test.ts` (the pre-approved list), `tests/scripts/packaging.test.mjs` (a bad version or checksum is refused), `ci-workflow.test.ts` (cargo in Dependabot, host keys pinned).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "skills/atm-loop-tasks/SKILL.md",
@@ -17562,7 +17562,7 @@
         "tests/sandbox/Dockerfile"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T16:21:16Z",
+      "updated_at": "2026-11-22T16:58:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17573,7 +17573,9 @@
       ],
       "sprint": "Audit and tabs",
       "number": 678,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-22T16:58:04Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226ff51a3a63",
@@ -20479,7 +20481,7 @@
       "description": "Hakan, 2026-11-21: the diff rounds are completely messed up.\n\n## The model\nA review is a chain of incremental diffs, one per round: **diff1 → diff2 → diff3 …**.\n- **diff1** is round 1's change, from the review's base to round 1's head.\n- **diffN** (N > 1) is what round N changed on top of round N−1, from round N−1's head to round N's head.\n\nWhat the page and the API show, for the round shown N:\n\n| View | Is |\n|---|---|\n| Round 1 | diff1 |\n| Round N, since round N−1 | diffN |\n| Round N, since round M (M < N) | diffM+1 + … + diffN, from round M's head to round N's head |\n| Round N, whole | diff1 + … + diffN, from the review's base to round N's head |\n\nThe whole change is always measured from **the review's base** (round 1's base), never from a base a later round happened to name.\n\n## Where it goes wrong now\n- Each round stores whatever range it was opened with: `RoundKind::Range {base, head}` and `rounds/N.diff`.\n  - An author who passes `base..HEAD` makes round N cumulative.\n  - One who passes `HEAD~1..HEAD` makes it incremental.\n  - A rebased or moved base makes it neither.\n- \"Whole change\" (`crates/atm-lib/src/review_pages/view.rs:30`, `against: None`) shows round N's own stored diff from its own base. So it is diffN on one review and diff1…diffN on another.\n- \"Since round M\" (`rounds::compare`, `view.rs:47`) compares the two rounds' trees. It does not add up with \"whole\", and comments anchored on a round move between views.\n- The page's picker (`dashboard/src/lib/reviews/ReviewPage.svelte:845`) offers \"Whole change\" and \"Since round n\" over these.\n\n## The change\n- **Model it in the code.** In atm-review, a round records its increment: the previous round's head (round 1: the review's base) and its own head, or the tree for a working or files round. Make it a type, `Increment` or `RoundDiff`, that can't be built otherwise.\n- **One function** composes a view from increments: `diff(review, from: Base | Round(M), to: Round(N))`, the only way a view is made.\n  - `whole(N)` = `diff(Base, N)`.\n  - `since(M, N)` = `diff(Round(M), N)`.\n  - `round(1)` = `whole(1)`.\n- **`atm review round` and `create`** record the increment whatever range is given. They take the head, or the range's end; a range whose start isn't the previous round's head (or the review's base for round 1) is recorded from the previous head, and atm says so. Live and working rounds alike.\n- **Existing reviews:** their stored rounds are read through the model.\n  - Round N's head is kept.\n  - Its increment is worked out from round N−1's head.\n  - The review's base is round 1's base.\n  - Nothing is rewritten in the review folders unless a migration is agreed.\n- **Comments:** a comment stays on the round it was written on, and is placed in a view the same way whichever view it is: shown in a view that contains its round's increment, else listed as on another round.\n- **The API and the page:** the route's `round` and `against` keep their meaning: `against=M` is since round M, and none is whole. The page labels its picker \"Round N (whole)\", \"Since round M\" and \"Round N only\" (= since N−1). The view says which it shows, from the API.\n- **Docs:** `docs/code-review-design.md` (rounds) and `atm docs reviews` say it in these words.\n\n## Tests\n- atm-review: a table over a three-round review (a commit range each round; a working round; a files round), checking for every N and M:\n  - whole(N) = diff1…diffN;\n  - since(M, N) = diffM+1…diffN;\n  - round 1 = diff1;\n  - whole(N) = whole(M) + since(M, N), file by file.\n- A round opened with a cumulative range and one with an incremental range give the same increments.\n- An existing review folder (rounds stored cumulatively, and incrementally) reads the same.\n- A comment on round 2 shows in whole(3) and since(1, 3), not in since(2, 3).\n- `reviews.spec.ts`: the picker's three views on a three-round review.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/model.rs",
@@ -20490,7 +20492,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-21T16:42:00Z",
-      "updated_at": "2026-11-22T16:21:14Z",
+      "updated_at": "2026-11-22T16:57:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20503,7 +20505,24 @@
       "number": 725,
       "started_at": "2026-11-22T16:16:46Z",
       "started_by": "claude:0f56a916",
-      "review": "async"
+      "review": "async",
+      "commit": "ab47e50f711739ceac3f231393c4d89a8d897bf9",
+      "code_reviews": [
+        {
+          "id": "01a20431-72ce-7505-b2ec-5fb5428bc548",
+          "ref": "CR-113"
+        }
+      ],
+      "review_requested_at": "2026-11-22T16:57:59Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-22T16:57:59Z",
+          "kind": "review",
+          "text": "CR-113: Review rounds as increments: one view function, rounds recorded from the round before",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a2040b-321c-72da-a83d-bc9d461b28a6",
