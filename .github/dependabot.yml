@@ -24,3 +24,13 @@ updates:
       npm:
         patterns: ['*']
         update-types: [minor, patch]
+  # atm's crates (ATM-678): grouped like npm's, a major update on its own; `cargo deny check` still runs on each PR
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo:
+        patterns: ['*']
+        update-types: [minor, patch]

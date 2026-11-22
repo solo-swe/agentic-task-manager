@@ -17562,7 +17562,7 @@
         "tests/sandbox/Dockerfile"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T16:58:04Z",
+      "updated_at": "2026-11-22T17:20:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17574,7 +17574,23 @@
       "sprint": "Audit and tabs",
       "number": 678,
       "review": "async",
-      "started_at": "2026-11-22T16:58:04Z",
+      "commit": "13841b58ec1b9238198dcc00b870972ab6148683",
+      "blocks": [
+        {
+          "from": "2026-11-22T17:08:19Z",
+          "to": "2026-11-22T17:20:31Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-22T17:20:31Z",
+          "kind": "answer",
+          "text": "Done and committed (13841b5): the loop skill names atm sprint list --json (A4), and the Homebrew scripts refuse a bad version or checksum (A12, tested). The rest changes permissions and CI, which I do not do on a task word alone. → Noted.; May I add atm version and atm docs to the pre-approved commands in skills/claude-code.json (A13)? → Hakan, in chat: good (yes).; May I edit homebrew.yml and skills.yml to pin GitHub SSH host keys and refuse anything but a v* tag, and add cargo to dependabot.yml (A12, A11)? → Hakan, in chat: yes.; May I pin the sandbox images by digest, looking the digests up with docker buildx imagetools inspect (A11)? → Hakan, in chat: yes.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-22T17:20:33Z",
       "started_by": "claude:0f56a916"
     },
     {
@@ -17599,7 +17615,7 @@
         "crates/atm-cli/src/commands/maintenance.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T16:21:17Z",
+      "updated_at": "2026-11-22T17:20:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17610,7 +17626,15 @@
       ],
       "sprint": "Audit and tabs",
       "number": 679,
-      "review": "async"
+      "review": "async",
+      "notes": [
+        {
+          "at": "2026-11-22T17:20:32Z",
+          "kind": "handoff",
+          "text": "Not started: handed back to finish ATM-678 first, its questions answered.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2270a6f9bac9",
@@ -20367,7 +20391,7 @@
       "description": "Step 7 of [the plan](docs/dashboard-derived-state.md), group G.\n\n## Change\n- `ReviewPage.svelte` shows Approve, Request changes, Comment (Publish comments), Round and Close only as `can` allows, with its reason.\n- The page's own rules go: `ended`, `live`, `sentBack` and `settled` as rules, and `approveBlocked`'s fallback.\n- Each comment carries `editable` from atm. `ChainBox`'s rule goes.\n\n## Tests\n- `can`'s table (atm-lib).\n- The page's unit tests for each answer.\n- `reviews.spec.ts` for a waiting, a live, a sent-back and an approved review.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -20375,7 +20399,7 @@
         "crates/atm-lib/src/review_pages/page.rs"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-22T16:20:14Z",
+      "updated_at": "2026-11-22T17:27:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20412,6 +20436,18 @@
           "kind": "review",
           "text": "CR-112: The review page follows atm: can and editable",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T17:27:22Z",
+          "kind": "note",
+          "text": "Approved: in CR-112 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-22T17:27:39Z",
+          "kind": "outcome",
+          "text": "Approved in CR-112. The review page follows atm can and editable, and has no rule of its own.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-22T16:20:13Z",
@@ -20423,7 +20459,15 @@
         }
       ],
       "review_requested_at": "2026-11-22T16:20:14Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-22T16:20:14Z",
+          "to": "2026-11-22T17:27:22Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-22T17:27:39Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d689547b76",
@@ -20481,7 +20525,7 @@
       "description": "Hakan, 2026-11-21: the diff rounds are completely messed up.\n\n## The model\nA review is a chain of incremental diffs, one per round: **diff1 → diff2 → diff3 …**.\n- **diff1** is round 1's change, from the review's base to round 1's head.\n- **diffN** (N > 1) is what round N changed on top of round N−1, from round N−1's head to round N's head.\n\nWhat the page and the API show, for the round shown N:\n\n| View | Is |\n|---|---|\n| Round 1 | diff1 |\n| Round N, since round N−1 | diffN |\n| Round N, since round M (M < N) | diffM+1 + … + diffN, from round M's head to round N's head |\n| Round N, whole | diff1 + … + diffN, from the review's base to round N's head |\n\nThe whole change is always measured from **the review's base** (round 1's base), never from a base a later round happened to name.\n\n## Where it goes wrong now\n- Each round stores whatever range it was opened with: `RoundKind::Range {base, head}` and `rounds/N.diff`.\n  - An author who passes `base..HEAD` makes round N cumulative.\n  - One who passes `HEAD~1..HEAD` makes it incremental.\n  - A rebased or moved base makes it neither.\n- \"Whole change\" (`crates/atm-lib/src/review_pages/view.rs:30`, `against: None`) shows round N's own stored diff from its own base. So it is diffN on one review and diff1…diffN on another.\n- \"Since round M\" (`rounds::compare`, `view.rs:47`) compares the two rounds' trees. It does not add up with \"whole\", and comments anchored on a round move between views.\n- The page's picker (`dashboard/src/lib/reviews/ReviewPage.svelte:845`) offers \"Whole change\" and \"Since round n\" over these.\n\n## The change\n- **Model it in the code.** In atm-review, a round records its increment: the previous round's head (round 1: the review's base) and its own head, or the tree for a working or files round. Make it a type, `Increment` or `RoundDiff`, that can't be built otherwise.\n- **One function** composes a view from increments: `diff(review, from: Base | Round(M), to: Round(N))`, the only way a view is made.\n  - `whole(N)` = `diff(Base, N)`.\n  - `since(M, N)` = `diff(Round(M), N)`.\n  - `round(1)` = `whole(1)`.\n- **`atm review round` and `create`** record the increment whatever range is given. They take the head, or the range's end; a range whose start isn't the previous round's head (or the review's base for round 1) is recorded from the previous head, and atm says so. Live and working rounds alike.\n- **Existing reviews:** their stored rounds are read through the model.\n  - Round N's head is kept.\n  - Its increment is worked out from round N−1's head.\n  - The review's base is round 1's base.\n  - Nothing is rewritten in the review folders unless a migration is agreed.\n- **Comments:** a comment stays on the round it was written on, and is placed in a view the same way whichever view it is: shown in a view that contains its round's increment, else listed as on another round.\n- **The API and the page:** the route's `round` and `against` keep their meaning: `against=M` is since round M, and none is whole. The page labels its picker \"Round N (whole)\", \"Since round M\" and \"Round N only\" (= since N−1). The view says which it shows, from the API.\n- **Docs:** `docs/code-review-design.md` (rounds) and `atm docs reviews` say it in these words.\n\n## Tests\n- atm-review: a table over a three-round review (a commit range each round; a working round; a files round), checking for every N and M:\n  - whole(N) = diff1…diffN;\n  - since(M, N) = diffM+1…diffN;\n  - round 1 = diff1;\n  - whole(N) = whole(M) + since(M, N), file by file.\n- A round opened with a cumulative range and one with an incremental range give the same increments.\n- An existing review folder (rounds stored cumulatively, and incrementally) reads the same.\n- A comment on round 2 shows in whole(3) and since(1, 3), not in since(2, 3).\n- `reviews.spec.ts`: the picker's three views on a three-round review.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/model.rs",
@@ -20492,7 +20536,7 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-21T16:42:00Z",
-      "updated_at": "2026-11-22T16:57:59Z",
+      "updated_at": "2026-11-22T17:27:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20514,15 +20558,35 @@
         }
       ],
       "review_requested_at": "2026-11-22T16:57:59Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T16:57:59Z",
           "kind": "review",
           "text": "CR-113: Review rounds as increments: one view function, rounds recorded from the round before",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T17:26:44Z",
+          "kind": "note",
+          "text": "Approved: in CR-113 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-22T17:27:38Z",
+          "kind": "outcome",
+          "text": "Approved in CR-113. Views add up the rounds increments (rounds::between), ranges recorded from the round before (as_increment), comments in the views that hold their round (in_view), the picker Round N (whole), Since round M, Round N only.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T16:57:59Z",
+          "to": "2026-11-22T17:26:44Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-22T17:27:38Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a2040b-321c-72da-a83d-bc9d461b28a6",
@@ -20539,7 +20603,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-22T16:54:08Z",
+      "updated_at": "2026-11-22T17:08:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20592,6 +20656,12 @@
           "at": "2026-11-22T16:54:08Z",
           "kind": "note",
           "text": "ATM-725: the CLI suite failed once because atm embeds docs/agent at build time and the docs were edited after the last cargo build. Rule of thumb: rebuild after any docs/agent change, before the CLI suite.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T17:08:20Z",
+          "kind": "note",
+          "text": "ATM-678: an audit task mixed safe work with CI, permission and pinning changes the agent rules forbid on a task word alone, so it had to be half done and blocked. Audit tasks could separate what needs Hakan up front. Also notes and questions cap at 500 characters: split questions into several --question.",
           "by": "claude:0f56a916"
         }
       ]

@@ -1320,7 +1320,16 @@ land (I11, I13, I24, I25). Fields:
 - **The Homebrew scripts check what they put into Ruby** (ATM-678, audit A12): `packaging/homebrew-formula.sh` and
   `homebrew-cask.sh` refuse a version that isn't MAJOR.MINOR.PATCH and a checksum that isn't 64 lowercase hex digits
   (the characters listed, not a locale-dependent range), printing nothing. The loop skill names `atm sprint list
-  --json` (A4), a command it already used; no instruction runs anything new.
+  --json` (A4), a command it already used; no instruction runs anything new. With Hakan's yes (2026-11-22):
+  - **Pre-approved:** `atm version` and `atm docs` for every skill in `skills/claude-code.json` (A13), both
+    read-only (`skills.test.ts` checks the shape and that each skill has them).
+  - **The deploy-key pushes** (`homebrew.yml`, `skills.yml`, A12): a first step refuses anything but a
+    `v<MAJOR>.<MINOR>.<PATCH>` tag, the tagged commit is checked out, and ssh trusts only github.com's published host
+    keys (`gh api meta`, inline in each workflow; `StrictHostKeyChecking=yes`, never `accept-new`). A key rotation by
+    GitHub fails the push until the keys are updated by hand (`ci-workflow.test.ts`).
+  - **Dependabot** watches atm's crates too (A11), grouped like npm; each PR still runs `cargo deny check`.
+  - **The agent sandbox's images** are pinned by digest (A11), bumped by hand with `docker buildx imagetools
+    inspect`.
 
 ## 4. Keeping it current
 

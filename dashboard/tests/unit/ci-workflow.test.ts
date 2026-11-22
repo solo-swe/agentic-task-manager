@@ -145,15 +145,58 @@ describe('Dependabot (I19, T-275)', () => {
   // Each `- package-ecosystem:` entry, as text
   const ecosystems = config.split(/^ {2}- package-ecosystem: /m).slice(1);
 
-  it('watches the actions and the dashboard npm packages, weekly', () => {
-    expect(ecosystems.map((e) => e.split('\n')[0])).toEqual(['github-actions', 'npm']);
+  it('watches the actions, the dashboard npm packages and atm’s crates (ATM-678), weekly', () => {
+    expect(ecosystems.map((e) => e.split('\n')[0])).toEqual(['github-actions', 'npm', 'cargo']);
     for (const e of ecosystems) expect(e).toMatch(/interval: weekly/);
   });
 
-  it("groups each ecosystem's updates into one PR (npm: minor and patch; a major gets its own)", () => {
-    const [actions, npm] = ecosystems;
+  it("groups each ecosystem's updates into one PR (npm and cargo: minor and patch; a major gets its own)", () => {
+    const [actions, npm, cargo] = ecosystems;
     expect(actions).toMatch(/groups:\n {6}actions:\n {8}patterns: \['\*'\]/);
     expect(actions).not.toMatch(/update-types/);
     expect(npm).toMatch(/groups:\n {6}npm:\n {8}patterns: \['\*'\]\n {8}update-types: \[minor, patch\]/);
+    expect(cargo).toMatch(/directory: \/\n/);
+    expect(cargo).toMatch(/groups:\n {6}cargo:\n {8}patterns: \['\*'\]\n {8}update-types: \[minor, patch\]/);
+  });
+});
+
+// ATM-678 (audit A12): the workflows that push with a deploy key run on a release's tag only, its own commit
+// checked out, and trust github.com's published host keys and no other
+describe('the deploy-key pushes (Homebrew, the skills export)', () => {
+  const read = (name: string) => readFileSync(new URL(`../../../.github/workflows/${name}`, import.meta.url), 'utf8');
+  const pushes = { 'homebrew.yml': read('homebrew.yml'), 'skills.yml': read('skills.yml') };
+
+  for (const [name, w] of Object.entries(pushes)) {
+    it(`${name}: refuses anything but a v<MAJOR>.<MINOR>.<PATCH> tag before anything else, and checks the tag out`, () => {
+      const steps = w.slice(w.indexOf('    steps:'));
+      expect(steps.indexOf("The tag is a release's")).toBeGreaterThan(0);
+      expect(steps.indexOf("The tag is a release's")).toBeLessThan(steps.indexOf('uses: actions/checkout@'));
+      expect(steps).toMatch(/case "\$TAG" in\n {12}v\[0-9\]\*\.\[0-9\]\*\.\[0-9\]\*\) ;;\n {12}\*\) .*exit 1 ;;/);
+      expect(steps).toMatch(/ref: \$\{\{ github\.event\.release\.tag_name \|\| inputs\.tag \}\}/);
+    });
+
+    it(`${name}: ssh trusts the pinned host keys only, never a new one`, () => {
+      expect(w).not.toMatch(/accept-new|StrictHostKeyChecking=no/);
+      expect(w).toMatch(/-o UserKnownHostsFile=\$RUNNER_TEMP\/known_hosts -o StrictHostKeyChecking=yes"/);
+      expect(w).toMatch(/printf '%s' "\$GITHUB_HOST_KEYS" > "\$RUNNER_TEMP\/known_hosts"/);
+      const keys = w.split('\n').filter((line) => /^ {8}github\.com /.test(line));
+      expect(keys.map((k) => k.trim().split(' ')[1])).toEqual(['ssh-ed25519', 'ecdsa-sha2-nistp256', 'ssh-rsa']);
+      expect(keys[0]).toContain('AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl');
+    });
+  }
+
+  it('both pin the same keys', () => {
+    const keys = (w: string) => w.split('\n').filter((line) => /^ {8}github\.com /.test(line));
+    expect(keys(pushes['skills.yml'])).toEqual(keys(pushes['homebrew.yml']));
+  });
+});
+
+// ATM-678 (audit A11): the sandbox's images are pinned by digest, like CI's
+describe('the agent sandbox’s images', () => {
+  const read = (path: string) => readFileSync(new URL(`../../../tests/sandbox/${path}`, import.meta.url), 'utf8');
+
+  it('the proxy and the agent’s base image are pinned by digest', () => {
+    expect(read('compose.yaml')).toMatch(/^ {4}image: ubuntu\/squid:[\w.-]+@sha256:[0-9a-f]{64}$/m);
+    expect(read('Dockerfile')).toMatch(/^FROM node:[\w.-]+@sha256:[0-9a-f]{64}$/m);
   });
 });
