@@ -67,6 +67,7 @@
     file,
     chains,
     drifted,
+    elsewhere = [],
     before,
     after,
     viewed,
@@ -90,6 +91,8 @@
     file: ViewFile;
     chains: Chain[];
     drifted: PlacedChain[];
+    /** Its comments made on a round the view doesn't hold (ATM-725): listed, linking to their round */
+    elsewhere?: PlacedChain[];
     before: DocumentSource | null;
     after: DocumentSource | null;
     viewed: boolean;
@@ -276,6 +279,16 @@
           <button class="review-drifted-link" onclick={() => chain.drifted && onround(chain.drifted.round)}>
             see it where it was made, round {chain.drifted?.round}{chain.drifted?.lines
               ? `, lines ${chain.drifted.lines[0]}–${chain.drifted.lines[1]}`
+              : ''}
+          </button>
+        </p>
+      {/each}
+      {#each elsewhere as chain (chain.id)}
+        <p class="review-drifted review-elsewhere" data-chain={chain.id}>
+          A comment on round {chain.anchor.round}, which this view doesn't show:
+          <button class="review-drifted-link" onclick={() => onround(chain.anchor.round)}>
+            see it on round {chain.anchor.round}{chain.anchor.lines
+              ? `, lines ${chain.anchor.lines[0]}–${chain.anchor.lines[1]}`
               : ''}
           </button>
         </p>

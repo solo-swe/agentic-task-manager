@@ -15,8 +15,9 @@ pub(super) fn round_of(review: &Review, number: u32) -> Result<&Round> {
         })
 }
 
-/// The files of one view: the whole change of round `shown` (its base to its result), or what changed in it since
-/// round `against`; each with its patch and the objects (a commit, or a tree) its two sides are read from.
+/// The files of one view (ATM-725, [`rounds::between`]): the whole change of round `shown`, from the review's base,
+/// or what changed since round `against`, the increments between them added up; each file with its patch and the
+/// objects (a commit, or a tree) its two sides are read from.
 pub(super) fn view<S: RoundDiffs + ?Sized>(
     vcs: &atm_vcs::GitVcs,
     store: &S,
@@ -25,33 +26,23 @@ pub(super) fn view<S: RoundDiffs + ?Sized>(
     against: Option<u32>,
 ) -> Result<Value> {
     let round = round_of(review, shown)?;
-    let id = &review.header.id;
-    let diff = store.diff_of(id, shown)?;
-    let (before, after, patch, listed) = match against {
-        None => {
-            let before = match &round.kind {
-                RoundKind::Range { base, .. } | RoundKind::Working { base } => Some(base.clone()),
-                RoundKind::Files => None,
-            };
-            let after = match &round.kind {
-                RoundKind::Range { head, .. } => head.clone(),
-                _ => rounds::tree(vcs, round, &diff)?.to_string(),
-            };
-            (before, after, diff, Some(&round.files))
-        }
-        Some(from) if from == shown => {
-            return Err(Error::Invalid(format!(
-                "round {shown} against itself: name an earlier round"
-            )));
-        }
-        Some(from) => {
-            let earlier = round_of(review, from)?;
-            let before = rounds::tree(vcs, earlier, &store.diff_of(id, from)?)?.to_string();
-            let after = rounds::tree(vcs, round, &diff)?.to_string();
-            let between = rounds::compare(vcs, store, review, from, shown)?;
-            (Some(before), after, between, None)
-        }
-    };
+    if against == Some(shown) {
+        return Err(Error::Invalid(format!(
+            "round {shown} against itself: name an earlier round"
+        )));
+    }
+    let since = against.map_or(rounds::Since::Base, rounds::Since::Round);
+    let made = rounds::between(vcs, store, review, since, shown)?;
+    // A files round's whole change starts from nothing: its files' left sides aren't read
+    let first_is_files = review
+        .rounds
+        .iter()
+        .min_by_key(|r| r.number)
+        .is_some_and(|r| r.kind == RoundKind::Files);
+    let before = (!(against.is_none() && first_is_files)).then(|| made.before.to_string());
+    let after = made.after.to_string();
+    let patch = reviews::Patch(made.diff.patch);
+    let listed = rounds::file_changes(made.diff.files);
     let repo = rounds::repository(vcs, round).unwrap_or_else(|_| vcs.clone());
     let patches = with_links(&repo, file_patches(&patch.0), before.as_ref(), &after);
     // A moved submodule's entry: its two commits and its repository's web address, when it has one, for links
@@ -95,32 +86,29 @@ pub(super) fn view<S: RoundDiffs + ?Sized>(
         }
         out
     };
-    // The whole change lists the round's files (a binary one has no patch); between rounds, what the diff has
-    let files: Vec<Value> = match listed {
-        Some(files) => files
-            .iter()
-            .flat_map(|f| {
-                let found = patches.iter().find(|p| p.path == f.path).cloned();
-                side(&found.unwrap_or_else(|| FilePatch {
-                    path: f.path.clone(),
-                    old_path: match &f.status {
-                        reviews::FileStatus::Renamed { from } => from.clone(),
-                        _ => f.path.clone(),
-                    },
-                    status: match &f.status {
-                        reviews::FileStatus::Added => "added",
-                        reviews::FileStatus::Deleted => "deleted",
-                        reviews::FileStatus::Renamed { .. } => "renamed",
-                        reviews::FileStatus::Modified => "modified",
-                    },
-                    binary: f.binary,
-                    submodule: None,
-                    patch: String::new(),
-                }))
-            })
-            .collect(),
-        None => patches.iter().flat_map(side).collect(),
-    };
+    // Every file the view changes (a binary one has no patch), in the order git lists them
+    let files: Vec<Value> = listed
+        .iter()
+        .flat_map(|f| {
+            let found = patches.iter().find(|p| p.path == f.path).cloned();
+            side(&found.unwrap_or_else(|| FilePatch {
+                path: f.path.clone(),
+                old_path: match &f.status {
+                    reviews::FileStatus::Renamed { from } => from.clone(),
+                    _ => f.path.clone(),
+                },
+                status: match &f.status {
+                    reviews::FileStatus::Added => "added",
+                    reviews::FileStatus::Deleted => "deleted",
+                    reviews::FileStatus::Renamed { .. } => "renamed",
+                    reviews::FileStatus::Modified => "modified",
+                },
+                binary: f.binary,
+                submodule: None,
+                patch: String::new(),
+            }))
+        })
+        .collect();
     Ok(json!({ "round": shown, "against": against, "files": files }))
 }
 
@@ -132,20 +120,25 @@ pub(super) fn placed<S: RoundDiffs + ?Sized>(
     review: &Review,
     chain: &Chain,
     shown: u32,
+    against: Option<u32>,
 ) -> Value {
     let out = serde_json::to_value(chain).unwrap_or(Value::Null);
-    with_placement(vcs, store, review, &chain.anchor, shown, out)
+    with_placement(vcs, store, review, &chain.anchor, (shown, against), out)
 }
 
-/// `out` with where `anchor` shows in round `shown`: `placed`, and `drifted`.
+/// `out` with where `anchor` shows in the view of round `shown` (since `against`): `placed`, `drifted`, and
+/// `in_view`, whether the view holds the increment of the round it was made on (ATM-725, [`rounds::in_view`]): a
+/// comment on another round is listed as such, not placed.
 pub(super) fn with_placement<S: RoundDiffs + ?Sized>(
     vcs: &atm_vcs::GitVcs,
     store: &S,
     review: &Review,
     anchor: &Anchor,
-    shown: u32,
+    (shown, against): (u32, Option<u32>),
     mut out: Value,
 ) -> Value {
+    let since = against.map_or(rounds::Since::Base, rounds::Since::Round);
+    let in_view = rounds::in_view(since, shown, anchor.round);
     let made = || json!({ "round": anchor.round, "lines": anchor.lines });
     let (at, drifted) = match rounds::place(vcs, store, review, anchor, shown) {
         Ok(rounds::Placement::Whole) => (Value::Null, Value::Null),
@@ -161,6 +154,7 @@ pub(super) fn with_placement<S: RoundDiffs + ?Sized>(
     if let Some(map) = out.as_object_mut() {
         map.insert("placed".into(), at);
         map.insert("drifted".into(), drifted);
+        map.insert("in_view".into(), Value::Bool(in_view));
     }
     out
 }
@@ -179,7 +173,7 @@ pub(super) fn shown_with<S: RoundDiffs + ?Sized>(
     let chains = review
         .chains
         .iter()
-        .map(|c| placed(vcs, diffs, review, c, shown))
+        .map(|c| placed(vcs, diffs, review, c, shown, against))
         .collect();
     let newest = review.rounds.last().map_or(shown, |r| r.number);
     let drafts = drafts
@@ -201,7 +195,7 @@ pub(super) fn shown_with<S: RoundDiffs + ?Sized>(
                         lines: *lines,
                         quote: quote.clone(),
                     };
-                    with_placement(vcs, diffs, review, &anchor, shown, out)
+                    with_placement(vcs, diffs, review, &anchor, (shown, against), out)
                 }
                 Place::Reply { .. } => out,
             }

@@ -276,7 +276,8 @@ function withAtmAnswers(reference: string, page: ReviewPageFake): ReviewPageFake
   return {
     ...page,
     can: { ...can, ...page.can },
-    chains: page.chains.map((ch) => ({ ...ch, comments: ch.comments.map(mark) })),
+    // In the view (ATM-725) unless the test says it is on another round: the fixture serves one page for every view
+    chains: page.chains.map((ch) => ({ in_view: true, ...ch, comments: ch.comments.map(mark) })),
   };
 }
 

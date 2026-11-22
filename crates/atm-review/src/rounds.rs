@@ -48,7 +48,9 @@ pub fn unstored(number: u32, new: NewRound, at: String) -> (Round, Patch) {
     )
 }
 
-fn file_changes(files: Vec<ChangedFile>) -> Vec<FileChange> {
+/// The files a diff changes, as a round lists them.
+#[must_use]
+pub fn file_changes(files: Vec<ChangedFile>) -> Vec<FileChange> {
     files
         .into_iter()
         .map(|f| FileChange {
@@ -190,11 +192,148 @@ fn round_of(review: &Review, number: u32) -> Result<&Round> {
         })
 }
 
-/// What changed from round `from` to round `to` of a review: their trees' diff, limited to the files either round
-/// has (§3.6's "between two rounds").
+/// Where a view of a review starts (ATM-725). A review is a chain of increments, one a round: round 1's from the
+/// review's base to its result, round N's from round N−1's result to its own. A view adds up those between its start
+/// and its round: the whole change of round N from the base, or what changed since round M.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Since {
+    /// The review's base: round 1's (its commit; nothing, for files reviewed whole). The whole change.
+    Base,
+    /// Round M's result: what rounds M+1 … N changed.
+    Round(u32),
+}
+
+/// A view of a review: from `before` (a commit or a tree) to `after` (a tree), its diff and the files it changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Between {
+    /// Where it starts: the review's base commit, an earlier round's tree, or the empty tree.
+    pub before: Rev,
+    /// Where it ends: the round's tree.
+    pub after: Rev,
+    /// The diff and its files.
+    pub diff: Diff,
+}
+
+/// The view of round `to` since `since` (ATM-725), the one way a view is made: round `to`'s tree against the
+/// review's base or round M's tree, so it is the increments between them added up, however each round was opened (a
+/// range from the review's base, from the round before, or from anywhere). Everything the two differ in, atm's task
+/// folder left out; where a files round is in it, only the files those rounds name (ATM-622: a files round speaks
+/// for the files it names, not for the others, which its tree doesn't have).
 ///
 /// # Errors
-/// No such round, or a round's tree can't be had here (its base is gone from this clone).
+/// No such round, a start not before `to`, rounds of different repositories, or a round's tree can't be had here (its
+/// base is gone from this clone).
+pub fn between<S: RoundDiffs + ?Sized>(
+    vcs: &GitVcs,
+    store: &S,
+    review: &Review,
+    since: Since,
+    to: u32,
+) -> Result<Between> {
+    let b = round_of(review, to)?;
+    let first = review
+        .rounds
+        .iter()
+        .min_by_key(|r| r.number)
+        .ok_or_else(|| Error::NotFound(format!("{} has no rounds", review.header.reference)))?;
+    let from = match since {
+        Since::Base => first,
+        Since::Round(m) if m >= to => {
+            return Err(Error::Invalid(format!(
+                "round {to} since round {m}: name an earlier round"
+            )));
+        }
+        Since::Round(m) => round_of(review, m)?,
+    };
+    let repo = shared_repository(vcs, from, b)?;
+    let after = tree(vcs, b, &store.diff_of(&review.header.id, to)?)?;
+    let before = match (since, &first.kind) {
+        (Since::Base, RoundKind::Range { base, .. } | RoundKind::Working { base }) => {
+            recorded(base)?
+        }
+        (Since::Base, RoundKind::Files) => Rev::object_id(&repo.empty_tree()?)?,
+        (Since::Round(m), _) => tree(vcs, from, &store.diff_of(&review.header.id, m)?)?,
+    };
+    // The rounds the view spans: from the first (the base) or from round M, to round N
+    let start = match since {
+        Since::Base => first.number,
+        Since::Round(m) => m,
+    };
+    let spanned: Vec<&Round> = review
+        .rounds
+        .iter()
+        .filter(|r| (start..=to).contains(&r.number))
+        .collect();
+    let only: Vec<String> = if spanned.iter().any(|r| r.kind == RoundKind::Files) {
+        let mut paths: Vec<String> = spanned
+            .iter()
+            .flat_map(|r| r.files.iter().map(|f| f.path.clone()))
+            .collect();
+        // Round N a files round: only its files (one of an earlier round it doesn't name isn't deleted)
+        if b.kind == RoundKind::Files {
+            paths.retain(|p| b.files.iter().any(|f| &f.path == p));
+        }
+        paths.sort();
+        paths.dedup();
+        paths
+    } else {
+        Vec::new()
+    };
+    let diff = repo.diff_between(&before, &after, &only, &[TASK_DIR])?;
+    Ok(Between {
+        before,
+        after,
+        diff,
+    })
+}
+
+/// Whether a comment made on round `made_on` is in the view of round `to` since `since` (ATM-725): the view holds
+/// that round's increment. A comment on a round after it, or (since round M) on round M or before, is on another round.
+#[must_use]
+pub fn in_view(since: Since, to: u32, made_on: u32) -> bool {
+    made_on <= to
+        && match since {
+            Since::Base => true,
+            Since::Round(m) => made_on > m,
+        }
+}
+
+/// A new round as its increment (ATM-725): a commit range that doesn't start where the round before ended (a range
+/// from the review's base, or from anywhere else) is recorded from that round's head, so each round's own diff is
+/// what it changed; with the words saying so. Anything else as it is: a working or files round is rebuilt from its
+/// own base, and a range after one of those has no commit to start from; so is a range whose previous head isn't in
+/// this clone.
+#[must_use]
+pub fn as_increment(vcs: &GitVcs, previous: &Round, new: NewRound) -> (NewRound, Option<String>) {
+    let (RoundKind::Range { head: last, .. }, RoundKind::Range { base, head }) =
+        (&previous.kind, &new.kind)
+    else {
+        return (new, None);
+    };
+    if base == last || previous.submodule != new.submodule {
+        return (new, None);
+    }
+    let short = |sha: &str| sha.chars().take(12).collect::<String>();
+    let said = format!(
+        "its range started at {}, not where round {} ended ({}): recorded from there, so the round is what it changed",
+        short(base),
+        previous.number,
+        short(last)
+    );
+    // The round before's head not in this clone (made in another, or gone): kept as given, the views still add up
+    // from the rounds' trees wherever they can be had
+    let head = head.clone();
+    match repository(vcs, previous).and_then(|repo| from_range(&repo, last, &head, &new.by)) {
+        Ok(increment) => (increment, Some(said)),
+        Err(_) => (new, None),
+    }
+}
+
+/// What changed from round `from` to round `to` of a review (§3.6's "between two rounds"): [`between`] since round
+/// `from`.
+///
+/// # Errors
+/// As [`between`]'s.
 pub fn compare<S: RoundDiffs + ?Sized>(
     vcs: &GitVcs,
     store: &S,
@@ -202,25 +341,11 @@ pub fn compare<S: RoundDiffs + ?Sized>(
     from: u32,
     to: u32,
 ) -> Result<Patch> {
-    let (a, b) = (round_of(review, from)?, round_of(review, to)?);
-    let repo = shared_repository(vcs, a, b)?;
-    let tree_a = tree(vcs, a, &store.diff_of(&review.header.id, from)?)?;
-    let tree_b = tree(vcs, b, &store.diff_of(&review.header.id, to)?)?;
-    let vcs = &repo;
-    let mut paths: Vec<String> = a
-        .files
-        .iter()
-        .chain(&b.files)
-        .map(|f| f.path.clone())
-        .collect();
-    // A files round speaks only for the files it names (ATM-622): its tree is rebuilt from them alone, so a file of the
-    // earlier round it doesn't name isn't deleted, it just isn't in this round. One it alone names is new to the review
-    if b.kind == RoundKind::Files {
-        paths.retain(|p| b.files.iter().any(|f| &f.path == p));
-    }
-    paths.sort();
-    paths.dedup();
-    Ok(Patch(vcs.diff_trees(&tree_a, &tree_b, &paths)?))
+    Ok(Patch(
+        between(vcs, store, review, Since::Round(from), to)?
+            .diff
+            .patch,
+    ))
 }
 
 /// A part of a file a diff changed: `old_len` lines from `old_start` became `new_len` from `new_start` (1-based).

@@ -21,19 +21,20 @@
   made), changes_requested (sent back), approved, closed. In a filter, `open` is every review not decided yet
   (`atm review list --status open`: draft, waiting, live or changes_requested).
 - **Reading it:** `atm review show CR-7` (the header, rounds and counts), `atm review comments CR-7 [--open]` (every
-  chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (a round's diff, or what changed
-  since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`. A review
+  chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (round 2's whole change, from the
+  review's base, or what changed since round 1: each round is an increment, what it changed since the round before,
+  and a view adds them up). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`. A review
   atm can't read (a status a newer atm wrote, a broken header) is listed after the others as *can't be read*, with
   why, whatever the filter (on stderr with `--json`, whose list stays the reviews it can read): don't edit its files
   to make it readable, say so to the user (`atm doctor` reports it too).
 - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
   tasks back in review; a task of yours whose claim lapsed meanwhile (back in to do) is taken back first, its note
-  saying so, and a round that can't reach its tasks writes nothing. A round is the whole change as it now is, not the
-  fix alone: a range round keeps the
-  review's first base (`--range <the first round's base>..HEAD`, never the fix commit's own range), and a files round
-  keeps the files the last one reviewed (naming more adds them). The reviewer sees what the fix changed as *since round
-  N*; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
+  saying so, and a round that can't reach its tasks writes nothing. A range round ends at the change as it now is
+  (`--range <base>..HEAD`): atm records it from where the round before ended, whatever base you give, and says so
+  when it moved it; a files round keeps the files the last one reviewed (naming more adds them). The reviewer sees the
+  fix as *Round N only*, everything since an earlier round as *since round M*, and the whole change from the review's
+  base; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
   check has changed. Start a chain of your own with `atm review comment CR-7 --file <path> --lines A-B --body '…'`
   (without `--file`, about the review as a whole).
 - **Resolving and deciding are the reviewer's:** a top-level comment is resolved (`atm review resolve CR-7 c9`) by a

@@ -4,6 +4,7 @@ import {
   TREE_WIDTH,
   chainsOf,
   driftedOf,
+  elsewhereOf,
   fileTree,
   filesIn,
   filterChains,
@@ -163,6 +164,7 @@ const chain = (id: string, path: string | null, placed: [number, number] | null,
     comments: [],
     placed,
     drifted: null,
+    in_view: true,
     ...more,
   }) as PlacedChain;
 
@@ -346,6 +348,20 @@ describe('a file’s chains', () => {
   it('drifted: only those whose text is gone, of this file', () => {
     expect(driftedOf(chains, file('a.md')).map((c) => c.id)).toEqual(['t4']);
     expect(driftedOf(chains, file('b.md'))).toEqual([]);
+  });
+
+  // ATM-725: atm's `in_view`, whether the view holds the round a comment was made on
+  it('on a round the view doesn’t hold: not placed, not drifted, listed as elsewhere; the others not elsewhere', () => {
+    const other = [
+      chain('k1', 'a.md', [3, 4], { in_view: false }),
+      chain('k2', 'a.md', [9, 9], { in_view: false, drifted: { round: 1, lines: [7, 7] } }),
+      chain('k3', 'a.md', [1, 1]),
+      chain('k4', 'b.md', [1, 1], { in_view: false }),
+    ];
+    expect(chainsOf(other, file('a.md')).map((c) => c.id)).toEqual(['k3']);
+    expect(driftedOf(other, file('a.md'))).toEqual([]);
+    expect(elsewhereOf(other, file('a.md')).map((c) => c.id)).toEqual(['k1', 'k2']);
+    expect(elsewhereOf(chains, file('a.md'))).toEqual([]);
   });
 
   it('the review’s own are on no file', () => {

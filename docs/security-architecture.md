@@ -1311,6 +1311,12 @@ land (I11, I13, I24, I25). Fields:
 - **A review's page marks each comment `editable`** (ATM-723), from the same rule `edit` enforces
   (`atm_review::rules::may_edit`). The page shows its controls only as `can` and `editable` allow, a convenience: every
   change is still checked by atm when it is made. No skill reads it, and no route or command is added.
+- **A review's views are made from its rounds' trees** (ATM-725): `rounds::between` diffs round N's tree against the
+  review's base commit or round M's tree, the commits read from `rounds/N.json` as before (full object IDs, checked by
+  `RoundKind::check`), the paths limited to the rounds' own files when a files round is in the view (`:(literal)`
+  pathspecs, never shell). `atm review round` records a range from where the round before ended, a commit atm itself
+  recorded. `docs/agent/reviews.md` changed: agents no longer need to name the first round's base. No new route, path
+  or command.
 
 ## 4. Keeping it current
 

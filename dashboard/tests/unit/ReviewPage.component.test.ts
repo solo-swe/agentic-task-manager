@@ -32,6 +32,7 @@ const chain = (id: string, path: string | null, more: Partial<PlacedChain> = {},
   ],
   placed: path ? [2, 2] : null,
   drifted: null,
+  in_view: true,
   ...more,
 });
 

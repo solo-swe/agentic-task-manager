@@ -63,20 +63,39 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
     Ok(header)
 }
 
-/// The author's next round: the review is open again, and its tasks in progress go back in review.
+/// A round added: its number, and what atm did to its range, when it did anything (ATM-725).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddedRound {
+    /// Its number.
+    pub number: u32,
+    /// Its range recorded from where the round before ended, saying so.
+    pub recorded: Option<String>,
+}
+
+/// The author's next round, recorded as its increment (ATM-725, [`atm_review::rounds::as_increment`]): the review is open again,
+/// and its tasks in progress go back in review.
 ///
 /// # Errors
 /// What the review's rules refuse, or a store error.
-pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) -> Result<u32> {
+pub fn add_round(
+    project: &mut Project,
+    reference: &ReviewRef,
+    round: NewRound,
+) -> Result<AddedRound> {
     let mut reviews = store(project)?;
     // Checked whole first (ATM-633, ATM-594): a round is never kept without its tasks going back in review
     let before = reviews.get_review(reference)?;
     let outcome = crate::lifecycle::check(project, &before, &Event::Round, &round.by)?;
+    let (round, recorded) = match (before.rounds.iter().max_by_key(|r| r.number), project.vcs()) {
+        (Some(last), Some(vcs)) => atm_review::rounds::as_increment(&vcs, last, round),
+        _ => (round, None),
+    };
     let number = Reviews::new(&mut reviews).add_round(reference, round)?;
     let header = reviews.get_review(reference)?.header;
+    let added = AddedRound { number, recorded };
     // A draft waits on no one yet: its tasks stay as they are (ATM-713)
     if header.status == Status::Draft {
-        return Ok(number);
+        return Ok(added);
     }
     // The author's own task its lapse sent back to to do, started again first (the design's hole 1); its review note
     // says so, as opening a review does
@@ -90,7 +109,7 @@ pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) 
     ask_review(project, &rest, &header, &format!("round {number}"))?;
     let lapsed = format!("round {number} (its claim had lapsed: taken back for this round)");
     ask_review(project, &back, &header, &lapsed)?;
-    Ok(number)
+    Ok(added)
 }
 
 /// The author changes the review's summary, its Description (with a round: `atm review round --summary-file`).

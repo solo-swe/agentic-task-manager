@@ -20,6 +20,7 @@ const chain = (id: string, comments: ReviewComment[]): PlacedChain => ({
   comments,
   placed: [3, 4],
   drifted: null,
+  in_view: true,
 });
 const onLines = (id: string, more: Partial<PlacedDraft> = {}): PlacedDraft =>
   ({
@@ -69,7 +70,11 @@ describe('withDrafts', () => {
       ],
       placed: [9, 9],
       drifted: null,
+      in_view: true,
     });
+    // On a round the view doesn't hold, as the server says (ATM-725)
+    const [, elsewhere] = withDrafts([chain('t1', [])], [onLines('d1', { in_view: false })], 'Hakan', 2);
+    expect(elsewhere.in_view).toBe(false);
   });
 
   it('one on what a live review is now is on the round shown; on the review, no file; drifted as the server says', () => {

@@ -222,6 +222,36 @@ impl GitVcs {
         })
     }
 
+    /// The diff from one tree (or commit) to another, with the files it changes (ATM-725: a review's views, each from
+    /// one round's result, or the review's base, to another's): only `only` when any are named, else everything but
+    /// the folders `leave_out` (atm's own task folder).
+    ///
+    /// # Errors
+    /// Either isn't a tree or a commit, a path outside a submodule's folder, or git fails.
+    pub fn diff_between(
+        &self,
+        from: &Rev,
+        to: &Rev,
+        only: &[String],
+        leave_out: &[&str],
+    ) -> Result<Diff> {
+        let spec = if only.is_empty() {
+            pathspec(leave_out)
+        } else {
+            let mut spec = vec!["--".to_string()];
+            for path in only {
+                spec.push(format!(":(literal){}", self.inside(path)?));
+            }
+            spec
+        };
+        let mut args = vec![END_OF_OPTIONS, from.as_str(), to.as_str()];
+        args.extend(spec.iter().map(String::as_str));
+        Ok(Diff {
+            patch: self.patch(&args, &[])?,
+            files: self.changed_files(&args, &[])?,
+        })
+    }
+
     /// The diff of a commit range, `base` to `head`, the folders `leave_out` left out (atm's own task folder).
     ///
     /// # Errors

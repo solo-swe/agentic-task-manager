@@ -17,6 +17,7 @@
   import {
     chainsOf,
     driftedOf,
+    elsewhereOf,
     fileTree,
     filesIn,
     filterChains,
@@ -828,8 +829,12 @@
             value={view.against ?? ''}
             onchange={(e) => onround(view.round, e.currentTarget.value ? Number(e.currentTarget.value) : null)}
           >
-            <option value="">Whole change</option>
-            {#each rounds.filter((n) => n < view.round) as n (n)}<option value={n}>Since round {n}</option>{/each}
+            <!-- ATM-725: a round's whole change (from the review's base), what changed since an earlier round, or the
+                 round's own increment (since the round before) -->
+            <option value="">Round {view.round} (whole)</option>
+            {#each rounds.filter((n) => n < view.round) as n (n)}<option value={n}
+                >{n === view.round - 1 ? `Round ${view.round} only` : `Since round ${n}`}</option
+              >{/each}
           </select>
           <span class="review-progress" title="{viewedCount} of {files.length} files viewed">
             <span class="review-meter"
@@ -1151,6 +1156,7 @@
             {imageAt}
             chains={chainsOf(allChains, f)}
             drifted={driftedOf(allChains, f)}
+            elsewhere={elsewhereOf(allChains, f)}
             before={sideOf(f.before)}
             after={sideOf(f.after)}
             viewed={isViewed(f)}

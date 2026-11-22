@@ -129,6 +129,9 @@ export interface ViewFile {
 export interface PlacedChain extends Chain {
   placed: [number, number] | null;
   drifted: { round: number; lines: [number, number] | null } | null;
+  /** Whether the view holds the increment of the round it was made on (ATM-725, atm's): placed in the view when it
+   * does, else listed as on another round */
+  in_view: boolean;
 }
 
 /** One of the user's drafts on the review (ATM-612), as the page has it: a comment placed in the round shown as a chain
@@ -144,6 +147,7 @@ export type PlacedDraft = { id: string; at: string; body: string } & (
       round: number | null;
       placed?: [number, number] | null;
       drifted?: { round: number; lines: [number, number] | null } | null;
+      in_view?: boolean;
     }
   | { kind: 'reply'; to: string }
 );

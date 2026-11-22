@@ -333,7 +333,8 @@ old parameters from its hash and moves to the new address.
   `"answered"` when someone else wrote in it after they last did (as the summary's `code_reviews`), else `null`. A
   status that isn't one is `400`.
 - `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
-  when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
+  when none) from the review's base, or what changed in it since round `against` (ATM-725: the rounds' increments
+  between them added up, however each round was opened; docs/code-review-design.md §3.6): `{review, summary, branch, rounds, chains, view: {round,
   against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you, can}`. `can` is what its
   reader may do, each of `approve`, `request_changes`, `comment`, `round` and `close` as `{ok, why?}` (the review's
   rules answering, ATM-633), and each comment and reply carries `editable`, whether they may change its text (their
@@ -341,8 +342,9 @@ old parameters from its hash and moves to the new address.
   file's `patch` is
   its part of the diff, `before` and `after` the revisions its two sides are read from (`documents?path=&at=`, §2.6;
   `null` for a side the file doesn't have). Each chain has `placed`, its lines in the round shown (followed there from
-  the round it was made on), and `drifted`, the round and lines it was made on when its text is gone from the round
-  shown. A round that isn't a whole number from 1 is `400`, one the review doesn't have `404`, a round against itself
+  the round it was made on), `drifted`, the round and lines it was made on when its text is gone from the round
+  shown, and `in_view`, whether the view holds the increment of the round it was made on (ATM-725; else the page lists
+  it as on that round). A round that isn't a whole number from 1 is `400`, one the review doesn't have `404`, a round against itself
   `400`; a reference two reviews share (`CR-8`, two clones took the number) is `400` naming both (`CR-8.1`, `CR-8.2`).
   A live review with no `round` asked for is shown as its working copy is now (ATM-576): `view.now: true`, its
   `round` the one after its checkpoints (`rounds` lists only those) when the copy changed since the last checkpoint,

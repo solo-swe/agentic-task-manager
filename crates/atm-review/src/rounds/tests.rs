@@ -1,6 +1,8 @@
 use super::{Hunk, Placement, follow, hunks};
 use atm_vcs::Rev;
 
+mod views;
+
 /// A hunk that replaces `old_len` lines with `new_len` (or inserts, with no old lines).
 fn hunk(old_start: u32, old_len: u32, new_start: u32, new_len: u32) -> Hunk {
     let count = |n: u32| usize::try_from(n).unwrap();

@@ -66,6 +66,8 @@ export function withDrafts(
             comments: [asComment(d, you)],
             placed: d.placed ?? null,
             drifted: d.drifted ?? null,
+            // A draft on what a live review is now is on the round shown
+            in_view: d.in_view ?? true,
           },
         ]
       : [],

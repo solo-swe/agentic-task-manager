@@ -16438,9 +16438,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-22T16:21:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -16452,7 +16452,8 @@
       "related": [
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
-      "number": 660
+      "number": 660,
+      "review": "async"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225d75c0aa3a",
@@ -16477,9 +16478,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-22T16:21:16Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -16488,7 +16489,8 @@
       ],
       "sprint": "Audit and tabs",
       "with": "user",
-      "number": 661
+      "number": 661,
+      "review": "async"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225e61ea5857",
@@ -17560,9 +17562,9 @@
         "tests/sandbox/Dockerfile"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-22T16:21:16Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17570,7 +17572,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 678
+      "number": 678,
+      "review": "async"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226ff51a3a63",
@@ -17594,9 +17597,9 @@
         "crates/atm-cli/src/commands/maintenance.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-22T16:21:17Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17604,7 +17607,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 679
+      "number": 679,
+      "review": "async"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2270a6f9bac9",
@@ -17628,9 +17632,9 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-22T16:21:18Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17638,7 +17642,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 680
+      "number": 680,
+      "review": "async"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2271adb698a3",
@@ -17663,9 +17668,9 @@
         "crates/atm-review/src/model.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-22T16:21:19Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17673,7 +17678,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 681
+      "number": 681,
+      "review": "async"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22728aee8e9c",
@@ -17700,9 +17706,9 @@
         "app/src-tauri/src/commands.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-22T16:21:20Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17710,7 +17716,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 682
+      "number": 682,
+      "review": "async"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-227337ddbf84",
@@ -17736,9 +17743,9 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-20T06:55:03Z",
+      "updated_at": "2026-11-22T16:21:22Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -17746,7 +17753,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 683
+      "number": 683,
+      "review": "async"
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83db95b7695d",
@@ -18892,7 +18900,7 @@
       ],
       "files": [],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T17:16:06Z",
+      "updated_at": "2026-11-22T16:21:23Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18907,7 +18915,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 699
+      "number": 699,
+      "review": "async"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15b77d909a3",
@@ -18929,7 +18938,7 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T17:16:06Z",
+      "updated_at": "2026-11-22T16:21:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18944,7 +18953,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 700
+      "number": 700,
+      "review": "async"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15c40f37bbc",
@@ -18973,7 +18983,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-20T17:16:06Z",
+      "updated_at": "2026-11-22T16:21:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18988,7 +18998,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 701
+      "number": 701,
+      "review": "async"
     },
     {
       "id": "01a1f8d9-79c7-7484-b094-c9afad23fb21",
@@ -19300,9 +19311,9 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-20T18:19:09Z",
-      "updated_at": "2026-11-20T18:19:09Z",
+      "updated_at": "2026-11-22T16:21:26Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19310,7 +19321,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 706
+      "number": 706,
+      "review": "async"
     },
     {
       "id": "01a1fa31-88c0-75df-bb58-6495920a527c",
@@ -19475,7 +19487,7 @@
         "dashboard/tests/unit/compmd.helpers.ts"
       ],
       "created_at": "2026-11-20T22:26:04Z",
-      "updated_at": "2026-11-20T22:26:04Z",
+      "updated_at": "2026-11-22T16:21:27Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19485,7 +19497,8 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 709
+      "number": 709,
+      "review": "async"
     },
     {
       "id": "01a1fb32-2d87-77ef-a96b-3882d16be1bc",
@@ -19926,9 +19939,9 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T13:10:30Z",
+      "updated_at": "2026-11-22T16:21:27Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19939,7 +19952,8 @@
       "related": [
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
-      "number": 714
+      "number": 714,
+      "review": "async"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b843b52bc96",
@@ -19961,9 +19975,9 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-21T13:10:30Z",
+      "updated_at": "2026-11-22T16:21:28Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -19974,7 +19988,8 @@
       "related": [
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
-      "number": 715
+      "number": 715,
+      "review": "async"
     },
     {
       "id": "01a1feb5-c89d-74fd-85a0-3050e2ec1a45",
@@ -20172,9 +20187,9 @@
         "dashboard/src/lib/scope.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-22T16:21:29Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -20185,7 +20200,8 @@
       "related": [
         "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
       ],
-      "number": 719
+      "number": 719,
+      "review": "async"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d2f1a2543f",
@@ -20320,9 +20336,9 @@
         "dashboard/src/lib/projectinfo.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-22T16:21:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -20333,7 +20349,8 @@
       "related": [
         "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
       ],
-      "number": 722
+      "number": 722,
+      "review": "async"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d54f6238cf",
@@ -20348,7 +20365,7 @@
       "description": "Step 7 of [the plan](docs/dashboard-derived-state.md), group G.\n\n## Change\n- `ReviewPage.svelte` shows Approve, Request changes, Comment (Publish comments), Round and Close only as `can` allows, with its reason.\n- The page's own rules go: `ended`, `live`, `sentBack` and `settled` as rules, and `approveBlocked`'s fallback.\n- Each comment carries `editable` from atm. `ChainBox`'s rule goes.\n\n## Tests\n- `can`'s table (atm-lib).\n- The page's unit tests for each answer.\n- `reviews.spec.ts` for a waiting, a live, a sent-back and an approved review.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -20356,7 +20373,7 @@
         "crates/atm-lib/src/review_pages/page.rs"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-22T16:00:09Z",
+      "updated_at": "2026-11-22T16:20:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20375,10 +20392,36 @@
           "at": "2026-11-22T15:59:01Z",
           "kind": "failure",
           "text": "lease expired (claude:0f56a916)"
+        },
+        {
+          "at": "2026-11-22T16:16:45Z",
+          "kind": "outcome",
+          "text": "The review page offers each action only as atm can allows, with its words, and keeps no rule of its own (ended, settled, the open-comments and drafts fallbacks gone). One rule may_edit in atm-review, used by edit and served as editable on each comment and reply. ChainBox reads it. Close stays offered on live reviews only (a question in ATM-726). Unit, Rust, CLI and e2e 590 green.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T16:20:07Z",
+          "kind": "note",
+          "text": "Reopened: Reopened for its code review at Hakan word: it was done without one",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T16:20:14Z",
+          "kind": "review",
+          "text": "CR-112: The review page follows atm: can and editable",
+          "by": "claude:0f56a916"
         }
       ],
-      "started_at": "2026-11-22T16:00:09Z",
-      "started_by": "claude:0f56a916"
+      "started_at": "2026-11-22T16:20:13Z",
+      "started_by": "claude:0f56a916",
+      "code_reviews": [
+        {
+          "id": "01a2040e-e3b5-73fc-be90-04329d08d2ec",
+          "ref": "CR-112"
+        }
+      ],
+      "review_requested_at": "2026-11-22T16:20:14Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d689547b76",
@@ -20409,9 +20452,9 @@
         "dashboard/src/lib/worktrees.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-22T16:21:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -20422,7 +20465,8 @@
       "related": [
         "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
       ],
-      "number": 724
+      "number": 724,
+      "review": "async"
     },
     {
       "id": "01a1fefc-742e-7272-a4bb-2be34486ecf7",
@@ -20435,7 +20479,7 @@
       "description": "Hakan, 2026-11-21: the diff rounds are completely messed up.\n\n## The model\nA review is a chain of incremental diffs, one per round: **diff1 → diff2 → diff3 …**.\n- **diff1** is round 1's change, from the review's base to round 1's head.\n- **diffN** (N > 1) is what round N changed on top of round N−1, from round N−1's head to round N's head.\n\nWhat the page and the API show, for the round shown N:\n\n| View | Is |\n|---|---|\n| Round 1 | diff1 |\n| Round N, since round N−1 | diffN |\n| Round N, since round M (M < N) | diffM+1 + … + diffN, from round M's head to round N's head |\n| Round N, whole | diff1 + … + diffN, from the review's base to round N's head |\n\nThe whole change is always measured from **the review's base** (round 1's base), never from a base a later round happened to name.\n\n## Where it goes wrong now\n- Each round stores whatever range it was opened with: `RoundKind::Range {base, head}` and `rounds/N.diff`.\n  - An author who passes `base..HEAD` makes round N cumulative.\n  - One who passes `HEAD~1..HEAD` makes it incremental.\n  - A rebased or moved base makes it neither.\n- \"Whole change\" (`crates/atm-lib/src/review_pages/view.rs:30`, `against: None`) shows round N's own stored diff from its own base. So it is diffN on one review and diff1…diffN on another.\n- \"Since round M\" (`rounds::compare`, `view.rs:47`) compares the two rounds' trees. It does not add up with \"whole\", and comments anchored on a round move between views.\n- The page's picker (`dashboard/src/lib/reviews/ReviewPage.svelte:845`) offers \"Whole change\" and \"Since round n\" over these.\n\n## The change\n- **Model it in the code.** In atm-review, a round records its increment: the previous round's head (round 1: the review's base) and its own head, or the tree for a working or files round. Make it a type, `Increment` or `RoundDiff`, that can't be built otherwise.\n- **One function** composes a view from increments: `diff(review, from: Base | Round(M), to: Round(N))`, the only way a view is made.\n  - `whole(N)` = `diff(Base, N)`.\n  - `since(M, N)` = `diff(Round(M), N)`.\n  - `round(1)` = `whole(1)`.\n- **`atm review round` and `create`** record the increment whatever range is given. They take the head, or the range's end; a range whose start isn't the previous round's head (or the review's base for round 1) is recorded from the previous head, and atm says so. Live and working rounds alike.\n- **Existing reviews:** their stored rounds are read through the model.\n  - Round N's head is kept.\n  - Its increment is worked out from round N−1's head.\n  - The review's base is round 1's base.\n  - Nothing is rewritten in the review folders unless a migration is agreed.\n- **Comments:** a comment stays on the round it was written on, and is placed in a view the same way whichever view it is: shown in a view that contains its round's increment, else listed as on another round.\n- **The API and the page:** the route's `round` and `against` keep their meaning: `against=M` is since round M, and none is whole. The page labels its picker \"Round N (whole)\", \"Since round M\" and \"Round N only\" (= since N−1). The view says which it shows, from the API.\n- **Docs:** `docs/code-review-design.md` (rounds) and `atm docs reviews` say it in these words.\n\n## Tests\n- atm-review: a table over a three-round review (a commit range each round; a working round; a files round), checking for every N and M:\n  - whole(N) = diff1…diffN;\n  - since(M, N) = diffM+1…diffN;\n  - round 1 = diff1;\n  - whole(N) = whole(M) + since(M, N), file by file.\n- A round opened with a cumulative range and one with an incremental range give the same increments.\n- An existing review folder (rounds stored cumulatively, and incrementally) reads the same.\n- A comment on round 2 shows in whole(3) and since(1, 3), not in since(2, 3).\n- `reviews.spec.ts`: the picker's three views on a three-round review.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-review/src/model.rs",
@@ -20446,9 +20490,9 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-21T16:42:00Z",
-      "updated_at": "2026-11-21T16:42:00Z",
+      "updated_at": "2026-11-22T16:21:14Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -20456,7 +20500,10 @@
         }
       ],
       "sprint": "Audit and tabs",
-      "number": 725
+      "number": 725,
+      "started_at": "2026-11-22T16:16:46Z",
+      "started_by": "claude:0f56a916",
+      "review": "async"
     },
     {
       "id": "01a2040b-321c-72da-a83d-bc9d461b28a6",
@@ -20473,7 +20520,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-22T16:16:23Z",
+      "updated_at": "2026-11-22T16:54:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20514,6 +20561,18 @@
           "at": "2026-11-22T16:16:23Z",
           "kind": "note",
           "text": "Decision to revisit: on ATM-723 the review page still shows Close only on a live review, though atm allows the author or a reviewer to close any open review. Show Close on waiting reviews too?",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T16:21:48Z",
+          "kind": "note",
+          "text": "Code reviews: ATM-717 to ATM-723 went done with no CR, as the project review mode is none, and Hakan caught it. Now every open sprint task is review async and every code task gets a CR. Worth deciding the project default (meta.review) so it is not per task.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T16:54:08Z",
+          "kind": "note",
+          "text": "ATM-725: the CLI suite failed once because atm embeds docs/agent at build time and the docs were edited after the last cargo build. Rule of thumb: rebuild after any docs/agent change, before the CLI suite.",
           "by": "claude:0f56a916"
         }
       ]

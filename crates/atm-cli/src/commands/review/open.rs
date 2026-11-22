@@ -200,14 +200,21 @@ pub(super) fn run(command: OpenCommand, ctx: Context, cwd: &Path) -> Result<u8> 
                 );
                 return Ok(0);
             }
-            let number = reviews::add_round(&mut project, &found.header.reference, round)?;
+            let added = reviews::add_round(&mut project, &found.header.reference, round)?;
+            let number = added.number;
             if let Some(summary) = summary {
                 reviews::edit_summary(&mut project, &found.header.reference, summary.trim_end())?;
             }
             if ctx.json {
-                print_json(&json!({ "review": found.header.reference, "round": number }));
+                print_json(
+                    &json!({ "review": found.header.reference, "round": number, "recorded": added.recorded }),
+                );
             } else {
                 println!("{}: round {number}", found.header.reference);
+                // Its range recorded from where the round before ended (ATM-725), saying so
+                if let Some(said) = added.recorded {
+                    println!("Round {number}: {said}");
+                }
             }
         }
         OpenCommand::Tasks {

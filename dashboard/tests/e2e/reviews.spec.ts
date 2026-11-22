@@ -1525,6 +1525,44 @@ test.describe('a review’s page', () => {
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=2');
   });
 
+  // ATM-725: a round's views are its whole change, what changed since an earlier round, and its own increment
+  test('the picker: Round 3 (whole), Since round 1, Round 3 only; each asked of the server', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDiffs(page, tasksServer);
+    await expect(page.locator('#review-against option')).toHaveText([
+      'Round 3 (whole)',
+      'Since round 1',
+      'Round 3 only',
+    ]);
+    await page.selectOption('#review-against', '2');
+    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=3&against=2');
+    await page.selectOption('#review-against', '');
+    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=3');
+    // Round 1 has only its whole change (the fixture serves one page for every view: round 1's, now)
+    tasksServer.setReview('CR-2', reviewPage({ view: { ...reviewPage().view, round: 1 } }));
+    await page.selectOption('#review-round', '1');
+    await expect(page.locator('#review-against option')).toHaveText(['Round 1 (whole)']);
+  });
+
+  test('a comment on a round the view doesn’t hold is listed, linking to its round, not placed', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDiffs(page, tasksServer);
+    // Since round 2: c1, made on round 2, is on a round the view doesn't hold
+    const chains: Record<string, unknown>[] = reviewPage().chains;
+    chains[0] = { ...chains[0], anchor: { ...reviewPage().chains[0].anchor, round: 2 }, in_view: false };
+    tasksServer.setReview('CR-2', reviewPage({ chains, view: { ...reviewPage().view, against: 2 } }));
+    await page.reload();
+    const listed = card(page, 'src/a.rs').locator('.review-elsewhere[data-chain="t1"]');
+    await expect(listed).toContainText('A comment on round 2');
+    await expect(card(page, 'src/a.rs').locator('[data-comment="c1"]')).toHaveCount(0);
+    await listed.getByRole('button', { name: /see it on round 2, lines 3–3/ }).click();
+    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=2');
+  });
+
   test('a drifted chain links to the round it was made on', async ({ page, tasksServer }) => {
     await openDiffs(page, tasksServer);
     await page.getByRole('button', { name: /see it where it was made, round 1, lines 7–8/ }).click();

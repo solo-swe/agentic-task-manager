@@ -153,16 +153,16 @@ pub(super) fn run(command: ReadCommand, ctx: Context, cwd: &Path) -> Result<u8> 
             let store = reviews::store(&project)?;
             let found = store.get_review(&reference(&review))?;
             if let Some(round) = round {
-                let patch = match against {
-                    Some(from) => rounds::compare(&vcs_of(&project)?, &store, &found, from, round)?,
-                    None => store.round_diff(&found.header.id, round)?,
-                };
+                // The same views as the page's (ATM-725): the whole change from the review's base, or since round M
+                let since = against.map_or(rounds::Since::Base, rounds::Since::Round);
+                let view = rounds::between(&vcs_of(&project)?, &store, &found, since, round)?;
+                let patch = view.diff.patch;
                 if ctx.json {
                     print_json(
-                        &json!({ "review": found.header.reference, "round": round, "against": against, "diff": patch.0 }),
+                        &json!({ "review": found.header.reference, "round": round, "against": against, "diff": patch }),
                     );
                 } else {
-                    print!("{}", patch.0);
+                    print!("{patch}");
                 }
                 return Ok(0);
             }

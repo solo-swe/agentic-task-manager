@@ -371,9 +371,24 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
 A **round** is what the author asks the reviewers to look at: the first when the review is opened, then one each time
 the author has addressed the comments (`atm review round`), or a live review's checkpoints.
 
-- **The whole change:** the latest round's diff, against its base.
-- **Between two rounds** (round 2 against round 1): what changed in response to the comments, from the two rounds'
-  files (their heads, or rebuilt from their diffs, §3.3), limited to the review's files. This is the view Crit lacks.
+A review is **a chain of increments, one a round** (ATM-725): diff1 is round 1's change, from the review's base to
+round 1's result; diffN (N > 1) is what round N changed on top of round N−1, from round N−1's result to its own. A
+round's result is its tree: a range's head, or its files rebuilt from its base and its diff (§3.3). `atm review round`
+records a range from where the round before ended, whatever base it was given, and says so when it moved it. Every view
+is made one way, `rounds::between`: round N's tree against a start, so it is the increments between them added up,
+however each round was opened.
+
+| View | Is | The page's picker |
+|---|---|---|
+| Round 1 | diff1 | *Round 1 (whole)* |
+| Round N, whole | diff1 + … + diffN, from the review's base (round 1's) to round N's result | *Round N (whole)* |
+| Round N, since round M (M < N) | diffM+1 + … + diffN, from round M's result to round N's | *Since round M* |
+| Round N, since round N−1 | diffN | *Round N only* |
+
+So whole(N) = whole(M) + since(M, N), and the whole change is always measured from the review's base, never from a
+base a later round named. Atm's task folder is in no view; a view spanning a files round shows only the files those
+rounds name. A comment shows in a view that holds its round's increment (made on round K: in whole(N) for K ≤ N, in
+since(M, N) for M < K ≤ N); in any other, its file lists it as on round K, with a link there (`in_view` on each chain).
 
 A chain is anchored to **a round, a file, a side (new or old), a line range, and the quoted text**. In a later round,
 atm moves the anchor through the change between the two rounds: lines unchanged around it move with it. When the
@@ -729,8 +744,8 @@ docs/code-review-design.md --task ATM-337`: the file reviewed whole, read render
 text anchored by their quote. The next round is the file as revised; round 2 against round 1 shows what changed, which
 Crit struggled with. A review of code and documents together shows each file its way. §3.2, §3.6, §3.7.
 
-**U5. The whole change, or only what changed since the last round.** The round picker (§3.6): the latest round's
-whole diff, or round 3 against round 2.
+**U5. The whole change, or only what changed since the last round.** The round picker (§3.6): a round's whole
+change from the review's base, what changed since an earlier round, or the round alone (*Round 3 only*, since round 2).
 
 **U6. A batch review at the sprint's end.** The tasks in `batch` mode are reviewed together: one CR over the sprint's
 range, naming them (`--task` repeated). A decision is each task's; a chain about one task names it in its text.
