@@ -4,6 +4,7 @@
 import { appTabs, type AppTabs } from './app-tabs.svelte';
 import { closeWindow, openWindow } from './api/shell';
 import { rememberScroll, showTab } from './navigation';
+import { forgetTab } from './tab-parked';
 
 /** A click that asks for a new tab: ⌘-click, Ctrl-click or a middle click, as in a browser */
 export function wantsNewTab(e: MouseEvent): boolean {
@@ -56,7 +57,11 @@ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): T
     open: (address = '/', background = false) =>
       background ? void tabs.open(address, true) : go(leaving(() => tabs.open(address))),
     select: (id) => go(id === tabs.active ? undefined : (leaving(() => tabs.select(id)) ?? undefined)),
-    close: (id = tabs.active) => go(tabs.close(id)),
+    close: (id = tabs.active) => {
+      // Its questions left open go with it (ATM-700)
+      forgetTab(id);
+      go(tabs.close(id));
+    },
     step: (step) => go(leaving(() => tabs.step(step)) ?? undefined),
     move: (id, to) => tabs.move(id, to),
     toWindow: () => {

@@ -48,6 +48,7 @@
   import { reviewWindow } from '../reviews/window.svelte';
   import { withTask } from '../routes';
   import { tabActions } from '../tab-actions';
+  import { appTabs } from '../app-tabs.svelte';
   import { withView } from '../tabs';
   import { dashboard } from '../state.svelte';
 
@@ -88,6 +89,8 @@
   let unreadable = $state.raw<UnreadableReview[]>([]);
   // The review shown
   let shown = $state.raw<ReviewPageData | null>(null);
+  /** The app's tab it is shown on (ATM-700); none in the browser */
+  const tab = $derived(inApp ? appTabs.active : undefined);
   let loading = $state(false);
   let busy = $state(false);
   let problem = $state<string | null>(null);
@@ -275,10 +278,12 @@
   {#if at.review}
     {#if shown && project}
       {@const page = shown}
-      <!-- Another review is another page (ATM-675, audit D2): nothing typed on one, no file it was at, stays for the next -->
-      {#key page.review.id}
+      <!-- Another review is another page (ATM-675, audit D2): nothing typed on one, no file it was at, stays for the next;
+           and in the app another tab is another page too, its questions left open kept for it (ATM-700) -->
+      {#key `${tab ?? ''}:${page.review.id}`}
         <ReviewPage
           {page}
+          appTab={tab}
           project={shortName}
           file={at.file}
           section={shownSection}

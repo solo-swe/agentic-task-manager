@@ -898,6 +898,29 @@ describe('ReviewPage: submit', () => {
     expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(OPEN_WHY);
   });
 
+  // ATM-700: a question left open belongs to its tab; a switch takes the page away and back
+  it('Submit review left open is there again on its tab, as it was; not on another, nor in the browser', async () => {
+    const first = show(open(), { appTab: 't1' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Half written' } });
+    first.unmount();
+    // Another tab's page of the same review: its own, closed
+    const other = show(open(), { appTab: 't2' });
+    expect(screen.queryByLabelText('Summary')).toBeNull();
+    other.unmount();
+    show(open(), { appTab: 't1' });
+    expect(screen.getByLabelText('Summary')).toHaveValue('Half written');
+  });
+
+  it('in the browser (no tab), a form left open isn’t kept', async () => {
+    const first = show(open());
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Gone' } });
+    first.unmount();
+    show(open());
+    expect(screen.queryByLabelText('Summary')).toBeNull();
+  });
+
   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {
     const { rerender } = show(open());
     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));

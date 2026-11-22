@@ -7,6 +7,7 @@
   import { formatWhen } from '../format';
   import { readStored, writeStored } from '../prefs';
   import Icon from '../ui/Icon.svelte';
+  import { park, unpark } from '../tab-parked';
   import ChainBox from './ChainBox.svelte';
   import ComposerActions from './ComposerActions.svelte';
   import { setDraftActions, withDrafts, type DraftActions } from './drafts';
@@ -74,6 +75,7 @@
     ondrafts,
     onedit,
     ondocument,
+    appTab,
   }: {
     page: ReviewPageData;
     /** The project's short name (its key), before the reference */
@@ -127,6 +129,9 @@
     /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
      * manager opens its document viewer (ATM-586) */
     ondocument?: (ref: DocumentRef) => void;
+    /** The app's tab it is shown on (ATM-700): its Submit review and Poke forms, left open, are kept for that tab
+     * across a switch and there again on return; none in the browser */
+    appTab?: string;
   } = $props();
 
   const review = $derived(page.review);
@@ -585,6 +590,27 @@
     onsubmit(decision, summary.trim());
     submitting = false;
   }
+  // A question left open belongs to its tab (ATM-700, lib/tab-parked.ts): a switch of tab takes the page away, so the
+  // forms are parked for the tab as they are, and taken back when it is shown again
+  interface Open {
+    submitting: boolean;
+    summary: string;
+    poking: boolean;
+    pokeText: string;
+  }
+  const parkedAs = untrack(() => `review-forms:${review.id}`);
+  const shownOn = untrack(() => appTab);
+  const kept = unpark<Open>(shownOn, parkedAs);
+  if (kept) {
+    submitting = kept.submitting;
+    summary = kept.summary;
+    poking = kept.poking;
+    pokeText = kept.pokeText;
+  }
+  onDestroy(() => {
+    if (submitting || poking || summary || pokeText) park(shownOn, parkedAs, { submitting, summary, poking, pokeText });
+  });
+
   // A decision made (the review's `updated` moves): the summary box starts empty; a refresh that changed nothing else
   // keeps what is being written
   let updatedAt = untrack(() => review.updated);

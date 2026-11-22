@@ -18969,14 +18969,14 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 5 of §7.\n\n## Change\nA context menu component in `ui/`, used in the app only (the browser keeps its own):\n- on a link, card or row: **Open**, **Open in New Tab**, **Open in New Window**, **Copy Link** (the `atm://` form, §4.4);\n- on a title-bar tab: **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs**;\n- elsewhere: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text.\n\nWebKit's default menu is turned off in the app, as its Reload bypasses the app's reload.\n\n## Tests\ne2e in the app: each menu's items and what each does; Copy Link copies the `atm://` address.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c1592d63e49a",
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
       "files": [],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-22T19:23:03Z",
+      "updated_at": "2026-11-22T19:35:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18994,7 +18994,24 @@
       "number": 699,
       "review": "async",
       "started_at": "2026-11-22T19:23:03Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "695a2413455a540442316676c7c4338b8fd8ca0f",
+      "code_reviews": [
+        {
+          "id": "01a204c2-0a3d-74c3-9dcd-78181ba0c813",
+          "ref": "CR-117"
+        }
+      ],
+      "review_requested_at": "2026-11-22T19:35:55Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-22T19:35:55Z",
+          "kind": "review",
+          "text": "CR-117: atm’s own right-click menus in the app: links, tabs, elsewhere",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15b77d909a3",
@@ -19008,7 +19025,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.2, task 6 of §7 (§6.2's recommended answer).\n\n## Change\n- A question (Add task, a confirmation, Submit review) belongs to its tab: hidden on a switch and there again on return, as a macOS sheet; a menu or dropdown closes on a switch.\n- The app's own (Settings, Help, What's new, About, the search) stay above every tab.\n- A place over a page (task details, a document) is hidden with its tab and there again on return (it is in the tab's address).\n- `App.svelte` and the dialogs.\n\n## Tests\ne2e in the app: a Submit review form half-filled on one tab, another tab shown and back, the form as it was; Settings stays open across a switch.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
@@ -19016,7 +19033,7 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-22T16:21:24Z",
+      "updated_at": "2026-11-22T19:35:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19032,7 +19049,9 @@
       ],
       "sprint": "Audit and tabs",
       "number": 700,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-22T19:35:55Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15c40f37bbc",

@@ -424,6 +424,68 @@ test.describe('the dashboard in the atm app', () => {
     },
   );
 
+  // ATM-700 (docs/tabs-and-navigation-design.md §4.2): a question stays on its tab; the app's own stay above every tab
+  test('a Submit review form left open is there again on its tab; Settings stays open across a switch', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    const header = {
+      id: 'r2',
+      reference: 'CR-2',
+      number: 2,
+      title: 'Trim the names',
+      status: 'waiting',
+      tasks: [],
+      author: 'claude:a',
+      reviewers: [],
+      created: '2026-11-17T10:00:00Z',
+      updated: '2026-11-17T10:00:00Z',
+    };
+    tasksServer
+      .setReviews({ reviews: [{ review: header, branch: null, chains: 0, open: 0, needs_you: true }], you: 'Ana' })
+      .setReview('CR-2', {
+        review: header,
+        summary: '',
+        branch: null,
+        rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
+        chains: [],
+        view: { round: 1, against: null, files: [] },
+        needs_you: true,
+        you: 'Ana',
+      });
+    tasksServer.link(`/projects/${tasksServer.projectId}/reviews/CR-2`);
+    await page.goto('/');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+
+    // Half written, then another tab shown and back: the form as it was
+    await page.getByRole('button', { name: 'Other decisions' }).click();
+    await page.getByLabel('Summary').fill('Half written');
+    await page.locator('#app-tab-new').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(page.locator('#review-page')).toHaveCount(0);
+    await tabs.nth(0).click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    await expect(page.getByLabel('Summary')).toHaveValue('Half written');
+
+    // The same review in the other tab is its own page: no form open there
+    await tasksServer.pushLink(`/projects/${tasksServer.projectId}/reviews/CR-2`);
+    await expect(tabs).toHaveCount(3);
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    await expect(page.getByLabel('Summary')).toHaveCount(0);
+
+    // Settings is the app's: open across a switch of tab
+    await tasksServer.chooseMenu({ kind: 'settings' });
+    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
+    // The link's tab opened right of the first; the one before it is the first, with its form
+    await tasksServer.chooseMenu({ kind: 'previous_tab' });
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
+    await expect(page.getByLabel('Summary')).toHaveValue('Half written');
+  });
+
   test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
     page,
     tasksServer,
