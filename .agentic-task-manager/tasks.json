@@ -1830,7 +1830,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 726
+    "next_number": 727
   },
   "tasks": [
     {
@@ -20254,7 +20254,7 @@
       "description": "Step 5 of [the plan](docs/dashboard-derived-state.md), group D, decisions 1 and 4.\n\n## atm-lib\n- One work rule over a task's attempts and rounds (`reviews`, `blocks`, the start and lapse notes): `derived.work` `{minutes, live, spans}`.\n- `summary.rs` `work_span` and `agent_minutes` use it, with `is_agent` instead of the `claude:` literal.\n- `with: user` decides \"with you\". `atm db migrate` moves the `interactive` label to `with: user` once, and says so.\n\n## Dashboard\nThe uses go to `derived.work`:\n- `work.ts` `workSpan` and `taskTimes`;\n- `cardfacts.ts`;\n- `timeHistogram`, `taskDurations`, the cycle times;\n- `agentTimeline`, `timeUse`.\n\n`INTERACTIVE_LABEL` goes.\n\n## Tests\n- atm-lib's table: one attempt; taken back after a lapse; two review rounds; blocked between; active now.\n- The migration scenario.\n- Unit tests on atm's fields.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/summary.rs",
@@ -20266,7 +20266,7 @@
         "dashboard/src/lib/forecast.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-22T01:33:36Z",
+      "updated_at": "2026-11-22T02:12:17Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20281,7 +20281,18 @@
       ],
       "number": 721,
       "started_at": "2026-11-22T01:33:36Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "20e199a59e0da32ff7b1d54ab1c507a931ca15fe",
+      "completed_at": "2026-11-22T02:12:17Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-22T02:12:17Z",
+          "kind": "outcome",
+          "text": "One work rule in atm-lib work.rs: every attempt and round, less reviews and blocks. Served as derived.work with per-span by. back_to_todo records attempts, ending where the work stopped (a lapse at the last update or lease end). The summary agent time and every dashboard chart use it. with user decides with you, and db migrate moves the interactive label once. All suites green.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d426cb480e",
@@ -20337,7 +20348,7 @@
       "description": "Step 7 of [the plan](docs/dashboard-derived-state.md), group G.\n\n## Change\n- `ReviewPage.svelte` shows Approve, Request changes, Comment (Publish comments), Round and Close only as `can` allows, with its reason.\n- The page's own rules go: `ended`, `live`, `sentBack` and `settled` as rules, and `approveBlocked`'s fallback.\n- Each comment carries `editable` from atm. `ChainBox`'s rule goes.\n\n## Tests\n- `can`'s table (atm-lib).\n- The page's unit tests for each answer.\n- `reviews.spec.ts` for a waiting, a live, a sent-back and an approved review.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/reviews/ReviewPage.svelte",
@@ -20345,9 +20356,9 @@
         "crates/atm-lib/src/review_pages/page.rs"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-22T16:00:09Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -20358,7 +20369,16 @@
       "related": [
         "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
       ],
-      "number": 723
+      "number": 723,
+      "notes": [
+        {
+          "at": "2026-11-22T15:59:01Z",
+          "kind": "failure",
+          "text": "lease expired (claude:0f56a916)"
+        }
+      ],
+      "started_at": "2026-11-22T16:00:09Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d689547b76",
@@ -20437,6 +20457,66 @@
       ],
       "sprint": "Audit and tabs",
       "number": 725
+    },
+    {
+      "id": "01a2040b-321c-72da-a83d-bc9d461b28a6",
+      "name": "Retrospective of the sprint Audit and tabs, with Hakan, before it closes",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "retro"
+      ],
+      "description": "A conversation with Hakan before `/atm-close-sprint`: what worked in this sprint and what could be improved, in how the agent works and in atm itself.\n\n## Before it\nAgents add a note to this task (`atm task note`) whenever something worth discussing comes up while they work: a slowdown, a slip, a check that caught a real bug, a rule that got in the way, a tool that was missing. The notes are the agenda.\n\n## To discuss\n- The notes, one by one: keep doing, change, or stop.\n- How long tasks took, and where the time went (implementation, tests, waiting on suites, fixing failures).\n- The testing routine: per-task checks, the full end-to-end run, the screenshots at the release.\n- Questions to the user: blocked tasks, how fast they were answered, what could have been decided up front.\n- What to carry into the next sprint: follow-up tasks (through `/atm-create-tasks`), and preferences to remember.\n\n## Outcome\nA short summary in this task's done note, follow-up tasks created, and any agreed working preference saved.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-11-22T16:16:12Z",
+      "updated_at": "2026-11-22T16:16:23Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-22T16:16:12Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "with": "user",
+      "number": 726,
+      "notes": [
+        {
+          "at": "2026-11-22T16:16:21Z",
+          "kind": "note",
+          "text": "ATM-721: the full e2e run found a real bug the unit tests missed (a live bar ran to when atm served the data, 5630 h). Worth the 3 minutes. But a serve test failed once only because the CLI suite and cargo test ran at the same time: run them one after another.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T16:16:21Z",
+          "kind": "note",
+          "text": "ATM-723: three reviews-list specs used fixed 17 Nov dates and broke on 22 Nov, past the list 5-day cutoff. Specs with dates should be relative to the run or fix the clock. Worth a sweep of the other specs for the same pattern.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T16:16:22Z",
+          "kind": "note",
+          "text": "ATM-723: the claim lapsed (2 h lease) while the agent talked with Hakan between commands, and the task went back to todo. Talking renews nothing: only atm commands do. Should a chat answer renew it, or the agent hold the claim more often?",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T16:16:23Z",
+          "kind": "note",
+          "text": "Agent slips this sprint: a python call (denied), two commands chained with &&, a bogus reporter path on a vitest command. Each cost a round trip. And ATM-723 unit tests were built on the page fallback rules the task removed, so about ten needed rewriting: tests built on fakes of atm answers would have needed none.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T16:16:23Z",
+          "kind": "note",
+          "text": "Decision to revisit: on ATM-723 the review page still shows Close only on a live review, though atm allows the author or a reviewer to close any open review. Show Close on waiting reviews too?",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }

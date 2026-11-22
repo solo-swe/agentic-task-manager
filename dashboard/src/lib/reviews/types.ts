@@ -23,6 +23,9 @@ export interface ReviewComment {
   poke?: boolean;
   /** One of the user's drafts (ATM-612), not sent yet: only they see it; absent for any other comment */
   draft?: boolean;
+  /** Whether you may change its text (ATM-723): atm's rule (yours, not a poke, the review not ended). A draft's is
+   * the drafts' own (absent: only the server's comments carry it) */
+  editable?: boolean;
   replies: ReviewComment[];
 }
 
@@ -160,9 +163,9 @@ export interface ReviewPageData {
   needs_you: boolean;
   you: string;
   /** What this reader may do, and why not (ATM-633, docs/task-review-state-machine.md §5.2): the server's state
-   * machine answering for each action, so the page shows a button for what it allows and never repeats the rules.
-   * Optional, for an older atm's pages */
-  can?: Partial<Record<ReviewAction, { ok: boolean; why?: string }>>;
+   * machine answering for each action, so the page shows a button for what it allows and never repeats the rules
+   * (ATM-723: the page has no rule of its own) */
+  can: Record<ReviewAction, { ok: boolean; why?: string }>;
 }
 
 /** The actions a review's page offers, as the server's `can` names them */

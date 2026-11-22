@@ -52,6 +52,10 @@ const NEW_D = '# Plan\n\nFirst step.\n\nNew ending.\n';
 const PATCH_D =
   'diff --git a/docs/plan.md b/docs/plan.md\n--- a/docs/plan.md\n+++ b/docs/plan.md\n@@ -5 +5 @@\n-Old ending.\n+New ending.\n';
 
+/** An hour before the run: a decided review is among the recent ones whatever day the suite runs (after
+ * `RECENT_DAYS`, the list folds it under *Older*) */
+const RECENTLY = new Date(Date.now() - 60 * 60_000).toISOString();
+
 const header = (n: number, status = 'waiting', more: Record<string, unknown> = {}) => ({
   id: `r${n}`,
   reference: `CR-${n}`,
@@ -61,8 +65,8 @@ const header = (n: number, status = 'waiting', more: Record<string, unknown> = {
   tasks: ['T-001'],
   author: 'claude:a',
   reviewers: [],
-  created: '2026-11-17T10:00:00Z',
-  updated: '2026-11-17T10:00:00Z',
+  created: RECENTLY,
+  updated: RECENTLY,
   ...more,
 });
 
@@ -72,7 +76,7 @@ const comment = (id: string, body: string, resolved: boolean | null = false) => 
   at: '2026-11-17T10:00:00Z',
   body,
   resolved,
-  replies: [],
+  replies: [] as unknown[],
 });
 
 const file = (path: string, patch: string, status = 'modified', before: string | null = 'base1') => ({
@@ -85,7 +89,8 @@ const file = (path: string, patch: string, status = 'modified', before: string |
   after: 'head3',
 });
 
-/** CR-2's page: three rounds, three files, a chain in place, a drifted one, one on the review */
+/** CR-2's page: three rounds, three files, a chain in place, a drifted one, one on the review (`setReview` adds atm's
+ * answers on it, `can` and `editable`, unless it gives them) */
 function reviewPage(more: Record<string, unknown> = {}) {
   return {
     review: header(2),
@@ -2599,14 +2604,55 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(page.locator('#review-approve, [data-decision="approve"]').first()).toBeDisabled();
     await expect(page.locator('#review-approve-why')).toContainText(why);
     await expect(page.locator('[data-decision="request_changes"]')).toHaveCount(0);
-    // The server allows it now (the comment resolved elsewhere): the page follows its next answer
+    // The server allows it now (the comment resolved elsewhere): the page follows its next answer, Approve one click
+    // (ATM-723: atm's answer, not the comments the page holds)
     const allowed = { approve: { ok: true }, request_changes: { ok: true }, comment: { ok: true } };
     tasksServer.setReview('CR-2', reviewPage({ can: allowed }));
     await page.goto(reviewPath(tasksServer, '/CR-2'));
-    await page.getByRole('button', { name: 'Submit review' }).click();
+    await expect(page.locator('#review-approve')).toBeEnabled();
+    await page.getByRole('button', { name: 'Other decisions' }).click();
     await expect(page.locator('[data-decision="approve"]')).toBeEnabled();
     await expect(page.locator('#review-approve-why')).toHaveCount(0);
     await expect(page.locator('[data-decision="request_changes"]')).toBeVisible();
+  });
+
+  // ATM-723: the controls follow atm's answers on each kind of review, the page keeping no rule of its own
+  for (const [status, offered] of [
+    ['waiting', ['comment', 'request_changes', 'approve']],
+    ['live', ['comment', 'close', 'approve']],
+    ['changes_requested', ['comment', 'approve']],
+  ] as const) {
+    test(`a ${status} review offers ${offered.join(', ')}; Edit on your own comments`, async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer);
+      const chains = reviewPage().chains;
+      // On the review: the reviewer's comment, and the agent's reply to it
+      const theirs = { ...comment('c4', 'Thanks.', null), author: 'claude:a' };
+      // Open: a resolved comment is folded, its Edit not drawn
+      chains[2] = { ...chains[2], comments: [{ ...comment('c3', 'Nice and small.'), replies: [theirs] }] };
+      tasksServer.setReview('CR-2', reviewPage({ review: header(2, status), chains }));
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('button', { name: /Submit review|Publish comments/ }).click();
+      await expect(page.locator('.review-submit [data-decision]')).toHaveCount(offered.length);
+      for (const decision of offered) await expect(page.locator(`[data-decision="${decision}"]`)).toBeVisible();
+      await expect(page.locator('[data-decision="approve"]')).toBeDisabled(); // c1 is open
+      const conversation = page.locator('.review-conversation');
+      const edit = (id: string) =>
+        conversation.locator(`[data-comment="${id}"] > .chain-meta`).getByRole('button', { name: 'Edit comment' });
+      await expect(edit('c3')).toHaveCount(1);
+      await expect(edit('c4')).toHaveCount(0);
+    });
+  }
+
+  test('an approved review offers no decision, no poke and no Edit', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    tasksServer.setReview('CR-2', reviewPage({ review: header(2, 'approved') }));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await expect(page.locator('#review-page')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Submit review|Approve|Poke/ })).toHaveCount(0);
+    await expect(page.locator('[aria-label="Edit comment"]')).toHaveCount(0);
   });
 
   test('every comment resolved: Submit review is Approve, and one click approves', async ({ page, tasksServer }) => {
@@ -2731,10 +2777,10 @@ test.describe('the diff viewer on a review’s page', () => {
       });
     tasksServer.answerReviewChanges(403, { error: "the review's author can't decide it" });
     await page.getByRole('button', { name: 'Submit review' }).click();
-    // Its comments open, Approve can't be pressed, and says why (ATM-601)
+    // Its comments open, Approve can't be pressed, and says why in atm's words (ATM-601, ATM-723)
     const approve = page.getByRole('button', { name: 'Approve' });
     await expect(approve).toBeDisabled();
-    await expect(approve).toHaveAccessibleDescription(/still open: resolve them first/);
+    await expect(approve).toHaveAccessibleDescription('CR-2 can’t be approved while comments are open: c1, c2');
     await page.getByLabel('Summary').fill('One more.');
     await page.getByRole('button', { name: 'Comment', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveText("the review's author can't decide it");

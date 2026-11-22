@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftedComments, withDrafts } from '../../src/lib/reviews/drafts';
+import { withDrafts } from '../../src/lib/reviews/drafts';
 import type { PlacedChain, PlacedDraft, ReviewComment } from '../../src/lib/reviews/types';
 
 // The user's drafts among a review's chains (lib/reviews/drafts.ts, ATM-612): a draft comment a chain of its own,
@@ -107,12 +107,5 @@ describe('withDrafts', () => {
     expect(shown[1]).toEqual(chains[1]);
     // The page's own chains are left as they were
     expect(chains[0].comments[0].replies).toHaveLength(1);
-  });
-});
-
-describe('draftedComments', () => {
-  it('counts the drafts that would be open comments once sent, not the replies', () => {
-    expect(draftedComments(undefined)).toBe(0);
-    expect(draftedComments([onLines('d1'), reply('d2', 'c1'), onLines('d3')])).toBe(2);
   });
 });

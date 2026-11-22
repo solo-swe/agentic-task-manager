@@ -31,10 +31,9 @@ export function taskLinks(): TaskLinks | undefined {
 
 const EDITS = Symbol('review-comment-edits');
 
-/** Editing one's own comments on the page (ATM-638): who you are, and what a change does (why it was refused, or
- * null). None on a review that has ended, or a page that can't change one */
+/** Editing one's own comments on the page (ATM-638): what a change does (why it was refused, or null). Which comments
+ * may be changed is each comment's `editable`, atm's (ATM-723). None on a page that can't change one */
 export interface CommentEdits {
-  readonly you: string;
   edit(comment: string, body: string): Promise<string | null>;
 }
 

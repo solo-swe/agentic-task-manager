@@ -199,6 +199,44 @@ fn a_reply_is_edited_by_its_author_only_and_a_missing_comment_is_not_found() {
     ));
 }
 
+/// ATM-723: the one rule the page's Edit and `edit` share. Its author's comment or reply, while the review is open in
+/// any status; never another's, never a poke, never on an ended review
+#[test]
+fn may_edit_is_its_authors_on_a_review_not_ended_never_a_poke() {
+    for (status, open) in [
+        (Status::Draft, true),
+        (Status::Waiting, true),
+        (Status::Live, true),
+        (Status::ChangesRequested, true),
+        (Status::Approved, false),
+        (Status::Closed, false),
+    ] {
+        let mut store = MemoryStore::new();
+        let reference = at(&mut store, Status::Waiting);
+        let mut reviews = Reviews::new(&mut store);
+        let question = reviews
+            .comment(&reference, on("a.rs", 1), "Why?", &hakan())
+            .unwrap();
+        let answer = reviews
+            .reply(&reference, &question, "Because.", &agent())
+            .unwrap();
+        let poke = reviews.poke(&reference, "Where are we?", &hakan()).unwrap();
+        let mut review = store.get_review(&reference).unwrap();
+        review.header.status = status;
+        let may = |id: &CommentId, by: &Actor| {
+            rules::may_edit(&review, review.comment(id).unwrap(), by).is_ok()
+        };
+        let seen = [
+            may(&question, &hakan()),
+            may(&answer, &agent()),
+            may(&question, &agent()),
+            may(&answer, &hakan()),
+            may(&poke, &hakan()),
+        ];
+        assert_eq!(seen, [open, open, false, false, false], "{status:?}");
+    }
+}
+
 #[test]
 fn a_comment_is_resolved_and_reopened_by_a_decider_or_its_author_only() {
     let mut store = MemoryStore::new();

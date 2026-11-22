@@ -127,6 +127,10 @@ pub fn review_page(
         .and_then(|all| all.into_iter().find(|f| f.header.id == review.header.id))
         .and_then(|f| f.branch);
     let me = me(project);
+    let mut chains = chains;
+    for chain in &mut chains {
+        mark_editable(&review, chain, &me);
+    }
     // What this reader may do, and why not (ATM-633, docs/task-review-state-machine.md §5.2): the machine's answer,
     // so the page shows a button for what the server allows and never repeats the rules
     let can: serde_json::Map<String, Value> =
@@ -152,4 +156,29 @@ pub fn review_page(
         "you": me.0,
         "can": can,
     }))
+}
+
+/// Each comment of a placed chain, its replies too, says whether `me` may change its text (ATM-723): the review's own
+/// rule ([`atm_review::rules::may_edit`]), so the page shows Edit only where an edit would be taken.
+fn mark_editable(review: &atm_review::Review, chain: &mut Value, me: &atm_review::Actor) {
+    fn mark(review: &atm_review::Review, comment: &mut Value, me: &atm_review::Actor) {
+        let found = comment
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| review.comment(&atm_review::CommentId(id.to_string())));
+        let editable = found.is_some_and(|c| atm_review::rules::may_edit(review, c, me).is_ok());
+        if let Some(map) = comment.as_object_mut() {
+            map.insert("editable".into(), Value::Bool(editable));
+            if let Some(Value::Array(replies)) = map.get_mut("replies") {
+                for reply in replies {
+                    mark(review, reply, me);
+                }
+            }
+        }
+    }
+    if let Some(Value::Array(comments)) = chain.get_mut("comments") {
+        for comment in comments {
+            mark(review, comment, me);
+        }
+    }
 }

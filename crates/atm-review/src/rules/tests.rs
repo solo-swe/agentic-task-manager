@@ -4,6 +4,7 @@ use crate::model::{
     Actor, Anchor, Chain, CommentId, FileChange, FileStatus, Patch, ReviewHeader, ReviewRef,
     RoundKind, Status,
 };
+use crate::rules;
 use crate::store::{NewReview, NewRound, ReviewFilter, ReviewStore};
 use atm_common::Error;
 use std::sync::Arc;

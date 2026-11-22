@@ -334,7 +334,11 @@ old parameters from its hash and moves to the new address.
   status that isn't one is `400`.
 - `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
   when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
-  against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you}`. Each file's `patch` is
+  against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you, can}`. `can` is what its
+  reader may do, each of `approve`, `request_changes`, `comment`, `round` and `close` as `{ok, why?}` (the review's
+  rules answering, ATM-633), and each comment and reply carries `editable`, whether they may change its text (their
+  own, not a poke, the review not ended; ATM-723): the page offers what these allow and has no rule of its own. Each
+  file's `patch` is
   its part of the diff, `before` and `after` the revisions its two sides are read from (`documents?path=&at=`, §2.6;
   `null` for a side the file doesn't have). Each chain has `placed`, its lines in the round shown (followed there from
   the round it was made on), and `drifted`, the round and lines it was made on when its text is gone from the round

@@ -1308,6 +1308,9 @@ land (I11, I13, I24, I25). Fields:
   attempt, which `started_at` and `started_by` held already. atm writes them; the merge driver keeps them like
   `blocks`. `atm db migrate` moves the label `interactive` to `with: user` once, on the project's own files, staged
   and not committed, and says so. No skill reads them, and no command reads a new path or URL.
+- **A review's page marks each comment `editable`** (ATM-723), from the same rule `edit` enforces
+  (`atm_review::rules::may_edit`). The page shows its controls only as `can` and `editable` allow, a convenience: every
+  change is still checked by atm when it is made. No skill reads it, and no route or command is added.
 
 ## 4. Keeping it current
 

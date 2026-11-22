@@ -227,6 +227,59 @@ export function board(
   );
 }
 
+interface CommentFake {
+  id: string;
+  author: string;
+  resolved: boolean | null;
+  poke?: boolean;
+  editable?: boolean;
+  replies?: CommentFake[];
+}
+type Answer = { ok: boolean; why?: string };
+export interface ReviewPageFake {
+  review: { status: string };
+  you: string;
+  chains: { comments: CommentFake[] }[];
+  can?: Record<string, Answer>;
+}
+
+/** atm's answers on a review's page (ATM-633, ATM-723), as the fixture plays atm: what its reader may do (`can`:
+ * nothing on an ended review; Approve not while a comment is open; sent back only while waiting; rounds the author's,
+ * whom the fixture's reader never is) and which comments they may edit (`editable`: their own, not a poke, the review
+ * not ended). What the page gives is kept: a test's own `can` answers, its own `editable` */
+function withAtmAnswers(reference: string, page: ReviewPageFake): ReviewPageFake {
+  const status = page.review.status;
+  const ended = status === 'approved' || status === 'closed';
+  const all = (cs: CommentFake[]): CommentFake[] => cs.flatMap((c) => [c, ...all(c.replies ?? [])]);
+  const open = page.chains.flatMap((ch) => all(ch.comments)).filter((c) => c.resolved === false);
+  const no = (why: string): Answer => ({ ok: false, why });
+  const actions = ['approve', 'request_changes', 'comment', 'round', 'close'];
+  const can: Record<string, Answer> = ended
+    ? Object.fromEntries(actions.map((a) => [a, no(`${reference} is ${status}: it can’t be changed`)]))
+    : {
+        approve: open.length
+          ? no(`${reference} can’t be approved while comments are open: ${open.map((c) => c.id).join(', ')}`)
+          : { ok: true },
+        request_changes:
+          status === 'waiting'
+            ? { ok: true }
+            : no(`${reference} is ${status.replace('_', ' ')}: it can’t be sent back`),
+        comment: { ok: true },
+        round: no(`only ${reference}’s author adds its rounds`),
+        close: { ok: true },
+      };
+  const mark = (c: CommentFake): CommentFake => ({
+    ...c,
+    editable: c.editable ?? (!ended && !c.poke && c.author === page.you),
+    replies: (c.replies ?? []).map(mark),
+  });
+  return {
+    ...page,
+    can: { ...can, ...page.can },
+    chains: page.chains.map((ch) => ({ ...ch, comments: ch.comments.map(mark) })),
+  };
+}
+
 /** A channel's ID in an app command's arguments: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its
  * `id`) as Playwright passes it */
 function channelId(channel: unknown): number {
@@ -322,9 +375,10 @@ export class TasksServer {
     return this;
   }
 
-  /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round */
+  /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round, with atm's answers on it (`can`, each
+   * comment's `editable`) unless the page gives its own */
   setReview(reference: string, page: unknown) {
-    this.reviewPages.set(reference, page);
+    this.reviewPages.set(reference, withAtmAnswers(reference, page as ReviewPageFake));
     return this;
   }
 

@@ -72,6 +72,50 @@ fn a_live_reviews_page_says_what_its_reader_may_do_and_why_not() {
     );
 }
 
+/// ATM-723: each comment on the page says whether its reader may change it: their own comment or reply, not another's
+/// and not a poke; nothing once the review has ended
+#[test]
+fn a_reviews_page_says_which_comments_its_reader_may_edit() {
+    let dir = dir();
+    let (mut hakan, cr) = live(&dir.0);
+    let mut reviews = atm_lib::reviews::store(&hakan).unwrap();
+    let anchor = atm_lib::reviews::Anchor {
+        round: 1,
+        ..atm_lib::reviews::Anchor::default()
+    };
+    let mut rules = atm_lib::reviews::Reviews::new(&mut reviews);
+    let mine = rules.comment(&cr, anchor, "Why?", &"Hakan".into()).unwrap();
+    rules
+        .reply(&cr, &mine, "Because.", &"claude:1".into())
+        .unwrap();
+    rules.poke(&cr, "Where are we?", &"Hakan".into()).unwrap();
+    let editable = |project: &atm_lib::Project| {
+        let page = atm_lib::review_pages::review_page(project, &cr, Some(1), None).unwrap();
+        let mut seen = Vec::new();
+        for chain in page["chains"].as_array().unwrap() {
+            for comment in chain["comments"].as_array().unwrap() {
+                seen.push((comment["body"].clone(), comment["editable"].clone()));
+                for reply in comment["replies"].as_array().unwrap() {
+                    seen.push((reply["body"].clone(), reply["editable"].clone()));
+                }
+            }
+        }
+        seen
+    };
+    assert_eq!(
+        editable(&hakan),
+        [
+            (json!("Why?"), json!(true)),
+            (json!("Because."), json!(false)),
+            (json!("Where are we?"), json!(false)),
+        ]
+    );
+    let agent = reopen(&dir.0, "claude:1");
+    assert_eq!(editable(&agent)[1], (json!("Because."), json!(true)));
+    atm_lib::reviews::close(&mut hakan, &cr, "Not this way.", false).unwrap();
+    assert!(editable(&hakan).iter().all(|(_, e)| e == &json!(false)));
+}
+
 /// ATM-576: the page shows a live review's working copy as it is now, after its checkpoints, not stored; a
 /// comment on it makes it a checkpoint first, and is anchored there; a named round is that round
 #[test]

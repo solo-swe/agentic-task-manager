@@ -4,7 +4,9 @@
 
 use atm_common::{Error, Result};
 
-use crate::model::{Actor, Anchor, CommentId, FileStatus, Review, ReviewHeader, ReviewRef, Status};
+use crate::model::{
+    Actor, Anchor, Comment, CommentId, FileStatus, Review, ReviewHeader, ReviewRef, Status,
+};
 use crate::store::{NewReview, NewRound, ReviewStore};
 
 /// What a reviewer submits (§3.11's *Submit*).
@@ -49,6 +51,30 @@ pub fn decides(header: &ReviewHeader, who: &Actor) -> bool {
     } else {
         header.reviewers.contains(who)
     }
+}
+
+/// Whether `by` may change `comment`'s text on `review` (ATM-723, the one rule the page's Edit shows by): a comment of
+/// their own, not a poke (a nudge has no text to change), on a review not ended.
+///
+/// # Errors
+/// Why not, in the words the page shows.
+pub fn may_edit(review: &Review, comment: &Comment, by: &Actor) -> Result<()> {
+    if review.header.status.ended() {
+        return Err(not_now(review, "be edited"));
+    }
+    if comment.poke {
+        return Err(refused(format!(
+            "{} is a poke: it has no text to edit",
+            comment.id
+        )));
+    }
+    if &comment.author != by {
+        return Err(refused(format!(
+            "{} is {}'s to edit",
+            comment.id, comment.author.0
+        )));
+    }
+    Ok(())
 }
 
 impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
@@ -236,12 +262,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
     ) -> Result<()> {
         let review = self.not_ended(reference, "be edited")?;
         let found = self.store.get_comment(&review.header.id, comment)?;
-        if &found.author != by {
-            return Err(refused(format!(
-                "{comment} is {}'s to edit",
-                found.author.0
-            )));
-        }
+        may_edit(&review, &found, by)?;
         self.store.edit_comment(&review.header.id, comment, body)
     }
 

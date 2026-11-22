@@ -71,7 +71,7 @@
   /** Editing one's own comment (ATM-638); none on an ended review or a page that can't */
   const edits = commentEdits();
   /** A comment whose text you may change here: a draft of yours, or one you wrote */
-  const editable = (c: ReviewComment) => (c.draft ? !!drafts : !!edits && c.author === edits.you && !c.poke);
+  const editable = (c: ReviewComment) => (c.draft ? !!drafts : !!edits && !!c.editable);
 
   // A draft's text, or one's own comment's, changed in place (ATM-612, ATM-638)
   let editing = $state<string | null>(null);

@@ -9,7 +9,7 @@
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
   import ComposerActions from './ComposerActions.svelte';
-  import { draftedComments, setDraftActions, withDrafts, type DraftActions } from './drafts';
+  import { setDraftActions, withDrafts, type DraftActions } from './drafts';
   import { focusOnShow } from './focus';
   import { setCommentEdits, setDocumentLinks, setTaskLinks } from './links';
   import type { TaskLinks } from '../compmd';
@@ -134,12 +134,9 @@
   // be an open comment once sent, which an approval can't be made with)
   const allChains = $derived(withDrafts(page.chains, page.drafts, page.you, view.round));
   const pendingDrafts = $derived(page.drafts?.length ?? 0);
-  // Editing one's own comments (ATM-638): none on an ended review, which takes no change (no one is "you" there)
+  // Editing one's own comments (ATM-638): each comment says whether it may be (atm's `editable`, ATM-723)
   if (untrack(() => onedit))
     setCommentEdits({
-      get you() {
-        return ended ? '' : page.you;
-      },
       edit: (comment, body) => onedit?.(comment, body) ?? Promise.resolve('Comments can’t be changed here.'),
     });
   // Set once, for the boxes under the page: each calls the handlers as they are then (a round shown since, say)
@@ -157,10 +154,11 @@
   // In the tree's order (ATM-596): the diffs, moving between files, the round's select and the Viewed count follow it
   const files = $derived(treeOrder(view.files));
   const tree = $derived(fileTree(files));
-  const ended = $derived(review.status === 'approved' || review.status === 'closed');
-  /** A live review: its working copy followed as it is made (ATM-576) */
+  /** Something this reader may do on it (atm's `can`, ATM-723): the decisions' menu and the poke show only then */
+  const actionable = $derived(Object.values(page.can).some((answer) => answer.ok));
+  /** A live review: its working copy followed as it is made (ATM-576); how it is shown, not what may be done */
   const live = $derived(review.status === 'live');
-  /** Sent back to its author: more words are *Publish comments*, never a second send-back (ATM-597, CR-2) */
+  /** Sent back to its author: more words are *Publish comments* (ATM-597, CR-2), the button's name only */
   const sentBack = $derived(review.status === 'changes_requested');
   const rounds = $derived(page.rounds.map((r) => r.number));
   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
@@ -602,21 +600,8 @@
     open: allChains.filter(isOpen).length,
     resolved: allChains.filter((c) => isResolved(c)).length,
   });
-  /** Nothing left open: the decision at hand is to approve */
-  const settled = $derived(chainCounts.open === 0);
-  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can. A review
-   * sent back can be approved too (ATM-609) */
-  const approveBlocked = $derived.by(() => {
-    // The server's answer when it gives one (ATM-633): the machine's own words
-    const can = page.can?.approve;
-    if (can) return can.ok ? null : (can.why ?? 'not allowed now');
-    const drafted = draftedComments(page.drafts);
-    const open = chainCounts.open - drafted;
-    if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
-    if (drafted > 0)
-      return `Your ${drafted === 1 ? 'draft comment' : `${drafted} draft comments`} would be open once sent: send ${drafted === 1 ? 'it' : 'them'} with Comment or Request changes, or remove ${drafted === 1 ? 'it' : 'them'}`;
-    return null;
-  });
+  /** Why Approve can't be pressed now, in the review's rules' own words (ATM-601, ATM-633); null when it can */
+  const approveBlocked = $derived(page.can.approve.ok ? null : (page.can.approve.why ?? 'not allowed now'));
   /** What a decision sends with it (ATM-612): the user's drafts */
   const pendingLabel = $derived(
     pendingDrafts ? `${pendingDrafts} ${pendingDrafts === 1 ? 'draft' : 'drafts'} will be sent with it` : null,
@@ -669,7 +654,7 @@
           title="The change as it is being made; a comment keeps what you saw as a checkpoint"
           >Following the working copy</span
         >{/if}
-      {#if !ended && onpoke}
+      {#if actionable && onpoke}
         <!-- A poke (ATM-611): a nudge its agent hears and answers, saying where the review stands -->
         <div class="review-submit-anchor">
           <button
@@ -704,9 +689,9 @@
           {/if}
         </div>
       {/if}
-      {#if !ended}
+      {#if actionable}
         <div class="review-submit-anchor">
-          {#if settled && !approveBlocked}
+          {#if !approveBlocked}
             <div class="review-split-button">
               <button
                 class="review-button primary approve"
@@ -752,33 +737,34 @@
                 aria-label="Summary"
                 {@attach focusOnShow}></textarea>
               <div class="review-actions">
-                <button
-                  class="review-button"
-                  data-decision="comment"
-                  disabled={busy || (!summary.trim() && !pendingDrafts)}
-                  onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
-                >
-                {#if live}
-                  <!-- A live review isn't sent back: its author ends it with a round; a reviewer approves or closes it -->
-                  {#if onclose}
-                    <button
-                      class="review-button danger"
-                      data-decision="close"
-                      disabled={busy || !summary.trim()}
-                      title="End it without approval; the summary says why"
-                      onclick={() => {
-                        onclose(summary.trim());
-                        submitting = false;
-                      }}>Close review</button
-                    >
-                  {/if}
-                {:else if page.can?.request_changes ? page.can.request_changes.ok : !sentBack}
-                  <!-- Sent back already, it isn't sent back again (CR-2): more words are published as comments -->
+                <!-- Each decision as atm's rules allow it (ATM-723): a live review isn't sent back, nor one sent back
+                     already (CR-2: more words are published as comments) -->
+                {#if page.can.comment.ok}
+                  <button
+                    class="review-button"
+                    data-decision="comment"
+                    disabled={busy || (!summary.trim() && !pendingDrafts)}
+                    onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
+                  >
+                {/if}
+                {#if page.can.request_changes.ok}
                   <button
                     class="review-button danger"
                     data-decision="request_changes"
                     disabled={busy}
                     onclick={() => submit('request_changes')}>Request changes</button
+                  >
+                {:else if live && page.can.close.ok && onclose}
+                  <!-- A live review's reviewer ends it unapproved by closing it; its author ends it with a round -->
+                  <button
+                    class="review-button danger"
+                    data-decision="close"
+                    disabled={busy || !summary.trim()}
+                    title="End it without approval; the summary says why"
+                    onclick={() => {
+                      onclose(summary.trim());
+                      submitting = false;
+                    }}>Close review</button
                   >
                 {/if}
                 <!-- Disabled, saying why, while the rules would refuse it (ATM-601): the reason on the wrapper, as a
