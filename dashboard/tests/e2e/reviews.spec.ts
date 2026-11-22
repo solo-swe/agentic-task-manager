@@ -1671,11 +1671,18 @@ test.describe('the diff viewer on a review’s page', () => {
     const medium = await fontSize();
     await page.evaluate(() => (document.documentElement.dataset.docSize = 'huge'));
     await expect.poll(fontSize).toBeCloseTo(medium * 1.3, 1);
+    // Level with the heading's text, not its box (a style's heading has padding and a rule under it, ATM-706)
+    const headingText = () =>
+      newSide.locator('.compmd-page h1').evaluate((el) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        const box = r.getClientRects()[0];
+        return box.top + box.height / 2;
+      });
     await expect
       .poll(async () => {
         const n = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
-        const h = (await newSide.locator('.compmd-page h1').boundingBox())!;
-        return Math.abs(n.y + n.height / 2 - (h.y + h.height / 2));
+        return Math.abs(n.y + n.height / 2 - (await headingText()));
       })
       .toBeLessThan(4);
     await page.getByRole('button', { name: 'Unified' }).click();
@@ -1956,8 +1963,8 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(number).toHaveClass(/marked/);
     const numberBox = (await number.boundingBox())!;
     expect(Math.abs(numberBox.y - text.y)).toBeLessThan(text.height);
-    // ATM-645: in Unified, as wide as the document viewer's page (820 px where the desk has room), its margin the
-    // viewer's: one component
+    // ATM-645: in Unified, as wide as the document viewer's page (its style's, GitHub's 980 px by default since
+    // ATM-706, where the desk has room), its margin the viewer's: one component
     await page.getByRole('button', { name: 'Unified' }).click();
     const one = view.locator('.diff-pane.diff-new');
     const widths = await one.evaluate((desk) => {
@@ -1970,8 +1977,8 @@ test.describe('the diff viewer on a review’s page', () => {
         max: getComputedStyle(page).maxWidth,
       };
     });
-    expect(widths.max).toBe('820px');
-    expect(widths.page).toBe(Math.min(820, widths.room));
+    expect(widths.max).toBe('980px');
+    expect(widths.page).toBe(Math.min(980, widths.room));
   });
 
   // ATM-627 (Hakan, the app): writing a comment on the rendered view, the document was drawn over the comment box
@@ -2075,7 +2082,8 @@ test.describe('the diff viewer on a review’s page', () => {
     const box = (await composer.boundingBox())!;
     const sheet = (await newSide.locator('.doc-page').boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(sheet.x + sheet.width);
-    expect(Math.abs(box.y - (text.y + text.height / 2 - 16))).toBeLessThan(4);
+    // Level with line 1's number, which is on the heading's text (its box has padding and a rule in a style, ATM-706)
+    expect(Math.abs(box.y - (number.y + number.height / 2 - 16))).toBeLessThan(4);
     await page.mouse.move(0, 0);
     await expect(newSide.locator('.diff-plus.held')).toHaveCount(1);
     await expect(newSide.locator('.diff-block-mark.diff-picked')).not.toHaveCount(0);

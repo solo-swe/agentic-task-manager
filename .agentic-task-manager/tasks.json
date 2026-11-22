@@ -19025,7 +19025,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.2, task 6 of §7 (§6.2's recommended answer).\n\n## Change\n- A question (Add task, a confirmation, Submit review) belongs to its tab: hidden on a switch and there again on return, as a macOS sheet; a menu or dropdown closes on a switch.\n- The app's own (Settings, Help, What's new, About, the search) stay above every tab.\n- A place over a page (task details, a document) is hidden with its tab and there again on return (it is in the tab's address).\n- `App.svelte` and the dialogs.\n\n## Tests\ne2e in the app: a Submit review form half-filled on one tab, another tab shown and back, the form as it was; Settings stays open across a switch.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
@@ -19033,7 +19033,7 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-22T19:35:55Z",
+      "updated_at": "2026-11-22T19:45:30Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19051,7 +19051,24 @@
       "number": 700,
       "review": "async",
       "started_at": "2026-11-22T19:35:55Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "0664f041d956819ec89f995183d8b5024c57e1f5",
+      "code_reviews": [
+        {
+          "id": "01a204ca-d1a1-7111-966a-5efe960b20a7",
+          "ref": "CR-118"
+        }
+      ],
+      "review_requested_at": "2026-11-22T19:45:30Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-22T19:45:30Z",
+          "kind": "review",
+          "text": "CR-118: Pop-ups by kind: a question left open stays on its tab",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15c40f37bbc",
@@ -19398,7 +19415,7 @@
       "description": "Hakan (2026-11-20): the Docs and Magazine document styles draw a narrower page than GitHub's, and GitHub's is the right size; the Theme style (the theme's own page, `auto`) looks darker and not at all like paper.\n\nToday each style copies its model's line length (`dashboard/src/themes/doc-styles.css`): GitHub 980px, Docs `calc(44rem + 112px)` (about 816px), Magazine 760px.\n\n## Change\n- Docs and Magazine: the page as wide as GitHub's (980px max), their type and colours as they are. Keep the width in one variable, so the styles can't drift apart again.\n- `dashboard/src/lib/appearance.ts`: `DOC_STYLES` in the order GitHub, Docs, Magazine, Theme (the `auto` entry last), and `DEFAULT_DOC_STYLE` GitHub. A reader who chose a style keeps it; one who never chose gets GitHub. Check how `prefs.ts` stores the default (a stored `auto` that was never chosen must not keep the old default).\n- The diff viewer's rendered side (`.doc-sheet`) follows, as it uses the same styles.\n- Settings' sample (`.doc-style-sample`) and the Rendered tooltip's wording still right.\n\n## Tests\n- `appearance` unit tests: the order and the default.\n- e2e `documents.spec.ts`: a fresh dashboard renders a Markdown document in the GitHub style; Docs and Magazine pages are as wide as GitHub's.\n- Screenshots that change (Settings menu, document viewer) are regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/themes/doc-styles.css",
@@ -19408,7 +19425,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-20T18:19:09Z",
-      "updated_at": "2026-11-22T16:21:26Z",
+      "updated_at": "2026-11-22T19:45:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19419,7 +19436,9 @@
       ],
       "sprint": "Audit and tabs",
       "number": 706,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-22T19:45:31Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fa31-88c0-75df-bb58-6495920a527c",
@@ -20674,7 +20693,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-22T19:31:26Z",
+      "updated_at": "2026-11-22T20:35:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20739,6 +20758,18 @@
           "at": "2026-11-22T19:31:26Z",
           "kind": "note",
           "text": "ATM-699: a 30-second Playwright timeout said nothing about where it hung. A run with --trace on named it at once (the details overlay took the click). Worth making --trace on the first step on any timeout.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T20:21:27Z",
+          "kind": "note",
+          "text": "ATM-706: unit and e2e runs slowed tenfold and vitest workers timed out because the machine was loaded (load average 22, an Xcode build and the Neural Engine compiler, not ours). And the agent sent dependent checks in one go, so e2e started on a broken build. Worth a load check before long suites, and steps in order.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T20:35:06Z",
+          "kind": "note",
+          "text": "Flaky under a loaded full run: graph-zoom.spec.ts panning or zooming turns it off. The + key press reached the 90-task graph before it took keys, auto-fit stayed on. 5 of 5 alone. Wait for the graph to be ready before pressing a key.",
           "by": "claude:0f56a916"
         }
       ]

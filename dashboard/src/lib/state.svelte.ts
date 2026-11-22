@@ -26,6 +26,7 @@ import { compareVersions } from './changelog';
 import { getPref, setPref, storageAvailable } from './prefs';
 import { dashboardBuild, dashboardVersion } from './release-notes';
 import {
+  DEFAULT_DOC_STYLE,
   isModePref,
   knownDocSize,
   knownDocStyle,
@@ -389,7 +390,7 @@ export class DashboardState {
   );
   theme = $state(knownTheme(getPref('theme', 'default')));
   /** The document viewer's page (T-404), per browser like the theme */
-  docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', 'auto')));
+  docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', DEFAULT_DOC_STYLE)));
   /** The size of a document's text (ATM-691), per browser like its style */
   docSize = $state<DocSize>(knownDocSize(getPref('docSize', 'medium')));
   systemPrefersLight = $state(prefersLight());

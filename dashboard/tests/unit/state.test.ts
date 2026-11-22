@@ -623,13 +623,16 @@ describe('DashboardState appearance', () => {
     expect(next.theme).toBe('default');
   });
 
-  it('remembers the document style; an unknown one is Auto (T-404)', () => {
+  it('remembers the document style; none chosen, or an unknown one, is GitHub (T-404, ATM-706)', () => {
     const first = new DashboardState();
-    expect(first.docStyle).toBe('auto');
+    expect(first.docStyle).toBe('github');
     first.setDocStyle('docs');
     expect(new DashboardState().docStyle).toBe('docs');
-    first.setDocStyle('terminal');
+    // The theme's own page, once chosen, stays chosen
+    first.setDocStyle('auto');
     expect(new DashboardState().docStyle).toBe('auto');
+    first.setDocStyle('terminal');
+    expect(new DashboardState().docStyle).toBe('github');
   });
 
   it('remembers the text size; an unknown one is Medium (ATM-691)', () => {
