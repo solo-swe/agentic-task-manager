@@ -210,8 +210,8 @@
                 <strong>Idle</strong>: nobody working and nothing waiting, for 10 minutes or more, nights included.
               </p>
               <p>
-                <strong>Time per task</strong>: from a task's start until it asked for a review, or was done; tasks
-                labelled <code>interactive</code> are counted apart, as <em>with you</em>.
+                <strong>Time per task</strong>: its work, every attempt, without its reviews and blocks; tasks done
+                together with you are counted apart, as <em>with you</em>.
               </p>
             </InfoTip></span
           >

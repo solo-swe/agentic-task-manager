@@ -6,7 +6,7 @@ import { formatMinutes } from './format';
 import { taskNotes } from './notes';
 import type { Note, Task } from './types';
 import { taskKind } from './vocab';
-import { ms, startedBy, workSpan } from './work';
+import { ms, startedBy, workMinutes } from './work';
 
 export interface CardPerson {
   role: 'created' | 'worked' | 'finished';
@@ -38,12 +38,13 @@ export function cardFacts(task: Task, now: number): CardFacts {
   else if (kind === 'active' || kind === 'review') when = ago('started', task.started_at);
   else when = ago('created', task.created_at);
 
-  const span = workSpan(task, now);
-  const minutes = span ? (span.end - span.start) / 60_000 : 0;
+  // atm's work time (ATM-721): every attempt and round
+  const minutes = workMinutes(task, now);
+  const live = !!task.derived?.work?.live;
   const took =
-    !span || (!span.live && minutes < 1)
+    minutes === null || (!live && minutes < 1)
       ? null
-      : span.live
+      : live
         ? `${formatMinutes(minutes)} so far`
         : `took ${formatMinutes(minutes)}`;
   return { people, when, took };

@@ -220,7 +220,7 @@ fn merge_task(
             progress.get(&key).cloned()
         } else if key == "notes" {
             Some(merge_notes(o, t))
-        } else if key == "blocks" || key == "reviews" {
+        } else if key == "blocks" || key == "reviews" || key == "attempts" {
             Some(merge_intervals(o, t))
         } else if key == "sprint_history" {
             Some(merge_history(o, t))

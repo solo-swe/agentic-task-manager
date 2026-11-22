@@ -141,7 +141,10 @@ test.describe('Project tab', () => {
     await expect(stat('prs')).toHaveText('1 pull requests');
     // s1 08:00–08:30 and s2 08:10–08:40 (to its review); Bo's own work isn't agent time
     await expect(stat('agent-time')).toHaveText('1 h agent time');
-    await expect(stat('agent-time')).toHaveAttribute('title', /1 h on tasks agents did alone, 0 m on interactive/);
+    await expect(stat('agent-time')).toHaveAttribute(
+      'title',
+      /1 h on tasks agents did alone, 0 m on tasks done with you/,
+    );
     await expect(stat('most')).toHaveText('2 most at once');
     // 60 m of agent time over 40 m with an agent at work
     await expect(page.locator('#project-parallelism')).toHaveText('1.5 agents working on average while any works');
@@ -153,7 +156,7 @@ test.describe('Project tab', () => {
   }) => {
     // T-1 30 m alone and T-2 30 m with you (until its review): both in the 30–45 m bin
     const data = shop();
-    data.tasks[1].labels = ['interactive'];
+    data.tasks[1].with = 'user';
     await openDashboard(page, tasksServer, data, { tab: 'project' });
     const chart = page.locator('#time-histogram');
     await expect(chart.locator('.hist-bar.alone')).toHaveCount(1);

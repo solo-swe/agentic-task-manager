@@ -49,6 +49,9 @@
               "status": "todo",
               "commit": "abc1234",
               "updated_at": "2026-05-01T11:00:00Z",
+              "attempts": [
+                { "from": "2026-05-01T10:00:00Z", "to": "2026-05-01T10:30:00Z", "by": "alice", "outcome": "lapsed" }
+              ],
               "notes": [{ "at": "2026-05-01T11:00:00Z", "kind": "failure", "text": "lease expired (alice)" }]
             }
           ]

@@ -7,7 +7,7 @@
 import { MIN_IDLE_MS, gaps } from './insights';
 import type { Task } from './types';
 import { taskKind } from './vocab';
-import { ms, startedBy, workSpan } from './work';
+import { ms, startedBy, workSpans } from './work';
 
 export interface Interval {
   start: number;
@@ -102,10 +102,12 @@ export function waitingIntervals(task: Task, now: number): Interval[] {
  * `split` gives the same three-way split for part of it (a chart's bucket).
  */
 export function timeUse(tasks: Task[], period: Interval | null, now: number): TimeUseWithSplit | null {
-  const work = tasks.flatMap((t) => {
-    const span = workSpan(t, now);
-    return span && span.end > span.start ? [{ agent: startedBy(t) ?? '', start: span.start, end: span.end }] : [];
-  });
+  // Each stretch of each task's work, as atm counts it (ATM-721), by who did it
+  const work = tasks.flatMap((t) =>
+    workSpans(t, now)
+      .filter((p) => p.end > p.start)
+      .map((p) => ({ agent: p.by ?? startedBy(t) ?? '', start: p.start, end: p.end })),
+  );
   const waitingAll = mergeIntervals(tasks.flatMap((t) => waitingIntervals(t, now)));
   const firstWork = Math.min(...work.map((w) => w.start));
   const from = Math.max(period?.start ?? -Infinity, firstWork);

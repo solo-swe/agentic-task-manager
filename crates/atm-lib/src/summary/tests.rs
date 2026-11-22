@@ -191,45 +191,6 @@ fn the_recent_sprints_are_the_open_ones_with_tasks_then_the_latest_closed_up_to_
 }
 
 #[test]
-fn a_tasks_work_runs_from_its_start_to_its_review_or_its_end() {
-    let v = vocab(&json!({}));
-    let now = parse_iso(&at(10)).unwrap();
-    let span = |t: Value| work_span(&v, &tasks(&json!([t]))[0], now);
-    let s = |h: i64| parse_iso(&at(h)).unwrap();
-    assert_eq!(span(json!({"status": "todo", "started_at": at(1)})), None);
-    assert_eq!(span(json!({"status": "done"})), None, "never started");
-    assert_eq!(
-        span(json!({"status": "in_progress", "started_at": at(1)})),
-        Some((s(1), s(10)))
-    );
-    assert_eq!(
-        span(json!({"status": "done", "started_at": at(1), "completed_at": at(3)})),
-        Some((s(1), s(3)))
-    );
-    assert_eq!(
-        span(
-            json!({"status": "done", "started_at": at(1), "review_requested_at": at(2), "completed_at": at(5)})
-        ),
-        Some((s(1), s(2))),
-        "the review isn't agent work"
-    );
-    assert_eq!(
-        span(json!({"status": "in_review", "started_at": at(1), "updated_at": at(4)})),
-        Some((s(1), s(4)))
-    );
-    // an end before the start: no time
-    assert_eq!(
-        span(json!({"status": "done", "started_at": at(3), "completed_at": at(1)})),
-        Some((s(3), s(3)))
-    );
-    // started after now while active: none yet
-    assert_eq!(
-        span(json!({"status": "in_progress", "started_at": at(20)})),
-        Some((s(20), s(20)))
-    );
-}
-
-#[test]
 fn agent_time_merges_an_agents_overlapping_work_and_adds_up_parallel_agents() {
     let v = vocab(&json!({}));
     let done = |by: Option<&str>, from: i64, to: i64| {

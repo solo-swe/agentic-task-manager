@@ -66,9 +66,34 @@ export const vocabulary = (lists: Partial<Vocabulary>): Vocabulary => ({ ...DEFA
 export function withKinds<T extends Task>(tasks: readonly T[], vocab: Vocabulary = DEFAULT_VOCABULARY): T[] {
   return tasks.map((t) => {
     const kind = vocab.statuses.find((s) => s.id === t.status)?.kind;
-    // Only the kind: a test that gives atm's other answers gives them itself
-    return kind ? { ...t, derived: { ...t.derived, kind } as Task['derived'] } : t;
+    // The kind, and the work when the test gives none; a test that gives atm's other answers gives them itself
+    const work = t.derived?.work ?? workOf(t, kind);
+    return kind ? { ...t, derived: { ...t.derived, kind, ...(work ? { work } : {}) } as Task['derived'] } : t;
   }) as T[];
+}
+
+/**
+ * A fake of atm's work (ATM-721, `derived.work`) for unit tests on fixtures: one stretch from the task's start to its
+ * review request or its finish (to its start while active: the dashboard runs a live one to now). atm's rule (every
+ * attempt and round, less reviews and blocks) is atm-lib's `work` table; this only gives the charts something to draw.
+ */
+function workOf(t: Task, kind: string | undefined): TaskDerived['work'] {
+  const time = (iso: string | undefined) => (iso && !Number.isNaN(Date.parse(iso)) ? iso : undefined);
+  const from = time(t.started_at);
+  if (!from || !['active', 'review', 'done'].includes(kind ?? '')) return undefined;
+  const to =
+    kind === 'active'
+      ? from
+      : (time(t.review_requested_at) ?? time(kind === 'done' ? t.completed_at : t.updated_at) ?? from);
+  const [start, end] = [Date.parse(from), Date.parse(to)];
+  // As atm: a finish before the start is a time that can't be, no work
+  if (end < start) return undefined;
+  const by = t.started_by ?? t.agent;
+  return {
+    minutes: (end - start) / 60_000,
+    live: kind === 'active',
+    spans: [{ from, to: new Date(end).toISOString(), ...(by ? { by } : {}) }],
+  };
 }
 
 /** The tasks of `fixtures/progress.json` (its numbers: `progress.md`) as atm serves them: agent work is left on all of

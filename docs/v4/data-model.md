@@ -94,6 +94,7 @@ New fields, all optional:
 | `blocked_at` | `block` | `unblock` | when it started waiting |
 | `blocks` | leaving a blocked status (`unblock`, `skip`) | — | `[{from, to, on}]`: each past block, from its `blocked_at` to when it ended, and who it waited on (T-244). Merged like notes, one per `from` |
 | `reviews` | leaving a review status (`done`, `reject`) | — | `[{from, to}]`: each past review, from its `review_requested_at` to its end. Merged like `blocks` |
+| `attempts` | going back to to do (`release`, `fail`, `reopen`, `drop`, a lapse) | — | `[{from, to, by, outcome?}]`: each past attempt, from its `started_at` to its end (a lapse: its last update, `outcome: lapsed`), and who started it (ATM-721), so its work still counts once the attempt's fields are cleared. A task's work is its attempts and its current one, less its `reviews` and `blocks` (atm-lib's `work`, served as `derived.work`). Merged like `blocks` |
 | `skipped_at` | `skip` | `reopen` (a return to `todo`) | when it was skipped: a skipped task's finish time, as `completed_at` is a done one's (T-181). `atm migrate` fills in `completed_at` and `skipped_at` from `updated_at` for finished tasks from before these existed, so a later edit (which moves `updated_at`) doesn't move them in time |
 | `notes` | `note`, `--note`, `--reason`, `--answer` | — | `[{at, by, kind, text}]`; kind is `handoff`, `outcome`, `review`, `rejection`, `failure`, `answer` or `note` |
 | `commit` | `commit`, `done --commit` | a return to `todo` | the SHA of the task's commit |

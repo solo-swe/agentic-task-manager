@@ -124,12 +124,30 @@ describe('agentTimeline', () => {
     expect(t.lanes.map((l) => l.agent)).toEqual(['bob', 'carol', 'alice']);
   });
 
-  it('a done task without completion time is a zero-length bar; one ending before it started is too', () => {
+  it('a done task without completion time is a zero-length bar; one ending before it started has none, as atm says', () => {
     const noEnd = { ...worked('a', 10, 20, 'alice'), completed_at: undefined };
     const backwards = worked('b', 30, 25, 'alice');
-    const [a, b] = timeline([noEnd, backwards], new Map(), T0)!.lanes[0].bars;
-    expect(a.end - a.start).toBe(0);
-    expect(b.end - b.start).toBe(0);
+    const bars = timeline([noEnd, backwards], new Map(), T0)!.lanes[0].bars;
+    expect(bars.map((b) => [b.task.id, b.end - b.start])).toEqual([['a', 0]]);
+  });
+
+  it('a bar per stretch of its work, in the lane of who did it (ATM-721): an attempt taken back is another agent’s', () => {
+    const t = worked('a', 60, 90, 'bob');
+    // atm's work: alice's attempt that lapsed, then bob's
+    const work = {
+      minutes: 50,
+      live: false,
+      spans: [
+        { from: iso(T0), to: iso(T0 + 20 * M), by: 'alice' },
+        { from: iso(T0 + 60 * M), to: iso(T0 + 90 * M), by: 'bob' },
+      ],
+    };
+    const lanes = timeline([{ ...t, derived: { ...t.derived, work } as Task['derived'] }], new Map(), T0)!.lanes;
+    expect(lanes.map((l) => [l.agent, l.bars.map((b) => (b.end - b.start) / M), l.done])).toEqual([
+      // Done in bob's lane, who finished it; alice's attempt was taken over
+      ['bob', [30], 1],
+      ['alice', [20], 0],
+    ]);
   });
 });
 

@@ -1,6 +1,5 @@
 // The Project tab's Stats (docs/project-stats-proposal.md §4, T-253): the project's numbers over its whole history.
 // Work time as everywhere else (work.ts, timeuse.ts); no git calls: commits and PRs are what atm recorded on tasks.
-import { INTERACTIVE_LABEL } from './forecast';
 import { keyOf } from './keys';
 import { median } from './insights';
 import { completions } from './timeline';
@@ -8,7 +7,7 @@ import { NO_SPRINTS, type SprintModel } from './sprints';
 import { mergeIntervals, timeUse } from './timeuse';
 import type { Task } from './types';
 import { DEFAULT_VOCABULARY, taskKind, type Vocabulary } from './vocab';
-import { ms, startedBy, workSpan } from './work';
+import { ms, startedBy, withYou, workMinutes, workSpans } from './work';
 import { isAgent } from './actors';
 
 export interface ProjectStats {
@@ -24,7 +23,7 @@ export interface ProjectStats {
   taskCommits: number;
   /** Distinct pull requests recorded on tasks; null for a project that pushes straight to its branch */
   pullRequests: number | null;
-  /** Work time, parallel agents adding up; split into tasks agents did alone and `interactive` ones */
+  /** Work time, parallel agents adding up; split into tasks agents did alone and those done with you */
   agentMs: number;
   aloneMs: number;
   withYouMs: number;
@@ -70,15 +69,13 @@ export function projectStats(
     return !starter || isAgent(starter);
   });
   const use = timeUse(agentTasks, null, now);
-  const withYou = agentTasks.filter((t) => t.labels?.includes(INTERACTIVE_LABEL));
-  const alone = agentTasks.filter((t) => !t.labels?.includes(INTERACTIVE_LABEL));
-  // Time with at least one agent at work: the union of the work spans (short pauses not included)
-  const working = mergeIntervals(
-    agentTasks.flatMap((t) => {
-      const span = workSpan(t, now);
-      return span ? [span] : [];
-    }),
-  ).reduce((sum, iv) => sum + iv.end - iv.start, 0);
+  const together = agentTasks.filter(withYou);
+  const alone = agentTasks.filter((t) => !withYou(t));
+  // Time with at least one agent at work: the union of the work's stretches, atm's (short pauses not included)
+  const working = mergeIntervals(agentTasks.flatMap((t) => workSpans(t, now))).reduce(
+    (sum, iv) => sum + iv.end - iv.start,
+    0,
+  );
 
   return {
     started: created ?? metaCreated,
@@ -94,7 +91,7 @@ export function projectStats(
     pullRequests: prs.size === 0 && workflow === 'direct' ? null : prs.size,
     agentMs: use?.agentMs ?? 0,
     aloneMs: timeUse(alone, null, now)?.agentMs ?? 0,
-    withYouMs: timeUse(withYou, null, now)?.agentMs ?? 0,
+    withYouMs: timeUse(together, null, now)?.agentMs ?? 0,
     maxAgents: use?.maxAgents ?? 0,
     parallelism: use && working > 0 ? use.agentMs / working : null,
   };
@@ -108,7 +105,7 @@ export interface TimedTask {
   key?: string;
   name: string;
   minutes: number;
-  /** An `interactive` task: its time includes working with you */
+  /** Done with you (`with: user`): its time includes working with you */
   withYou: boolean;
 }
 
@@ -140,25 +137,13 @@ export const TIME_BINS = [0, 5, 10, 20, 30, 45, 60, 90, 120, 180, 240];
 const binLabel = (m: number) => (m < 60 ? `${m} m` : `${m / 60} h`);
 
 /**
- * Every done task's work time (start until it asked for a review, or was done), binned. Tasks without a start are left
- * out; a task restarted after an expired lease, or reopened, counts its latest attempt.
+ * Every done task's work time, binned: atm's (ATM-721), every attempt and round, less its reviews and blocks. Tasks
+ * without any work are left out.
  */
 export function timeHistogram(tasks: Task[]): TimeHistogram {
   const timed: TimedTask[] = tasks.flatMap((t) => {
-    if (taskKind(t) !== 'done') return [];
-    const start = ms(t.started_at);
-    const end = ms(t.review_requested_at) ?? ms(t.completed_at);
-    return start === null || end === null || end < start
-      ? []
-      : [
-          {
-            id: t.id,
-            ...keyOf(t),
-            name: t.name,
-            minutes: (end - start) / 60_000,
-            withYou: !!t.labels?.includes(INTERACTIVE_LABEL),
-          },
-        ];
+    const minutes = taskKind(t) === 'done' ? workMinutes(t, 0) : null;
+    return minutes === null ? [] : [{ id: t.id, ...keyOf(t), name: t.name, minutes, withYou: withYou(t) }];
   });
   const bins: TimeBin[] = TIME_BINS.map((from, i) => {
     const to = TIME_BINS[i + 1] ?? Infinity;

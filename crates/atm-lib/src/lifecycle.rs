@@ -304,6 +304,15 @@ pub fn lapse(
     claim: &Value,
 ) {
     let stamp = atm_common::time::now_iso();
+    // Its work ended when it was last touched (ATM-721), else at the latest when its lease ran out: never now, which
+    // would count the time nobody worked on it
+    let last = task
+        .get("updated_at")
+        .or_else(|| claim.get("lease_expires_at"))
+        .and_then(Value::as_str)
+        .unwrap_or(&stamp)
+        .to_string();
+    atm_common::edits::end_attempt(task, &last, Some("lapsed"));
     atm_common::edits::back_to_todo(task, vocab, None, &stamp, true);
     let text = format!(
         "lease expired ({})",

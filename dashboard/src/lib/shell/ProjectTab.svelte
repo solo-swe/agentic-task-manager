@@ -109,7 +109,7 @@
       key: 'agent-time',
       value: hours(stats.agentMs),
       label: 'agent time',
-      title: `Parallel agents add up: ${hours(stats.aloneMs)} on tasks agents did alone, ${hours(stats.withYouMs)} on interactive tasks with you`,
+      title: `Parallel agents add up: ${hours(stats.aloneMs)} on tasks agents did alone, ${hours(stats.withYouMs)} on tasks done with you`,
     },
     {
       key: 'most',

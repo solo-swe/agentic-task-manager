@@ -20200,7 +20200,7 @@
       "description": "Step 4 of [the plan](docs/dashboard-derived-state.md), group E.\n\n## atm\n- `…/sprints`: each sprint in atm's order, with:\n  - its state;\n  - done, total and percent (one rule: an empty sprint is the same everywhere);\n  - added, carried and sprint review pending;\n  - its due date and days left (one rule, the project's day);\n  - its close report;\n  - the backlog's size as `atm sprint list` counts it (unfinished only).\n- `…/releases`: each release with its sprints, counts by stage, and its notes from `release_notes`.\n- The matching app commands.\n\n## Dashboard\nDelete:\n- `sprintModel`, `readSprints`, `sprintsFromPhases`;\n- `sprintSummary`, `addedMidSprint`, `carriedCount`, `lastClosed`;\n- `velocity`'s fallback;\n- `daysUntil` and `endOfDay` as rules;\n- `vocabCounts`' sprints and backlog;\n- `readReleases`, `releaseSummaries`, `releaseNotes`.\n\n## Tests\n- atm-lib tables: an empty sprint, a sprint with skipped tasks, a task added mid-sprint, one carried, a due date today and yesterday.\n- The route tests.\n- The scope bar and the overview card show the same percent.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1fecd-5725-722d-8d45-22d03168db17"
       ],
@@ -20213,7 +20213,7 @@
         "dashboard/src/lib/projectinfo.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T21:40:44Z",
+      "updated_at": "2026-11-21T23:27:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20228,7 +20228,18 @@
       ],
       "number": 720,
       "started_at": "2026-11-21T21:40:44Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "8ed6d2a4bb7877d4bdd648d00a4b7fe3c46aeb75",
+      "completed_at": "2026-11-21T23:27:12Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-21T23:27:12Z",
+          "kind": "outcome",
+          "text": "atm serves the sprints and releases with the tasks, with their figures by one rule each. Per sprint: percent, added, carried, review pending, days_left and due_end by the project day. Also the backlog as atm sprint list counts it, the release counts by stage with notes, and derived.sprint and derived.carried. Unmigrated phases use the migration rule. Served in the tasks response, Hakan chose that. All suites green.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d3de5844fe",
@@ -20243,7 +20254,7 @@
       "description": "Step 5 of [the plan](docs/dashboard-derived-state.md), group D, decisions 1 and 4.\n\n## atm-lib\n- One work rule over a task's attempts and rounds (`reviews`, `blocks`, the start and lapse notes): `derived.work` `{minutes, live, spans}`.\n- `summary.rs` `work_span` and `agent_minutes` use it, with `is_agent` instead of the `claude:` literal.\n- `with: user` decides \"with you\". `atm db migrate` moves the `interactive` label to `with: user` once, and says so.\n\n## Dashboard\nThe uses go to `derived.work`:\n- `work.ts` `workSpan` and `taskTimes`;\n- `cardfacts.ts`;\n- `timeHistogram`, `taskDurations`, the cycle times;\n- `agentTimeline`, `timeUse`.\n\n`INTERACTIVE_LABEL` goes.\n\n## Tests\n- atm-lib's table: one attempt; taken back after a lapse; two review rounds; blocked between; active now.\n- The migration scenario.\n- Unit tests on atm's fields.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/summary.rs",
@@ -20255,9 +20266,9 @@
         "dashboard/src/lib/forecast.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-21T15:50:32Z",
+      "updated_at": "2026-11-22T01:33:36Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Audit and tabs",
@@ -20268,7 +20279,9 @@
       "related": [
         "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
       ],
-      "number": 721
+      "number": 721,
+      "started_at": "2026-11-22T01:33:36Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d426cb480e",

@@ -239,6 +239,7 @@
               "dependencies": [],
               "updated_at": "2026-05-01T10:00:00Z",
               "updated_by": "alice",
+              "attempts": [{ "from": "2026-05-01T09:00:00Z", "to": "2026-05-01T10:00:00Z" }],
               "notes": [
                 {
                   "at": "2026-05-01T10:00:00Z",
@@ -299,7 +300,8 @@
               "status": "todo",
               "dependencies": [],
               "updated_at": "2026-05-01T10:00:00Z",
-              "updated_by": "alice"
+              "updated_by": "alice",
+              "attempts": [{ "from": "2026-05-01T09:00:00Z", "to": "2026-05-01T10:00:00Z" }]
             }
           ]
         }
@@ -703,7 +705,7 @@
     }
   },
   {
-    "name": "release forgets who started it (an older file's agent too)",
+    "name": "release forgets who started it (an older file's agent too); its attempt keeps who worked it (ATM-721)",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -748,7 +750,8 @@
               "dependencies": [],
               "status": "todo",
               "updated_at": "2026-05-01T10:00:00Z",
-              "updated_by": "alice"
+              "updated_by": "alice",
+              "attempts": [{ "from": "2026-05-01T09:00:00Z", "to": "2026-05-01T10:00:00Z", "by": "alice" }]
             }
           ]
         }

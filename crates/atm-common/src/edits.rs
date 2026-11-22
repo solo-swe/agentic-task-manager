@@ -131,6 +131,22 @@ pub fn back_to_todo(
     let todo = statuses_of(vocab, Kind::Todo)
         .first()
         .map_or_else(|| "todo".into(), |s| (*s).to_string());
+    // The attempt ended where its work stopped: when it was done, skipped, sent for review or blocked; at `stamp`
+    // while an agent was still at it
+    let stopped = match vocab.kind_of(task.get("status")) {
+        Some(Kind::Done) => "completed_at",
+        Some(Kind::Skipped) => "skipped_at",
+        Some(Kind::Review) => "review_requested_at",
+        Some(Kind::Blocked) => "blocked_at",
+        _ => "",
+    };
+    let end = task
+        .get(stopped)
+        .and_then(Value::as_str)
+        .filter(|t| !t.is_empty())
+        .unwrap_or(stamp)
+        .to_string();
+    end_attempt(task, &end, None);
     task.insert("status".into(), json!(todo));
     touch(task, actor, stamp);
     for field in ATTEMPT_FIELDS {
@@ -141,8 +157,44 @@ pub fn back_to_todo(
     }
 }
 
-/// Append `{from, to[, on][, outcome]}` to the task's list `field`: `blocks` (with who it waited on) or `reviews`
-/// (with what the review decided).
+/// Record the task's attempt as it ends (ATM-721): `{from, to, by[, outcome]}` in `attempts`, from its `started_at` to
+/// `to`, by who started it, so its work still counts once going back to to do clears the attempt's fields. A task never
+/// started records none, nor one already recorded (a lapse ends it at its last update, before `back_to_todo`).
+pub fn end_attempt(task: &mut Task, to: &str, outcome: Option<&str>) {
+    let Some(from) = task
+        .get("started_at")
+        .filter(|v| crate::py::truthy(v))
+        .cloned()
+    else {
+        return;
+    };
+    let recorded = task
+        .get("attempts")
+        .and_then(Value::as_array)
+        .is_some_and(|list| list.iter().any(|a| a.get("from") == Some(&from)));
+    if recorded {
+        return;
+    }
+    let by = task
+        .get("started_by")
+        .or_else(|| task.get("agent"))
+        .filter(|v| crate::py::truthy(v))
+        .cloned();
+    let to = if from.as_str().is_some_and(|f| f > to) {
+        from.clone()
+    } else {
+        json!(to)
+    };
+    add_interval(task, "attempts", &from, &to, None, outcome);
+    if let (Some(by), Some(Value::Array(list))) = (by, task.get_mut("attempts"))
+        && let Some(Value::Object(last)) = list.last_mut()
+    {
+        last.insert("by".into(), by);
+    }
+}
+
+/// Append `{from, to[, on][, outcome]}` to the task's list `field`: `blocks` (with who it waited on), `reviews` (with
+/// what the review decided) or `attempts` (how the attempt ended).
 pub fn add_interval(
     task: &mut Task,
     field: &str,
@@ -279,16 +331,22 @@ mod tests {
     #[test]
     fn back_to_todo_clears_the_attempt_and_keeps_the_commit_when_asked() {
         let vocab = Vocabulary::of_meta(&Map::new()).unwrap();
+        let (start, now) = ("2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z");
         let mut t = task(
-            json!({"id": "T-1", "status": "in_progress", "started_at": "x", "started_by": "a", "commit": "abc"}),
+            json!({"id": "T-1", "status": "in_progress", "started_at": start, "started_by": "a", "commit": "abc"}),
         );
-        back_to_todo(&mut t, &vocab, Some("bob"), "now", true);
+        back_to_todo(&mut t, &vocab, Some("bob"), now, true);
+        // The attempt is kept, so its work still counts (ATM-721)
         assert_eq!(
             Value::Object(t.clone()),
-            json!({"id": "T-1", "status": "todo", "commit": "abc", "updated_at": "now", "updated_by": "bob"})
+            json!({"id": "T-1", "status": "todo", "commit": "abc",
+                   "attempts": [{"from": start, "to": now, "by": "a"}],
+                   "updated_at": now, "updated_by": "bob"})
         );
-        back_to_todo(&mut t, &vocab, None, "later", false);
+        // A task not started records no attempt
+        back_to_todo(&mut t, &vocab, None, "2026-01-01T02:00:00Z", false);
         assert!(t.get("commit").is_none());
+        assert_eq!(t["attempts"].as_array().unwrap().len(), 1);
     }
 
     #[test]

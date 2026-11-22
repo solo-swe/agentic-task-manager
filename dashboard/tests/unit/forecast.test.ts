@@ -162,11 +162,11 @@ describe('forecastSprints', () => {
     expect(withHistory.sprints[0].estimate!.minutes.likely).toBe(5 * 8.5);
   });
 
-  it('leaves tasks labelled interactive out of the pace: they include waiting on the user (T-240)', () => {
+  it('leaves tasks done with you (with: user) out of the pace: they include waiting on you (T-240, ATM-721)', () => {
     const base = forecast(tasks).pace!;
     // The slowest timed task, done with the user: without it, the pace may only get faster
     const slowest = taskDurations(tasks).reduce((a, b) => (b.minutes > a.minutes ? b : a));
-    const labelled = tasks.map((x) => (x.id === slowest.id ? { ...x, labels: ['interactive'] } : x));
+    const labelled = tasks.map((x) => (x.id === slowest.id ? { ...x, with: 'user' as const } : x));
     const withInteractive = forecast(labelled).pace!;
     expect(withInteractive.basedOn).toBe(base.basedOn - 1);
     expect(withInteractive.likely).toBeLessThanOrEqual(base.likely);

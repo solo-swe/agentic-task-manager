@@ -6,6 +6,7 @@ import { NO_SPRINTS, type Sprint, type SprintModel } from './sprints';
 import { completedAt } from './timeline';
 import type { Task } from './types';
 import { taskKind } from './vocab';
+import { withYou, workMinutes } from './work';
 
 /** A gap between completions longer than this is idle time, not work. */
 export const GAP_CAP_MINUTES = 30;
@@ -13,8 +14,6 @@ export const GAP_CAP_MINUTES = 30;
 export const HISTORY = 10;
 /** Below this many timed completions there is no estimate. */
 export const MIN_HISTORY = 3;
-/** The label of tasks done together with the user: not part of the agents' pace */
-export const INTERACTIVE_LABEL = 'interactive';
 
 const MINUTE = 60_000;
 
@@ -84,9 +83,9 @@ const time = (iso: string | undefined) => {
 };
 
 /**
- * Duration of each completed task, oldest first: its work, started_at until it asked for a review or was completed,
- * when known; otherwise the gap since the previous completion, capped. The first completion without a start has
- * nothing to measure from and is left out.
+ * Duration of each completed task, oldest first: its work as atm counts it (ATM-721: every attempt and round, less its
+ * reviews and blocks), when it has any; otherwise the gap since the previous completion, capped. The first completion
+ * without any work has nothing to measure from and is left out.
  */
 export function taskDurations(tasks: Task[]): TimedCompletion[] {
   const finished = tasks
@@ -97,11 +96,8 @@ export function taskDurations(tasks: Task[]): TimedCompletion[] {
 
   const result: TimedCompletion[] = [];
   finished.forEach(({ task, end }, i) => {
-    const start = time(task.started_at);
-    const workEnd = time(task.review_requested_at) ?? end;
-    let minutes: number | undefined;
-    if (start !== undefined && start <= workEnd) minutes = (workEnd - start) / MINUTE;
-    else if (i > 0) minutes = Math.min((end - finished[i - 1].end) / MINUTE, GAP_CAP_MINUTES);
+    let minutes = workMinutes(task, end) ?? undefined;
+    if (minutes === undefined && i > 0) minutes = Math.min((end - finished[i - 1].end) / MINUTE, GAP_CAP_MINUTES);
     if (minutes !== undefined) result.push({ id: task.id, completedAt: end, minutes });
   });
   return result;
@@ -143,10 +139,10 @@ export function forecastSprints(
   history: Task[] = tasks,
   model: SprintModel = NO_SPRINTS,
 ): Forecast {
-  // Tasks done together with the user (labelled interactive) include the time spent waiting on them: they would slow
+  // Tasks done together with the user (`with: user`) include the time spent waiting on them: they would slow
   // the pace agents keep when they work alone (docs/progress-tab-review.md §1.4, T-240)
-  const interactive = new Set(history.filter((t) => t.labels?.includes(INTERACTIVE_LABEL)).map((t) => t.id));
-  const p = pace(taskDurations(history).filter((d) => !interactive.has(d.id)));
+  const together = new Set(history.filter(withYou).map((t) => t.id));
+  const p = pace(taskDurations(history).filter((d) => !together.has(d.id)));
   const kind = taskKind;
   const groups = new Map<string, Task[]>();
   for (const t of tasks) {

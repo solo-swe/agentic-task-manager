@@ -58,7 +58,7 @@
     }
   },
   {
-    "name": "migrate gives unfinished tasks labelled interactive with: user, once; the label stays (SR-6.5)",
+    "name": "migrate gives tasks labelled interactive with: user, finished ones too, and moves the label to it, once (SR-6.5, ATM-721)",
     "setup": {
       "files": {
         ".agentic-task-manager/.gitignore": "tasks-dashboard.html\n.server.json\n.server.log\nclaims.json\nclaims-store.json\n.lock/\n",
@@ -73,13 +73,13 @@
     },
     "args": ["db", "migrate"],
     "expect": {
-      "stdout": "Gave 1 task labelled interactive `with: user` (done together with you; unattended loops skip them).\n",
+      "stdout": "Gave 1 task labelled interactive `with: user` (done together with you; unattended loops skip them).\nMoved the label interactive to `with: user` on 2 tasks, finished ones too: `with: user` alone says the work was done with you.\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
-          "meta": { "migrations": ["interactive-label"] },
+          "meta": { "migrations": ["interactive-label", "interactive-label-moved"] },
           "tasks": [
-            { "id": "T-1", "status": "todo", "labels": ["interactive"], "with": "user" },
-            { "id": "T-2", "status": "done", "labels": ["interactive"] },
+            { "id": "T-1", "status": "todo", "with": "user" },
+            { "id": "T-2", "status": "done", "with": "user" },
             { "id": "T-3", "status": "todo" }
           ]
         }
@@ -87,12 +87,34 @@
     }
   },
   {
-    "name": "once migrated, a with taken off isn't put back",
+    "name": "a project that ran the first migration still gets the label moved, once (ATM-721)",
     "setup": {
       "files": {
         ".agentic-task-manager/.gitignore": "tasks-dashboard.html\n.server.json\n.server.log\nclaims.json\nclaims-store.json\n.lock/\n",
         ".agentic-task-manager/tasks.json": {
           "meta": { "migrations": ["interactive-label"] },
+          "tasks": [{ "id": "T-1", "status": "done", "labels": ["interactive", "ux"] }]
+        }
+      }
+    },
+    "args": ["db", "migrate"],
+    "expect": {
+      "stdout": "Moved the label interactive to `with: user` on 1 task, finished ones too: `with: user` alone says the work was done with you.\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "migrations": ["interactive-label", "interactive-label-moved"] },
+          "tasks": [{ "id": "T-1", "status": "done", "labels": ["ux"], "with": "user" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "once migrated, the label put back or a with taken off is left as it is",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/.gitignore": "tasks-dashboard.html\n.server.json\n.server.log\nclaims.json\nclaims-store.json\n.lock/\n",
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "migrations": ["interactive-label", "interactive-label-moved"] },
           "tasks": [{ "id": "T-1", "status": "todo", "labels": ["interactive"] }]
         }
       }

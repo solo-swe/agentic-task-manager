@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use atm_common::edits::is_agent;
 use atm_common::keys::{key_of, keys_format, label_of, number_of, with_key};
 use atm_common::py::{py_str, py_str_opt, strip, truthy};
 use atm_common::rules::{natural_cmp, unfinished_dependencies};
@@ -496,44 +497,25 @@ fn board(
     })
 }
 
-/// A task's work as (start, end), as the dashboard counts it: from `started_at` until it asked for a review or was
-/// done, or until now while active; none for a task that holds none.
-fn work_span(vocab: &Vocabulary, task: &Task, current: i64) -> Option<(i64, i64)> {
-    let start = time_of(task.get("started_at"))?;
-    let end = match vocab.kind_of(task.get("status")) {
-        Some(Kind::Active) => current.max(start),
-        Some(kind @ (Kind::Done | Kind::Review)) => {
-            let finished = if kind == Kind::Done {
-                task.get("completed_at")
-            } else {
-                task.get("updated_at")
-            };
-            time_of(task.get("review_requested_at"))
-                .or_else(|| time_of(finished))
-                .unwrap_or(start)
-        }
-        _ => return None,
-    };
-    Some((start, end.max(start)))
-}
-
-/// Agent time (T-255): the work of tasks an agent started, or nobody recorded (before v4), each agent's spans merged
-/// so an agent on two tasks counts once; parallel agents add up. In minutes.
+/// Agent time (T-255): the work of tasks (atm-lib's one rule, every attempt and round: [`crate::work`]) an agent did,
+/// or nobody recorded (before v4), each agent's spans merged so an agent on two tasks counts once; parallel agents add
+/// up. In minutes.
 fn agent_minutes(vocab: &Vocabulary, tasks: &[&Task], current: i64) -> i64 {
     let mut spans: Vec<(String, Vec<(i64, i64)>)> = Vec::new();
     for (i, t) in tasks.iter().enumerate() {
-        let starter = started_by(t).filter(|s| truthy(s)).map(py_str);
-        if starter.as_ref().is_some_and(|s| !s.starts_with("claude:")) {
-            continue;
-        }
-        let Some(span) = work_span(vocab, t, current) else {
+        let Some(work) = crate::work::work_of(vocab, t, current) else {
             continue;
         };
-        // Unattributed spans are each their own
-        let key = starter.unwrap_or_else(|| format!("\u{0}{i}"));
-        match spans.iter_mut().find(|(k, _)| *k == key) {
-            Some((_, list)) => list.push(span),
-            None => spans.push((key, vec![span])),
+        for span in work.spans {
+            if span.by.is_some() && !is_agent(span.by.as_deref()) {
+                continue;
+            }
+            // Unattributed spans are each task's own
+            let key = span.by.unwrap_or_else(|| format!("\u{0}{i}"));
+            match spans.iter_mut().find(|(k, _)| *k == key) {
+                Some((_, list)) => list.push((span.from, span.to)),
+                None => spans.push((key, vec![(span.from, span.to)])),
+            }
         }
     }
     let mut total = 0i64;

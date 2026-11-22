@@ -237,7 +237,7 @@ describe('activitySeries', () => {
   });
 
   it('marks interactive tasks: their time includes working with you (T-246)', () => {
-    const s = series([worked('alone', 0, 1), worked('pair', 1, 3, { labels: ['ux', 'interactive'] })])!;
+    const s = series([worked('alone', 0, 1), worked('pair', 1, 3, { labels: ['ux'], with: 'user' })])!;
     expect(s.cycleTimes.map((c) => [c.id, c.withYou])).toEqual([
       ['alone', false],
       ['pair', true],

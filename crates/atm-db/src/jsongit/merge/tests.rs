@@ -465,8 +465,8 @@ fn notes_from_both_sides_are_kept_once_each_oldest_first() {
 }
 
 #[test]
-fn past_blocks_and_reviews_are_kept_one_per_start_oldest_first_ours_where_both_have_it() {
-    for key in ["blocks", "reviews"] {
+fn past_blocks_reviews_and_attempts_are_kept_one_per_start_oldest_first_ours_where_both_have_it() {
+    for key in ["blocks", "reviews", "attempts"] {
         let (task, conflicts) = merge_one(
             json!({}),
             json!({key: [{"from": "02", "to": "03"}]}),

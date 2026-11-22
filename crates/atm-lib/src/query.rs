@@ -368,6 +368,10 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         if let Some(kind) = kind {
             derived.insert("kind".into(), json!(kind.as_str()));
         }
+        // Its work by one rule, every attempt and round (ATM-721)
+        if let Some(work) = crate::work::work_of(vocab, t, atm_common::time::now()) {
+            derived.insert("work".into(), work.to_json());
+        }
         if let Some(place) = id_of(t).and_then(|id| sprints.get(id)) {
             derived.insert("sprint".into(), json!(place.sprint));
             if place.carried > 0 {

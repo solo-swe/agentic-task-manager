@@ -78,6 +78,25 @@
         "kind": { "enum": ["todo", "active", "review", "blocked", "done", "skipped"] }
       }
     },
+    "TaskWork": {
+      "type": "object",
+      "description": "A task's work by atm's one rule (ATM-721): every attempt and every round, less its review rounds and blocks. Absent for a task that holds none",
+      "required": ["minutes", "live", "spans"],
+      "properties": {
+        "minutes": { "type": "number", "description": "Its length" },
+        "live": { "type": "boolean", "description": "An agent is at it now: its last span runs to now" },
+        "spans": { "type": "array", "items": { "$ref": "#/$defs/WorkSpan" }, "description": "In time order" }
+      }
+    },
+    "WorkSpan": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "description": "ISO 8601 UTC" },
+        "to": { "type": "string", "description": "ISO 8601 UTC" },
+        "by": { "type": "string", "description": "Who did it" }
+      }
+    },
     "ServedSprints": {
       "type": "object",
       "description": "The project's sprints as atm counts them (ATM-720): each in its order, closed ones too, and the backlog",
@@ -268,6 +287,7 @@
           "type": "integer",
           "description": "How many sprints it was carried through before its sprint (SR-4.5); absent when none"
         },
+        "work": { "$ref": "#/$defs/TaskWork" },
         "stage": { "type": "string", "description": "A done task's stage: done, in_pr or merged (DM-4.3)" },
         "archived": { "type": "boolean", "description": "From the archive" },
         "problems": {

@@ -199,6 +199,12 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
   The scope bar, the overview's card and Progress tab, the burndown, the velocity, the Project tab's counts and the
   release view read these, and count none of it.
 
+- **Its work** (ATM-721; atm-lib's `work`): `derived.work` `{ minutes, live, spans: [{ from, to, by? }] }`. That is every
+  attempt (`attempts`) and its current one, less its review rounds and blocks, by one rule; `live` while an agent is at
+  it. The summary's agent time is made of the same spans. The cards' "took", the details' duration, the Agents tab's
+  bars, the time per task, the cycle times, the forecast's pace and the time-use split read it. "Done with you" is
+  `with: user` alone; `atm db migrate` moved the old `interactive` label to it, once.
+
 - **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
   `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,
   found }`, and when found, the project's `project_name` and `places` (`[{ workspace, project }]`, where it is

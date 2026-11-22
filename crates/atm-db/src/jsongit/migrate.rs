@@ -494,6 +494,93 @@ fn migrate_interactive(paths: &Paths) -> Result<usize> {
     Ok(count)
 }
 
+/// The migration that moves the `interactive` label to `with: user` (ATM-721), recorded in `meta.migrations`.
+const LABEL_MOVED_MIGRATION: &str = "interactive-label-moved";
+
+/// Move the label `interactive` to `with: user` on `tasks` (ATM-721, decision 1: `with: user` alone says the work was
+/// done with the user): each task with the label loses it, and gets `with: user` unless it has a `with`. How many.
+fn move_interactive_label(tasks: &mut [Value]) -> usize {
+    let mut moved = 0;
+    for task in tasks.iter_mut().filter_map(Value::as_object_mut) {
+        let Some(Value::Array(labels)) = task.get_mut("labels") else {
+            continue;
+        };
+        let before = labels.len();
+        labels.retain(|l| l != "interactive");
+        if labels.len() == before {
+            continue;
+        }
+        if labels.is_empty() {
+            task.shift_remove("labels");
+        }
+        if !task.get("with").is_some_and(truthy) {
+            task.insert("with".into(), json!("user"));
+        }
+        moved += 1;
+    }
+    moved
+}
+
+/// Whether the label move ran already (`meta.migrations`).
+fn label_moved(document: &Value) -> bool {
+    document
+        .pointer("/meta/migrations")
+        .and_then(Value::as_array)
+        .is_some_and(|m| m.iter().any(|x| x == LABEL_MOVED_MIGRATION))
+}
+
+/// [`move_interactive_label`] on `tasks.json` and the archive, finished tasks too, once: the change is recorded in
+/// `meta.migrations`, so the label put back later stays. Nothing is written when no task has the label. How many tasks.
+fn migrate_interactive_label(paths: &Paths) -> Result<usize> {
+    let has_label = |document: &Value| {
+        document["tasks"].as_array().into_iter().flatten().any(|t| {
+            t.get("labels")
+                .and_then(Value::as_array)
+                .is_some_and(|l| l.iter().any(|x| x == "interactive"))
+        })
+    };
+    let precheck = || -> Result<bool> {
+        let document = load_tasks(paths)?.document;
+        Ok(!label_moved(&document)
+            && (has_label(&document) || has_label(&archive_document(paths)?)))
+    };
+    if !precheck().unwrap_or(false) {
+        return Ok(0);
+    }
+    let archive = paths.archive();
+    let (written, moved) = {
+        let _lock = lock(&paths.dir, None)?;
+        let mut document = load_tasks(paths)?.document;
+        let mut archived = archive_document(paths)?;
+        let mut moved = move_interactive_label(tasks_mut(&mut document));
+        let in_archive = move_interactive_label(tasks_mut(&mut archived));
+        moved += in_archive;
+        if !document.get("meta").is_some_and(Value::is_object) {
+            document["meta"] = json!({});
+        }
+        let mut migrations = document["meta"]
+            .get("migrations")
+            .filter(|m| truthy(m))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        migrations.push(json!(LABEL_MOVED_MIGRATION));
+        document["meta"]["migrations"] = Value::Array(migrations);
+        write_json(&paths.tasks, &document)?;
+        let mut written = vec![paths.tasks.clone()];
+        if in_archive > 0 && archive.is_file() {
+            write_json(&archive, &archived)?;
+            written.push(archive.clone());
+        }
+        (written, moved)
+    };
+    if in_git(&paths.root) {
+        let files: Vec<&Path> = written.iter().map(std::path::PathBuf::as_path).collect();
+        stage(&paths.root, &files);
+    }
+    Ok(moved)
+}
+
 /// Add any missing runtime entries to the folder's `.gitignore`, keeping the user's lines. Whether it changed.
 fn ensure_gitignore(task_dir: &Path) -> Result<bool> {
     let p = task_dir.join(".gitignore");
@@ -537,6 +624,7 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
         "finish_times_filled": 0,
         "sprints_from_phases": null,
         "with_user_from_label": 0,
+        "interactive_label_moved": 0,
         "key_final_dropped": 0,
         "renumbered": [],
     })
@@ -610,6 +698,10 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
         "with_user_from_label".into(),
         json!(migrate_interactive(paths)?),
     );
+    result.insert(
+        "interactive_label_moved".into(),
+        json!(migrate_interactive_label(paths)?),
+    );
     result.insert("key_final_dropped".into(), json!(drop_key_final(paths)?));
     result.insert("renumbered".into(), Value::Array(take_renumbered(paths)?));
     // An unreadable file: the command the skill runs next reports the problem
@@ -620,6 +712,15 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
         }
     }
     Ok(result)
+}
+
+/// "1 task" or "N tasks".
+fn some_tasks(n: u64) -> String {
+    if n == 1 {
+        "1 task".to_string()
+    } else {
+        format!("{n} tasks")
+    }
 }
 
 /// What a migration did, in words, a line each ("Nothing to migrate." when nothing).
@@ -674,22 +775,21 @@ pub fn describe_migration(r: &Map<String, Value>, paths: &Paths) -> Vec<String> 
     }
     let together = count("with_user_from_label");
     if together > 0 {
-        let tasks = if together == 1 {
-            "1 task".to_string()
-        } else {
-            format!("{together} tasks")
-        };
+        let tasks = some_tasks(together);
         lines.push(format!(
             "Gave {tasks} labelled interactive `with: user` (done together with you; unattended loops skip them)."
         ));
     }
+    let relabelled = count("interactive_label_moved");
+    if relabelled > 0 {
+        let tasks = some_tasks(relabelled);
+        lines.push(format!(
+            "Moved the label interactive to `with: user` on {tasks}, finished ones too: `with: user` alone says the work was done with you."
+        ));
+    }
     let plain = count("key_final_dropped");
     if plain > 0 {
-        let tasks = if plain == 1 {
-            "1 task".to_string()
-        } else {
-            format!("{plain} tasks")
-        };
+        let tasks = some_tasks(plain);
         lines.push(format!(
             "Task keys are plain now (ADR-009): dropped key_final from {tasks} (staged, not committed)."
         ));

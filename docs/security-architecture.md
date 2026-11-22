@@ -1304,6 +1304,10 @@ land (I11, I13, I24, I25). Fields:
   and dates atm works out of the tasks. The release notes hold the tasks' names and outcome notes, text the dashboard
   already showed, and show it as text. An unmigrated project's phases are read as sprints on an in-memory copy;
   nothing is written. No skill reads them, and no command reads a new path or URL.
+- **Tasks record `attempts`, and the views gain `derived.work`** (ATM-721): times and the actor who started each
+  attempt, which `started_at` and `started_by` held already. atm writes them; the merge driver keeps them like
+  `blocks`. `atm db migrate` moves the label `interactive` to `with: user` once, on the project's own files, staged
+  and not committed, and says so. No skill reads them, and no command reads a new path or URL.
 
 ## 4. Keeping it current
 

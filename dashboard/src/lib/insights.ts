@@ -1,12 +1,11 @@
 // Numbers behind the Progress and Activity widgets in the top bar: completion shares (overall, per phase, per type)
 // and activity over time (completions, who was working, time per task).
 import { isAgent } from './actors';
-import { INTERACTIVE_LABEL } from './forecast';
 import { keyOf } from './keys';
 import { completions, type Completion } from './timeline';
 import type { Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, taskKind, type StatusKind, type Vocabulary } from './vocab';
-import { startedBy, workSpan } from './work';
+import { startedBy, withYou, workMinutes, workSpans } from './work';
 
 export interface Share {
   key: string;
@@ -114,7 +113,7 @@ export interface CycleTime {
   /** When it was completed (ms) */
   time: number;
   minutes: number;
-  /** An `interactive` task: its time includes working with you (docs/activity-popup-review.md §3) */
+  /** Done with you (`with: user`): its time includes working with you (docs/activity-popup-review.md §3) */
   withYou: boolean;
 }
 
@@ -391,11 +390,12 @@ export function activitySeries(
   const count = Math.floor((last - origin) / bucketMs) + 1;
 
   const typeOf = new Map(tasks.map((t) => [t.id, t.type]));
-  // Work intervals per agent (work.ts): start to completion or review request, or to now while active
-  const work = tasks.flatMap((t) => {
-    const span = workSpan(t, now);
-    return !span || span.end <= span.start ? [] : [{ agent: startedBy(t) ?? '', start: span.start, end: span.end }];
-  });
+  // Work intervals per agent: each stretch of each task's work, as atm counts it (ATM-721, work.ts), by who did it
+  const work = tasks.flatMap((t) =>
+    workSpans(t, now)
+      .filter((p) => p.end > p.start)
+      .map((p) => ({ agent: p.by ?? startedBy(t) ?? '', start: p.start, end: p.end })),
+  );
   const buckets: ActivityBucket[] = [];
   for (let i = 0; i < count; i++) {
     const start = origin + i * bucketMs;
@@ -426,22 +426,19 @@ export function activitySeries(
     });
   }
 
-  // Time per task is its work: until it asked for a review, if it did; the review isn't part of it
+  // Time per task is its work, as atm counts it (ATM-721): every attempt and round; the reviews aren't part of it
   const cycleTimes: CycleTime[] = tasks
     .filter((t) => kind(t) === 'done')
-    .map((t) => ({ t, s: ms(t.started_at), c: ms(t.completed_at), w: ms(t.review_requested_at) ?? ms(t.completed_at) }))
-    .filter(
-      ({ s, c, w }) =>
-        s !== null && c !== null && w !== null && w >= s && (!period || (c >= period.start && c < period.end)),
-    )
-    .map(({ t, s, c, w }) => ({
+    .map((t) => ({ t, c: ms(t.completed_at), minutes: workMinutes(t, now) }))
+    .filter(({ c, minutes }) => c !== null && minutes !== null && (!period || (c >= period.start && c < period.end)))
+    .map(({ t, c, minutes }) => ({
       id: t.id,
       ...keyOf(t),
       name: t.name,
       type: t.type,
       time: c!,
-      minutes: (w! - s!) / 60_000,
-      withYou: !!t.labels?.includes(INTERACTIVE_LABEL),
+      minutes: minutes!,
+      withYou: withYou(t),
     }))
     .sort((a, b) => a.time - b.time);
 

@@ -121,9 +121,9 @@
             people, not agents, so the forecast ends at their number, not at zero.
           </p>
           <p>
-            It assumes <strong>one agent, one task at a time</strong>: parallel agents finish sooner. Tasks labelled
-            <code>interactive</code> are left out of the pace, as they include time spent waiting on you. Filters choose the
-            lines, not the pace.
+            It assumes <strong>one agent, one task at a time</strong>: parallel agents finish sooner. Tasks done
+            <strong>with you</strong> are left out of the pace, as they include time spent waiting on you. Filters choose
+            the lines, not the pace.
           </p>
         </InfoTip>
       </h3>

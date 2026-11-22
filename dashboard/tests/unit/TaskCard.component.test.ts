@@ -232,7 +232,13 @@ describe('TaskCard', () => {
       completed_at: '2026-01-01T10:30:00Z',
       notes: [{ at: '2026-01-01T10:30:00Z', by: 'claude:abc', kind: 'outcome', text: 'Ran `npm test`' }],
     };
-    const { container } = render(TaskCard, { task: t });
+    // Its work as atm counts it (ATM-721): the half hour from its start
+    const work = {
+      minutes: 30,
+      live: false,
+      spans: [{ from: '2026-01-01T10:00:00Z', to: '2026-01-01T10:30:00Z', by: 'claude:abc' }],
+    };
+    const { container } = render(TaskCard, { task: viewed(t, { kind: 'done', work }) });
     expect(container.querySelector('.task-excerpt')?.textContent).toContain('Set up the repo');
     expect(container.querySelector('.task-note')?.textContent).toMatch(/Outcome:\s*Ran npm test/);
     expect([...container.querySelectorAll('.task-fact-who')].map((e) => e.textContent)).toEqual([
