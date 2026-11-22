@@ -114,6 +114,37 @@ describe('DetailPanel', () => {
     expect(plain.querySelector('#detail-with-user')).toBeNull();
   });
 
+  // ATM-719: the links pointing at a task, its resolution and its release are atm's, never worked out from the fields
+  it('shows the links, resolution and release atm gives, not what the fields would say', () => {
+    const fields: Record<string, Record<string, unknown>> = {
+      // T-002's fields say nothing points at it; atm's answers say otherwise
+      'T-002': {
+        status: 'skipped',
+        release: '9.9',
+        derived: {
+          kind: 'skipped',
+          resolution: 'obsolete',
+          required_by: ['T-004'],
+          related_by: ['T-001'],
+          duplicated_by: ['T-003'],
+          effective_release: '2.0',
+        },
+      },
+    };
+    loadIntoDashboard({ ...standard, tasks: standard.tasks.map((t) => ({ ...t, ...fields[t.id] })) });
+    const { container } = render(DetailPanel);
+    const ids = (selector: string) =>
+      [...container.querySelectorAll(`${selector} .detail-dep-item strong`)].map((s) => s.textContent);
+    dashboard.showDetail('T-002');
+    flushSync();
+    expect(ids('#detail-related')).toEqual(['T-001']);
+    expect(ids('#detail-duplicated-by')).toEqual(['T-003']);
+    expect(container.querySelector('#detail-resolution')).toHaveTextContent('obsolete');
+    expect(container.textContent).toContain('Required By');
+    expect(container.textContent).toContain('2.0');
+    expect(container.textContent).not.toContain('9.9');
+  });
+
   it('shows how it ended when not done, what it duplicates or is duplicated by, and related tasks both ways (SR-7.6)', () => {
     const fields: Record<string, Record<string, unknown>> = {
       'T-001': { related: ['T-002'] },

@@ -40,6 +40,7 @@
           },
           "derived": {
             "kind": "todo",
+            "required_by": ["T-3"],
             "ready": true,
             "waiting_for": [],
             "priority": "P2",

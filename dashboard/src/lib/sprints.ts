@@ -49,14 +49,10 @@ export function backlog(model: SprintModel, tasks: Task[]): Task[] {
   return tasks.filter((t) => model.sprintOf(t) === undefined);
 }
 
-/** A task's release: its own, else its sprint's (SR-2.6) */
-export function effectiveRelease(model: SprintModel, task: Task): string | undefined {
-  // As atm says it (T-371), for a task that comes with atm's values; judged here only for the others (archived ones,
-  // a linked worktree's copy)
-  if (typeof task.derived?.ready === 'boolean') return task.derived.effective_release;
-  if (task.release) return task.release;
-  const sprint = model.sprintOf(task);
-  return sprint ? model.sprints.find((s) => s.id === sprint)?.release : undefined;
+/** A task's release, its own else its sprint's (SR-2.6), as atm says it (`derived.effective_release`, T-371; ATM-719:
+ * every task the dashboard has comes with atm's values, archived ones and a worktree's copies too) */
+export function effectiveRelease(task: Task): string | undefined {
+  return task.derived?.effective_release;
 }
 
 /** atm's days to a due date (`days_left`) in words: "due in 3 days", "due tomorrow", "due today", "1 day overdue",

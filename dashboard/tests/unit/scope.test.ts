@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVE, BACKLOG } from '../../src/lib/filters';
-import { countKinds, lastClosed, leftovers, scopeOf, scopeTasks } from '../../src/lib/scope';
+import { countKinds, lastClosed, scopeOf, scopeTasks } from '../../src/lib/scope';
 import { NO_SPRINTS } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
@@ -70,18 +70,6 @@ describe('scopeTasks and countKinds', () => {
   it('counts by kind; the total leaves the skipped out', () => {
     const counted = countKinds(withKinds([...tasks, { ...tasks[0], id: 'T-009', status: 'skipped' }]));
     expect(counted).toEqual({ total: 5, done: 1, todo: 3, active: 1, review: 0, blocked: 0, skipped: 1 });
-  });
-});
-
-describe('leftovers (T-323)', () => {
-  it('open tasks in closed sprints: not the done or skipped ones, nor open ones in other sprints', () => {
-    // T-001 is done in the closed Foundations; reopened, it is left over
-    const reopened = withKinds(tasks.map((t) => (t.id === 'T-001' ? { ...t, status: 'todo' } : t)));
-    expect(leftovers(tasks, model)).toEqual([]);
-    expect(ids(leftovers(reopened, model))).toEqual(['T-001']);
-    const skipped = withKinds(tasks.map((t) => (t.id === 'T-001' ? { ...t, status: 'skipped' } : t)));
-    expect(leftovers(skipped, model)).toEqual([]);
-    expect(leftovers(reopened, NO_SPRINTS)).toEqual([]);
   });
 });
 

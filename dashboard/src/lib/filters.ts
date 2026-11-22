@@ -148,7 +148,7 @@ function valuesOf(group: FilterGroup, t: Task, vocab: Vocabulary, model: SprintM
     return sprint === undefined ? [BACKLOG] : sprint === activeId(model) ? [sprint, ACTIVE] : [sprint];
   }
   if (group === 'release') {
-    const release = effectiveRelease(model, t);
+    const release = effectiveRelease(t);
     return release ? [release] : [];
   }
   if (group === 'component')

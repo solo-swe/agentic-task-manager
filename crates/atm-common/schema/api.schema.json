@@ -289,6 +289,29 @@
         },
         "work": { "$ref": "#/$defs/TaskWork" },
         "stage": { "type": "string", "description": "A done task's stage: done, in_pr or merged (DM-4.3)" },
+        "resolution": {
+          "type": "string",
+          "description": "How a finished task ended (SR-2.8): its own, else done or wont_do; absent while it isn't finished (ATM-719)"
+        },
+        "in_closed_sprint": {
+          "type": "boolean",
+          "description": "Left unfinished in a closed sprint, which the loop never takes (ATM-719); absent otherwise"
+        },
+        "required_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The tasks whose dependencies name it (ATM-719); absent when none"
+        },
+        "related_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The tasks that relate to it, not among its own related (SR-2.8, ATM-719); absent when none"
+        },
+        "duplicated_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The tasks that duplicate it (ATM-719); absent when none"
+        },
         "archived": { "type": "boolean", "description": "From the archive" },
         "problems": {
           "type": "array",

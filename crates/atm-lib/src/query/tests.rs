@@ -81,6 +81,68 @@ fn claims_are_listed_by_task_and_entries_without_a_task_are_left_out() {
     assert_eq!(list_claims(&empty).len(), 0);
 }
 
+/// ATM-719: how a finished task ended, its own resolution or the default; none while open
+#[test]
+fn a_finished_tasks_resolution_is_its_own_or_the_default() {
+    let vocab = Vocabulary::of_meta(&Map::new()).unwrap();
+    for (t, resolution) in [
+        (json!({"status": "done"}), Some("done")),
+        (json!({"status": "skipped"}), Some("wont_do")),
+        (
+            json!({"status": "skipped", "resolution": "duplicate"}),
+            Some("duplicate"),
+        ),
+        (
+            json!({"status": "done", "resolution": "obsolete"}),
+            Some("obsolete"),
+        ),
+        (
+            json!({"status": "skipped", "resolution": ""}),
+            Some("wont_do"),
+        ),
+        (json!({"status": "todo", "resolution": "duplicate"}), None),
+        (json!({"status": "in_review"}), None),
+    ] {
+        assert_eq!(
+            task_resolution(&vocab, &task(t.clone())).as_deref(),
+            resolution,
+            "{t}"
+        );
+    }
+}
+
+/// ATM-719: what atm serves of each task's links both ways, and of a task left in a closed sprint
+#[test]
+fn the_views_carry_each_tasks_backlinks_resolution_and_a_closed_sprint() {
+    let p = project_with(
+        json!({"sprints": [{"id": "Old", "state": "closed"}, {"id": "Now", "state": "active"}]}),
+        json!([
+            {"id": "T-1", "status": "todo", "sprint": "Old", "related": ["T-3"]},
+            {"id": "T-2", "status": "todo", "dependencies": ["T-1"], "related": ["T-1"]},
+            {"id": "T-3", "status": "skipped", "duplicate_of": "T-1", "sprint": "Old"},
+            {"id": "T-4", "status": "done", "dependencies": ["T-1"], "related": "see T-1", "sprint": "Now"}
+        ]),
+        json!([]),
+    );
+    let views = task_views(&p, &Filters::default()).unwrap();
+    let derived =
+        |id: &str| views.iter().find(|v| v["task"]["id"] == id).unwrap()["derived"].clone();
+    let one = derived("T-1");
+    assert_eq!(one["required_by"], json!(["T-2", "T-4"]));
+    // Its own related (T-3) isn't listed again; one written as a text names it too
+    assert_eq!(one["related_by"], json!(["T-2", "T-4"]));
+    assert_eq!(one["duplicated_by"], json!(["T-3"]));
+    assert_eq!(one["in_closed_sprint"], json!(true));
+    assert!(one.get("resolution").is_none());
+    let three = derived("T-3");
+    // Finished in a closed sprint: not left there; skipped as a duplicate by default as won't do
+    assert!(three.get("in_closed_sprint").is_none());
+    assert_eq!(three["resolution"], json!("wont_do"));
+    let two = derived("T-2");
+    assert!(two.get("required_by").is_none() && two.get("duplicated_by").is_none());
+    assert_eq!(derived("T-4")["resolution"], json!("done"));
+}
+
 #[test]
 fn a_done_tasks_stage_is_merged_in_pr_or_done() {
     let vocab = Vocabulary::of_meta(&Map::new()).unwrap();
@@ -440,7 +502,7 @@ fn views_derive_what_applies_and_leave_out_the_rest() {
         views[0]["derived"],
         json!({
             "kind": "todo", "ready": true, "waiting_for": [], "priority": "P2", "effective_review": "none", "archived": false,
-            "agent_work": true
+            "agent_work": true, "required_by": ["T-3"]
         })
     );
     assert_eq!(views[1]["derived"]["waiting_for"], json!(["T-2"]));
@@ -462,6 +524,7 @@ fn views_derive_what_applies_and_leave_out_the_rest() {
             .collect::<Vec<_>>(),
         [
             "kind",
+            "required_by",
             "ready",
             "waiting_for",
             "priority",

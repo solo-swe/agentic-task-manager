@@ -82,7 +82,7 @@ import { findTask, refView, taskLabel, type OtherProject, type RefView } from '.
 import { latest, type Ticket } from './latest';
 import type { ListGroupBy } from './list-groups';
 import { loadProjectSources, type ProjectSource } from './overview-data';
-import { leftovers as leftoversOf, scopeOf } from './scope';
+import { scopeOf } from './scope';
 import { sprintParamOf, withSprintParam } from './sprint-param';
 import type { Release } from './releases';
 import { NO_SPRINTS, type SprintModel } from './sprints';
@@ -251,8 +251,8 @@ export class DashboardState {
   releases = $state.raw<Release[]>([]);
   /** The project's components, as atm serves them with the vocabulary, in their order; tasks name them by ID (T-323) */
   components = $derived(this.vocab.components);
-  /** Open tasks left in closed sprints, which no loop takes until they are moved (lib/scope.ts, T-323) */
-  leftovers = $derived(leftoversOf(this.tasks, this.sprints));
+  /** Open tasks left in closed sprints, which no loop takes until they are moved (T-323), as atm says it (ATM-719) */
+  leftovers = $derived(this.tasks.filter((t) => t.derived?.in_closed_sprint === true));
   // Archived tasks by ID, for dependency stubs in the detail panel
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   archiveMap = $derived<ReadonlyMap<string, Task>>(new Map(this.archive.map((t) => [t.id, t])));

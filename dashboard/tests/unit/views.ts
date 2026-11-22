@@ -66,9 +66,60 @@ export const vocabulary = (lists: Partial<Vocabulary>): Vocabulary => ({ ...DEFA
 export function withKinds<T extends Task>(tasks: readonly T[], vocab: Vocabulary = DEFAULT_VOCABULARY): T[] {
   return tasks.map((t) => {
     const kind = vocab.statuses.find((s) => s.id === t.status)?.kind;
-    // The kind, and the work when the test gives none; a test that gives atm's other answers gives them itself
+    // The kind, and the work, stage and resolution when the test gives none; a test that gives atm's other answers
+    // gives them itself
     const work = t.derived?.work ?? workOf(t, kind);
-    return kind ? { ...t, derived: { ...t.derived, kind, ...(work ? { work } : {}) } as Task['derived'] } : t;
+    const stage = t.derived?.stage ?? stageOf(t, kind);
+    const resolution = t.derived?.resolution ?? resolutionOf(t, kind);
+    const more = { ...(work ? { work } : {}), ...(stage ? { stage } : {}), ...(resolution ? { resolution } : {}) };
+    return kind ? { ...t, derived: { ...t.derived, kind, ...more } as Task['derived'] } : t;
+  }) as T[];
+}
+
+/** A fake of atm's stage (DM-4.3, `derived.stage`) for unit tests on fixtures: a done task's, merged, in a PR or done */
+function stageOf(t: Task, kind: string | undefined): string | undefined {
+  if (kind !== 'done') return undefined;
+  if (t.merged_at) return 'merged';
+  return t.pr && typeof t.pr === 'object' && typeof t.pr.number === 'number' ? 'in_pr' : 'done';
+}
+
+/** A fake of atm's resolution (SR-2.8, `derived.resolution`): a finished task's own, else the default */
+function resolutionOf(t: Task, kind: string | undefined): string | undefined {
+  if (kind === 'done') return t.resolution || 'done';
+  if (kind === 'skipped') return t.resolution || 'wont_do';
+  return undefined;
+}
+
+/**
+ * A fake of atm's links and places (ATM-719) for unit tests on fixtures, over the project's `tasks` and its `meta`:
+ * the links pointing at each task (`required_by`, `related_by`, `duplicated_by`), its release (its own, else its
+ * sprint's: `effective_release`) and whether it is left open in a closed sprint (`in_closed_sprint`). atm's rules are
+ * atm-lib's (`tasks::Backlinks`, `query`), tested there; this gives the panels what atm would.
+ */
+export function withLinks<T extends Task>(tasks: readonly T[], meta: TasksFile['meta'] = {}): T[] {
+  const sprints = ((meta as { sprints?: { id: string; state?: string; release?: string }[] }).sprints ?? []).filter(
+    (s) => s && typeof s.id === 'string',
+  );
+  const sprintOf = (t: Task) =>
+    typeof t.sprint === 'string' ? sprints.find((s) => s.id.toLowerCase() === t.sprint!.toLowerCase()) : undefined;
+  const pointing = (t: Task, at: (other: Task) => boolean) =>
+    tasks.filter((other) => other.id !== t.id && at(other)).map((other) => other.id);
+  return tasks.map((t) => {
+    const own = (t.related ?? []).filter((id) => typeof id === 'string');
+    const kind = t.derived?.kind;
+    const sprint = sprintOf(t);
+    const release = t.release ?? sprint?.release;
+    const links = {
+      required_by: pointing(t, (o) => (o.dependencies ?? []).includes(t.id)),
+      related_by: pointing(t, (o) => (o.related ?? []).includes(t.id) && !own.includes(o.id)),
+      duplicated_by: pointing(t, (o) => o.duplicate_of === t.id),
+    };
+    const more = {
+      ...Object.fromEntries(Object.entries(links).filter(([, ids]) => ids.length)),
+      ...(release ? { effective_release: release } : {}),
+      ...(sprint?.state === 'closed' && kind !== 'done' && kind !== 'skipped' ? { in_closed_sprint: true } : {}),
+    };
+    return { ...t, derived: { ...more, ...t.derived } as Task['derived'] };
   }) as T[];
 }
 

@@ -23,17 +23,16 @@ describe('stageOf', () => {
     expect(hasStage(task('A', { merged_at: '2026-04-01T00:00:00Z' }))).toBe(true);
   });
 
-  // ATM-680 (audit D6): atm's `derived.stage` is the task's; the local rule only for a task it hasn't served
-  it('is atm’s stage when it gave one; an unknown one falls back to the rule', () => {
-    const served = (stage: string, fields: Partial<Task> = {}) => {
+  // ATM-680, ATM-719: atm's `derived.stage` is the task's, whatever its own fields say; no rule of the dashboard's
+  it('is atm’s stage; one it doesn’t know, or none, is no stage', () => {
+    const served = (stage: string | undefined, fields: Partial<Task> = {}) => {
       const t = task('A', fields);
       return { ...t, derived: { ...t.derived!, stage } } as Task;
     };
     expect(stageOf(served('merged'))).toBe('merged');
     expect(stageOf(served('in_pr', { merged_at: '2026-04-01T00:00:00Z' }))).toBe('in_pr');
-    expect(stageOf(served('shipped', { pr: { number: 3 } }))).toBe('in_pr');
-    // Not done: no stage, whatever is said
-    expect(stageOf(served('merged', { status: 'in_progress' }))).toBeUndefined();
+    expect(stageOf(served('shipped', { pr: { number: 3 } }))).toBeUndefined();
+    expect(stageOf(served(undefined, { pr: { number: 3 } }))).toBeUndefined();
   });
 });
 

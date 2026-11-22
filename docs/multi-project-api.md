@@ -143,6 +143,12 @@ typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/ge
 task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
 `in_pr`, `merged`) and `archived`; what doesn't apply is left out.
 
+- **Its links and how it ended** (ATM-719): `resolution` (a finished task's, the default filled in: `done`, or
+  `wont_do` for a skipped one), `required_by`, `related_by` and `duplicated_by` (the working tasks pointing at it, for
+  an archived task too; `related_by` leaves out those in its own `related`), and `in_closed_sprint` (an unfinished
+  task left in a closed sprint, which the loop never takes). Every task the dashboard has comes with them, archived
+  ones and a worktree's copies too, so it works none of them out.
+
 - **Its code reviews' statuses** (ATM-621): a task with code reviews (`code_reviews`) has `derived.review_statuses`,
   by review ID: each review's status (`draft`, `waiting`, `live`, `changes_requested`, `approved`, `closed`), or
   `unreadable` for one atm can't read (ATM-617). They're read from the project's reviews once for all the views. A

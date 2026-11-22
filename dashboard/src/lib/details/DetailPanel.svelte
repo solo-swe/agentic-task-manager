@@ -68,7 +68,7 @@
   // Its sprint (or the backlog), its release (its own, else its sprint's), and the sprints it was carried through
   // (SR-7.6, SR-4.5): shown when it was in more than one; flagged once carried twice or more
   const sprint = $derived(task ? dashboard.sprints.sprintOf(task) : undefined);
-  const release = $derived(task ? effectiveRelease(dashboard.sprints, task) : undefined);
+  const release = $derived(task ? effectiveRelease(task) : undefined);
   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
   // How many sprints it was carried through, as atm counts it (ATM-720)
   const carried = $derived(task?.derived?.carried ?? 0);
@@ -83,10 +83,13 @@
   const reviewProject = $derived(dashboard.projectId);
   const actors = $derived(task ? actorsLine(task) : '');
   const attempts = $derived(task ? earlierAttempts(task) : []);
-  const requiredBy = $derived(task ? dashboard.tasks.filter((t) => (t.dependencies ?? []).includes(task.id)) : []);
-  // How it ended, when not done, and its links that don't block, both ways (SR-2.8, SR-7.6)
+  // The tasks that depend on it, as atm finds them (ATM-719: `derived.required_by`), those the page has
+  const requiredBy = $derived(
+    (task?.derived?.required_by ?? []).flatMap((id) => dashboard.tasks.find((t) => t.id === id) ?? []),
+  );
+  // How it ended, when not done, and its links that don't block, both ways (SR-2.8, SR-7.6), as atm says them
   const resolution = $derived(task ? resolutionOf(task) : undefined);
-  const relations = $derived(task ? relationsOf(task, dashboard.tasks) : { related: [], duplicatedBy: [] });
+  const relations = $derived(task ? relationsOf(task) : { related: [], duplicatedBy: [] });
   const linked = $derived(
     (task?.dependencies ?? []).length ||
       requiredBy.length ||

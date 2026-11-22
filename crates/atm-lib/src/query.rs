@@ -238,6 +238,21 @@ pub fn list_matching<'p>(project: &'p Project, filters: &Filters) -> Result<Vec<
     Ok(kept)
 }
 
+/// How a finished task ended (SR-2.8, ATM-719): its own resolution, else the default (`done` for a done task,
+/// `wont_do` for a skipped one, as atm stores one only when it isn't the default); None while it isn't finished.
+#[must_use]
+pub fn task_resolution(vocab: &Vocabulary, task: &Task) -> Option<String> {
+    let own = task
+        .get("resolution")
+        .and_then(Value::as_str)
+        .filter(|r| !r.is_empty());
+    match vocab.kind_of(task.get("status"))? {
+        Kind::Done => Some(own.unwrap_or("done").to_string()),
+        Kind::Skipped => Some(own.unwrap_or("wont_do").to_string()),
+        _ => None,
+    }
+}
+
 /// A done task's stage (DM-4.3): `done`, `in_pr` (a recorded PR, not merged) or `merged`; None for other kinds.
 #[must_use]
 pub fn task_stage(vocab: &Vocabulary, task: &Task) -> Option<&'static str> {
@@ -329,6 +344,28 @@ impl ReviewStatuses {
     }
 }
 
+/// A task's resolution and the links pointing at it (ATM-719): the tasks that depend on it, relate to it and
+/// duplicate it, each left out when there is none
+fn links_and_resolution(
+    vocab: &Vocabulary,
+    links: &crate::tasks::Backlinks,
+    t: &Task,
+    derived: &mut Map<String, Value>,
+) {
+    if let Some(resolution) = task_resolution(vocab, t) {
+        derived.insert("resolution".into(), json!(resolution));
+    }
+    for (field, ids) in [
+        ("required_by", links.required_by(t)),
+        ("related_by", links.related_by(t)),
+        ("duplicated_by", links.duplicated_by(t)),
+    ] {
+        if !ids.is_empty() {
+            derived.insert(field.into(), json!(ids));
+        }
+    }
+}
+
 /// The tasks the filters keep, each as `{task, derived}`: what atm derives for it (the REST API's tasks,
 /// docs/layered-architecture.md §6.2): its kind, whether it is ready, the dependencies it waits for, who a blocked
 /// task waits on, its effective priority, review mode and release, its stage, and whether it is archived. What
@@ -352,6 +389,7 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
     let statuses = ReviewStatuses::of(project);
     // The sprint each task is in, as the sprints served with the tasks count them (ATM-720): phases too, unmigrated
     let sprints = crate::sprints::task_sprints(project)?;
+    let links = crate::tasks::Backlinks::of(&tasks);
     let mut views = Vec::new();
     for t in list_matching(project, filters)? {
         let kind = vocab.kind_of(t.get("status"));
@@ -377,7 +415,12 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
             if place.carried > 0 {
                 derived.insert("carried".into(), json!(place.carried));
             }
+            // Left unfinished in a closed sprint (ATM-719): the loop never takes it until it is moved
+            if place.closed && !matches!(kind, Some(Kind::Done | Kind::Skipped)) {
+                derived.insert("in_closed_sprint".into(), json!(true));
+            }
         }
+        links_and_resolution(vocab, &links, t, &mut derived);
         let is_ready = id_of(t).is_some_and(|id| ready.contains(id)) && problems.is_none();
         derived.insert("ready".into(), json!(is_ready));
         derived.insert("waiting_for".into(), json!(waiting_for));

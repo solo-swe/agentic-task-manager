@@ -192,7 +192,8 @@ fn a_tasks_sprint_is_its_sprints_name_as_the_project_writes_it_with_how_often_it
         by_task.get("T-1"),
         Some(&super::TaskSprint {
             sprint: "Now".into(),
-            carried: 2
+            carried: 2,
+            closed: false
         })
     );
     // A sprint the project doesn't define: in none

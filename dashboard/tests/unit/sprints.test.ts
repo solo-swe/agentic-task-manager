@@ -53,18 +53,11 @@ describe('fromServedSprints', () => {
 });
 
 describe('effectiveRelease', () => {
-  it("is atm's when the task comes with atm's values (T-371): none from atm is none", () => {
+  it("is atm's (T-371, ATM-719): none from atm is none, whatever the task's own fields", () => {
     const derived = { kind: 'todo', ready: true, waiting_for: [], priority: 'P2', archived: false };
-    expect(effectiveRelease(model, { ...tasks[1], derived: { ...derived, effective_release: '2.0' } })).toBe('2.0');
-    expect(effectiveRelease(model, { ...tasks[1], derived })).toBeUndefined();
-  });
-
-  it("without atm's values (a linked worktree's copy): its own, else its sprint's", () => {
-    const copy = (sprintName: string | undefined, release?: string) =>
-      ({ id: 'X', status: 'todo', ...(release ? { release } : {}), derived: { sprint: sprintName } }) as Task;
-    expect(effectiveRelease(model, copy('Ada Lovelace'))).toBe('1.0');
-    expect(effectiveRelease(model, copy('Ada Lovelace', '1.1'))).toBe('1.1');
-    expect(effectiveRelease(model, copy(undefined))).toBeUndefined();
+    expect(effectiveRelease({ ...tasks[1], derived: { ...derived, effective_release: '2.0' } })).toBe('2.0');
+    expect(effectiveRelease({ ...tasks[1], release: '1.1', derived })).toBeUndefined();
+    expect(effectiveRelease({ id: 'X', status: 'todo', release: '1.1' } as Task)).toBeUndefined();
   });
 });
 

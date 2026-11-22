@@ -16,7 +16,7 @@ import {
 } from '../../src/lib/filters';
 import type { Task, TasksFile } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
-import { sprintModel, vocabulary, withKinds } from './views';
+import { sprintModel, vocabulary, withKinds, withLinks } from './views';
 import standardFile from '../fixtures/standard.json';
 import edgeFile from '../fixtures/edge-cases.json';
 import sprintsFile from '../fixtures/sprints.json';
@@ -163,7 +163,8 @@ describe('filterOptions', () => {
 
 describe('sprints, releases and components (SR-7.1)', () => {
   const file = sprintsFile as TasksFile;
-  const tasks = withKinds(file.tasks as Task[]);
+  // With atm's releases on them (its own, else its sprint's: the fake's, views.ts)
+  const tasks = withLinks(withKinds(file.tasks as Task[]), file.meta);
   const m = sprintModel(file.meta, tasks, DEFAULT_VOCABULARY);
   const withComponents = tasks.map((t, i) => (i < 2 ? { ...t, components: ['api', 'ui'] } : t));
 
@@ -256,13 +257,14 @@ describe('labels', () => {
 
 describe('the stage group', () => {
   it('offers the stages done tasks have, in order; filters by them; tasks not done have none', () => {
-    const done = standard.filter((t) => t.status === 'done');
-    const tasks = [
+    const done = standardFile.tasks.filter((t) => t.status === 'done') as Task[];
+    // Each with the stage atm gives it (the fake's, views.ts)
+    const tasks = withKinds([
       { ...done[0], merged_at: '2026-04-01T00:00:00Z', pr: { number: 2 } },
       { ...done[1], pr: { number: 3, url: 'u' } },
       done[2],
-      { ...standard.find((t) => t.status === 'todo')!, pr: { number: 3 } },
-    ];
+      { ...(standardFile.tasks.find((t) => t.status === 'todo') as Task), pr: { number: 3 } },
+    ]);
     expect(filterOptions(tasks).stage).toEqual([
       { value: 'done', label: 'Done' },
       { value: 'in_pr', label: 'In PR' },

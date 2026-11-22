@@ -189,6 +189,8 @@ pub struct TaskSprint {
     pub sprint: String,
     /// How many sprints it was carried through before this one.
     pub carried: usize,
+    /// Its sprint is closed (ATM-719: an unfinished task left there, which the loop never takes).
+    pub closed: bool,
 }
 
 /// Each task's sprint, by task ID (working and archived tasks). A task in no sprint, or one the project doesn't define,
@@ -203,9 +205,18 @@ pub fn task_sprints(project: &Project) -> Result<HashMap<String, TaskSprint>> {
             .chain(archived)
             .filter_map(|t| {
                 let id = t.get("id").and_then(Value::as_str)?;
-                let sprint = sprint_id(vocab.find_sprint(t.get("sprint"))?);
+                let found = vocab.find_sprint(t.get("sprint"))?;
+                let closed = found.get("state").and_then(Value::as_str) == Some("closed");
+                let sprint = sprint_id(found);
                 let carried = carried_through(t, &sprint);
-                Some((id.to_string(), TaskSprint { sprint, carried }))
+                Some((
+                    id.to_string(),
+                    TaskSprint {
+                        sprint,
+                        carried,
+                        closed,
+                    },
+                ))
             })
             .collect()
     })

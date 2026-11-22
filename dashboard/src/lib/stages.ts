@@ -3,7 +3,6 @@
 import type { KanbanCard } from './kanban';
 import type { Task } from './types';
 import { safeUrl } from './url';
-import { taskKind } from './vocab';
 
 export type Stage = 'done' | 'in_pr' | 'merged';
 export const STAGES: Stage[] = ['done', 'in_pr', 'merged'];
@@ -20,14 +19,11 @@ export function hasStage(task: Task): boolean {
   return !!prOf(task) || !!task.merged_at;
 }
 
-/** A done-kind task's stage, as atm says (`derived.stage`, ATM-680; the local rule only without it); undefined for
- * tasks that aren't done */
+/** A done task's stage, as atm says it (`derived.stage`, ATM-719: every task the dashboard has comes with atm's
+ * values, archived ones and a worktree's copies too); undefined for a task that isn't done */
 export function stageOf(task: Task): Stage | undefined {
-  if (taskKind(task) !== 'done') return undefined;
   const served = task.derived?.stage;
-  if (served && (STAGES as string[]).includes(served)) return served as Stage;
-  if (task.merged_at) return 'merged';
-  return prOf(task) ? 'in_pr' : 'done';
+  return served && (STAGES as string[]).includes(served) ? (served as Stage) : undefined;
 }
 
 export interface DoneSection {

@@ -6,7 +6,7 @@ import type { Release } from '../../src/lib/releases';
 import type { SprintModel } from '../../src/lib/sprints';
 import type { TasksFile } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
-import { sprintModel, withKinds } from './views';
+import { sprintModel, withKinds, withLinks } from './views';
 
 /** What atm serves beside the tasks, as a test gives it */
 export interface Served {
@@ -26,7 +26,8 @@ export function loadIntoDashboard(
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   served: Served = {},
 ) {
-  const withTheirKinds = { ...data, tasks: withKinds(data.tasks ?? [], vocab) };
+  // atm's answers on each task (its kind, then the links and places it works out over the project, ATM-719)
+  const withTheirKinds = { ...data, tasks: withLinks(withKinds(data.tasks ?? [], vocab), data.meta) };
   const { tasks, taskMap, projectName, meta, bytes } = parseTasksFile(withTheirKinds, JSON.stringify(data).length);
   const archived = withKinds(archive?.tasks ?? [], vocab);
   const releases = (meta as { releases?: { id: string }[] } | undefined)?.releases ?? [];
