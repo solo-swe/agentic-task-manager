@@ -346,14 +346,38 @@ fn ensure_server(home: &Path, port: u64) -> Result<(Map<String, Value>, bool)> {
     Ok((start_server(home, port)?, true))
 }
 
-/// Start (or reuse) the server; the URL to show: the project's (at or above `cwd`), or the overview's.
-fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
+/// What a service command did (ATM-679, audit C11): its lines for people, and the same as one JSON object for
+/// `--json`.
+struct Said {
+    lines: Vec<String>,
+    json: Map<String, Value>,
+}
+
+impl Said {
+    fn print(&self, json: bool) {
+        if json {
+            print_json(&Value::Object(self.json.clone()));
+        } else {
+            for line in &self.lines {
+                println!("{line}");
+            }
+        }
+    }
+}
+
+/// Start (or reuse) the server; the URL to show: the project's (at or above `cwd`), or the overview's. `--json`:
+/// `{url, started, listed, migrated}`.
+fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<(String, Said)> {
     let mut project = None;
+    let mut lines = Vec::new();
+    let mut migrated = Vec::new();
+    let mut listed = Value::Null;
     if !overview {
         let migration = super::db::maintenance(cwd)?.migrate(false)?;
         for line in &migration.lines {
             if line != "Nothing to migrate." {
-                println!("{line}");
+                lines.push(line.clone());
+                migrated.push(line.clone());
             }
         }
         if !migration.tasks_exists {
@@ -362,11 +386,13 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
             ));
         }
         let (id, shown) = Project::open(cwd)?.join_default_workspace()?;
+        listed = Value::Bool(shown);
         if shown {
             project = Some(id);
         } else {
-            println!(
+            lines.push(
                 "This project isn't listed on the dashboard (meta.dashboard.listed is false)."
+                    .into(),
             );
         }
     }
@@ -376,15 +402,17 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
         record.get("port").unwrap_or(&Value::Null),
         project.as_deref(),
     );
-    println!(
+    lines.push(format!(
         "Dashboard server {}: {url}",
         if started {
             "started"
         } else {
             "already running"
         }
-    );
-    Ok(url)
+    ));
+    let json = json!({ "url": url, "started": started, "listed": listed, "migrated": migrated });
+    let json = json.as_object().cloned().unwrap_or_default();
+    Ok((url, Said { lines, json }))
 }
 
 /// How many checks in a row must miss a process before it counts as gone: a busy machine can make one look miss it.
@@ -528,54 +556,75 @@ fn older_atms_servers(home: &Path, servers: &[Map<String, Value>]) -> Vec<Map<St
         .collect()
 }
 
-fn serve_stop(home: &Path, port: u16) -> Result<()> {
+/// Stop the server, and any atm server the record doesn't name. `--json`: `{stopped: [{pid, port, recorded}],
+/// stale_record}` (the pid of a record whose server was gone, removed).
+fn serve_stop(home: &Path, port: u16) -> Result<Said> {
     let record = read_record(home);
     let live = record
         .as_ref()
         .is_some_and(|r| ask(port_of(r)).is_some_and(|i| answers_for(&i, r, home)));
     let recorded = record.as_ref().filter(|_| live).and_then(|r| r.get("pid"));
     let strays = unrecorded_servers(home, &servers_on(port), recorded);
-    let Some(record) = record else {
-        if strays.is_empty() {
-            println!("Dashboard server is not running.");
-            return Ok(());
-        }
-        return stop_strays(home, &strays);
+    let mut said = Said {
+        lines: Vec::new(),
+        json: Map::new(),
     };
-    if !live {
-        let _ = std::fs::remove_file(record_path(home));
-        if strays.is_empty() {
-            println!(
-                "Dashboard server is not running (removed a stale record for pid {}).",
-                py_str_opt(record.get("pid"))
-            );
-            return Ok(());
+    let mut stopped = Vec::new();
+    let mut stale = Value::Null;
+    match &record {
+        None if strays.is_empty() => said.lines.push("Dashboard server is not running.".into()),
+        None => {}
+        Some(record) if !live => {
+            let _ = std::fs::remove_file(record_path(home));
+            stale = record.get("pid").cloned().unwrap_or(Value::Null);
+            if strays.is_empty() {
+                said.lines.push(format!(
+                    "Dashboard server is not running (removed a stale record for pid {}).",
+                    py_str_opt(record.get("pid"))
+                ));
+            }
         }
-    } else if let Some(pid) = pid_of(&record) {
-        stop_server(home, pid, Some(&record))?;
-        println!("Dashboard server stopped (pid {pid}).");
+        Some(record) => {
+            if let Some(pid) = pid_of(record) {
+                stop_server(home, pid, Some(record))?;
+                said.lines
+                    .push(format!("Dashboard server stopped (pid {pid})."));
+                stopped.push(json!({ "pid": pid, "port": record.get("port"), "recorded": true }));
+            }
+        }
     }
-    stop_strays(home, &strays)
+    let failed = stop_strays(home, &strays, &mut said.lines, &mut stopped);
+    said.json.insert("stopped".into(), Value::Array(stopped));
+    said.json.insert("stale_record".into(), stale);
+    failed.map_or(Ok(said), Err)
 }
 
 /// Stop the servers the record doesn't name: each one that is an atm server; any other answering as one is only
-/// reported (ATM-673, audit C6), and the others are still stopped.
-fn stop_strays(home: &Path, strays: &[Map<String, Value>]) -> Result<()> {
+/// reported (ATM-673, audit C6), and the others are still stopped. The last refusal, if any.
+fn stop_strays(
+    home: &Path,
+    strays: &[Map<String, Value>],
+    lines: &mut Vec<String>,
+    stopped: &mut Vec<Value>,
+) -> Option<Error> {
     let mut failed = None;
     for info in strays {
         let Some(pid) = pid_of(info) else { continue };
         match stop_server(home, pid, None) {
-            Ok(()) => println!(
-                "Stopped a dashboard server the record didn't name (pid {pid}, port {}).",
-                py_str_opt(info.get("port"))
-            ),
+            Ok(()) => {
+                lines.push(format!(
+                    "Stopped a dashboard server the record didn't name (pid {pid}, port {}).",
+                    py_str_opt(info.get("port"))
+                ));
+                stopped.push(json!({ "pid": pid, "port": info.get("port"), "recorded": false }));
+            }
             Err(e) => {
                 eprintln!("atm: port {}: {e}", py_str_opt(info.get("port")));
                 failed = Some(e);
             }
         }
     }
-    failed.map_or(Ok(()), Err)
+    failed
 }
 
 fn real_path(path: &str) -> PathBuf {
@@ -741,11 +790,21 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
     if args.refresh {
         if ctx.dry_run {
             println!("[dry-run] would refresh the dashboard server if outdated");
-        } else if let Some(record) = refresh_server(&home)? {
+            return Ok(());
+        }
+        let restarted = refresh_server(&home)?;
+        let url = restarted
+            .as_ref()
+            .map(|r| server_url(r.get("port").unwrap_or(&Value::Null), None));
+        if ctx.json {
+            let version = restarted.as_ref().and_then(|r| r.get("version"));
+            print_json(
+                &json!({ "restarted": restarted.is_some(), "version": version, "url": url }),
+            );
+        } else if let (Some(record), Some(url)) = (&restarted, &url) {
             println!(
-                "Dashboard server restarted with dashboard {}: {}",
-                py_str_opt(record.get("version")),
-                server_url(record.get("port").unwrap_or(&Value::Null), None)
+                "Dashboard server restarted with dashboard {}: {url}",
+                py_str_opt(record.get("version"))
             );
         }
         return Ok(());
@@ -757,7 +816,8 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             refresh_server(&home)?;
-            let url = serve_start(&cwd, args.port, args.all)?;
+            let (url, said) = serve_start(&cwd, args.port, args.all)?;
+            said.print(ctx.json);
             if args.open {
                 open_browser(&url);
             }
@@ -767,7 +827,7 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
                 println!("[dry-run] would stop the dashboard server");
                 return Ok(());
             }
-            serve_stop(&home, args.port)?;
+            serve_stop(&home, args.port)?.print(ctx.json);
         }
         _ => serve_status(&home, ctx.json, args.port),
     }

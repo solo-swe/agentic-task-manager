@@ -17548,7 +17548,7 @@
       "description": "Audit findings A4, A11, A12 and A13 ([the report](docs/codebase-audit-2026-11.md#a4-low-bug-the-loop-skill-names-atm-sprints---json-checked-that-the-line-is-there)).\n\n- **A4:** `skills/atm-loop-tasks/SKILL.md:174` names `atm sprints --json`; the command is `atm sprint list --json`.\n- **A13:** every skill starts with `atm version` and points to `atm docs`, neither pre-approved in `skills/claude-code.json`: add both (read-only; check I2 and `skills.test.ts` allow them).\n- **A12:** `packaging/homebrew-formula.sh` and `homebrew-cask.sh` put the version and checksums into Ruby unchecked: require `^[0-9]+\\.[0-9]+\\.[0-9]+$` and `^[0-9a-f]{64}$`. The deploy-key pushes accept a new host key (`homebrew.yml:41`, `skills.yml:43`): pin GitHub's host keys. Both workflows check out the tag and refuse anything not a `v*` tag.\n- **A11:** add Dependabot's `cargo` ecosystem, grouped like npm; pin the sandbox's images (`tests/sandbox/compose.yaml`, `Dockerfile`).\n\nThis changes skills: before the release PR merges, the security checklist (§3) applies.\n\n## Tests\n`dashboard/tests/unit/skills.test.ts` (the pre-approved list), `tests/scripts/packaging.test.mjs` (a bad version or checksum is refused), `ci-workflow.test.ts` (cargo in Dependabot, host keys pinned).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "skills/atm-loop-tasks/SKILL.md",
@@ -17562,7 +17562,7 @@
         "tests/sandbox/Dockerfile"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T17:20:33Z",
+      "updated_at": "2026-11-22T17:28:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17574,7 +17574,7 @@
       "sprint": "Audit and tabs",
       "number": 678,
       "review": "async",
-      "commit": "13841b58ec1b9238198dcc00b870972ab6148683",
+      "commit": "5689639b1650092fc1aa1900ad5ca0c4ac7759b3",
       "blocks": [
         {
           "from": "2026-11-22T17:08:19Z",
@@ -17588,10 +17588,24 @@
           "kind": "answer",
           "text": "Done and committed (13841b5): the loop skill names atm sprint list --json (A4), and the Homebrew scripts refuse a bad version or checksum (A12, tested). The rest changes permissions and CI, which I do not do on a task word alone. → Noted.; May I add atm version and atm docs to the pre-approved commands in skills/claude-code.json (A13)? → Hakan, in chat: good (yes).; May I edit homebrew.yml and skills.yml to pin GitHub SSH host keys and refuse anything but a v* tag, and add cargo to dependabot.yml (A12, A11)? → Hakan, in chat: yes.; May I pin the sandbox images by digest, looking the digests up with docker buildx imagetools inspect (A11)? → Hakan, in chat: yes.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T17:28:43Z",
+          "kind": "review",
+          "text": "CR-114: Skills and packaging: pre-approvals, the loop skill command, checked Homebrew inputs, pinned host keys and images",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-22T17:20:33Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "code_reviews": [
+        {
+          "id": "01a2044d-957e-70cd-9637-96df7b9b79ae",
+          "ref": "CR-114"
+        }
+      ],
+      "review_requested_at": "2026-11-22T17:28:43Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226ff51a3a63",
@@ -17605,7 +17619,7 @@
       "description": "Audit findings C8, C9, C11, C12 and C13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-2)).\n\n- **C9:** `output::clean` (`crates/atm-cli/src/output.rs:105`) keeps bidi and format characters (U+200B-200F, U+202A-202E, U+2060-2069, U+FEFF): drop them, sharing `py::printable`'s list (I30).\n- **C11:** `service start/stop --json`, `db init --meta-file --json` and `vcs commit --record --json` print text or leave fields out: a JSON object each.\n- **C13:** `task list --agent` is a filter, but `main.rs:396` takes any `--agent` as \"run as someone else\": rename the filter `--started-by` (keep `--agent` as a hidden alias for a release), or decide from the parsed command.\n- **C12:** `claim hold` says it holds while its watcher quits when the shell's start time can't be read (`claim.rs:287`): refuse then.\n- **C8:** each printed line with a UUID reopens the project and rereads the archive, twice in `say()`: one `Labeller` per process.\n\n## Tests\n`tests/scripts/output.test.mjs`: a task name with U+202E prints without it; each command's `--json` parses; `task list --agent x` still renews the caller's claim.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/output.rs",
@@ -17615,7 +17629,7 @@
         "crates/atm-cli/src/commands/maintenance.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T17:20:32Z",
+      "updated_at": "2026-11-22T17:28:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17634,7 +17648,9 @@
           "text": "Not started: handed back to finish ATM-678 first, its questions answered.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-22T17:28:48Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2270a6f9bac9",

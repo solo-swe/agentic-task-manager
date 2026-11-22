@@ -187,6 +187,8 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
         return Ok(());
     }
     let mut project = Project::open(cwd)?;
+    // What the meta file did, for `--json` too (ATM-679, audit C11): none without one
+    let mut meta = Value::Null;
     if let Some(meta_file) = meta_file.filter(|m| !m.is_empty()) {
         let text = crate::option_file::read_option_file(cwd, "meta-file", meta_file)?;
         let new = serde_json::from_str::<Value>(&text).ok();
@@ -196,6 +198,7 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
             )));
         };
         let (created, keys) = init_meta(&mut project, &new)?;
+        meta = json!({ "created": created, "keys": keys });
         // The task data as it is now
         project = Project::open(cwd)?;
         if !ctx.json {
@@ -220,6 +223,7 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
     let setup = maintenance(cwd)?.set_up()?;
     if ctx.json {
         print_json(&json!({
+            "meta": meta,
             "project_id": project_id,
             "repository": repository,
             "git": setup.git,

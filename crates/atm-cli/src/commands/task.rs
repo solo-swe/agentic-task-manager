@@ -41,8 +41,8 @@ pub struct ListArgs {
     /// Only tasks with this label (repeatable)
     #[arg(long)]
     label: Vec<String>,
-    /// Only tasks started by this agent
-    #[arg(long)]
+    /// Only tasks started by this agent (`--agent` until 0.43.0, which reads as running as someone else: ATM-679)
+    #[arg(long = "started-by", alias = "agent")]
     agent: Option<String>,
     /// Only to-do tasks whose dependencies are done
     #[arg(long)]

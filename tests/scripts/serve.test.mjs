@@ -151,6 +151,13 @@ describe('serve', () => {
     const again = atm(['service', 'start', '--port', String(port + 5)], root);
     assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/projects/abcd1234`));
     assert.equal(record(atmHome).pid, r.pid);
+    // --json: one object, never the text (ATM-679, audit C11)
+    assert.deepEqual(JSON.parse(atm(['service', 'start', '--json'], root).stdout), {
+      url: `http://localhost:${port}/projects/abcd1234`,
+      started: false,
+      listed: true,
+      migrated: [],
+    });
 
     const running = atm(['service', 'status'], root).stdout;
     assert.match(running, new RegExp(`running: http://localhost:${port}/ .*pid ${r.pid}`));
@@ -158,11 +165,15 @@ describe('serve', () => {
     assert.equal(status.running, true);
     assert.equal(status.url, `http://localhost:${port}/`);
 
-    assert.equal(atm(['service', 'stop'], root).stdout, `Dashboard server stopped (pid ${r.pid}).\n`);
+    assert.deepEqual(JSON.parse(atm(['service', 'stop', '--json'], root).stdout), {
+      stopped: [{ pid: r.pid, port, recorded: true }],
+      stale_record: null,
+    });
     assert.equal(alive(r.pid), false);
     assert.equal(record(atmHome), null);
     assert.equal(atm(['service', 'status'], root).stdout, 'Dashboard server is not running.\n');
     assert.equal(atm(['service', 'stop'], root).stdout, 'Dashboard server is not running.\n');
+    assert.deepEqual(JSON.parse(atm(['service', 'stop', '--json'], root).stdout), { stopped: [], stale_record: null });
   });
 
   test('one server for two projects; /api/projects lists them', async () => {

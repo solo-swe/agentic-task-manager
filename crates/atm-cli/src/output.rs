@@ -99,10 +99,14 @@ fn own_sgr(params: &str) -> bool {
 /// window's title or a link, clear the screen, move the cursor or hide text, and a carriage return could print over a
 /// line. Every control character goes but the line ends and tabs, the rest of its sequence staying as plain text for
 /// the reader to see; with styling on, an SGR sequence of atm's own styles stays (the same in task text: it can only
-/// colour). `--json` is untouched: JSON escapes control characters itself.
+/// colour). The invisible format characters go too (ATM-679, [`atm_common::py::invisible_format`]): a bidirectional
+/// override makes a line read in another order than it runs. `--json` is untouched: JSON escapes control characters
+/// itself.
 #[must_use]
 pub fn clean(text: &str) -> std::borrow::Cow<'_, str> {
-    let keep = |c: char| c == '\n' || c == '\t' || !c.is_control();
+    let keep = |c: char| {
+        (c == '\n' || c == '\t' || !c.is_control()) && !atm_common::py::invisible_format(c)
+    };
     if text.chars().all(keep) {
         return text.into();
     }
@@ -452,6 +456,32 @@ mod tests {
             "".into(),
         ]);
         t
+    }
+
+    /// ATM-679 (audit C9): what reaches a terminal has no control character but the line ends and tabs, and no
+    /// invisible format character (a right-to-left override makes a line read backwards); plain text is borrowed
+    #[test]
+    fn clean_drops_control_and_invisible_format_characters() {
+        let cases = [
+            (
+                "Plain text, ünïcode and emoji 🙂",
+                "Plain text, ünïcode and emoji 🙂",
+            ),
+            ("two\nlines\tand a tab", "two\nlines\tand a tab"),
+            ("a\rb\u{7}c", "abc"),
+            ("evil\u{202e}txt.exe", "eviltxt.exe"),
+            ("\u{2066}isolated\u{2069}", "isolated"),
+            ("zero\u{200b}width\u{200d}joiner\u{feff}", "zerowidthjoiner"),
+            ("soft\u{ad}hyphen\u{2060}", "softhyphen"),
+            (
+                "marks \u{200e}\u{200f} and \u{202a}\u{202b}\u{202c}\u{202d}",
+                "marks  and ",
+            ),
+        ];
+        for (text, printed) in cases {
+            assert_eq!(clean(text), printed, "{text:?}");
+        }
+        assert!(matches!(clean("as it is"), std::borrow::Cow::Borrowed(_)));
     }
 
     #[test]

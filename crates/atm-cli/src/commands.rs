@@ -52,12 +52,41 @@ pub fn resolved(cwd: &std::path::Path, references: &[String]) -> atm_common::Res
 
 /// A text with every task UUID in it replaced by the task's label (its key, `~` while provisional: ADR-007 §1), as
 /// people know the task: for the lines atm prints. Text without one, or a project without task keys, unchanged.
+///
+/// One [`Labeller`] a process (ATM-679, audit C8): each printed line used to open the project and read its archive
+/// again. It is opened again when the task file changed since it read it (the command wrote it: a key changed, a task
+/// added), or when a line names a task it doesn't know.
 #[must_use]
 pub fn labelled(cwd: &std::path::Path, text: &str) -> String {
     if !has_uuid(text) {
         return text.to_string();
     }
-    Labeller::open(cwd).text(text)
+    LABELLER.with(|cell| {
+        let mut shared = cell.borrow_mut();
+        if shared
+            .as_ref()
+            .is_none_or(|(dir, labeller)| dir != cwd || labeller.stale())
+        {
+            *shared = Some((cwd.to_path_buf(), Labeller::open(cwd)));
+        }
+        let (out, missed) = shared.as_ref().map_or_else(
+            || (text.to_string(), false),
+            |(_, labeller)| labeller.labels(text),
+        );
+        if !missed {
+            return out;
+        }
+        let fresh = Labeller::open(cwd);
+        let out = fresh.text(text);
+        *shared = Some((cwd.to_path_buf(), fresh));
+        out
+    })
+}
+
+thread_local! {
+    /// The process's labeller, and the folder it is of ([`labelled`])
+    static LABELLER: std::cell::RefCell<Option<(std::path::PathBuf, Labeller)>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 fn is_uuid(s: &str) -> bool {
@@ -73,6 +102,18 @@ fn has_uuid(s: &str) -> bool {
 /// [`labelled`] for many texts of one project: the project opened once.
 pub struct Labeller {
     project: Option<(atm_lib::Project, Vec<atm_common::Task>)>,
+    /// The task file's size and time when it was read: a later write (a key changed, a task added) makes it stale
+    read: Option<(u64, std::time::SystemTime)>,
+}
+
+/// The task file's size and modification time, of the project `project` is.
+fn task_file_stamp(project: &atm_lib::Project) -> Option<(u64, std::time::SystemTime)> {
+    let file = project
+        .root()?
+        .join(atm_common::TASK_DIR)
+        .join("tasks.json");
+    let meta = std::fs::metadata(file).ok()?;
+    Some((meta.len(), meta.modified().ok()?))
 }
 
 impl Labeller {
@@ -87,22 +128,38 @@ impl Labeller {
                 .unwrap_or_default();
             (project, archive)
         });
-        Labeller { project }
+        let read = project.as_ref().and_then(|(p, _)| task_file_stamp(p));
+        Labeller { project, read }
+    }
+
+    /// Whether the task file changed since it was read (or it can't be told).
+    fn stale(&self) -> bool {
+        match &self.project {
+            Some((project, _)) => self.read.is_none() || task_file_stamp(project) != self.read,
+            None => true,
+        }
     }
 
     /// A text with its task UUIDs as labels.
     #[must_use]
     pub fn text(&self, text: &str) -> String {
+        self.labels(text).0
+    }
+
+    /// A text with its task UUIDs as labels, and whether a UUID in it named no task this labeller knows (one the
+    /// command added since it was opened, or none at all).
+    fn labels(&self, text: &str) -> (String, bool) {
         if !has_uuid(text) {
-            return text.to_string();
+            return (text.to_string(), false);
         }
         let Some((project, archive)) = &self.project else {
-            return text.to_string();
+            return (text.to_string(), true);
         };
         let Ok(document) = project.store().document() else {
-            return text.to_string();
+            return (text.to_string(), true);
         };
         let mut out = String::new();
+        let mut missed = false;
         let mut rest = text;
         while rest.len() >= 36 {
             let found = (0..=rest.len() - 36)
@@ -113,14 +170,16 @@ impl Labeller {
             };
             out.push_str(&rest[..i]);
             let uuid = &rest[i..i + 36];
-            match atm_common::keys::resolve(document, archive, uuid) {
-                Ok(f) => out.push_str(&project.task_label(f.task)),
-                Err(_) => out.push_str(uuid),
+            if let Ok(f) = atm_common::keys::resolve(document, archive, uuid) {
+                out.push_str(&project.task_label(f.task));
+            } else {
+                missed = true;
+                out.push_str(uuid);
             }
             rest = &rest[i + 36..];
         }
         out.push_str(rest);
-        out
+        (out, missed)
     }
 
     /// The project's palette (its statuses and priorities, for their styles).

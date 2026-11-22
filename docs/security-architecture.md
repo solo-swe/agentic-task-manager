@@ -1330,6 +1330,12 @@ land (I11, I13, I24, I25). Fields:
   - **Dependabot** watches atm's crates too (A11), grouped like npm; each PR still runs `cargo deny check`.
   - **The agent sandbox's images** are pinned by digest (A11), bumped by hand with `docker buildx imagetools
     inspect`.
+- **What atm prints for people drops the invisible format characters** (ATM-679, audit C9, I30): the bidirectional
+  embeddings, overrides and isolates, the zero-width characters, the soft hyphen and the byte-order mark go from task
+  text as control characters do, by one list (`atm_common::py::invisible_format`, which `repr` quoting shares). `--json`
+  keeps text as it is. `task list --agent` (renamed `--started-by`, the old name kept hidden) no longer counts as
+  running as someone else, so it renews its caller's claims (C13); `claim hold` refuses when it can't read the shell's
+  start time instead of saying it holds (C12).
 
 ## 4. Keeping it current
 

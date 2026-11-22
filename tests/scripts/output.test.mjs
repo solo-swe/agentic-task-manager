@@ -107,6 +107,45 @@ describe('styles', () => {
     }
   });
 
+  // ATM-679 (audit C9): a right-to-left override makes a line read in another order than it runs; the invisible format
+  // characters go from what people read, as the control characters do, and stay in --json
+  test('task text’s bidirectional and invisible format characters are dropped; --json keeps them', () => {
+    const name = 'Pay ‮eulav‬ now ⁦x⁩ ​zero‍ ﻿bom';
+    const root = makeProject({
+      files: { '.agentic-task-manager/tasks.json': { tasks: [{ id: 'T-1', name, status: 'todo' }] } },
+    });
+    try {
+      for (const args of [
+        ['task', 'list'],
+        ['task', 'details', 'T-1'],
+      ]) {
+        const out = runAtm(args, root);
+        assert.equal(out.code, 0, out.stderr);
+        assert.ok(!/[­​-‏‪-‮⁠-⁤⁦-⁩﻿]/.test(out.stdout), args.join(' '));
+        assert.ok(out.stdout.includes('Pay eulav now x zero bom'), `${args.join(' ')}: ${JSON.stringify(out.stdout)}`);
+      }
+      assert.equal(JSON.parse(runAtm(['task', 'list', '--json'], root).stdout)[0].name, name);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  // ATM-679 (audit C11): `db init --meta-file --json` is one JSON object, what the meta file did in it
+  test('db init --meta-file --json prints one JSON object, with the keys it set', () => {
+    const root = makeProject({ files: { 'meta.json': { project: 'Named' } } });
+    try {
+      const out = runAtm(['db', 'init', '--meta-file', 'meta.json', '--json'], root);
+      assert.equal(out.code, 0, out.stderr);
+      const said = JSON.parse(out.stdout);
+      assert.deepEqual(said.meta, { created: true, keys: ['project'] });
+      assert.ok('project_id' in said && 'git' in said, out.stdout);
+      // Without a meta file: none
+      assert.equal(JSON.parse(runAtm(['db', 'init', '--json'], root).stdout).meta, null);
+    } finally {
+      removeDir(root);
+    }
+  });
+
   test('--json is never styled, even with --color always', () => {
     const root = project();
     try {

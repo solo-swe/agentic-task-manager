@@ -137,11 +137,14 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 }
                 let result = record_commit(&mut project, vcs, &task_id, &rev)?;
                 if ctx.json {
-                    let mut shown = json!({"task": result["task"], "commit": result["commit"], "recorded": true});
-                    if !result["hint"].is_null() {
-                        shown["hint"] = result["hint"].clone();
-                    }
-                    print_json(&shown);
+                    // Every field the text says, always there (ATM-679, audit C11): `hint` null when there is none
+                    print_json(&json!({
+                        "task": result["task"],
+                        "commit": result["commit"],
+                        "summary": result["summary"],
+                        "recorded": true,
+                        "hint": result["hint"],
+                    }));
                     return Ok(());
                 }
                 let sha = py_str(&result["commit"]);

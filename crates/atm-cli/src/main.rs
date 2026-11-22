@@ -199,6 +199,12 @@ enum Command {
 }
 
 impl Command {
+    /// Whether its `--agent` is a filter, not who runs it (ATM-679, audit C13): `task list --agent`, the old name of
+    /// `--started-by`. Its caller is the one running it, whose claims it renews.
+    fn agent_is_a_filter(&self) -> bool {
+        matches!(self, Command::Task(commands::task::TaskCommand::List(_)))
+    }
+
     /// Whether running it renews the caller's own claims (T-439): not the commands that work on no project, nor the
     /// heartbeat and the watcher, which renew their own.
     fn renews_claims(&self) -> bool {
@@ -233,10 +239,7 @@ impl Command {
 /// no hook (T-439, docs/porting-to-rust.md §4). As `claim heartbeat --auto`: only claims whose last renewal is ten
 /// minutes old, so most commands only read. Not for a command run as someone else (`--agent`), and never in the way of
 /// the command itself.
-fn renew_own_claims(args: &[OsString], cwd: &Path) {
-    if as_someone_else(args) {
-        return;
-    }
+fn renew_own_claims(cwd: &Path) {
     if let Ok(project) = atm_lib::Project::open(cwd) {
         let actor = atm_lib::actor::agent_identity(None, cwd);
         // No project here, or one atm can't read: the command says so itself
@@ -357,10 +360,12 @@ fn run(args: &[OsString]) -> u8 {
         // Never in the way of the command itself
         let _ = commands::maintenance::refresh_server(&atm_common::home::state_dir());
     }
-    if cli.command.renews_claims() {
-        renew_own_claims(args, &cwd);
+    // Run as someone else: `--agent`, unless the command's `--agent` is a filter (ATM-679)
+    let other = as_someone_else(args) && !cli.command.agent_is_a_filter();
+    if cli.command.renews_claims() && !other {
+        renew_own_claims(&cwd);
     }
-    let reminds = cli.command.reminds_to_watch();
+    let reminds = cli.command.reminds_to_watch() && !other;
     let code = match dispatch(cli.command, ctx, &cwd) {
         Ok(code) => code,
         Err(error) => {
@@ -369,7 +374,7 @@ fn run(args: &[OsString]) -> u8 {
         }
     };
     if reminds {
-        remind_to_watch(args, &cwd);
+        remind_to_watch(&cwd);
     }
     code
 }
@@ -377,10 +382,7 @@ fn run(args: &[OsString]) -> u8 {
 /// An agent that runs a command with a review of its work open and no watch of its reviews running is told so, once
 /// in a while, on stderr (ATM-642, `review_listen::reminder`): comments, pokes and decisions would go unseen. After
 /// the command, so its own output comes first; never with `--agent` (run as someone else), never in its way.
-fn remind_to_watch(args: &[OsString], cwd: &Path) {
-    if as_someone_else(args) {
-        return;
-    }
+fn remind_to_watch(cwd: &Path) {
     if let Ok(project) = atm_lib::Project::open(cwd) {
         let me = atm_lib::actor::agent_identity(None, cwd);
         if let Some(line) = atm_lib::review_listen::reminder(&project, &me) {
@@ -394,7 +396,8 @@ fn remind_to_watch(args: &[OsString], cwd: &Path) {
     }
 }
 
-/// Whether a command is run as someone else (`--agent`, before any `--`).
+/// Whether a command is run as someone else (`--agent`, before any `--`); the caller decides from the parsed command
+/// whether its `--agent` is a filter instead ([`Command::agent_is_a_filter`]).
 fn as_someone_else(args: &[OsString]) -> bool {
     args.iter().take_while(|a| *a != "--").any(|a| {
         let a = a.to_string_lossy();
