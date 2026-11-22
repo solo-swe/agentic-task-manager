@@ -310,8 +310,7 @@ pub fn add_sprint(
     due: Option<&str>,
     after: Option<&str>,
 ) -> Result<Value> {
-    let mut added = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archived = work.archive()?["tasks"]
             .as_array()
@@ -339,10 +338,8 @@ pub fn add_sprint(
         }
         sprints.insert(position, Value::Object(sprint.clone()));
         Vocabulary::of_document(&work.document)?;
-        added = Value::Object(sprint);
-        Ok(())
-    })?;
-    Ok(added)
+        Ok(Value::Object(sprint))
+    })
 }
 
 /// `atm sprint edit`: a sprint's goal, release or due date (`None` leaves one, an empty value removes it). Returns the
@@ -357,8 +354,7 @@ pub fn edit_sprint(
     release: Option<&str>,
     due: Option<&str>,
 ) -> Result<(Value, Vec<String>)> {
-    let mut outcome = (Value::Null, Vec::new());
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_sprint(&work.document, &vocab, name)?;
         let mut sprint = sprint_at(&mut work.document, at).clone();
@@ -367,10 +363,8 @@ pub fn edit_sprint(
             sprint_at(&mut work.document, at).clone_from(&sprint);
             Vocabulary::of_document(&work.document)?;
         }
-        outcome = (Value::Object(sprint), changed);
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok((Value::Object(sprint), changed))
+    })
 }
 
 /// What a sprint's rename changed: its names, and how many tasks and sprint reports follow it.
@@ -420,8 +414,7 @@ fn rename_in_task(task: &mut Value, from: &str, to: &str) -> bool {
 /// # Errors
 /// An unknown sprint; an empty or too long name, or one another sprint has or had (a task's history names it).
 pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Renamed> {
-    let mut outcome: Option<Renamed> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_sprint(&work.document, &vocab, name)?;
         let from = sprint_id(sprint_at(&mut work.document, at));
@@ -486,16 +479,14 @@ pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Ren
             None => 0,
         };
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(Renamed {
+        Ok(Renamed {
             from: from.clone(),
             to: to.clone(),
             tasks,
             archived,
             reports,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| not_found(format!("no sprint {}", repr_str(name))))
+        })
+    })
 }
 
 /// `atm sprint start`: make a planned sprint the active one (one at a time). Returns the sprint.
@@ -503,8 +494,7 @@ pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Ren
 /// # Errors
 /// An unknown sprint, a closed or active one, another sprint active.
 pub fn start_sprint(project: &mut Project, name: &str) -> Result<Value> {
-    let mut started = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_sprint(&work.document, &vocab, name)?;
         let sprint = sprint_at(&mut work.document, at);
@@ -540,10 +530,8 @@ pub fn start_sprint(project: &mut Project, name: &str) -> Result<Value> {
         }
         sprint.insert("state".into(), json!("active"));
         sprint.insert("start".into(), json!(now_iso()));
-        started = Value::Object(sprint.clone());
-        Ok(())
-    })?;
-    Ok(started)
+        Ok(Value::Object(sprint.clone()))
+    })
 }
 
 /// Whether the task is in the sprint (names compare case-insensitively).
@@ -655,8 +643,7 @@ pub fn close_sprint(
     reviewed: bool,
 ) -> Result<Closed> {
     let actor = project.actor().map(String::from);
-    let mut outcome: Option<Closed> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archived = work.archive()?["tasks"].as_array().cloned().unwrap_or_default();
         let at = stored_sprint(&work.document, &vocab, name)?;
@@ -777,10 +764,8 @@ pub fn close_sprint(
         stored.insert("report".into(), Value::Object(report));
         let closed = Value::Object(stored.clone());
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(Closed { sprint: closed, created, target, was_active });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| not_found(format!("no sprint {}", repr_str(name))))
+        Ok(Closed { sprint: closed, created, target, was_active })
+    })
 }
 
 /// What a sprint's deletion did: the sprint, its state, the tasks moved and where (`None`: the backlog).
@@ -810,8 +795,7 @@ pub fn delete_sprint(
     force: bool,
 ) -> Result<Deleted> {
     let actor = project.actor().map(String::from);
-    let mut outcome: Option<Deleted> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archived = work.archive()?["tasks"].as_array().cloned().unwrap_or_default();
         let at = stored_sprint(&work.document, &vocab, name)?;
@@ -879,10 +863,8 @@ pub fn delete_sprint(
         }
         sprints_mut(&mut work.document).remove(at);
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(Deleted { sprint: Value::Object(sprint), state, moved, target });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| not_found(format!("no sprint {}", repr_str(name))))
+        Ok(Deleted { sprint: Value::Object(sprint), state, moved, target })
+    })
 }
 
 /// The sprint (`None`, the backlog) `atm sprint move --to` means for the task.
@@ -944,8 +926,7 @@ fn worked_on(
 /// An unknown task, one in progress or finished, a target that can't take it.
 pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec<Value>> {
     let actor = project.actor().map(String::from);
-    let mut moved = Vec::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let mut plans: Vec<(usize, Option<String>)> = Vec::new();
         for task_id in ids {
@@ -987,7 +968,7 @@ pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec
             plans.push((at, move_target(&vocab, &task, to)?));
         }
         let stamp = now_iso();
-        moved = plans
+        Ok(plans
             .into_iter()
             .map(|(at, target)| {
                 let before = work.document["tasks"][at]
@@ -1008,10 +989,8 @@ pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec
                     .unwrap_or(Value::Null);
                 json!({"id": id, "from": before, "to": target})
             })
-            .collect();
-        Ok(())
-    })?;
-    Ok(moved)
+            .collect())
+    })
 }
 
 #[cfg(test)]

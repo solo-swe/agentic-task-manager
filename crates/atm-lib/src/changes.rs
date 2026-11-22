@@ -267,8 +267,8 @@ pub fn change_task_status(
 ) -> Result<StatusChange> {
     let agent = project.actor().map(String::from);
     let agent = agent.as_deref();
-    let mut outcome: Option<StatusChange> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    // None where the change deferred its error: the store returns that error instead
+    let outcome = project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archive = archived_tasks(work)?;
         // The archived task with an ID, for the dependency rules (ATM-667); whether there is one, for the messages
@@ -291,7 +291,7 @@ pub fn change_task_status(
             if let Some(own) = own_lease_expired(&expired, &work.document, &vocab, task_id, agent, Some(&then)) {
                 // The expiry is written first, so `atm task details` agrees with the error
                 work.defer(own);
-                return Ok(());
+                return Ok(None);
             }
         }
         check_holder(section(&mut work.claims_store, "claims"), task_id, agent, command.name())?;
@@ -374,8 +374,7 @@ pub fn change_task_status(
         let claim = section(&mut work.claims_store, "claims").get(task_id).cloned().unwrap_or(Value::Null);
         // The task as it is shown: its key with it (ATM-557), never stored
         let task = atm_common::keys::with_key(&work.document, &task);
-        outcome = Some(StatusChange { task, previous, claim, unblocked, hint, stranded, expired, view: Some(view) });
-        Ok(())
+        Ok(Some(StatusChange { task, previous, claim, unblocked, hint, stranded, expired, view: Some(view) }))
     })?;
     outcome.ok_or_else(|| Error::failed(format!("no change to {task_id}")))
 }
@@ -467,8 +466,7 @@ pub fn next_task_for(
 ) -> Result<NextTask> {
     let agent = project.actor().map(String::from);
     let agent = agent.as_deref();
-    let mut outcome = NextTask::default();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archive = archived_tasks(work)?;
         let in_archive = |id: &str| -> Result<Option<Task>> {
@@ -529,16 +527,14 @@ pub fn next_task_for(
                 agent,
             ));
         }
-        outcome = NextTask {
+        Ok(NextTask {
             // As it is shown: its key with it (ATM-557), never stored
             task: task.map(|t| atm_common::keys::with_key(&work.document, &t)),
             claim: new,
             reason,
             expired,
-        };
-        Ok(())
-    })?;
-    Ok(outcome)
+        })
+    })
 }
 
 /// `atm task note`: a note on a task, whatever its status (DM-4), at most 500 characters, as the project's actor.
@@ -548,8 +544,7 @@ pub fn next_task_for(
 /// An unknown task (it says when the task is archived), a note too long, a store error.
 pub fn add_task_note(project: &mut Project, task_id: &str, text: &str) -> Result<Task> {
     let actor = project.actor().map(String::from);
-    let mut noted: Option<Task> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let (tasks, at) = snapshot(&work.document, task_id);
         let Some(at) = at else {
             let archived = archived_tasks(work)?
@@ -567,10 +562,8 @@ pub fn add_task_note(project: &mut Project, task_id: &str, text: &str) -> Result
         atm_common::edits::add_note(&mut task, "note", text, actor.as_deref(), &stamp, true)?;
         atm_common::edits::touch(&mut task, actor.as_deref(), &stamp);
         work.tasks()[at] = Value::Object(task.clone());
-        noted = Some(task);
-        Ok(())
-    })?;
-    noted.ok_or_else(|| Error::failed(format!("no note on {task_id}")))
+        Ok(task)
+    })
 }
 
 #[cfg(test)]

@@ -220,8 +220,7 @@ pub fn add_release(
             repr_str(at)
         )));
     }
-    let mut outcome: Option<AddedRelease> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         if find_release(&vocab, id).is_some() {
             return Err(invalid(format!(
@@ -265,13 +264,11 @@ pub fn add_release(
             list.push(Value::Object(release.clone()));
         }
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(AddedRelease {
+        Ok(AddedRelease {
             release: Value::Object(release),
             tasks: given,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| invalid(format!("no release {}", repr_str(id))))
+        })
+    })
 }
 
 /// `atm release edit`: a release's name or target (`None` leaves it, an empty value removes it). Returns the release
@@ -285,8 +282,7 @@ pub fn edit_release(
     name: Option<&str>,
     target: Option<&str>,
 ) -> Result<(Value, Vec<String>)> {
-    let mut outcome = (Value::Null, Vec::new());
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_release(&work.document, &vocab, id)?;
         let mut release = release_at(&mut work.document, at).clone();
@@ -295,10 +291,8 @@ pub fn edit_release(
             release_at(&mut work.document, at).clone_from(&release);
             Vocabulary::of_document(&work.document)?;
         }
-        outcome = (Value::Object(release), changed);
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok((Value::Object(release), changed))
+    })
 }
 
 /// What marking a release by hand did: the release after it, and its tasks that weren't merged.
@@ -341,8 +335,7 @@ pub fn mark_release(
             repr_str(date)
         )));
     }
-    let mut outcome: Option<MarkedRelease> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_release(&work.document, &vocab, id)?;
         let mut tasks: Vec<Value> = work.document["tasks"].as_array().cloned().unwrap_or_default();
@@ -390,14 +383,12 @@ pub fn mark_release(
         }
         let release = Value::Object(release.clone());
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(MarkedRelease {
+        Ok(MarkedRelease {
             release,
             open: open.clone(),
             unmerged: unmerged.clone(),
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| invalid(format!("no release {}", repr_str(id))))
+        })
+    })
 }
 
 /// What a release's rename changed: its IDs, and how many tasks and sprints follow it.
@@ -439,8 +430,7 @@ pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<Rena
             repr_str(new)
         )));
     }
-    let mut outcome: Option<RenamedRelease> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_release(&work.document, &vocab, id)?;
         if new == id {
@@ -469,16 +459,14 @@ pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<Rena
             new,
         );
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(RenamedRelease {
+        Ok(RenamedRelease {
             from: id.to_string(),
             to: new.to_string(),
             tasks,
             archived,
             sprints,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| invalid(format!("no release {}", repr_str(id))))
+        })
+    })
 }
 
 /// `atm release archive`: it leaves the open releases (`atm release list --all` shows it). Returns the release.
@@ -486,8 +474,7 @@ pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<Rena
 /// # Errors
 /// An unknown release, or one archived already.
 pub fn archive_release(project: &mut Project, id: &str) -> Result<Value> {
-    let mut archived = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_release(&work.document, &vocab, id)?;
         let release = release_at(&mut work.document, at);
@@ -498,10 +485,8 @@ pub fn archive_release(project: &mut Project, id: &str) -> Result<Value> {
             )));
         }
         release.insert("state".into(), json!("archived"));
-        archived = Value::Object(release.clone());
-        Ok(())
-    })?;
-    Ok(archived)
+        Ok(Value::Object(release.clone()))
+    })
 }
 
 /// The task's last outcome note (what `atm task state done --note` said).

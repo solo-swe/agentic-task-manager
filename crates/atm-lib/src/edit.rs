@@ -565,14 +565,11 @@ pub struct Added {
 /// exist, a cycle): nothing is written then.
 pub fn add_new_tasks(project: &mut Project, entries: &[Task]) -> Result<Added> {
     let actor = project.actor().map(String::from);
-    let mut added: Option<Added> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let tasks = add_tasks(work, entries, actor.as_deref())?;
         let vocab = Vocabulary::of_document(&work.document)?;
-        added = Some(Added { tasks, vocab });
-        Ok(())
-    })?;
-    added.ok_or_else(|| Error::failed("no tasks added"))
+        Ok(Added { tasks, vocab })
+    })
 }
 
 /// What `atm task edit` changes: what isn't given (`None`, or an empty list) changes nothing; an empty `release`,
@@ -855,8 +852,7 @@ fn edit_task(
 /// cycle: nothing is written then.
 pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit) -> Result<Edited> {
     let actor = project.actor().map(String::from);
-    let mut edited: Option<Edited> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let mut archived = Archived::default();
         let at = work.document["tasks"].as_array().and_then(|list| {
             list.iter()
@@ -894,14 +890,12 @@ pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit)
             work.tasks()[at] = Value::Object(task.clone());
         }
         let vocab = Vocabulary::of_document(&work.document)?;
-        edited = Some(Edited {
+        Ok(Edited {
             task,
             changed,
             vocab,
-        });
-        Ok(())
-    })?;
-    edited.ok_or_else(|| Error::failed(format!("no change to {task_id}")))
+        })
+    })
 }
 
 /// What a label's rename changed: how many tasks follow it.
@@ -954,8 +948,7 @@ pub fn relabel(project: &mut Project, from: &str, to: &str) -> Result<RelabeledT
             repr_str(from)
         )));
     }
-    let mut outcome: Option<RelabeledTasks> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let tasks = relabel_in(work.document["tasks"].as_array_mut(), from, to);
         let archived = relabel_in(
             work.archive()?
@@ -986,10 +979,8 @@ pub fn relabel(project: &mut Project, from: &str, to: &str) -> Result<RelabeledT
                 }
             }
         }
-        outcome = Some(RelabeledTasks { tasks, archived });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| Error::Invalid(format!("no label {}", repr_str(from))))
+        Ok(RelabeledTasks { tasks, archived })
+    })
 }
 
 #[cfg(test)]

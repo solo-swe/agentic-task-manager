@@ -239,8 +239,7 @@ pub fn add_component(
             "--assign gives the component to the tasks its globs match: it needs --path",
         ));
     }
-    let mut outcome = (Value::Null, Moved::default());
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         if vocab
             .components
@@ -280,10 +279,8 @@ pub fn add_component(
         }
         let moved = move_and_assign(work, &component, from_label, assign)?;
         Vocabulary::of_document(&work.document)?; // checks meta.components, as atm db init would
-        outcome = (Value::Object(component), moved);
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok((Value::Object(component), moved))
+    })
 }
 
 /// What `atm component edit` did: the component after it, the fields changed, and what moved.
@@ -313,8 +310,7 @@ pub fn edit_component(
     assign: bool,
 ) -> Result<EditedComponent> {
     check_options(add_paths, review)?;
-    let mut outcome: Option<EditedComponent> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let known: Vec<String> = vocab
             .components
@@ -384,14 +380,12 @@ pub fn edit_component(
         work.document["meta"]["components"][at] = Value::Object(component.clone());
         let moved = move_and_assign(work, &component, from_label, assign)?;
         Vocabulary::of_document(&work.document)?; // checks meta.components, as atm db init would
-        outcome = Some(EditedComponent {
+        Ok(EditedComponent {
             component: Value::Object(component),
             changed,
             moved,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| invalid(format!("no component {}", repr_str(id))))
+        })
+    })
 }
 
 /// What a component's rename changed: its IDs, and how many tasks follow it.
@@ -447,8 +441,7 @@ pub fn rename_component(project: &mut Project, id: &str, new: &str) -> Result<Re
             repr_str(new)
         )));
     }
-    let mut outcome: Option<RenamedComponent> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let ids: Vec<String> = vocab
             .components
@@ -494,15 +487,13 @@ pub fn rename_component(project: &mut Project, id: &str, new: &str) -> Result<Re
             new,
         );
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(RenamedComponent {
+        Ok(RenamedComponent {
             from: id.to_string(),
             to: new.to_string(),
             tasks,
             archived,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| invalid(format!("no component {}", repr_str(id))))
+        })
+    })
 }
 
 #[cfg(test)]

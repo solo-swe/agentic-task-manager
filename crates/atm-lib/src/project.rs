@@ -6,7 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
-use atm_common::Result;
+use atm_common::{Error, Result};
+use atm_db::working::Working;
 use atm_db::{ProjectSettings, Store};
 use atm_vcs::GitVcs;
 
@@ -88,6 +89,24 @@ impl Project {
     /// Its store, to change.
     pub fn store_mut(&mut self) -> &mut dyn Store {
         self.store.as_mut()
+    }
+
+    /// Change the task data under its lock, as the store's `change` does, and give back what `change` returned
+    /// (ATM-681): nothing is written when it fails, and an error it deferred comes back after the writes, instead of
+    /// its value.
+    ///
+    /// # Errors
+    /// As the store's `change`: the lock, the files, `change`'s own error or the one it deferred.
+    pub fn change<T>(&mut self, mut change: impl FnMut(&mut Working) -> Result<T>) -> Result<T> {
+        let mut out = None;
+        self.store.change(&mut |work: &mut Working| {
+            out = Some(change(work)?);
+            Ok(())
+        })?;
+        // The store runs a change once, so a store that returned without running it isn't one atm knows
+        out.ok_or_else(|| {
+            Error::failed("the task data wasn't changed: the store didn't run the change")
+        })
     }
 
     /// The stored ID of the task a reference names (ADR-007 §5): in a keys-format file, a key, a key with an earlier

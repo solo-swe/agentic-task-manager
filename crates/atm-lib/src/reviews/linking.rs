@@ -61,7 +61,7 @@ pub(super) fn link(
         return Ok(());
     }
     let entry = json!({ "id": header.id.0, "ref": header.reference.0 });
-    project.store_mut().change(&mut |work| {
+    project.change(|work| {
         for task in work.tasks().iter_mut() {
             if !id_of(task).is_some_and(|id| ids.iter().any(|i| i == id)) {
                 continue;

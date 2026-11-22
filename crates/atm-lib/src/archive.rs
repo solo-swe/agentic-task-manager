@@ -241,8 +241,7 @@ pub fn archive_finished(project: &mut Project, request: &ArchiveRequest) -> Resu
             sizes: store.sizes(),
         });
     }
-    let mut result = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    let (moved, duplicates_dropped, kept) = project.change(|work: &mut Working| {
         let document = work.document.clone();
         let mut archive = work.archive()?.clone();
         let (moving, dropped, kept) = plan_archive(&document, &mut archive, request, before)?;
@@ -283,10 +282,8 @@ pub fn archive_finished(project: &mut Project, request: &ArchiveRequest) -> Resu
             work.document["meta"]["archived"] = json!(count);
             *work.archive()? = archive;
         }
-        result = Some((ids, dropped, kept));
-        Ok(())
+        Ok((ids, dropped, kept))
     })?;
-    let (moved, duplicates_dropped, kept) = result.unwrap_or_default();
     Ok(Archived {
         moved,
         duplicates_dropped,
@@ -317,8 +314,7 @@ pub fn unarchive_tasks(project: &mut Project, ids: &[String]) -> Result<Unarchiv
         .cloned()
         .collect();
     let ids = ids.as_slice();
-    let mut result = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    let moves_back = project.change(|work: &mut Working| {
         let mut archive = work.archive()?.clone();
         drop_duplicates(&work.document, &mut archive);
         let found = |id: &str| {
@@ -378,12 +374,11 @@ pub fn unarchive_tasks(project: &mut Project, ids: &[String]) -> Result<Unarchiv
             });
         }
         *work.archive()? = archive;
-        result = Some(again);
-        Ok(())
+        Ok(again)
     })?;
     Ok(Unarchived {
         restored: ids.to_vec(),
-        moves_back: result.unwrap_or_default(),
+        moves_back,
     })
 }
 

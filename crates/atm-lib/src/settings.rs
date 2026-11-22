@@ -116,8 +116,7 @@ pub fn init_meta(project: &mut Project, new: &Map<String, Value>) -> Result<(boo
         project.store_mut().create(&document)?;
         return Ok((true, keys));
     }
-    let mut set = Vec::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    let mut set = project.change(|work: &mut Working| {
         let meta = meta_mut(&mut work.document);
         let refused: Vec<String> = new
             .iter()
@@ -130,7 +129,7 @@ pub fn init_meta(project: &mut Project, new: &Map<String, Value>) -> Result<(boo
                 refused.join("; ")
             )));
         }
-        set.clear();
+        let mut set = Vec::new();
         for (key, value) in &new {
             if INIT_KEYS.contains(&key.as_str()) {
                 meta.insert(key.clone(), value.clone());
@@ -138,7 +137,7 @@ pub fn init_meta(project: &mut Project, new: &Map<String, Value>) -> Result<(boo
             }
         }
         atm_common::Vocabulary::of_document(&work.document)?;
-        Ok(())
+        Ok(set)
     })?;
     set.sort();
     Ok((false, set))
@@ -166,22 +165,19 @@ pub fn ensure_project_id(project: &mut Project) -> Result<Option<String>> {
     if !project.store().exists() {
         return Ok(None);
     }
-    let mut given = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let meta = meta_mut(&mut work.document);
         if meta
             .get("id")
             .and_then(Value::as_str)
             .is_some_and(|id| !id.is_empty())
         {
-            return Ok(());
+            return Ok(None);
         }
         let id = random_id();
         meta.insert("id".into(), json!(id));
-        given = Some(id);
-        Ok(())
-    })?;
-    Ok(given)
+        Ok(Some(id))
+    })
 }
 
 /// `atm project workflow`: the project's workflow with its defaults, or none when none is set.
@@ -253,8 +249,7 @@ pub fn set_workflow(
         _ => {}
     }
     let remove_trailers = change.trailers.as_deref() == Some("none");
-    let mut result = Map::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let meta = meta_mut(&mut work.document);
         let mut workflow = meta
             .get("workflow")
@@ -269,10 +264,8 @@ pub fn set_workflow(
         }
         meta.insert("workflow".into(), Value::Object(workflow));
         // Checked before anything is written
-        result = workflow_of(meta)?.unwrap_or_default();
-        Ok(())
-    })?;
-    Ok(result)
+        Ok(workflow_of(meta)?.unwrap_or_default())
+    })
 }
 
 /// The project's root, where its logo is looked for; none for a store without a working copy.
@@ -324,7 +317,7 @@ pub fn set_logo(project: &mut Project, path: &str, cwd: &Path) -> Result<String>
         }
         None => path.to_string(),
     };
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         meta_mut(&mut work.document).insert("logo".into(), json!(relative));
         Ok(())
     })?;
@@ -336,12 +329,9 @@ pub fn set_logo(project: &mut Project, path: &str, cwd: &Path) -> Result<String>
 /// # Errors
 /// A store error.
 pub fn unset_logo(project: &mut Project) -> Result<bool> {
-    let mut removed = false;
-    project.store_mut().change(&mut |work: &mut Working| {
-        removed = meta_mut(&mut work.document).shift_remove("logo").is_some();
-        Ok(())
-    })?;
-    Ok(removed)
+    project.change(|work: &mut Working| {
+        Ok(meta_mut(&mut work.document).shift_remove("logo").is_some())
+    })
 }
 
 /// One of a project's vocabularies (T-500).
@@ -430,8 +420,7 @@ pub fn set_project_key(project: &mut Project, key: &str) -> Result<KeySet> {
             atm_common::py::repr_str(&key)
         )));
     }
-    let mut outcome = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let keyed = atm_common::keys::keys_format(&work.document);
         if !work.document.get("meta").is_some_and(Value::is_object) {
             work.document["meta"] = json!({});
@@ -467,14 +456,12 @@ pub fn set_project_key(project: &mut Project, key: &str) -> Result<KeySet> {
         } else {
             meta.insert("key_history".into(), json!(history));
         }
-        outcome = Some(KeySet {
+        Ok(KeySet {
             from: from.clone(),
             to: key.clone(),
             history: history.clone(),
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| Error::failed("the key wasn't set"))
+        })
+    })
 }
 
 /// `atm project vocab rename` (T-500): an entry of the statuses, types or priorities gets the ID `new` (and, given, the
@@ -499,8 +486,7 @@ pub fn rename_term(
             "nothing to change: give a new ID or --label for {from}"
         )));
     }
-    let mut outcome: Option<RenamedTerm> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = atm_common::Vocabulary::of_document(&work.document)?;
         // The list as it is in effect: meta's, else the defaults, as objects
         let entries: Vec<Map<String, Value>> = match list {
@@ -574,16 +560,14 @@ pub fn rename_term(
             &to,
         );
         atm_common::Vocabulary::of_document(&work.document)?;
-        outcome = Some(RenamedTerm {
+        Ok(RenamedTerm {
             from: from.to_string(),
             to: to.clone(),
             label: renamed_label,
             tasks,
             archived,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| Error::Invalid(format!("no {} {from}", list.task_field())))
+        })
+    })
 }
 
 /// The project's own list `stored`, entry `from` renamed `to` (and labelled `label`) in place: every other key of it,

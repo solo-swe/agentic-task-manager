@@ -74,17 +74,15 @@ fn commit_message(text: &str, trailers: Option<&Value>) -> String {
 /// The task's commit is `sha` (known only once the commit exists: a change for the next commit). Returns the task.
 fn record_on_task(project: &mut Project, task_id: &str, sha: &str) -> Result<Task> {
     let actor = project.actor().map(String::from);
-    let mut recorded = Task::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let at = task_at(work, task_id)?;
-        if let Some(task) = work.tasks()[at].as_object_mut() {
-            task.insert("commit".into(), json!(sha));
-            touch(task, actor.as_deref(), &now_iso());
-            recorded.clone_from(task);
-        }
-        Ok(())
-    })?;
-    Ok(recorded)
+        let Some(task) = work.tasks()[at].as_object_mut() else {
+            return Ok(Task::new());
+        };
+        task.insert("commit".into(), json!(sha));
+        touch(task, actor.as_deref(), &now_iso());
+        Ok(task.clone())
+    })
 }
 
 /// The files named relative to `cwd`, relative to the repository instead (what [`commit_task`] takes), checked as a
@@ -324,14 +322,13 @@ pub fn record_pr(
         )));
     }
     let actor = project.actor().map(String::from);
-    let mut recorded = Vec::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let found = ids
             .iter()
             .map(|id| task_at(work, id))
             .collect::<Result<Vec<usize>>>()?;
         let stamp = now_iso();
-        recorded.clear();
+        let mut recorded = Vec::new();
         for at in found {
             if let Some(task) = work.tasks()[at].as_object_mut() {
                 task.insert("pr".into(), json!({"number": number, "url": url}));
@@ -340,9 +337,8 @@ pub fn record_pr(
                 recorded.push(task.get("id").map(py_str).unwrap_or_default());
             }
         }
-        Ok(())
-    })?;
-    Ok(recorded)
+        Ok(recorded)
+    })
 }
 
 fn pr_number(task: &Value) -> Option<i64> {
@@ -453,8 +449,7 @@ pub fn record_merge(project: &mut Project, pr: i64, at: Option<&str>) -> Result<
         )));
     }
     let actor = project.actor().map(String::from);
-    let mut outcome = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let in_pr: Vec<usize> = work.document["tasks"]
             .as_array()
             .into_iter()
@@ -483,10 +478,8 @@ pub fn record_merge(project: &mut Project, pr: i64, at: Option<&str>) -> Result<
             }
         }
         let (released, pending) = release_with_merge(&mut work.document, &in_pr, pr, &when)?;
-        outcome = json!({"pr": pr, "tasks": changed, "already": already, "released": released, "pending": pending});
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok(json!({"pr": pr, "tasks": changed, "already": already, "released": released, "pending": pending}))
+    })
 }
 
 /// `atm vcs repository`: `meta.repository`, if set.
@@ -522,8 +515,7 @@ pub fn set_repository(project: &mut Project, url: &str, previous: Option<&str>) 
         })?),
         None => None,
     };
-    let mut outcome = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         if !work.document.get("meta").is_some_and(Value::is_object) {
             work.document["meta"] = json!({});
         }
@@ -540,10 +532,8 @@ pub fn set_repository(project: &mut Project, url: &str, previous: Option<&str>) 
                 moved += move_pr_links(tasks, before, &address);
             }
         }
-        outcome = json!({"repository": address, "moved_links": moved, "previous": before});
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok(json!({"repository": address, "moved_links": moved, "previous": before}))
+    })
 }
 
 /// `atm db init`: fill `meta.repository` from the version control's remote when there is none. The address set, if
@@ -561,8 +551,7 @@ pub fn ensure_repository(project: &mut Project, vcs: Option<&GitVcs>) -> Result<
     else {
         return Ok(None);
     };
-    let mut set = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         if !work.document.get("meta").is_some_and(Value::is_object) {
             work.document["meta"] = json!({});
         }
@@ -570,13 +559,11 @@ pub fn ensure_repository(project: &mut Project, vcs: Option<&GitVcs>) -> Result<
             .get("repository")
             .is_some_and(atm_common::py::truthy)
         {
-            return Ok(());
+            return Ok(None);
         }
         work.document["meta"]["repository"] = json!(url);
-        set = Some(url.clone());
-        Ok(())
-    })?;
-    Ok(set)
+        Ok(Some(url.clone()))
+    })
 }
 
 /// The remote's default branch (`origin/HEAD`), else `main`: the base of a workflow that names none.
