@@ -2,6 +2,8 @@ use serde_json::{Map, Value, json};
 
 use super::*;
 
+mod docs;
+
 fn task(v: Value) -> Task {
     match v {
         Value::Object(m) => m,

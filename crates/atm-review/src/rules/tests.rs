@@ -188,5 +188,6 @@ fn is_not_now(result: &Result<impl std::fmt::Debug, Error>) -> bool {
 
 mod comments;
 mod deciding;
+mod docs;
 mod rounds;
 mod table;

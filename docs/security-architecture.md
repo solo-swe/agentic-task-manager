@@ -1336,6 +1336,9 @@ land (I11, I13, I24, I25). Fields:
   keeps text as it is. `task list --agent` (renamed `--started-by`, the old name kept hidden) no longer counts as
   running as someone else, so it renews its caller's claims (C13); `claim hold` refuses when it can't read the shell's
   start time instead of saying it holds (C12).
+- **`atm docs states` and `atm docs reviews` carry the state tables** (ATM-715): a table of a task's moves and one of a
+  review's status, each checked by a test against atm's own (`Command::sources` and `destination`, the review table's
+  rows), so what agents read is what atm does. No command, path or instruction is added.
 
 ## 4. Keeping it current
 

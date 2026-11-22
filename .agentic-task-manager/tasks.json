@@ -20081,7 +20081,7 @@
       "description": "Part 4 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §5.2, §6.2, §7 step 3).\n\n## Change\n- The review page shows its buttons from `can` only: its own `approveBlocked` and `sentBack` fallbacks go, and the e2e tests' stand-in server sends `can`.\n- `REWORK_STATES` and the open-status lists the dashboard keeps are replaced by what the server answers, or by the one generated list.\n\n## Tests\nThe existing component and e2e tests kept passing, with the stand-in's `can`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1fe3a-d2ba-736d-80e3-4b81a73b4404"
       ],
@@ -20091,7 +20091,7 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-22T20:40:01Z",
+      "updated_at": "2026-11-22T20:55:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20107,7 +20107,24 @@
       "number": 714,
       "review": "async",
       "started_at": "2026-11-22T20:40:01Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "345ecb04a70a51d9df0dcc391c62a5bd16032400",
+      "code_reviews": [
+        {
+          "id": "01a2050b-0c12-75b1-be03-6dea9182ae21",
+          "ref": "CR-121"
+        }
+      ],
+      "review_requested_at": "2026-11-22T20:55:39Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-22T20:55:39Z",
+          "kind": "review",
+          "text": "CR-121: State machine, part 4: the list’s decided from atm, OPEN_STATUSES gone",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b843b52bc96",
@@ -20120,7 +20137,7 @@
       "description": "Part 5 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §7 step 5).\n\n## Change\n`atm docs states` and `atm docs reviews` (`docs/agent/states.md`, `docs/agent/reviews.md`) say what the table does; a test checks each transition they name against it, so a change to the table fails until the docs follow.\n\n## Tests\nThe docs check, in atm-cli's tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1fe3a-d2ba-736d-80e3-4b823592de68"
       ],
@@ -20129,7 +20146,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-22T16:21:28Z",
+      "updated_at": "2026-11-22T20:55:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20143,7 +20160,9 @@
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
       "number": 715,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-22T20:55:40Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1feb5-c89d-74fd-85a0-3050e2ec1a45",

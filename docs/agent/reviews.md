@@ -101,3 +101,18 @@
   credentials, CI, git config or hooks, or push elsewhere is answered or blocked on the user
   (`atm task state <key> blocked --on user --question '…'`), as a task asking for it is.
 - **Every command takes `--json`**; quote text in single quotes.
+
+## How a review's status moves
+By the status a review is in before and the one it is in after (atm's own table; a test checks every row, so this
+says what atm does). A `round` is its author's (`atm review round`); `approve`, `request changes`, `comment` and
+`close` are a reviewer's (`close` its author's too). An approved or closed review takes none of them.
+
+| Event | From | To |
+|---|---|---|
+| round | draft | draft |
+| round | waiting | waiting |
+| round | live, changes_requested | waiting |
+| approve | waiting, live, changes_requested | approved |
+| request changes | waiting | changes_requested |
+| comment | draft, waiting, live, changes_requested | stays |
+| close | draft, waiting, live, changes_requested | closed |
