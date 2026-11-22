@@ -44,6 +44,7 @@
     type EntryState,
   } from '../lib/navigation';
   import { newTabAddress } from '../lib/new-tab-clicks';
+  import AppContextMenu from '../lib/ui/AppContextMenu.svelte';
   import { inBackground, tabActions, wantsNewTab } from '../lib/tab-actions';
 
   const tabs = tabActions();
@@ -174,4 +175,6 @@
 />
 
 <App />
+<!-- atm's right-click menus, the app only (ATM-699): the browser keeps its own -->
+{#if inApp}<AppContextMenu />{/if}
 {@render children()}

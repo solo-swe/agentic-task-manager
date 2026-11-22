@@ -600,6 +600,77 @@ test.describe('the dashboard in the atm app', () => {
     await expect(tabs).toHaveCount(4);
   });
 
+  // ATM-699 (docs/tabs-and-navigation-design.md §4.5): atm's own right-click menus, WebKit's turned off
+  test('right-click menus: on a card, on a tab, elsewhere; each item does what it says; text keeps the system’s', async ({
+    page,
+    context,
+    tasksServer,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/kanban`);
+    await page.goto('/');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    const menu = page.locator('#app-context-menu');
+    const items = menu.locator('.app-context-item');
+    const item = (id: string) => menu.locator(`[data-item="${id}"]`);
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    const card = page.locator('.kanban-card[data-id="T-004"]');
+
+    // A card: Open, Open in New Tab, Open in New Window, Copy Link
+    await card.click({ button: 'right' });
+    await expect(items).toHaveText(['Open', 'Open in New Tab', 'Open in New Window', 'Copy Link']);
+    await item('copy-link').click();
+    await expect(menu).toBeHidden();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`atm://projects/${tasksServer.projectId}/kanban?task=T-004`);
+    await card.click({ button: 'right' });
+    await item('open-tab').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await card.click({ button: 'right' });
+    await item('open-window').click();
+    await expect.poll(() => tasksServer.openedWindows.length).toBe(1);
+    expect(tasksServer.openedWindows[0]).toContain('task=T-004');
+    await card.click({ button: 'right' });
+    await item('open').click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+
+    // A tab: its six items; Close Other Tabs leaves it alone
+    await tabs.nth(1).click({ button: 'right' });
+    await expect(items).toHaveText([
+      'New Tab',
+      'Duplicate',
+      'Move to New Window',
+      'Copy Link',
+      'Close',
+      'Close Other Tabs',
+    ]);
+    await item('duplicate').click();
+    await expect(tabs).toHaveCount(3);
+    // The tab duplicated was the card's, its details over its page: the copy shows them too
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+    await tabs.nth(0).click({ button: 'right' });
+    await item('close-others').click();
+    await expect(tabs).toHaveCount(1);
+
+    // Elsewhere: Back, Forward, Reload; Back is there after a step
+    await page.locator('#tab-list').click();
+    await page.locator('#app-titlebar-end').click({ button: 'right' });
+    await expect(items).toHaveText(['Back', 'Forward', 'Reload']);
+    await expect(item('forward')).toHaveAttribute('data-disabled', '');
+    await item('back').click();
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+
+    // Over text that can be edited: none of atm's (the system's shows)
+    await page.locator('#task-search').click({ button: 'right' });
+    await expect(menu).toBeHidden();
+  });
+
   // ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): each tab its own history; a switch adds nothing
   test('Back and Forward walk the active tab’s own history; a switch of tab adds to neither; the page’s own stays put', async ({
     page,

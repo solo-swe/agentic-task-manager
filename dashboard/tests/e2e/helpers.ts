@@ -768,6 +768,8 @@ export class TasksServer {
   windowShell = { system_menu_bar: true, system_window_buttons: true };
   /** The window commands the page called (T-513), in order */
   windowCalls: string[] = [];
+  /** The addresses the page opened a new window at (`open_window`), in order */
+  openedWindows: string[] = [];
   /** How many times the page asked the app for a project's tasks (`project_tasks`) */
   projectTaskRequests = 0;
   /** The tabs the window comes back with as the app starts (`restored_tabs`, T-518), answered once */
@@ -1052,6 +1054,10 @@ export class TasksServer {
         return { ok: null };
       case 'open_url':
         this.openedUrls.push(String(args.url));
+        return { ok: null };
+      // A new window at an address (T-514, ATM-699's menus): recorded, as the app would open it
+      case 'open_window':
+        this.openedWindows.push(String(args.address));
         return { ok: null };
       // The menu (T-512)
       case 'subscribe_menu':

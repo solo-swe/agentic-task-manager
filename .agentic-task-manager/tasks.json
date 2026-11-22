@@ -17679,7 +17679,7 @@
       "description": "Audit findings D6, D12, D11 and D13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-5)).\n\n- **D6:** the dashboard calls `kindOf(` in about 45 places, `priorityOf` in 7 and `stageOf` in 4, though atm sends `derived.kind`, `derived.priority` and `derived.stage` (the guide: no domain logic in the UI). Add `kindOfTask(t)`, `priorityOfTask(t)`, `stageOfTask(t)` reading `derived`, falling back to the local rule only when it's missing, and use them.\n- **D12:** `DepGraph.svelte:62` picks its focus by status IDs `in_progress` and `todo`: by kind.\n- **D11:** Escape anywhere closes the details panel (`DetailPanel.svelte:194`): only when it's open and the event wasn't handled.\n- **D13:** dragging the graph writes the whole view to localStorage on every pointer move: save on pointer up, or debounce `saveView`.\n\n## Tests\nUnit tests: a project with its own status IDs gets a graph focus; a task whose `derived.kind` differs from the local rule shows atm's; Escape in a composer doesn't close the panel.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/vocab.ts",
@@ -17689,7 +17689,7 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T17:51:07Z",
+      "updated_at": "2026-11-22T19:23:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17702,7 +17702,24 @@
       "number": 680,
       "review": "async",
       "started_at": "2026-11-22T17:51:07Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "1bdd9aace6ea4b018e2342f976100f65a5d83329",
+      "code_reviews": [
+        {
+          "id": "01a204b6-4201-7221-b7d1-30860157e3c4",
+          "ref": "CR-116"
+        }
+      ],
+      "review_requested_at": "2026-11-22T19:23:03Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-22T19:23:03Z",
+          "kind": "review",
+          "text": "CR-116: Dashboard rules from atm: priority and stage from derived, graph focus by kind, Escape, the graph view saved once",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2271adb698a3",
@@ -18952,14 +18969,14 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 5 of §7.\n\n## Change\nA context menu component in `ui/`, used in the app only (the browser keeps its own):\n- on a link, card or row: **Open**, **Open in New Tab**, **Open in New Window**, **Copy Link** (the `atm://` form, §4.4);\n- on a title-bar tab: **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs**;\n- elsewhere: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text.\n\nWebKit's default menu is turned off in the app, as its Reload bypasses the app's reload.\n\n## Tests\ne2e in the app: each menu's items and what each does; Copy Link copies the `atm://` address.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c1592d63e49a",
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
       "files": [],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-22T16:21:23Z",
+      "updated_at": "2026-11-22T19:23:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18975,7 +18992,9 @@
       ],
       "sprint": "Audit and tabs",
       "number": 699,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-22T19:23:03Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15b77d909a3",
@@ -20636,7 +20655,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-22T17:08:20Z",
+      "updated_at": "2026-11-22T19:31:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20695,6 +20714,12 @@
           "at": "2026-11-22T17:08:20Z",
           "kind": "note",
           "text": "ATM-678: an audit task mixed safe work with CI, permission and pinning changes the agent rules forbid on a task word alone, so it had to be half done and blocked. Audit tasks could separate what needs Hakan up front. Also notes and questions cap at 500 characters: split questions into several --question.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T19:31:26Z",
+          "kind": "note",
+          "text": "ATM-699: a 30-second Playwright timeout said nothing about where it hung. A run with --trace on named it at once (the details overlay took the click). Worth making --trace on the first step on any timeout.",
           "by": "claude:0f56a916"
         }
       ]
