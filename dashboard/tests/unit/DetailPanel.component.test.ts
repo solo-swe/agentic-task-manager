@@ -45,6 +45,23 @@ describe('DetailPanel', () => {
   const bodyGroups = (container: HTMLElement) =>
     [...container.querySelectorAll<HTMLElement>('#detail-body [data-group]')].map((g) => g.dataset.group);
 
+  // ATM-680 (audit D11): Escape closes the panel when it is open and nothing else took the key
+  it('Escape closes the open panel, not one a composer or menu already handled, and does nothing when closed', () => {
+    open({});
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    handled.preventDefault();
+    document.dispatchEvent(handled);
+    expect(dashboard.detailOpen).toBe(true);
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(dashboard.detailOpen).toBe(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(dashboard.detailOpen).toBe(false);
+    // Closed: Escape changes nothing (no close again)
+    const close = vi.spyOn(dashboard, 'closeDetail');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(close).not.toHaveBeenCalled();
+  });
+
   it('shows its sprint and release, and the sprints it was carried through, flagged from twice (SR-7.6, SR-4.5)', () => {
     loadIntoDashboard(sprints as TasksFile);
     const { container } = render(DetailPanel);

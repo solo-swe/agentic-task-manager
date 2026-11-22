@@ -20,9 +20,12 @@ export function hasStage(task: Task): boolean {
   return !!prOf(task) || !!task.merged_at;
 }
 
-/** A done-kind task's stage; undefined for tasks that aren't done */
+/** A done-kind task's stage, as atm says (`derived.stage`, ATM-680; the local rule only without it); undefined for
+ * tasks that aren't done */
 export function stageOf(task: Task): Stage | undefined {
   if (taskKind(task) !== 'done') return undefined;
+  const served = task.derived?.stage;
+  if (served && (STAGES as string[]).includes(served)) return served as Stage;
   if (task.merged_at) return 'merged';
   return prOf(task) ? 'in_pr' : 'done';
 }

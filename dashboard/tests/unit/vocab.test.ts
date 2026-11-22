@@ -132,6 +132,9 @@ describe('lookups', () => {
     expect(priorityOf(v, { priority: 'must' })).toBe('must');
     expect(priorityOf(v, {})).toBe('should');
     expect(priorityOf(v, { priority: 'P0' })).toBe('should');
+    // atm's answer, when it gave one, is the task's (ATM-680): the local rule is only for a task it hasn't served
+    expect(priorityOf(v, { priority: 'P0', derived: { priority: 'could' } })).toBe('could');
+    expect(priorityOf(v, { priority: 'must', derived: { priority: '' } })).toBe('must');
     expect([priorityRank(v, 'must'), priorityRank(v, 'could'), priorityRank(v, 'nope')]).toEqual([0, 2, 1]);
     expect(priorityLabel(v, 'could')).toBe('Could');
     expect(priorityLabel(v, 'P0')).toBe('P0');

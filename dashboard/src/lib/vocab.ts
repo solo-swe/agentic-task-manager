@@ -144,8 +144,11 @@ export function phaseLabel(vocab: Vocabulary, phase: number): string {
   return name ? `Phase ${phase} · ${name}` : `Phase ${phase}`;
 }
 
-/** The task's priority ID: its own when the vocabulary has it; a missing or unknown priority is the default (DM-2). */
-export function priorityOf(vocab: Vocabulary, task: { priority?: string }): string {
+/** The task's priority ID, as atm says (`derived.priority`, ATM-680); without it (a task atm hasn't served), its own
+ * when the vocabulary has it, a missing or unknown priority being the default (DM-2). */
+export function priorityOf(vocab: Vocabulary, task: { priority?: string; derived?: { priority?: string } }): string {
+  const served = task.derived?.priority;
+  if (served) return served;
   return task.priority && vocab.priorities.some((p) => p.id === task.priority) ? task.priority : vocab.defaultPriority;
 }
 

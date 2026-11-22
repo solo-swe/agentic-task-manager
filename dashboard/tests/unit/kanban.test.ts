@@ -130,7 +130,8 @@ describe('buildBoard', () => {
       t('T-1', 'todo', { dependencies: ['T-9'], derived: said('T-9') }),
       t('T-3', 'todo', { derived: said() }),
       t('T-2', 'todo', { derived: said() }),
-      t('T-4', 'todo', { priority: 'P0', derived: said() }),
+      // atm's priority is the one that counts (ATM-680)
+      t('T-4', 'todo', { priority: 'P0', derived: { ...said()!, priority: 'P0' } }),
       t('T-9', 'in_progress'),
     ];
     const todo = boardOf(tasks, tasks, all)[0];

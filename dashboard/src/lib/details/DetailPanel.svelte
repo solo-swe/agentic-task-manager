@@ -190,8 +190,11 @@
     if (e.target === e.currentTarget) dashboard.closeDetail();
   }
 
+  // Escape closes the panel when it is open and nothing else took the key (ATM-680, audit D11): a composer, a menu or
+  // a dialog that handles its own Escape keeps the panel open
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') dashboard.closeDetail();
+    if (e.key !== 'Escape' || e.defaultPrevented || !dashboard.detailOpen) return;
+    dashboard.closeDetail();
   }
 </script>
 

@@ -17619,7 +17619,7 @@
       "description": "Audit findings C8, C9, C11, C12 and C13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-2)).\n\n- **C9:** `output::clean` (`crates/atm-cli/src/output.rs:105`) keeps bidi and format characters (U+200B-200F, U+202A-202E, U+2060-2069, U+FEFF): drop them, sharing `py::printable`'s list (I30).\n- **C11:** `service start/stop --json`, `db init --meta-file --json` and `vcs commit --record --json` print text or leave fields out: a JSON object each.\n- **C13:** `task list --agent` is a filter, but `main.rs:396` takes any `--agent` as \"run as someone else\": rename the filter `--started-by` (keep `--agent` as a hidden alias for a release), or decide from the parsed command.\n- **C12:** `claim hold` says it holds while its watcher quits when the shell's start time can't be read (`claim.rs:287`): refuse then.\n- **C8:** each printed line with a UUID reopens the project and rereads the archive, twice in `say()`: one `Labeller` per process.\n\n## Tests\n`tests/scripts/output.test.mjs`: a task name with U+202E prints without it; each command's `--json` parses; `task list --agent x` still renews the caller's claim.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/output.rs",
@@ -17629,7 +17629,7 @@
         "crates/atm-cli/src/commands/maintenance.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T17:28:48Z",
+      "updated_at": "2026-11-22T17:51:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17647,10 +17647,25 @@
           "kind": "handoff",
           "text": "Not started: handed back to finish ATM-678 first, its questions answered.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-22T17:51:07Z",
+          "kind": "review",
+          "text": "CR-115: CLI output: invisible characters dropped, --json everywhere, --started-by, claim hold refuses, one labeller",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-22T17:28:48Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "4768a6eda9b94f36c4ac989274bafccf3623505c",
+      "code_reviews": [
+        {
+          "id": "01a20462-16cc-718a-b16a-f1286587398c",
+          "ref": "CR-115"
+        }
+      ],
+      "review_requested_at": "2026-11-22T17:51:07Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2270a6f9bac9",
@@ -17664,7 +17679,7 @@
       "description": "Audit findings D6, D12, D11 and D13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-5)).\n\n- **D6:** the dashboard calls `kindOf(` in about 45 places, `priorityOf` in 7 and `stageOf` in 4, though atm sends `derived.kind`, `derived.priority` and `derived.stage` (the guide: no domain logic in the UI). Add `kindOfTask(t)`, `priorityOfTask(t)`, `stageOfTask(t)` reading `derived`, falling back to the local rule only when it's missing, and use them.\n- **D12:** `DepGraph.svelte:62` picks its focus by status IDs `in_progress` and `todo`: by kind.\n- **D11:** Escape anywhere closes the details panel (`DetailPanel.svelte:194`): only when it's open and the event wasn't handled.\n- **D13:** dragging the graph writes the whole view to localStorage on every pointer move: save on pointer up, or debounce `saveView`.\n\n## Tests\nUnit tests: a project with its own status IDs gets a graph focus; a task whose `derived.kind` differs from the local rule shows atm's; Escape in a composer doesn't close the panel.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/vocab.ts",
@@ -17674,7 +17689,7 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T16:21:18Z",
+      "updated_at": "2026-11-22T17:51:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17685,7 +17700,9 @@
       ],
       "sprint": "Audit and tabs",
       "number": 680,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-22T17:51:07Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2271adb698a3",
