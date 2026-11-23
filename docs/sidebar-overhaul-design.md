@@ -81,6 +81,10 @@ address) and replaces the sidebar parts of [the desktop UI design](app-desktop-u
 
 ## 3. Tabs and navigation
 
+- **The + button (and File ▸ New Tab, ⌘T)** stays, and opens a new tab on the **sidebar's scope's Overview**: the
+  selected project's Overview, or All's project cards. Today it opens the workspace's overview whatever is selected
+  (`tab-actions.ts`). So + is "a fresh start here", as a browser's new tab page is, and the six items are "go
+  straight there"; with the sidebar hidden, + is still the way to a new tab.
 - **A tab's title** is `<scope> - <item>` with the item's icon: `ATM - Tasks`, `All - Analysis`. *Scope* is the
   project's **key** (`ATM`) when it has one, else its name cut to 16 characters; All is `All`. A review or a
   document open in the tab names itself instead: `ATM - CR-134`, `ATM - sidebar-overhaul-design.md` (the item's icon
