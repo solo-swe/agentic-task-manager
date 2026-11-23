@@ -1,7 +1,8 @@
 # The sidebar overhaul: a scope selector and six destinations (ATM-728)
 
-**Status:** design, reviewed with Hakan (CR-135); §7 records the decisions. The build becomes tasks of this sprint
-(§8). Inbox and Documents get design documents of their own (`docs/inbox-design.md`, `docs/documents-design.md`).
+**Status:** design, agreed with Hakan (CR-135); §7 records the decisions. The build becomes tasks of this sprint
+(§8). Inbox and Documents have design documents of their own ([inbox](inbox-design.md),
+[documents](documents-design.md), agreed in CR-136).
 
 Builds on [the tabs design](tabs-and-navigation-design.md) (a tab is a place with its own history, every page has an
 address) and replaces the sidebar parts of [the desktop UI design](app-desktop-ui-design.md) §4.
