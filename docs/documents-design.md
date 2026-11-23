@@ -21,8 +21,10 @@ Documents item, §1); the build becomes tasks of the sprint *Sidebar overhaul* o
   without git: none (the page says the project needs git for its documents).
 - **Refused as the viewer refuses** (atm-docs' `document_path`): `.git/`, `.agentic-task-manager/`, environment
   files, key files. Hidden folders otherwise listed (`.github/`), as the viewer shows them.
-- **Submodules:** not entered. A submodule is listed as a folder you can't open, named as one; its documents are
-  that project's, when it is registered.
+- **Submodules are included** (Hakan, CR-137): a submodule checked out in the project is listed as a folder, marked
+  as a submodule, holding its documents by the same rules, found in the submodule's own repository (its tracked
+  files and its untracked ones its own rules don't ignore), as the viewer already reads a file in one (T-408). Nested
+  submodules too. One that isn't checked out (`git submodule status` says `-`) shows as an empty folder saying so.
 - **At most 500 documents** (Hakan, CR-137); past that, the first 500 by path and a line saying how many more there
   are. The search (§4) then asks the route (`?q=`), which matches before it cuts, so every document can be found.
 
@@ -71,7 +73,7 @@ and the listed files' sizes and mtimes), as the other routes' `ETag`s are.
 
 | Route | Answer |
 |---|---|
-| `GET …/projects/<id>/documents` (no `path`; `?q=` matches titles and paths, at most 200 characters, before the cap) | `{documents: [{path, title, bytes, modified_at, tracked}], submodules: [path], more: n}`; `ETag` |
+| `GET …/projects/<id>/documents` (no `path`; `?q=` matches titles and paths, at most 200 characters, before the cap) | `{documents: [{path, title, bytes, modified_at, tracked}], submodules: [{path, checked_out}], more: n}` (a submodule's documents among `documents`, by their path from the project's root); `ETag` |
 
 - The same route's `?path=` answers one document, as now; without it, the list. `…` is `api/v2/workspaces/<w>` (and
   the v1 form for the default workspace).
@@ -88,7 +90,8 @@ and the listed files' sizes and mtimes), as the other routes' `ETag`s are.
 1. **Markdown only** (`*.md`, `*.markdown`).
 2. **Untracked documents are listed**, marked *new*.
 3. **Tree is the first view.**
-4. **Submodules show as folders you can't open.**
+4. **Submodules' documents are included** (CR-137), each submodule a folder marked as one.
+5. **At most 500 documents** (CR-137), the search finding the rest.
 
 ## 7. Tasks it implies
 
