@@ -2,8 +2,8 @@
 
 use super::{
     Command, Error, Kind, NewRound, Options, Project, Result, Review, ReviewFilter, ReviewHeader,
-    ReviewRef, ReviewStore, Reviews, RoundKind, Status, TASK_DIR, actor_of, change_task_status,
-    key_of_id, kind_of, naming, rounds, store, vcs,
+    ReviewRef, ReviewStore, Reviews, RoundKind, Status, TASK_DIR, change_task_status, key_of_id,
+    kind_of, naming, rounds, store, vcs,
 };
 
 /// Whether an approved live review covers a task's change now (§3.5): the review named the task, and the working
@@ -38,7 +38,7 @@ pub fn live_approval_for(project: &Project, task: &str) -> Result<Option<ReviewH
             continue;
         };
         let approved = reviews.round_diff(&header.id, last.number)?;
-        let now = rounds::from_working(&vcs, base, &actor_of(project))?;
+        let now = rounds::from_working(&vcs, base, &project.review_actor())?;
         if now.patch == approved {
             return Ok(Some(header));
         }
@@ -62,7 +62,7 @@ pub fn working_now(project: &Project, review: &Review) -> Result<Option<NewRound
         return Ok(None);
     };
     let vcs = rounds::repository(&vcs(project)?, last)?;
-    let now = rounds::from_working(&vcs, base, &actor_of(project))?;
+    let now = rounds::from_working(&vcs, base, &project.review_actor())?;
     if now.patch == store(project)?.round_diff(&review.header.id, last.number)? {
         return Ok(None);
     }

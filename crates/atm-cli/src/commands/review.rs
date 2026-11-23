@@ -71,10 +71,6 @@ fn opened(cwd: &Path, agent: Option<&str>) -> Result<Project> {
     Ok(Project::open(cwd)?.with_actor(Some(agent_identity(agent, cwd))))
 }
 
-fn actor(project: &Project) -> Actor {
-    Actor(project.actor().unwrap_or("someone").to_string())
-}
-
 fn text_of(body: Body, cwd: &Path) -> Result<String> {
     let text = match (body.body, body.body_file) {
         (Some(text), _) => text,
@@ -101,7 +97,7 @@ fn new_round(
     previous_files: &[String],
 ) -> Result<NewRound> {
     let vcs = vcs_of(project)?;
-    let by = actor(project);
+    let by = project.review_actor();
     if let Some(range) = change.range {
         let (base, head) = range
             .split_once("..")

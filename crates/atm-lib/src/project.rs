@@ -80,6 +80,12 @@ impl Project {
         self.actor.as_deref()
     }
 
+    /// Who works on it, as a review records them (ATM-681: the one place): "someone" when nobody is named.
+    #[must_use]
+    pub fn review_actor(&self) -> atm_review::Actor {
+        atm_review::Actor(self.actor().unwrap_or("someone").to_string())
+    }
+
     /// Its store.
     #[must_use]
     pub fn store(&self) -> &dyn Store {

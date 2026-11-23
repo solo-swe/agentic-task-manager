@@ -4,9 +4,8 @@ use crate::lifecycle::Event;
 
 use super::{
     Command, Error, Kind, NewReview, NewRound, Options, Project, Result, ReviewHeader, ReviewRef,
-    ReviewStore, Reviews, Status, Verdict, Vocabulary, actor_of, agent_at_work, agent_of_tasks,
-    ask_review, change_task_status, checkpoint_now, is_agent, key_of_id, link, resolve,
-    review_keys, store,
+    ReviewStore, Reviews, Status, Verdict, Vocabulary, agent_at_work, agent_of_tasks, ask_review,
+    change_task_status, checkpoint_now, is_agent, key_of_id, link, resolve, review_keys, store,
 };
 
 /// Open a review, link its tasks, and put them in review (one waiting on its reviewers; a draft or a live one leaves
@@ -117,7 +116,7 @@ pub fn add_round(
 /// # Errors
 /// What the review's rules refuse (an ended review, not its author), or a store error.
 pub fn edit_summary(project: &mut Project, reference: &ReviewRef, summary: &str) -> Result<()> {
-    let by = actor_of(project);
+    let by = project.review_actor();
     let mut reviews = store(project)?;
     Reviews::new(&mut reviews).edit_summary(reference, summary, &by)
 }
@@ -136,7 +135,7 @@ pub fn submit(
     body: Option<&str>,
     overriding: Option<&str>,
 ) -> Result<()> {
-    let by = actor_of(project);
+    let by = project.review_actor();
     let mut reviews = store(project)?;
     // Checked whole first (ATM-633): the review's rules, and every task the decision changes, found (ATM-594) and
     // able to move (ATM-670): all or none
@@ -214,7 +213,7 @@ pub fn close(
     reason: &str,
     reject: bool,
 ) -> Result<()> {
-    let by = actor_of(project);
+    let by = project.review_actor();
     let mut reviews = store(project)?;
     // Checked whole first (ATM-633): with `reject`, every task it rejects found and able to move, before it closes
     let before = reviews.get_review(reference)?;
@@ -241,7 +240,7 @@ pub fn set_tasks(
     add: &[String],
     remove: &[String],
 ) -> Result<ReviewHeader> {
-    let by = actor_of(project);
+    let by = project.review_actor();
     let mut reviews = store(project)?;
     let before = reviews.get_review(reference)?;
     let header = before.header.clone();

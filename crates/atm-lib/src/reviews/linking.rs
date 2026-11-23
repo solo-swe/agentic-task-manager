@@ -6,10 +6,6 @@ use super::{
     store,
 };
 
-pub(super) fn actor_of(project: &Project) -> Actor {
-    Actor(project.actor().unwrap_or("someone").to_string())
-}
-
 pub(super) fn id_of(task: &Value) -> Option<&str> {
     task.get("id").and_then(Value::as_str)
 }

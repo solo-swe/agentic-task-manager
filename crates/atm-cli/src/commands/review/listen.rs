@@ -3,7 +3,7 @@
 use clap::Subcommand;
 
 use super::{
-    Context, Error, Path, Result, Value, actor, json, opened, print_json, reference, summary_line,
+    Context, Error, Path, Result, Value, json, opened, print_json, reference, summary_line,
 };
 
 /// The commands that listen to the reviews (in `atm review`'s list, ATM-711).
@@ -70,7 +70,7 @@ pub(super) fn run(command: ListenCommand, ctx: Context, cwd: &Path) -> Result<u8
             agent,
         } => {
             let project = opened(cwd, agent.as_deref())?;
-            let me = actor(&project);
+            let me = project.review_actor();
             let until = if until == "decision" {
                 atm_lib::review_listen::WaitFor::Decision
             } else {
@@ -111,7 +111,7 @@ pub(super) fn run(command: ListenCommand, ctx: Context, cwd: &Path) -> Result<u8
             agent,
         } => {
             let project = opened(cwd, agent.as_deref())?;
-            let me = actor(&project);
+            let me = project.review_actor();
             let mut ready = || eprintln!("Watching the reviews for {}'s work.", me.0);
             let mut emit = |heard: Value| {
                 if ctx.json {
@@ -143,7 +143,7 @@ pub(super) fn run(command: ListenCommand, ctx: Context, cwd: &Path) -> Result<u8
             agent,
         } => {
             let project = opened(cwd, agent.as_deref())?;
-            let me = actor(&project);
+            let me = project.review_actor();
             let unread = atm_lib::review_listen::inbox(&project, &me.0, !peek)?;
             if ctx.json {
                 for event in &unread {

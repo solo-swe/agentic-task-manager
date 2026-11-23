@@ -4,8 +4,8 @@ use clap::Subcommand;
 
 use super::{
     CommentFilter, CommentsFile, Context, Error, FileStore, Path, Result, ReviewFilter, ReviewRef,
-    ReviewStore, RoundKind, Value, actor, comments_md, json, opened, print_json, reference,
-    reviews, rounds, status_of, summary_line, vcs_of,
+    ReviewStore, RoundKind, Value, comments_md, json, opened, print_json, reference, reviews,
+    rounds, status_of, summary_line, vcs_of,
 };
 
 /// The commands that read the reviews (in `atm review`'s list, ATM-711).
@@ -63,7 +63,7 @@ pub(super) fn run(command: ReadCommand, ctx: Context, cwd: &Path) -> Result<u8> 
             search,
         } => {
             let project = opened(cwd, None)?;
-            let me = actor(&project);
+            let me = project.review_actor();
             let filter = ReviewFilter {
                 statuses: statuses
                     .iter()

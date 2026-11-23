@@ -3,8 +3,8 @@
 use clap::Subcommand;
 
 use super::{
-    Body, CommentId, Context, Error, Path, Result, ReviewStore, Reviews, Side, Value, actor, json,
-    opened, print_json, reference, reviews, text_of,
+    Body, CommentId, Context, Error, Path, Result, ReviewStore, Reviews, Side, Value, json, opened,
+    print_json, reference, reviews, text_of,
 };
 
 /// The commands that talk in a review: comments, replies, pokes and drafts (in `atm review`'s list, ATM-711).
@@ -235,7 +235,7 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> 
                 &reference(&review),
                 &CommentId(comment.clone()),
                 &text,
-                &actor(&project),
+                &project.review_actor(),
             )?;
             if ctx.json {
                 print_json(&json!({ "review": review, "comment": id, "reply_to": comment }));
@@ -260,7 +260,7 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> 
                 &reference(&review),
                 &CommentId(comment.clone()),
                 &text,
-                &actor(&project),
+                &project.review_actor(),
             )?;
             if ctx.json {
                 print_json(&json!({ "review": review, "comment": comment }));
@@ -287,7 +287,7 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> 
                 &reference(&review),
                 &CommentId(comment.clone()),
                 !reopen,
-                &actor(&project),
+                &project.review_actor(),
             )?;
             if ctx.json {
                 print_json(&json!({ "review": review, "comment": comment, "resolved": !reopen }));

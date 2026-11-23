@@ -3,8 +3,8 @@
 use clap::Subcommand;
 
 use super::{
-    Actor, Change, Context, NewReview, Path, Result, ReviewStore, Status, Value, actor, json,
-    new_round, opened, print_json, reference, reviews, summary_line,
+    Actor, Change, Context, NewReview, Path, Result, ReviewStore, Status, Value, json, new_round,
+    opened, print_json, reference, reviews, summary_line,
 };
 
 /// The commands that open a review and add to it (in `atm review`'s list, ATM-711).
@@ -109,7 +109,7 @@ pub(super) fn run(command: OpenCommand, ctx: Context, cwd: &Path) -> Result<u8> 
                 );
                 return Ok(0);
             }
-            let author = actor(&project);
+            let author = project.review_actor();
             let header = reviews::create(
                 &mut project,
                 NewReview {
@@ -150,7 +150,7 @@ pub(super) fn run(command: OpenCommand, ctx: Context, cwd: &Path) -> Result<u8> 
                 println!("[dry-run] would open a live review “{title}”");
                 return Ok(0);
             }
-            let author = actor(&project);
+            let author = project.review_actor();
             let header = reviews::create(
                 &mut project,
                 NewReview {

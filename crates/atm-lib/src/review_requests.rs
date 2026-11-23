@@ -182,10 +182,6 @@ fn text<'t>(what: &str, text: &'t str) -> Result<&'t str> {
     Ok(text)
 }
 
-fn actor_of(project: &Project) -> Actor {
-    Actor(project.actor().unwrap_or("someone").to_string())
-}
-
 fn first_round(project: &Project, change: &ChangeToReview, by: &Actor) -> Result<NewRound> {
     let vcs = reviews::vcs(project)?;
     if let Some(range) = &change.range {
@@ -212,7 +208,7 @@ fn first_round(project: &Project, change: &ChangeToReview, by: &Actor) -> Result
 /// # Errors
 /// No change named, one git can't diff, an empty title, or what the review's rules refuse.
 pub fn open_review(project: &mut Project, opening: ReviewOpening) -> Result<ReviewHeader> {
-    let by = actor_of(project);
+    let by = project.review_actor();
     let change = if opening.start == ReviewStart::Live {
         ChangeToReview {
             uncommitted: true,
@@ -269,7 +265,12 @@ pub fn add_comment(
         lines: comment.lines,
         quote: comment.quote,
     };
-    Reviews::new(&mut store).comment(&found.header.reference, anchor, body, &actor_of(project))
+    Reviews::new(&mut store).comment(
+        &found.header.reference,
+        anchor,
+        body,
+        &project.review_actor(),
+    )
 }
 
 /// A poke on `review` (`atm review poke`, ATM-611): a nudge its agent hears through its review watch and answers,
@@ -279,7 +280,7 @@ pub fn add_comment(
 /// No such review, an agent poking, a message over [`MAX_TEXT`], or what the review's rules refuse (an ended
 /// review).
 pub fn poke_review(project: &Project, review: &ReviewRef, poke: &NewPoke) -> Result<CommentId> {
-    let by = actor_of(project);
+    let by = project.review_actor();
     if atm_common::edits::is_agent(Some(&by.0)) {
         return Err(Error::Invalid(
             "a person pokes a review: an agent answers a poke (atm review reply), never makes one"
@@ -309,7 +310,7 @@ pub fn reply_to_comment(
         review,
         comment,
         text("the reply", &reply.body)?,
-        &actor_of(project),
+        &project.review_actor(),
     )
 }
 
@@ -324,7 +325,7 @@ pub fn update_comment(
     update: CommentUpdate,
 ) -> Result<()> {
     let mut store = reviews::store(project)?;
-    let by = actor_of(project);
+    let by = project.review_actor();
     match (update.body, update.resolved) {
         (Some(body), None) => {
             Reviews::new(&mut store).edit(review, comment, text("the comment", &body)?, &by)
@@ -382,7 +383,7 @@ pub fn submit_decision_with(
         .map(|o| text("the reason for the override", &o.reason))
         .transpose()?;
     // A person's drafts go with it; an agent has none (it comments at once)
-    let by = actor_of(project);
+    let by = project.review_actor();
     let pending = if atm_common::edits::is_agent(Some(&by.0)) {
         Vec::new()
     } else {
