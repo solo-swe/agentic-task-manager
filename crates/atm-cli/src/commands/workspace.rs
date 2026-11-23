@@ -64,12 +64,9 @@ pub enum WorkspaceCommand {
     },
 }
 
-/// With `--dry-run`, say what would be done; whether it was a dry run.
+/// With `--dry-run`, say what would be done; whether it was a dry run ([`Context::dry`]).
 fn dry(ctx: Context, what: &str) -> bool {
-    if ctx.dry_run {
-        println!("[dry-run] would {what}");
-    }
-    ctx.dry_run
+    ctx.dry(what)
 }
 
 fn workspace(workspaces: &Workspaces, id: Option<&str>) -> Result<Arc<Workspace>> {

@@ -139,6 +139,24 @@ impl Project {
             .to_string())
     }
 
+    /// [`Project::resolve_task`], checked: the task is among the working tasks, as a command that changes it needs
+    /// (ATM-682, audit C17: so `--dry-run` refuses what the real run would). Its stored ID.
+    ///
+    /// # Errors
+    /// As [`Project::resolve_task`]; no such working task (saying when it is archived).
+    pub fn working_task(&self, reference: &str) -> Result<String> {
+        let id = self.resolve_task(reference)?;
+        if self.store.get_task(&id)?.is_some() {
+            return Ok(id);
+        }
+        let archived = self
+            .store
+            .list_archived()?
+            .iter()
+            .any(|t| t.get("id").and_then(serde_json::Value::as_str) == Some(id.as_str()));
+        Err(crate::lookup::no_task(reference, archived))
+    }
+
     /// A dependency or related task to store (ADR-007 §5, §7): a task of this project by [`Project::resolve_task`], or,
     /// when the key's prefix is another registered project's, that task as `<project id>:<UUID>`.
     ///

@@ -107,15 +107,15 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
     };
     let actor = agent_identity(decider.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    if ctx.dry_run {
-        println!("[dry-run] would {} {task_id}", command.name());
-        return Ok(());
-    }
     let options = Options {
         status: decider.status,
         ..options
     };
-    let stored = project.resolve_task(&task_id)?;
+    // The task is found first, so a dry run refuses an unknown one as the real run does (audit C17)
+    let stored = project.working_task(&task_id)?;
+    if ctx.dry(&format!("{} {task_id}", command.name())) {
+        return Ok(());
+    }
     let result = change_task_status(&mut project, command, &stored, &options)?;
     report(command, &result, ctx, cwd);
     Ok(())

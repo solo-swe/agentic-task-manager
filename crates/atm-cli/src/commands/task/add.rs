@@ -230,13 +230,12 @@ pub struct NoteArgs {
 /// # Errors
 /// An unknown task, a note too long, a store error.
 pub fn note(args: &NoteArgs, ctx: Context, cwd: &Path) -> Result<()> {
-    if ctx.dry_run {
-        println!("[dry-run] would add a note to {}", args.task_id);
-        return Ok(());
-    }
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    let stored = project.resolve_task(&args.task_id)?;
+    let stored = project.working_task(&args.task_id)?;
+    if ctx.dry(&format!("add a note to {}", args.task_id)) {
+        return Ok(());
+    }
     let task = add_task_note(&mut project, &stored, &args.text)?;
     let notes = task
         .get("notes")

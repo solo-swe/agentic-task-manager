@@ -31,6 +31,19 @@ pub struct Context {
     pub dry_run: bool,
 }
 
+impl Context {
+    /// With `--dry-run`, say what would be done; whether it was a dry run, so the command stops there (ATM-682, audit
+    /// C17: the one rule). Called once the command has checked and resolved what it was given, so a dry run refuses
+    /// what the real run would, and only the change itself is left out.
+    #[must_use]
+    pub fn dry(self, what: &str) -> bool {
+        if self.dry_run {
+            println!("[dry-run] would {what}");
+        }
+        self.dry_run
+    }
+}
+
 /// Print a JSON result, as atm prints JSON: exactly (std's `println!`, not the crate's, which drops control
 /// characters; JSON escapes those it must, and a program reads it, not a terminal).
 pub fn print_json(value: &Value) {

@@ -183,8 +183,7 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> 
                 round,
                 body: text,
             };
-            if ctx.dry_run {
-                println!("[dry-run] would comment on {}", found.header.reference);
+            if ctx.dry(&format!("comment on {}", found.header.reference)) {
                 return Ok(0);
             }
             // On a live review, the working copy as it is now first becomes a checkpoint (ATM-576)
@@ -202,8 +201,9 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> 
             agent,
         } => {
             let project = opened(cwd, agent.as_deref())?;
-            if ctx.dry_run {
-                println!("[dry-run] would poke {review}");
+            // The review is found first, so a dry run refuses an unknown one as the real run does (audit C17)
+            reviews::store(&project)?.get_review(&reference(&review))?;
+            if ctx.dry(&format!("poke {review}")) {
                 return Ok(0);
             }
             let id = atm_lib::review_requests::poke_review(
@@ -227,8 +227,8 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> 
             let project = opened(cwd, agent.as_deref())?;
             let text = text_of(body, cwd)?;
             let mut store = reviews::store(&project)?;
-            if ctx.dry_run {
-                println!("[dry-run] would reply to {comment} in {review}");
+            store.get_review(&reference(&review))?;
+            if ctx.dry(&format!("reply to {comment} in {review}")) {
                 return Ok(0);
             }
             let id = Reviews::new(&mut store).reply(
@@ -252,8 +252,8 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> 
             let project = opened(cwd, agent.as_deref())?;
             let text = text_of(body, cwd)?;
             let mut store = reviews::store(&project)?;
-            if ctx.dry_run {
-                println!("[dry-run] would edit {comment} in {review}");
+            store.get_review(&reference(&review))?;
+            if ctx.dry(&format!("edit {comment} in {review}")) {
                 return Ok(0);
             }
             Reviews::new(&mut store).edit(
@@ -276,11 +276,9 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> 
         } => {
             let project = opened(cwd, agent.as_deref())?;
             let mut store = reviews::store(&project)?;
-            if ctx.dry_run {
-                println!(
-                    "[dry-run] would {} {comment} in {review}",
-                    if reopen { "reopen" } else { "resolve" }
-                );
+            store.get_review(&reference(&review))?;
+            let what = if reopen { "reopen" } else { "resolve" };
+            if ctx.dry(&format!("{what} {comment} in {review}")) {
                 return Ok(0);
             }
             Reviews::new(&mut store).resolve(
@@ -345,8 +343,7 @@ pub(super) fn run_draft(command: DraftCommand, ctx: Context, cwd: &Path) -> Resu
                 round,
                 body: text_of(body, cwd)?,
             };
-            if ctx.dry_run {
-                println!("[dry-run] would draft on {review}");
+            if ctx.dry(&format!("draft on {review}")) {
                 return Ok(0);
             }
             let draft = drafts::add_draft(&project, &reference(&review), new)?;
@@ -379,8 +376,7 @@ pub(super) fn run_draft(command: DraftCommand, ctx: Context, cwd: &Path) -> Resu
             let update = DraftUpdate {
                 body: text_of(body, cwd)?,
             };
-            if ctx.dry_run {
-                println!("[dry-run] would change {draft} on {review}");
+            if ctx.dry(&format!("change {draft} on {review}")) {
                 return Ok(0);
             }
             let changed = drafts::update_draft(&project, &reference(&review), &draft, &update)?;
@@ -396,8 +392,7 @@ pub(super) fn run_draft(command: DraftCommand, ctx: Context, cwd: &Path) -> Resu
             agent,
         } => {
             let project = opened(cwd, agent.as_deref())?;
-            if ctx.dry_run {
-                println!("[dry-run] would remove {draft} from {review}");
+            if ctx.dry(&format!("remove {draft} from {review}")) {
                 return Ok(0);
             }
             drafts::remove_draft(&project, &reference(&review), &draft)?;

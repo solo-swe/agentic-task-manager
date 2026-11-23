@@ -81,8 +81,9 @@ pub(super) fn run(command: DecideCommand, ctx: Context, cwd: &Path) -> Result<u8
             } else {
                 None
             };
-            if ctx.dry_run {
-                println!("[dry-run] would submit on {review}");
+            // The review is found first, so a dry run refuses an unknown one as the real run does (audit C17)
+            reviews::store(&project)?.get_review(&reference(&review))?;
+            if ctx.dry(&format!("submit on {review}")) {
                 return Ok(0);
             }
             // With the person's drafts on it (ATM-612): `--comment` without a text only sends them
@@ -108,8 +109,8 @@ pub(super) fn run(command: DecideCommand, ctx: Context, cwd: &Path) -> Result<u8
             agent,
         } => {
             let mut project = opened(cwd, agent.as_deref())?;
-            if ctx.dry_run {
-                println!("[dry-run] would close {review}");
+            reviews::store(&project)?.get_review(&reference(&review))?;
+            if ctx.dry(&format!("close {review}")) {
                 return Ok(0);
             }
             reviews::close(&mut project, &reference(&review), &reason, reject_tasks)?;

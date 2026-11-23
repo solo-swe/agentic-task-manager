@@ -90,10 +90,6 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
             "--sprint and --backlog can't both be given".into(),
         ));
     }
-    if ctx.dry_run {
-        println!("[dry-run] would edit task {}", args.task_id);
-        return Ok(());
-    }
     let description = match &file {
         Some(file) => Some(crate::option_file::read_option_file(
             cwd,
@@ -131,7 +127,7 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
     };
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    let stored = project.resolve_task(&args.task_id)?;
+    let stored = project.working_task(&args.task_id)?;
     // Tasks named by key, alias or UUID are stored by UUID (ADR-007 §5); a reference to take away that names no task
     // (a dangling one) is taken away as written
     // Another project's task too, by its key (ADR-007 §7)
@@ -144,6 +140,10 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
     };
     change.remove_dependencies = loose(&change.remove_dependencies);
     change.remove_related = loose(&change.remove_related);
+    // After the description file is read and the task and its new references are found (audit C17)
+    if ctx.dry(&format!("edit task {}", args.task_id)) {
+        return Ok(());
+    }
     let edited = edit_existing_task(&mut project, &stored, &change)?;
     if ctx.json {
         print_json(&Value::Object(edited.task));
