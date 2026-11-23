@@ -1835,7 +1835,8 @@
     "key_history": [
       "T"
     ],
-    "next_number": 742
+    "next_number": 750,
+    "review": "async"
   },
   "tasks": [
     {
@@ -19016,11 +19017,11 @@
       "description": "A conversation with Hakan before `/atm-close-sprint`: what worked in this sprint and what could be improved, in how the agent works and in atm itself.\n\n## Before it\nAgents add a note to this task (`atm task note`) whenever something worth discussing comes up while they work: a slowdown, a slip, a check that caught a real bug, a rule that got in the way, a tool that was missing. The notes are the agenda.\n\n## To discuss\n- The notes, one by one: keep doing, change, or stop.\n- How long tasks took, and where the time went (implementation, tests, waiting on suites, fixing failures).\n- The testing routine: per-task checks, the full end-to-end run, the screenshots at the release.\n- Questions to the user: blocked tasks, how fast they were answered, what could have been decided up front.\n- What to carry into the next sprint: follow-up tasks (through `/atm-create-tasks`), and preferences to remember.\n\n## Outcome\nA short summary in this task's done note, follow-up tasks created, and any agreed working preference saved.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-23T21:04:12Z",
+      "updated_at": "2026-11-23T22:12:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19147,7 +19148,9 @@
           "text": "Release PR #58: two CI failures, both cleared by one re-run. Rust (macOS) never got a runner (GitHub macOS capacity), and the timed long-review test counted 38,057 DOM nodes alive against its 30,000 bound on a retry after a timeout (22,311 locally, and it passed in the other run). Worth a look at why a retry after a timeout keeps more nodes alive.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-23T22:12:40Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a2061f-351f-71f3-a573-ea15e4c70a99",
@@ -19687,6 +19690,224 @@
       "completed_at": "2026-11-23T21:05:54Z",
       "completed_by": "claude:0f56a916",
       "merged_at": "2026-11-23T21:04:46Z"
+    },
+    {
+      "id": "01a20a7f-82f6-7703-ac29-a943660d65f3",
+      "name": "Flaky e2e tests: graph-zoom's early key press, the long-review node bound after a retry, specs with fixed dates",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "test",
+        "e2e"
+      ],
+      "description": "From the Audit and tabs retrospective (ATM-726). Three e2e tests failed intermittently this sprint; each passed when run alone or on a re-run, so they waste runs and hide real failures.\n\n## The tests\n- **`graph-zoom.spec.ts`** (panning or zooming turns auto-fit off): under a loaded full run, the `+` key press reached the 90-task graph before it took keys, so auto-fit stayed on. 5 of 5 passed alone. Wait for the graph to be ready for keys (a state the graph exposes, not a timeout) before pressing.\n- **`reviews.spec.ts` › performance › a long review (94 files) … measured** (`@timed`): in CI on PR #58 the first attempt hit the 30 s test timeout inside the scroll's `page.evaluate`, and the retry counted 38,057 DOM nodes alive against the 30,000 bound (22,311 locally, twice; it passed in the other run). Find why a retry after a timeout keeps more nodes alive (the first attempt's page not gone? a trace with `--trace on`), and fix the cause. Never raise the bound (AGENTS.md).\n- **Specs with fixed dates:** three reviews-list specs used fixed 17 November dates and broke on 22 November, past the list's 5-day cutoff (ATM-723). Sweep `dashboard/tests/e2e/` for dates written as literals that a rule compares with now, and make each relative to the run or fix the page's clock (`page.clock.setFixedTime`, which also sets atm's time since ATM-722).\n\n## Tests\nEach spec passes 10 times in a row under the full suite's load (`--repeat-each 10`), and the timed test in CI's conditions.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/tests/e2e/graph-zoom.spec.ts",
+        "dashboard/tests/e2e/reviews.spec.ts"
+      ],
+      "created_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:21:04Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "review": "async",
+      "number": 742,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a20a7f-82f6-7703-ac29-a944947d1493",
+      "name": "The CLI's open-as-actor and JSON-or-text output, one way each (ATM-682's remaining pieces)",
+      "type": "refactor",
+      "priority": "P3",
+      "labels": [
+        "audit",
+        "cli"
+      ],
+      "description": "The rest of ATM-682 (CR-129), from the audit's repetition list ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported)). No behaviour change; the CLI suite is the check. Done in one run, one piece per commit (the retrospective: a task in pieces between other tasks mixes their commits into its review).\n\n## Pieces\n- **Open as the actor:** 38 `agent: Option<String>` fields and 17 `agent_identity` calls. A flattened `#[derive(Args)] struct As { agent: Option<String> }` with `fn open(&self, cwd) -> Result<Project>`. Keep `check_named` (ATM-660) in `main`, where it covers every command.\n- **JSON or text:** 92 `if ctx.json` branches. A `trait Shown { fn json(&self) -> Value; fn lines(&self) -> Vec<String>; }` and one `show(ctx, &out)`; move the commands group by group.\n- **The other dry runs:** the sites ATM-682 left (`release`, `component`, `vcs`, `db`, `claim`, `maintenance`) through `Context::dry`, each after the command has checked and found what it changes (audit C17), with a scenario where a dry run refuses what the real run would.\n\n## Tests\nThe CLI suite unchanged, plus the dry-run scenarios.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-cli/src/commands.rs",
+        "crates/atm-cli/src/main.rs"
+      ],
+      "created_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:20:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "review": "async",
+      "number": 743
+    },
+    {
+      "id": "01a20a7f-82f6-7703-ac29-a9454f271d96",
+      "name": "The server and the app: one member per request, one review-change handler, one command list (ATM-682's remaining pieces)",
+      "type": "refactor",
+      "priority": "P3",
+      "labels": [
+        "audit",
+        "api",
+        "app"
+      ],
+      "description": "The rest of ATM-682 (CR-129) for the server and the app ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported-1)). No behaviour change.\n\n## Pieces\n- **A `Member { project, stamp }` held for a request:** a document GET opens the project once, not four times (measure before and after with the large-file benchmark, `tests/scripts/bench.mjs`).\n- **`change::<Body, Out>(made, body, op)`** for the eleven review change handlers in `crates/atm-api/src/routes/reviews.rs`; one `json_of`; one `conditional(request, tag, headers, load)`; `off_workers(f)`.\n- **The app's one command list** generating `build.rs`'s manifest and `capabilities/main.json`, so a command added in one place can't be missing from another (a test that compares them first).\n\n## Tests\nThe routes' unit tests with their fakes, the app's tests, the CLI suite's serve tests.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-api/src/routes.rs",
+        "crates/atm-api/src/routes/reviews.rs",
+        "app/src-tauri/build.rs",
+        "app/src-tauri/capabilities/main.json"
+      ],
+      "created_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:20:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "review": "async",
+      "number": 744
+    },
+    {
+      "id": "01a20a7f-82f6-7703-ac29-a9467398cf03",
+      "name": "Split ReviewPage.svelte and state.svelte.ts by concern (ATM-683's remaining pieces)",
+      "type": "refactor",
+      "priority": "P3",
+      "labels": [
+        "audit",
+        "ux"
+      ],
+      "description": "The rest of ATM-683 (CR-130), from the audit's §7 ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported-4)). No behaviour change; the unit tests and the functional e2e are the check, the timed tests too.\n\n## Pieces\n- **`ReviewPage.svelte`** (about 1,850 lines): the file tree, submit, the overview, the comments and the keys, each a component or module of its own under `src/lib/reviews/`.\n- **`state.svelte.ts`** (about 1,150 lines): the saved view, the app update, the project cache and the loader out of the state class.\n- **`request<T>(url, {method, body, since})`** in `api/http.ts` returning `{status, body, etag}` and mapping `{error}` the same way, for the six fetch wrappers; URL building only in `http.ts`. `ipcFetch` honouring `init` (D14) needs a decision first: in the app there are no ETags; ask Hakan what it should mean before changing it.\n- **Styles and controls:** `app.css`'s component styles into their components (`.detail-*` first), `DetailPanel`'s inline styles as classes on tokens, the hand-made popovers (Progress, Activity) and the project selector's listbox as Bits UI pieces, the card's `div role=button` a button; `<SprintBadge>` and `<TaskWaits>` shared by the two cards.\n\nOne piece per commit, in one run.\n\n## Tests\nComponent tests for each new component; the functional e2e; the screenshots once at the release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/lib/api/http.ts",
+        "dashboard/src/app.css"
+      ],
+      "created_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:21:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "review": "async",
+      "number": 745,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a20a7f-82f6-7703-ac29-a9476f7fe2b6",
+      "name": "Claude Code settings that keep agents from tripping permission prompts",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "dx"
+      ],
+      "description": "From the Audit and tabs retrospective (ATM-726). Each permission prompt stalls an unattended loop until Hakan is back, and each denial costs a round trip. Look at `.claude/settings.json` (project) and propose rules and hooks that make the safe forms just work and the unsafe ones fail fast with a message saying what to do instead. A change to permission settings is Hakan's to make: propose it in the task's review, apply it on his yes.\n\n## What happened (examples to design against)\n- **Compound commands prompted:** `cmd1 && cmd2`, `cmd ; cmd`, `cmd | grep …`, `cmd > file 2>&1`, `VAR=x cmd`, `cd dir && cmd`, `$(…)`. Plain single commands didn't.\n- **A quoted pattern read as shell syntax:** `grep -n -E \"project_tasks|\\| \\`GET …/tasks\" docs/x.md` (backticks and `|` inside the quotes) was rejected; `grep -n project_tasks docs/x.md` wasn't.\n- **Interpreters and in-place edits:** a `python` call, `node -e \"…writeFileSync…\"`, `perl -0pi -e`, `sed -i`, `cat >> file <<EOF` were rejected; Read/Edit/Write were the way.\n- **Forms the allow list doesn't have:** the agent ran `pnpm --dir dashboard exec vitest …`, `pnpm --dir dashboard run build`, `pnpm --dir dashboard exec playwright test …` and `node --test tests/scripts/…` all session; the list allows `pnpm exec vitest *` and `node tests/scripts/run.mjs *` but not these.\n- **`gh` with filters:** `gh api … --jq '…'` prompted; plain `gh api …`, `gh pr checks`, `gh run list` didn't.\n- **Paths outside the project:** `ls ~/.claude`, `curl -o /dev/null …` prompted.\n- **The auto-mode classifier** (not the settings) denied `atm task review approve` (oversight) and one `gh secret delete` (destructive) even on Hakan's word: note these, as settings may not be the fix.\n\n## To propose\n- Allow rules for the forms above that are read-only or test-only, as exact as the existing ones (never `Bash(node *)` or `Bash(pnpm run *)`).\n- A `PreToolUse` hook on `Bash` that refuses a compound command or an interpreter one-liner with a message naming the plain form (one command per call; Read/Edit/Write for files), so the agent corrects itself instead of waiting on a prompt. Pipe-test it before writing it (the update-config skill's steps).\n- What to keep as it is (the deny list of cat/head/tail/sed/awk/cd).\n\n## Tests\nThe hook pipe-tested with a compound and a plain command; each new allow rule tried once.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        ".claude/settings.json"
+      ],
+      "created_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:20:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "review": "async",
+      "with": "user",
+      "number": 746
+    },
+    {
+      "id": "01a20a7f-82f6-7703-ac29-a948c68b0fac",
+      "name": "Close a waiting review from its page, as atm allows the author or a reviewer",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "reviews",
+        "ux"
+      ],
+      "description": "From the Audit and tabs retrospective (ATM-726), a decision from ATM-723. The review page shows **Close** only on a live review, though atm lets the author or a reviewer close any open review (`atm review close`, the review table in `atm docs reviews`). Show Close on a waiting review too, when atm's `can` says the viewer may close it (the page reads `can` since ATM-723, never its own rule), with the reason box `close` asks for, and the option to reject the review's tasks in review (`--reject-tasks`).\n\n## Tests\nA component test per state (live, waiting, decided; author, reviewer, someone else) from `can`; an e2e spec closing a waiting review and seeing its status and its task's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/reviews/ReviewPage.svelte"
+      ],
+      "created_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:21:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "review": "async",
+      "number": 747,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a20a7f-82f6-7703-ac29-a949c1da298e",
+      "name": "Who is an agent, part 3: a person only on positive evidence (Cursor and Copilot set no marker)",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "audit",
+        "security"
+      ],
+      "description": "The part of ATM-660 (CR-132) not built, from audit L2 ([the report](docs/codebase-audit-2026-11.md#l2-high-security-the-review-gate-rests-on-the-actors-name-starting-with-claude-checked-in-part)). Since ATM-660 every harness that puts a marker in its commands' environment (Claude Code, Codex, Gemini CLI, OpenCode, `AI_AGENT`) gets an agent identity. Cursor's and Copilot's agents set none, as far as is known, so they still run as the person whose git name they use, and can finish a `blocker` task with no review.\n\n## The decision first (with Hakan)\nTreating as a person only an interactive terminal with no harness markers would catch them, but would also make every run not at a terminal an agent: git hooks, CI steps, scripts, and the CLI suite's hundreds of runs. Options to weigh:\n- strict (a TTY or a person's explicit opt-in, `ATM_PERSON=1`, else an agent), with the suite and hooks setting the opt-in;\n- detect Cursor and Copilot by their process ancestry (signed binaries), as the agent-detection projects do;\n- leave it: the skills never pass `--agent` (I23), and the review mode is a workflow guard, not a boundary (security doc §2).\n\n## Then\nThe chosen rule in `atm_lib::actor`, scenarios for each case, and the security doc's review-modes paragraph.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/actor.rs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:20:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "review": "async",
+      "with": "user",
+      "number": 748
+    },
+    {
+      "id": "01a20a7f-82f6-7703-ac29-a94aeae5b5e0",
+      "name": "Release: the app's signing step compiles nothing (atm-app recompiled with the secrets in 0.43.0)",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "ci",
+        "security"
+      ],
+      "description": "Found in the 0.43.0 release (run 45266083639). ATM-661 added a step that compiles the app with no secrets (`app:bundle --target universal-apple-darwin --no-bundle`) before the signing step, so the signing step's `tauri build` would find nothing left to build (audit A1). It didn't: the signing step logged `Compiling atm-app v0.43.0` and took 2 m 43 s, with the Developer ID, notary and updater secrets in its environment. Only atm-app itself recompiled, no dependency, so no third-party build script ran with them; but atm-app's own `build.rs` and Tauri's macros in its compile did.\n\n## To find out\nWhat differs between `tauri build --no-bundle` and `tauri build` for `atm-app`: an environment variable a build script tracks (`rerun-if-env-changed`: the `APPLE_*`, `TAURI_SIGNING_*` or `TAURI_ENV_*` the bundling run sets), a feature Tauri adds when it bundles, or the config. Reproduce it locally (both commands in a row, `CARGO_LOG=cargo::core::compiler::fingerprint=info` says why a crate is dirty).\n\n## Then\nThe fix in `.github/workflows/release.yml` (or `app/src-tauri/build.rs`), and a check that would have caught it: the signing step fails if cargo compiles anything (its output says `Compiling`). A CI workflow change is Hakan's yes.\n\n## Tests\n`ci-workflow.test.ts`; the next release's log shows no `Compiling` in the signing step.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        ".github/workflows/release.yml",
+        "app/src-tauri/build.rs",
+        "dashboard/tests/unit/ci-workflow.test.ts"
+      ],
+      "created_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:21:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "review": "async",
+      "with": "user",
+      "number": 749,
+      "components": [
+        "ci"
+      ]
     }
   ]
 }
