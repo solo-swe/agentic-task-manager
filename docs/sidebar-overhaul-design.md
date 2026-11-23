@@ -76,15 +76,40 @@ address) and replaces the sidebar parts of [the desktop UI design](app-desktop-u
   changes project in place; you open the other project's page from the sidebar.
 - **The view tabs** (Kanban, List, …) above the page: the sidebar's items replace them. The sub-tabs of Tasks and
   Analysis stay in the page, under its header, as the review page's Overview · Diffs · Comments are.
-- **With the sidebar hidden** the items aren't anywhere: the View menu gets the six as **Go ▸ Overview … Analysis**
-  (⌘1 … ⌘6, opening a new tab), so a hidden sidebar loses nothing.
+- **With the sidebar hidden** the new tab's chooser (§3) reaches every page, and the View menu gets the six as
+  **Go ▸ Overview … Analysis** (opening a new tab on the sidebar's scope), so a hidden sidebar loses nothing.
 
 ## 3. Tabs and navigation
 
-- **The + button (and File ▸ New Tab, ⌘T)** stays, and opens a new tab on the **sidebar's scope's Overview**: the
-  selected project's Overview, or All's project cards. Today it opens the workspace's overview whatever is selected
-  (`tab-actions.ts`). So + is "a fresh start here", as a browser's new tab page is, and the six items are "go
-  straight there"; with the sidebar hidden, + is still the way to a new tab.
+- **The + button (and File ▸ New Tab, ⌘T)** stays, and opens a new tab on a **chooser of scope and item** (Hakan,
+  CR-135), as a browser's new tab page is. Today it opens the workspace's overview (`tab-actions.ts`).
+
+  ```
+  ┌─────────────────────────────────────────────┐
+  │  Open                                       │
+  │  ┌───────────────┐  ┌─────────────────────┐ │
+  │  │ All projects  │  │ ▦ Overview          │ │
+  │  │▸ATM        3  │  │ ✉ Inbox          2  │ │
+  │  │ compmd        │  │ ▥ Tasks             │ │
+  │  │ lfb           │  │ ⎘ Code Reviews   1  │ │
+  │  └───────────────┘  │ ▤ Documents         │ │
+  │                     │ ↗ Analysis          │ │
+  │                     └─────────────────────┘ │
+  └─────────────────────────────────────────────┘
+  ```
+
+  - **Two columns:** the scopes (All, then the workspace's projects, with their logos and badges, as the scope
+    selector lists them) and the six items of the scope chosen, with their badges. The sidebar's scope is chosen
+    when it opens.
+  - **Choosing an item opens it in this tab**, in place of the chooser: the chooser is the new tab's first entry, so
+    Back from the page returns to it.
+  - **Keys:** ↑↓ move in a column, ←→ between them, typing filters the projects, Enter opens; ⌘1 … ⌘6 open that item
+    of the chosen scope at once.
+  - **Its address** is `/new` (the tab's title: *New Tab*), so a reload, Back and a restored window keep it.
+  - **The webapp** doesn't have it: a browser's new tab is the browser's.
+
+  So the sidebar's items are "go straight there" and + is "choose where", and with the sidebar hidden the chooser
+  is the way to every page.
 - **A tab's title** is `<scope> - <item>` with the item's icon: `ATM - Tasks`, `All - Analysis`. *Scope* is the
   project's **key** (`ATM`) when it has one, else its name cut to 16 characters; All is `All`. A review or a
   document open in the tab names itself instead: `ATM - CR-134`, `ATM - sidebar-overhaul-design.md` (the item's icon
@@ -112,6 +137,7 @@ scope's list:
 | Documents | `/projects/<id>/documents` (new); a document open as `?doc=` | `/documents` (new) |
 | Analysis | `/projects/<id>/progress`, `/agents` | `/progress`, `/agents` |
 
+- **The new tab's chooser** is `/new` (the app's only).
 - **Old addresses stay valid**: none is renamed (`kanban` and `graph` keep their segments; only the labels change), so
   deep links, bookmarks and `windows.json`'s saved tabs open as before.
 - **The item of an address** is a function of its view (`lib/address.ts`, next to `placeName`), the one rule both
@@ -153,8 +179,8 @@ scope's list:
    user-level inbox for input not tied to a project yet, triaged into one later? (For `docs/inbox-design.md`.)
 7. **Documents for All:** every project's documents, by project (recommended), or Documents for one project only,
    like Dependencies?
-8. **The sidebar hidden:** Go ▸ Overview … Analysis with ⌘1 … ⌘6 (recommended)? ⌘1 … ⌘9 select tabs in browsers;
-   atm's tabs today have Ctrl+Tab only.
+8. **⌘1 … ⌘6:** the six items, in the new tab's chooser only (recommended: ⌘1 … ⌘9 select tabs in browsers, and
+   atm's tabs may want them later)? Or also everywhere, opening a new tab on the sidebar's scope?
 
 ## 8. Tasks it implies
 
@@ -164,8 +190,9 @@ scope's list:
 3. **The sidebar:** the scope selector and the six items, badges, new tab on click, the link menu; the title bar's
    project chooser and view tabs gone in the app; Go menu items.
 4. **Tab titles:** `<scope> - <item>` and its icon, from the item rule.
-5. **The pill and the searches inside the tab:** ATM-736, ATM-737, ATM-738 (exist).
-6. **Inbox:** from `docs/inbox-design.md` (its own tasks: data model and atm commands, the route, the page, agents'
+5. **The new tab's chooser:** `/new`, its two columns and keys, + and ⌘T opening it.
+6. **The pill and the searches inside the tab:** ATM-736, ATM-737, ATM-738 (exist).
+7. **Inbox:** from `docs/inbox-design.md` (its own tasks: data model and atm commands, the route, the page, agents'
    triage).
-7. **Documents:** from `docs/documents-design.md` (the listing route, the page).
-8. **Docs:** `app-desktop-ui-design.md` §4 replaced by this; Help's pages on the sidebar and tabs.
+8. **Documents:** from `docs/documents-design.md` (the listing route, the page).
+9. **Docs:** `app-desktop-ui-design.md` §4 replaced by this; Help's pages on the sidebar and tabs.

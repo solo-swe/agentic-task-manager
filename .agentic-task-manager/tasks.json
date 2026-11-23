@@ -19391,7 +19391,7 @@
         "docs/documents-design.md"
       ],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T22:44:22Z",
+      "updated_at": "2026-11-23T22:51:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19405,7 +19405,7 @@
       "number": 728,
       "started_at": "2026-11-23T22:41:58Z",
       "started_by": "claude:ba530ebb",
-      "commit": "2b2caa3b213e1989422dd838e27e4666b8d744e6",
+      "commit": "b9d7697328a196bb7d89d65958d4891a3fd4756a",
       "code_reviews": [
         {
           "id": "01a20a94-f018-718d-b471-65fceca09ac1",
