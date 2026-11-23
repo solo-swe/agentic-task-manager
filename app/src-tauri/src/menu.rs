@@ -504,9 +504,7 @@ pub struct Menus {
 
 impl Menus {
     fn inner(&self) -> std::sync::MutexGuard<'_, ByWindow> {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        crate::locked(&self.inner)
     }
 
     /// `window`'s page listens on `channel`.

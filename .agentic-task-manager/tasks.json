@@ -15133,7 +15133,7 @@
       "description": "Audit §2's repetition ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported)). No behaviour changes; the existing tests are the check.\n\n- `impl Project { fn change<T>(&mut self, f: impl FnMut(&mut Working) -> Result<T>) -> Result<T> }`, replacing about 30 `let mut outcome = None` sites.\n- One `task_at(work, id) -> Result<usize>` (returning `NotFound`, saying when the task is archived) for the six copies.\n- One `expire(work, vocab) -> Vec<Value>` for the four expiry preambles, and one `section(store, key)`.\n- One `REWORK_STATES` (or `rules::awaits_agent`), one `id_of` (`Task::id()`), one `valid_label`, `find_release`, `in_open_pr`, `http_url`; `Vocabulary::active_sprint()` and `sprint_id_of(task)`; `set_or_remove(map, fields)`, `count_by_kind(vocab, tasks)`, `for_each_task_in_both(work, f)`.\n- Status groups of reviews as methods on `atm_review::Status` (`is_decision`, `is_open`, `waits_on_reviewers`, `task_command`); one `actor_of`; `home::keyed_state_file(kind, parts)`.\n\nDo it in steps, one helper per commit, with the full Rust suite between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-2259e5eae26e",
         "01a1f7bc-bb84-7190-99d9-226323bfa33b"
@@ -15145,7 +15145,7 @@
         "crates/atm-review/src/model.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T11:22:49Z",
+      "updated_at": "2026-11-23T11:23:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15157,16 +15157,30 @@
       "sprint": "Audit and tabs",
       "number": 681,
       "review": "async",
-      "commit": "8df8f81c0d3cc0f0aa89ce16faa65301dd9d4db5",
+      "commit": "083c35562b0c9f492a74f5aa14a99f36d3286252",
       "notes": [
         {
           "at": "2026-11-23T09:17:40Z",
           "kind": "failure",
           "text": "lease expired (claude:0f56a916)"
+        },
+        {
+          "at": "2026-11-23T11:23:26Z",
+          "kind": "review",
+          "text": "CR-128: atm-lib: one helper for each repetition the audit found",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T10:52:33Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "code_reviews": [
+        {
+          "id": "01a20825-847b-77b7-b06d-1712b0734419",
+          "ref": "CR-128"
+        }
+      ],
+      "review_requested_at": "2026-11-23T11:23:26Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22728aee8e9c",
@@ -15182,7 +15196,7 @@
       "description": "Audit §3-§5's repetition ([the report](docs/codebase-audit-2026-11.md#8-cross-cutting-themes), theme 5). No behaviour changes but C17's dry-run rule.\n\n## CLI\n- A flattened `#[derive(Args)] struct As { agent: Option<String> }` with `fn open(&self, cwd) -> Result<Project>` (38 fields, 17 calls).\n- `trait Shown { fn json(&self) -> Value; fn lines(&self) -> Vec<String>; }` and one `show(ctx, &out)` (92 branches).\n- One `dry(ctx, what)` called after validating and resolving, never before (49 sites).\n\n## Server\n- A `Member { project, stamp }` held for a request, so a document GET opens the project once, not four times.\n- `change::<Body, Out>(made, body, op)` for the eleven review change handlers; one `json_of`; one `conditional(request, tag, headers, load)`; `off_workers(f)`; `Served::is_own_host`.\n\n## App\n- One `with_user(state, w, p, |project| …)` for the fourteen review commands; `fn locked(m)`; `impl From<tauri::Error>` and `From<io::Error>` for `AppError`; one command list that generates the manifest and the capability.\n\nOne area per commit, the full suite between.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-22603f058a59"
       ],
@@ -15193,7 +15207,7 @@
         "app/src-tauri/src/commands.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T16:21:20Z",
+      "updated_at": "2026-11-23T11:23:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15204,7 +15218,9 @@
       ],
       "sprint": "Audit and tabs",
       "number": 682,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-23T11:23:32Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-227337ddbf84",

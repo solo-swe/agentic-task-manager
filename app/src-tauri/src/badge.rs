@@ -92,10 +92,7 @@ impl NeedsYou {
     /// workspaces the windows show, each workspace once (ATM-677, audit A9: the badge is the app's, not the window's
     /// that asked last).
     pub fn badge_total(&self, window: &str, workspace: &str, total: u32) -> u32 {
-        let mut shown = self
-            .shown
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut shown = crate::locked(&self.shown);
         shown
             .windows
             .insert(window.to_owned(), workspace.to_owned());
@@ -108,19 +105,12 @@ impl NeedsYou {
 
     /// `window` closed: its workspace counts no more, unless another window shows it.
     pub fn forget(&self, window: &str) {
-        self.shown
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .windows
-            .remove(window);
+        crate::locked(&self.shown).windows.remove(window);
     }
     /// `workspace`'s projects wait as `now` says: what to notify, a notice per project whose count went up since the
     /// last time. The first time for a workspace (the app's start, a switch) only sets what was seen.
     pub fn update(&self, workspace: &str, now: &[Waiting]) -> Vec<String> {
-        let mut seen = self
-            .seen
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut seen = crate::locked(&self.seen);
         let counts: HashMap<String, u32> = now.iter().map(|w| (w.id.clone(), w.count)).collect();
         let notices = seen.get(workspace).map_or_else(Vec::new, |before| {
             now.iter()
@@ -243,7 +233,7 @@ pub async fn needs_you<R: Runtime>(
     let all = state
         .needs_you()
         .badge_total(window.label(), &workspace, total);
-    show_badge(&window, badge.then_some(all)).map_err(|e| AppError::Failed(e.to_string()))?;
+    show_badge(&window, badge.then_some(all))?;
     let app = window.app_handle();
     let in_front = app
         .webview_windows()

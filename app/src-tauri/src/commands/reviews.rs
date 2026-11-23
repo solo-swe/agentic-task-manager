@@ -22,7 +22,7 @@ fn as_user(workspaces: &Workspaces, w: &str, p: &str) -> Result<atm_lib::Project
 }
 
 fn header_json(header: &atm_lib::reviews::ReviewHeader) -> Result<Value, AppError> {
-    serde_json::to_value(header).map_err(|e| AppError::Failed(e.to_string()))
+    Ok(serde_json::to_value(header)?)
 }
 
 pub(super) fn review_ref(review: &str) -> atm_lib::reviews::ReviewRef {

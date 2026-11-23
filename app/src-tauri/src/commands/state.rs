@@ -90,18 +90,12 @@ impl AppState {
     /// The window focused last, if it is still open.
     #[must_use]
     pub fn front(&self) -> Option<String> {
-        self.front
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        crate::locked(&self.front).clone()
     }
 
     /// `window` came to the front.
     pub fn focused(&self, window: &str) {
-        *self
-            .front
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(window.to_owned());
+        *crate::locked(&self.front) = Some(window.to_owned());
     }
 
     /// `window` closed: its subscriptions end, its links go nowhere, and it is no longer in front. How many
@@ -110,10 +104,7 @@ impl AppState {
         self.links.forget(window);
         self.menus.forget(window);
         self.needs_you().forget(window);
-        let mut front = self
-            .front
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut front = crate::locked(&self.front);
         if front.as_deref() == Some(window) {
             *front = None;
         }
@@ -146,25 +137,19 @@ impl AppState {
             let _ = channel.send(message.clone());
         }))?;
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        self.subscriptions
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(
-                id,
-                Live {
-                    window: window.to_owned(),
-                    _subscription: subscription,
-                },
-            );
+        crate::locked(&self.subscriptions).insert(
+            id,
+            Live {
+                window: window.to_owned(),
+                _subscription: subscription,
+            },
+        );
         Ok(id)
     }
 
     /// End `window`'s subscription `id` (it stops when dropped); another window's stays. Whether there was one.
     pub(super) fn unwatch(&self, window: &str, id: u32) -> bool {
-        let mut subscriptions = self
-            .subscriptions
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut subscriptions = crate::locked(&self.subscriptions);
         if subscriptions.get(&id).is_some_and(|s| s.window == window) {
             subscriptions.remove(&id).is_some()
         } else {
@@ -176,10 +161,7 @@ impl AppState {
     /// that made them is gone without saying so (a channel to it doesn't fail, its messages only find no callback).
     /// Other windows' stay. How many ended.
     pub fn unwatch_window(&self, window: &str) -> usize {
-        let mut subscriptions = self
-            .subscriptions
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut subscriptions = crate::locked(&self.subscriptions);
         let before = subscriptions.len();
         subscriptions.retain(|_, s| s.window != window);
         let ended = before - subscriptions.len();
@@ -217,6 +199,26 @@ impl From<atm_common::Error> for AppError {
             E::Conflict(m) => Self::Conflict(m),
             E::Failed { message, .. } => Self::Failed(message),
         }
+    }
+}
+
+/// What the window, a file or JSON failed at: an error atm can't do anything about (ATM-682: one mapping, not one per
+/// call).
+impl From<tauri::Error> for AppError {
+    fn from(error: tauri::Error) -> Self {
+        Self::Failed(error.to_string())
+    }
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Failed(error.to_string())
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Failed(error.to_string())
     }
 }
 

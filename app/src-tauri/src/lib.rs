@@ -37,6 +37,14 @@ use windows::{
     close_window, minimize, open_window, set_title, shell, start_dragging, toggle_maximize,
 };
 
+/// `mutex`, locked: a lock a panicking thread left poisoned is taken as it is, as the app's state is never left half
+/// changed by a panic (ATM-682: the one way the app locks).
+pub(crate) fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 // What the app serves on its own `atm:` scheme (`assets`), embedded by build.rs
 include!(concat!(env!("OUT_DIR"), "/atm_assets.rs"));
 

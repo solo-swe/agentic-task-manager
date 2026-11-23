@@ -189,7 +189,7 @@ pub fn logo_of(workspaces: &Workspaces, w: &str, p: &str) -> Result<Option<FileD
     let Some((file, content_type)) = member(workspaces, w, p)?.logo() else {
         return Ok(None);
     };
-    let data = std::fs::read(&file).map_err(|e| AppError::Failed(e.to_string()))?;
+    let data = std::fs::read(&file)?;
     Ok(Some(FileData {
         content_type: content_type.into(),
         data,

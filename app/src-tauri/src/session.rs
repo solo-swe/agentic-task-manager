@@ -180,9 +180,7 @@ struct Inner {
 
 impl Session {
     fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        crate::locked(&self.inner)
     }
 
     /// Keep the windows in `path`.
@@ -277,10 +275,7 @@ impl Session {
     /// # Errors
     /// When the file can't be written.
     pub fn write(&self) -> std::io::Result<()> {
-        let _writing = self
-            .writing
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _writing = crate::locked(&self.writing);
         let Some(path) = self.inner().path.clone() else {
             return Ok(());
         };
@@ -402,10 +397,7 @@ pub async fn save_tabs<R: Runtime>(
         .checked()
         .ok_or_else(|| AppError::Invalid("no tab is one of the dashboard's pages".into()))?;
     if state.session().show(window.label(), tabs) {
-        state
-            .session()
-            .write()
-            .map_err(|e| AppError::Failed(e.to_string()))?;
+        state.session().write()?;
     }
     Ok(())
 }
@@ -447,10 +439,8 @@ pub async fn reload_window<R: Runtime>(
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
     state.session().reloading(window.label());
-    let url = window.url().map_err(|e| AppError::Failed(e.to_string()))?;
-    window
-        .navigate(page_url(url))
-        .map_err(|e| AppError::Failed(e.to_string()))
+    let url = window.url()?;
+    Ok(window.navigate(page_url(url))?)
 }
 
 #[cfg(test)]

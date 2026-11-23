@@ -65,9 +65,7 @@ struct Inner {
 
 impl Links {
     fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        crate::locked(&self.inner)
     }
 
     /// A link the app was opened with, for `window`'s page: sent now, or kept for it. Whether it was a link the app
