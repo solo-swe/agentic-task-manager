@@ -13,20 +13,23 @@ address) and replaces the sidebar parts of [the desktop UI design](app-desktop-u
   chevron) already does. It lists *Projects Overview* and the workspace's projects, and a click changes this tab
   (`Sidebar.svelte`).
 - **It becomes a scope selector and six destinations.** At its top, the **scope**: *All projects* or one project.
-  Under it, six items, each opening that scope's page **in a new tab**:
+  Under it, six items for a project and three for All, each opening that scope's page **in a new tab**:
 
   | Item | Icon (Lucide) | One project | All projects |
   |---|---|---|---|
   | **Overview** | `layout-dashboard` | the Project tab | the project cards |
-  | **Inbox** (new) | `inbox` | the project's inbox | every project's inbox, by project |
+  | **Inbox** (new) | `inbox` | the project's inbox | — |
   | **Tasks** | `square-kanban` | Board · List · Dependencies | Board · List |
-  | **Code Reviews** | `file-diff` | the Reviews tab | All reviews |
-  | **Documents** (new) | `file-text` | the project's documents | every project's, by project |
+  | **Code Reviews** | `file-diff` | the Reviews tab | — |
+  | **Documents** (new) | `file-text` | the project's documents | — |
   | **Analysis** | `trending-up` | Progress · Agents | Progress · Agents |
+
+  All projects has no Inbox, Code Reviews or Documents for now (Hakan, CR-135; to reconsider later): the sidebar
+  lists only its three items.
 
 - **The seven view tabs become six items**; two of them have sub-tabs (Tasks: Board, List, Dependencies; Analysis:
   Progress, Agents). Kanban is renamed **Board** and Graph **Dependencies**, as the items name them.
-- **A tab's title** is `<scope> - <item>`, with the item's icon: `ATM - Tasks`, `All - Code Reviews`.
+- **A tab's title** is `<scope> - <item>`, with the item's icon: `ATM - Tasks`, `All - Analysis`.
 - **The app loses the title bar's project chooser**; the webapp keeps it, and shows the six items as its tabs.
 
 ## 2. The sidebar (app)
@@ -99,7 +102,7 @@ address) and replaces the sidebar parts of [the desktop UI design](app-desktop-u
   ```
 
   - **Two columns:** the scopes (All, then the workspace's projects, with their logos and badges, as the scope
-    selector lists them) and the six items of the scope chosen, with their badges. The sidebar's scope is chosen
+    selector lists them) and the items of the scope chosen (six for a project, three for All), with their badges. The sidebar's scope is chosen
     when it opens.
   - **Choosing an item opens it in this tab**, in place of the chooser: the chooser is the new tab's first entry, so
     Back from the page returns to it.
@@ -131,13 +134,15 @@ scope's list:
 | Item | One project | All projects |
 |---|---|---|
 | Overview | `/projects/<id>/project` | `/projects` |
-| Inbox | `/projects/<id>/inbox` (new) | `/inbox` (new) |
+| Inbox | `/projects/<id>/inbox` (new) | — |
 | Tasks | `/projects/<id>/kanban`, `/list`, `/graph` | `/board`, `/list` (new) |
-| Code Reviews | `/projects/<id>/reviews`, `…/reviews/<CR>` | `/reviews` |
-| Documents | `/projects/<id>/documents` (new); a document open as `?doc=` | `/documents` (new) |
+| Code Reviews | `/projects/<id>/reviews`, `…/reviews/<CR>` | — (`/reviews` today) |
+| Documents | `/projects/<id>/documents` (new); a document open as `?doc=` | — |
 | Analysis | `/projects/<id>/progress`, `/agents` | `/progress`, `/agents` |
 
 - **The new tab's chooser** is `/new` (the app's only).
+- **All reviews (`/reviews`) leaves the items**: nothing links to it any more, but the address still opens the list, so
+  old links and saved tabs work (§7, question 6).
 - **Old addresses stay valid**: none is renamed (`kanban` and `graph` keep their segments; only the labels change), so
   deep links, bookmarks and `windows.json`'s saved tabs open as before.
 - **The item of an address** is a function of its view (`lib/address.ts`, next to `placeName`), the one rule both
@@ -150,8 +155,8 @@ scope's list:
 - **No sidebar**, as today: one page, the title bar with the project chooser and the workspace picker.
 - **The six items are its tabs**, in the sidebar's order, under the title bar, where the seven view tabs are now; a
   tab click is in place (the browser's tab is the place). Tasks and Analysis show their sub-tabs under it.
-- **For All projects** the same six (today's overview tabs Projects, Omniboard, Progress, Agents, All reviews map onto
-  Overview, Tasks, Analysis, Code Reviews; Inbox and Documents are new).
+- **For All projects** its three (today's overview tabs Projects, Omniboard, Progress and Agents map onto Overview,
+  Tasks and Analysis; All reviews has no tab).
 - So the app and the webapp show the same page for an address: the app takes the item row away, the sidebar does its
   job.
 
@@ -175,10 +180,10 @@ scope's list:
 4. **A project's default page** (`/projects/<id>`, a scope's first click): the Board, as today, or its Overview?
 5. **The tab's scope name:** the project key (`ATM - Tasks`, recommended: short and what tasks are called by), or
    the project's name?
-6. **All projects' Inbox:** one inbox for each project only, shown together for All (recommended)? Or also a
-   user-level inbox for input not tied to a project yet, triaged into one later? (For `docs/inbox-design.md`.)
-7. **Documents for All:** every project's documents, by project (recommended), or Documents for one project only,
-   like Dependencies?
+6. **All reviews (`/reviews`)**, now with no item: kept as an address nothing links to (recommended: old links and
+   saved tabs keep working, and it is there when All gets Code Reviews back), or removed, its address opening All's
+   Overview?
+7. **Settled (CR-135):** All projects has no Inbox, Code Reviews or Documents for now; an inbox is a project's.
 8. **⌘1 … ⌘6:** the six items, in the new tab's chooser only (recommended: ⌘1 … ⌘9 select tabs in browsers, and
    atm's tabs may want them later)? Or also everywhere, opening a new tab on the sidebar's scope?
 
