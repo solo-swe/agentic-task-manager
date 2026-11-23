@@ -531,6 +531,16 @@ pub fn search_tasks(project: &Project, query: &str, also: &str) -> Result<Vec<St
         .collect())
 }
 
+/// The claims held at `now` (s): [`list_claims`] without those whose lease has run out, by the loop's rule
+/// (ATM-724, `leases::holder`), so the dashboard shows who works on what as atm sees it, by atm's clock.
+#[must_use]
+pub fn held_claims(project: &Project, now: i64) -> Vec<Value> {
+    list_claims(project)
+        .into_iter()
+        .filter(|claim| crate::leases::holder(claim, now).is_some())
+        .collect()
+}
+
 /// The project's claims, from every working copy, by task.
 #[must_use]
 pub fn list_claims(project: &Project) -> Vec<Value> {

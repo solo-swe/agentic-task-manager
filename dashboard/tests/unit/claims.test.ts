@@ -14,28 +14,23 @@ const claim = (task: string, overrides: Partial<Claim> = {}): Claim => ({
 });
 
 describe('parseClaims', () => {
-  it('maps live claims by task', () => {
-    const claims = parseClaims({ claims: [claim('T-1'), claim('T-2')] }, NOW);
+  it('maps the claims atm serves by task', () => {
+    const claims = parseClaims({ claims: [claim('T-1'), claim('T-2')] });
     expect([...claims.keys()]).toEqual(['T-1', 'T-2']);
     expect(claims.get('T-1')?.branch).toBe('agent-2');
   });
 
-  it('leaves out expired leases and malformed entries', () => {
-    const data = {
-      claims: [
-        claim('T-1', { lease_expires_at: '2026-05-01T10:29:59Z' }),
-        claim('T-2', { claimed_at: 'not a date' }),
-        { task: 'T-3' },
-        null,
-        'T-4',
-        claim('T-5'),
-      ],
-    };
-    expect([...parseClaims(data, NOW).keys()]).toEqual(['T-5']);
+  it('keeps what atm serves, by atm’s clock: a lease the browser’s clock says ran out stays (ATM-724)', () => {
+    expect(parseClaims({ claims: [claim('T-1', { lease_expires_at: '2020-01-01T00:00:00Z' })] }).has('T-1')).toBe(true);
+  });
+
+  it('leaves out malformed entries', () => {
+    const data = { claims: [claim('T-2', { claimed_at: 'not a date' }), { task: 'T-3' }, null, 'T-4', claim('T-5')] };
+    expect([...parseClaims(data).keys()]).toEqual(['T-5']);
   });
 
   it('anything but a list of claims means no claims', () => {
-    for (const data of [null, undefined, {}, { claims: {} }, [], 'x']) expect(parseClaims(data, NOW).size).toBe(0);
+    for (const data of [null, undefined, {}, { claims: {} }, [], 'x']) expect(parseClaims(data).size).toBe(0);
   });
 });
 

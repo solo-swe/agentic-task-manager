@@ -33,8 +33,10 @@ test.describe('claims', () => {
     await expect(page.locator('#detail-claim')).toContainText('/work/proj-2');
   });
 
-  test('expired claims, and claims on tasks that are not in progress, are not shown', async ({ page, tasksServer }) => {
-    tasksServer.claims([claim('T-005', { lease_expires_at: minutesFromNow(-1) }), claim('T-006')]);
+  // An expired lease is atm's to leave out (ATM-724: the claims route serves the claims held by atm's clock, tested in
+  // atm-lib and the route); the fixture plays atm's answer, so it serves none here
+  test('a claim on a task that is not in progress is not shown', async ({ page, tasksServer }) => {
+    tasksServer.claims([claim('T-006')]);
     // The List's cards (built only while it is shown, T-525)
     await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
     await expect(page.locator('.task-card')).toHaveCount(12);

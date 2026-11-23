@@ -18,7 +18,7 @@ use crate::Project;
 use crate::archive::{project_stamp, task_snapshot};
 use crate::documents::{read_document, read_image};
 use crate::foreign;
-use crate::query::{Filters, list_claims};
+use crate::query::Filters;
 use crate::settings::get_logo;
 use crate::summary::project_summary;
 use crate::worktrees::working_copies;
@@ -381,10 +381,13 @@ impl Member {
         Workspace::project_tolerant(&self.entry).map_or(Value::Null, |p| foreign::named_version(&p))
     }
 
-    /// The claims of all its worktrees, from the shared claims store.
+    /// The claims of all its worktrees held now, from the shared claims store: an expired lease is left out, by atm's
+    /// clock (ATM-724).
     #[must_use]
     pub fn claims(&self) -> Vec<Value> {
-        self.project().map(|p| list_claims(&p)).unwrap_or_default()
+        self.project()
+            .map(|p| crate::query::held_claims(&p, atm_common::time::now()))
+            .unwrap_or_default()
     }
 
     /// Its working copies, main first, and the tasks that differ in the others.

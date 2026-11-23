@@ -81,6 +81,36 @@ fn claims_are_listed_by_task_and_entries_without_a_task_are_left_out() {
     assert_eq!(list_claims(&empty).len(), 0);
 }
 
+/// ATM-724: the claims held at a moment, by the loop's rule: a lease running at it, its agent named
+#[test]
+fn held_claims_leave_out_a_lease_run_out_and_a_claim_without_an_agent() {
+    let store = json!({"claims": {
+        "a": {"task": "T-1", "agent": "claude:a", "lease_expires_at": "2026-11-01T12:00:00Z"},
+        "b": {"task": "T-2", "agent": "claude:b", "lease_expires_at": "2026-11-01T10:00:00Z"},
+        "c": {"task": "T-3", "lease_expires_at": "2026-11-01T12:00:00Z"},
+        "d": {"task": "T-4", "agent": "claude:d"}
+    }});
+    let p = Project::new(Box::new(
+        MemoryStore::new(Vec::new(), Vec::new(), &Map::new())
+            .unwrap()
+            .with_claims(store.as_object().unwrap().clone()),
+    ));
+    let at = |iso: &str| atm_common::time::parse_iso(iso).unwrap();
+    let held = |now: i64| -> Vec<Value> {
+        held_claims(&p, now)
+            .iter()
+            .map(|c| c["task"].clone())
+            .collect()
+    };
+    assert_eq!(
+        held(at("2026-11-01T09:00:00Z")),
+        [json!("T-1"), json!("T-2")]
+    );
+    assert_eq!(held(at("2026-11-01T11:00:00Z")), [json!("T-1")]);
+    // At its end the lease has run out
+    assert_eq!(held(at("2026-11-01T12:00:00Z")), Vec::<Value>::new());
+}
+
 /// ATM-719: how a finished task ended, its own resolution or the default; none while open
 #[test]
 fn a_finished_tasks_resolution_is_its_own_or_the_default() {

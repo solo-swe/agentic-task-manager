@@ -1024,17 +1024,24 @@ describe('serve', () => {
       headers: { 'If-None-Match': etag },
     });
     assert.equal(after.status, 200);
-    const changed = (await after.json()).worktrees[1].tasks;
+    const afterTrees = (await after.json()).worktrees;
+    const changed = afterTrees[1].tasks;
     assert.deepEqual(
       changed.map((v) => [v.task.id, v.task.status, v.derived.kind]),
       [['T-1', 'in_progress', 'active']],
     );
+    // Which copy the board shows is atm's (ATM-724): the linked one's T-1 got further, by the merge driver's ranking
+    assert.deepEqual(afterTrees[1].shown, ['T-1']);
+    assert.equal(afterTrees[0].shown, undefined);
     // A copy's derived values are worked out in its own worktree (§11.10 A, T-387): there T-2 now waits for T-1,
     // which is in progress there
     assert.equal(atm(['task', 'edit', 'T-2', '--add-dep', 'T-1'], linked).code, 0);
-    const copies = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
+    const copiesTree = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1];
+    const copies = copiesTree.tasks;
     const t2 = copies.find((v) => v.task.id === 'T-2');
     assert.deepEqual([t2.derived.kind, t2.derived.ready, t2.derived.waiting_for], ['todo', false, ['T-1']]);
+    // T-2's copy differs but got no further than main's (to do in both): main's is shown
+    assert.deepEqual(copiesTree.shown, ['T-1']);
     const claims = await (await fetch(`${base}/p/abcd1234/claims.json`)).json();
     assert.deepEqual(
       claims.claims.map((c) => [c.task, c.agent, c.branch]),
@@ -1055,11 +1062,12 @@ describe('serve', () => {
       ],
     );
     assert.equal(atm(['task', 'state', 'T-1', 'todo', '--answer', 'This one'], root).code, 0);
-    const left = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
+    const leftTree = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1];
     assert.deepEqual(
-      left.map((v) => v.task.id),
+      leftTree.tasks.map((v) => v.task.id),
       ['T-2'],
     );
+    assert.deepEqual(leftTree.shown, []);
     atm(['service', 'stop'], root);
   });
 

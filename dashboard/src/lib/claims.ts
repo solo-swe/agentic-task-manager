@@ -22,12 +22,13 @@ const isClaim = (c: unknown): c is Claim =>
   !Number.isNaN(Date.parse((c as Claim).claimed_at)) &&
   !Number.isNaN(Date.parse((c as Claim).lease_expires_at));
 
-/** Live claims by task ID. Malformed entries and expired leases are left out. */
-export function parseClaims(data: unknown, now: number): Map<string, Claim> {
+/** The claims atm serves, by task ID: the ones held now, by atm's clock (ATM-724: an expired lease is atm's to leave
+ * out, not the dashboard's). Malformed entries are left out. */
+export function parseClaims(data: unknown): Map<string, Claim> {
   const list = (data as { claims?: unknown })?.claims;
   const claims = new Map<string, Claim>();
   if (!Array.isArray(list)) return claims;
-  for (const c of list) if (isClaim(c) && Date.parse(c.lease_expires_at) > now) claims.set(c.task, c);
+  for (const c of list) if (isClaim(c)) claims.set(c.task, c);
   return claims;
 }
 
@@ -40,7 +41,7 @@ export async function loadClaims(
   try {
     const resp = await fetchFn(projectFileUrl(project, 'claims.json') + '?' + now());
     if (!resp.ok) return new Map();
-    return parseClaims(await resp.json(), now());
+    return parseClaims(await resp.json());
   } catch {
     return new Map();
   }

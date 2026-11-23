@@ -73,6 +73,8 @@ test.describe('Kanban board', () => {
           copy('T-024', 'todo', { status: 'todo' }), // behind the main worktree: not shown
           view(onlyHere, 'todo'),
         ],
+        // Which copies the board shows from here, as atm ranks them (ATM-724): not T-024, behind main's
+        shown: ['T-027', 'T-029', 'T-099'],
       },
     ]);
     await openKanban(page, tasksServer, 'kanban');

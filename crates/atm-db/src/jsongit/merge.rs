@@ -39,8 +39,10 @@ const PROGRESS_FIELDS: [&str; 18] = [
     "blocked_at",
 ];
 
-/// How far along a status's kind is (DM-3.3); a status without a kind ranks like todo.
-fn kind_rank(kind: Option<Kind>) -> u8 {
+/// How far along a status's kind is (DM-3.3); a status without a kind ranks like todo. The one ranking: the merge
+/// driver's, and which working copy's copy of a task the board shows (ATM-724, `atm_lib::worktrees`).
+#[must_use]
+pub fn kind_rank(kind: Option<Kind>) -> u8 {
     match kind {
         Some(Kind::Active | Kind::Blocked | Kind::Review) => 1,
         Some(Kind::Done | Kind::Skipped) => 2,

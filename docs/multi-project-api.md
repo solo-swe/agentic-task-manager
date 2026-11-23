@@ -68,8 +68,10 @@ The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/
 
 The claims of all a clone's worktrees are in one store, in the git common directory (`.git/atm/claims.json`; outside
 git, `claims-store.json` in the task folder). The server answers from it, as `{generated_at, claims: [...]}` sorted by
-task, so an agent at work in a linked worktree shows on the project's board. Its ETag changes with the store. Before
-the first claim there is no store yet, and the answer is an empty list.
+task, so an agent at work in a linked worktree shows on the project's board. Only the claims held now are listed: an
+expired lease is left out by atm's clock (ATM-724, the loop's rule), so the dashboard doesn't judge leases by the
+browser's. Its ETag changes with the store and with which claims are held, so a lease running out is a new version.
+Before the first claim there is no store yet, and the answer is an empty list.
 
 ### 2.2 `worktrees.json`: the project's git worktrees
 
@@ -104,9 +106,11 @@ the first claim there is no store yet, and the answer is an empty list.
   merge; T-387). The dashboard takes them as they are and applies no rule of its own to a copy.
 - The ETag changes when a worktree is added or removed, switches branch, its `tasks.json` changes, or the claims
   store does.
-- The dashboard shows all of them on one board: each task from the worktree where it got furthest (by status kind:
-  todo, blocked, active, review, then done or skipped; the main worktree's copy on a tie), with that worktree's branch
-  on its card.
+- Each linked worktree also says which tasks the board shows from it, `shown` (IDs, ATM-724): a task's copy that
+  got further than every other, by the merge driver's ranking (`kind_rank`: to do; then active, blocked or in review;
+  then done or skipped), the first listed on a tie, the main worktree's first; a task only linked worktrees have, from
+  the first of them. The dashboard shows all of them on one board as `shown` says, with that worktree's branch on its
+  card, and ranks nothing itself.
 
 ### 2.3 `logo`: the project's logo
 

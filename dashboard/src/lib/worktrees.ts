@@ -1,12 +1,11 @@
 // A project's git worktrees on one board (T-179). Each worktree has its branch's copy of tasks.json; atm serve's
 // p/<id>/worktrees.json lists the worktrees and, for each linked one, the tasks whose copy there differs from the main
 // worktree's, as views ({task, derived}) with atm's derived values worked out in that worktree (T-387): a copy is
-// judged by atm, like every other task. A task is shown from the worktree where it got furthest, with that
-// worktree's branch on its card.
+// judged by atm, like every other task. A task is shown from the worktree where it got furthest, as atm says
+// (ATM-724: each linked worktree's `shown`, by the merge driver's ranking), with that worktree's branch on its card.
 import { browserFetch, fetchProjectFile, type Fetch, type Validators } from './api/http';
 import { compareTasks } from './keys';
 import type { Task } from './types';
-import { taskKind, type StatusKind } from './vocab';
 
 export interface Worktree {
   path: string;
@@ -15,6 +14,8 @@ export interface Worktree {
   /** Linked worktrees only: the tasks that differ from the main worktree's copy, or that only this one has, each with
    * atm's derived values from that worktree */
   tasks?: Task[];
+  /** Linked worktrees only: the IDs of the tasks the board shows from this worktree, as atm decides it */
+  shown?: string[];
 }
 
 /** A worktree's views as tasks, each with its derived values beside its fields (as the v1 tasks route's, load.ts) */
@@ -25,14 +26,6 @@ function viewedCopies(list: unknown[]): Task[] {
     .map((v) => (v.derived ? { ...v.task, derived: v.derived } : v.task));
 }
 
-/** How far a task got, by its status's kind: a linked worktree's copy wins only when it got further */
-const PROGRESS: Record<StatusKind, number> = { todo: 0, blocked: 1, active: 2, review: 3, done: 4, skipped: 4 };
-
-function progress(task: Task): number {
-  const kind = taskKind(task);
-  return kind ? PROGRESS[kind] : -1;
-}
-
 export interface Merged {
   tasks: Task[];
   /** The branch each task is shown from, for tasks that come from a linked worktree */
@@ -40,18 +33,17 @@ export interface Merged {
 }
 
 /**
- * The main worktree's tasks, each replaced by a linked worktree's copy that got further (the furthest one; the first
- * listed on a tie), plus the tasks only linked worktrees have, after the others in ID order.
+ * The main worktree's tasks, each replaced by the linked worktree's copy atm shows (its `shown`), plus the tasks only
+ * linked worktrees have, after the others in ID order. Which copy got further is atm's to say, never worked out here.
  */
 export function mergeWorktrees(tasks: Task[], worktrees: readonly Worktree[]): Merged {
   const shown = new Map(tasks.map((t) => [t.id, t]));
   const branches = new Map<string, string>();
   for (const tree of worktrees) {
     if (tree.main) continue;
+    const fromHere = new Set(tree.shown ?? []);
     for (const task of tree.tasks ?? []) {
-      if (!task || typeof task.id !== 'string') continue;
-      const current = shown.get(task.id);
-      if (current && progress(task) <= progress(current)) continue;
+      if (!task || typeof task.id !== 'string' || !fromHere.has(task.id)) continue;
       shown.set(task.id, task);
       branches.set(task.id, tree.branch ?? tree.path);
     }
@@ -83,6 +75,7 @@ export async function loadWorktrees(
       branch: typeof w.branch === 'string' && w.branch ? w.branch : null,
       main: w.main === true,
       ...(Array.isArray(w.tasks) ? { tasks: viewedCopies(w.tasks) } : {}),
+      ...(Array.isArray(w.shown) ? { shown: w.shown.filter((id): id is string => typeof id === 'string') } : {}),
     }));
   return { unchanged: false, worktrees, validators: file.validators };
 }

@@ -13755,7 +13755,7 @@
       "description": "Audit finding L2 ([the report](docs/codebase-audit-2026-11.md#l2-high-security-the-review-gate-rests-on-the-actors-name-starting-with-claude-checked-in-part)). To be designed with Hakan: it changes who atm treats as a person.\n\n`agent_identity` (`crates/atm-lib/src/actor.rs:28`) falls back to the git user name unless `CLAUDE_CODE_SESSION_ID` is set, and `is_agent` (`crates/atm-common/src/edits.rs:239`) is `starts_with(\"claude:\")`. So an agent in Codex, Cursor, Copilot, OpenCode or Gemini (all installed by `atm agents install`), or one passing `--agent '<a name>'`, counts as a person: `state.rs:272` lets it mark a `blocker` task done with no review, and a `batch` task gets no `sprint_review: pending`.\n\n## Options to decide\n- Detect the other harnesses' environment variables, and give them identities of their own.\n- Inside a harness session, refuse an `--agent` or `ATM_AGENT` that would produce a person's identity.\n- Treat an actor as a person only on positive evidence (the app or server path through `user_identity`, or an interactive terminal with no harness variables).\n\n## Tests\nScenarios: each harness's environment gives an agent identity; `--agent 'Hakan'` inside a Claude Code session is refused or still an agent; a blocker task can't be done without review from any of them.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/actor.rs",
@@ -13763,7 +13763,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T12:07:36Z",
+      "updated_at": "2026-11-23T12:29:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13785,10 +13785,31 @@
           "kind": "note",
           "text": "Hakan, in chat (2026-11-23): all three. A person only on positive evidence (the app or server path, or an interactive terminal with no harness variables). Each harness’s variables give an agent identity. Inside a harness session, an --agent or ATM_AGENT naming a person is refused.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T12:29:20Z",
+          "kind": "review",
+          "text": "CR-132: Every agent harness is an agent; inside one, no acting as a person",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T12:29:20Z",
+          "kind": "note",
+          "text": "Open for Hakan (in CR-132): the third part, a person only on positive evidence. Read literally, every run not at an interactive terminal becomes an agent: git hooks, CI steps, scripts and the CLI suite. It is the only rule that would catch Cursor and Copilot, which set no marker. Strict, or person unless a marker says otherwise?",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T12:07:36Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "253350177c9b96ee3bb8c5d6c1bd10445c7b248b",
+      "code_reviews": [
+        {
+          "id": "01a20861-d8f0-7053-baff-0eebb1bdf738",
+          "ref": "CR-132"
+        }
+      ],
+      "review_requested_at": "2026-11-23T12:29:20Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225d75c0aa3a",
@@ -18206,7 +18227,7 @@
       "description": "Step 6 of [the plan](docs/dashboard-derived-state.md), group F, decision 2.\n\n## atm\n- `…/stats`, with the matching app command. It holds:\n  - the project's stats;\n  - the time histogram;\n  - people and agents;\n  - the agents' lanes;\n  - progress overall, by type and by sprint (archived tasks counted as they are);\n  - the pace and the forecast per sprint, in the loop's order.\n- The CLI can print the forecast (`atm project status`).\n- `api/projects`' summaries carry what the overview's Progress tab shows.\n\n## Dashboard\nDelete:\n- `projectStats`, `progressBreakdown` (and its phase grouping);\n- `forecastSprints`, `pace`, `nextInLoop`;\n- `actors`;\n- `projectProgress`, `velocityByPeriod`.\n\nThe overview no longer loads every project's tasks for its Progress tab.\n\n## Tests\n- atm-lib's tables: archived skipped tasks; the loop's order.\n- The route test.\n- The overview's Progress e2e on summaries.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1fecd-5725-722d-8d45-22d2f1a2543f",
         "01a1fecd-5725-722d-8d45-22d3de5844fe"
@@ -18219,7 +18240,7 @@
         "dashboard/src/lib/projectinfo.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-23T12:01:28Z",
+      "updated_at": "2026-11-23T15:14:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18253,6 +18274,24 @@
           "kind": "review",
           "text": "CR-127: Stats, progress and the forecast from atm",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:14:09Z",
+          "kind": "note",
+          "text": "Approved: in CR-127 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T15:14:37Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:14:42Z",
+          "kind": "outcome",
+          "text": "Stats, progress and the forecast from atm: one stats route for a slice and a period, the overview Progress tab from the summaries. Approved by Hakan (CR-127).",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T09:53:50Z",
@@ -18265,7 +18304,15 @@
         }
       ],
       "review_requested_at": "2026-11-23T10:52:29Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-23T10:52:29Z",
+          "to": "2026-11-23T15:14:37Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T15:14:42Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d54f6238cf",
@@ -18371,7 +18418,7 @@
       "description": "Step 8 of [the plan](docs/dashboard-derived-state.md), group H and §4.6.\n\n## Change\n- The claims route leaves out an expired lease, by atm's clock. `parseClaims` stops filtering.\n- The worktrees route says which copy of each task is shown, and from which branch, with one ranking shared with the merge driver (`merge.rs` `kind_rank`). `mergeWorktrees`' `PROGRESS` goes.\n- A guard test (like `tokens.test.ts`) fails when `dashboard/src` decides something from a raw state field: `kindOf(`, `.review_state`, `.started_at`, `.completed_at`, `.review_requested_at`, `.blocked_at`, `meta.sprints`, `meta.statuses` and so on. The files that only show them are on an allow-list.\n\n## Tests\n- The routes' tests.\n- The guard test, failing on a sample that breaks the rule.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1fecd-5725-722d-8d45-22cf65ee6177",
         "01a1fecd-5725-722d-8d45-22d03168db17",
@@ -18387,7 +18434,7 @@
         "dashboard/src/lib/worktrees.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-22T16:21:30Z",
+      "updated_at": "2026-11-23T15:14:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18401,7 +18448,9 @@
         "01a1feb5-c89d-74fd-85a0-3050e2ec1a45"
       ],
       "number": 724,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-23T15:14:46Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fefc-742e-7272-a4bb-2be34486ecf7",
@@ -18492,7 +18541,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-23T11:54:08Z",
+      "updated_at": "2026-11-23T12:29:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18605,6 +18654,12 @@
           "at": "2026-11-23T11:54:08Z",
           "kind": "note",
           "text": "Agent slips this session: a grep pattern with backticks and a | inside the quotes was rejected as a complex command. Now saved: one plain word per grep. Also a test run started while the agent was still editing, so it ran on half-changed files and had to run again.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T12:29:39Z",
+          "kind": "handoff",
+          "text": "Agenda ready: 17 notes. It is a conversation with Hakan before the sprint closes.",
           "by": "claude:0f56a916"
         }
       ]
