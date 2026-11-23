@@ -1,0 +1,98 @@
+# Documents: every document of a project, to read (ATM-728)
+
+**Status:** design, for review with Hakan (CR). Part of [the sidebar overhaul](sidebar-overhaul-design.md) (its
+Documents item, §1); the build becomes tasks of the sprint *Sidebar overhaul* once agreed.
+
+## 1. In short
+
+- **Documents lists a project's documents**, the Markdown files in its repository, as a tree by folder with each
+  one's title, and opens one in the document viewer to read, in place in the tab.
+- **The listing is atm's** (atm-docs, beside the viewer's reads), with the viewer's rules: only files the viewer
+  would show (never git's or atm's folders, environment or key files, or what git ignores).
+- **Nothing new to read a document:** the viewer, its address (`?doc=path`), its links and its CompMD rendering are
+  as they are today. This page is how you find one.
+
+## 2. Which files
+
+- **Markdown:** `*.md` and `*.markdown`, the files CompMD renders as documents. (Code and text files open in the
+  viewer from links, as now, but aren't listed: a repository's code is not its documents.)
+- **Where git has them:** tracked files (`git ls-files`) and untracked ones git doesn't ignore
+  (`git ls-files --others --exclude-standard`), so a document being written shows before its commit. In a project
+  without git: none (the page says the project needs git for its documents).
+- **Refused as the viewer refuses** (atm-docs' `document_path`): `.git/`, `.agentic-task-manager/`, environment
+  files, key files. Hidden folders otherwise listed (`.github/`), as the viewer shows them.
+- **Submodules:** not entered. A submodule is listed as a folder you can't open, named as one; its documents are
+  that project's, when it is registered.
+- **At most 5,000 documents**; past that, the first 5,000 by path and a line saying how many more there are
+  (search narrows them, §4).
+
+## 3. What each entry says
+
+| Field | From |
+|---|---|
+| `path` | the file's path from the project's root |
+| `title` | its first `# ` heading (ATX, or a Setext `===` heading) in its first 8 KB, else the file's name without `.md` |
+| `bytes`, `modified_at` | the file's size and modification time |
+| `tracked` | whether git tracks it (an untracked one is marked *new*) |
+
+Reading each title costs a read of the file's start: the answer is cached by the listing's stamp (git's index, `HEAD`
+and the listed files' sizes and mtimes), as the other routes' `ETag`s are.
+
+## 4. The page (Documents item)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ [ Search documents…                ]   Tree · Recent         │  in the tab's header line
+├──────────────────────────────────────────────────────────────┤
+│ ▾ docs                                                   42  │
+│   ▾ adr                                                   7  │
+│       ADR-003 Layered crates           ADR-003-….md   3 d    │
+│   The sidebar overhaul               sidebar-overhaul…  2 h  │
+│   Tabs, pop-ups, Back and Forward    tabs-and-navig…    5 d  │
+│ ▸ packaging                                               1  │
+│   README.md  Agentic Task Manager                       1 w  │
+│   CHANGELOG.md  Changelog                       new     2 h  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- **Two views:** *Tree* (folders, open or closed, the root's files after its folders) and *Recent* (every document by
+  last change, newest first). The view, the search and the open folders are in the address
+  (`/projects/<id>/documents?view=recent&q=sidebar`), the open folders by the tree's state kept per project in the
+  preferences instead (they would make the address long).
+- **Each row** is its title, its file name, and how long ago it changed; an untracked one says *new*.
+- **The search** filters by title and path as you type, in the page (the list is already loaded), in the tab's header
+  line where the other searches are (the sidebar design §6).
+- **A click opens the document in the viewer, in place**: `?doc=docs/x.md` over the Documents page, a step in the
+  tab's history, so Back closes it and returns to the list where it was. ⌘-click opens it in a new tab.
+- **Refreshed** as the other pages are (the dashboard's poll, by `ETag`).
+
+## 5. API and the app's command
+
+| Route | Answer |
+|---|---|
+| `GET …/projects/<id>/documents` (no `path`) | `{documents: [{path, title, bytes, modified_at, tracked}], submodules: [path], more: n}`; `ETag` |
+
+- The same route's `?path=` answers one document, as now; without it, the list. `…` is `api/v2/workspaces/<w>` (and
+  the v1 form for the default workspace).
+- **Read-only, a new entry point:** it lists paths of the project, so it keeps I11 and I12's rules: the Host check,
+  a GET refused from another site, only the registered projects, nothing outside the project, through no symlink,
+  git run with literal pathspecs (I7). `docs/security-architecture.md` (I11, I12) and `docs/multi-project-api.md`
+  §2.6 are updated in the same change.
+- **The app's command** `project_documents` mirrors it (I27).
+- **Layers:** atm-docs `list_documents` (the rules of §2 and §3), atm-vcs the two `ls-files` calls, atm-lib the call,
+  atm-api the route; the dashboard `lib/documents/DocumentsPage.svelte` and `api/documents.ts`.
+
+## 6. Questions for Hakan
+
+1. **What is a document:** Markdown only (recommended)? Or also plain text (`*.txt`), and files without an extension
+   such as `LICENSE`?
+2. **Untracked documents:** listed, marked *new* (recommended: you see the one an agent is writing)? Or tracked only?
+3. **The first view:** Tree (recommended) or Recent?
+4. **Submodules:** shown as folders you can't open (recommended), or left out?
+
+## 7. Tasks it implies
+
+1. **The listing:** atm-docs `list_documents` (which files, titles, the cap), atm-vcs's listing, atm-lib; unit tests
+   for each rule (refused paths, ignored and untracked files, submodules, titles, the cap).
+2. **The route and the command:** §5, its `ETag`; the security document and `multi-project-api.md`; serve tests.
+3. **The page:** Tree and Recent, the search, opening in the viewer in place; component tests and an e2e spec.
