@@ -56,9 +56,9 @@ and the listed files' sizes and mtimes), as the other routes' `ETag`s are.
 ```
 
 - **Two views:** *Tree* (folders, open or closed, the root's files after its folders) and *Recent* (every document by
-  last change, newest first). The view, the search and the open folders are in the address
-  (`/projects/<id>/documents?view=recent&q=sidebar`), the open folders by the tree's state kept per project in the
-  preferences instead (they would make the address long).
+  last change, newest first). The view and the search are in the address
+  (`/projects/<id>/documents?view=recent&q=sidebar`); the open folders are kept per project in the preferences
+  (they would make the address long).
 - **Each row** is its title, its file name, and how long ago it changed; an untracked one says *new*.
 - **The search** filters by title and path as you type, in the page (the list is already loaded), in the tab's header
   line where the other searches are (the sidebar design §6).
