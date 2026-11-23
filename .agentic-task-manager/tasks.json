@@ -1565,8 +1565,10 @@
       },
       {
         "id": "Sidebar overhaul",
-        "state": "planned",
-        "goal": "Turn the app sidebar into a scope selector with six destinations (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis), and fix the doc viewer, diff view and search bugs"
+        "state": "active",
+        "goal": "Turn the app sidebar into a scope selector with six destinations (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis), and fix the doc viewer, diff view and search bugs",
+        "release": "0.44.0",
+        "start": "2026-11-23T22:40:42Z"
       }
     ],
     "releases": [
@@ -1849,6 +1851,10 @@
       {
         "id": "0.43.0",
         "state": "planned"
+      },
+      {
+        "id": "0.44.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -1928,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 750,
+    "next_number": 751,
     "review": "async"
   },
   "tasks": [
@@ -19841,14 +19847,21 @@
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-23T22:21:04Z",
+      "updated_at": "2026-11-23T22:39:56Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "claude:ba530ebb",
       "review": "async",
       "number": 742,
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T22:39:56Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul"
     },
     {
       "id": "01a20a7f-82f6-7703-ac29-a944947d1493",
@@ -19950,12 +19963,19 @@
         ".claude/settings.json"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-23T22:20:58Z",
+      "updated_at": "2026-11-23T22:39:56Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "review": "async",
       "with": "user",
-      "number": 746
+      "number": 746,
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T22:39:56Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul"
     },
     {
       "id": "01a20a7f-82f6-7703-ac29-a948c68b0fac",
@@ -20030,9 +20050,9 @@
         "dashboard/tests/unit/ci-workflow.test.ts"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-23T22:25:56Z",
+      "updated_at": "2026-11-23T22:39:56Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:0f56a916",
+      "updated_by": "claude:ba530ebb",
       "review": "async",
       "with": "user",
       "number": 749,
@@ -20046,7 +20066,66 @@
           "text": "Reproduced on the re-run of 45266083639: the no-secrets step compiled atm-app twice (once per architecture, 6 m 31 s and 5 m 14 s), then the signing step compiled it again (3 m 11 s) with the secrets present. Only atm-app each time, so its fingerprint differs between the two tauri build runs, not a dependency.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T22:39:56Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul"
+    },
+    {
+      "id": "01a20a91-76ac-710c-81db-f000bc9edfc9",
+      "name": "Release 0.44.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "release"
+      ],
+      "description": "Ship the sprint *Sidebar overhaul* as 0.44.0, as AGENTS.md's *Versions* and *CI* sections describe: the sidebar as a scope selector, the review and doc viewer fixes, and the release signing fix (ATM-749).\n\n## Change\n- **The version:** 0.44.0 in `Cargo.toml` (`[workspace.package]`), if no task of the sprint bumped it already.\n- **`CHANGELOG.md` and `WHATS-NEW.md`:** the `[0.44.0]` entries dated the release day; WHATS-NEW's 3–6 plain-language bullets written from the changelog entry.\n- **Screenshots:** regenerate the Linux baselines the sprint changed (`pnpm run test:e2e:visual:update`, Docker), look at them, commit them; delete baselines whose test is gone.\n- **The security checklist** (`docs/security-architecture.md` §3): the 0.44.0 entry. If skills, `docs/agent/` or agent-facing output changed, the agent sandbox, or without an API key the written skill review in §3.3; any new entry point, agent-facing field or CI permission recorded in the document.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n- **After the release:** check that the app job's signing step compiled nothing (ATM-749).\n\n## Push\nPushing, the release PR to `main`, merging, tagging and publishing are Hakan's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a207f0-a2e1-7602-b260-d97d26c2073b",
+        "01a207f0-a2e1-7602-b260-d97e12924d39",
+        "01a207f0-a2e1-7602-b260-d97fba7f02a1",
+        "01a207f0-a2e1-7602-b260-d980e8e25290",
+        "01a207f0-a2e1-7602-b260-d98174c645b4",
+        "01a207f0-a2e1-7602-b260-d982704f90ae",
+        "01a207f0-a2e1-7602-b260-d98332143200",
+        "01a207f0-a2e1-7602-b260-d9843d6019f3",
+        "01a207f0-a2e1-7602-b260-d985bd59fa46",
+        "01a207f0-a2e1-7602-b260-d98638440e40",
+        "01a207f0-a2e1-7602-b260-d9875c4593f8",
+        "01a207f5-b8d8-77e2-b9e8-b65158981919",
+        "01a20808-570f-738e-a5c5-e9142ff2e1c9",
+        "01a20a7f-82f6-7703-ac29-a943660d65f3",
+        "01a20a7f-82f6-7703-ac29-a9476f7fe2b6",
+        "01a20a7f-82f6-7703-ac29-a94aeae5b5e0"
+      ],
+      "files": [
+        "Cargo.toml",
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-23T22:40:34Z",
+      "updated_at": "2026-11-23T22:40:34Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T22:40:34Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "release": "0.44.0",
+      "review": "async",
+      "number": 750
     }
   ]
 }
