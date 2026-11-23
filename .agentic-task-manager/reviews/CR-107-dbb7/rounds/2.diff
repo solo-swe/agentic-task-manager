@@ -1,0 +1,514 @@
+diff --git a/crates/atm-cli/src/commands/review.rs b/crates/atm-cli/src/commands/review.rs
+index 1fe53c07..cbbb27a2 100644
+--- a/crates/atm-cli/src/commands/review.rs
++++ b/crates/atm-cli/src/commands/review.rs
+@@ -52,19 +52,19 @@ pub struct Body {
+ pub enum ReviewCommand {
+     // create, live, round, tasks
+     #[command(flatten)]
+-    Open(open::Command),
++    Open(open::OpenCommand),
+     // list, show, comments
+     #[command(flatten)]
+-    Read(read::Command),
++    Read(read::ReadCommand),
+     // comment, poke, draft, reply, edit, resolve
+     #[command(flatten)]
+-    Talk(talk::Command),
++    Talk(talk::TalkCommand),
+     // submit, close
+     #[command(flatten)]
+-    Decide(decide::Command),
++    Decide(decide::DecideCommand),
+     // wait, watch, inbox
+     #[command(flatten)]
+-    Listen(listen::Command),
++    Listen(listen::ListenCommand),
+ }
+ 
+ fn opened(cwd: &Path, agent: Option<&str>) -> Result<Project> {
+diff --git a/crates/atm-cli/src/commands/review/decide.rs b/crates/atm-cli/src/commands/review/decide.rs
+index ca977159..153f0c76 100644
+--- a/crates/atm-cli/src/commands/review/decide.rs
++++ b/crates/atm-cli/src/commands/review/decide.rs
+@@ -9,7 +9,7 @@ use super::{
+ 
+ /// The commands that decide a review (in `atm review`'s list, ATM-711).
+ #[derive(Debug, Subcommand)]
+-pub enum Command {
++pub enum DecideCommand {
+     /// A reviewer's verdict: approve (every top-level comment resolved), request changes, or a comment on the whole.
+     Submit {
+         /// The review (CR-7)
+@@ -53,9 +53,9 @@ pub enum Command {
+ ///
+ /// # Errors
+ /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
+-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
++pub(super) fn run(command: DecideCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+     match command {
+-        Command::Submit {
++        DecideCommand::Submit {
+             review,
+             approve,
+             request_changes,
+@@ -101,7 +101,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 println!("{}", summary_line(&header));
+             }
+         }
+-        Command::Close {
++        DecideCommand::Close {
+             review,
+             reason,
+             reject_tasks,
+diff --git a/crates/atm-cli/src/commands/review/listen.rs b/crates/atm-cli/src/commands/review/listen.rs
+index 412bdf0b..65b1b630 100644
+--- a/crates/atm-cli/src/commands/review/listen.rs
++++ b/crates/atm-cli/src/commands/review/listen.rs
+@@ -8,7 +8,7 @@ use super::{
+ 
+ /// The commands that listen to the reviews (in `atm review`'s list, ATM-711).
+ #[derive(Debug, Subcommand)]
+-pub enum Command {
++pub enum ListenCommand {
+     /// Wait until a reviewer submits on a review (or decides it): what happened, and the comments added meanwhile.
+     /// Exit code 3 when the time is up first.
+     Wait {
+@@ -61,9 +61,9 @@ pub enum Command {
+ /// # Errors
+ /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
+ #[allow(clippy::too_many_lines)] // reason: one arm per command
+-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
++pub(super) fn run(command: ListenCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+     match command {
+-        Command::Wait {
++        ListenCommand::Wait {
+             review,
+             until,
+             timeout,
+@@ -104,7 +104,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+             }
+             Ok(0)
+         }
+-        Command::Watch {
++        ListenCommand::Watch {
+             timeout,
+             once,
+             since,
+@@ -132,12 +132,12 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+             // --once with nothing told by the time up: exit code 3, as `atm review wait` (ATM-624)
+             Ok(if once && told == 0 { 3 } else { 0 })
+         }
+-        Command::Inbox {
++        ListenCommand::Inbox {
+             peek: _,
+             hook: true,
+             agent,
+         } => Ok(hook_inbox(cwd, agent.as_deref())),
+-        Command::Inbox {
++        ListenCommand::Inbox {
+             peek,
+             hook: false,
+             agent,
+diff --git a/crates/atm-cli/src/commands/review/open.rs b/crates/atm-cli/src/commands/review/open.rs
+index 4350c91a..b2315e6a 100644
+--- a/crates/atm-cli/src/commands/review/open.rs
++++ b/crates/atm-cli/src/commands/review/open.rs
+@@ -9,7 +9,7 @@ use super::{
+ 
+ /// The commands that open a review and add to it (in `atm review`'s list, ATM-711).
+ #[derive(Debug, Subcommand)]
+-pub enum Command {
++pub enum OpenCommand {
+     /// Open a review of a change: a commit range, uncommitted changes, or files as they are.
+     Create {
+         /// One line saying what it is
+@@ -85,9 +85,9 @@ pub enum Command {
+ /// # Errors
+ /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
+ #[allow(clippy::too_many_lines)] // reason: one arm per command
+-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
++pub(super) fn run(command: OpenCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+     match command {
+-        Command::Create {
++        OpenCommand::Create {
+             title,
+             tasks,
+             change,
+@@ -132,7 +132,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 println!("Opened {}", summary_line(&header));
+             }
+         }
+-        Command::Live {
++        OpenCommand::Live {
+             base,
+             tasks,
+             title,
+@@ -170,7 +170,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 println!("Opened {}", summary_line(&header));
+             }
+         }
+-        Command::Round {
++        OpenCommand::Round {
+             review,
+             change,
+             summary_file,
+@@ -210,7 +210,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 println!("{}: round {number}", found.header.reference);
+             }
+         }
+-        Command::Tasks {
++        OpenCommand::Tasks {
+             review,
+             add,
+             remove,
+diff --git a/crates/atm-cli/src/commands/review/read.rs b/crates/atm-cli/src/commands/review/read.rs
+index 61d2cb1e..388105a4 100644
+--- a/crates/atm-cli/src/commands/review/read.rs
++++ b/crates/atm-cli/src/commands/review/read.rs
+@@ -10,7 +10,7 @@ use super::{
+ 
+ /// The commands that read the reviews (in `atm review`'s list, ATM-711).
+ #[derive(Debug, Subcommand)]
+-pub enum Command {
++pub enum ReadCommand {
+     /// List the reviews, of every working copy, newest first.
+     List {
+         /// Only these statuses (repeatable): open (any not decided yet: draft, waiting, live or changes_requested), or
+@@ -54,9 +54,9 @@ pub enum Command {
+ /// # Errors
+ /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
+ #[allow(clippy::too_many_lines)] // reason: one arm per command
+-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
++pub(super) fn run(command: ReadCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+     match command {
+-        Command::List {
++        ReadCommand::List {
+             statuses,
+             task,
+             mine,
+@@ -144,7 +144,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 }
+             }
+         }
+-        Command::Show {
++        ReadCommand::Show {
+             review,
+             round,
+             against,
+@@ -223,7 +223,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+             let open = found.open_comments().count();
+             println!("  {} chain(s), {open} open", found.chains.len());
+         }
+-        Command::Comments { review, open } => {
++        ReadCommand::Comments { review, open } => {
+             let project = opened(cwd, None)?;
+             let store = reviews::store(&project)?;
+             let found = store.get_review(&reference(&review))?;
+diff --git a/crates/atm-cli/src/commands/review/talk.rs b/crates/atm-cli/src/commands/review/talk.rs
+index 89361c4f..2b9c8516 100644
+--- a/crates/atm-cli/src/commands/review/talk.rs
++++ b/crates/atm-cli/src/commands/review/talk.rs
+@@ -9,7 +9,7 @@ use super::{
+ 
+ /// The commands that talk in a review: comments, replies, pokes and drafts (in `atm review`'s list, ATM-711).
+ #[derive(Debug, Subcommand)]
+-pub enum Command {
++pub enum TalkCommand {
+     /// Start a chain: on a file's lines, a whole file, or (without --file) the review as a whole.
+     Comment {
+         /// The review (CR-7)
+@@ -160,9 +160,9 @@ pub enum DraftCommand {
+ /// # Errors
+ /// What the review's rules or atm-lib refuse, and a project or review that can't be read.
+ #[allow(clippy::too_many_lines)] // reason: one arm per command
+-pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
++pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+     match command {
+-        Command::Comment {
++        TalkCommand::Comment {
+             review,
+             file,
+             lines,
+@@ -196,7 +196,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 println!("{}: {id}", found.header.reference);
+             }
+         }
+-        Command::Poke {
++        TalkCommand::Poke {
+             review,
+             body,
+             agent,
+@@ -217,8 +217,8 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 println!("{review}: poked ({id})");
+             }
+         }
+-        Command::Draft { command } => return run_draft(command, ctx, cwd),
+-        Command::Reply {
++        TalkCommand::Draft { command } => return run_draft(command, ctx, cwd),
++        TalkCommand::Reply {
+             review,
+             comment,
+             body,
+@@ -243,7 +243,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 println!("{review}: {id}, in reply to {comment}");
+             }
+         }
+-        Command::Edit {
++        TalkCommand::Edit {
+             review,
+             comment,
+             body,
+@@ -268,7 +268,7 @@ pub(super) fn run(command: Command, ctx: Context, cwd: &Path) -> Result<u8> {
+                 println!("{review}: {comment} changed");
+             }
+         }
+-        Command::Resolve {
++        TalkCommand::Resolve {
+             review,
+             comment,
+             reopen,
+diff --git a/crates/atm-lib/src/lifecycle.rs b/crates/atm-lib/src/lifecycle.rs
+index 19f6101c..2818c910 100644
+--- a/crates/atm-lib/src/lifecycle.rs
++++ b/crates/atm-lib/src/lifecycle.rs
+@@ -81,6 +81,21 @@ fn check_moves(
+     Ok(())
+ }
+ 
++/// Whether `task`, in to do, is `agent`'s own work its lapse sent back (§3.3): its latest note is the lapse's ("lease
++/// expired (agent)"), which [`lapse`] writes; a lapse clears `started_by` with the rest of the attempt, so that alone
++/// can't tell (ATM-712). A task `agent` started and still names is its own too.
++pub(crate) fn lapsed_for(task: &atm_common::Task, agent: &str) -> bool {
++    let last = task
++        .get("notes")
++        .and_then(Value::as_array)
++        .and_then(|notes| notes.last());
++    let lapse = format!("lease expired ({agent})");
++    last.is_some_and(|n| {
++        n.get("kind").and_then(Value::as_str) == Some("failure")
++            && n.get("text").and_then(Value::as_str) == Some(lapse.as_str())
++    }) || task.get("started_by").and_then(Value::as_str) == Some(agent)
++}
++
+ /// The moves that put a task in review from where it is: in progress, into review; the author's own task whose claim
+ /// lapsed (`take_back`), started again first (from to do; one still in progress, its claim run out but not dropped
+ /// yet, goes straight in).
+@@ -223,8 +238,7 @@ pub fn check(project: &Project, review: &Review, event: &Event, by: &Actor) -> R
+             let Some(task) = project.store().get_task(id)? else {
+                 continue;
+             };
+-            let own = is_agent(Some(&by.0))
+-                && task.get("started_by").and_then(Value::as_str) == Some(by.0.as_str());
++            let own = is_agent(Some(&by.0)) && lapsed_for(task, &by.0);
+             match reviews::kind_of(project, id)?.map(|(kind, _)| kind) {
+                 Some(Kind::Active) => moves.push((id.clone(), vec![Command::Review])),
+                 Some(Kind::Todo) if own => {
+diff --git a/crates/atm-lib/src/reviews/linking.rs b/crates/atm-lib/src/reviews/linking.rs
+index c4bf3c97..288cb92d 100644
+--- a/crates/atm-lib/src/reviews/linking.rs
++++ b/crates/atm-lib/src/reviews/linking.rs
+@@ -194,7 +194,10 @@ pub(crate) fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>
+         let own_lapsed = claim.is_some_and(|c| {
+             held_by.is_none() && c.get("agent").and_then(Value::as_str) == me.as_deref()
+         });
+-        let started_by_me = task.get("started_by").and_then(Value::as_str) == me.as_deref();
++        // Its lapse cleared `started_by`: the lapse's note says whose it was (ATM-712)
++        let started_by_me = me
++            .as_deref()
++            .is_some_and(|me| crate::lifecycle::lapsed_for(task, me));
+         let kind = vocab.kind_of(task.get("status")).unwrap_or(Kind::Todo);
+         planned.push(match kind {
+             Kind::Active if own_lapsed => Opening::TakeBack,
+diff --git a/crates/atm-lib/tests/reviews/fixtures.rs b/crates/atm-lib/tests/reviews/fixtures.rs
+index 6731357f..90d909a9 100644
+--- a/crates/atm-lib/tests/reviews/fixtures.rs
++++ b/crates/atm-lib/tests/reviews/fixtures.rs
+@@ -90,6 +90,38 @@ pub fn project_of(root: &Path, actor: &str, tasks: &Value, claims: &Value) -> Pr
+     reopen(root, actor)
+ }
+ 
++/// The claim on task `id` runs out (§3.3 of docs/task-review-state-machine.md): its lease is put in the past, as two
++/// hours with no renewal leave it, and the next atm command applies the lapse (here `atm claim list`'s): the task back
++/// in to do, with its "lease expired" note.
++pub fn lapse(project: &mut Project, id: &str) {
++    project
++        .store_mut()
++        .change(&mut |work| {
++            if let Some(claim) = work
++                .claims_store
++                .get_mut("claims")
++                .and_then(|claims| claims.get_mut(id))
++            {
++                claim["lease_expires_at"] = LAPSED.into();
++            }
++            Ok(())
++        })
++        .unwrap();
++    atm_lib::claims::expire_claims(project).unwrap();
++}
++
++/// Task `id` gone from the project's task file, as another branch's merge or a hand edit can leave it.
++pub fn drop_task(project: &mut Project, id: &str) {
++    project
++        .store_mut()
++        .change(&mut |work| {
++            work.tasks()
++                .retain(|t| t.get("id").and_then(Value::as_str) != Some(id));
++            Ok(())
++        })
++        .unwrap();
++}
++
+ pub fn claim(task: &str, agent: &str, until: &str) -> Value {
+     json!({ "task": task, "agent": agent, "lease_expires_at": until, "claimed_at": "2026-11-19T10:00:00Z" })
+ }
+diff --git a/crates/atm-lib/tests/reviews/lifecycle.rs b/crates/atm-lib/tests/reviews/lifecycle.rs
+index 2361b41e..4ebfed33 100644
+--- a/crates/atm-lib/tests/reviews/lifecycle.rs
++++ b/crates/atm-lib/tests/reviews/lifecycle.rs
+@@ -5,30 +5,16 @@ use atm_lib::lifecycle::{Event, Outcome, can, check};
+ use atm_lib::reviews::{ReviewStore, Status, Verdict};
+ use atm_lib::state::Command;
+ 
+-use crate::fixtures::{dir, open_review, project, project_of, reopen, round, task};
++use crate::fixtures::{
++    dir, drop_task, lapse, open_review, project, project_of, reopen, round, task,
++};
+ 
+-/// The task file with `id`'s status set to `status`, as a lapse or another branch's merge leaves it
+-fn set_status(root: &std::path::Path, id: &str, status: &str) {
+-    let file = root.join(".agentic-task-manager/tasks.json");
+-    let mut tasks: serde_json::Value =
+-        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+-    for t in tasks["tasks"].as_array_mut().unwrap() {
+-        if t["id"] == id {
+-            t["status"] = status.into();
+-            t.as_object_mut().unwrap().remove("review_state");
+-        }
+-    }
+-    std::fs::write(&file, tasks.to_string()).unwrap();
+-}
+-
+-/// ATM-712, the design's hole 1 (ATM-632's class): a round on a review whose task its lapse sent back to to do took
+-/// the round and left the task there; the author's own task is taken back first, then goes in review with it
+-#[test]
+-fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
+-    let dir = dir();
+-    let mut agent = project(&dir.0, "claude:1");
++/// CR-1 of the agent's T-1, sent back by Hakan; the agent takes T-1 back to fix it, then its claim lapses (the task
++/// back in to do): the state ATM-632's class of bug starts from
++fn sent_back_then_lapsed(root: &std::path::Path) -> atm_lib::reviews::ReviewHeader {
++    let mut agent = project(root, "claude:1");
+     let header = open_review(&mut agent, &["T-1"]);
+-    let mut hakan = reopen(&dir.0, "Hakan");
++    let mut hakan = reopen(root, "Hakan");
+     atm_lib::reviews::submit(
+         &mut hakan,
+         &header.reference,
+@@ -37,8 +23,25 @@ fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
+         None,
+     )
+     .unwrap();
+-    // The agent took it back, then its claim lapsed: the task is to do, started by the agent
+-    set_status(&dir.0, "T-1", "todo");
++    let mut agent = reopen(root, "claude:1");
++    atm_lib::changes::change_task_status(
++        &mut agent,
++        Command::Start,
++        "T-1",
++        &atm_lib::state::Options::default(),
++    )
++    .unwrap();
++    lapse(&mut agent, "T-1");
++    assert_eq!(task(&agent, "T-1")["status"], "todo");
++    header
++}
++
++/// ATM-712, the design's hole 1 (ATM-632's class): a round on a review whose task its lapse sent back to to do took
++/// the round and left the task there; the author's own task is taken back first, then goes in review with it
++#[test]
++fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
++    let dir = dir();
++    let header = sent_back_then_lapsed(&dir.0);
+     let agent = reopen(&dir.0, "claude:1");
+     let review = review_of(&agent, &header.reference);
+     let outcome = check(&agent, &review, &Event::Round, &"claude:1".into()).unwrap();
+@@ -65,22 +68,49 @@ fn a_round_takes_the_authors_lapsed_task_back_before_it_goes_in_review() {
+     );
+ }
+ 
+-/// ATM-712: a person's to-do task in the review isn't the author's to take back; the round leaves it as it is
++/// ATM-712: a real lapse clears who started the task; opening a review of it still finds it the author's, by the
++/// lapse's note, and takes it back (ATM-631)
+ #[test]
+-fn a_round_takes_back_only_the_authors_own_task() {
++fn opening_a_review_takes_back_a_task_its_real_lapse_sent_to_to_do() {
+     let dir = dir();
+-    let mut agent = project(&dir.0, "claude:1");
+-    let header = open_review(&mut agent, &["T-1"]);
+-    let mut hakan = reopen(&dir.0, "Hakan");
+-    atm_lib::reviews::submit(
+-        &mut hakan,
+-        &header.reference,
+-        Verdict::RequestChanges,
+-        Some("Fix."),
+-        None,
++    let tasks =
++        serde_json::json!([{ "id": "T-1", "name": "One", "type": "feature", "status": "todo" }]);
++    let mut agent = project_of(&dir.0, "claude:1", &tasks, &serde_json::json!({}));
++    atm_lib::changes::change_task_status(
++        &mut agent,
++        Command::Start,
++        "T-1",
++        &atm_lib::state::Options::default(),
++    )
++    .unwrap();
++    lapse(&mut agent, "T-1");
++    assert!(task(&agent, "T-1").get("started_by").is_none());
++    crate::fixtures::waiting(&mut agent, &["T-1"]).unwrap();
++    assert_eq!(
++        task(&reopen(&dir.0, "claude:1"), "T-1")["status"],
++        "in_review"
++    );
++    // Another agent's lapse isn't this one's to take back
++    let dir = crate::fixtures::dir();
++    let mut other = project_of(&dir.0, "claude:2", &tasks, &serde_json::json!({}));
++    atm_lib::changes::change_task_status(
++        &mut other,
++        Command::Start,
++        "T-1",
++        &atm_lib::state::Options::default(),
+     )
+     .unwrap();
+-    set_status(&dir.0, "T-1", "todo");
++    lapse(&mut other, "T-1");
++    let mut agent = reopen(&dir.0, "claude:1");
++    assert!(crate::fixtures::waiting(&mut agent, &["T-1"]).is_err());
++}
++
++/// ATM-712: only the review's author takes its own lapsed task back; another agent's round is refused, and the task
++/// stays in to do
++#[test]
++fn a_round_takes_back_only_the_authors_own_task() {
++    let dir = dir();
++    let header = sent_back_then_lapsed(&dir.0);
+     // Another agent's round (a review whose author isn't known yet would take it; this one has its author)
+     let other = reopen(&dir.0, "claude:2");
+     let review = review_of(&other, &header.reference);
+@@ -241,14 +271,7 @@ fn closing_moves_no_task_unless_it_rejects_them_and_then_reaches_each_first() {
+     let mut project = project(&dir.0, "claude:1");
+     let header = open_review(&mut project, &["T-1"]);
+     // T-1 gone from the task file (another branch's merge, a hand edit): the review names a task atm can't find
+-    let file = dir.0.join(".agentic-task-manager/tasks.json");
+-    let mut tasks: serde_json::Value =
+-        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+-    tasks["tasks"]
+-        .as_array_mut()
+-        .unwrap()
+-        .retain(|t| t["id"] != "T-1");
+-    std::fs::write(&file, tasks.to_string()).unwrap();
++    drop_task(&mut project, "T-1");
+     let hakan = reopen(&dir.0, "Hakan");
+     let review = review_of(&hakan, &header.reference);
+     // Rejecting its tasks: refused before the review closes

@@ -1,0 +1,82 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "fc548701ffc709a16bd3702fcb63ec9c6577b87f",
+    "head": "efdde4e58a5e14fc70ec9bcb627ec22ee0d17d32"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/db.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/task/add.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/task/edit.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/main.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/option_file.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/src/secrets.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-docs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/option-files.test.mjs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/refusals.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/lifecycle.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/wrong-uses.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T20:43:00Z"
+}

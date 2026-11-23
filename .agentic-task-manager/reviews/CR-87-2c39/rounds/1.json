@@ -1,0 +1,92 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "f425b4ba918a2b5ada9beb3d3a10a95e0c2afeb5",
+    "head": "453dda89ce3303a3d9fa72f2b7a403d6663e42a9"
+  },
+  "files": [
+    {
+      "path": "crates/atm-docs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/code.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_drafts/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_keys.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/folder.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/model.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rounds.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/store_contract.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-vcs/src/diff.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-vcs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-vcs/src/rev.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/wrong-uses.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T17:47:16Z"
+}

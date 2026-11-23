@@ -1,0 +1,47 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "345ecb04a70a51d9df0dcc391c62a5bd16032400",
+    "head": "b1711bf597feab0b7aeff92658fea30a2c023392"
+  },
+  "files": [
+    {
+      "path": "crates/atm-lib/src/state/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/state/tests/docs.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules/tests/docs.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/reviews.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/states.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-22T21:12:10Z"
+}

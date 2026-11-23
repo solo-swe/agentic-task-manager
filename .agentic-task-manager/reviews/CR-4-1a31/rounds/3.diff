@@ -1,0 +1,270 @@
+diff --git a/crates/atm-lib/src/review_pages.rs b/crates/atm-lib/src/review_pages.rs
+index d0e7a4a6..15597691 100644
+--- a/crates/atm-lib/src/review_pages.rs
++++ b/crates/atm-lib/src/review_pages.rs
+@@ -276,6 +276,39 @@ fn round_of(review: &Review, number: u32) -> Result<&Round> {
+         })
+ }
+ 
++/// A patch's files, a submodule only moved among them known by its sides' trees: renamed with its commit the same, it
++/// has no `Subproject commit` lines (ATM-599: `markdown-rs`, moved into `crates/`, showed as a file not in its
++/// commit).
++fn with_links(
++    repo: &atm_vcs::GitVcs,
++    patches: Vec<FilePatch>,
++    before: Option<&String>,
++    after: &String,
++) -> Vec<FilePatch> {
++    let linked =
++        |object: Option<&String>, path: &str| object.and_then(|o| repo.gitlink_in(o, path));
++    patches
++        .into_iter()
++        .map(|mut file| {
++            // Only an entry with no lines can be a submodule git didn't mark: one whose commit changed has its
++            // `Subproject commit` lines, and `submodule` already. No lines is a pure rename (the moved submodule), a
++            // mode change, an empty or a binary file: only those are looked up in the trees, a git process each,
++            // never the files with lines, so a large review costs nothing more
++            let no_lines = !file.patch.contains("\n@@");
++            if file.submodule.is_none() && no_lines {
++                let (old, new) = (
++                    linked(before, &file.old_path),
++                    linked(Some(after), &file.path),
++                );
++                if old.is_some() || new.is_some() {
++                    file.submodule = Some((old, new));
++                }
++            }
++            file
++        })
++        .collect()
++}
++
+ /// The files of one view: the whole change of round `shown` (its base to its result), or what changed in it since
+ /// round `against`; each with its patch and the objects (a commit, or a tree) its two sides are read from.
+ fn view<S: RoundDiffs + ?Sized>(
+@@ -313,26 +346,8 @@ fn view<S: RoundDiffs + ?Sized>(
+             (Some(before), after, between, None)
+         }
+     };
+-    // A submodule only moved (renamed, its commit the same) has no `Subproject commit` lines: its sides' trees say it
+-    // is one (ATM-599: CompMD's `markdown-rs`, moved into `crates/`, showed as a file not in its commit)
+     let repo = rounds::repository(vcs, round).unwrap_or_else(|_| vcs.clone());
+-    let linked =
+-        |object: Option<&String>, path: &str| object.and_then(|o| repo.gitlink_in(o, path));
+-    let patches: Vec<FilePatch> = file_patches(&patch.0)
+-        .into_iter()
+-        .map(|mut file| {
+-            if file.submodule.is_none() && !file.patch.contains("\n@@") {
+-                let (old, new) = (
+-                    linked(before.as_ref(), &file.old_path),
+-                    linked(Some(&after), &file.path),
+-                );
+-                if old.is_some() || new.is_some() {
+-                    file.submodule = Some((old, new));
+-                }
+-            }
+-            file
+-        })
+-        .collect();
++    let patches = with_links(&repo, file_patches(&patch.0), before.as_ref(), &after);
+     // A moved submodule's entry: its two commits and its repository's web address, when it has one, for links
+     let submodule = |file: &FilePatch| {
+         file.submodule.as_ref().map(|(from, to)| {
+@@ -343,7 +358,7 @@ fn view<S: RoundDiffs + ?Sized>(
+             json!({ "from": from, "to": to, "repository": repository })
+         })
+     };
+-    let side = |file: &FilePatch| {
++    let entry = |file: &FilePatch, before: Option<&String>, after: &String| {
+         json!({
+             "path": file.path,
+             "old_path": file.old_path,
+@@ -351,15 +366,33 @@ fn view<S: RoundDiffs + ?Sized>(
+             "binary": file.binary,
+             "submodule": submodule(file),
+             "patch": file.patch,
+-            "before": if file.status == "added" { None } else { before.clone() },
++            "before": if file.status == "added" { None } else { before.cloned() },
+             "after": if file.status == "deleted" { None } else { Some(after.clone()) },
+         })
+     };
++    // A submodule moved from one commit to another: its entry, then the files its own repository changed between
++    // them, named as the project has them, their sides the submodule's commits (ATM-599, Hakan on CR-4); none when it
++    // isn't checked out here, or a commit is gone from it
++    let side = |file: &FilePatch| {
++        let mut out = vec![entry(file, before.as_ref(), &after)];
++        if let Some((Some(from), Some(to))) = &file.submodule
++            && from != to
++            && let Some(sub) = vcs.submodule_at(&file.path)
++            && let Ok(diff) = sub.diff_range(from, to, &[])
++        {
++            out.extend(
++                file_patches(&diff.patch)
++                    .iter()
++                    .map(|inner| entry(inner, Some(from), to)),
++            );
++        }
++        out
++    };
+     // The whole change lists the round's files (a binary one has no patch); between rounds, what the diff has
+     let files: Vec<Value> = match listed {
+         Some(files) => files
+             .iter()
+-            .map(|f| {
++            .flat_map(|f| {
+                 let found = patches.iter().find(|p| p.path == f.path).cloned();
+                 side(&found.unwrap_or_else(|| FilePatch {
+                     path: f.path.clone(),
+@@ -379,7 +412,7 @@ fn view<S: RoundDiffs + ?Sized>(
+                 }))
+             })
+             .collect(),
+-        None => patches.iter().map(side).collect(),
++        None => patches.iter().flat_map(side).collect(),
+     };
+     Ok(json!({ "round": shown, "against": against, "files": files }))
+ }
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 5bf9fef4..8cce05ff 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -991,6 +991,87 @@ mod tests {
+         );
+     }
+ 
++    /// ATM-599, Hakan on CR-4: a commit of the project that moves a submodule to a later commit shows the files that
++    /// changed inside it, each with its diff and its two sides, as the submodule's commits have them
++    #[test]
++    fn a_project_commit_moving_a_submodule_shows_the_files_changed_inside_it() {
++        let dir = dir();
++        let sub = dir.0.join("sub-origin");
++        std::fs::create_dir_all(&sub).unwrap();
++        git(&["init", "-q"], &sub);
++        std::fs::write(sub.join("a.txt"), "a\n").unwrap();
++        git(&["add", "-A"], &sub);
++        git(&["commit", "-q", "-m", "sub"], &sub);
++        let root = dir.0.join("repo");
++        std::fs::create_dir_all(&root).unwrap();
++        git(&["init", "-q"], &root);
++        let project = project(&root, "claude:1");
++        let add = [
++            "-c",
++            "protocol.file.allow=always",
++            "submodule",
++            "--quiet",
++            "add",
++            "../sub-origin",
++            "lib",
++        ];
++        git(&add, &root);
++        git(&["add", "-A"], &root);
++        git(&["commit", "-q", "-m", "base"], &root);
++        // In the submodule: a file changed, one added, committed there; the project records its new commit
++        std::fs::write(root.join("lib/a.txt"), "a, changed\n").unwrap();
++        std::fs::write(root.join("lib/b.txt"), "b\n").unwrap();
++        git(&["add", "-A"], &root.join("lib"));
++        git(&["commit", "-q", "-m", "inside"], &root.join("lib"));
++        git(&["add", "lib"], &root);
++        git(&["commit", "-q", "-m", "the submodule moved on"], &root);
++        let vcs = project.vcs().unwrap();
++        let first = super::rounds::from_range(&vcs, "HEAD~1", "HEAD", &"claude:1".into()).unwrap();
++        let mut agent = reopen(&root, "claude:1");
++        let header = super::create(
++            &mut agent,
++            NewReview {
++                title: "Moved on".into(),
++                summary: String::new(),
++                tasks: vec!["T-1".into()],
++                author: None,
++                reviewers: Vec::new(),
++                status: Status::Open,
++                first,
++            },
++        )
++        .unwrap();
++        let page =
++            crate::review_pages::review_page(&agent, &ReviewRef(header.reference.0), None, None)
++                .unwrap();
++        let files = page["view"]["files"].as_array().unwrap();
++        let paths: Vec<&str> = files.iter().filter_map(|f| f["path"].as_str()).collect();
++        // The submodule's entry, and the files inside it
++        assert!(paths.contains(&"lib"), "{paths:?}");
++        let inside = |path: &str| {
++            files
++                .iter()
++                .find(|f| f["path"] == path)
++                .unwrap_or_else(|| panic!("{path} not shown: {paths:?}"))
++        };
++        let a = inside("lib/a.txt");
++        assert_eq!(a["status"], "modified");
++        let patch = a["patch"].as_str().unwrap();
++        assert!(
++            patch.contains("-a\n") && patch.contains("+a, changed\n"),
++            "{patch}"
++        );
++        assert_eq!(inside("lib/b.txt")["status"], "added");
++        // Each side reads as the submodule's commits have it
++        let read = |revision: &Value| {
++            crate::documents::read_document_at(Some(&vcs), revision.as_str().unwrap(), "lib/a.txt")
++                .unwrap()["text"]
++                .clone()
++        };
++        assert_eq!(read(&a["before"]), "a\n");
++        assert_eq!(read(&a["after"]), "a, changed\n");
++    }
++
+     /// ATM-599 (`markdown-rs` moved into `crates/`, in CompMD): a commit that only moves a submodule's folder shows it as
+     /// the submodule, at its one commit, not as a file whose sides are read
+     #[test]
+diff --git a/dashboard/src/lib/reviews/page.ts b/dashboard/src/lib/reviews/page.ts
+index c68a1878..c3ab2b06 100644
+--- a/dashboard/src/lib/reviews/page.ts
++++ b/dashboard/src/lib/reviews/page.ts
+@@ -11,11 +11,13 @@ export type TreeRow =
+ export function fileTree(files: ViewFile[]): TreeRow[] {
+   const rows: TreeRow[] = [];
+   const shown = new Set<string>();
++  // A submodule's entry stands where its folder is, the files changed inside it under it (ATM-599): sorted as a
++  // folder, and its row is the folder's
+   const sorted = [...files].sort((a, b) => {
+     const [da, db] = [a.path.split('/'), b.path.split('/')];
+     for (let i = 0; i < Math.min(da.length, db.length); i++) {
+-      const lastA = i === da.length - 1;
+-      const lastB = i === db.length - 1;
++      const lastA = i === da.length - 1 && !a.submodule;
++      const lastB = i === db.length - 1 && !b.submodule;
+       // A folder before a file at the same level
+       if (lastA !== lastB) return lastA ? 1 : -1;
+       if (da[i] !== db[i]) return da[i] < db[i] ? -1 : 1;
+@@ -31,6 +33,7 @@ export function fileTree(files: ViewFile[]): TreeRow[] {
+       rows.push({ kind: 'folder', path, name: parts[depth], depth });
+     }
+     rows.push({ kind: 'file', file, name: parts.at(-1) ?? file.path, depth: parts.length - 1 });
++    if (file.submodule) shown.add(file.path);
+   }
+   return rows;
+ }
+diff --git a/dashboard/tests/unit/page.test.ts b/dashboard/tests/unit/page.test.ts
+index a66d5bec..564aad3f 100644
+--- a/dashboard/tests/unit/page.test.ts
++++ b/dashboard/tests/unit/page.test.ts
+@@ -70,6 +70,19 @@ describe('the file tree', () => {
+       'a/b/c',
+     ]);
+   });
++
++  // ATM-599: a submodule moved to another commit, and the files changed inside it
++  it('a submodule’s entry stands where its folder is, among the folders, its files under it', () => {
++    const sub = { from: 'a1', to: 'b2', repository: null };
++    const rows = fileTree([
++      file('src/x.rs'),
++      file('lib/b.txt'),
++      file('lib', '', { submodule: sub }),
++      file('lib/a.txt'),
++      file('README.md'),
++    ]).map((r) => `${'  '.repeat(r.depth)}${r.kind === 'folder' ? `${r.name}/` : r.name}`);
++    expect(rows).toEqual(['lib', '  a.txt', '  b.txt', 'src/', '  x.rs', 'README.md']);
++  });
+ });
+ 
+ describe('a file’s line counts', () => {

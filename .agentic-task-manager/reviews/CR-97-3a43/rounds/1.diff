@@ -1,0 +1,712 @@
+diff --git a/dashboard/src/lib/documents/DocumentViewer.svelte b/dashboard/src/lib/documents/DocumentViewer.svelte
+index 4bd06dbf..e3cd3174 100644
+--- a/dashboard/src/lib/documents/DocumentViewer.svelte
++++ b/dashboard/src/lib/documents/DocumentViewer.svelte
+@@ -19,6 +19,7 @@
+   import { getPref, setPref } from '../prefs';
+   import { slug, type DrawnLine, type GutterRow } from '../compmd';
+   import { compactAt } from '../scroll';
++  import { latest } from '../latest';
+   import type { DocumentRefresh, DocumentSource } from './source';
+   import DocumentPage from './DocumentPage.svelte';
+   import Icon from '../ui/Icon.svelte';
+@@ -58,15 +59,20 @@
+   /** The source and path the shown document is of */
+   let shownKey = '';
+   const keyOf = (from: DocumentSource | null, path: string | undefined) => `${from?.id}\u0000${path}`;
++  // Only the latest ask's answer is shown, and only while its file is open (ATM-675): not another file's, nor an
++  // older poll's that came last
++  const loads = latest(() => keyOf(source, ref?.path));
+ 
+   async function load(key: string, from: DocumentSource, path: string, poll: boolean) {
+-    const result = await from.load(path, poll ? validators : undefined);
+-    if (key !== keyOf(source, ref?.path)) return; // another file was opened meanwhile
++    const ask = loads.ask();
++    const result = await from.load(path, poll ? validators : undefined).finally(() => ask.done());
++    if (!ask.current(key)) return; // another file was opened meanwhile, or a newer answer is on its way
+     loading = false;
+     if (result.unchanged) return;
+     if ('error' in result) {
+-      // A poll that fails keeps what is shown; a first load says what happened
+-      if (!poll || result.error !== 'failed') {
++      // A poll that fails keeps what is shown; a first load says what happened, and so does a poll that came in its
++      // place (the first load's answer was dropped for it) with nothing shown yet
++      if (!poll || !doc || result.error !== 'failed') {
+         doc = null;
+         error = { kind: result.error, message: result.message };
+       }
+diff --git a/dashboard/src/lib/latest.ts b/dashboard/src/lib/latest.ts
+new file mode 100644
+index 00000000..5b4e2c77
+--- /dev/null
++++ b/dashboard/src/lib/latest.ts
+@@ -0,0 +1,45 @@
++/**
++ * Only the latest ask's answer counts (ATM-675, audit D1). A view asks for data again and again (the timer, focus, a
++ * link, the app's events), and the answers can come back out of order: one that arrives after a newer ask was made,
++ * or for another thing than the one now shown, must change nothing.
++ *
++ * `ask()` starts an ask and returns its ticket. After every `await`, `ticket.current()` says whether it is still the
++ * latest ask; `ticket.current(key)` also whether `key` is still what `shown()` names (the workspace and project a load
++ * was for, say). `ticket.done()`, in a `finally`, ends it; `busy` says whether one is still out, so a poll can wait for
++ * the next tick rather than pile up.
++ */
++export interface Ticket {
++  /** Whether this is still the latest ask, and (given a key) still for what is shown */
++  current(key?: string): boolean;
++  /** The ask is over, answered or failed; once is enough, more change nothing */
++  done(): void;
++}
++
++export interface Latest {
++  ask(): Ticket;
++  /** Whether an ask is still out */
++  readonly busy: boolean;
++}
++
++export function latest(shown: () => string = () => ''): Latest {
++  let asked = 0;
++  let out = 0;
++  return {
++    ask() {
++      const number = ++asked;
++      out++;
++      let open = true;
++      return {
++        current: (key?: string) => number === asked && (key === undefined || key === shown()),
++        done: () => {
++          if (!open) return;
++          open = false;
++          out--;
++        },
++      };
++    },
++    get busy() {
++      return out > 0;
++    },
++  };
++}
+diff --git a/dashboard/src/lib/overview/OverviewReviews.svelte b/dashboard/src/lib/overview/OverviewReviews.svelte
+index 09022480..ba507085 100644
+--- a/dashboard/src/lib/overview/OverviewReviews.svelte
++++ b/dashboard/src/lib/overview/OverviewReviews.svelte
+@@ -8,6 +8,7 @@
+   import type { ProjectEntry } from '../load';
+   import { currentAddress, navigate } from '../navigation';
+   import { loadReviews } from '../review-data';
++  import { latest } from '../latest';
+   import { keepFilter, keptFilter } from '../review-filter';
+   import { mergeProjectReviews } from '../reviews/page';
+   import ReviewList from '../reviews/ReviewList.svelte';
+@@ -34,12 +35,13 @@
+   let loading = $state(false);
+   let problem = $state<string | null>(null);
+   let shownText = '';
+-  let asked = 0;
++  // Only the latest ask's answer is shown (ATM-675)
++  const loads = latest();
+ 
+   /** Each project's reviews the query keeps, asked of each at once; a project that can't answer is left out, and the
+    * list says which */
+   async function load() {
+-    const ask = ++asked;
++    const ask = loads.ask();
+     const from = listed;
+     loading = !entries.length;
+     const answers = await Promise.all(
+@@ -50,7 +52,8 @@
+         ),
+       ),
+     );
+-    if (ask !== asked) return;
++    ask.done();
++    if (!ask.current()) return;
+     loading = false;
+     const failed = from.filter((_, i) => !answers[i]).map((p) => p.name);
+     problem = failed.length ? `Couldn't read the reviews of ${failed.join(', ')}.` : null;
+diff --git a/dashboard/src/lib/shell/RefreshMenu.svelte b/dashboard/src/lib/shell/RefreshMenu.svelte
+index df42af41..796942a0 100644
+--- a/dashboard/src/lib/shell/RefreshMenu.svelte
++++ b/dashboard/src/lib/shell/RefreshMenu.svelte
+@@ -22,7 +22,7 @@
+ 
+   $effect(() => {
+     if (!dashboard.polls) return;
+-    const timer = setInterval(() => dashboard.reload(), dashboard.autoRefreshSeconds * 1000);
++    const timer = setInterval(() => dashboard.poll(), dashboard.autoRefreshSeconds * 1000);
+     return () => clearInterval(timer);
+   });
+ </script>
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 0795d1ee..1c14923d 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -19,6 +19,7 @@
+     updateDraft,
+     type ChangeResult,
+   } from '../api/review-changes';
++  import { latest } from '../latest';
+   import { backEntry, currentAddress, goBack, navigate } from '../navigation';
+   import { placeName } from '../places';
+   import {
+@@ -90,18 +91,19 @@
+   let shownText = '';
+   let entriesText = '';
+ 
+-  let asked = 0;
++  // Only the latest ask's answer is shown (ATM-675)
++  const loads = latest();
+   async function load() {
+     const id = project;
+     if (!id) return;
+-    const ask = ++asked;
++    const ask = loads.ask();
+     if (!at.review) loading = !entries.length;
+     try {
+       if (at.review) {
+         const page = await loadReview(id, at.review, at.round, at.against);
+         learnReviews(id, [page.review]);
+         const text = JSON.stringify(page);
+-        if (ask === asked && text !== shownText) {
++        if (ask.current() && text !== shownText) {
+           shownText = text;
+           [shown, choices] = [page, []];
+         }
+@@ -113,22 +115,23 @@
+         );
+         learnUnreadable(id, listed.unreadable ?? []);
+         const text = JSON.stringify([listed.reviews, listed.unreadable]);
+-        if (ask === asked && text !== entriesText) {
++        if (ask.current() && text !== entriesText) {
+           entriesText = text;
+           [entries, unreadable] = [listed.reviews, listed.unreadable ?? []];
+         }
+       }
+-      if (ask === asked) problem = null;
++      if (ask.current()) problem = null;
+     } catch (e) {
+-      if (ask !== asked) return;
++      if (!ask.current()) return;
+       problem = (e as Error).message;
+       const review = at.review;
+       if (review && !shown) {
+         const listed = await loadReviews(id, NO_QUERY).catch(() => null);
+-        if (ask === asked) choices = (listed?.reviews ?? []).filter((r) => r.review.reference.startsWith(`${review}.`));
++        if (ask.current()) choices = (listed?.reviews ?? []).filter((r) => r.review.reference.startsWith(`${review}.`));
+       }
+     } finally {
+-      if (ask === asked) loading = false;
++      if (ask.current()) loading = false;
++      ask.done();
+     }
+   }
+ 
+@@ -260,45 +263,29 @@
+   {#if at.review}
+     {#if shown && project}
+       {@const page = shown}
+-      <ReviewPage
+-        {page}
+-        project={shortName}
+-        file={at.file}
+-        side={(revision) => revisionDocuments(project, revision)}
+-        imageAt={(revision, path) => v1FileUrl(project, path, revision)}
+-        isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
+-        taskHref={taskPage}
+-        tasks={taskLinks}
+-        backHref={cameFrom ?? listAddress}
+-        backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
+-        onback={() => (cameFrom ? goBack() : go(listAddress))}
+-        {busy}
+-        {problem}
+-        docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
+-        onfile={(path) => go(withReview(currentAddress(), { ...at, file: path }), true)}
+-        onround={(round, against) => go(withReview(currentAddress(), { ...at, round, against }))}
+-        onviewed={(file) => (viewed = toggleViewed(page.review.id, page.view.round, page.view.against, file))}
+-        oncomment={({ path, picked, body }) =>
+-          change(
+-            addComment(project, review, {
+-              path,
+-              lines: picked?.lines ?? null,
+-              side: picked?.side ?? 'new',
+-              quote: picked?.quote ?? null,
+-              round: path ? page.view.round : null,
+-              body,
+-            }),
+-          )}
+-        onreply={(to, body) => change(replyTo(project, review, to, body))}
+-        onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
+-        onedit={(comment, body) => change(editComment(project, review, comment, body))}
+-        onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
+-        onclose={(reason) => change(closeReview(project, review, reason))}
+-        onpoke={(body) => change(pokeReview(project, review, body))}
+-        ondrafts={{
+-          comment: (path, picked, body) =>
++      <!-- Another review is another page (ATM-675, audit D2): nothing typed on one, no file it was at, stays for the next -->
++      {#key page.review.id}
++        <ReviewPage
++          {page}
++          project={shortName}
++          file={at.file}
++          side={(revision) => revisionDocuments(project, revision)}
++          imageAt={(revision, path) => v1FileUrl(project, path, revision)}
++          isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
++          taskHref={taskPage}
++          tasks={taskLinks}
++          backHref={cameFrom ?? listAddress}
++          backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
++          onback={() => (cameFrom ? goBack() : go(listAddress))}
++          {busy}
++          {problem}
++          docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
++          onfile={(path) => go(withReview(currentAddress(), { ...at, file: path }), true)}
++          onround={(round, against) => go(withReview(currentAddress(), { ...at, round, against }))}
++          onviewed={(file) => (viewed = toggleViewed(page.review.id, page.view.round, page.view.against, file))}
++          oncomment={({ path, picked, body }) =>
+             change(
+-              addDraft(project, review, {
++              addComment(project, review, {
+                 path,
+                 lines: picked?.lines ?? null,
+                 side: picked?.side ?? 'new',
+@@ -306,13 +293,33 @@
+                 round: path ? page.view.round : null,
+                 body,
+               }),
+-            ),
+-          reply: (to, body) => change(addDraft(project, review, { reply_to: to, body })),
+-          edit: (id, body) => change(updateDraft(project, review, id, body)),
+-          remove: (id) => change(removeDraft(project, review, id)),
+-        }}
+-        ondocument={(ref) => dashboard.openDocument(ref)}
+-      />
++            )}
++          onreply={(to, body) => change(replyTo(project, review, to, body))}
++          onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
++          onedit={(comment, body) => change(editComment(project, review, comment, body))}
++          onsubmit={(decision, body) =>
++            change(submitDecision(project, review, body ? { decision, body } : { decision }))}
++          onclose={(reason) => change(closeReview(project, review, reason))}
++          onpoke={(body) => change(pokeReview(project, review, body))}
++          ondrafts={{
++            comment: (path, picked, body) =>
++              change(
++                addDraft(project, review, {
++                  path,
++                  lines: picked?.lines ?? null,
++                  side: picked?.side ?? 'new',
++                  quote: picked?.quote ?? null,
++                  round: path ? page.view.round : null,
++                  body,
++                }),
++              ),
++            reply: (to, body) => change(addDraft(project, review, { reply_to: to, body })),
++            edit: (id, body) => change(updateDraft(project, review, id, body)),
++            remove: (id) => change(removeDraft(project, review, id)),
++          }}
++          ondocument={(ref) => dashboard.openDocument(ref)}
++        />
++      {/key}
+     {:else if problem}
+       <p class="reviews-problem" role="alert">{problem}</p>
+       {#if choices.length}
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 1e0a66b6..5599265e 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -79,6 +79,7 @@ import type { ViewWindow } from './time-window';
+ import type { Task } from './types';
+ import type { ForeignTask } from '$generated/types';
+ import { findTask, refView, taskLabel, type OtherProject, type RefView } from './keys';
++import { latest, type Ticket } from './latest';
+ import type { ListGroupBy } from './list-groups';
+ import { loadProjectSources, type ProjectSource } from './overview-data';
+ import { leftovers as leftoversOf, scopeOf } from './scope';
+@@ -413,6 +414,15 @@ export class DashboardState {
+   #dismissedBuild = '';
+   #archiveValidators: Validators | undefined;
+   #archiveWanted = false;
++  /** What is shown, by workspace and project: a load's answer applies only while it is (ATM-675) */
++  #shownKey = () => (this.projectId === null ? '' : this.#keptKey(this.projectId));
++  /** The page's loads (fetchAndApply, a task opened on the Omniboard), the archive's and the overview's: only the
++   * latest one's answer is applied, and only while what it was for is shown (ATM-675, audit D1) */
++  #loads = latest(this.#shownKey);
++  #archiveLoads = latest(this.#shownKey);
++  #sourcesLoads = latest(() => this.workspace);
++  /** The task opened on the Omniboard whose details show once its project's data is in */
++  #peekTask: string | null = null;
+   // The main worktree's tasks as loaded, and the project's worktrees: `tasks` is the two merged
+   #mainTasks: Task[] = [];
+   #worktrees: Worktree[] = [];
+@@ -442,16 +452,24 @@ export class DashboardState {
+ 
+   private async refreshArchive() {
+     if (!this.projectId) return;
+-    const result = await loadArchive(
+-      this.projectId,
+-      browserFetch,
+-      this.archiveLoaded ? this.#archiveValidators : undefined,
+-    );
+-    if (!result.unchanged) {
+-      this.#archiveValidators = result.validators;
+-      this.archive = result.tasks;
++    const key = this.#shownKey();
++    const ticket = this.#archiveLoads.ask();
++    try {
++      const result = await loadArchive(
++        this.projectId,
++        browserFetch,
++        this.archiveLoaded ? this.#archiveValidators : undefined,
++      );
++      // Another project shown by now, or a newer answer already in: this one changes nothing
++      if (!ticket.current(key)) return;
++      if (!result.unchanged) {
++        this.#archiveValidators = result.validators;
++        this.archive = result.tasks;
++      }
++      this.archiveLoaded = true;
++    } finally {
++      ticket.done();
+     }
+-    this.archiveLoaded = true;
+   }
+ 
+   async load() {
+@@ -475,9 +493,16 @@ export class DashboardState {
+     setTimeout(() => (this.reloading = false), RELOAD_SPIN_MS);
+   }
+ 
++  /** The timer's reload: skipped while a load is still out (ATM-675), so slow answers don't pile up */
++  poll() {
++    if (this.#loads.busy) return;
++    void this.reload();
++  }
++
+   /** Re-fetch the project list and decide the page from the URL; returns the project to load, or null for a page
+-   * without one (the overview, how to add a project, an unknown project). */
+-  private async refreshProjects(): Promise<string | null> {
++   * without one (the overview, how to add a project, an unknown project); undefined when a newer load was asked for
++   * meanwhile (its answer is the page's). */
++  private async refreshProjects(ticket: Ticket): Promise<string | null | undefined> {
+     // Another workspace: its own projects, from its own routes; a project of the same ID there is another project
+     const workspace = workspaceOf(currentAddress());
+     if (workspace !== apiWorkspace()) {
+@@ -489,6 +514,7 @@ export class DashboardState {
+     }
+     this.workspace = workspace;
+     const result = await loadProjects(browserFetch, this.#projectsValidators);
++    if (!ticket.current()) return undefined;
+     if (!result.unchanged) {
+       this.#projectsValidators = result.validators;
+       this.projects = result.projects;
+@@ -750,21 +776,34 @@ export class DashboardState {
+   }
+ 
+   private async fetchAndApply() {
++    const ticket = this.#loads.ask();
++    try {
++      await this.fetchAndApplyFor(ticket);
++    } finally {
++      ticket.done();
++    }
++  }
++
++  /** One load of the page, its answers applied only while it is the latest (ATM-675) */
++  private async fetchAndApplyFor(ticket: Ticket) {
+     // The first load waits, as `/` may go to another workspace; a poll doesn't
+     if (this.projectsLoaded) void this.refreshWorkspaces();
+     else await this.refreshWorkspaces();
+-    const project = await this.refreshProjects();
++    if (!ticket.current()) return;
++    const project = await this.refreshProjects(ticket);
++    // A newer load was asked for meanwhile: its answers are the page's
++    if (project === undefined) return;
+     void this.checkServerBuild(); // the server answered: ask which dashboard it holds now
+     void this.checkAppUpdate(); // in the app: on start, then now and then
+     if (project === null) {
+       if (this.route.page === 'overview') await this.refreshProjectSources();
+       // A task open on the Omniboard (T-411): its project's data kept current under the board
+-      if (this.peeking && this.projectId) await this.loadProjectData(this.projectId);
+-      this.loadedAt = Date.now();
++      if (this.peeking && this.projectId && (await this.loadProjectData(this.projectId, ticket))) this.showPeeked();
++      if (ticket.current()) this.loadedAt = Date.now();
+       return;
+     }
+-    // Another project by now: its own load shows it
+-    if (!(await this.loadProjectData(project))) return;
++    // Another project by now, or a newer load: that load shows it
++    if (!(await this.loadProjectData(project, ticket))) return;
+     const first = !this.loaded;
+     if (first) this.restoreView();
+     if (this.#pendingNeedsYou) {
+@@ -786,20 +825,35 @@ export class DashboardState {
+   async openOnBoard(projectId: string, taskId: string) {
+     if (projectId !== this.projectId) this.switchProject(projectId);
+     this.peeking = true;
+-    await this.loadProjectData(projectId);
+-    if (this.projectId !== projectId || !this.peeking) return; // another card was opened meanwhile, or another page
++    this.#peekTask = taskId;
++    const ticket = this.#loads.ask();
++    try {
++      // Not applied: another card was opened meanwhile, another page, or a newer load came (which shows the task)
++      if (await this.loadProjectData(projectId, ticket)) this.showPeeked();
++    } finally {
++      ticket.done();
++    }
++  }
++
++  /** The details of the task opened on the Omniboard, once its project's data is in */
++  private showPeeked() {
++    const taskId = this.#peekTask;
++    this.#peekTask = null;
++    if (!taskId || !this.peeking || !this.projectId) return;
+     if (this.findTask(taskId)) {
+       this.showDetail(taskId);
+       return;
+     }
+     // Not in the data loaded (the board and the project disagree for a moment): its project's page, as before
+     this.peeking = false;
+-    this.openProject(projectId, { task: taskId });
++    this.openProject(this.projectId, { task: taskId });
+   }
+ 
+   /** The project's tasks, claims and worktrees, applied to the state (the project's page, or a task opened on the
+-   * Omniboard); whether they were (not when another project is shown by the time they come) */
+-  private async loadProjectData(project: string): Promise<boolean> {
++   * Omniboard); whether they were: not when another project (or the same ID in another workspace) is shown by the
++   * time they come, or a newer load was asked for (ATM-675) */
++  private async loadProjectData(project: string, ticket: Ticket): Promise<boolean> {
++    const key = this.#keptKey(project);
+     const [result, claims, trees] = await Promise.all([
+       // The validators are this project's (switchProject forgets another's), from its page or the Omniboard
+       loadTasks(project, browserFetch, this.#validators),
+@@ -813,12 +867,13 @@ export class DashboardState {
+         ? this.refreshArchive().catch((e) => console.error('Reloading the archive failed:', e))
+         : undefined,
+     ]);
++    // Another project shown meanwhile (a quick switch of tab), or a newer load: this answer is not the page's, the
++    // worktrees neither
++    if (!ticket.current(key)) return false;
+     if (!trees.unchanged) {
+       this.#worktreesValidators = trees.validators;
+       this.#worktrees = trees.worktrees;
+     }
+-    // Another project shown meanwhile (a quick switch of tab): this one's answer is not the page's
+-    if (project !== this.projectId) return false;
+     if (result.unchanged) {
+       // tasks.json is as it was: keep the tasks (no re-parse, no re-render); claims and the clock still move
+       this.claims = claims;
+@@ -848,8 +903,17 @@ export class DashboardState {
+   /** Every listed project's tasks and claims, for the overview's views across projects; a failure keeps what was
+    * there */
+   private async refreshProjectSources() {
+-    this.projectSources = await loadProjectSources(this.projects, this.projectSources);
+-    this.projectSourcesLoaded = true;
++    const key = this.workspace;
++    const ticket = this.#sourcesLoads.ask();
++    try {
++      const sources = await loadProjectSources(this.projects, this.projectSources);
++      // Another workspace by now, or a newer answer already in (ATM-675)
++      if (!ticket.current(key)) return;
++      this.projectSources = sources;
++      this.projectSourcesLoaded = true;
++    } finally {
++      ticket.done();
++    }
+   }
+ 
+   setBoardGroupByProject(on: boolean) {
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index c68c5279..7c49aef6 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -2348,6 +2348,43 @@ test.describe('the diff viewer on a review’s page', () => {
+       });
+   });
+ 
++  // ATM-675 (audit D2): the page was one component across reviews, so what was typed on one was posted to the next
++  test('a comment typed on one review isn’t there on the next one gone to', async ({ page, tasksServer }) => {
++    const data = loadFixture('standard');
++    Object.assign(
++      data.tasks.find((t) => t.id === 'T-001')!,
++      {
++        status: 'in_review',
++        code_reviews: [
++          { id: 'r2', ref: 'CR-2' },
++          { id: 'r1', ref: 'CR-1' },
++        ],
++      },
++    );
++    tasksServer
++      .setReviews({
++        reviews: [
++          { review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true },
++          { review: header(1), branch: 'dev/1', chains: 0, open: 0, needs_you: true },
++        ],
++        you: 'Ana',
++      })
++      .setReview('CR-2', reviewPage())
++      .setReview('CR-1', reviewPage({ review: header(1), chains: [] }));
++    await openDashboard(page, tasksServer, data, { tab: 'reviews' });
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    await page.getByRole('button', { name: 'Comment on the review' }).click();
++    await page.locator('#review-comment-body').fill('Half a thought');
++    // To CR-1 without leaving the page: from the details of the task both review
++    await page.locator('#review-page a[data-task="T-001"]').first().click();
++    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++    await page.locator('#detail-review .review-link', { hasText: 'CR-1' }).click();
++    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-1');
++    await expect(page.locator('#review-comment-body')).toHaveCount(0);
++    await page.getByRole('button', { name: 'Comment on the review' }).click();
++    await expect(page.locator('#review-comment-body')).toHaveValue('');
++  });
++
+   test('viewed folds a file, kept in the browser; its fold opens it again', async ({ page, tasksServer }) => {
+     await openDiffs(page, tasksServer);
+     await card(page, 'src/a.rs').getByLabel('Viewed src/a.rs').check();
+diff --git a/dashboard/tests/unit/latest.test.ts b/dashboard/tests/unit/latest.test.ts
+new file mode 100644
+index 00000000..d3a246c3
+--- /dev/null
++++ b/dashboard/tests/unit/latest.test.ts
+@@ -0,0 +1,41 @@
++import { describe, expect, it } from 'vitest';
++import { latest } from '../../src/lib/latest';
++
++describe('latest (ATM-675)', () => {
++  it('an ask is current until a newer one is made; the newer stays current', () => {
++    const loads = latest();
++    const first = loads.ask();
++    expect(first.current()).toBe(true);
++    const second = loads.ask();
++    expect([first.current(), second.current()]).toEqual([false, true]);
++    // Ending one changes neither
++    first.done();
++    second.done();
++    expect([first.current(), second.current()]).toEqual([false, true]);
++  });
++
++  it('with a key, current only while what is shown is still that key', () => {
++    let shown = 'default/p1';
++    const loads = latest(() => shown);
++    const ask = loads.ask();
++    expect(ask.current('default/p1')).toBe(true);
++    expect(ask.current('work/p1')).toBe(false); // the same project ID in another workspace
++    shown = 'default/p2';
++    expect(ask.current('default/p1')).toBe(false);
++    expect(ask.current()).toBe(true); // no key: the sequence alone
++    shown = 'default/p1';
++    expect(ask.current('default/p1')).toBe(true);
++  });
++
++  it('is busy while an ask is out; done more than once counts once', () => {
++    const loads = latest();
++    expect(loads.busy).toBe(false);
++    const [a, b] = [loads.ask(), loads.ask()];
++    expect(loads.busy).toBe(true);
++    a.done();
++    a.done();
++    expect(loads.busy).toBe(true); // b is still out
++    b.done();
++    expect(loads.busy).toBe(false);
++  });
++});
+diff --git a/dashboard/tests/unit/state.test.ts b/dashboard/tests/unit/state.test.ts
+index 0eb50fd3..abd2ce63 100644
+--- a/dashboard/tests/unit/state.test.ts
++++ b/dashboard/tests/unit/state.test.ts
+@@ -295,6 +295,94 @@ describe('DashboardState', () => {
+     });
+   });
+ 
++  describe('answers out of order (ATM-675, audit D1)', () => {
++    afterEach(() => {
++      history.replaceState(null, '', '/');
++      localStorage.clear();
++    });
++    const OTHER = {
++      meta: { project: 'Other', id: 'other' },
++      tasks: [{ id: 'T-1', name: 'Other', type: 'feature', status: 'todo' }],
++    };
++    /** The server, but the next requests whose URL `holds` matches wait, each until released with a body */
++    function holding(base: ReturnType<typeof server>, holds: (url: string) => boolean) {
++      const waiting: ((body: unknown) => void)[] = [];
++      const fn = vi.fn((url: string) => {
++        if (!holds(String(url))) return base(url);
++        return new Promise<Response>((answer) => waiting.push((body) => answer(new Response(JSON.stringify(body)))));
++      });
++      return { fn, waiting };
++    }
++    const tasksOf = (id: string) => (url: string) => url.startsWith(v1Tasks(id)) && !url.includes('archived');
++
++    it("project A's answer coming after B is shown changes nothing", async () => {
++      const held = holding(server({ projects: [project('p2'), project('p3')] }), tasksOf('p3'));
++      vi.stubGlobal('fetch', held.fn);
++      history.replaceState(null, '', '/projects/p3');
++      const s = new DashboardState();
++      const first = s.load();
++      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
++      history.replaceState(null, '', '/projects/p2');
++      s.onNavigate();
++      await vi.waitFor(() => expect([s.projectId, s.loaded]).toEqual(['p2', true]));
++      held.waiting[0](asTaskViews(OTHER));
++      await first;
++      expect([s.projectId, s.projectName, s.tasks.length]).toEqual(['p2', 'Standard Project', 12]);
++    });
++
++    it("an older poll's answer coming after a newer one's changes nothing", async () => {
++      const s = new DashboardState();
++      await s.load();
++      let holdNext = true;
++      const held = holding(server(), (url) => tasksOf('p1')(url) && holdNext && !(holdNext = false));
++      vi.stubGlobal('fetch', held.fn);
++      const older = s.reload();
++      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
++      await s.reload(); // the newer one: the server's answer now
++      expect(s.projectName).toBe('Standard Project');
++      held.waiting[0](asTaskViews(OTHER));
++      await older;
++      expect([s.projectName, s.tasks.length]).toEqual(['Standard Project', 12]);
++    });
++
++    it('a poll waits while a load is still out; a reload asked for goes ahead', async () => {
++      const s = new DashboardState();
++      await s.load();
++      const held = holding(server(), tasksOf('p1'));
++      vi.stubGlobal('fetch', held.fn);
++      const out = s.reload();
++      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
++      s.poll();
++      await new Promise((r) => setTimeout(r, 0));
++      expect(held.waiting).toHaveLength(1);
++      const asked = s.reload();
++      await vi.waitFor(() => expect(held.waiting).toHaveLength(2));
++      for (const answer of held.waiting) answer(asTaskViews(standard));
++      await Promise.all([out, asked]);
++      // Nothing out: the next poll asks
++      s.poll();
++      await vi.waitFor(() => expect(held.waiting).toHaveLength(3));
++      held.waiting[2](asTaskViews(standard));
++    });
++
++    it("project A's archive coming after B is shown is not B's", async () => {
++      const archiveOf = (id: string) => (url: string) => url.startsWith(v1Tasks(id)) && url.includes('archived');
++      const held = holding(server({ projects: [project('p2'), project('p3')] }), archiveOf('p3'));
++      vi.stubGlobal('fetch', held.fn);
++      history.replaceState(null, '', '/projects/p3');
++      const s = new DashboardState();
++      await s.load();
++      s.wantArchive();
++      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
++      history.replaceState(null, '', '/projects/p2');
++      s.onNavigate();
++      await vi.waitFor(() => expect([s.projectId, s.loaded]).toEqual(['p2', true]));
++      held.waiting[0]({ ...asTaskViews(OTHER), archived: true });
++      await new Promise((r) => setTimeout(r, 0));
++      expect([s.archive, s.archiveLoaded]).toEqual([[], false]);
++    });
++  });
++
+   it('keeps showing the same project across reloads', async () => {
+     const s = new DashboardState();
+     await s.load();

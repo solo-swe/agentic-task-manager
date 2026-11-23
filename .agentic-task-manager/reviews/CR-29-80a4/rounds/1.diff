@@ -1,0 +1,149 @@
+diff --git a/dashboard/src/lib/reviews/DiffView.svelte b/dashboard/src/lib/reviews/DiffView.svelte
+index 0e42b406..31c1c332 100644
+--- a/dashboard/src/lib/reviews/DiffView.svelte
++++ b/dashboard/src/lib/reviews/DiffView.svelte
+@@ -284,6 +284,20 @@
+ 
+   // The rendered view's pick: the lines under the text selected
+   let renderedPick = $state<Picked | null>(null);
++  // Where its comment box goes (ATM-627): right under the text selected, over the side it was selected on, in the
++  // rendered view's coordinates. Not after the document: a comment on its first lines was written a document away
++  let renderedEl = $state<HTMLElement>();
++  let pickAt = $state<{ top: number; left: number; width: number } | null>(null);
++  function placePick() {
++    const selection = window.getSelection();
++    const within = renderedEl?.getBoundingClientRect();
++    if (!within || !selection || !selection.rangeCount) return (pickAt = null);
++    const text = selection.getRangeAt(0).getBoundingClientRect();
++    const start = selection.anchorNode;
++    const pane = (start instanceof Element ? start : start?.parentElement)?.closest('.diff-pane');
++    const side = pane?.getBoundingClientRect() ?? within;
++    pickAt = { top: text.bottom - within.top, left: side.left - within.left, width: side.width };
++  }
+   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
+ 
+   function cancel() {
+@@ -502,7 +516,7 @@
+       <div class="diff-more" style:height="{(items.total - limit) * 20}px" aria-hidden="true"></div>
+     {/if}
+   {:else}
+-    <div class="diff-rendered" class:single={sides.length < 2}>
++    <div class="diff-rendered" class:single={sides.length < 2} bind:this={renderedEl}>
+       {#each sides as s (s)}
+         {@const doc = s === 'old' ? oldDoc : newDoc}
+         {#if doc}
+@@ -521,6 +535,7 @@
+                 : 'After'}
+             onpick={oncomment
+               ? (p) => {
++                  placePick();
+                   renderedPick = p;
+                   draft = '';
+                 }
+@@ -528,8 +543,17 @@
+           />
+         {/if}
+       {/each}
++      {#if composing && oncomment}
++        <div
++          class="diff-rendered-composer"
++          style:top="{pickAt?.top ?? 0}px"
++          style:left="{pickAt?.left ?? 0}px"
++          style:width={pickAt ? `${pickAt.width}px` : '100%'}
++        >
++          {@render composer(composing)}
++        </div>
++      {/if}
+     </div>
+-    {#if composing && oncomment}{@render composer(composing)}{/if}
+   {/if}
+ 
+   {#if loaded && !problem && elsewhere.length}
+@@ -704,10 +728,19 @@
+     opacity: 0.5;
+     cursor: default;
+   }
++  /* Its own stacking context: the comment box is above the pages, their marks and folds, and under the card's
++     sticky header */
+   .diff-rendered {
++    position: relative;
++    isolation: isolate;
+     display: grid;
+     grid-template-columns: 1fr 1fr;
+   }
++  /* The comment box, under the text selected, over the document below it (ATM-627) */
++  .diff-rendered-composer {
++    position: absolute;
++    z-index: 2;
++  }
+   .diff-rendered.single {
+     grid-template-columns: 1fr;
+   }
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 76af48e0..fd14c8ac 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -993,6 +993,63 @@ test.describe('the diff viewer on a review’s page', () => {
+     expect(Math.abs(numberBox.y - text.y)).toBeLessThan(text.height);
+   });
+ 
++  // ATM-627 (Hakan, the app): writing a comment on the rendered view, the document was drawn over the comment box
++  for (const unified of [false, true])
++    test(`Rendered${unified ? ', unified' : ''}: text selected opens its comment box, on top and near it`, async ({
++      page,
++      tasksServer,
++    }) => {
++      const paragraphs = (last: string) =>
++        Array.from({ length: 120 }, (_, i) => (i === 119 ? last : `Paragraph ${i + 1} of a long plan.`)).join('\n\n') +
++        '\n';
++      const patch =
++        'diff --git a/docs/long.md b/docs/long.md\n--- a/docs/long.md\n+++ b/docs/long.md\n' +
++        '@@ -237,3 +237,3 @@\n Paragraph 119 of a long plan.\n \n-The old ending.\n+The new ending.\n';
++      await openReviews(page, tasksServer);
++      tasksServer
++        .setRevisionDocument('base1', projectDocument('docs/long.md', paragraphs('The old ending.')))
++        .setRevisionDocument('head3', projectDocument('docs/long.md', paragraphs('The new ending.')));
++      tasksServer.setReview(
++        'CR-2',
++        reviewPage({
++          view: { round: 3, against: null, files: [{ ...file('docs/long.md', patch), after: 'head3' }] },
++        }),
++      );
++      await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/long.md'));
++      const view = diffOf(page, 'docs/long.md');
++      await expect(view.locator('.diff-line').first()).toBeVisible();
++      if (unified) await page.getByRole('button', { name: 'Unified' }).click();
++      await page.getByRole('button', { name: 'Rendered' }).click();
++      const newSide = view.locator('.diff-pane.diff-new');
++      // The whole document, so the text picked is far from its end
++      await newSide.getByRole('button', { name: /^Show \d+ unchanged lines$/ }).click();
++      const picked = newSide.locator('.compmd-page p', { hasText: /^Paragraph 3 of/ });
++      await picked.scrollIntoViewIfNeeded();
++      // Its text selected, as a drag over it selects it
++      await picked.evaluate((p) => {
++        const range = document.createRange();
++        range.selectNodeContents(p);
++        window.getSelection()!.removeAllRanges();
++        window.getSelection()!.addRange(range);
++        p.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
++      });
++      const box = page.getByRole('textbox', { name: /^Comment on/ });
++      await expect(box).toBeFocused();
++      await expect(box).toBeInViewport();
++      // The box is what is drawn at its centre, not the document
++      const composer = view.locator('.diff-composer');
++      const centre = (await composer.boundingBox())!;
++      const top = await page.evaluate(
++        ([x, y]) => document.elementFromPoint(x, y)?.closest('.diff-composer') !== null,
++        [centre.x + centre.width / 2, centre.y + centre.height / 2],
++      );
++      expect(top).toBe(true);
++      // Under the text it comments on, not at the end of the document
++      const text = (await picked.boundingBox())!;
++      expect(centre.y).toBeGreaterThanOrEqual(text.y + text.height - 1);
++      expect(centre.y - (text.y + text.height)).toBeLessThan(200);
++    });
++
+   // ATM-591: the rendered view folds as the source view does: whole blocks near the change, the rest folded
+   test('Rendered folds: the blocks near a change, with their own line numbers; the rest folded, each fold opened by a click', async ({
+     page,

@@ -1,0 +1,578 @@
+diff --git a/dashboard/src/lib/card-state.ts b/dashboard/src/lib/card-state.ts
+new file mode 100644
+index 00000000..1b267e67
+--- /dev/null
++++ b/dashboard/src/lib/card-state.ts
+@@ -0,0 +1,52 @@
++// What a task's card shows of its state (ATM-683): the same for the Task List's card and the Kanban's, worked out
++// once. Its sprint and that sprint's colour, its type's style, whether it is stranded in a closed sprint, its kind,
++// the claim on it, who it waits on, and the code review it waits on.
++import type { Claim } from './claims';
++import type { SprintModel } from './sprints';
++import { phaseColor, typeStyle } from './theme';
++import type { Task } from './types';
++import { taskKind } from './vocab';
++import { waitLine } from './waiting';
++
++/** What the card state reads of the dashboard */
++export interface CardContext {
++  sprints: SprintModel;
++  /** Open tasks in closed sprints (reopened after it closed, T-323) */
++  leftovers: readonly Task[];
++  claims: ReadonlyMap<string, Claim>;
++  /** When the data was loaded: what "waiting 12 m" counts from */
++  loadedAt: number;
++}
++
++export interface CardState {
++  /** Its sprint's ID; undefined: the backlog */
++  sprint: string | undefined;
++  /** Its sprint's colour, by the sprint's place in the project's sprints; the backlog muted */
++  sprintColor: string;
++  typeStyle: ReturnType<typeof typeStyle>;
++  /** Open in a closed sprint: the badge says so */
++  stranded: boolean;
++  kind: ReturnType<typeof taskKind>;
++  /** The claim on it, while it is active */
++  claim: Claim | undefined;
++  /** Who it waits on, as atm says it (ATM-717): one line, agreeing with its review's chip */
++  wait: ReturnType<typeof waitLine>;
++  /** Its code review, while it is in review (ATM-619): the one it waits on, as atm says it */
++  codeReview: NonNullable<Task['derived']>['review'] | null;
++}
++
++export function taskCardState(task: Task, context: CardContext): CardState {
++  const sprint = context.sprints.sprintOf(task);
++  const sprintIndex = context.sprints.sprints.findIndex((s) => s.id === sprint);
++  const kind = taskKind(task);
++  return {
++    sprint,
++    sprintColor: sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex),
++    typeStyle: typeStyle(task.type),
++    stranded: context.leftovers.includes(task),
++    kind,
++    claim: kind === 'active' ? context.claims.get(task.id) : undefined,
++    wait: waitLine(task, context.loadedAt),
++    codeReview: kind === 'review' ? (task.derived?.review ?? null) : null,
++  };
++}
+diff --git a/dashboard/src/lib/cardfacts.ts b/dashboard/src/lib/cardfacts.ts
+index ea6c4852..f10da643 100644
+--- a/dashboard/src/lib/cardfacts.ts
++++ b/dashboard/src/lib/cardfacts.ts
+@@ -1,8 +1,8 @@
+ // What a Task List card shows beyond its chips (T-338): who created and worked on the task, when, how long it took,
+ // and its latest outcome or handoff, from what the task already holds (no new data loads).
+ import { approvedBy } from './actors';
+-import { formatAgo, shortAgent } from './claims';
+-import { formatMinutes } from './format';
++import { shortAgent } from './claims';
++import { formatAgo, formatMinutes } from './format';
+ import { taskNotes } from './notes';
+ import type { Note, Task } from './types';
+ import { taskKind } from './vocab';
+diff --git a/dashboard/src/lib/claims.ts b/dashboard/src/lib/claims.ts
+index 2230ef2a..8dd0dd80 100644
+--- a/dashboard/src/lib/claims.ts
++++ b/dashboard/src/lib/claims.ts
+@@ -1,6 +1,6 @@
+ // Live claims (which agent works on which task), from the gitignored claims.json snapshot that `atm` writes next to
+ // tasks.json, served as p/<id>/claims.json. The file is optional: a project without one simply has no claims.
+-import { formatMinutes } from './format';
++import { formatAgo } from './format';
+ import { browserFetch, projectFileUrl, type Fetch } from './api/http';
+ 
+ export interface Claim {
+@@ -53,11 +53,6 @@ export function shortAgent(agent: string): string {
+   return at > 0 && colon > at ? agent.slice(0, colon) : agent;
+ }
+ 
+-export function formatAgo(iso: string, now: number): string {
+-  const minutes = (now - Date.parse(iso)) / 60_000;
+-  return minutes < 1 ? 'just now' : `${formatMinutes(minutes)} ago`;
+-}
+-
+ /** One line for a card: "claude:e5ea9db0 · dev/x · 12 m ago". */
+ export function claimSummary(claim: Claim, now: number): string {
+   return [shortAgent(claim.agent), claim.branch, formatAgo(claim.claimed_at, now)].filter(Boolean).join(' · ');
+diff --git a/dashboard/src/lib/details/DetailPanel.svelte b/dashboard/src/lib/details/DetailPanel.svelte
+index a5d9d7e2..adb263b7 100644
+--- a/dashboard/src/lib/details/DetailPanel.svelte
++++ b/dashboard/src/lib/details/DetailPanel.svelte
+@@ -9,6 +9,7 @@
+   import { actorsLine, earlierAttempts } from '../actors';
+   import { noteKindLabel, shortSha, taskNotes } from '../notes';
+   import { waitLine } from '../waiting';
++  import { formatDateTime } from '../format';
+   import { taskTimes } from '../work';
+   import { commitRef } from '../repo';
+   import { referenceTo, type DocumentRef } from '../documents';
+@@ -418,9 +419,7 @@
+             <li class="detail-note note-{note.kind}" data-kind={note.kind}>
+               <div class="note-head">
+                 <span class="note-kind">{noteKindLabel(note.kind)}</span>
+-                <span class="note-meta"
+-                  >{note.by ? `${note.by} · ` : ''}{note.at ? new Date(note.at).toLocaleString() : ''}</span
+-                >
++                <span class="note-meta">{note.by ? `${note.by} · ` : ''}{formatDateTime(note.at)}</span>
+               </div>
+               <div class="note-text">
+                 <CompMd text={note.text} {task} onopen={openDocument} />
+@@ -434,7 +433,7 @@
+   {#if claim || actors || attempts.length || task.commit || times.length}
+     <div class="detail-group" data-group="activity">
+       {#if claim}
+-        {@const since = new Date(claim.claimed_at).toLocaleString()}
++        {@const since = formatDateTime(claim.claimed_at)}
+         {@const until = new Date(claim.lease_expires_at).toLocaleTimeString()}
+         <div class="detail-section" id="detail-claim">
+           <div class="label">Claimed by</div>
+@@ -461,7 +460,7 @@
+           <div class="label">Timestamps</div>
+           <div class="value" style="font-size:13px;color:var(--text-muted)">
+             {#each times as row, i (row.label)}{#if i}<br />{/if}{row.label}:
+-              {row.at ? new Date(row.at).toLocaleString() : row.text}{/each}
++              {row.at ? formatDateTime(row.at) : row.text}{/each}
+           </div>
+         </div>
+       {/if}
+@@ -521,7 +520,7 @@
+           </div>
+         {/if}
+         {#if task.derived?.waiting?.since}
+-          <div style="color:var(--text-muted)">Since {new Date(task.derived.waiting.since).toLocaleString()}</div>
++          <div style="color:var(--text-muted)">Since {formatDateTime(task.derived.waiting.since)}</div>
+         {/if}
+         {#if wait.note}<div class="review-note">
+             <CompMd text={wait.note.text} {task} onopen={openDocument} />
+@@ -547,7 +546,7 @@
+       <div class="value" style="font-size:13px">
+         <div><strong>{wait.text}</strong></div>
+         {#if task.derived?.waiting?.since}
+-          <div style="color:var(--text-muted)">Since {new Date(task.derived.waiting.since).toLocaleString()}</div>
++          <div style="color:var(--text-muted)">Since {formatDateTime(task.derived.waiting.since)}</div>
+         {/if}
+         {#if wait.questions.length}
+           <ol class="block-questions">
+diff --git a/dashboard/src/lib/format.ts b/dashboard/src/lib/format.ts
+index 20b59d75..8f989b1a 100644
+--- a/dashboard/src/lib/format.ts
++++ b/dashboard/src/lib/format.ts
+@@ -17,6 +17,35 @@ export function formatMinutesRange(low: number, high: number): string {
+   return a === b ? a : `${a} – ${b}`;
+ }
+ 
++/** How long ago `iso` was, to the minute: "just now", "12 m ago", "1 h 10 m ago" (a card's claim and times). */
++export function formatAgo(iso: string, now: number): string {
++  const minutes = (now - Date.parse(iso)) / 60_000;
++  return minutes < 1 ? 'just now' : `${formatMinutes(minutes)} ago`;
++}
++
++/** How long ago `iso` was, in its largest unit: "just now", "5 min ago", "3 h ago", "12 d ago"; its date after 30
++ * days, and the text as it is when it isn't a time (a list's "updated"). */
++export function formatAgoOrDate(iso: string, now: number): string {
++  const seconds = (now - Date.parse(iso)) / 1000;
++  if (!Number.isFinite(seconds)) return iso;
++  if (seconds < 60) return 'just now';
++  const units: [string, number][] = [
++    ['min', 60],
++    ['h', 3600],
++    ['d', 86400],
++  ];
++  const limits = [3600, 86400, 86400 * 30];
++  const at = limits.findIndex((limit) => seconds < limit);
++  if (at < 0) return iso.slice(0, 10);
++  const [unit, size] = units[at];
++  return `${Math.floor(seconds / size)} ${unit} ago`;
++}
++
++/** A moment in full, date and time, in the viewer's locale (a note's, a claim's, a merge's); "" without one. */
++export function formatDateTime(iso: string | undefined | null): string {
++  return iso ? new Date(iso).toLocaleString() : '';
++}
++
+ const sameDay = (a: Date, b: Date) =>
+   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+ 
+diff --git a/dashboard/src/lib/kanban/KanbanCard.svelte b/dashboard/src/lib/kanban/KanbanCard.svelte
+index 22d76ac0..b5c4925c 100644
+--- a/dashboard/src/lib/kanban/KanbanCard.svelte
++++ b/dashboard/src/lib/kanban/KanbanCard.svelte
+@@ -4,11 +4,10 @@
+   import ReviewLink from '../details/ReviewLink.svelte';
+   import type { KanbanCard } from '../kanban';
+   import { dashboard } from '../state.svelte';
+-  import { phaseColor, typeStyle } from '../theme';
++  import { taskCardState } from '../card-state';
+   import { markdownPlainText } from '../plain-text';
+   import { REVIEW_STATE_LABELS } from '../review';
+-  import { priorityOf, taskKind } from '../vocab';
+-  import { waitLine } from '../waiting';
++  import { priorityOf } from '../vocab';
+   import BranchChip from '../ui/BranchChip.svelte';
+   import ComponentChips from '../ui/ComponentChips.svelte';
+   import LabelChips from '../ui/LabelChips.svelte';
+@@ -20,26 +19,16 @@
+   // `showSprint`: the board shows tasks of more than one sprint, so the card names its own (SR-7.3)
+   let { card, showSprint = false }: { card: KanbanCard; showSprint?: boolean } = $props();
+   const task = $derived(card.task);
+-  const sprint = $derived(dashboard.sprints.sprintOf(task));
+-  // A sprint keeps its colour: by its place in the project's sprints; the backlog is muted
+-  const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
+-  const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
+-  const ts = $derived(typeStyle(task.type));
+-  // Open in a closed sprint (reopened after it closed, T-323): the badge says so
+-  const stranded = $derived(dashboard.leftovers.includes(task));
+-  const kind = $derived(taskKind(task));
+-  const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
+-  // Who it waits on, as atm says it (ATM-717): one line, agreeing with its review's chip
+-  const wait = $derived(waitLine(task, dashboard.loadedAt));
++  // Its sprint and colour, type, kind, claim, wait and review: the same as the Task List card's (ATM-683); a link on
++  // the card for its code review opens the review, not the task
++  const state = $derived(taskCardState(task, dashboard));
++  const { sprint, sprintColor: pc, typeStyle: ts, stranded, kind, claim, wait, codeReview } = $derived(state);
+   // The tasks it waits for, by their keys (ADR-007)
+   const waitingOn = $derived(
+     card.readiness && !card.readiness.ready
+       ? card.readiness.waitingOn.map((id) => dashboard.refOf(id).label).join(', ')
+       : '',
+   );
+-
+-  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
+-  const codeReview = $derived(kind === 'review' ? (task.derived?.review ?? null) : null);
+   const href = $derived(dashboard.taskAddress(task));
+ </script>
+ 
+diff --git a/dashboard/src/lib/overview/AllProjectsBoard.svelte b/dashboard/src/lib/overview/AllProjectsBoard.svelte
+index c9ed2ace..3c79c6a5 100644
+--- a/dashboard/src/lib/overview/AllProjectsBoard.svelte
++++ b/dashboard/src/lib/overview/AllProjectsBoard.svelte
+@@ -11,7 +11,8 @@
+     type AllBoardColumn,
+     type BoardMatch,
+   } from '../allboard';
+-  import { formatAgo, shortAgent } from '../claims';
++  import { shortAgent } from '../claims';
++  import { formatAgo } from '../format';
+   import { searchProjects, type ProjectEntry } from '../load';
+   import { dashboard } from '../state.svelte';
+   import { kindStyle, priorityStyle, typeStyle } from '../theme';
+diff --git a/dashboard/src/lib/overview/ProjectCard.svelte b/dashboard/src/lib/overview/ProjectCard.svelte
+index e089bc98..9c63eebf 100644
+--- a/dashboard/src/lib/overview/ProjectCard.svelte
++++ b/dashboard/src/lib/overview/ProjectCard.svelte
+@@ -1,6 +1,6 @@
+ <script lang="ts">
+   // One project on the overview (docs/multi-project-dashboard-proposal.md 3.5), from its server summary
+-  import { formatAgo } from '../claims';
++  import { formatAgo, formatDateTime } from '../format';
+   import type { ProjectEntry } from '../load';
+   import { needsYou, statsLine } from '../projects';
+   import { dashboard } from '../state.svelte';
+@@ -288,9 +288,7 @@
+         <!-- The task finished last, and when (T-208): replaces the bare "12 m ago" -->
+         <span
+           class="project-card-last"
+-          title="Last finished: {taskLabel(lastDone)} {lastDone.name}, {new Date(
+-            lastDone.completed_at,
+-          ).toLocaleString()}"
++          title="Last finished: {taskLabel(lastDone)} {lastDone.name}, {formatDateTime(lastDone.completed_at)}"
+         >
+           <!-- When, in the quiet label style (T-335) -->
+           <span class="project-card-label project-card-last-when"
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index d81a87c4..25c11b82 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -1,5 +1,6 @@
+ <script lang="ts">
+   import type { TaskLinks } from '../compmd';
++  import { formatAgoOrDate } from '../format';
+   import { readStored, writeStored } from '../prefs';
+   import Icon from '../ui/Icon.svelte';
+   import { groupReviews, waitedFor } from './page';
+@@ -135,14 +136,7 @@
+     onopen(entry.review.reference, e.metaKey || e.ctrlKey, entry);
+   }
+ 
+-  function ago(at: string): string {
+-    const seconds = (Date.now() - Date.parse(at)) / 1000;
+-    if (!Number.isFinite(seconds)) return at;
+-    if (seconds < 60) return 'just now';
+-    const [unit, size] =
+-      seconds < 3600 ? ['min', 60] : seconds < 86400 ? ['h', 3600] : seconds < 86400 * 30 ? ['d', 86400] : [null, 0];
+-    return unit ? `${Math.floor(seconds / (size as number))} ${unit} ago` : at.slice(0, 10);
+-  }
++  const ago = (at: string) => formatAgoOrDate(at, Date.now());
+ </script>
+ 
+ <div class="review-list" id="review-list">
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 1448fce2..40af9077 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -869,7 +869,7 @@ export class DashboardState {
+    * time they come, or a newer load was asked for (ATM-675) */
+   private async loadProjectData(project: string, ticket: Ticket): Promise<boolean> {
+     const key = this.#keptKey(project);
+-    const [result, claims, trees, , stats] = await Promise.all([
++    const loads = Promise.all([
+       // The validators are this project's (switchProject forgets another's), from its page or the Omniboard
+       loadTasks(project, browserFetch, this.#validators),
+       loadClaims(project),
+@@ -881,16 +881,20 @@ export class DashboardState {
+       this.#archiveWanted
+         ? this.refreshArchive().catch((e) => console.error('Reloading the archive failed:', e))
+         : undefined,
+-      // The whole project's figures (ATM-722), on every load: they run to now. A failure leaves the last ones
+-      loadStats(project).catch((e): null => {
+-        console.error('Loading the stats failed:', e);
+-        return null;
+-      }),
+     ]);
++    // The whole project's figures (ATM-722), on every load: they run to now. Asked for with the rest, but the tasks
++    // never wait for them (the figures take atm longer to work out): they come in when they come, if the page still
++    // shows the project. A failure leaves the last ones
++    void loadStats(project).then(
++      (stats) => {
++        if (ticket.current(key)) this.stats = stats;
++      },
++      (e) => console.error('Loading the stats failed:', e),
++    );
++    const [result, claims, trees] = await loads;
+     // Another project shown meanwhile (a quick switch of tab), or a newer load: this answer is not the page's, the
+     // worktrees neither
+     if (!ticket.current(key)) return false;
+-    if (stats) this.stats = stats;
+     if (!trees.unchanged) {
+       this.#worktreesValidators = trees.validators;
+       this.#worktrees = trees.worktrees;
+diff --git a/dashboard/src/lib/tasks/TaskCard.svelte b/dashboard/src/lib/tasks/TaskCard.svelte
+index 3ecc95d8..1ce804b0 100644
+--- a/dashboard/src/lib/tasks/TaskCard.svelte
++++ b/dashboard/src/lib/tasks/TaskCard.svelte
+@@ -4,13 +4,13 @@
+   import ReviewLink from '../details/ReviewLink.svelte';
+   import { scrollToTask } from '../scroll';
+   import { dashboard } from '../state.svelte';
+-  import { kindStyle, phaseColor, typeStyle } from '../theme';
++  import { kindStyle } from '../theme';
+   import type { Task } from '../types';
++  import { taskCardState } from '../card-state';
+   import { cardFacts, cardNote } from '../cardfacts';
+   import { markdownPlainText } from '../plain-text';
+   import { noteKindLabel } from '../notes';
+-  import { statusLabel, taskKind, typeLabel } from '../vocab';
+-  import { waitLine } from '../waiting';
++  import { statusLabel, typeLabel } from '../vocab';
+   import BranchChip from '../ui/BranchChip.svelte';
+   import ComponentChips from '../ui/ComponentChips.svelte';
+   import LabelChips from '../ui/LabelChips.svelte';
+@@ -22,21 +22,11 @@
+   // `showSprint`: the list shows tasks of more than one sprint and doesn't group by them, so the card names its own
+   let { task, showSprint = false }: { task: Task; showSprint?: boolean } = $props();
+ 
+-  const sprint = $derived(dashboard.sprints.sprintOf(task));
+-  // A sprint keeps its colour: by its place in the project's sprints; the backlog is muted (as on the Kanban)
+-  const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
+-  const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
+-  const ts = $derived(typeStyle(task.type));
+-  // Open in a closed sprint (reopened after it closed, T-323): the badge says so
+-  const stranded = $derived(dashboard.leftovers.includes(task));
+-  const kind = $derived(taskKind(task));
++  // Its sprint and colour, type, kind, claim, wait and review: the same as the Kanban card's (ATM-683)
++  const card = $derived(taskCardState(task, dashboard));
++  const { sprint, sprintColor: pc, typeStyle: ts, stranded, kind, claim, wait, codeReview } = $derived(card);
+   const ss = $derived(kindStyle(kind));
+   const deps = $derived(task.dependencies ?? []);
+-  const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
+-  // Who it waits on, as atm says it (ATM-717): one line, agreeing with its review's chip
+-  const wait = $derived(waitLine(task, dashboard.loadedAt));
+-  // Its code review, while it is in review (ATM-619): the one it waits on, as atm says it (ATM-717)
+-  const codeReview = $derived(kind === 'review' ? (task.derived?.review ?? null) : null);
+   // The row's width (T-338): the description's start and the latest note on the left, who and when on the right
+   const excerpt = $derived(task.description ? markdownPlainText(task.description) : '');
+   const note = $derived(cardNote(task));
+diff --git a/dashboard/src/lib/ui/StageChip.svelte b/dashboard/src/lib/ui/StageChip.svelte
+index 3b814ce1..b0ec6423 100644
+--- a/dashboard/src/lib/ui/StageChip.svelte
++++ b/dashboard/src/lib/ui/StageChip.svelte
+@@ -1,4 +1,5 @@
+ <script lang="ts">
++  import { formatDateTime } from '../format';
+   import { pullRef } from '../repo';
+   import { prOf, stageOf } from '../stages';
+   import { dashboard } from '../state.svelte';
+@@ -11,7 +12,7 @@
+   const stage = $derived(stageOf(task));
+   const pr = $derived(prOf(task));
+   const merged = $derived(
+-    `Merged${pr ? ` in #${pr.number}` : ''}${task.merged_at ? ` on ${new Date(task.merged_at).toLocaleString()}` : ''}`,
++    `Merged${pr ? ` in #${pr.number}` : ''}${task.merged_at ? ` on ${formatDateTime(task.merged_at)}` : ''}`,
+   );
+ </script>
+ 
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index ac565086..e6908f2d 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -1225,10 +1225,12 @@ export class TasksServer {
+     return this;
+   }
+ 
+-  /** Work out the task views now, when the data is set, so no request waits for atm (the timing tests measure them) */
++  /** Work out the task views and the whole project's stats now, when the data is set, so no request waits for atm:
++   * the timing tests measure them, and atm runs in this process, so a request working one out holds up the others */
+   private warm() {
+     if (this.body !== null) asTaskViews(this.body, this.archiveBody);
+     if (this.body !== null && this.archiveBody !== null) asTaskViews(this.body, this.archiveBody, true);
++    if (this.body !== null && isTaskFile(this.body)) asStats(this.body, this.archiveBody, new URLSearchParams());
+   }
+ 
+   fail(status = 404) {
+diff --git a/dashboard/tests/unit/card-state.test.ts b/dashboard/tests/unit/card-state.test.ts
+new file mode 100644
+index 00000000..d99f24aa
+--- /dev/null
++++ b/dashboard/tests/unit/card-state.test.ts
+@@ -0,0 +1,69 @@
++import { describe, expect, it } from 'vitest';
++import { taskCardState, type CardContext } from '../../src/lib/card-state';
++import type { Claim } from '../../src/lib/claims';
++import { phaseColor } from '../../src/lib/theme';
++import type { Task } from '../../src/lib/types';
++import { sprintModel, viewed, withKinds } from './views';
++
++// A card's state (ATM-683), the same for the Task List's card and the Kanban's
++const NOW = Date.parse('2026-05-01T12:00:00Z');
++const meta = {
++  sprints: [
++    { id: 'S1', state: 'closed' },
++    { id: 'S2', state: 'active' },
++  ],
++};
++const [inS2, inBacklog, active, inReview, leftover] = withKinds([
++  { id: 'T-1', name: '1', type: 'feature', status: 'todo', sprint: 'S2' },
++  { id: 'T-2', name: '2', type: 'bugfix', status: 'todo' },
++  { id: 'T-3', name: '3', type: 'feature', status: 'in_progress', sprint: 'S2' },
++  { id: 'T-4', name: '4', type: 'feature', status: 'in_review', sprint: 'S2' },
++  { id: 'T-5', name: '5', type: 'feature', status: 'todo', sprint: 'S1' },
++] as Task[]);
++const claim: Claim = {
++  task: 'T-3',
++  agent: 'claude:a',
++  branch: 'dev/x',
++  claimed_at: '2026-05-01T11:00:00Z',
++  lease_expires_at: '2026-05-01T13:00:00Z',
++};
++const context = (tasks: Task[]): CardContext => ({
++  sprints: sprintModel(meta, tasks),
++  leftovers: [leftover],
++  claims: new Map([['T-3', claim]]),
++  loadedAt: NOW,
++});
++
++describe('taskCardState', () => {
++  const all = [inS2, inBacklog, active, inReview, leftover];
++
++  it('a sprint keeps its colour by its place; the backlog is muted', () => {
++    expect(taskCardState(inS2, context(all))).toMatchObject({ sprint: 'S2', sprintColor: phaseColor(1) });
++    expect(taskCardState(inBacklog, context(all))).toMatchObject({
++      sprint: undefined,
++      sprintColor: 'var(--text-muted)',
++    });
++  });
++
++  it('stranded only when open in a closed sprint', () => {
++    expect(taskCardState(leftover, context(all)).stranded).toBe(true);
++    expect(taskCardState(inS2, context(all)).stranded).toBe(false);
++  });
++
++  it('the claim only while active; the code review only while in review', () => {
++    expect(taskCardState(active, context(all)).claim).toBe(claim);
++    // A claim on a task that isn't active (a stale one) isn't shown
++    const todoClaimed = { ...context(all), claims: new Map([['T-1', { ...claim, task: 'T-1' }]]) };
++    expect(taskCardState(inS2, todoClaimed).claim).toBeUndefined();
++    const review = { id: 'r1', reference: 'CR-1', status: 'waiting' } as const;
++    const reviewed = viewed(inReview, { review } as never);
++    expect(taskCardState(reviewed, context(all)).codeReview).toEqual(review);
++    expect(taskCardState(viewed(inS2, { review } as never), context(all)).codeReview).toBeNull();
++  });
++
++  it('its kind and type style come with it', () => {
++    const state = taskCardState(inBacklog, context(all));
++    expect(state.kind).toBe('todo');
++    expect(state.typeStyle).toBeTruthy();
++  });
++});
+diff --git a/dashboard/tests/unit/claims.test.ts b/dashboard/tests/unit/claims.test.ts
+index 5d60ca79..2e31bc4f 100644
+--- a/dashboard/tests/unit/claims.test.ts
++++ b/dashboard/tests/unit/claims.test.ts
+@@ -1,5 +1,6 @@
+ import { describe, expect, it, vi } from 'vitest';
+-import { claimSummary, formatAgo, loadClaims, parseClaims, shortAgent, type Claim } from '../../src/lib/claims';
++import { claimSummary, loadClaims, parseClaims, shortAgent, type Claim } from '../../src/lib/claims';
++import { formatAgo } from '../../src/lib/format';
+ 
+ const NOW = Date.parse('2026-05-01T10:30:00Z');
+ const claim = (task: string, overrides: Partial<Claim> = {}): Claim => ({
+diff --git a/dashboard/tests/unit/format.test.ts b/dashboard/tests/unit/format.test.ts
+index 74fe5d0c..2ab1ef46 100644
+--- a/dashboard/tests/unit/format.test.ts
++++ b/dashboard/tests/unit/format.test.ts
+@@ -1,5 +1,26 @@
+ import { describe, expect, it } from 'vitest';
+-import { formatMinutes, formatMinutesRange, formatWhen } from '../../src/lib/format';
++import { formatAgoOrDate, formatMinutes, formatMinutesRange, formatWhen } from '../../src/lib/format';
++
++describe('formatAgoOrDate', () => {
++  const now = Date.parse('2026-05-01T12:00:00Z');
++  const before = (seconds: number) => new Date(now - seconds * 1000).toISOString();
++  it.each([
++    [30, 'just now'],
++    [60, '1 min ago'],
++    [3599, '59 min ago'],
++    [3600, '1 h ago'],
++    [86_399, '23 h ago'],
++    [86_400, '1 d ago'],
++    [86_400 * 30 - 1, '29 d ago'],
++  ])('%i s ago: %s', (seconds, text) => {
++    expect(formatAgoOrDate(before(seconds), now)).toBe(text);
++  });
++
++  it('its date after 30 days; the text as it is when it is no time', () => {
++    expect(formatAgoOrDate('2026-03-01T10:00:00Z', now)).toBe('2026-03-01');
++    expect(formatAgoOrDate('soon', now)).toBe('soon');
++  });
++});
+ 
+ describe('formatMinutes', () => {
+   it('rounds to whole minutes and switches to hours', () => {
+diff --git a/dashboard/tests/unit/state.test.ts b/dashboard/tests/unit/state.test.ts
+index ead2c7d3..da9a33a8 100644
+--- a/dashboard/tests/unit/state.test.ts
++++ b/dashboard/tests/unit/state.test.ts
+@@ -145,6 +145,22 @@ describe('DashboardState', () => {
+       ]);
+     });
+ 
++    it('the tasks never wait for the stats: they show while atm still works the figures out; the figures follow', async () => {
++      const answering = server({ projects: [project('p2')] });
++      let answerStats: (r: Response) => void = () => {};
++      fetchMock = vi.fn((url: string) =>
++        String(url).endsWith('/stats') ? new Promise<Response>((resolve) => (answerStats = resolve)) : answering(url),
++      );
++      vi.stubGlobal('fetch', fetchMock);
++      const s = new DashboardState();
++      await s.load();
++      expect(s.loaded).toBe(true);
++      expect(s.tasks.length).toBeGreaterThan(0);
++      expect(s.stats).toBeNull();
++      answerStats(new Response(JSON.stringify({ progress: { archived: 0 } }), { status: 200 }));
++      await vi.waitFor(() => expect(s.stats).toEqual({ progress: { archived: 0 } }));
++    });
++
+     it('with several, lands on the overview without opening a project; it reads every project’s tasks', async () => {
+       fetchMock = server({ projects: [project('p2'), project('p3')] });
+       vi.stubGlobal('fetch', fetchMock);

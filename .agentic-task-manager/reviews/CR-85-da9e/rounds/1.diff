@@ -1,0 +1,381 @@
+diff --git a/crates/atm-lib/src/changes.rs b/crates/atm-lib/src/changes.rs
+index 45b2f44a..c9d869c4 100644
+--- a/crates/atm-lib/src/changes.rs
++++ b/crates/atm-lib/src/changes.rs
+@@ -8,7 +8,7 @@ use atm_common::py::{repr_str, truthy};
+ use atm_common::rules::unfinished_dependencies;
+ use atm_common::time::now_iso;
+ use atm_common::{Error, Kind, Result, Task, Vocabulary};
+-use atm_db::working::Working;
++use atm_db::working::{Here, Working};
+ use serde_json::{Map, Value, json};
+ 
+ use crate::leases::{
+@@ -216,6 +216,22 @@ fn adopt_waiting(
+     Some(record.get("worktree").cloned().unwrap_or(Value::Null))
+ }
+ 
++/// A task started (`task state <id> in_progress` or `loop next --claim`): its claim, and it is no longer done or
++/// waiting anywhere (ATM-657: the loop's claim left both records behind). Returns the claim.
++fn record_start(
++    store: &mut Map<String, Value>,
++    here: &Here,
++    document: &Value,
++    task_id: &str,
++    agent: Option<&str>,
++) -> Value {
++    let record = claim_record(here, document, task_id, agent);
++    section(store, "claims").insert(task_id.into(), record.clone());
++    section(store, "completed").shift_remove(task_id); // starting a task again on purpose
++    section(store, "waiting").shift_remove(task_id);
++    record
++}
++
+ /// The to-do tasks waiting on `task_id` whose dependencies are now all done.
+ fn newly_ready(
+     vocab: &Vocabulary,
+@@ -288,18 +304,16 @@ pub fn change_task_status(
+         work.tasks()[at] = Value::Object(task.clone());
+ 
+         let document = work.document.clone();
+-        let claims = section(&mut work.claims_store, "claims");
+         match command {
+             Command::Start => {
+-                claims.insert(task_id.into(), claim_record(&here, &document, task_id, agent));
+-                section(&mut work.claims_store, "completed").shift_remove(task_id); // starting a task again on purpose
++                record_start(&mut work.claims_store, &here, &document, task_id, agent);
+             }
+             Command::Reopen => {
+-                claims.shift_remove(task_id);
++                section(&mut work.claims_store, "claims").shift_remove(task_id);
+                 section(&mut work.claims_store, "completed").shift_remove(task_id); // not done any more, anywhere
+             }
+             _ => {
+-                claims.shift_remove(task_id);
++                section(&mut work.claims_store, "claims").shift_remove(task_id);
+             }
+         }
+         if command == Command::Done {
+@@ -462,11 +476,13 @@ pub fn next_task_for(
+         apply_resolutions(work, &vocab, &in_archive);
+         let (tasks, _) = snapshot(&work.document, "");
+         let refs: Vec<&Task> = tasks.iter().collect();
++        let here = work.here().clone();
+         let (found, reason) = next_task(
+             &vocab,
+             &work.document,
+             &refs,
+             &work.claims_store,
++            here.worktree.as_deref(),
+             sel,
+             agent,
+             with_user,
+@@ -496,10 +512,14 @@ pub fn next_task_for(
+             }) {
+                 work.tasks()[at] = Value::Object(t.clone());
+             }
+-            let here = work.here().clone();
+-            let record = claim_record(&here, &work.document, &task_id, agent);
+-            section(&mut work.claims_store, "claims").insert(task_id, record.clone());
+-            new = Some(record);
++            let document = work.document.clone();
++            new = Some(record_start(
++                &mut work.claims_store,
++                &here,
++                &document,
++                &task_id,
++                agent,
++            ));
+         }
+         outcome = NextTask {
+             // As it is shown: its key with it (ATM-557), never stored
+diff --git a/crates/atm-lib/src/loop_rules.rs b/crates/atm-lib/src/loop_rules.rs
+index bb2b3c34..f9dfde3f 100644
+--- a/crates/atm-lib/src/loop_rules.rs
++++ b/crates/atm-lib/src/loop_rules.rs
+@@ -249,8 +249,25 @@ pub struct LoopOrder<'t> {
+     pub problem: Option<String>,
+ }
+ 
++/// The tasks blocked or in review in another worktree than `here` (T-204): this worktree's copy doesn't say so until
++/// the branches merge. A wait recorded here is the task's own status here, which the loop reads from the task itself
++/// (ATM-657: a review decided here left a record that kept the task from its agent).
++fn waiting_elsewhere<'s>(
++    store: &'s Map<String, Value>,
++    here: Option<&str>,
++) -> impl Iterator<Item = &'s String> {
++    store
++        .get("waiting")
++        .and_then(Value::as_object)
++        .into_iter()
++        .flatten()
++        .filter(move |(_, record)| record.get("worktree").and_then(Value::as_str) != here)
++        .map(|(id, _)| id)
++}
++
+ /// Every task the loop could take now, in the order it takes them (tasks back from review first, then the
+-/// selection's own order, the most urgent priority and the lowest ID): `loop next` hands out the first.
++/// selection's own order, the most urgent priority and the lowest ID): `loop next` hands out the first. `here` is the
++/// worktree it runs in (the working copy's folder; none outside git).
+ ///
+ /// # Errors
+ /// A selection naming a task or sprint the project doesn't have (exit code 2); an archive that can't be read.
+@@ -260,6 +277,7 @@ pub fn loop_order<'t>(
+     document: &Value,
+     tasks: &[&'t Task],
+     store: &Map<String, Value>,
++    here: Option<&str>,
+     sel: &Selection,
+     agent: Option<&str>,
+     with_user: bool,
+@@ -311,9 +329,10 @@ pub fn loop_order<'t>(
+             .map(|m| m.keys().cloned().collect::<Vec<_>>())
+             .unwrap_or_default()
+     };
+-    let taken: HashSet<String> = [section("claims"), section("completed"), section("waiting")]
++    let taken: HashSet<String> = [section("claims"), section("completed")]
+         .concat()
+         .into_iter()
++        .chain(waiting_elsewhere(store, here).cloned())
+         .collect();
+     let mut ready = Vec::new();
+     for c in &candidates {
+@@ -354,13 +373,14 @@ pub fn next_task<'t>(
+     document: &Value,
+     tasks: &[&'t Task],
+     store: &Map<String, Value>,
++    here: Option<&str>,
+     sel: &Selection,
+     agent: Option<&str>,
+     with_user: bool,
+     archived: &dyn Fn(&str) -> Result<bool>,
+ ) -> Result<(Option<&'t Task>, Option<String>)> {
+     let order = loop_order(
+-        vocab, document, tasks, store, sel, agent, with_user, archived,
++        vocab, document, tasks, store, here, sel, agent, with_user, archived,
+     )?;
+     if let Some(problem) = order.problem {
+         return Ok((None, Some(problem)));
+@@ -451,8 +471,14 @@ pub fn next_task<'t>(
+             .copied()
+             .collect::<Vec<_>>()
+     };
+-    let (claimed, done_elsewhere, waiting_elsewhere) =
+-        (pick("claims"), pick("completed"), pick("waiting"));
++    let elsewhere: HashSet<&String> = waiting_elsewhere(store, here).collect();
++    let (claimed, done_elsewhere) = (pick("claims"), pick("completed"));
++    let waiting_elsewhere: Vec<&Task> = order
++        .candidates
++        .iter()
++        .filter(|t| id_of(t).is_some_and(|id| elsewhere.contains(&id.to_string())))
++        .copied()
++        .collect();
+     let mut parts = vec![format!(
+         "{} todo task(s) waiting on dependencies",
+         order.candidates.len()
+diff --git a/crates/atm-lib/src/loop_rules/tests.rs b/crates/atm-lib/src/loop_rules/tests.rs
+index 971cac0c..006cad69 100644
+--- a/crates/atm-lib/src/loop_rules/tests.rs
++++ b/crates/atm-lib/src/loop_rules/tests.rs
+@@ -9,6 +9,9 @@ fn task(value: Value) -> Task {
+     }
+ }
+ 
++/// The worktree the loop runs in, in these tests.
++const HERE: Option<&str> = Some("/work/here");
++
+ struct Fixture {
+     document: Value,
+     tasks: Vec<Task>,
+@@ -48,6 +51,7 @@ impl Fixture {
+             &self.document,
+             &tasks,
+             &store,
++            HERE,
+             sel,
+             None,
+             false,
+@@ -70,6 +74,7 @@ impl Fixture {
+             &self.document,
+             &tasks,
+             &store,
++            HERE,
+             sel,
+             None,
+             false,
+@@ -97,6 +102,7 @@ impl Fixture {
+             &self.document,
+             &tasks,
+             &store,
++            HERE,
+             sel,
+             agent,
+             with_user,
+@@ -283,6 +289,66 @@ fn work_elsewhere_is_not_ready_and_the_reason_names_where_it_is() {
+     );
+ }
+ 
++#[test]
++fn a_wait_recorded_in_this_worktree_doesnt_hold_a_task_back_one_in_another_does() {
++    // T-1 and T-2 back from review here (a decision records a wait, ATM-657), T-3 to do here but in review elsewhere
++    let f = Fixture::new(
++        json!({}),
++        json!([
++            {"id": "T-1", "status": "in_review", "review_state": "changes_requested"},
++            {"id": "T-2", "status": "in_review", "review_state": "approved"},
++            {"id": "T-3", "status": "todo"},
++            {"id": "T-4", "status": "todo"}
++        ]),
++    );
++    let store = json!({"waiting": {
++        "T-1": {"task": "T-1", "worktree": "/work/here", "status": "in_review"},
++        "T-2": {"task": "T-2", "worktree": "/work/here", "status": "in_review"},
++        "T-3": {"task": "T-3", "worktree": "/work/other", "status": "in_review"},
++        "T-4": {"task": "T-4", "status": "blocked"}
++    }});
++    let vocab = Vocabulary::of_document(&f.document).unwrap();
++    let tasks: Vec<&Task> = f.tasks.iter().collect();
++    let Value::Object(store) = store else {
++        unreachable!()
++    };
++    let ready = |here: Option<&str>| -> Vec<String> {
++        loop_order(
++            &vocab,
++            &f.document,
++            &tasks,
++            &store,
++            here,
++            &Selection::default(),
++            None,
++            false,
++            &|_| Ok(false),
++        )
++        .unwrap()
++        .ready
++        .iter()
++        .map(|t| t["id"].as_str().unwrap().to_string())
++        .collect()
++    };
++    // Here: its own waits don't count; a record without a worktree (made outside git) is from somewhere else
++    assert_eq!(ready(HERE), ["T-1", "T-2"]);
++    // Outside git: only the record without a worktree is its own
++    assert_eq!(ready(None), ["T-4"]);
++    // Nothing ready elsewhere names only the tasks waiting in another worktree
++    let others = Fixture::new(
++        json!({}),
++        json!([{"id": "T-3", "status": "todo"}, {"id": "T-5", "status": "todo"}]),
++    );
++    let mine = json!({"waiting": {
++        "T-3": {"task": "T-3", "worktree": "/work/other", "status": "in_review"},
++        "T-5": {"task": "T-5", "worktree": "/work/here", "status": "blocked"}
++    }});
++    assert_eq!(
++        others.next(&Selection::default(), mine, false).0.as_deref(),
++        Some("T-5")
++    );
++}
++
+ #[test]
+ fn only_a_decided_review_sends_a_task_back_to_the_loop() {
+     for (state, ready) in [
+@@ -378,6 +444,7 @@ fn an_archived_dependency_is_done() {
+         &f.document,
+         &tasks,
+         &store,
++        HERE,
+         &Selection::default(),
+         None,
+         false,
+@@ -401,6 +468,7 @@ fn an_archive_that_cant_be_read_is_an_error() {
+         &f.document,
+         &tasks,
+         &store,
++        HERE,
+         &Selection::default(),
+         None,
+         false,
+@@ -594,6 +662,7 @@ fn listed_tasks_go_in_their_order_and_unknown_ones_are_refused() {
+         &f.document,
+         &tasks,
+         &store,
++        HERE,
+         &bad,
+         None,
+         false,
+diff --git a/crates/atm-lib/src/status.rs b/crates/atm-lib/src/status.rs
+index 1349199a..77a4c32b 100644
+--- a/crates/atm-lib/src/status.rs
++++ b/crates/atm-lib/src/status.rs
+@@ -242,6 +242,7 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
+         document,
+         &all,
+         &claims,
++        here.as_str(),
+         &Selection::default(),
+         None,
+         false,
+diff --git a/crates/atm-lib/src/summary.rs b/crates/atm-lib/src/summary.rs
+index f63410a6..711bbbc3 100644
+--- a/crates/atm-lib/src/summary.rs
++++ b/crates/atm-lib/src/summary.rs
+@@ -672,11 +672,13 @@ pub fn project_summary(project: &Project) -> Result<Value> {
+         label: &label,
+     };
+     // What the loop takes next with its default selection, by the very rule `atm loop next` follows
++    let here = store.working_copy().map(atm_common::Shown::shown);
+     let order = loop_order(
+         vocab,
+         document,
+         &tasks,
+         &claims,
++        here.as_deref(),
+         &Selection::default(),
+         None,
+         false,
+diff --git a/tests/scripts/scenarios/review-states.json b/tests/scripts/scenarios/review-states.json
+index 5b15b94c..dc4e846e 100644
+--- a/tests/scripts/scenarios/review-states.json
++++ b/tests/scripts/scenarios/review-states.json
+@@ -148,6 +148,42 @@
+       }
+     }
+   },
++  {
++    "name": "through the real commands: in review, changes requested, then next --claim hands it back to its agent (ATM-657)",
++    "setup": {
++      "git": true,
++      "commit": true,
++      "files": {
++        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] }
++      },
++      "commands": [
++        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_progress"],
++        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_review --note 'Check the columns'"],
++        ["sh", "-c", "ATM_AGENT=Hakan \"$ATM\" task review request-changes T-1 --reason 'Name the columns'"]
++      ]
++    },
++    "args": ["loop", "next", "--claim", "--json"],
++    "env": { "ATM_AGENT": "claude:aaaa1111" },
++    "expect": { "stdoutIncludes": ["\"id\": \"T-1\"", "\"status\": \"in_progress\"", "\"reason\": null"] }
++  },
++  {
++    "name": "through the real commands: in review, approved, then next --claim hands it back to its agent (ATM-657)",
++    "setup": {
++      "git": true,
++      "commit": true,
++      "files": {
++        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] }
++      },
++      "commands": [
++        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_progress"],
++        ["sh", "-c", "ATM_AGENT=claude:aaaa1111 \"$ATM\" task state T-1 in_review --note 'Check the columns'"],
++        ["sh", "-c", "ATM_AGENT=Hakan \"$ATM\" task review approve T-1"]
++      ]
++    },
++    "args": ["loop", "next", "--claim", "--json"],
++    "env": { "ATM_AGENT": "claude:aaaa1111" },
++    "expect": { "stdoutIncludes": ["\"id\": \"T-1\"", "\"status\": \"in_progress\"", "\"reason\": null"] }
++  },
+   {
+     "name": "dependents keep waiting in every review state (SR-6.2)",
+     "setup": {

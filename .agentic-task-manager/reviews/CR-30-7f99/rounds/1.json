@@ -1,0 +1,15 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "files"
+  },
+  "files": [
+    {
+      "path": "docs/adr/ADR-009-task-keys-plain-from-creation.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T22:33:32Z"
+}

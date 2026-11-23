@@ -1,0 +1,122 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "c97ed602c4072e78d65c7a6902b733a87ad0d15b",
+    "head": "8faf60282b7a6579aea9635ca2f539d0c437a95e"
+  },
+  "files": [
+    {
+      "path": ".github/rulesets/release-tags.json",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "CHANGELOG.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "Cargo.lock",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "WHATS-NEW.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/kanban-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/light-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/projects-overview-narrow-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/settings-menu-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/settings-menu-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/standard-list-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-dark-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/update-notice-light-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-header-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-dark-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-header-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "dashboard/tests/e2e/__screenshots__/visual.spec.ts/v4-light-kanban-linux.png",
+      "status": "modified",
+      "binary": true
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "packaging/README.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-23T17:34:12Z"
+}

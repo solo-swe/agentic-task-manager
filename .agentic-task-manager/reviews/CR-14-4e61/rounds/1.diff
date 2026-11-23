@@ -1,0 +1,386 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index 3496db3e..837fa34a 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -3993,6 +3993,14 @@ svg.graph-minimap.hidden {
+ .review-note {
+   margin-top: var(--space-2);
+ }
++/* A task's code reviews (ATM-585): the latest first, larger, the earlier ones after it */
++.detail-review-links {
++  align-items: center;
++  display: flex;
++  flex-wrap: wrap;
++  gap: var(--space-4);
++  margin-top: var(--space-3);
++}
+ /* Blocked on a decision (D-3.2): waiting on you stands out; waiting on an agent stays quiet */
+ .block-wait {
+   color: var(--text-muted);
+diff --git a/dashboard/src/lib/address.ts b/dashboard/src/lib/address.ts
+index 4198352b..465f5372 100644
+--- a/dashboard/src/lib/address.ts
++++ b/dashboard/src/lib/address.ts
+@@ -162,6 +162,18 @@ export function withReview(address: string, at: Partial<ReviewAddress> & { revie
+   return formatAddress(params);
+ }
+ 
++/** The page of review `review` of `project`, in the workspace `address` is in, with nothing else open over it (a task's
++ * details or a document: ATM-585, a task linking to its review) */
++export function reviewPageOf(address: string, project: string, review: string): string {
++  const params = new URLSearchParams();
++  const workspace = addressParams(address).get('workspace');
++  if (workspace) params.set('workspace', workspace);
++  params.set('project', project);
++  params.set('view', REVIEWS);
++  params.set('review', review);
++  return formatAddress(params);
++}
++
+ /** The workspace an address is in: its `/w/<w>`, else `default` */
+ export function workspaceOf(address: string): string {
+   return addressParams(address).get('workspace') || DEFAULT_WORKSPACE;
+diff --git a/dashboard/src/lib/details/DetailPanel.svelte b/dashboard/src/lib/details/DetailPanel.svelte
+index 76625e29..21a24565 100644
+--- a/dashboard/src/lib/details/DetailPanel.svelte
++++ b/dashboard/src/lib/details/DetailPanel.svelte
+@@ -14,6 +14,7 @@
+   import { referenceTo, type DocumentRef } from '../documents';
+   import { cutOff, scrollBehavior } from '../scroll';
+   import RepoRef from '../ui/RepoRef.svelte';
++  import ReviewLink from './ReviewLink.svelte';
+   import BranchChip from '../ui/BranchChip.svelte';
+   import ComponentChips from '../ui/ComponentChips.svelte';
+   import LabelChips from '../ui/LabelChips.svelte';
+@@ -73,6 +74,12 @@
+   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
+   const carried = $derived(task && sprint ? carriedCount(task, sprint) : 0);
+   const reviewMode = $derived(task ? effectiveReview(task) : 'none');
++  // Its code reviews (ATM-585: `code_reviews`, oldest first): the latest to open, the others after it, in the project
++  // shown
++  const codeReviews = $derived(task?.code_reviews ?? []);
++  const latestReview = $derived(codeReviews.at(-1) ?? null);
++  const earlierReviews = $derived(codeReviews.slice(0, -1).reverse());
++  const reviewProject = $derived(dashboard.projectId);
+   const actors = $derived(task ? actorsLine(task) : '');
+   const attempts = $derived(task ? earlierAttempts(task) : []);
+   const requiredBy = $derived(task ? dashboard.tasks.filter((t) => (t.dependencies ?? []).includes(task.id)) : []);
+@@ -483,12 +490,30 @@
+       <div class="label">In review</div>
+       <div class="value" style="font-size:13px">
+         <div><strong>{reviewSummary(review)}</strong></div>
++        {#if latestReview && reviewProject}
++          <!-- Its code review, the latest it names, to open (ATM-585); the earlier ones after it -->
++          <div class="detail-review-links">
++            <ReviewLink project={reviewProject} reference={latestReview.ref} prominent />
++            {#each earlierReviews as r (r.id)}<ReviewLink project={reviewProject} reference={r.ref} />{/each}
++          </div>
++        {/if}
+         <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
+         {#if review.note}<div class="review-note">
+             <CompMd text={review.note.text} {task} onopen={openDocument} />
+           </div>{/if}
+       </div>
+     </div>
++  {:else if latestReview && reviewProject}
++    <!-- Not in review (done, sent back, …): its code reviews still, less prominently (ATM-585) -->
++    <div class="detail-section" id="detail-code-reviews">
++      <div class="label">Code reviews</div>
++      <div class="value detail-review-links">
++        {#each [...earlierReviews, latestReview] as r (r.id)}<ReviewLink
++            project={reviewProject}
++            reference={r.ref}
++          />{/each}
++      </div>
++    </div>
+   {/if}
+   {#if block}
+     <div class="detail-section" id="detail-blocked">
+diff --git a/dashboard/src/lib/details/ReviewLink.svelte b/dashboard/src/lib/details/ReviewLink.svelte
+new file mode 100644
+index 00000000..ca71b4d4
+--- /dev/null
++++ b/dashboard/src/lib/details/ReviewLink.svelte
+@@ -0,0 +1,89 @@
++<script lang="ts">
++  // A task's link to one of its code reviews (ATM-585; the cards and the list share it, ATM-575): its reference, and
++  // its status when the page knows it (the Reviews tab has listed it: never a request per task), or *needs you* when
++  // the project's summary says so. A click opens the review's page: in the app in a tab of its own, as the Reviews
++  // list opens one; in the browser in this tab, or another for ⌘-click, Ctrl-click or a middle click, as any link.
++  import { inApp } from '../api/http';
++  import { reviewPageOf } from '../address';
++  import { currentAddress, navigate } from '../navigation';
++  import { knownStatus } from '../reviews/known.svelte';
++  import { STATUS_LABELS } from '../reviews/types';
++  import { dashboard } from '../state.svelte';
++  import { tabActions, wantsNewTab } from '../tab-actions';
++  import Icon from '../ui/Icon.svelte';
++
++  interface Props {
++    /** The project the review is in */
++    project: string;
++    /** Its reference (CR-7) */
++    reference: string;
++    /** The one to look at: drawn larger, with its status */
++    prominent?: boolean;
++  }
++  let { project, reference, prominent = false }: Props = $props();
++
++  const status = $derived(knownStatus(project, reference));
++  const waiting = $derived(
++    dashboard.projects
++      .find((p) => p.id === project)
++      ?.summary?.needs_you_reviews?.some((r) => r.reference === reference) ?? false,
++  );
++  const href = $derived(reviewPageOf(currentAddress(), project, reference));
++  const tabs = tabActions();
++
++  function open(e: MouseEvent) {
++    if (!inApp && wantsNewTab(e)) return;
++    e.preventDefault();
++    e.stopPropagation();
++    if (inApp) tabs.open(href);
++    else navigate(href);
++  }
++</script>
++
++<a
++  class="review-link"
++  class:prominent
++  {href}
++  data-review={reference}
++  onclick={open}
++  onauxclick={open}
++  title="Open {reference}'s page"
++  ><Icon name="message-square" size={prominent ? 14 : 12} /><span class="review-link-ref">{reference}</span
++  >{#if prominent && status}<span class="review-link-status" data-status={status}>{STATUS_LABELS[status]}</span
++    >{/if}{#if waiting}<span class="review-link-needs">needs you</span>{/if}</a
++>
++
++<style>
++  .review-link {
++    align-items: center;
++    color: var(--accent);
++    display: inline-flex;
++    font-size: var(--text-xs);
++    gap: var(--space-2);
++    text-decoration: none;
++  }
++  .review-link:hover .review-link-ref {
++    text-decoration: underline;
++  }
++  .review-link.prominent {
++    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
++    border-radius: var(--radius-pill);
++    font-size: var(--text-sm);
++    font-weight: 600;
++    padding: var(--space-1) var(--space-5);
++  }
++  .review-link-ref {
++    font-family: 'SF Mono', Menlo, Consolas, monospace;
++  }
++  .review-link-status {
++    color: var(--text-muted);
++    font-weight: 400;
++  }
++  .review-link-status::before {
++    content: '· ';
++  }
++  .review-link-needs {
++    color: var(--purple);
++    font-weight: 600;
++  }
++</style>
+diff --git a/dashboard/src/lib/reviews/known.svelte.ts b/dashboard/src/lib/reviews/known.svelte.ts
+new file mode 100644
+index 00000000..b15f6ae9
+--- /dev/null
++++ b/dashboard/src/lib/reviews/known.svelte.ts
+@@ -0,0 +1,20 @@
++import type { ReviewStatus } from './types';
++
++// The reviews the page has listed or shown, by project and reference, with their status (ATM-585): a task's link to
++// its review shows the status when the page knows it, and never asks the server for it (a request per task would be
++// one too many). The Reviews tab fills it as it lists and shows reviews.
++
++const known = $state<Record<string, ReviewStatus>>({});
++
++const key = (project: string, reference: string) => `${project}\u0000${reference}`;
++
++/** What the page knows of `reference`'s status in `project`, if anything */
++export function knownStatus(project: string, reference: string): ReviewStatus | null {
++  return known[key(project, reference)] ?? null;
++}
++
++/** The reviews of `project` just listed or shown, with their statuses */
++export function learnReviews(project: string, reviews: readonly { reference: string; status: ReviewStatus }[]): void {
++  for (const r of reviews)
++    if (known[key(project, r.reference)] !== r.status) known[key(project, r.reference)] = r.status;
++}
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 6dd99991..3d43478b 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -24,6 +24,7 @@
+     viewedKeys,
+   } from '../review-data';
+   import { keepFilter, keptFilter } from '../review-filter';
++  import { learnReviews } from '../reviews/known.svelte';
+   import ReviewList from '../reviews/ReviewList.svelte';
+   import ReviewPage from '../reviews/ReviewPage.svelte';
+   import { reviewTitle } from '../reviews/page';
+@@ -81,6 +82,7 @@
+     try {
+       if (at.review) {
+         const page = await loadReview(id, at.review, at.round, at.against);
++        learnReviews(id, [page.review]);
+         const text = JSON.stringify(page);
+         if (ask === asked && text !== shownText) {
+           shownText = text;
+@@ -88,6 +90,10 @@
+         }
+       } else {
+         const listed = await loadReviews(id, query);
++        learnReviews(
++          id,
++          listed.reviews.map((e) => e.review),
++        );
+         const text = JSON.stringify(listed.reviews);
+         if (ask === asked && text !== entriesText) {
+           entriesText = text;
+diff --git a/dashboard/tests/e2e/detail.spec.ts b/dashboard/tests/e2e/detail.spec.ts
+index 9923103d..d945edec 100644
+--- a/dashboard/tests/e2e/detail.spec.ts
++++ b/dashboard/tests/e2e/detail.spec.ts
+@@ -80,6 +80,43 @@ test.describe('detail panel', () => {
+     await expect(panel(page).locator('h3')).toHaveText('T-004 User login');
+   });
+ 
++  // ATM-585: a task in review links to its code review: a click opens the review's page, ⌘-click a browser tab
++  test('a task in review links to its code review; the click opens its page, ⌘-click a tab of its own', async ({
++    page,
++    tasksServer,
++  }) => {
++    const data = loadFixture('standard');
++    Object.assign(
++      data.tasks.find((t) => t.id === 'T-004')!,
++      {
++        status: 'in_review',
++        code_reviews: [
++          { id: 'u1', ref: 'CR-1' },
++          { id: 'u2', ref: 'CR-2' },
++        ],
++      },
++    );
++    tasksServer.use(data);
++    await page.locator('#reload-btn').click();
++    await openFromCard(page, 'T-004');
++    const latest = page.locator('#detail-review .review-link.prominent');
++    await expect(latest).toHaveAttribute('data-review', 'CR-2');
++    await expect(page.locator('#detail-review .review-link:not(.prominent)')).toHaveAttribute('data-review', 'CR-1');
++    const reviews = `/projects/${tasksServer.projectId}/reviews`;
++    // ⌘-click (Ctrl elsewhere): the browser's own new tab, this page stays as it is
++    const [tab] = await Promise.all([
++      page.context().waitForEvent('page'),
++      latest.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] }),
++    ]);
++    await expect.poll(() => new URL(tab.url()).pathname).toBe(`${reviews}/CR-2`);
++    await tab.close();
++    await expect(overlay(page)).toHaveClass(/open/);
++    // A click: the review's page here, the details closed
++    await latest.click();
++    await expect.poll(() => new URL(page.url()).pathname).toBe(`${reviews}/CR-2`);
++    expect(new URL(page.url()).searchParams.get('task')).toBeNull();
++  });
++
+   test('placeholders for missing optional fields', async ({ page }) => {
+     await openFromCard(page, 'T-009');
+     await expect(section(page, 'Use Cases').locator('.detail-refs')).toHaveText('None');
+diff --git a/dashboard/tests/unit/DetailPanel.component.test.ts b/dashboard/tests/unit/DetailPanel.component.test.ts
+index b08a1123..5776b637 100644
+--- a/dashboard/tests/unit/DetailPanel.component.test.ts
++++ b/dashboard/tests/unit/DetailPanel.component.test.ts
+@@ -1,6 +1,6 @@
+ import { fireEvent, render } from '@testing-library/svelte';
+ import { flushSync } from 'svelte';
+-import { beforeEach, describe, expect, it, vi } from 'vitest';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import DetailPanel from '../../src/lib/details/DetailPanel.svelte';
+ import { compmdSettled } from './compmd.helpers';
+ import { dashboard } from '../../src/lib/state.svelte';
+@@ -353,6 +353,75 @@ describe('DetailPanel', () => {
+     expect(question).toHaveTextContent('Keep --force? why');
+   });
+ 
++  // ATM-585: a task's code reviews, the latest to open where its review is shown
++  describe('its code reviews', () => {
++    const links = (container: HTMLElement, section: string) =>
++      [...container.querySelectorAll<HTMLAnchorElement>(`${section} .review-link`)].map((a) => [
++        a.dataset.review,
++        a.classList.contains('prominent'),
++        a.getAttribute('href'),
++      ]);
++    const reviews = [
++      { id: 'u1', ref: 'CR-3' },
++      { id: 'u2', ref: 'CR-7' },
++    ];
++    beforeEach(() => {
++      dashboard.projectId = 'p1';
++    });
++    afterEach(() => {
++      dashboard.projectId = null;
++    });
++
++    it('in review with one: it, prominent, linking to its page; with two, the latest first and the other after it', () => {
++      const one = open({ status: 'in_review', code_reviews: reviews.slice(1) });
++      expect(links(one, '#detail-review')).toEqual([['CR-7', true, '/projects/p1/reviews/CR-7']]);
++      const two = open({ status: 'in_review', code_reviews: reviews });
++      expect(links(two, '#detail-review')).toEqual([
++        ['CR-7', true, '/projects/p1/reviews/CR-7'],
++        ['CR-3', false, '/projects/p1/reviews/CR-3'],
++      ]);
++      expect(two.querySelector('#detail-code-reviews')).toBeNull();
++    });
++
++    it('in review without one: no link, as before', () => {
++      const container = open({ status: 'in_review' });
++      expect(container.querySelector('#detail-review')).not.toBeNull();
++      expect(container.querySelector('.review-link')).toBeNull();
++    });
++
++    it('not in review: its reviews in a section of their own, none prominent, oldest first', () => {
++      const container = open({ status: 'done', code_reviews: reviews });
++      expect(container.querySelector('#detail-review')).toBeNull();
++      expect(links(container, '#detail-code-reviews')).toEqual([
++        ['CR-3', false, '/projects/p1/reviews/CR-3'],
++        ['CR-7', false, '/projects/p1/reviews/CR-7'],
++      ]);
++      expect(open({ status: 'done' }).querySelector('#detail-code-reviews')).toBeNull();
++    });
++
++    it('the status the page knows, never asked for; needs you when the project’s summary says so', async () => {
++      const { learnReviews } = await import('../../src/lib/reviews/known.svelte');
++      const container = open({ status: 'in_review', code_reviews: reviews });
++      const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
++      expect(latest().textContent).toBe('CR-7');
++      learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
++      flushSync();
++      expect(latest().textContent).toBe('CR-7Waiting for review');
++      dashboard.projects = [
++        {
++          id: 'p1',
++          name: 'P',
++          path: '/p',
++          missing: false,
++          summary: { needs_you_reviews: [{ reference: 'CR-7', title: 'T', why: 'review' }] } as never,
++        },
++      ];
++      flushSync();
++      expect(latest().querySelector('.review-link-needs')).toHaveTextContent('needs you');
++      dashboard.projects = [];
++    });
++  });
++
+   it('a plain description is one paragraph, as before', async () => {
+     const container = open({ description: 'Add the editor.' });
+     await compmdSettled();

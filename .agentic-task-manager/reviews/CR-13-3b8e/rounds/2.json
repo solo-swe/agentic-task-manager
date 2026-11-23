@@ -1,0 +1,27 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "3c2b8d8a4966bc9cc6d44547909ea4d017816f7c",
+    "head": "a7d3dd43be715b51f6e7474d32af4b54f6d50dd7"
+  },
+  "files": [
+    {
+      "path": "crates/atm-review/src/files.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/code-review-design.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T08:10:46Z"
+}

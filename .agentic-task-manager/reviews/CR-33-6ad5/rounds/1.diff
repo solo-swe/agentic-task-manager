@@ -1,0 +1,1090 @@
+diff --git a/app/src-tauri/build.rs b/app/src-tauri/build.rs
+index 7fe30859..735eb4cd 100644
+--- a/app/src-tauri/build.rs
++++ b/app/src-tauri/build.rs
+@@ -29,6 +29,7 @@ fn main() {
+         "project_review",
+         "subscribe_workspace",
+         "subscribe_project",
++        "subscribe_working_copy",
+         "unsubscribe",
+         "agents_status",
+         "connect_agents",
+diff --git a/app/src-tauri/capabilities/main.json b/app/src-tauri/capabilities/main.json
+index 2ffc9f92..18fb551d 100644
+--- a/app/src-tauri/capabilities/main.json
++++ b/app/src-tauri/capabilities/main.json
+@@ -18,6 +18,7 @@
+     "allow-project-review",
+     "allow-subscribe-workspace",
+     "allow-subscribe-project",
++    "allow-subscribe-working-copy",
+     "allow-unsubscribe",
+     "allow-agents-status",
+     "allow-connect-agents",
+diff --git a/app/src-tauri/src/commands.rs b/app/src-tauri/src/commands.rs
+index bdbe3435..7e524b6b 100644
+--- a/app/src-tauri/src/commands.rs
++++ b/app/src-tauri/src/commands.rs
+@@ -905,6 +905,33 @@ pub async fn subscribe_project<R: Runtime>(
+     state.watch(window.label(), |c| found.subscribe(c), channel, message)
+ }
+ 
++/// Be told on `channel` when a project's working copy changes as a live review shows it (ATM-607): a live review's
++/// page asks again on each, instead of every 2 s. The subscription's ID.
++///
++/// # Errors
++/// No such workspace or project; a project not in git, or a folder that can't be watched.
++#[tauri::command]
++#[specta::specta]
++pub async fn subscribe_working_copy<R: Runtime>(
++    window: WebviewWindow<R>,
++    state: State<'_, AppState>,
++    workspace: String,
++    project: String,
++    channel: Channel<Changed>,
++) -> Result<u32, AppError> {
++    let found = member(&state.workspaces, &workspace, &project)?;
++    let message = Changed {
++        workspace,
++        project: Some(project),
++    };
++    state.watch(
++        window.label(),
++        |c| found.subscribe_working_copy(c),
++        channel,
++        message,
++    )
++}
++
+ /// `atm agents status`: per harness atm knows, whether it is installed here, and each of atm's skills' state in the
+ /// user's own folder for it (linked, copied, missing, stale, not atm's).
+ ///
+diff --git a/app/src-tauri/src/lib.rs b/app/src-tauri/src/lib.rs
+index fb8ffaa7..9a9d7b2e 100644
+--- a/app/src-tauri/src/lib.rs
++++ b/app/src-tauri/src/lib.rs
+@@ -21,7 +21,7 @@ use session::{reload_window, restored_tabs, save_tabs};
+ use commands::{
+     AppState, agents_status, claims, connect_agents, document, file, list_projects,
+     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
+-    subscribe_workspace, unsubscribe, version, worktrees,
++    subscribe_working_copy, subscribe_workspace, unsubscribe, version, worktrees,
+ };
+ use commands::{
+     add_review_comment, close_review, create_review, project_review, project_reviews,
+@@ -56,6 +56,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
+         project_review,
+         subscribe_workspace::<tauri::Wry>,
+         subscribe_project::<tauri::Wry>,
++        subscribe_working_copy::<tauri::Wry>,
+         unsubscribe::<tauri::Wry>,
+         agents_status,
+         connect_agents,
+diff --git a/crates/atm-api/src/routes.rs b/crates/atm-api/src/routes.rs
+index 38c7304c..7135aee1 100644
+--- a/crates/atm-api/src/routes.rs
++++ b/crates/atm-api/src/routes.rs
+@@ -176,7 +176,7 @@ fn serve_project_read(
+         ProjectRead::Worktrees => claims::get_worktrees(project, request),
+         ProjectRead::Claims => claims::get_claims(project, request),
+         ProjectRead::Reviews => reviews::get_reviews(project, query),
+-        ProjectRead::Review(review) => reviews::get_review(project, review, query),
++        ProjectRead::Review(review) => reviews::get_review(project, review, query, request),
+     }
+ }
+ 
+diff --git a/crates/atm-api/src/routes/reviews.rs b/crates/atm-api/src/routes/reviews.rs
+index 09641321..36c76b3c 100644
+--- a/crates/atm-api/src/routes/reviews.rs
++++ b/crates/atm-api/src/routes/reviews.rs
+@@ -15,7 +15,7 @@
+ use atm_common::py::to_json;
+ use atm_lib::review_requests::request_from;
+ use atm_lib::reviews::{CommentId, ReviewHeader, ReviewRef};
+-use axum::http::{Method, StatusCode};
++use axum::http::{HeaderMap, Method, StatusCode};
+ use axum::response::Response;
+ use serde_json::{Value, json};
+ 
+@@ -23,7 +23,7 @@ use atm_lib::review_pages::ReviewQuery;
+ 
+ use super::query::{parameter, parse_query};
+ use super::source::{ProjectSource, ReviewChanges};
+-use super::{Projects, error_response, ok_json, stamped};
++use super::{Projects, error_response, etag, not_modified, ok_json, stamped, unchanged};
+ use crate::{send, send_error};
+ 
+ /// `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews the query keeps (`status` repeats; the
+@@ -70,14 +70,31 @@ fn round_number(query: &str, name: &str) -> Result<Option<u32>, String> {
+ }
+ 
+ /// `GET …/reviews/<CR>?round=&against=`: the review's page for one view, the whole change of a round (the latest when
+-/// none) or a round against an earlier one. Never cached, as the list.
+-pub(super) fn get_review(project: &dyn ProjectSource, review: &str, query: &str) -> Response {
++/// none) or a round against an earlier one. Never cached, as the list, except a live review's page of its working copy
++/// now (ATM-607): tagged from what it is made of (the reviews, the working copy's state, who asks), so the page's poll
++/// gets a 304 without a diff being made while nothing changed.
++pub(super) fn get_review(
++    project: &dyn ProjectSource,
++    review: &str,
++    query: &str,
++    request: &HeaderMap,
++) -> Response {
+     let (round, against) = match (round_number(query, "round"), round_number(query, "against")) {
+         (Ok(round), Ok(against)) => (round, against),
+         (Err(why), _) | (_, Err(why)) => return send_error(StatusCode::BAD_REQUEST, &why),
+     };
+-    match project.review(&ReviewRef(review.to_string()), round, against) {
+-        Ok(page) => ok_json(&stamped(page), None),
++    let reference = ReviewRef(review.to_string());
++    let tag = match project.live_review_stamp(&reference, round, against) {
++        Ok(stamp) => stamp.map(|s| etag(&s)),
++        Err(e) => return error_response(&e),
++    };
++    if let Some(tag) = &tag
++        && unchanged(request, tag)
++    {
++        return not_modified(tag, &[]);
++    }
++    match project.review(&reference, round, against) {
++        Ok(page) => ok_json(&stamped(page), tag.as_deref()),
+         Err(e) => error_response(&e),
+     }
+ }
+@@ -286,7 +303,8 @@ mod tests {
+     use atm_lib::reviews::{Side, Status};
+ 
+     use super::super::test_support::{
+-        Answer, Call, Fake, FakeProject, FakeReviews, answer, bound, header, refusals,
++        Answer, Call, Fake, FakeProject, FakeReviews, answer, bound, having, header, plain,
++        refusals,
+     };
+     use super::*;
+ 
+@@ -339,7 +357,10 @@ mod tests {
+         });
+         for (got, expected) in [
+             (answer(get_reviews(project.as_ref(), "")), listed),
+-            (answer(get_review(project.as_ref(), "CR-2", "")), page),
++            (
++                answer(get_review(project.as_ref(), "CR-2", "", &plain())),
++                page,
++            ),
+         ] {
+             assert_eq!(got.status, StatusCode::OK);
+             assert_eq!(got.unstamped(), expected);
+@@ -361,7 +382,7 @@ mod tests {
+         ] {
+             let (project, calls) = bound(FakeProject::default());
+             assert_eq!(
+-                get_review(project.as_ref(), "CR-7", query).status(),
++                get_review(project.as_ref(), "CR-7", query, &plain()).status(),
+                 StatusCode::OK
+             );
+             assert_eq!(
+@@ -384,7 +405,7 @@ mod tests {
+             "against=y",
+         ] {
+             let (project, calls) = bound(FakeProject::default());
+-            let refused = answer(get_review(project.as_ref(), "CR-7", query));
++            let refused = answer(get_review(project.as_ref(), "CR-7", query, &plain()));
+             assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{query}");
+             assert!(
+                 refused.json()["error"]
+@@ -405,7 +426,7 @@ mod tests {
+             });
+             for got in [
+                 answer(get_reviews(project.as_ref(), "")),
+-                answer(get_review(project.as_ref(), "CR-1", "")),
++                answer(get_review(project.as_ref(), "CR-1", "", &plain())),
+             ] {
+                 assert_eq!(got.status, status, "{error}");
+                 assert_eq!(got.json(), json!({"error": error.to_string()}));
+@@ -413,6 +434,45 @@ mod tests {
+         }
+     }
+ 
++    /// ATM-607: a live review's page of its working copy now is tagged from what it is made of; asked again with the
++    /// tag while that is the same, a 304 with no page made; once it changes, the page and a new tag
++    #[test]
++    fn a_live_pages_poll_gets_a_304_while_its_working_copy_is_the_same() {
++        let live = |state: &str| FakeProject {
++            live_stamp: Ok(Some(json!(["live", "r1", null, [1, 1], state, "Ana"]))),
++            ..FakeProject::default()
++        };
++        let (project, calls) = bound(live("a.txt 3:1"));
++        let first = answer(get_review(project.as_ref(), "CR-1", "", &plain()));
++        assert_eq!(first.status, StatusCode::OK);
++        let tag = first.tag();
++        assert!(!tag.is_empty(), "tagged");
++        assert_eq!(calls.taken(), [Call::Review(r("CR-1"), None, None)]);
++        let again = answer(get_review(project.as_ref(), "CR-1", "", &having(&tag)));
++        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
++        assert_eq!(again.tag(), tag);
++        assert_eq!(calls.taken(), [], "no page made for a 304");
++        // A file written: another tag, and the page made again
++        let (project, calls) = bound(live("a.txt 4:2"));
++        let changed = answer(get_review(project.as_ref(), "CR-1", "", &having(&tag)));
++        assert_eq!(changed.status, StatusCode::OK);
++        assert_ne!(changed.tag(), tag);
++        assert_eq!(calls.taken(), [Call::Review(r("CR-1"), None, None)]);
++    }
++
++    #[test]
++    fn a_live_pages_stamp_refused_is_its_status() {
++        for (error, status) in refusals() {
++            let (project, calls) = bound(FakeProject {
++                live_stamp: Err(error.clone()),
++                ..FakeProject::default()
++            });
++            let got = answer(get_review(project.as_ref(), "CR-1", "", &plain()));
++            assert_eq!(got.status, status, "{error}");
++            assert_eq!(calls.taken(), [], "{error}: no page made");
++        }
++    }
++
+     fn send(fake: Fake, method: &Method, resource: &str, body: Value) -> (Answer, Vec<Call>) {
+         let (projects, calls) = fake.projects();
+         let answer = answer(serve_review_change(
+diff --git a/crates/atm-api/src/routes/source.rs b/crates/atm-api/src/routes/source.rs
+index 56c6b4f5..a9b4e8de 100644
+--- a/crates/atm-api/src/routes/source.rs
++++ b/crates/atm-api/src/routes/source.rs
+@@ -102,6 +102,17 @@ pub trait ProjectSource {
+     /// No such review or round; a round's tree that can't be had here.
+     fn review(&self, review: &ReviewRef, round: Option<u32>, against: Option<u32>)
+     -> Result<Value>;
++    /// What a live review's page of its working copy now is made from, cheap to read (ATM-607): its `ETag`'s parts.
++    /// None for any other page, which isn't tagged.
++    ///
++    /// # Errors
++    /// No such review; the project isn't in git.
++    fn live_review_stamp(
++        &self,
++        review: &ReviewRef,
++        round: Option<u32>,
++        against: Option<u32>,
++    ) -> Result<Option<Value>>;
+     /// Its reviews, to change as the user at the machine (never an agent's identity).
+     ///
+     /// # Errors
+@@ -285,6 +296,15 @@ impl ProjectSource for Member {
+         Member::review(self, review, round, against)
+     }
+ 
++    fn live_review_stamp(
++        &self,
++        review: &ReviewRef,
++        round: Option<u32>,
++        against: Option<u32>,
++    ) -> Result<Option<Value>> {
++        Member::live_review_stamp(self, review, round, against)
++    }
++
+     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>> {
+         Ok(Box::new(self.project_as_user()?))
+     }
+diff --git a/crates/atm-api/src/routes/test_support.rs b/crates/atm-api/src/routes/test_support.rs
+index a88342c9..8bc5c2af 100644
+--- a/crates/atm-api/src/routes/test_support.rs
++++ b/crates/atm-api/src/routes/test_support.rs
+@@ -133,6 +133,8 @@ pub(super) struct FakeProject {
+     pub listed: Result<Value>,
+     /// What a review's page answers
+     pub page: Result<Value>,
++    /// What a live review's page is made from (ATM-607): none, a page that isn't tagged
++    pub live_stamp: Result<Option<Value>>,
+ }
+ 
+ impl Default for FakeProject {
+@@ -150,6 +152,7 @@ impl Default for FakeProject {
+             at_revision: Ok(json!({"path": "a.md", "revision": "t1"})),
+             listed: Ok(json!({"reviews": [], "you": "Ana"})),
+             page: Ok(json!({"review": {"reference": "CR-1"}, "view": {"files": []}})),
++            live_stamp: Ok(None),
+         }
+     }
+ }
+@@ -368,6 +371,15 @@ impl ProjectSource for Bound<FakeProject> {
+         self.fake.page.clone()
+     }
+ 
++    fn live_review_stamp(
++        &self,
++        _review: &ReviewRef,
++        _round: Option<u32>,
++        _against: Option<u32>,
++    ) -> Result<Option<Value>> {
++        self.fake.live_stamp.clone()
++    }
++
+     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {
+         self.calls.note(Call::Image(path.into()));
+         self.file(path)?.image
+diff --git a/crates/atm-db/src/subscription.rs b/crates/atm-db/src/subscription.rs
+index 404b9049..8e5a334d 100644
+--- a/crates/atm-db/src/subscription.rs
++++ b/crates/atm-db/src/subscription.rs
+@@ -13,8 +13,8 @@ use serde_json::Value;
+ 
+ // atm-common's, shared with the review store (atm-review, ATM-561), so atm-lib can merge the two
+ pub use atm_common::subscription::{OnChange, Subscription};
+-// The folder watcher is atm-fs's, shared with the review store (ATM-563)
+-pub use atm_fs::watch::{SETTLE, watch};
++// The folder watcher is atm-fs's, shared with the review store (ATM-563); a working copy's, filtered (ATM-607)
++pub use atm_fs::watch::{Keep, SETTLE, watch, watch_tree_where};
+ 
+ /// Poll a store's stamp (`stamp`, a value that changes when the data does, as [`crate::Store::stamp`]) every `every`,
+ /// calling `on_change` when it differs from the one before, on the poller's own thread: for a store that can't push.
+diff --git a/crates/atm-fs/src/watch.rs b/crates/atm-fs/src/watch.rs
+index d1fb3076..2fed6ad0 100644
+--- a/crates/atm-fs/src/watch.rs
++++ b/crates/atm-fs/src/watch.rs
+@@ -29,6 +29,41 @@ pub fn watch_tree(folders: &[PathBuf], on_change: OnChange) -> Result<Subscripti
+     watch_with(folders, RecursiveMode::Recursive, on_change)
+ }
+ 
++/// Which changed paths count, for [`watch_tree_where`]: called with every path a settled burst touched.
++pub type Keep = std::sync::Arc<dyn Fn(&[PathBuf]) -> bool + Send + Sync>;
++
++/// [`watch_tree`], told only of a burst `keep` says counts (given its paths): a working copy, whose `.git/` and ignored
++/// files change all the time without changing the work (ATM-607).
++///
++/// # Errors
++/// The watcher can't be started, or a folder can't be watched.
++pub fn watch_tree_where(
++    folders: &[PathBuf],
++    keep: Keep,
++    on_change: OnChange,
++) -> Result<Subscription> {
++    let failed = |e: notify::Error| Error::failed(format!("watching for changes: {e}"));
++    let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
++        let Ok(events) = result else {
++            return;
++        };
++        let paths: Vec<PathBuf> = events
++            .iter()
++            .flat_map(|e| e.paths.iter().cloned())
++            .collect();
++        if !paths.is_empty() && keep(&paths) {
++            on_change();
++        }
++    })
++    .map_err(failed)?;
++    for folder in folders.iter().filter(|f| f.is_dir()) {
++        watcher
++            .watch(folder, RecursiveMode::Recursive)
++            .map_err(failed)?;
++    }
++    Ok(Subscription::new(watcher))
++}
++
+ fn watch_with(
+     folders: &[PathBuf],
+     mode: RecursiveMode,
+@@ -95,6 +130,30 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn a_filtered_tree_watch_tells_only_the_changes_it_keeps() {
++        let dir = crate::test_dir::TestDir::new();
++        std::fs::create_dir_all(dir.path().join(".git")).unwrap();
++        let (on_change, received) = told();
++        let keep: Keep = Arc::new(|paths: &[PathBuf]| {
++            paths
++                .iter()
++                .any(|p| !p.components().any(|c| c.as_os_str() == ".git"))
++        });
++        let subscription = watch_tree_where(&[dir.path().to_path_buf()], keep, on_change).unwrap();
++        std::thread::sleep(Duration::from_millis(200));
++        std::fs::write(dir.path().join(".git/index"), "i").unwrap();
++        assert!(
++            received.recv_timeout(SETTLE * 4).is_err(),
++            "a change in .git/ only is left out"
++        );
++        std::fs::write(dir.path().join("a.txt"), "a").unwrap();
++        received
++            .recv_timeout(Duration::from_secs(10))
++            .expect("told of a change it keeps");
++        drop(subscription);
++    }
++
+     #[test]
+     fn a_tree_watch_tells_a_change_deep_in_a_subfolder() {
+         let dir = crate::test_dir::TestDir::new();
+diff --git a/crates/atm-lib/src/review_pages.rs b/crates/atm-lib/src/review_pages.rs
+index 8d21ee06..d7612b90 100644
+--- a/crates/atm-lib/src/review_pages.rs
++++ b/crates/atm-lib/src/review_pages.rs
+@@ -558,6 +558,39 @@ fn shown_with<S: RoundDiffs + ?Sized>(
+     Ok((view, chains))
+ }
+ 
++/// What a live review's page of its working copy now (`round` none) is made from, cheap to read (ATM-607): the
++/// reviews' stamp, the working copy's state (`git status`, the changed files' sizes and times) and who asks. The same
++/// while the page would be; a browser's poll gets a 304 from it without a diff being made. None for any other page,
++/// which isn't tagged.
++///
++/// # Errors
++/// No such review; the project isn't in git.
++pub fn live_page_stamp(
++    project: &Project,
++    reference: &ReviewRef,
++    round: Option<u32>,
++    against: Option<u32>,
++) -> Result<Option<Value>> {
++    if round.is_some() {
++        return Ok(None);
++    }
++    let review = reviews::store(project)?.get_review(reference)?;
++    if review.header.status != Status::Live {
++        return Ok(None);
++    }
++    let Some(state) = reviews::vcs(project)?.working_state() else {
++        return Ok(None);
++    };
++    Ok(Some(json!([
++        "live",
++        review.header.id.0,
++        against,
++        reviews_stamp(project),
++        state,
++        project.actor(),
++    ])))
++}
++
+ /// A review's page for one view (`round`, the latest when none; `against`, an earlier round): `{review, summary,
+ /// branch, rounds, chains, view: {round, against, now, files}, needs_you, you}`. A live review shown with no round
+ /// is its working copy now (`now`, §3.5, ATM-576): when it changed since the last checkpoint, as the round after the
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index bd3b815a..35109c1f 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -747,6 +747,38 @@ pub fn checkpoint_now(project: &Project, reference: &ReviewRef) -> Result<u32> {
+     }
+ }
+ 
++/// Be told when the project's working copy changes in a way a live review shows (ATM-607), until the subscription is
++/// dropped: a settled burst of changes in its folder that touches a file git doesn't ignore, outside `.git/` and atm's
++/// task folder (never part of a review). `on_change` runs on the watcher's thread.
++///
++/// # Errors
++/// The project isn't in git (reviews are of changes in git), or its folder can't be watched.
++pub fn subscribe_working_copy(
++    project: &Project,
++    on_change: atm_db::subscription::OnChange,
++) -> Result<atm_db::subscription::Subscription> {
++    let vcs = vcs(project)?;
++    let root = project
++        .root()
++        .ok_or_else(|| Error::failed("this project has no folder to watch"))?;
++    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
++    let inside = root.clone();
++    let keep: atm_db::subscription::Keep =
++        std::sync::Arc::new(move |paths: &[std::path::PathBuf]| {
++            let relative: Vec<String> = paths
++                .iter()
++                .filter_map(|path| {
++                    let rel = path.strip_prefix(&inside).ok()?;
++                    let first = rel.components().next()?.as_os_str();
++                    (first != ".git" && first != TASK_DIR)
++                        .then(|| rel.to_string_lossy().replace('\\', "/"))
++                })
++                .collect();
++            vcs.any_not_ignored(&relative)
++        });
++    atm_db::subscription::watch_tree_where(&[root], keep, on_change)
++}
++
+ /// A task in progress whose change an approved live review covers: put in review and approved, its note naming the
+ /// review, so it can be done with no other review (§3.5). None when no live review covers it as it is now.
+ ///
+@@ -1091,6 +1123,47 @@ mod tests {
+         assert_eq!(task_of(&project, "T-1")["status"], "todo");
+     }
+ 
++    /// ATM-607: a live review's page is told of the working copy's changes it shows, not of `.git/`, atm's task folder
++    /// or the files git ignores
++    #[test]
++    fn the_working_copy_is_watched_for_changes_a_live_review_shows() {
++        use std::time::Duration;
++        let dir = dir();
++        git(&["init", "-q"], &dir.0);
++        std::fs::write(dir.0.join(".gitignore"), "target/\n").unwrap();
++        std::fs::create_dir_all(dir.0.join("target")).unwrap();
++        let project = project(&dir.0, "claude:1");
++        let (sent, received) = std::sync::mpsc::channel();
++        let sent = std::sync::Mutex::new(sent);
++        let subscription = super::subscribe_working_copy(
++            &project,
++            std::sync::Arc::new(move || {
++                if let Ok(sent) = sent.lock() {
++                    let _ = sent.send(());
++                }
++            }),
++        )
++        .unwrap();
++        std::thread::sleep(Duration::from_millis(300));
++        let quiet = |what: &str| {
++            assert!(
++                received.recv_timeout(Duration::from_millis(1200)).is_err(),
++                "{what}: nothing told"
++            );
++        };
++        std::fs::write(dir.0.join("target/build.o"), "o").unwrap();
++        quiet("an ignored file");
++        std::fs::write(dir.0.join(".git/scratch"), "g").unwrap();
++        quiet("a file in .git/");
++        std::fs::write(dir.0.join(".agentic-task-manager/notes.txt"), "n").unwrap();
++        quiet("atm's task folder");
++        std::fs::write(dir.0.join("a.txt"), "a").unwrap();
++        received
++            .recv_timeout(Duration::from_secs(10))
++            .expect("a file of the work: told");
++        drop(subscription);
++    }
++
+     /// A person's review of files for a task an agent hasn't started (the sandbox's red-team review): linked, as it is
+     #[test]
+     fn a_persons_review_of_a_task_not_started_links_it_as_it_is() {
+@@ -1422,6 +1495,15 @@ mod tests {
+         let dir = dir();
+         let (hakan, cr) = live(&dir.0);
+         let page = || crate::review_pages::review_page(&hakan, &cr, None, None).unwrap();
++        // ATM-607: what its page now is made from: the same while nothing changes, another once a file is written; a
++        // round named isn't the page now, and isn't tagged
++        let stamp = || crate::review_pages::live_page_stamp(&hakan, &cr, None, None).unwrap();
++        let before = stamp().expect("a live review's page now is tagged");
++        assert_eq!(stamp(), Some(before.clone()));
++        assert_eq!(
++            crate::review_pages::live_page_stamp(&hakan, &cr, Some(1), None).unwrap(),
++            None
++        );
+         // Nothing changed since its first round: that round, now
+         let unchanged = page();
+         assert_eq!(
+@@ -1433,6 +1515,7 @@ mod tests {
+         );
+         // Changed: the working copy as the round after the stored ones, which `rounds` doesn't list
+         std::fs::write(dir.0.join("a.txt"), "one\ntwo\nthree\n").unwrap();
++        assert_ne!(stamp(), Some(before), "a file written: another tag");
+         let changed = page();
+         assert_eq!(changed["view"]["round"], 2);
+         assert_eq!(changed["rounds"].as_array().unwrap().len(), 1);
+diff --git a/crates/atm-lib/src/workspaces.rs b/crates/atm-lib/src/workspaces.rs
+index e69b0f13..a54b605a 100644
+--- a/crates/atm-lib/src/workspaces.rs
++++ b/crates/atm-lib/src/workspaces.rs
+@@ -399,6 +399,19 @@ impl Member {
+         crate::review_pages::review_page(&self.project_as_user()?, review, round, against)
+     }
+ 
++    /// What a live review's page of its working copy now is made from (ATM-607); none for any other page.
++    ///
++    /// # Errors
++    /// As [`crate::review_pages::live_page_stamp`].
++    pub fn live_review_stamp(
++        &self,
++        review: &crate::reviews::ReviewRef,
++        round: Option<u32>,
++        against: Option<u32>,
++    ) -> Result<Option<Value>> {
++        crate::review_pages::live_page_stamp(&self.project_as_user()?, review, round, against)
++    }
++
+     /// The image at `path` in its working copy, and its content type.
+     ///
+     /// # Errors
+@@ -415,6 +428,14 @@ impl Member {
+     pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
+         self.project()?.store().subscribe(on_change)
+     }
++
++    /// Be told when its working copy changes as a live review shows it (ATM-607), until the subscription is dropped.
++    ///
++    /// # Errors
++    /// As [`crate::reviews::subscribe_working_copy`].
++    pub fn subscribe_working_copy(&self, on_change: OnChange) -> Result<Subscription> {
++        crate::reviews::subscribe_working_copy(&self.project()?, on_change)
++    }
+ }
+ 
+ /// A project entry's folder.
+diff --git a/crates/atm-vcs/src/lib.rs b/crates/atm-vcs/src/lib.rs
+index 2b2e8f25..5d0d03b1 100644
+--- a/crates/atm-vcs/src/lib.rs
++++ b/crates/atm-vcs/src/lib.rs
+@@ -20,12 +20,28 @@ const LITERAL: &str = "--literal-pathspecs";
+ 
+ /// Run git in `cwd`; none when it can't be started.
+ fn run(args: &[&str], cwd: &Path) -> Option<Output> {
+-    Command::new("git")
+-        .args(args)
+-        .current_dir(cwd)
+-        .stdin(Stdio::null())
+-        .output()
+-        .ok()
++    run_fed(args, cwd, None)
++}
++
++/// Run git in `cwd`, with `input` on its stdin when given (paths for `--stdin`, never as arguments); none when it
++/// can't be started or fed. The one place this crate starts git (I24).
++fn run_fed(args: &[&str], cwd: &Path, input: Option<&[u8]>) -> Option<Output> {
++    use std::io::Write as _;
++    let mut command = Command::new("git");
++    command.args(args).current_dir(cwd);
++    let Some(input) = input else {
++        return command.stdin(Stdio::null()).output().ok();
++    };
++    let mut child = command
++        .stdin(Stdio::piped())
++        .stdout(Stdio::piped())
++        .stderr(Stdio::null())
++        .spawn()
++        .ok()?;
++    let mut stdin = child.stdin.take()?;
++    stdin.write_all(input).ok()?;
++    drop(stdin);
++    child.wait_with_output().ok()
+ }
+ 
+ /// A question for git: its output, stripped, or none when it fails.
+@@ -560,6 +576,71 @@ impl GitVcs {
+             .is_none_or(|o| o.status.code() != Some(1))
+     }
+ 
++    /// The working copy's state as a live review shows it (ATM-607), cheap to make: the commit checked out, and each
++    /// changed file outside atm's task folder (`git status`, untracked files too, ignored ones never) with its status,
++    /// size and modification time. The same text while nothing changes; a page's `ETag` is made from it. None outside
++    /// a repository, or when git can't say.
++    #[must_use]
++    pub fn working_state(&self) -> Option<String> {
++        let head = ask(&["rev-parse", "--verify", "-q", "HEAD"], &self.root).unwrap_or_default();
++        let status = run(
++            &["status", "--porcelain", "-z", "--untracked-files=all"],
++            &self.root,
++        )
++        .filter(|o| o.status.success())?;
++        let status = String::from_utf8_lossy(&status.stdout).into_owned();
++        let task_folder = format!("{}/", atm_common::TASK_DIR);
++        let mut state = vec![head];
++        for entry in status.split('\0').filter(|e| e.len() >= 4) {
++            let path = &entry[3..];
++            if path.starts_with(&task_folder) {
++                continue;
++            }
++            let version = std::fs::metadata(self.root.join(path)).ok().map(|m| {
++                let modified = m
++                    .modified()
++                    .ok()
++                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
++                    .map_or(0, |d| d.as_nanos());
++                format!("{}:{modified}", m.len())
++            });
++            state.push(format!("{entry}\t{}", version.unwrap_or_default()));
++        }
++        Some(state.join("\n"))
++    }
++
++    /// Whether any of `relative` is a file git doesn't ignore, in one git run for them all (`check-ignore --stdin`): a
++    /// burst of changes in a working copy, which a build or an install makes of thousands of ignored files (ATM-607).
++    /// Files in a submodule are judged by the project's rules here. Outside a repository every file counts; when git
++    /// can't answer, the burst counts too (a page asks again; it never misses a change).
++    #[must_use]
++    pub fn any_not_ignored(&self, relative: &[String]) -> bool {
++        if relative.is_empty() {
++            return false;
++        }
++        if !self.in_repository() {
++            return true;
++        }
++        let input: Vec<u8> = relative
++            .iter()
++            .flat_map(|p| p.bytes().chain(std::iter::once(0)))
++            .collect();
++        let Some(output) = run_fed(&["check-ignore", "--stdin", "-z"], &self.root, Some(&input))
++        else {
++            return true;
++        };
++        // Exit 0: some are ignored, listed; 1, none is; anything else, git couldn't say (both of those count)
++        if output.status.code() != Some(0) {
++            return true;
++        }
++        let ignored: std::collections::HashSet<&[u8]> = output
++            .stdout
++            .split(|b| *b == 0)
++            .filter(|p| !p.is_empty())
++            .collect();
++        relative.iter().any(|p| !ignored.contains(p.as_bytes()))
++    }
++
+     /// Whether git tracks the file; none outside a repository.
+     #[must_use]
+     pub fn tracked(&self, relative: &str) -> Option<bool> {
+@@ -1012,6 +1093,67 @@ mod tests {
+         }
+     }
+ 
++    /// ATM-607: a burst of changes counts when any file in it is one git doesn't ignore, in one git run
++    /// ATM-607: the working copy's state changes with a file of the work written, and only then
++    #[test]
++    fn the_working_state_changes_with_the_work_only() {
++        let dir = scratch();
++        let vcs = init(&dir.0);
++        write(&vcs, ".gitignore", "*.log\n");
++        write(&vcs, "a.txt", "one\n");
++        git(&dir.0, &["add", "."]);
++        git(&dir.0, &["commit", "-q", "-m", "first"]);
++        let clean = vcs.working_state().unwrap();
++        assert_eq!(vcs.working_state().unwrap(), clean, "nothing changed");
++        write(&vcs, "build.log", "ignored");
++        write(&vcs, ".agentic-task-manager/tasks.json", "{}");
++        assert_eq!(
++            vcs.working_state().unwrap(),
++            clean,
++            "an ignored file, or atm's folder"
++        );
++        write(&vcs, "a.txt", "two\n");
++        let edited = vcs.working_state().unwrap();
++        assert_ne!(edited, clean, "a file of the work edited");
++        std::thread::sleep(std::time::Duration::from_millis(20));
++        write(&vcs, "a.txt", "three\n");
++        assert_ne!(vcs.working_state().unwrap(), edited, "edited again");
++        write(&vcs, "new.txt", "n");
++        assert!(
++            vcs.working_state().unwrap().contains("new.txt"),
++            "a new file"
++        );
++        assert_eq!(GitVcs::new(&dir.0.join("not-a-repo")).working_state(), None);
++    }
++
++    #[test]
++    fn a_burst_counts_when_any_of_its_files_isnt_ignored() {
++        let dir = scratch();
++        let vcs = init(&dir.0);
++        write(&vcs, ".gitignore", "*.log\ntarget/\n");
++        write(&vcs, "kept.log", "tracked");
++        git(&dir.0, &["add", "-f", "kept.log", ".gitignore"]);
++        git(&dir.0, &["commit", "-q", "-m", "first"]);
++        let burst = |paths: &[&str]| {
++            vcs.any_not_ignored(&paths.iter().map(|p| (*p).to_string()).collect::<Vec<_>>())
++        };
++        assert!(!burst(&[]), "nothing changed");
++        assert!(
++            !burst(&["a.log", "target/debug/atm", "target/x"]),
++            "all ignored"
++        );
++        assert!(burst(&["a.log", "src/main.rs"]), "one that isn't");
++        assert!(
++            burst(&["kept.log"]),
++            "a tracked file, though its name is ignored"
++        );
++        assert!(burst(&["new.txt"]), "a new file, not ignored");
++        assert!(
++            GitVcs::new(&dir.0.join("not-a-repo")).any_not_ignored(&["a.log".into()]),
++            "outside a repository every file counts"
++        );
++    }
++
+     #[test]
+     fn the_remote_gives_the_default_base_its_address_and_files_as_last_fetched() {
+         let dir = scratch();
+diff --git a/dashboard/src/lib/api/changes.ts b/dashboard/src/lib/api/changes.ts
+index 94b8d3b4..bba7131c 100644
+--- a/dashboard/src/lib/api/changes.ts
++++ b/dashboard/src/lib/api/changes.ts
+@@ -10,16 +10,9 @@ export interface Changed {
+   project: string | null;
+ }
+ 
+-/**
+- * Be told when the workspace `workspace` (its list of projects) or, with `project`, that project's data changes:
+- * `onChange` for each message. Returns the function that ends both subscriptions; called before the app has answered,
+- * it ends them as soon as it has.
+- */
+-export function watchChanges(
+-  workspace: string,
+-  project: string | null,
+-  onChange: (changed: Changed) => void,
+-): () => void {
++/** The app's subscriptions `commands` (each a command and its arguments), ended together by the function returned;
++ * called before the app has answered, it ends them as soon as it has */
++function subscribeAll(commands: [string, Record<string, unknown>][], onChange: (changed: Changed) => void): () => void {
+   let ended = false;
+   const ids: number[] = [];
+   const subscribe = async (command: string, args: Record<string, unknown>) => {
+@@ -32,14 +25,41 @@ export function watchChanges(
+     else ids.push(id);
+   };
+   const failed = (e: unknown) => console.error('Watching for changes failed:', e);
+-  void subscribe('subscribe_workspace', { workspace }).catch(failed);
+-  if (project) void subscribe('subscribe_project', { workspace, project }).catch(failed);
++  for (const [command, args] of commands) void subscribe(command, args).catch(failed);
+   return () => {
+     ended = true;
+     for (const id of ids.splice(0)) void unsubscribe(id);
+   };
+ }
+ 
++/**
++ * Be told when the workspace `workspace` (its list of projects) or, with `project`, that project's data changes:
++ * `onChange` for each message. Returns the function that ends both subscriptions; called before the app has answered,
++ * it ends them as soon as it has.
++ */
++export function watchChanges(
++  workspace: string,
++  project: string | null,
++  onChange: (changed: Changed) => void,
++): () => void {
++  return subscribeAll(
++    [
++      ['subscribe_workspace', { workspace }],
++      ...(project ? [['subscribe_project', { workspace, project }] as [string, Record<string, unknown>]] : []),
++    ],
++    onChange,
++  );
++}
++
++/**
++ * Be told when project `project`'s working copy changes as a live review shows it (ATM-607): a file of the work
++ * written, not one in `.git/`, atm's task folder or one git ignores. A live review's page asks again on each, instead
++ * of every few seconds. Returns the function that ends the subscription.
++ */
++export function watchWorkingCopy(workspace: string, project: string, onChange: () => void): () => void {
++  return subscribeAll([['subscribe_working_copy', { workspace, project }]], () => onChange());
++}
++
+ function unsubscribe(id: number): Promise<void> {
+   return invoke('unsubscribe', { id }).then(
+     () => undefined,
+diff --git a/dashboard/src/lib/review-data.ts b/dashboard/src/lib/review-data.ts
+index 82958017..c19b5180 100644
+--- a/dashboard/src/lib/review-data.ts
++++ b/dashboard/src/lib/review-data.ts
+@@ -24,15 +24,30 @@ export function loadReviews(project: string, query: ListQuery, fetchFn: Fetch =
+  * §3.5: a change shows within a second or two) */
+ export const LIVE_MS = 2000;
+ 
++/** The tagged page last read (a live review's page of its working copy now, ATM-607), by its address: asked for again
++ * with its tag, a 304 is this page, with no diff made on the server. One is kept: the page being followed */
++let tagged: { url: string; tag: string; page: ReviewPageData } | null = null;
++
+ /** A review's page for one view */
+-export function loadReview(
++export async function loadReview(
+   project: string,
+   review: string,
+   round: number | null,
+   against: number | null,
+   fetchFn: Fetch = browserFetch,
+ ): Promise<ReviewPageData> {
+-  return getJson(reviewUrl(project, review, round, against), fetchFn);
++  const url = reviewUrl(project, review, round, against);
++  const kept = tagged?.url === url ? tagged : null;
++  const resp = await fetchFn(url, {
++    cache: 'no-store',
++    ...(kept ? { headers: { 'If-None-Match': kept.tag } } : {}),
++  });
++  if (resp.status === 304 && kept) return kept.page;
++  const body = (await resp.json().catch(() => ({}))) as ReviewPageData & { error?: unknown };
++  if (!resp.ok) throw new Error(typeof body.error === 'string' ? body.error : `HTTP ${resp.status}`);
++  const tag = resp.headers?.get('ETag');
++  tagged = tag ? { url, tag, page: body } : tagged?.url === url ? null : tagged;
++  return body;
+ }
+ 
+ /** The sides made, by client and `project@revision`: the same source each time, so a page asked for again (its
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 36575b1c..9053d023 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -2,6 +2,7 @@
+   import { page as router } from '$app/state';
+   import { onDestroy, untrack } from 'svelte';
+   import { addressOf, reviewOf, withReview } from '../address';
++  import { watchWorkingCopy } from '../api/changes';
+   import { inApp } from '../api/http';
+   import { setWindowTitle } from '../api/shell';
+   import {
+@@ -140,13 +141,19 @@
+   });
+ 
+   // The server pushes nothing about reviews yet: ask again now and then while the tab is in view, and on coming back.
+-  // A live review follows its working copy (ATM-576): asked every LIVE_MS while it is shown, the rest every 10 s
++  // A live review follows its working copy (ATM-576): in the app, asked again when the app says a file of the work
++  // changed (ATM-607); in the browser, every LIVE_MS while it is shown, a 304 while nothing changed. The rest every 10 s
++  const followingLive = $derived(!!at.review && shown?.review.status === 'live');
++  $effect(() => {
++    const id = project;
++    if (!inApp || !followingLive || !id) return;
++    return watchWorkingCopy(dashboard.workspace, id, () => void load());
++  });
+   let ticks = 0;
+   const timer = setInterval(() => {
+     if (document.visibilityState !== 'visible') return;
+     ticks += 1;
+-    const following = !!at.review && shown?.review.status === 'live';
+-    if (following || ticks % (10_000 / LIVE_MS) === 0) void load();
++    if ((followingLive && !inApp) || ticks % (10_000 / LIVE_MS) === 0) void load();
+   }, LIVE_MS);
+   onDestroy(() => clearInterval(timer));
+ 
+diff --git a/dashboard/tests/unit/changes.test.ts b/dashboard/tests/unit/changes.test.ts
+index c5541cf9..67ccd5fc 100644
+--- a/dashboard/tests/unit/changes.test.ts
++++ b/dashboard/tests/unit/changes.test.ts
+@@ -1,6 +1,6 @@
+ import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+-import { watchChanges, type Changed } from '../../src/lib/api/changes';
++import { watchChanges, watchWorkingCopy, type Changed } from '../../src/lib/api/changes';
+ 
+ describe('the app’s changes (T-506)', () => {
+   afterEach(() => clearMocks());
+@@ -77,6 +77,21 @@ describe('the app’s changes (T-506)', () => {
+     expect(seen).toEqual([]);
+   });
+ 
++  // ATM-607: a live review's page follows the working copy by the app's push, not a timer
++  it('watches a project’s working copy for a live review; each change reaches the page until it ends', async () => {
++    const mock = app();
++    let told = 0;
++    const stop = watchWorkingCopy('default', 'abcd1234', () => (told += 1));
++    await vi.waitFor(() => expect(mock.subscribed).toEqual(['subscribe_working_copy default/abcd1234']));
++    const [[id, channel]] = [...mock.channels];
++    send(channel, { workspace: 'default', project: 'abcd1234' });
++    expect(told).toBe(1);
++    stop();
++    await vi.waitFor(() => expect(mock.ended).toEqual([id]));
++    send(channel, { workspace: 'default', project: 'abcd1234' }, 1);
++    expect(told).toBe(1);
++  });
++
+   it('a subscription the app refuses, and an unsubscription that fails, are only logged', async () => {
+     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+     const subscribed: string[] = [];
+diff --git a/dashboard/tests/unit/review-data.test.ts b/dashboard/tests/unit/review-data.test.ts
+index 9d97fae5..5676f78b 100644
+--- a/dashboard/tests/unit/review-data.test.ts
++++ b/dashboard/tests/unit/review-data.test.ts
+@@ -63,6 +63,51 @@ describe('the reads', () => {
+   });
+ });
+ 
++// ATM-607: a live review's page, followed by polling in the browser, is asked for with its tag: a 304 is the page kept
++describe('a tagged page asked for again', () => {
++  /** A server answering in turn: each answer a status, a body and an ETag (or none); what each request sent */
++  function server(...answers: [number, string, string | null][]) {
++    const sent: (string | null)[] = [];
++    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
++      sent.push(new Headers(init?.headers).get('If-None-Match'));
++      const [status, body, tag] = answers.shift()!;
++      return new Response(status === 304 ? null : body, { status, headers: tag ? { ETag: tag } : {} });
++    }) as unknown as Fetch;
++    return { fetch, sent };
++  }
++  const page = (round: number) => JSON.stringify({ review: { reference: 'CR-7' }, view: { round } });
++
++  it('sends its tag; a 304 is the page it had; a new page and tag replace them', async () => {
++    const { fetch, sent } = server(
++      [200, page(1), '"t1"'],
++      [304, '', '"t1"'],
++      [200, page(2), '"t2"'],
++      [304, '', '"t2"'],
++    );
++    const first = await loadReview('p1', 'CR-7', null, null, fetch);
++    expect(await loadReview('p1', 'CR-7', null, null, fetch)).toBe(first);
++    expect((await loadReview('p1', 'CR-7', null, null, fetch)).view).toEqual({ round: 2 });
++    expect((await loadReview('p1', 'CR-7', null, null, fetch)).view).toEqual({ round: 2 });
++    expect(sent).toEqual([null, '"t1"', '"t1"', '"t2"']);
++  });
++
++  it('another address (a round named) is sent no tag; a page answered untagged forgets its address’s', async () => {
++    const { fetch, sent } = server(
++      [200, page(1), '"t1"'],
++      [200, page(1), null],
++      [200, page(1), null],
++      [200, page(1), null],
++    );
++    await loadReview('p1', 'CR-8', null, null, fetch);
++    await loadReview('p1', 'CR-8', 1, null, fetch);
++    expect(sent).toEqual([null, null]);
++    // The live page again: its tag; answered untagged (the review no longer live), its tag is forgotten
++    await loadReview('p1', 'CR-8', null, null, fetch);
++    await loadReview('p1', 'CR-8', null, null, fetch);
++    expect(sent).toEqual([null, null, '"t1"', null]);
++  });
++});
++
+ describe('a round’s side', () => {
+   it('reads each file at its revision, never changing, with no images and no repository link', async () => {
+     const doc = { path: 'a.md', kind: 'markdown', text: '# A' };
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 217d3b33..10c685c3 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -244,7 +244,8 @@ old parameters from its hash and moves to the new address.
+ - The app's commands answer the same (without `generated_at`): `list_workspaces`, `list_projects`, `search`,
+   `project_tasks`, `claims`, `worktrees`, `document` (with `at`), `file`, `logo`, `project_reviews` and
+   `project_review`, and `subscribe_workspace`, `subscribe_project` and `unsubscribe` for live changes
+-  (docs/guides/tauri.md).
++  (docs/guides/tauri.md); `subscribe_working_copy` (ATM-607) for a live review's page: told when a file of the work
++  changes (not in `.git/` or the task folder, not one git ignores), so the page asks again then, not every 2 s.
+ 
+ ### 2.9 A project's code reviews (ATM-572, ATM-574)
+ 
+@@ -273,7 +274,10 @@ old parameters from its hash and moves to the new address.
+   A live review with no `round` asked for is shown as its working copy is now (ATM-576): `view.now: true`, its
+   `round` the one after its checkpoints (`rounds` lists only those) when the copy changed since the last checkpoint,
+   that checkpoint when it didn't. Nothing is written: the page asks again every 2 s while it shows
+-  one; a comment, or an approval, keeps what was seen as a checkpoint (a `working` round) first.
++  one (in the app, when `subscribe_working_copy` says the work changed); a comment, or an approval, keeps what was
++  seen as a checkpoint (a `working` round) first. That page alone is tagged (ATM-607): its `ETag` is made from the
++  reviews' stamp, the working copy's state (the commit checked out, `git status` and the changed files' sizes and
++  times) and who asks, so the browser's poll with `If-None-Match` gets a `304` with no diff made while nothing changed.
+ 
+ **The changes**: the only routes that change anything (docs/code-review-design.md §3.12), under
+ `/api/v2/workspaces/<w>/projects/<id>/reviews`. Each is the same atm-lib call as its `atm review …` command, acting as
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 011b373d..bfb6f78e 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -744,7 +744,13 @@ can call. T-461 reviews the finished app; until then the skeleton keeps to the T
+ 
+ **The app's commands and the v2 routes (T-456, ADR-003 §5).** New entry points: the v2 routes (I11) and the app's
+ commands, which mirror them: `list_workspaces`, `list_projects`, `search`, `project_tasks`, `claims`, `worktrees`,
+-`document`, `file`, `logo`, and `subscribe_workspace`, `subscribe_project`, `unsubscribe`.
++`document`, `file`, `logo`, and `subscribe_workspace`, `subscribe_project`, `unsubscribe`. ATM-607 adds
++`subscribe_working_copy`, for a live review's page: a recursive watch on a registered project's folder (the same
++`member` lookup as `subscribe_project`, so only projects the user registered), which says only *that* the work
++changed (the workspace and project, no path, no content), for a change outside `.git/` and the task folder in a
++file git doesn't ignore (one `git check-ignore --stdin` per settled burst, the paths fed on stdin, never as
++arguments). It reads nothing it sends, and ends with `unsubscribe` or the window's page; in the main window's
++capability.
+ 
+ - **Each command is a read through the same atm-lib call as its route** (`Workspace`, `Member`), so it has the same
+   checks: the task folder's symlink checks, the size limit, the document viewer's path rules. A test per read checks
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index aacb70bc..2f6128fe 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -607,8 +607,15 @@ describe('atm review', () => {
+       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+       // The usual lease again, for the claim taken back (a lease is fixed when it is taken)
+       delete data.meta.lease_minutes;
+-      fs.writeFileSync(tasksFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(tasksFile, 'utf8')), meta: data.meta }));
+-      const opened = ok(['review', 'create', '--title', 'Mine', '--task', 'T-1', '--uncommitted', '--json'], root, AGENT);
++      fs.writeFileSync(
++        tasksFile,
++        JSON.stringify({ ...JSON.parse(fs.readFileSync(tasksFile, 'utf8')), meta: data.meta }),
++      );
++      const opened = ok(
++        ['review', 'create', '--title', 'Mine', '--task', 'T-1', '--uncommitted', '--json'],
++        root,
++        AGENT,
++      );
+       assert.equal(opened.json().reference, 'CR-1');
+       const t1 = task(root, 'T-1');
+       assert.equal(t1.status, 'in_review');

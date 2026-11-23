@@ -1,0 +1,209 @@
+diff --git a/dashboard/src/lib/context-menus.ts b/dashboard/src/lib/context-menus.ts
+index d86d97fb..3cf17dd5 100644
+--- a/dashboard/src/lib/context-menus.ts
++++ b/dashboard/src/lib/context-menus.ts
+@@ -1,16 +1,18 @@
+ // atm's own right-click menus in the app (ATM-699, docs/tabs-and-navigation-design.md §4.5): on a link, card or row,
+-// on a title-bar tab, and elsewhere. WebKit's own menu is turned off in the app (its Reload would load the page's
+-// route, not the app's page, ATM-584), except over text, where the system's Cut, Copy and Paste stay. The browser keeps
+-// its own menus. This module says what a right-click is on and which items its menu has; ui/AppContextMenu.svelte
+-// shows them.
++// on a title-bar tab, on selected text, and elsewhere. WebKit's own menu is turned off in the app (its Reload would
++// load the page's route, not the app's page, ATM-584), except in a field you type in, where the system's Cut, Copy and
++// Paste stay. Selected text gets atm's menu with Copy (WebKit's would bring its Reload back). The browser keeps its own
++// menus. This module says what a right-click is on and which items its menu has; ui/AppContextMenu.svelte shows them.
+ import type { AppTab } from './app-tabs.svelte';
+ import { pageLink } from './menu-actions';
+ import { newTabAddress } from './new-tab-clicks';
+ 
+ /** What a right-click is on */
+ export type MenuTarget =
+-  /** Text that can be edited or is selected: the system's menu (Cut, Copy, Paste), not atm's */
++  /** A field you type in: the system's menu (Cut, Copy, Paste), not atm's */
+   | { kind: 'text' }
++  /** Text selected on the page, outside a field: atm's menu, Copy first */
++  | { kind: 'selection'; text: string }
+   /** A link, card or row to one of the dashboard's pages, by the address it opens */
+   | { kind: 'link'; address: string }
+   /** A title-bar tab, by its ID */
+@@ -25,7 +27,7 @@ export const TAB_ID_PREFIX = 'app-tab-';
+ export function menuTargetAt(target: Element | null, address: string, selected = ''): MenuTarget {
+   if (target?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
+     return { kind: 'text' };
+-  if (selected.trim()) return { kind: 'text' };
++  if (selected.trim()) return { kind: 'selection', text: selected };
+   const tab = target?.closest<HTMLElement>(`[role="tab"][id^="${TAB_ID_PREFIX}"]`);
+   if (tab) return { kind: 'tab', id: tab.id.slice(TAB_ID_PREFIX.length) };
+   const link = newTabAddress(target, address);
+@@ -64,11 +66,23 @@ export interface MenuDeps {
+ const copyLink = (deps: MenuDeps, address: string) => () =>
+   void deps.copy(pageLink(address)).catch((e: unknown) => console.error('Copying the link failed:', e));
+ 
+-/** The items of the menu for `target`; none for text (the system's menu shows) */
++/** Back, Forward and Reload, for this tab */
++const pageItems = (deps: MenuDeps, separated = false): MenuItem[] => [
++  { id: 'back', label: 'Back', disabled: !deps.canGo(-1), separated, run: deps.back },
++  { id: 'forward', label: 'Forward', disabled: !deps.canGo(1), run: deps.forward },
++  { id: 'reload', label: 'Reload', run: deps.reload },
++];
++
++/** The items of the menu for `target`; none in a field (the system's menu shows) */
+ export function menuItems(target: MenuTarget, deps: MenuDeps): MenuItem[] {
+   switch (target.kind) {
+     case 'text':
+       return [];
++    case 'selection': {
++      const { text } = target;
++      const copy = () => void deps.copy(text).catch((e: unknown) => console.error('Copying the text failed:', e));
++      return [{ id: 'copy', label: 'Copy', run: copy }, ...pageItems(deps, true)];
++    }
+     case 'link': {
+       const { address } = target;
+       return [
+@@ -105,10 +119,6 @@ export function menuItems(target: MenuTarget, deps: MenuDeps): MenuItem[] {
+       ];
+     }
+     case 'page':
+-      return [
+-        { id: 'back', label: 'Back', disabled: !deps.canGo(-1), run: deps.back },
+-        { id: 'forward', label: 'Forward', disabled: !deps.canGo(1), run: deps.forward },
+-        { id: 'reload', label: 'Reload', run: deps.reload },
+-      ];
++      return pageItems(deps);
+   }
+ }
+diff --git a/dashboard/src/lib/ui/AppContextMenu.svelte b/dashboard/src/lib/ui/AppContextMenu.svelte
+index 6bd2da68..ef6fabc7 100644
+--- a/dashboard/src/lib/ui/AppContextMenu.svelte
++++ b/dashboard/src/lib/ui/AppContextMenu.svelte
+@@ -1,8 +1,8 @@
+ <script lang="ts">
+   // atm's right-click menus in the app (ATM-699, docs/tabs-and-navigation-design.md §4.5; the rules in
+   // lib/context-menus.ts): one menu for the window, opened where it was right-clicked. WebKit's own menu is turned off,
+-  // except over text (the system's Cut, Copy and Paste) and where something already answered the click (the Back and
+-  // Forward arrows' history lists). Bits UI's menu (T-431): the arrows move, Enter chooses, Escape or a click outside
++  // except in a field you type in (the system's Cut, Copy and Paste) and where something already answered the click
++  // (the Back and Forward arrows' history lists); selected text gets atm's menu, with Copy. Bits UI's menu (T-431): the arrows move, Enter chooses, Escape or a click outside
+   // closes. The app only: the routes' layout mounts it there.
+   import { DropdownMenu } from 'bits-ui';
+   import { appTabs } from '../app-tabs.svelte';
+@@ -39,7 +39,7 @@
+     if (e.defaultPrevented) return;
+     const target = menuTargetAt(e.target as Element | null, currentAddress(), getSelection()?.toString() ?? '');
+     const listed = menuItems(target, deps);
+-    // Over text: the system's menu, with its text items
++    // In a field you type in: the system's menu, with its text items
+     if (listed.length === 0) return;
+     e.preventDefault();
+     at = { x: e.clientX, y: e.clientY };
+@@ -82,7 +82,9 @@
+     flex-direction: column;
+     min-width: 200px;
+     padding: var(--space-2);
+-    z-index: 60;
++    /* Above every layer, the details panel's (100) and the sheets' (110) too: it opens over whatever was right-clicked
++       (Bits UI gives its wrapper this z-index) */
++    z-index: 200;
+   }
+   .app-context-item {
+     border-radius: var(--radius-sm);
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 2cae872d..df12bff5 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -663,7 +663,7 @@ test.describe('the dashboard in the atm app', () => {
+   });
+ 
+   // ATM-699 (docs/tabs-and-navigation-design.md §4.5): atm's own right-click menus, WebKit's turned off
+-  test('right-click menus: on a card, on a tab, elsewhere; each item does what it says; text keeps the system’s', async ({
++  test('right-click menus: on a card, on selected text, on a tab, elsewhere; each item does what it says; a field keeps the system’s', async ({
+     page,
+     context,
+     tasksServer,
+@@ -699,6 +699,20 @@ test.describe('the dashboard in the atm app', () => {
+     await card.click({ button: 'right' });
+     await item('open').click();
+     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++
++    // Selected text (ATM-699, Hakan): atm's menu, not WebKit's (whose Reload isn't the app's); Copy copies it. The
++    // task's description, text a reader selects
++    const description = page.locator('#detail-description');
++    // Rendered once CompMD has drawn it: select it then
++    await expect(description).toHaveText(/\S/);
++    await description.selectText();
++    const selected = await page.evaluate(() => getSelection()?.toString() ?? '');
++    expect(selected.trim()).not.toBe('');
++    await description.click({ button: 'right' });
++    await expect(items).toHaveText(['Copy', 'Back', 'Forward', 'Reload']);
++    await item('copy').click();
++    await expect(menu).toBeHidden();
++    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(selected);
+     await page.keyboard.press('Escape');
+ 
+     // A tab: its six items; Close Other Tabs leaves it alone
+diff --git a/dashboard/tests/unit/context-menus.test.ts b/dashboard/tests/unit/context-menus.test.ts
+index bdc57773..b01994e2 100644
+--- a/dashboard/tests/unit/context-menus.test.ts
++++ b/dashboard/tests/unit/context-menus.test.ts
+@@ -55,8 +55,11 @@ describe('what a right-click is on', () => {
+     expect(menuTargetAt(on(html, selector), '/')).toEqual({ kind: 'text' });
+   });
+ 
+-  it('selected text is text, wherever it is', () => {
+-    expect(menuTargetAt(on('<p id="x">hello</p>', '#x'), '/', 'hello')).toEqual({ kind: 'text' });
++  it('selected text is a selection, on a link or a tab too; in a field it stays the field’s; spaces alone are none', () => {
++    expect(menuTargetAt(on('<p id="x">hello</p>', '#x'), '/', 'hello')).toEqual({ kind: 'selection', text: 'hello' });
++    const card = on('<div class="kanban-card" data-id="ATM-1"><span id="x">t</span></div>', '#x');
++    expect(menuTargetAt(card, '/projects/a/kanban', 't')).toEqual({ kind: 'selection', text: 't' });
++    expect(menuTargetAt(on('<input id="x">', '#x'), '/', 'typed')).toEqual({ kind: 'text' });
+     expect(menuTargetAt(on('<p id="x">hello</p>', '#x'), '/', '  ')).toEqual({ kind: 'page' });
+   });
+ 
+@@ -88,10 +91,33 @@ describe('what a right-click is on', () => {
+ describe('the menus', () => {
+   const link: MenuTarget = { kind: 'link', address: '/projects/a/list?task=ATM-1' };
+ 
+-  it('text has none: the system’s shows', () => {
++  it('a field has none: the system’s shows', () => {
+     expect(menuItems({ kind: 'text' }, deps().fake)).toEqual([]);
+   });
+ 
++  // ATM-699 (Hakan): WebKit's menu over a selection brought its Reload back; atm's own, Copy first
++  it('a selection: Copy, which copies the text as selected, then Back, Forward, Reload', async () => {
++    const selection: MenuTarget = { kind: 'selection', text: 'two words ' };
++    expect(menuItems(selection, deps().fake).map((i) => [i.label, !!i.disabled, !!i.separated])).toEqual([
++      ['Copy', false, false],
++      ['Back', false, true],
++      ['Forward', true, false],
++      ['Reload', false, false],
++    ]);
++    expect(await run(selection, 'copy')).toEqual(['copy two words ']);
++    expect(await run(selection, 'reload')).toEqual(['reload']);
++  });
++
++  it('a copy that fails is reported, not thrown', async () => {
++    const d = deps();
++    d.fake.copy = () => Promise.reject(new Error('denied'));
++    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
++    await run({ kind: 'selection', text: 'x' }, 'copy', d);
++    await Promise.resolve();
++    expect(logged).toHaveBeenCalledWith('Copying the text failed:', expect.any(Error));
++    logged.mockRestore();
++  });
++
+   it('a link: Open, Open in New Tab, Open in New Window, Copy Link (atm://), each doing that', async () => {
+     expect(menuItems(link, deps().fake).map((i) => i.label)).toEqual([
+       'Open',
+diff --git a/docs/tabs-and-navigation-design.md b/docs/tabs-and-navigation-design.md
+index 7d57d754..f9fa7bda 100644
+--- a/docs/tabs-and-navigation-design.md
++++ b/docs/tabs-and-navigation-design.md
+@@ -192,7 +192,7 @@ fragment (`links.rs` refuses one), so nothing in an address is a `#` anchor: a c
+ | Middle click on a title-bar tab | — | Closes it (as browsers do; the one place a middle click closes) |
+ | Right-click on a link, card or row | The browser's menu | atm's: **Open**, **Open in New Tab**, **Open in New Window**, **Copy Link** |
+ | Right-click on a title-bar tab | — | **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs** |
+-| Right-click elsewhere | The browser's | atm's: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text |
++| Right-click elsewhere | The browser's | atm's: **Back**, **Forward**, **Reload** (this tab); over selected text, **Copy** first (ATM-699: WebKit's menu there brought its own Reload back); in a field you type in, the system's text items |
+ | ⌘[ ⌘], mouse back and forward, a swipe | The browser's (the tab's) | The tab's history |
+ | ‹ › in the title bar | The browser's own buttons | Back and Forward arrows left of the sidebar toggle (Hakan, CR-63), after macOS's window buttons, as Safari, Linear and Notion have them: the active tab's history, each greyed out when there is nowhere to go; a long press or a right-click lists the entries to jump to |
+ | ⌘R, Reload | The browser's | Reloads the page and shows this tab where it was, not the window's first tab |

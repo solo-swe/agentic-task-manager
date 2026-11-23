@@ -1,0 +1,42 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "aeef51dac0a218f1b38f993a11a05c6efa8b64ce",
+    "head": "fa26dc3a882a695dae2ed14171b975d4b965f9b8"
+  },
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "Cargo.lock",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "Cargo.toml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "WHATS-NEW.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/app-desktop-ui-design.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-23T09:59:47Z"
+}

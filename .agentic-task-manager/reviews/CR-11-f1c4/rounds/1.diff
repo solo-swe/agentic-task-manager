@@ -1,0 +1,185 @@
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 8cce05ff..f4f867c7 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -772,6 +772,58 @@ mod tests {
+         assert_eq!(task(&project, "T-2")["review_state"], "approved");
+     }
+ 
++    /// ATM-609: the reviewer approves a review they sent back, with no round since: the review and its task approved
++    #[test]
++    fn a_review_sent_back_is_approved_without_a_round_since_and_so_is_its_task() {
++        let dir = dir();
++        let mut project = project(&dir.0, "claude:1");
++        let cr = super::create(
++            &mut project,
++            NewReview {
++                title: "One".into(),
++                summary: String::new(),
++                tasks: vec!["T-1".into()],
++                author: Some("claude:1".into()),
++                reviewers: vec!["Hakan".into()],
++                status: Status::Open,
++                first: round(),
++            },
++        )
++        .unwrap()
++        .reference;
++        let mut project = reopen(&dir.0, "Hakan");
++        let mut reviews = super::store(&project).unwrap();
++        let anchor = super::Anchor {
++            round: 1,
++            ..super::Anchor::default()
++        };
++        super::Reviews::new(&mut reviews)
++            .comment(&cr, anchor, "Fix it.", &"Hakan".into())
++            .unwrap();
++        super::submit(&mut project, &cr, Verdict::RequestChanges, None, None).unwrap();
++        assert_eq!(task(&project, "T-1")["review_state"], "changes_requested");
++        // With its comment open, still refused
++        assert!(super::submit(&mut project, &cr, Verdict::Approve, None, None).is_err());
++        let open = reviews
++            .get_review(&cr)
++            .unwrap()
++            .open_comments()
++            .next()
++            .unwrap()
++            .id
++            .clone();
++        super::Reviews::new(&mut reviews)
++            .resolve(&cr, &open, true, &"Hakan".into())
++            .unwrap();
++        super::submit(&mut project, &cr, Verdict::Approve, None, None).unwrap();
++        let reviews = super::store(&project).unwrap();
++        assert_eq!(
++            reviews.get_review(&cr).unwrap().header.status,
++            Status::Approved
++        );
++        assert_eq!(task(&project, "T-1")["review_state"], "approved");
++    }
++
+     fn open_review(project: &mut Project, tasks: &[&str]) -> super::ReviewHeader {
+         super::create(
+             project,
+diff --git a/crates/atm-review/src/rules.rs b/crates/atm-review/src/rules.rs
+index 8234b2c5..0f06d82d 100644
+--- a/crates/atm-review/src/rules.rs
++++ b/crates/atm-review/src/rules.rs
+@@ -309,8 +309,12 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+         };
+         let status = review.header.status;
+         let next = match verdict {
++            // Sent back too (ATM-609): a reviewer may change their mind, or settle what they asked for themselves
+             Verdict::Approve => {
+-                if !matches!(status, Status::Open | Status::Live) {
++                if !matches!(
++                    status,
++                    Status::Open | Status::Live | Status::ChangesRequested
++                ) {
+                     return Err(not_now(&review, "be approved"));
+                 }
+                 let open: Vec<String> = review.open_comments().map(|c| c.id.0.clone()).collect();
+@@ -1275,12 +1279,17 @@ mod tests {
+ 
+     /// Each status and decision: allowed or refused, the status it leaves, and whether the reviewer's words are kept
+     #[test]
+-    fn an_approval_is_for_an_open_or_live_review_and_a_send_back_for_an_open_one() {
++    fn an_approval_is_for_an_open_live_or_sent_back_review_and_a_send_back_for_an_open_one() {
+         for (status, verdict, after) in [
+             (Status::Draft, Verdict::Approve, None),
+             (Status::Open, Verdict::Approve, Some(Status::Approved)),
+             (Status::Live, Verdict::Approve, Some(Status::Approved)),
+-            (Status::ChangesRequested, Verdict::Approve, None),
++            // Sent back, then approved after all (ATM-609)
++            (
++                Status::ChangesRequested,
++                Verdict::Approve,
++                Some(Status::Approved),
++            ),
+             (Status::Draft, Verdict::RequestChanges, None),
+             (
+                 Status::Open,
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 7bc8821c..c8246152 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -350,9 +350,9 @@
+   });
+   /** Nothing left open: the decision at hand is to approve */
+   const settled = $derived(chainCounts.open === 0);
+-  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can */
++  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can. A review
++   * sent back can be approved too (ATM-609) */
+   const approveBlocked = $derived.by(() => {
+-    if (review.status === 'changes_requested') return 'Sent back: it is approved after its author’s next round';
+     const open = chainCounts.open;
+     if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
+     return null;
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 0afebe58..d1ff3e93 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -603,15 +603,6 @@ describe('ReviewPage: submit', () => {
+       (p: ReviewPageData) => ({ ...p, chains: [...p.chains, { ...p.chains[0], id: 't2' }] }),
+       '2 comments are still open: resolve them first',
+     ],
+-    [
+-      'it is sent back, everything resolved',
+-      (p: ReviewPageData) => ({
+-        ...p,
+-        chains: [chain('t1', 'src/a.rs', {}, true)],
+-        review: { ...p.review, status: 'changes_requested' as const },
+-      }),
+-      'Sent back: it is approved after its author’s next round',
+-    ],
+   ])('while %s, Approve is disabled and says why', async (_, made, why) => {
+     const { onsubmit } = show(made(open()));
+     // No one-click Approve either
+@@ -634,6 +625,26 @@ describe('ReviewPage: submit', () => {
+     expect(screen.queryByText(/still open|Sent back/)).toBeNull();
+   });
+ 
++  // ATM-609: a reviewer may approve a review they sent back, its comments resolved; with one open, still not
++  it('sent back, everything resolved: Approve is one click, and sends the approval', async () => {
++    const { onsubmit } = show(
++      data({ chains: [chain('t1', 'src/a.rs', {}, true)], review: { ...open().review, status: 'changes_requested' } }),
++    );
++    const approve = screen.getByRole('button', { name: 'Approve' });
++    expect(approve).toBeEnabled();
++    expect(approve).not.toHaveAttribute('aria-describedby');
++    await fireEvent.click(approve);
++    expect(onsubmit.mock.calls).toEqual([['approve', '']]);
++  });
++
++  it('sent back with a comment open: Approve is disabled, saying so', async () => {
++    show({ ...open(), review: { ...open().review, status: 'changes_requested' } });
++    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(
++      '1 comment is still open: resolve them first',
++    );
++  });
++
+   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {
+     const { rerender } = show(open());
+     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+diff --git a/docs/code-review-design.md b/docs/code-review-design.md
+index 76d64704..610db069 100644
+--- a/docs/code-review-design.md
++++ b/docs/code-review-design.md
+@@ -148,6 +148,7 @@ stateDiagram-v2
+     changes_requested --> open: the author adds a round
+     open --> approved: a reviewer approves (every top-level comment resolved)
+     live --> approved: a reviewer approves (every top-level comment resolved)
++    changes_requested --> approved: a reviewer approves after all (every top-level comment resolved; ATM-609)
+     live --> open: the author ends the live review with a round
+     draft --> closed
+     open --> closed
+@@ -162,7 +163,7 @@ stateDiagram-v2
+ | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
+ | `open` | waiting on the reviewers | the author, with a round |
+ | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
+-| `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words (changes asked for again keeps it here, with what they wrote; ATM-597) | a reviewer, when submitting |
++| `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words (changes asked for again keeps it here, with what they wrote; ATM-597); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
+ | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
+ | `closed` | ended without approval (abandoned, replaced) | the author, or a reviewer |
+ 

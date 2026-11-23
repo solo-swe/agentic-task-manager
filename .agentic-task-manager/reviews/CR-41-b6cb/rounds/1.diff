@@ -1,0 +1,189 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index a5fb9f6e..19156414 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -3997,6 +3997,10 @@ svg.graph-minimap.hidden {
+ .review-wait::before {
+   content: '◷ ';
+ }
++/* A card's code review, while in review (ATM-619): a link that opens it */
++.card-review {
++  margin-top: var(--space-3);
++}
+ .review-note {
+   margin-top: var(--space-2);
+ }
+diff --git a/dashboard/src/lib/details/ReviewLink.svelte b/dashboard/src/lib/details/ReviewLink.svelte
+index dbb5cf1d..61b5a3b3 100644
+--- a/dashboard/src/lib/details/ReviewLink.svelte
++++ b/dashboard/src/lib/details/ReviewLink.svelte
+@@ -34,9 +34,10 @@
+   const tabs = tabActions();
+ 
+   function open(e: MouseEvent) {
++    // The link's own, a new tab's too: never the card's or row's it is on (ATM-619), which would open the task
++    e.stopPropagation();
+     if (!inApp && wantsNewTab(e)) return;
+     e.preventDefault();
+-    e.stopPropagation();
+     if (inApp) tabs.open(href);
+     else navigate(href);
+   }
+diff --git a/dashboard/src/lib/kanban/KanbanCard.svelte b/dashboard/src/lib/kanban/KanbanCard.svelte
+index b9b88c77..a9fa379f 100644
+--- a/dashboard/src/lib/kanban/KanbanCard.svelte
++++ b/dashboard/src/lib/kanban/KanbanCard.svelte
+@@ -1,5 +1,6 @@
+ <script lang="ts">
+   import { claimSummary } from '../claims';
++  import ReviewLink from '../details/ReviewLink.svelte';
+   import type { KanbanCard } from '../kanban';
+   import { dashboard } from '../state.svelte';
+   import { phaseColor, typeStyle } from '../theme';
+@@ -36,7 +37,12 @@
+       : '',
+   );
+ 
++  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
++  const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
++
+   function onKeydown(e: KeyboardEvent) {
++    // A key on a link inside it (its review's) is the link's
++    if (e.target !== e.currentTarget) return;
+     if (e.key === 'Enter' || e.key === ' ') {
+       e.preventDefault();
+       dashboard.showDetail(task.id);
+@@ -90,6 +96,9 @@
+       {reviewSummary(review)}
+     </div>
+   {/if}
++  {#if codeReview && dashboard.projectId}
++    <div class="card-review"><ReviewLink project={dashboard.projectId} reference={codeReview.ref} prominent /></div>
++  {/if}
+   {#if block}
+     <div
+       class="kanban-waiting block-wait"
+diff --git a/dashboard/src/lib/tasks/TaskCard.svelte b/dashboard/src/lib/tasks/TaskCard.svelte
+index cc093650..da82e225 100644
+--- a/dashboard/src/lib/tasks/TaskCard.svelte
++++ b/dashboard/src/lib/tasks/TaskCard.svelte
+@@ -1,5 +1,6 @@
+ <script lang="ts">
+   import { claimSummary } from '../claims';
++  import ReviewLink from '../details/ReviewLink.svelte';
+   import { scrollToTask } from '../scroll';
+   import { dashboard } from '../state.svelte';
+   import { kindStyle, phaseColor, typeStyle } from '../theme';
+@@ -32,6 +33,8 @@
+   const deps = $derived(task.dependencies ?? []);
+   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
+   const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
++  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
++  const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
+   const block = $derived(blockWait(task, dashboard.loadedAt, dashboard.vocab));
+   // The row's width (T-338): the description's start and the latest note on the left, who and when on the right
+   const excerpt = $derived(task.description ? markdownPlainText(task.description) : '');
+@@ -87,6 +90,9 @@
+         {reviewSummary(review)}
+       </div>
+     {/if}
++    {#if codeReview && dashboard.projectId}
++      <div class="card-review"><ReviewLink project={dashboard.projectId} reference={codeReview.ref} prominent /></div>
++    {/if}
+     {#if block}
+       <div
+         class="task-waiting block-wait"
+diff --git a/dashboard/tests/e2e/kanban.spec.ts b/dashboard/tests/e2e/kanban.spec.ts
+index 95c46a35..0d3b4e2b 100644
+--- a/dashboard/tests/e2e/kanban.spec.ts
++++ b/dashboard/tests/e2e/kanban.spec.ts
+@@ -189,6 +189,37 @@ test.describe('Kanban board', () => {
+     await expect(page.locator('#detail-panel h3')).toHaveText('T-025 Build the board');
+   });
+ 
++  // ATM-619: a card in review shows its code review, a link that opens it from the board, not the task
++  test('a card in review links to its code review: Enter or a click opens it; ⌘-click a tab of its own', async ({
++    page,
++    tasksServer,
++  }) => {
++    const data = loadFixture('standard');
++    Object.assign(
++      data.tasks.find((t) => t.id === 'T-004')!,
++      {
++        status: 'in_review',
++        code_reviews: [{ id: 'u2', ref: 'CR-2' }],
++      },
++    );
++    await openKanban(page, tasksServer, data);
++    const link = card(page, 'T-004').locator('.card-review .review-link');
++    await expect(link).toHaveAttribute('data-review', 'CR-2');
++    const reviews = `/projects/${tasksServer.projectId}/reviews`;
++    const [tab] = await Promise.all([
++      page.context().waitForEvent('page'),
++      link.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] }),
++    ]);
++    await expect.poll(() => new URL(tab.url()).pathname).toBe(`${reviews}/CR-2`);
++    await tab.close();
++    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
++    // Enter on the link (in the card's tab order) opens the review, not the task's details
++    await link.focus();
++    await page.keyboard.press('Enter');
++    await expect.poll(() => new URL(page.url()).pathname).toBe(`${reviews}/CR-2`);
++    expect(new URL(page.url()).searchParams.get('task')).toBeNull();
++  });
++
+   test('skipped tasks are hidden behind a toggle', async ({ page, tasksServer }) => {
+     await openKanban(page, tasksServer, 'kanban');
+     await expect(column(page, 'skipped')).toHaveCount(0);
+diff --git a/dashboard/tests/unit/TaskCard.component.test.ts b/dashboard/tests/unit/TaskCard.component.test.ts
+index b2b7fa06..661f08cd 100644
+--- a/dashboard/tests/unit/TaskCard.component.test.ts
++++ b/dashboard/tests/unit/TaskCard.component.test.ts
+@@ -8,6 +8,8 @@ import standard from '../fixtures/standard.json';
+ import { loadIntoDashboard } from './components.helpers';
+ 
+ vi.mock('../../src/lib/scroll', () => ({ scrollToTask: vi.fn() }));
++const navigate = vi.hoisted(() => vi.fn());
++vi.mock('../../src/lib/navigation', async (actual) => ({ ...(await actual()), navigate }));
+ 
+ const task = (id: string) => dashboard.taskMap.get(id) as Task;
+ 
+@@ -37,6 +39,38 @@ describe('TaskCard', () => {
+     ]);
+   });
+ 
++  // ATM-619: a task in review shows its code review, a link that opens it and not the task
++  it('in review with a code review: its latest as a link to its page; a click opens it, not the task', async () => {
++    dashboard.projectId = 'p1';
++    const show = vi.spyOn(dashboard, 'showDetail');
++    const reviewed = {
++      ...task('T-004'),
++      status: 'in_review',
++      code_reviews: [
++        { id: 'u1', ref: 'CR-3' },
++        { id: 'u2', ref: 'CR-7' },
++      ],
++    };
++    const { container } = render(TaskCard, { task: reviewed });
++    const links = container.querySelectorAll<HTMLAnchorElement>('.card-review .review-link');
++    expect([...links].map((a) => [a.dataset.review, a.getAttribute('href')])).toEqual([
++      ['CR-7', '/projects/p1/reviews/CR-7'],
++    ]);
++    await fireEvent.click(links[0]);
++    expect(navigate).toHaveBeenCalledWith('/projects/p1/reviews/CR-7');
++    expect(show).not.toHaveBeenCalled();
++    dashboard.projectId = null;
++  });
++
++  it('no link without a code review, nor once the task is out of review', () => {
++    dashboard.projectId = 'p1';
++    const inReview = render(TaskCard, { task: { ...task('T-004'), status: 'in_review' } });
++    expect(inReview.container.querySelector('.card-review')).toBeNull();
++    const done = render(TaskCard, { task: { ...task('T-004'), code_reviews: [{ id: 'u2', ref: 'CR-7' }] } });
++    expect(done.container.querySelector('.card-review')).toBeNull();
++    dashboard.projectId = null;
++  });
++
+   it('dependency links show the target name and scroll to it', async () => {
+     render(TaskCard, { task: task('T-004') });
+     const link = screen.getByText('T-002');

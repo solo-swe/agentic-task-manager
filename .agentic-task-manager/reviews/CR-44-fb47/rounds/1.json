@@ -1,0 +1,142 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "75b27ed872a2ebf06fc689dd6fb262447202d49d",
+    "head": "bdf323a6367e4310cda50a77ea532d818dca2068"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/db.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/task.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/vcs.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/schema/api.schema.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/schema/task.schema.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/src/keys.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/src/keys/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/jsongit/files.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/jsongit/migrate.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/jsongit/migrate/keys.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/jsongit/migrate/keys/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/jsongit/migrate/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/code.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/edit.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/edit/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/foreign.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/project.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/summary.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/summary/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/commands.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/tasks.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/atm-push/SKILL.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/keys.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/migrate-phases.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/migrate.json",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T01:53:49Z"
+}

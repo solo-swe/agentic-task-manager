@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "868759376991ec92b191efe9e96d7d7600e1e4a2",
+    "head": "97bdb2d935f31d12aa08aafcdb036b9cec1a899f"
+  },
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/playwright.config.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T19:55:50Z"
+}

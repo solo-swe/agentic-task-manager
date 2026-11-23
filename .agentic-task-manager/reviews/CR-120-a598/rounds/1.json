@@ -1,0 +1,17 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "ecf97e4623dd47de891babf752f207c3c121846f",
+    "head": "10a1e634ce2413a36a5d4f31adb28305bff863ea"
+  },
+  "files": [
+    {
+      "path": "dashboard/tests/unit/setup.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-22T20:40:01Z"
+}

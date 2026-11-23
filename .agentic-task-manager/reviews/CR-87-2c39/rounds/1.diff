@@ -1,0 +1,1274 @@
+diff --git a/crates/atm-docs/src/lib.rs b/crates/atm-docs/src/lib.rs
+index c8cc0dc8..3b6cfa36 100644
+--- a/crates/atm-docs/src/lib.rs
++++ b/crates/atm-docs/src/lib.rs
+@@ -412,16 +412,15 @@ fn file_at<'a>(vcs: Option<&GitVcs>, revision: &str, path: &'a str) -> Result<Fi
+             "this project has no repository to read files from".into(),
+         ));
+     };
+-    // A revision is a commit's name, never an option for git
+-    if revision.is_empty() || revision.starts_with('-') || revision.contains('\0') {
+-        return Err(Error::Invalid(format!("{revision}: not a revision")));
+-    }
++    // A revision is a commit's name, never an option for git (atm-vcs's Rev, ATM-659)
++    let rev = atm_vcs::Rev::new(revision)
++        .map_err(|_| Error::Invalid(format!("{revision}: not a revision")))?;
+     // A commit, or a tree (a review's round rebuilt from its diff, which no commit has): the project's, or, for a file
+     // in a submodule, the submodule's own (a review's round of commits made in it, ATM-583), read by its path there
+     let found = |repo: &GitVcs| {
+-        let commit = repo.resolve(revision);
+-        let object = commit.clone().or_else(|| repo.resolve_tree(revision))?;
+-        Some((commit, object))
++        let commit = repo.resolve(&rev);
++        let object = commit.clone().or_else(|| repo.resolve_tree(&rev))?;
++        Some((commit, atm_vcs::Rev::object_id(&object).ok()?))
+     };
+     let (repo, inside, commit, object) = match found(vcs) {
+         Some((commit, object)) => (vcs.clone(), path.to_string(), commit, object),
+@@ -450,14 +449,14 @@ fn file_at<'a>(vcs: Option<&GitVcs>, revision: &str, path: &'a str) -> Result<Fi
+             limit / 1_000_000
+         )));
+     }
+-    let data = repo.blob_bytes(&blob)?;
++    let data = repo.blob_bytes(&atm_vcs::Rev::object_id(&blob)?)?;
+     Ok(FileAt {
+         path,
+         kind,
+         detail,
+         data,
+         commit,
+-        object,
++        object: object.to_string(),
+     })
+ }
+ 
+@@ -948,6 +947,11 @@ mod tests {
+         std::mem::forget(lib); // inside the project, which removes it
+     }
+ 
++    /// The test repository's first commit, tagged `first`.
++    fn first() -> atm_vcs::Rev {
++        atm_vcs::Rev::new("first").unwrap()
++    }
++
+     #[test]
+     fn a_file_at_a_revision_is_read_as_that_commit_has_it() {
+         let repo = Repo::new();
+@@ -955,7 +959,7 @@ mod tests {
+         let then = read_document_at(Some(&vcs), "first", "a.md").unwrap();
+         assert_eq!(then["document"], "# One\n");
+         assert_eq!(then["kind"], "markdown");
+-        assert_eq!(then["revision"], json!(vcs.resolve("first")));
++        assert_eq!(then["revision"], json!(vcs.resolve(&first())));
+         assert_eq!(
+             read_document(Some(&vcs), "a.md").unwrap()["document"],
+             "# Two\n"
+@@ -986,7 +990,9 @@ mod tests {
+             b"GIF89a-new".to_vec()
+         );
+         // In a tree too (a round rebuilt from its diff)
+-        let tree = vcs.resolve_tree("old").unwrap();
++        let tree = vcs
++            .resolve_tree(&atm_vcs::Rev::new("old").unwrap())
++            .unwrap();
+         assert_eq!(
+             read_image_at(Some(&vcs), &tree, "pic.gif").unwrap().0,
+             b"GIF89a-old".to_vec()
+@@ -1025,14 +1031,14 @@ mod tests {
+     fn a_file_in_a_tree_is_read_as_the_tree_has_it() {
+         let repo = Repo::new();
+         let vcs = repo.vcs();
+-        let tree = vcs.resolve_tree("first").unwrap();
++        let tree = vcs.resolve_tree(&first()).unwrap();
+         let then = read_document_at(Some(&vcs), &tree, "a.md").unwrap();
+         assert_eq!(then["document"], "# One\n");
+         assert_eq!(then["revision"], json!(tree));
+         assert_eq!(then["commit"], Value::Null);
+         // A commit's own answer names the commit
+         let at_commit = read_document_at(Some(&vcs), "first", "a.md").unwrap();
+-        assert_eq!(at_commit["commit"], json!(vcs.resolve("first")));
++        assert_eq!(at_commit["commit"], json!(vcs.resolve(&first())));
+         // The tree's checks are a commit's: a file it doesn't have, a path atm doesn't show
+         assert!(matches!(
+             read_document_at(Some(&vcs), &tree, "b.md"),
+diff --git a/crates/atm-lib/src/code.rs b/crates/atm-lib/src/code.rs
+index 45e9c5c6..62aa3e53 100644
+--- a/crates/atm-lib/src/code.rs
++++ b/crates/atm-lib/src/code.rs
+@@ -240,22 +240,23 @@ pub fn record_commit(
+     rev: &str,
+ ) -> Result<Value> {
+     let vcs = needs_git(vcs)?;
+-    if rev.starts_with('-') {
+-        return Err(Error::Invalid(format!(
++    let given = atm_vcs::Rev::new(rev).map_err(|_| {
++        Error::Invalid(format!(
+             "--record takes a revision, not an option: {}",
+             repr_str(rev)
+-        )));
+-    }
++        ))
++    })?;
+     let sha = vcs
+-        .resolve(rev)
++        .resolve(&given)
+         .ok_or_else(|| Error::failed(format!("no commit {rev} in this repository")))?;
+-    if !vcs.in_history(&sha) {
++    let commit = atm_vcs::Rev::object_id(&sha)?;
++    if !vcs.in_history(&commit) {
+         return Err(Error::failed(format!(
+             "{} is not on the current branch (an ancestor of HEAD)",
+             &sha[..7.min(sha.len())]
+         )));
+     }
+-    let text = vcs.message(&sha)?;
++    let text = vcs.message(&commit)?;
+     let task = record_on_task(project, task_id, &sha)?;
+     let id = task.get("id").map(py_str).unwrap_or_default();
+     // With task keys (ADR-007 §9) the message names its key, an alias or a key with an earlier prefix
+diff --git a/crates/atm-lib/src/review_drafts/tests.rs b/crates/atm-lib/src/review_drafts/tests.rs
+index c6bc0b21..4e1daad9 100644
+--- a/crates/atm-lib/src/review_drafts/tests.rs
++++ b/crates/atm-lib/src/review_drafts/tests.rs
+@@ -32,8 +32,9 @@ fn dir() -> Dir {
+ fn round() -> NewRound {
+     NewRound {
+         kind: RoundKind::Range {
+-            base: "a".into(),
+-            head: "b".into(),
++            // Commits as atm records them, full IDs (ATM-659)
++            base: "a".repeat(40),
++            head: "b".repeat(40),
+         },
+         submodule: None,
+         // The file the drafts are on: a comment is on one of its round's files (ATM-658)
+diff --git a/crates/atm-lib/src/review_keys.rs b/crates/atm-lib/src/review_keys.rs
+index 26dd02b2..f2a8738e 100644
+--- a/crates/atm-lib/src/review_keys.rs
++++ b/crates/atm-lib/src/review_keys.rs
+@@ -85,9 +85,10 @@ fn holder_then(reviews: &FileStore, header: &ReviewHeader, key: &str) -> Option<
+     let tasks = format!("{TASK_DIR}/tasks.json");
+     // A round's commit is what its file says, and anyone who can change the review wrote it: only a full SHA is read,
+     // never text git could take for an option or a revision expression
+-    let sha = |c: &&String| matches!(c.len(), 40 | 64) && c.bytes().all(|b| b.is_ascii_hexdigit());
+-    commits.iter().filter(sha).find_map(|commit| {
+-        let (_, blob) = vcs.blob_in(commit, &tasks)?;
++    commits.iter().find_map(|commit| {
++        let commit = atm_vcs::Rev::object_id(commit).ok()?;
++        let (_, blob) = vcs.blob_in(&commit, &tasks)?;
++        let blob = atm_vcs::Rev::object_id(&blob).ok()?;
+         let document: Value = serde_json::from_slice(&vcs.blob_bytes(&blob).ok()?).ok()?;
+         let found = keys::resolve(&document, &[], key).ok()?;
+         found.task.get("id")?.as_str().map(str::to_string)
+diff --git a/crates/atm-lib/src/review_listen.rs b/crates/atm-lib/src/review_listen.rs
+index a954d9bd..10783517 100644
+--- a/crates/atm-lib/src/review_listen.rs
++++ b/crates/atm-lib/src/review_listen.rs
+@@ -194,16 +194,20 @@ fn work_of(project: &Project, me: &str) -> Work {
+             work.held = Some(key.clone());
+         }
+         let mut files = declared_files(task);
+-        if let (Some(vcs), Some(commit)) = (&vcs, task.get("commit").and_then(Value::as_str)) {
+-            let parent = format!("{commit}^");
+-            if let Ok(diff) = vcs.diff_range(&parent, commit, &[atm_common::TASK_DIR]) {
+-                files.extend(diff.files.into_iter().map(|f| f.path));
+-            }
++        // The task's commit is task text: a revision only once checked (ATM-659)
++        if let (Some(vcs), Some(commit)) = (&vcs, task.get("commit").and_then(Value::as_str))
++            && let (Ok(parent), Ok(commit)) = (
++                atm_vcs::Rev::new(&format!("{commit}^")),
++                atm_vcs::Rev::new(commit),
++            )
++            && let Ok(diff) = vcs.diff_range(&parent, &commit, &[atm_common::TASK_DIR])
++        {
++            files.extend(diff.files.into_iter().map(|f| f.path));
+         }
+         work.tasks.push((key, files));
+     }
+     if let Some(vcs) = &vcs
+-        && let Ok(diff) = vcs.diff_working("HEAD", &[atm_common::TASK_DIR])
++        && let Ok(diff) = vcs.diff_working(&atm_vcs::Rev::head(), &[atm_common::TASK_DIR])
+     {
+         work.uncommitted = diff.files.into_iter().map(|f| f.path).collect();
+     }
+diff --git a/crates/atm-lib/src/review_pages.rs b/crates/atm-lib/src/review_pages.rs
+index 275ab72e..d9da4eab 100644
+--- a/crates/atm-lib/src/review_pages.rs
++++ b/crates/atm-lib/src/review_pages.rs
+@@ -366,8 +366,11 @@ fn with_links(
+     before: Option<&String>,
+     after: &String,
+ ) -> Vec<FilePatch> {
+-    let linked =
+-        |object: Option<&String>, path: &str| object.and_then(|o| repo.gitlink_in(o, path));
++    // A side is a round's commit or a tree atm rebuilt: a full object ID, or nothing to look up (ATM-659)
++    let linked = |object: Option<&String>, path: &str| {
++        let object = atm_vcs::Rev::object_id(object?).ok()?;
++        repo.gitlink_in(&object, path)
++    };
+     patches
+         .into_iter()
+         .map(|mut file| {
+@@ -410,7 +413,7 @@ fn view<S: RoundDiffs + ?Sized>(
+             };
+             let after = match &round.kind {
+                 RoundKind::Range { head, .. } => head.clone(),
+-                _ => rounds::tree(vcs, round, &diff)?,
++                _ => rounds::tree(vcs, round, &diff)?.to_string(),
+             };
+             (before, after, diff, Some(&round.files))
+         }
+@@ -421,8 +424,8 @@ fn view<S: RoundDiffs + ?Sized>(
+         }
+         Some(from) => {
+             let earlier = round_of(review, from)?;
+-            let before = rounds::tree(vcs, earlier, &store.diff_of(id, from)?)?;
+-            let after = rounds::tree(vcs, round, &diff)?;
++            let before = rounds::tree(vcs, earlier, &store.diff_of(id, from)?)?.to_string();
++            let after = rounds::tree(vcs, round, &diff)?.to_string();
+             let between = rounds::compare(vcs, store, review, from, shown)?;
+             (Some(before), after, between, None)
+         }
+@@ -459,7 +462,8 @@ fn view<S: RoundDiffs + ?Sized>(
+         if let Some((Some(from), Some(to))) = &file.submodule
+             && from != to
+             && let Some(sub) = vcs.submodule_at(&file.path)
+-            && let Ok(diff) = sub.diff_range(from, to, &[])
++            && let (Ok(a), Ok(b)) = (atm_vcs::Rev::object_id(from), atm_vcs::Rev::object_id(to))
++            && let Ok(diff) = sub.diff_range(&a, &b, &[])
+         {
+             out.extend(
+                 file_patches(&diff.patch)
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 76e78e00..755bd677 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -947,9 +947,10 @@ mod tests {
+     }
+     fn round() -> NewRound {
+         NewRound {
++            // Commits as atm records them, full IDs (ATM-659)
+             kind: RoundKind::Range {
+-                base: "a".into(),
+-                head: "b".into(),
++                base: "a".repeat(40),
++                head: "b".repeat(40),
+             },
+             submodule: None,
+             files: Vec::new(),
+@@ -1286,8 +1287,8 @@ mod tests {
+         let mut reviews = super::store(&project).unwrap();
+         let mut later = round();
+         later.kind = RoundKind::Range {
+-            base: "a".into(),
+-            head: "c".into(),
++            base: "a".repeat(40),
++            head: "c".repeat(40),
+         };
+         super::Reviews::new(&mut reviews)
+             .add_round(&cr, later)
+diff --git a/crates/atm-review/src/folder.rs b/crates/atm-review/src/folder.rs
+index d911cc28..25dfeb10 100644
+--- a/crates/atm-review/src/folder.rs
++++ b/crates/atm-review/src/folder.rs
+@@ -180,7 +180,7 @@ impl FileStore {
+         let text = read_file(&path).ok()??;
+         serde_json::from_str::<Round>(&text)
+             .ok()
+-            .filter(|r| r.number == 1)
++            .filter(|r| r.number == 1 && r.kind.check().is_ok())
+     }
+ 
+     /// One review's folder, read: its header, summary, comments and rounds.
+@@ -225,6 +225,11 @@ impl FileStore {
+                         round.number
+                     )));
+                 }
++                // Its commits reach git: full IDs only, never a name git could read as an option (ATM-659)
++                round
++                    .kind
++                    .check()
++                    .map_err(|e| Error::failed(format!("{}: {e}", entry.path().shown())))?;
+                 rounds.push(round);
+             }
+         }
+@@ -343,7 +348,7 @@ impl FileStore {
+ 
+     /// The review a reference names, as the folder holds it.
+     fn find(&self, reference: &ReviewRef) -> Result<Held> {
+-        let (held, ..) = self.read_all()?;
++        let (held, _, unreadable) = self.read_all()?;
+         if let Some(found) = held.iter().find(|h| {
+             h.review.header.reference == *reference || h.review.header.id.0 == reference.0
+         }) {
+@@ -356,6 +361,13 @@ impl FileStore {
+             .filter(|h| h.review.header.reference.0.starts_with(&prefix))
+             .collect();
+         if clashing.is_empty() {
++            // A review whose folder atm can't read says why, rather than that there is none (ATM-659: a round refused)
++            if let Some(bad) = unreadable.iter().find(|u| u.reference == reference.0) {
++                return Err(Error::failed(format!(
++                    "{reference} can't be read: {}",
++                    bad.problem
++                )));
++            }
+             return Err(Error::NotFound(format!("no review {reference}")));
+         }
+         let names: Vec<String> = clashing
+@@ -669,8 +681,9 @@ mod tests {
+             status: Status::Waiting,
+             first: NewRound {
+                 kind: RoundKind::Range {
+-                    base: "a1".into(),
+-                    head: "b2".into(),
++                    // Commits as atm records them, full IDs (ATM-659)
++                    base: "a1".repeat(20),
++                    head: "b2".repeat(20),
+                 },
+                 submodule: None,
+                 files: vec![FileChange {
+diff --git a/crates/atm-review/src/model.rs b/crates/atm-review/src/model.rs
+index 26985ca6..21ef04dc 100644
+--- a/crates/atm-review/src/model.rs
++++ b/crates/atm-review/src/model.rs
+@@ -184,6 +184,29 @@ pub enum RoundKind {
+     Files,
+ }
+ 
++impl RoundKind {
++    /// Whether the commits it names are full object IDs, as atm records them: `rounds/N.json` is committed and merged,
++    /// so anyone who can push writes it, and these reach git (ATM-659).
++    ///
++    /// # Errors
++    /// `Invalid`, naming the one that isn't.
++    pub fn check(&self) -> atm_common::Result<()> {
++        let commits: &[(&str, &String)] = match self {
++            Self::Range { base, head } => &[("base", base), ("head", head)],
++            Self::Working { base } => &[("base", base)],
++            Self::Files => &[],
++        };
++        for (what, id) in commits {
++            if !atm_vcs::is_object_id(id) {
++                return Err(atm_common::Error::Invalid(format!(
++                    "its {what} {id:?} isn't a commit's full ID, as atm writes it"
++                )));
++            }
++        }
++        Ok(())
++    }
++}
++
+ /// How a file changed in a round.
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ #[serde(rename_all = "snake_case")]
+@@ -449,6 +472,65 @@ mod tests {
+         );
+     }
+ 
++    /// ATM-659: a round's commits reach git, and `rounds/N.json` is anyone's to write: full object IDs only
++    #[test]
++    fn a_rounds_commits_are_full_object_ids_or_it_is_refused() {
++        let sha = "0123456789abcdef0123456789abcdef01234567";
++        let sha256 = "f".repeat(64);
++        for good in [
++            RoundKind::Range {
++                base: sha.into(),
++                head: sha256.clone(),
++            },
++            RoundKind::Working { base: sha.into() },
++            RoundKind::Files,
++        ] {
++            assert!(good.check().is_ok(), "{good:?}");
++        }
++        for (bad, says) in [
++            (
++                RoundKind::Range {
++                    base: "--index-output=x".into(),
++                    head: sha.into(),
++                },
++                "base \"--index-output=x\"",
++            ),
++            (
++                RoundKind::Range {
++                    base: sha.into(),
++                    head: "-p".into(),
++                },
++                "head \"-p\"",
++            ),
++            (
++                RoundKind::Range {
++                    base: sha.into(),
++                    head: "HEAD".into(),
++                },
++                "head \"HEAD\"",
++            ),
++            (
++                RoundKind::Working {
++                    base: "abc1234".into(),
++                },
++                "base \"abc1234\"",
++            ),
++            (
++                RoundKind::Working {
++                    base: format!("{sha}\n--all"),
++                },
++                "base",
++            ),
++        ] {
++            match bad.check() {
++                Err(atm_common::Error::Invalid(message)) => {
++                    assert!(message.contains(says), "{message}");
++                }
++                other => panic!("{bad:?}: {other:?}"),
++            }
++        }
++    }
++
+     #[test]
+     fn a_rounds_kind_and_a_files_status_are_written_tagged() {
+         for (kind, written) in [
+diff --git a/crates/atm-review/src/rounds.rs b/crates/atm-review/src/rounds.rs
+index 12699ddb..29235963 100644
+--- a/crates/atm-review/src/rounds.rs
++++ b/crates/atm-review/src/rounds.rs
+@@ -8,7 +8,7 @@
+ //! quote finds it again; else it has **drifted**, shown at its last place, with the round and lines it was made on.
+ 
+ use atm_common::{Error, Result, TASK_DIR};
+-use atm_vcs::{ChangedFile, Diff, GitVcs};
++use atm_vcs::{ChangedFile, Diff, GitVcs, Rev};
+ 
+ use crate::model::{
+     Actor, Anchor, FileChange, FileStatus, Patch, Review, ReviewId, Round, RoundKind,
+@@ -117,25 +117,34 @@ fn shared_repository(vcs: &GitVcs, a: &Round, b: &Round) -> Result<GitVcs> {
+ /// # Errors
+ /// Either isn't a commit, or git fails.
+ pub fn from_range(vcs: &GitVcs, base: &str, head: &str, by: &Actor) -> Result<NewRound> {
+-    let resolve = |rev: &str| {
+-        vcs.resolve(rev)
+-            .ok_or_else(|| Error::Invalid(format!("{rev} isn't a commit here")))
+-    };
+-    let (base, head) = (resolve(base)?, resolve(head)?);
++    let (base, head) = (commit(vcs, base)?, commit(vcs, head)?);
+     let diff = vcs.diff_range(&base, &head, &[TASK_DIR])?;
++    let (base, head) = (base.to_string(), head.to_string());
+     Ok(round(vcs, RoundKind::Range { base, head }, diff, by))
+ }
+ 
++/// A revision someone named, as its commit's full SHA: what a round records.
++fn commit(vcs: &GitVcs, rev: &str) -> Result<Rev> {
++    vcs.resolve(&Rev::new(rev)?)
++        .ok_or_else(|| Error::Invalid(format!("{rev} isn't a commit here")))
++        .and_then(|sha| Rev::object_id(&sha))
++}
++
++/// A round's commit, as `rounds/N.json` has it: a full object ID (ATM-659; a round's files are read with
++/// [`RoundKind::check`] first, and atm writes only SHAs there).
++fn recorded(id: &str) -> Result<Rev> {
++    Rev::object_id(id)
++}
++
+ /// A round of the working tree against `base` (`HEAD` by default): uncommitted changes, new files included, or a
+ /// live review's checkpoint.
+ ///
+ /// # Errors
+ /// `base` isn't a commit, or git fails.
+ pub fn from_working(vcs: &GitVcs, base: &str, by: &Actor) -> Result<NewRound> {
+-    let base = vcs
+-        .resolve(base)
+-        .ok_or_else(|| Error::Invalid(format!("{base} isn't a commit here")))?;
++    let base = commit(vcs, base)?;
+     let diff = vcs.diff_working(&base, &[TASK_DIR])?;
++    let base = base.to_string();
+     Ok(round(vcs, RoundKind::Working { base }, diff, by))
+ }
+ 
+@@ -155,7 +164,7 @@ pub fn from_files(vcs: &GitVcs, paths: &[String], by: &Actor) -> Result<NewRound
+ ///
+ /// # Errors
+ /// The base is gone from this clone, or the diff doesn't apply to it; the round's submodule isn't checked out here.
+-pub fn tree(vcs: &GitVcs, round: &Round, patch: &Patch) -> Result<String> {
++pub fn tree(vcs: &GitVcs, round: &Round, patch: &Patch) -> Result<Rev> {
+     let vcs = &repository(vcs, round)?;
+     let binary: Vec<String> = round
+         .files
+@@ -163,11 +172,12 @@ pub fn tree(vcs: &GitVcs, round: &Round, patch: &Patch) -> Result<String> {
+         .filter(|f| f.binary)
+         .map(|f| f.path.clone())
+         .collect();
+-    match &round.kind {
+-        RoundKind::Range { head, .. } => vcs.tree_of(head),
+-        RoundKind::Working { base } => vcs.tree_after(Some(base), &patch.0, &binary),
++    let tree = match &round.kind {
++        RoundKind::Range { head, .. } => vcs.tree_of(&recorded(head)?),
++        RoundKind::Working { base } => vcs.tree_after(Some(&recorded(base)?), &patch.0, &binary),
+         RoundKind::Files => vcs.tree_after(None, &patch.0, &binary),
+-    }
++    }?;
++    Rev::object_id(&tree)
+ }
+ 
+ fn round_of(review: &Review, number: u32) -> Result<&Round> {
+@@ -440,6 +450,7 @@ pub fn place<S: RoundDiffs + ?Sized>(
+ #[cfg(test)]
+ mod tests {
+     use super::{Hunk, Placement, follow, hunks};
++    use atm_vcs::Rev;
+ 
+     /// A hunk that replaces `old_len` lines with `new_len` (or inserts, with no old lines).
+     fn hunk(old_start: u32, old_len: u32, new_start: u32, new_len: u32) -> Hunk {
+@@ -866,8 +877,8 @@ mod tests {
+         assert_eq!(
+             round.kind,
+             RoundKind::Range {
+-                base: vcs.resolve("HEAD~1").unwrap(),
+-                head: vcs.resolve("HEAD").unwrap()
++                base: vcs.resolve(&Rev::new("HEAD~1").unwrap()).unwrap(),
++                head: vcs.resolve(&Rev::head()).unwrap()
+             }
+         );
+         assert_eq!(round.by, by);
+@@ -899,7 +910,7 @@ mod tests {
+             at: String::new(),
+         };
+         let head_tree = tree(&vcs, &kept, &round.patch).unwrap();
+-        assert_eq!(head_tree, vcs.tree_of("HEAD").unwrap());
++        assert_eq!(head_tree.as_str(), vcs.tree_of(&Rev::head()).unwrap());
+         assert_eq!(
+             vcs.file_in(&head_tree, "c.rs").as_deref(),
+             Some("fn c() {}\n")
+@@ -934,7 +945,7 @@ mod tests {
+         assert_eq!(
+             round.kind,
+             RoundKind::Working {
+-                base: vcs.resolve("HEAD").unwrap()
++                base: vcs.resolve(&Rev::head()).unwrap()
+             }
+         );
+         assert_eq!(
+diff --git a/crates/atm-review/src/store_contract.rs b/crates/atm-review/src/store_contract.rs
+index 113747b1..c8b7363c 100644
+--- a/crates/atm-review/src/store_contract.rs
++++ b/crates/atm-review/src/store_contract.rs
+@@ -16,9 +16,14 @@ fn hakan() -> Actor {
+     Actor::from("Hakan Serce")
+ }
+ 
++/// A round's commit, as atm records it: a full ID (ATM-659: the folder store refuses anything else).
++fn base() -> String {
++    "a1".repeat(20)
++}
++
+ fn round(patch: &str) -> NewRound {
+     NewRound {
+-        kind: RoundKind::Working { base: "a1".into() },
++        kind: RoundKind::Working { base: base() },
+         submodule: None,
+         files: Vec::new(),
+         patch: Patch(patch.into()),
+@@ -96,7 +101,7 @@ pub(crate) fn a_new_review_is_kept_numbered_with_its_first_round(store: &mut dyn
+     let round = &review.rounds[0];
+     assert_eq!(
+         (round.number, &round.by, &round.kind),
+-        (1, &agent(), &RoundKind::Working { base: "a1".into() })
++        (1, &agent(), &RoundKind::Working { base: base() })
+     );
+     assert_eq!(
+         store.round_diff(&first.id, 1).unwrap().0,
+diff --git a/crates/atm-vcs/src/diff.rs b/crates/atm-vcs/src/diff.rs
+index e90ed222..9a3254d3 100644
+--- a/crates/atm-vcs/src/diff.rs
++++ b/crates/atm-vcs/src/diff.rs
+@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
+ use atm_common::py::strip;
+ use atm_common::{Error, Result};
+ 
+-use crate::GitVcs;
++use crate::{END_OF_OPTIONS, GitVcs, Rev};
+ 
+ /// `path` without Windows' extended prefix (`\\?\C:\…` is `C:\…`, `\\?\UNC\host\…` is `\\host\…`): git can't make a
+ /// file under a path in that form ("Invalid argument"), which canonicalize gives. Any other path as it is.
+@@ -111,15 +111,12 @@ impl GitVcs {
+         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+     }
+ 
+-    /// A revision as the commit's SHA: what reaches git as a diff's end, never a name it could read as an option
+-    /// (`--output=…`), whoever wrote it (the browser's write routes, ATM-572).
++    /// A revision as the commit's SHA: what reaches git as a diff's end (a [`Rev`] is never a name git could read as
++    /// an option, whoever wrote it: the browser's write routes, ATM-572; a round's files, ATM-659).
+     ///
+     /// # Errors
+-    /// `Invalid` for a revision that starts with `-` or holds a NUL; `NotFound` for one that names no commit.
+-    fn commit_sha(&self, revision: &str) -> Result<String> {
+-        if revision.is_empty() || revision.starts_with('-') || revision.contains('\0') {
+-            return Err(Error::Invalid(format!("{revision}: not a revision")));
+-        }
++    /// `NotFound` for one that names no commit.
++    fn commit_sha(&self, revision: &Rev) -> Result<String> {
+         self.resolve(revision)
+             .ok_or_else(|| Error::NotFound(format!("{revision}: no such commit")))
+     }
+@@ -220,10 +217,10 @@ impl GitVcs {
+     ///
+     /// # Errors
+     /// Either isn't a commit, or git fails.
+-    pub fn diff_range(&self, base: &str, head: &str, leave_out: &[&str]) -> Result<Diff> {
++    pub fn diff_range(&self, base: &Rev, head: &Rev, leave_out: &[&str]) -> Result<Diff> {
+         let spec = pathspec(leave_out);
+         let (base, head) = (self.commit_sha(base)?, self.commit_sha(head)?);
+-        let mut args = vec![base.as_str(), head.as_str()];
++        let mut args = vec![END_OF_OPTIONS, base.as_str(), head.as_str()];
+         args.extend(spec.iter().map(String::as_str));
+         Ok(Diff {
+             patch: self.patch(&args, &[])?,
+@@ -236,14 +233,14 @@ impl GitVcs {
+     ///
+     /// # Errors
+     /// `base` isn't a commit, or git fails.
+-    pub fn diff_working(&self, base: &str, leave_out: &[&str]) -> Result<Diff> {
++    pub fn diff_working(&self, base: &Rev, leave_out: &[&str]) -> Result<Diff> {
+         let spec = pathspec(leave_out);
+         let base = self.commit_sha(base)?;
+         let base = base.as_str();
+         self.with_temporary_index(|env| {
+-            self.git_with(&["read-tree", base], env, None)?;
++            self.git_with(&["read-tree", END_OF_OPTIONS, base], env, None)?;
+             self.git_with(&["add", "-A"], env, None)?;
+-            let mut args = vec!["--cached", base];
++            let mut args = vec!["--cached", END_OF_OPTIONS, base];
+             args.extend(spec.iter().map(String::as_str));
+             Ok(Diff {
+                 patch: self.patch(&args, env)?,
+@@ -291,10 +288,12 @@ impl GitVcs {
+     ///
+     /// # Errors
+     /// The patch doesn't apply to `base`, or git fails.
+-    pub fn tree_after(&self, base: Option<&str>, patch: &str, skip: &[String]) -> Result<String> {
++    pub fn tree_after(&self, base: Option<&Rev>, patch: &str, skip: &[String]) -> Result<String> {
+         self.with_temporary_index(|env| {
+             match base {
+-                Some(base) => self.git_with(&["read-tree", base], env, None)?,
++                Some(base) => {
++                    self.git_with(&["read-tree", END_OF_OPTIONS, base.as_str()], env, None)?
++                }
+                 None => self.git_with(&["read-tree", "--empty"], env, None)?,
+             };
+             if !patch.trim().is_empty() {
+@@ -320,7 +319,7 @@ impl GitVcs {
+     ///
+     /// # Errors
+     /// Either isn't one, or git fails.
+-    pub fn diff_trees(&self, from: &str, to: &str, paths: &[String]) -> Result<String> {
++    pub fn diff_trees(&self, from: &Rev, to: &Rev, paths: &[String]) -> Result<String> {
+         let inside: Vec<&str> = paths
+             .iter()
+             .map(|p| self.inside(p))
+@@ -330,35 +329,52 @@ impl GitVcs {
+         all.extend(DIFF);
+         all.push("-M");
+         all.extend(prefixes.iter().map(String::as_str));
+-        all.extend([from, to, "--"]);
++        all.extend([END_OF_OPTIONS, from.as_str(), to.as_str(), "--"]);
+         all.extend(inside);
+         self.git_with(&all, &[], None)
+     }
+ 
+     /// A file's text in a tree (or commit), none when it isn't there (or, in a submodule's, isn't under its folder).
+     #[must_use]
+-    pub fn file_in(&self, tree: &str, path: &str) -> Option<String> {
++    pub fn file_in(&self, tree: &Rev, path: &str) -> Option<String> {
+         let path = self.inside_path(path)?;
+-        self.git_with(&["show", &format!("{tree}:{path}")], &[], None)
+-            .ok()
++        self.git_with(
++            &["show", END_OF_OPTIONS, &format!("{tree}:{path}")],
++            &[],
++            None,
++        )
++        .ok()
+     }
+ 
+     /// A commit's tree.
+     ///
+     /// # Errors
+     /// Not a commit.
+-    pub fn tree_of(&self, commit: &str) -> Result<String> {
+-        Ok(
+-            strip(&self.git_with(&["rev-parse", &format!("{commit}^{{tree}}")], &[], None)?)
+-                .to_string(),
+-        )
++    pub fn tree_of(&self, commit: &Rev) -> Result<String> {
++        // `--verify`: without it, rev-parse echoes `--end-of-options` back as one of its answers
++        Ok(strip(&self.git_with(
++            &[
++                "rev-parse",
++                "--verify",
++                END_OF_OPTIONS,
++                &format!("{commit}^{{tree}}"),
++            ],
++            &[],
++            None,
++        )?)
++        .to_string())
+     }
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+     use super::ChangedFile;
+-    use crate::GitVcs;
++    use crate::{GitVcs, Rev};
++
++    /// A revision, by a name the test gives.
++    fn rev(name: &str) -> Rev {
++        Rev::new(name).unwrap()
++    }
+ 
+     struct Repo(std::path::PathBuf);
+     impl Drop for Repo {
+@@ -393,10 +409,13 @@ mod tests {
+     fn write(vcs: &GitVcs, path: &str, text: &str) {
+         std::fs::write(vcs.root.join(path), text).unwrap();
+     }
+-    fn commit(vcs: &GitVcs, message: &str) -> String {
++    fn commit(vcs: &GitVcs, message: &str) -> Rev {
+         git(vcs, &["add", "-A"]);
+         git(vcs, &["commit", "-q", "-m", message]);
+-        git(vcs, &["rev-parse", "HEAD"]).trim().to_string()
++        head(vcs)
++    }
++    fn head(vcs: &GitVcs) -> Rev {
++        Rev::object_id(git(vcs, &["rev-parse", "HEAD"]).trim()).unwrap()
+     }
+ 
+     #[test]
+@@ -508,19 +527,13 @@ mod tests {
+         write(&vcs, "a.txt", "a\n");
+         git(&vcs, &["add", "-A"]);
+         git(&vcs, &["commit", "-q", "-m", "a"]);
++        // A revision that would be an option to git is no Rev, so none reaches a diff (ATM-659)
+         for bad in ["--output=x", "-p", ""] {
+-            assert!(
+-                matches!(vcs.diff_range(bad, "HEAD", &[]), Err(Error::Invalid(_))),
+-                "{bad}"
+-            );
+-            assert!(
+-                matches!(vcs.diff_working(bad, &[]), Err(Error::Invalid(_))),
+-                "{bad}"
+-            );
++            assert!(matches!(Rev::new(bad), Err(Error::Invalid(_))), "{bad}");
+         }
+         assert!(!vcs.root.join("x").exists());
+         assert!(matches!(
+-            vcs.diff_range("no-such", "HEAD", &[]),
++            vcs.diff_range(&rev("no-such"), &Rev::head(), &[]),
+             Err(Error::NotFound(_))
+         ));
+     }
+@@ -568,7 +581,7 @@ mod tests {
+     #[test]
+     fn a_range_that_moves_a_submodule_lists_it_and_rebuilds_its_tree() {
+         let (_repo, vcs, _sub, lib) = with_submodule();
+-        let base = git(&vcs, &["rev-parse", "HEAD"]).trim().to_string();
++        let base = head(&vcs);
+         write(&lib, "b.txt", "one\ntwo\n");
+         commit(&lib, "sub change");
+         write(&vcs, "a.txt", "one\nchanged\n");
+@@ -591,7 +604,7 @@ mod tests {
+     #[test]
+     fn uncommitted_changes_with_a_moved_and_dirty_submodule_rebuild_their_tree() {
+         let (_repo, vcs, _sub, lib) = with_submodule();
+-        let base = git(&vcs, &["rev-parse", "HEAD"]).trim().to_string();
++        let base = head(&vcs);
+         write(&lib, "b.txt", "one\ntwo\n");
+         commit(&lib, "sub change");
+         write(&lib, "b.txt", "one\ntwo\nthree, not committed\n");
+@@ -604,7 +617,7 @@ mod tests {
+     #[test]
+     fn a_submodules_repository_diffs_its_commits_with_the_projects_paths() {
+         let (_repo, vcs, _sub, lib) = with_submodule();
+-        let base = git(&lib, &["rev-parse", "HEAD"]).trim().to_string();
++        let base = head(&lib);
+         write(&lib, "b.txt", "one\ntwo\n");
+         write(&lib, "c.txt", "new\n");
+         let head = commit(&lib, "sub change");
+@@ -625,8 +638,8 @@ mod tests {
+             ["lib/b.txt", "lib/c.txt"]
+         );
+         // Its round's files rebuild in its own repository, read and compared by the project's paths
+-        let tree = sub.tree_after(Some(&base), &diff.patch, &[]).unwrap();
+-        assert_eq!(tree, sub.tree_of(&head).unwrap());
++        let tree = rev(&sub.tree_after(Some(&base), &diff.patch, &[]).unwrap());
++        assert_eq!(tree.as_str(), sub.tree_of(&head).unwrap());
+         assert_eq!(sub.file_in(&tree, "lib/b.txt").unwrap(), "one\ntwo\n");
+         assert_eq!(
+             sub.file_in(&tree, "b.txt"),
+@@ -686,8 +699,8 @@ mod tests {
+         write(&vcs, "a.txt", "one\nTWO\nthree\nfour\n");
+         let round2 = vcs.diff_working(&base, &[]).unwrap();
+ 
+-        let tree1 = vcs.tree_after(Some(&base), &round1.patch, &[]).unwrap();
+-        let tree2 = vcs.tree_after(Some(&base), &round2.patch, &[]).unwrap();
++        let tree1 = rev(&vcs.tree_after(Some(&base), &round1.patch, &[]).unwrap());
++        let tree2 = rev(&vcs.tree_after(Some(&base), &round2.patch, &[]).unwrap());
+         assert_eq!(vcs.file_in(&tree1, "a.txt").unwrap(), "one\nTWO\nthree\n");
+         let between = vcs.diff_trees(&tree1, &tree2, &["a.txt".into()]).unwrap();
+         assert!(
+diff --git a/crates/atm-vcs/src/lib.rs b/crates/atm-vcs/src/lib.rs
+index 39e47856..5ca42225 100644
+--- a/crates/atm-vcs/src/lib.rs
++++ b/crates/atm-vcs/src/lib.rs
+@@ -12,6 +12,12 @@ use atm_common::{Error, Result};
+ 
+ pub mod diff;
+ pub use diff::{ChangedFile, Diff};
++mod rev;
++pub use rev::{Rev, is_object_id};
++
++/// After a command's options, before its revisions: git reads nothing after it as an option, a second guard beside
++/// [`Rev`]'s check (ATM-659).
++const END_OF_OPTIONS: &str = "--end-of-options";
+ 
+ /// Pathspecs that stage more than the files named: another agent's work can be in the same tree.
+ const WHOLE_TREE: [&str; 7] = [".", "-A", "--all", "-u", "--update", ":/", "*"];
+@@ -396,12 +402,13 @@ impl GitVcs {
+ 
+     /// A revision's SHA, or none if there is no such commit.
+     #[must_use]
+-    pub fn resolve(&self, rev: &str) -> Option<String> {
++    pub fn resolve(&self, rev: &Rev) -> Option<String> {
+         ask(
+             &[
+                 "rev-parse",
+                 "--verify",
+                 "--quiet",
++                END_OF_OPTIONS,
+                 &format!("{rev}^{{commit}}"),
+             ],
+             &self.root,
+@@ -410,12 +417,13 @@ impl GitVcs {
+ 
+     /// The tree a revision names (a commit's, or a tree itself, as a review's rebuilt round is), or none.
+     #[must_use]
+-    pub fn resolve_tree(&self, rev: &str) -> Option<String> {
++    pub fn resolve_tree(&self, rev: &Rev) -> Option<String> {
+         ask(
+             &[
+                 "rev-parse",
+                 "--verify",
+                 "--quiet",
++                END_OF_OPTIONS,
+                 &format!("{rev}^{{tree}}"),
+             ],
+             &self.root,
+@@ -424,17 +432,30 @@ impl GitVcs {
+ 
+     /// Whether the commit is an ancestor of HEAD (on the current branch).
+     #[must_use]
+-    pub fn in_history(&self, sha: &str) -> bool {
+-        run(&["merge-base", "--is-ancestor", sha, "HEAD"], &self.root)
+-            .is_some_and(|o| o.status.success())
++    pub fn in_history(&self, sha: &Rev) -> bool {
++        run(
++            &[
++                "merge-base",
++                "--is-ancestor",
++                END_OF_OPTIONS,
++                sha.as_str(),
++                "HEAD",
++            ],
++            &self.root,
++        )
++        .is_some_and(|o| o.status.success())
+     }
+ 
+     /// The commit's message.
+     ///
+     /// # Errors
+     /// When git can't read it.
+-    pub fn message(&self, sha: &str) -> Result<String> {
+-        step(&["log", "-1", "--format=%B", sha], &self.root, false)
++    pub fn message(&self, sha: &Rev) -> Result<String> {
++        step(
++            &["log", "-1", "--format=%B", END_OF_OPTIONS, sha.as_str()],
++            &self.root,
++            false,
++        )
+     }
+ 
+     // The working copy's files, for the document viewer (docs/compmd-viewer-design.md §4). atm-docs checks the path
+@@ -478,9 +499,17 @@ impl GitVcs {
+     /// A regular file as `commit` (a SHA, as [`GitVcs::resolve`] gives it) has it: its size and its blob; none when the
+     /// commit has no regular file there (no entry, a symlink, a submodule, a folder).
+     #[must_use]
+-    pub fn blob_in(&self, commit: &str, relative: &str) -> Option<(u64, String)> {
++    pub fn blob_in(&self, commit: &Rev, relative: &str) -> Option<(u64, String)> {
+         let output = run(
+-            &["ls-tree", "-z", "--long", commit, "--", relative],
++            &[
++                "ls-tree",
++                "-z",
++                "--long",
++                END_OF_OPTIONS,
++                commit.as_str(),
++                "--",
++                relative,
++            ],
+             &self.root,
+         )?;
+         if !output.status.success() {
+@@ -503,10 +532,20 @@ impl GitVcs {
+     /// 160000); none for anything else there, or nothing (ATM-599: a submodule only moved has no other trace in a
+     /// diff).
+     #[must_use]
+-    pub fn gitlink_in(&self, object: &str, relative: &str) -> Option<String> {
++    pub fn gitlink_in(&self, object: &Rev, relative: &str) -> Option<String> {
+         // Named as the project has it; read as this repository has it (a submodule's round, ATM-583)
+         let relative = self.inside_path(relative)?;
+-        let output = run(&["ls-tree", "-z", object, "--", relative], &self.root)?;
++        let output = run(
++            &[
++                "ls-tree",
++                "-z",
++                END_OF_OPTIONS,
++                object.as_str(),
++                "--",
++                relative,
++            ],
++            &self.root,
++        )?;
+         if !output.status.success() {
+             return None;
+         }
+@@ -523,9 +562,12 @@ impl GitVcs {
+     ///
+     /// # Errors
+     /// git isn't available, or there is no such blob.
+-    pub fn blob_bytes(&self, blob: &str) -> Result<Vec<u8>> {
+-        let output = run(&["cat-file", "blob", blob], &self.root)
+-            .ok_or_else(|| Error::failed("git isn't available"))?;
++    pub fn blob_bytes(&self, blob: &Rev) -> Result<Vec<u8>> {
++        let output = run(
++            &["cat-file", "blob", END_OF_OPTIONS, blob.as_str()],
++            &self.root,
++        )
++        .ok_or_else(|| Error::failed("git isn't available"))?;
+         if !output.status.success() {
+             return Err(Error::NotFound(format!("{blob}: no such blob")));
+         }
+@@ -685,7 +727,7 @@ impl GitVcs {
+     #[must_use]
+     pub fn head(&self) -> Option<String> {
+         if self.in_repository() {
+-            self.resolve("HEAD")
++            self.resolve(&Rev::head())
+         } else {
+             None
+         }
+@@ -801,6 +843,11 @@ mod tests {
+         names.iter().map(ToString::to_string).collect()
+     }
+ 
++    /// A revision, by a name or ID the test has.
++    fn r(name: &str) -> Rev {
++        Rev::new(name).unwrap()
++    }
++
+     #[test]
+     fn only_git_is_a_version_control_atm_knows() {
+         assert!(open(Path::new("."), "git").is_ok());
+@@ -823,7 +870,7 @@ mod tests {
+         assert_eq!(vcs.submodule_of("a.txt"), None);
+         assert_eq!(vcs.remote_url(), None);
+         assert_eq!(vcs.default_base(), "main");
+-        assert_eq!(vcs.resolve("HEAD"), None);
++        assert_eq!(vcs.resolve(&Rev::head()), None);
+     }
+ 
+     #[test]
+@@ -916,12 +963,12 @@ mod tests {
+             .commit(&names(&["a.txt", "new.txt", "gone.txt"]), "the change")
+             .unwrap();
+         assert_eq!(vcs.head().as_deref(), Some(sha.as_str()));
+-        assert_eq!(vcs.resolve("HEAD"), Some(sha.clone()));
+-        assert_eq!(vcs.message(&sha).unwrap(), "the change");
++        assert_eq!(vcs.resolve(&Rev::head()), Some(sha.clone()));
++        assert_eq!(vcs.message(&r(&sha)).unwrap(), "the change");
+         let changed = git(&dir.0, &["show", "--name-status", "--format=", &sha]);
+         assert_eq!(changed, "M\ta.txt\nD\tgone.txt\nA\tnew.txt");
+         assert_eq!(git(&dir.0, &["status", "--porcelain"]), "A  staged.txt");
+-        assert!(vcs.in_history(&first) && vcs.in_history(&sha));
++        assert!(vcs.in_history(&r(&first)) && vcs.in_history(&r(&sha)));
+     }
+ 
+     #[test]
+@@ -936,7 +983,7 @@ mod tests {
+             "{error}"
+         );
+         assert!(
+-            vcs.message("no-such-commit")
++            vcs.message(&r("no-such-commit"))
+                 .unwrap_err()
+                 .to_string()
+                 .starts_with("git log failed: ")
+@@ -950,22 +997,22 @@ mod tests {
+         write(&vcs, "a.txt", "a");
+         let first = commit_all(&vcs, "first");
+         let tree = git(&dir.0, &["rev-parse", "HEAD^{tree}"]);
+-        assert_eq!(vcs.resolve("main"), Some(first.clone()));
+-        assert_eq!(vcs.resolve_tree(&first), Some(tree.clone()));
++        assert_eq!(vcs.resolve(&r("main")), Some(first.clone()));
++        assert_eq!(vcs.resolve_tree(&r(&first)), Some(tree.clone()));
+         assert_eq!(
+-            vcs.resolve_tree(&tree),
++            vcs.resolve_tree(&r(&tree)),
+             Some(tree.clone()),
+             "a tree is its own"
+         );
+-        assert_eq!(vcs.resolve(&tree), None, "a tree is no commit");
+-        assert_eq!(vcs.resolve("no-such-branch"), None);
++        assert_eq!(vcs.resolve(&r(&tree)), None, "a tree is no commit");
++        assert_eq!(vcs.resolve(&r("no-such-branch")), None);
+         git(&dir.0, &["checkout", "-q", "-b", "side"]);
+         write(&vcs, "b.txt", "b");
+         let side = commit_all(&vcs, "side");
+         git(&dir.0, &["checkout", "-q", "main"]);
+-        assert!(vcs.in_history(&first));
+-        assert!(!vcs.in_history(&side), "on another branch");
+-        assert!(!vcs.in_history("no-such-commit"));
++        assert!(vcs.in_history(&r(&first)));
++        assert!(!vcs.in_history(&r(&side)), "on another branch");
++        assert!(!vcs.in_history(&r("no-such-commit")));
+     }
+ 
+     #[test]
+@@ -1080,10 +1127,10 @@ mod tests {
+         git(&dir.0, &["update-index", "--chmod=+x", "run.sh"]);
+         #[cfg(unix)]
+         std::os::unix::fs::symlink("docs/a.md", vcs.root.join("link.md")).unwrap();
+-        let head = commit_all(&vcs, "first");
++        let head = r(&commit_all(&vcs, "first"));
+         let (size, blob) = vcs.blob_in(&head, "docs/a.md").unwrap();
+         assert_eq!(size, 5);
+-        assert_eq!(vcs.blob_bytes(&blob).unwrap(), b"hello");
++        assert_eq!(vcs.blob_bytes(&r(&blob)).unwrap(), b"hello");
+         assert_eq!(
+             vcs.blob_in(&head, "run.sh").map(|(s, _)| s),
+             Some(10),
+@@ -1092,10 +1139,10 @@ mod tests {
+         for other in ["docs", "missing.md", "docs/a", "link.md"] {
+             assert_eq!(vcs.blob_in(&head, other), None, "{other}");
+         }
+-        assert_eq!(vcs.blob_in("no-such-commit", "docs/a.md"), None);
++        assert_eq!(vcs.blob_in(&r("no-such-commit"), "docs/a.md"), None);
+         let unknown = "0".repeat(40);
+         assert_eq!(
+-            vcs.blob_bytes(&unknown).unwrap_err(),
++            vcs.blob_bytes(&r(&unknown)).unwrap_err(),
+             Error::NotFound(format!("{unknown}: no such blob"))
+         );
+     }
+@@ -1276,15 +1323,15 @@ mod tests {
+             ],
+         );
+         let head = commit_all(&vcs, "the submodule");
+-        let tree = vcs.resolve_tree(&head).unwrap();
+-        for object in [head.as_str(), tree.as_str()] {
++        let tree = vcs.resolve_tree(&r(&head)).unwrap();
++        for object in [r(&head), r(&tree)] {
+             assert_eq!(
+-                vcs.gitlink_in(object, "lib/sub"),
++                vcs.gitlink_in(&object, "lib/sub"),
+                 Some(sub_head.clone()),
+                 "{object}"
+             );
+             for other in ["lib/top.txt", "lib", "lib/none", "lib/sub/a.txt", "-p"] {
+-                assert_eq!(vcs.gitlink_in(object, other), None, "{object} {other}");
++                assert_eq!(vcs.gitlink_in(&object, other), None, "{object} {other}");
+             }
+         }
+     }
+diff --git a/crates/atm-vcs/src/rev.rs b/crates/atm-vcs/src/rev.rs
+new file mode 100644
+index 00000000..8eac442f
+--- /dev/null
++++ b/crates/atm-vcs/src/rev.rs
+@@ -0,0 +1,120 @@
++//! A revision as atm gives it to git (ATM-659): checked when it is made, so no string that git could read as an
++//! option (`--output=…`, `--index-output=…`) reaches it, whoever wrote it (a review's round files are committed and
++//! merged, so anyone who can push writes them).
++
++use std::fmt;
++
++use atm_common::{Error, Result};
++
++/// A revision to give git: a full object ID (a commit's, a tree's, a blob's), or a name (`HEAD`, `main`, `HEAD~1`,
++/// a short SHA) that doesn't start with `-` and has no control character or space. Every method of this crate that
++/// hands git a revision takes one.
++#[derive(Debug, Clone, PartialEq, Eq, Hash)]
++pub struct Rev(String);
++
++/// Whether `text` is a full object ID: SHA-1's 40 hexadecimal digits, or SHA-256's 64.
++#[must_use]
++pub fn is_object_id(text: &str) -> bool {
++    matches!(text.len(), 40 | 64) && text.bytes().all(|b| b.is_ascii_hexdigit())
++}
++
++impl Rev {
++    /// A revision by name or ID.
++    ///
++    /// # Errors
++    /// `Invalid` for an empty one, one starting with `-` (git would read it as an option), or one with a control
++    /// character (a NUL, a newline) or a space.
++    pub fn new(name: &str) -> Result<Self> {
++        if name.is_empty()
++            || name.starts_with('-')
++            || name.chars().any(|c| c.is_control() || c.is_whitespace())
++        {
++            return Err(Error::Invalid(format!("{name:?}: not a revision")));
++        }
++        Ok(Self(name.to_string()))
++    }
++
++    /// A full object ID only (what atm records: a round's commits, a tree it rebuilt).
++    ///
++    /// # Errors
++    /// `Invalid` for anything else.
++    pub fn object_id(id: &str) -> Result<Self> {
++        if !is_object_id(id) {
++            return Err(Error::Invalid(format!("{id:?}: not a full object ID")));
++        }
++        Ok(Self(id.to_string()))
++    }
++
++    /// `HEAD`: the commit checked out.
++    #[must_use]
++    pub fn head() -> Self {
++        Self("HEAD".into())
++    }
++
++    /// The revision as git reads it.
++    #[must_use]
++    pub fn as_str(&self) -> &str {
++        &self.0
++    }
++}
++
++impl fmt::Display for Rev {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        f.write_str(&self.0)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{Rev, is_object_id};
++
++    const SHA1: &str = "0123456789abcdef0123456789abcdef01234567";
++
++    #[test]
++    fn a_name_is_taken_unless_git_could_read_it_as_an_option_or_it_has_a_control_character() {
++        for ok in [
++            "HEAD",
++            "main",
++            "HEAD~1",
++            "dev/0.43.0",
++            "abc1234",
++            "v1.2.3^{commit}",
++            SHA1,
++        ] {
++            assert_eq!(Rev::new(ok).unwrap().as_str(), ok);
++        }
++        for bad in [
++            "",
++            "-",
++            "--index-output=x",
++            "--output=/tmp/x",
++            "-p",
++            "HEAD\0",
++            "HEAD\n--all",
++            "main branch",
++            "a\tb",
++        ] {
++            assert!(Rev::new(bad).is_err(), "{bad:?}");
++        }
++    }
++
++    #[test]
++    fn an_object_id_is_sha1s_or_sha256s_full_hex() {
++        let sha256 = "a".repeat(64);
++        for ok in [SHA1, sha256.as_str(), &SHA1.to_uppercase()] {
++            assert!(is_object_id(ok), "{ok}");
++            assert!(Rev::object_id(ok).is_ok(), "{ok}");
++        }
++        for bad in [
++            "HEAD",
++            "abc1234",
++            "--index-output=x",
++            &SHA1[..39],
++            &format!("{SHA1}0"),
++            &"g".repeat(40),
++        ] {
++            assert!(!is_object_id(bad), "{bad}");
++            assert!(Rev::object_id(bad).is_err(), "{bad}");
++        }
++    }
++}
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 91bc9ea4..b8a2f876 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -73,6 +73,7 @@ with the task that adds it.
+ | I9  | **The merge driver's command comes from the clone's own git config**, never from the repository; the path git gives it (`%P`, 0.40.0) only picks the merge by its file name (`tasks.json`, a review's `comments.md` or `review.md`) and is never opened                                                                                                                                                                                                                                                                                                                                                                                                     | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`, `crates/atm-lib/src/maintenance.rs`, `crates/atm-review/src/merge.rs`) |
+ | I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::for_people` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's; it also shows tasks named by UUID by their key, ATM-557), whose `output::clean` drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal"                                                             |
+ | I31 | **A comment's text can't forge another comment** (ATM-658): in `comments.md`, a comment's body line that has the shape of a comment's first line (`- **author** · at · cN`, at any indent, with or without its box) is written with a `\` mark after its indent and read back without it, so it stays the body's and never reads as a reply, a comment or a resolved box by whoever it names (the review watch tells agents such lines as a person's word). Body lines are always indented, so none is a heading. A comment's path, which the chain's heading carries, has no control character and is one of its round's files (a renamed file's old path too), in `rules::comment`, for the CLI, the REST routes and the app alike | atm-review's `a_body_with_comment_and_heading_shaped_lines_round_trips_as_one_comments_body`, `an_older_files_body_lines_with_marks_read_as_they_were` and `a_comment_is_on_one_of_its_rounds_files_whose_path_has_no_control_character` |
++| I32 | **No revision reaches git as an option** (ATM-659): every atm-vcs method that hands git a revision takes a `Rev`, which is a full object ID or a name that doesn't start with `-` and has no control character or space; the commands put `--end-of-options` before it too. A review's round (`rounds/N.json`, committed and merged, so anyone who can push writes it) is read only when its commits are full object IDs (`RoundKind::check`); a round that isn't is refused, its review named as unreadable with the reason (`atm review show`, `atm doctor`), before git sees it | atm-vcs's `rev.rs` tests; atm-review's `a_rounds_commits_are_full_object_ids_or_it_is_refused`; `tests/scripts/reviews/wrong-uses.test.mjs` "a round whose commit is no full ID…" |
+ 
+ ### Dashboard server (B3, B5)
+ 
+diff --git a/tests/scripts/reviews/wrong-uses.test.mjs b/tests/scripts/reviews/wrong-uses.test.mjs
+index 67f7a446..601b02c2 100644
+--- a/tests/scripts/reviews/wrong-uses.test.mjs
++++ b/tests/scripts/reviews/wrong-uses.test.mjs
+@@ -122,5 +122,41 @@ describe('atm review: refusals', () => {
+     }
+   });
+ 
++  // ATM-659: rounds/N.json is committed and merged, anyone's to write, and its commits reach git: a revision that would
++  // be an option to git (`--index-output=x` writes a file) is refused when the round is read, before git sees it
++  test('a round whose commit is no full ID, an option to git say, is refused and writes nothing', () => {
++    const root = project();
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
++      const reviews = path.join(root, '.agentic-task-manager/reviews');
++      const [folder] = fs.readdirSync(reviews);
++      const file = path.join(reviews, folder, 'rounds/1.json');
++      const round = JSON.parse(fs.readFileSync(file, 'utf8'));
++      assert.equal(round.kind.kind, 'working');
++      for (const base of ['--index-output=x', '-p', 'HEAD']) {
++        fs.writeFileSync(file, JSON.stringify({ ...round, kind: { ...round.kind, base } }));
++        for (const args of [
++          ['review', 'show', 'CR-1', '--json'],
++          ['review', 'show', 'CR-1', '--round', '1'],
++        ]) {
++          const r = atm(args, root, HAKAN);
++          assert.equal(r.code, 1, `${base}: atm ${args.join(' ')}: ${r.stdout}`);
++          assert.match(r.stderr, /rounds[/\\]1\.json: its base .* isn't a commit's full ID/, `${base}: ${r.stderr}`);
++        }
++        const doctor = atm(['doctor'], root, HAKAN);
++        assert.match(doctor.stdout + doctor.stderr, /its base .* isn't a commit's full ID/, base);
++      }
++      // git wrote no file of the option's, in the project or its git folder
++      assert.ok(!fs.existsSync(path.join(root, 'x')));
++      assert.ok(!fs.existsSync(path.join(root, '.git/x')));
++      // The round as atm wrote it reads again
++      fs.writeFileSync(file, JSON.stringify(round));
++      ok(['review', 'show', 'CR-1', '--json'], root, HAKAN);
++    } finally {
++      removeDir(root);
++    }
++  });
++
+   // ATM-622 (Hakan): a later round naming only the file that changed showed every other file as deleted since round 1
+ });

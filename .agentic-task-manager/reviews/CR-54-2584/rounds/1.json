@@ -1,0 +1,32 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "ba2bbdd194c32f86f7d568d1130b8b0854f1b6d4",
+    "head": "b8548126dd84781bd4479147f7cba2d4b362e4c9"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/documents/DocumentPage.svelte",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/documents/DocumentViewer.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/RenderedSide.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T07:37:11Z"
+}

@@ -1,0 +1,352 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index a85b7a3e..4d066ae7 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -787,9 +787,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "compmd-host"
+-version = "0.8.0"
++version = "0.9.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7aedf1c34e4a4a294c4131ecbdbc5edccc59ca4887a1b3ec06cf7404a39161bd"
++checksum = "fd0757fe10ee0437612212430395849fb78847ecc9535d16d94f75ea1e4b07e1"
+ dependencies = [
+  "compmd-pack",
+  "http",
+@@ -801,9 +801,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "compmd-pack"
+-version = "0.8.0"
++version = "0.9.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "177af57652ec46c5daee71ff66ec06f51bbeff9d3bdf0ea46c0af2562b5a6475"
++checksum = "fa63257f2a4987095ffce5c6dfd3007c4635005b2962a21da1f3755279d2a95e"
+ dependencies = [
+  "semver",
+  "serde",
+@@ -4349,9 +4349,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "tauri-plugin-compmd"
+-version = "0.8.0"
++version = "0.9.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a50f7783921128dfc3031ca5351b921650f36269852fc5988bf7513c158e228d"
++checksum = "2fe3c0e5f878c6ec65aec48fbaa05b914fbc29c71f9a3143923f1e77c0f55609"
+ dependencies = [
+  "compmd-host",
+  "serde_json",
+diff --git a/Cargo.toml b/Cargo.toml
+index 59d5df3d..7b7cd621 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -30,9 +30,9 @@ atm-api = { path = "crates/atm-api" }
+ # CompMD in a Tauri app (ADR-006, T-524): CompMD's own plugin serves the bundle the page's build wrote (the frames and
+ # the packs) on a compmd: scheme, embedded by the app's build.rs (the `build` feature). Its version is
+ # @compmd/sandbox's (dashboard/package.json): they are released together
+-tauri-plugin-compmd = "=0.8.0"
++tauri-plugin-compmd = "=0.9.0"
+ # CompMD's serving contract, which atm serve answers its bundle with as the plugin does in the app (ADR-006)
+-compmd-host = "=0.8.0"
++compmd-host = "=0.9.0"
+ clap = { version = "4.5", features = ["derive"] }
+ # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
+ clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
+diff --git a/dashboard/package.json b/dashboard/package.json
+index 14e4acfe..bbaf13ed 100644
+--- a/dashboard/package.json
++++ b/dashboard/package.json
+@@ -43,10 +43,10 @@
+   },
+   "devDependencies": {
+     "@comp-markdown/mermaid": "0.1.2",
+-    "@compmd/processor": "0.8.0",
+-    "@compmd/render": "0.8.0",
+-    "@compmd/sandbox": "0.8.0",
+-    "@compmd/vite": "0.8.0",
++    "@compmd/processor": "0.9.0",
++    "@compmd/render": "0.9.0",
++    "@compmd/sandbox": "0.9.0",
++    "@compmd/vite": "0.9.0",
+     "@dagrejs/dagre": "^3.1.3",
+     "@eslint/js": "^10.0.1",
+     "@playwright/test": "1.64",
+diff --git a/dashboard/pnpm-lock.yaml b/dashboard/pnpm-lock.yaml
+index 7f764d7c..7f7efbd4 100644
+--- a/dashboard/pnpm-lock.yaml
++++ b/dashboard/pnpm-lock.yaml
+@@ -173,17 +173,17 @@ importers:
+         specifier: 0.1.2
+         version: 0.1.2
+       '@compmd/processor':
+-        specifier: 0.8.0
+-        version: 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++        specifier: 0.9.0
++        version: 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+       '@compmd/render':
+-        specifier: 0.8.0
+-        version: 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++        specifier: 0.9.0
++        version: 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+       '@compmd/sandbox':
+-        specifier: 0.8.0
+-        version: 0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++        specifier: 0.9.0
++        version: 0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       '@compmd/vite':
+-        specifier: 0.8.0
+-        version: 0.8.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++        specifier: 0.9.0
++        version: 0.9.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       '@dagrejs/dagre':
+         specifier: ^3.1.3
+         version: 3.1.3
+@@ -312,19 +312,19 @@ packages:
+   '@comp-markdown/mermaid@0.1.2':
+     resolution: {integrity: sha512-FpJgzLz4AtA9Ty1ZORW6p1IcjtMgoEE/hoj9O2Nh9/Oa3wXd/6B1CcgkMxgZUZIHxTU/JFC6C7VjLU8vawUYtQ==}
+ 
+-  '@compmd/host@0.8.0':
+-    resolution: {integrity: sha512-gnGR1FmgoeupSySLQjKj0wmmadM9AdPg3tUjmSv6c4771maAs8slkZhGYL/snLsXt7wPkY0tZsGW2bGMAtgxvA==}
++  '@compmd/host@0.9.0':
++    resolution: {integrity: sha512-IoJRkYgDUeaEvWXseRKUi6PY/OWwTJpmXSrOnib3+K9RkRIzR9bmNDtUY0LORqYI1Esmgk5ZE+J01ZJ4i9lF5A==}
+ 
+-  '@compmd/processor@0.8.0':
+-    resolution: {integrity: sha512-TqtCspcjqPEW55a1fLdRwWEuvsT9DQV3TJ4pWeIuiggmR1AgYvoo6H6z+qLGDJRuvVuKHHjjWLx3MP3KQs2cWg==}
++  '@compmd/processor@0.9.0':
++    resolution: {integrity: sha512-8jyt6+HEXE2Jfx0Hiys6Oorjc8sEpXi+7+DUpAhAjJ9jo6mA+aTwWfSG7gl8TtU9VeiWFLhA3/YkRFMFctxawQ==}
+ 
+-  '@compmd/registry@0.8.0':
+-    resolution: {integrity: sha512-GyYYs9n2ebHWczY3z7a+JSqpBXznJe0phmqBV1L/1Voejg3e2/+Oc7FH273Dg1QEpiRr8LNlhzY7Fmi3qIOqWA==}
++  '@compmd/registry@0.9.0':
++    resolution: {integrity: sha512-djGbHRlyaAdHjFgu3Vv9GwjtVPgUwHhlWthkXeTm2eNa2KmEh+EOOgiP5GDxOgMQvfs9N9l9lgJeAFvccU54uQ==}
+     peerDependencies:
+-      '@compmd/processor': ^0.8.0
++      '@compmd/processor': ^0.9.0
+ 
+-  '@compmd/render@0.8.0':
+-    resolution: {integrity: sha512-6NtQMjngiFKJcL0Hu2vG4W9nOsphm2/n/YomTb0rPFWz/xTM++aX3S0jEWYLF2ANdiACVg9ye6SV/CuHr+xOBg==}
++  '@compmd/render@0.9.0':
++    resolution: {integrity: sha512-A+mm3mTs2BYdoHAi2vWI1+BaXc8DsrJmtwgcLXbunNQPbmXb9I4CHfgLWkiDzuKgZ/dQoag8oCvAHZrJ6locWg==}
+     peerDependencies:
+       react: ^19
+       react-dom: ^19
+@@ -337,17 +337,17 @@ packages:
+       svelte:
+         optional: true
+ 
+-  '@compmd/sandbox@0.8.0':
+-    resolution: {integrity: sha512-bZXEc7Il6X+bj7nDL/DpfHhMCB5HocfYN4v9KeD6sxzozC+gpsEtVG2Kd/Pb8KWDOs9cYc+/iqkK/xmDEsc97A==}
++  '@compmd/sandbox@0.9.0':
++    resolution: {integrity: sha512-gqFAR/7pC0y68KlBEo2UOFn/f6RNVFy6+QVZ6qFwb4L2BqGUddE0gHBIS5lLMemmDOjmKHz56fKWumVLbsuh/Q==}
+     peerDependencies:
+-      '@compmd/processor': ^0.8.0
++      '@compmd/processor': ^0.9.0
+       vite: '>=8'
+     peerDependenciesMeta:
+       vite:
+         optional: true
+ 
+-  '@compmd/vite@0.8.0':
+-    resolution: {integrity: sha512-arHUaC5iIy4tf/9kwAo2aF0ScZNG1XSXI5E4nFdO4NpKSCqDb3yOfp5UDV86vDfWATenLI7/DfH5G3p/ZsBsVg==}
++  '@compmd/vite@0.9.0':
++    resolution: {integrity: sha512-ryPJup9OGuoCJ6SU/o18LbRPulT4OMz5gNhWgXarXi1nXGT8LsdzfroejfQ4OeU4kX+URORIMlmCjQFkgVWa/A==}
+     peerDependencies:
+       react: ^19
+       react-dom: ^19
+@@ -2124,32 +2124,32 @@ snapshots:
+ 
+   '@comp-markdown/mermaid@0.1.2': {}
+ 
+-  '@compmd/host@0.8.0': {}
++  '@compmd/host@0.9.0': {}
+ 
+-  '@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
++  '@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+     dependencies:
+-      '@compmd/render': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/render': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+     transitivePeerDependencies:
+       - react
+       - react-dom
+       - svelte
+ 
+-  '@compmd/registry@0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
++  '@compmd/registry@0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
+     dependencies:
+-      '@compmd/processor': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/processor': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+ 
+-  '@compmd/render@0.8.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))':
++  '@compmd/render@0.9.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))':
+     optionalDependencies:
+       svelte: 5.57.2(@typescript-eslint/types@8.72.1)
+ 
+-  '@compmd/render@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
++  '@compmd/render@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+     optionalDependencies:
+       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
+ 
+-  '@compmd/sandbox@0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
++  '@compmd/sandbox@0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+     dependencies:
+-      '@compmd/processor': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/render': 0.8.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))
++      '@compmd/processor': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/render': 0.9.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))
+       '@shikijs/core': 4.5.0
+       '@shikijs/engine-javascript': 4.5.0
+       '@shikijs/engine-oniguruma': 4.5.0
+@@ -2166,13 +2166,13 @@ snapshots:
+       - react
+       - react-dom
+ 
+-  '@compmd/vite@0.8.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
++  '@compmd/vite@0.9.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+     dependencies:
+-      '@compmd/host': 0.8.0
+-      '@compmd/processor': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/registry': 0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
+-      '@compmd/render': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/sandbox': 0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++      '@compmd/host': 0.9.0
++      '@compmd/processor': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/registry': 0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
++      '@compmd/render': 0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/sandbox': 0.9.0(@compmd/processor@0.9.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       semver: 7.8.5
+       vite: 8.3.5(@types/node@26.6.6)(yaml@2.9.1)
+       yaml: 2.9.1
+diff --git a/dashboard/pnpm-workspace.yaml b/dashboard/pnpm-workspace.yaml
+index 6300f43d..2d4f7ce4 100644
+--- a/dashboard/pnpm-workspace.yaml
++++ b/dashboard/pnpm-workspace.yaml
+@@ -1,11 +1,11 @@
+ minimumReleaseAgeExclude:
+-  - '@compmd/processor@0.7.1 || 0.8.0'
+-  - '@compmd/registry@0.7.1 || 0.8.0'
+-  - '@compmd/render@0.7.1 || 0.8.0'
+-  - '@compmd/sandbox@0.7.1 || 0.8.0'
+-  - '@compmd/vite@0.7.1 || 0.8.0'
++  - '@compmd/processor@0.7.1 || 0.8.0 || 0.9.0'
++  - '@compmd/registry@0.7.1 || 0.8.0 || 0.9.0'
++  - '@compmd/render@0.7.1 || 0.8.0 || 0.9.0'
++  - '@compmd/sandbox@0.7.1 || 0.8.0 || 0.9.0'
++  - '@compmd/vite@0.7.1 || 0.8.0 || 0.9.0'
+   - '@comp-markdown/mermaid@0.1.2'
+-  - '@compmd/host@0.8.0'
++  - '@compmd/host@0.8.0 || 0.9.0'
+ # pnpm's settings for dashboard/ (a single package, not a workspace of several).
+ overrides:
+   # GHSA-g3hv-75wg-m249: ESLint and typescript-eslint still ask for 10.x (a development dependency; nothing ships)
+diff --git a/dashboard/tests/unit/compmd-processor.test.ts b/dashboard/tests/unit/compmd-processor.test.ts
+index 56423ddd..94de8a16 100644
+--- a/dashboard/tests/unit/compmd-processor.test.ts
++++ b/dashboard/tests/unit/compmd-processor.test.ts
+@@ -199,12 +199,26 @@ describe('task text through the real processor', () => {
+     const document = new OpenDocument(requestFor(text));
+     try {
+       expect(document.components.map((c) => c.name)).toContain('evil');
+-      expect(packComponents(document.components).map((c) => c.name)).toEqual(['mermaid']);
++      // Not given to the sandbox; and since CompMD 0.9.0 the pack's own components are listed only when the text uses
++      // them, so this text gives the sandbox nothing at all
++      expect(packComponents(document.components).map((c) => c.name)).toEqual([]);
+     } finally {
+       document.free();
+     }
+   });
+ 
++  it('a pack’s component is given to the sandbox only when the text uses it (CompMD 0.9.0)', () => {
++    const uses = new OpenDocument(requestFor('```mermaid\ngraph TD; A-->B\n```\n'));
++    const plain = new OpenDocument(requestFor('Just text.\n'));
++    try {
++      expect(packComponents(uses.components).map((c) => c.name)).toEqual(['mermaid']);
++      expect(packComponents(plain.components)).toEqual([]);
++    } finally {
++      uses.free();
++      plain.free();
++    }
++  });
++
+   it('a component that doesn’t exist shows its fallback, with a diagnostic', () => {
+     const r = run(':: chart[Sales went up] {rows=(md.data.task.labels)}\n');
+     expect(textOf(r.expanded)).toContain('Sales went up');
+diff --git a/docs/agent/compmd-llms.txt b/docs/agent/compmd-llms.txt
+index ab90fb11..f4f27a46 100644
+--- a/docs/agent/compmd-llms.txt
++++ b/docs/agent/compmd-llms.txt
+@@ -1,4 +1,4 @@
+-<!-- CompMD's llms.txt, version 0.8.0 (github.com/comp-markdown/compmd, spec/llms.txt at tag v0.8.0, commit 89b8fb54938c; unchanged since v0.4.0 but for one link), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
++<!-- CompMD's llms.txt, version 0.9.0 (github.com/comp-markdown/compmd, spec/llms.txt at tag v0.9.0, commit 87032ac311f6; unchanged since v0.8.0, and since v0.4.0 but for one link), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
+ # CompMD
+ 
+ > CompMD (Component Markdown) is CommonMark + GFM with components, containers, named slots, typed params, data, inputs and CSS-like layout. Files end in `.comp.md`. Every construct is one line, so a document stays readable in any plain Markdown renderer. This file is everything you need to write valid CompMD; the normative spec is compmd-spec-v1.md.
+diff --git a/docs/review-performance.md b/docs/review-performance.md
+index 509cd780..3e234c0f 100644
+--- a/docs/review-performance.md
++++ b/docs/review-performance.md
+@@ -216,3 +216,45 @@ The jump test now holds the restyles at none (`reviews.spec.ts`). The tab switch
+ 
+ **Sizes:** CompMD's WebAssembly 2,812,614 → 2,960,440 bytes (+5%); `compmd.js` 82,744 → 98,690 bytes; the frames'
+ runtime 71,941 → 81,004 bytes; the dashboard's page unchanged (1,058,092 bytes).
++
++## CompMD 0.9.0 (ATM-703)
++
++CompMD 0.9.0 moves code highlighting out of the frames: the host's page makes Shiki once and answers each frame's
++blocks, one block a task (CompMD measures ten frames blocking a WebKit page 0.4 s instead of 2.8 s). Its processor
++lists only the components a document uses, so a document without a diagram loads no Mermaid. The review's diffs are
++host-mode pages, not frames, so their highlighting was already the page's; the change reaches the task text and
++documents that draw a frame (a diagram).
++
++Measured the same way on 0.8.0 and on 0.9.0, on this Mac, atm 0.41.0 otherwise unchanged: the timed e2e tests, one
++worker, three runs each, medians.
++
++**The timed e2e tests** (`reviews.spec.ts`, `performance.spec.ts`; Chromium, medians of three; 0.8.0 → 0.9.0):
++
++| | 0.8.0 | 0.9.0 |
++|---|---|---|
++| A jump to a long review's last file: sheets set / styles read | 0 / 0 | 0 / 0 |
++| The long review: the first file drawn / settled | 36 / 70 ms | 37 / 71 ms |
++| The long review: the slowest frame after it settled | 24 ms | 23 ms |
++| The long review: DOM nodes alive after down and back | 22,116 | 22,116 |
++| A file far down a large review: total | 85 ms | 87 ms |
++| The + following the pointer: median / slowest frame | 33 / 34 ms | 33 / 34 ms |
++| Tab switches (500 tasks): Kanban / Progress / Agents / Graph / List | 21 / 47 / 68 / 79 / 79 ms | 24 / 48 / 67 / 79 / 78 ms |
++| A reload that changes the data: Graph / Kanban / Progress | 60 / 51 / 67 ms | 53 / 51 / 52 ms |
++
++All within their run-to-run spread but the reload's Progress tab (66–68 ms on 0.8.0, 52–54 on 0.9.0, every run).
++
++**The real review** (CompMD's CR-1, 94 files; `real-review.spec.ts`, one run per engine, in the full e2e runs; the
++0.8.0 run was before ATM-693's jump fix, so the jumps compare both changes):
++
++| | Chromium | WebKit |
++|---|---|---|
++| Opening: blocked | 83 → 83 ms | 102 → 92 ms |
++| Opening: busy until | 251 → 272 ms | 272 → 249 ms |
++| Scrolled to the end: the last file drawn | 2,048 → 1,929 ms | 2,022 → 2,017 ms |
++| Scrolling: blocked | 133 → 117 ms | 0 → 0 ms |
++| A jump to the top: blocked | 0 → 0 ms | 74 → 70 ms |
++| A jump to the end: blocked (long frames) | 0 → 0 ms | 107 → 51 ms (2 → 1) |
++| The sides: their time at atm in all (the slowest) | 15.3 → 10.4 s (159 → 110 ms) | 1.1 → 1.1 s (89 → 85 ms) |
++
++**Sizes:** CompMD's WebAssembly 2,960,441 → 2,967,257 bytes (+0.2%); `compmd.js` 98,693 → 99,956 bytes; the frames'
++runtime 81,004 → 82,429 bytes; the dashboard's page unchanged (1,084,296 bytes).
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 7c5fa0e3..9532e0c8 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1254,6 +1254,13 @@ drafts, the watch's catch-up and lease, and task keys plain from creation (ADR-0
+   - **The frames' policies, the hosting contract (`GET` only, the bundle's frames and packs, `sandbox allow-scripts`, CORS `*`, `nosniff`) and I26 are unchanged.**
+   - `minimumReleaseAgeExclude` names the `@compmd/*` packages at 0.8.0 too, and `@compmd/host@0.8.0`: released the same day, by CompMD's author, as for 0.7.
+   - **CompMD's guide for agents** (`docs/agent/compmd-llms.txt`, `atm docs compmd`) is its `spec/llms.txt` at `v0.8.0`, taken from the public repository; it differs from the copy before only by one link, so what agents read about rendering is unchanged.
++- **CompMD 0.9.0 (ATM-703).** Then 0.9.0, the same way: the four `@compmd/*` packages at 0.9.0 (`@compmd/host` and `@compmd/registry` 0.9.0 with them), the crates at `=0.9.0` (`compmd-pack` 0.9.0). No new package. Where it differs from 0.8:
++  - **The frames no longer highlight code themselves:** they ask the host's page, over the sandbox protocol's version 2 (`highlight`, `highlighted`), and the page answers only for the blocks it sent them. A page in frame mode loads the frames' `highlight.js` from where the frames are served: under `/assets/compmd/<version>/` (`atm serve`, the dev server) and on `compmd://` (the app), which every policy atm sets already allows for the frames' scripts. No policy changes on atm's side.
++  - **The frames' own policies are narrower:** they no longer allow `'wasm-unsafe-eval'`, as they load no highlighter. The host page keeps it for the processor and the highlighter.
++  - **The processor lists only the components a document uses** (`hostComponents`), no longer every one a pack gives: a document without a diagram loads no Mermaid. What a component may do is unchanged; the sandbox still never runs a component the text defines (`compmd-processor.test.ts`).
++  - **Every origin for a host's own documents** (`"any"`) is new in CompMD; atm doesn't use it: task text and documents still load no images or data from elsewhere.
++  - `minimumReleaseAgeExclude` names the 0.9.0 packages, released today by CompMD's author.
++  - **CompMD's guide for agents** is its `spec/llms.txt` at `v0.9.0`, unchanged since `v0.8.0`.
+ 
+ ## 4. Keeping it current
+ 

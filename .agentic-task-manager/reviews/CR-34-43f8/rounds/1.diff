@@ -1,0 +1,686 @@
+diff --git a/crates/atm-lib/src/review_pages.rs b/crates/atm-lib/src/review_pages.rs
+index d7612b90..c425d57c 100644
+--- a/crates/atm-lib/src/review_pages.rs
++++ b/crates/atm-lib/src/review_pages.rs
+@@ -180,8 +180,9 @@ fn me(project: &Project) -> Actor {
+ }
+ 
+ /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
+-/// open, needs_you, waiting}], unreadable: [{folder, reference, problem}], you}` (`waiting`: [`waiting_for`]'s why,
+-/// or `null`; `unreadable`: the reviews' folders atm can't read, ATM-617).
++/// open, needs_you, waiting, waiting_since}], unreadable: [{folder, reference, problem}], you}` (`waiting`:
++/// [`waiting_for`]'s why, or `null`; `waiting_since`: its latest round's time, ATM-610; `unreadable`: the reviews'
++/// folders atm can't read, ATM-617).
+ ///
+ /// # Errors
+ /// A status that isn't one; the project has no folder; a review that can't be read.
+@@ -221,6 +222,8 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
+             "open": review.open_comments().count(),
+             "needs_you": needs(&review.header, &me),
+             "waiting": waiting_for(&review, &me),
++            // When it began waiting on its reviewers: its latest round (ATM-610, the list's "waited 3 days")
++            "waiting_since": review.rounds.last().map(|r| r.at.clone()),
+         });
+         listed.push((review.header.updated.clone(), entry));
+     }
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 35109c1f..803f141d 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -1164,6 +1164,45 @@ mod tests {
+         drop(subscription);
+     }
+ 
++    /// ATM-610: the list says since when each review waits on its reviewers, its latest round's time
++    #[test]
++    fn the_list_says_since_when_each_review_waits() {
++        let dir = dir();
++        let mut project = project(&dir.0, "claude:1");
++        waiting(&mut project, &["T-1"]).unwrap();
++        let cr = ReviewRef("CR-1".into());
++        let listed = crate::review_pages::list_reviews(
++            &project,
++            &crate::review_pages::ReviewQuery::default(),
++        )
++        .unwrap();
++        let first = super::store(&project).unwrap().get_review(&cr).unwrap();
++        assert_eq!(
++            listed["reviews"][0]["waiting_since"],
++            json!(first.rounds[0].at)
++        );
++        let mut reviews = super::store(&project).unwrap();
++        let mut later = round();
++        later.kind = RoundKind::Range {
++            base: "a".into(),
++            head: "c".into(),
++        };
++        super::Reviews::new(&mut reviews)
++            .add_round(&cr, later)
++            .unwrap();
++        let again = crate::review_pages::list_reviews(
++            &project,
++            &crate::review_pages::ReviewQuery::default(),
++        )
++        .unwrap();
++        let second = super::store(&project).unwrap().get_review(&cr).unwrap();
++        assert_eq!(
++            again["reviews"][0]["waiting_since"],
++            json!(second.rounds[1].at),
++            "its latest round"
++        );
++    }
++
+     /// A person's review of files for a task an agent hasn't started (the sandbox's red-team review): linked, as it is
+     #[test]
+     fn a_persons_review_of_a_task_not_started_links_it_as_it_is() {
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index 2edfe827..88114c2f 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -1,6 +1,8 @@
+ <script lang="ts">
+   import type { TaskLinks } from '../compmd';
++  import { readStored, writeStored } from '../prefs';
+   import Icon from '../ui/Icon.svelte';
++  import { groupReviews, waitedFor } from './page';
+   import {
+     NO_QUERY,
+     STATUS_LABELS,
+@@ -82,8 +84,21 @@
+   const tasks = $derived(choices((e) => e.review.tasks, query.task));
+   const branches = $derived(choices((e) => [e.branch], query.branch));
+ 
+-  // Its decision or round, or an answer since you last wrote (ATM-606): *Next review needing you* takes both
+-  const waiting = $derived(entries.filter((e) => e.needs_you || e.waiting === 'answered'));
++  const filtering = $derived(
++    !!(query.q || query.status.length || query.author || query.reviewer || query.task || query.branch),
++  );
++
++  // Unfiltered, the list in groups (ATM-610): what waits for you first, the longest waiting on top; any filter or
++  // search, the plain list. *Older* is folded unless opened, which this browser remembers
++  const GROUPS_KEY = 'atm-review-groups';
++  const groups = $derived(filtering ? null : groupReviews(entries, Date.now()));
++  let olderOpen = $state(readStored(GROUPS_KEY).olderOpen === true);
++
++  // Its decision or round, or an answer since you last wrote (ATM-606): *Next review needing you* takes both, in the
++  // order shown (in groups, the longest waiting for your review first, ATM-610)
++  const waiting = $derived(
++    (groups ? groups.flatMap((g) => g.entries) : entries).filter((e) => e.needs_you || e.waiting === 'answered'),
++  );
+ 
+   // What is typed, until the query takes it (a moment later), then the query's
+   let search = $derived(query.q);
+@@ -101,10 +116,6 @@
+     onquery({ ...query, status: status_ });
+   }
+ 
+-  const filtering = $derived(
+-    !!(query.q || query.status.length || query.author || query.reviewer || query.task || query.branch),
+-  );
+-
+   function open(e: MouseEvent, reference: string) {
+     if (e.button !== 0 || e.shiftKey || e.altKey) return;
+     e.preventDefault();
+@@ -222,59 +233,96 @@
+           : 'No reviews yet. Agents open them with atm review create.'}
+     </p>
+   {:else}
+-    <ul class="review-rows" aria-busy={loading}>
+-      {#each entries as entry (entry.review.id)}
+-        {@const r = entry.review}
+-        <li
+-          class="review-row"
+-          class:needs-you={entry.needs_you || entry.waiting === 'answered'}
+-          data-review={r.reference}
+-        >
+-          <a class="review-link" href={href(r.reference)} onclick={(e) => open(e, r.reference)}>
+-            <span class="review-ref">{r.reference}</span>
+-            <span class="review-title">{r.title}</span>
+-          </a>
+-          <span class="review-status status-{r.status}">{STATUS_LABELS[r.status]}</span>
+-          {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>
+-          {:else if entry.waiting === 'answered'}<span
+-              class="review-needs answered"
+-              title="Someone wrote in it after you last did">New reply</span
+-            >{/if}
+-          <span class="review-meta">
+-            {#if r.tasks.length}<span class="review-tasks"
+-                ><Icon name="list-todo" size={12} />{#each r.tasks as key, i (key)}{i
+-                    ? ', '
+-                    : ''}{#if taskHref && taskLinks?.known(key)}<a
+-                      class="review-task-link"
+-                      href={taskHref(key)}
+-                      data-task={key}
+-                      onclick={(e) => openTask(e, key)}
+-                      onauxclick={(e) => e.button === 1 && openTask(e, key)}>{key}</a
+-                    >{:else}{key}{/if}{/each}</span
+-              >{/if}
+-            {#if entry.branch}<span class="review-branch"><Icon name="git-branch" size={12} />{entry.branch}</span>{/if}
+-            <span><Icon name="user" size={12} />{r.author ?? 'no author yet'}</span>
+-            <span title="Open chains of comments"
+-              ><Icon name="message-square" size={12} />{entry.open} open of {entry.chains}</span
+-            >
+-            <span title={r.updated}><Icon name="history" size={12} />{ago(r.updated)}</span>
+-          </span>
+-        </li>
+-      {/each}
+-      {#each unreadable as u (u.folder)}
+-        <li class="review-row review-unreadable" data-unreadable={u.reference}>
+-          <span class="review-ref">{u.reference}</span>
+-          <span class="review-status status-unreadable">Can't be read</span>
+-          <span class="review-meta">
+-            <span class="review-unreadable-why" title={u.folder}>{u.problem}</span>
+-            <span>A newer atm may have written it.</span>
+-          </span>
+-        </li>
++    {#if groups}
++      {#each groups as group (group.id)}
++        {@const folded = group.id === 'older' && !olderOpen}
++        <section class="review-group" data-group={group.id} aria-label={group.title}>
++          <h3 class="review-group-title">
++            {#if group.id === 'older'}
++              <button
++                class="review-group-fold"
++                aria-expanded={!folded}
++                onclick={() => {
++                  olderOpen = !olderOpen;
++                  writeStored(GROUPS_KEY, { olderOpen });
++                }}
++                ><Icon name={folded ? 'chevron-right' : 'chevron-down'} size={14} />{group.title}
++                <span class="review-group-count">{group.entries.length}</span></button
++              >
++            {:else}
++              {group.title} <span class="review-group-count">{group.entries.length}</span>
++            {/if}
++          </h3>
++          {#if !folded}
++            <ul class="review-rows" aria-busy={loading}>
++              {#each group.entries as entry (entry.review.id)}{@render row(entry, group.id === 'waiting')}{/each}
++            </ul>
++          {/if}
++        </section>
+       {/each}
+-    </ul>
++      {#if unreadable.length}
++        <ul class="review-rows">
++          {#each unreadable as u (u.folder)}{@render unreadableRow(u)}{/each}
++        </ul>
++      {/if}
++    {:else}
++      <ul class="review-rows" aria-busy={loading}>
++        {#each entries as entry (entry.review.id)}{@render row(entry, false)}{/each}
++        {#each unreadable as u (u.folder)}{@render unreadableRow(u)}{/each}
++      </ul>
++    {/if}
+   {/if}
+ </div>
+ 
++{#snippet row(entry: ReviewEntry, waited: boolean)}
++  {@const r = entry.review}
++  <li class="review-row" class:needs-you={entry.needs_you || entry.waiting === 'answered'} data-review={r.reference}>
++    <a class="review-link" href={href(r.reference)} onclick={(e) => open(e, r.reference)}>
++      <span class="review-ref">{r.reference}</span>
++      <span class="review-title">{r.title}</span>
++    </a>
++    <span class="review-status status-{r.status}">{STATUS_LABELS[r.status]}</span>
++    {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>
++    {:else if entry.waiting === 'answered'}<span
++        class="review-needs answered"
++        title="Someone wrote in it after you last did">New reply</span
++      >{/if}
++    {#if waited && entry.waiting_since}<span class="review-waited" title="Waiting since {entry.waiting_since}"
++        >Waited {waitedFor(entry.waiting_since, Date.now())}</span
++      >{/if}
++    <span class="review-meta">
++      {#if r.tasks.length}<span class="review-tasks"
++          ><Icon name="list-todo" size={12} />{#each r.tasks as key, i (key)}{i
++              ? ', '
++              : ''}{#if taskHref && taskLinks?.known(key)}<a
++                class="review-task-link"
++                href={taskHref(key)}
++                data-task={key}
++                onclick={(e) => openTask(e, key)}
++                onauxclick={(e) => e.button === 1 && openTask(e, key)}>{key}</a
++              >{:else}{key}{/if}{/each}</span
++        >{/if}
++      {#if entry.branch}<span class="review-branch"><Icon name="git-branch" size={12} />{entry.branch}</span>{/if}
++      <span><Icon name="user" size={12} />{r.author ?? 'no author yet'}</span>
++      <span title="Open chains of comments"
++        ><Icon name="message-square" size={12} />{entry.open} open of {entry.chains}</span
++      >
++      <span title={r.updated}><Icon name="history" size={12} />{ago(r.updated)}</span>
++    </span>
++  </li>
++{/snippet}
++
++{#snippet unreadableRow(u: UnreadableReview)}
++  <li class="review-row review-unreadable" data-unreadable={u.reference}>
++    <span class="review-ref">{u.reference}</span>
++    <span class="review-status status-unreadable">Can't be read</span>
++    <span class="review-meta">
++      <span class="review-unreadable-why" title={u.folder}>{u.problem}</span>
++      <span>A newer atm may have written it.</span>
++    </span>
++  </li>
++{/snippet}
++
+ <style>
+   .review-list {
+     display: flex;
+@@ -518,4 +566,40 @@
+   .review-problem {
+     color: var(--text-muted);
+   }
++  .review-group {
++    display: flex;
++    flex-direction: column;
++    gap: var(--space-4);
++  }
++  .review-group-title {
++    display: flex;
++    align-items: center;
++    gap: var(--space-3);
++    margin: 0;
++    color: var(--text-muted);
++    font-size: var(--text-sm);
++    font-weight: 600;
++  }
++  .review-group-fold {
++    display: inline-flex;
++    align-items: center;
++    gap: var(--space-3);
++    padding: 0;
++    border: none;
++    background: none;
++    color: inherit;
++    font: inherit;
++    cursor: pointer;
++  }
++  .review-group-count {
++    padding: 0 var(--space-3);
++    border-radius: var(--radius-pill);
++    background: var(--surface2);
++    font-weight: 600;
++  }
++  .review-waited {
++    color: var(--purple);
++    font-size: var(--text-xs);
++    font-weight: 600;
++  }
+ </style>
+diff --git a/dashboard/src/lib/reviews/page.ts b/dashboard/src/lib/reviews/page.ts
+index 74fcdbcf..c52a486b 100644
+--- a/dashboard/src/lib/reviews/page.ts
++++ b/dashboard/src/lib/reviews/page.ts
+@@ -1,6 +1,73 @@
+ // A review's page's own logic (docs/code-review-design.md §3.11, ATM-574): the files as a tree, what each file's patch
+ // adds and removes, where its chains go in the round shown, and the key a file's *viewed* tick is kept under.
+-import type { Chain, PlacedChain, ViewFile } from './types';
++import type { Chain, PlacedChain, ReviewEntry, ViewFile } from './types';
++
++/** How many days a decided review stays among the recent ones, before *Older* (ATM-610) */
++export const RECENT_DAYS = 5;
++
++/** A group of the unfiltered reviews list (ATM-610), in the order the list shows them */
++export interface ReviewGroup {
++  id: 'waiting' | 'commented' | 'sent-back' | 'others' | 'recent' | 'older';
++  title: string;
++  entries: ReviewEntry[];
++}
++
++const DAY_MS = 86_400_000;
++const time = (at: string | null | undefined) => (at ? Date.parse(at) : NaN);
++/** Latest first, by the review's last activity */
++const latestFirst = (a: ReviewEntry, b: ReviewEntry) => b.review.updated.localeCompare(a.review.updated);
++
++/**
++ * The unfiltered list in groups (ATM-610), each review in the first it fits, empty groups left out:
++ * 1. *Waiting for your review*: waiting or live, needing you; the longest waiting first (since its latest round);
++ * 2. *With open comments*: the rest with open comments, the latest activity first;
++ * 3. *Sent back*: changes requested, waiting on their author, the latest first;
++ * 4. *Waiting on others*: the rest not decided yet (a draft, or waiting on someone else), the latest first, so no
++ *    review is left out;
++ * 5. *Recently decided*: approved or closed in the last [`RECENT_DAYS`], the latest first;
++ * 6. *Older*: decided before that, the latest first (folded by the list).
++ */
++export function groupReviews(entries: ReviewEntry[], now: number): ReviewGroup[] {
++  const groups: ReviewGroup[] = [
++    { id: 'waiting', title: 'Waiting for your review', entries: [] },
++    { id: 'commented', title: 'With open comments', entries: [] },
++    { id: 'sent-back', title: 'Sent back', entries: [] },
++    { id: 'others', title: 'Waiting on others', entries: [] },
++    { id: 'recent', title: 'Recently decided', entries: [] },
++    { id: 'older', title: 'Older', entries: [] },
++  ];
++  const into = (id: ReviewGroup['id'], entry: ReviewEntry) => groups.find((g) => g.id === id)!.entries.push(entry);
++  for (const entry of entries) {
++    const status = entry.review.status;
++    const decided = status === 'approved' || status === 'closed';
++    if (entry.needs_you && (status === 'waiting' || status === 'live')) into('waiting', entry);
++    else if (entry.open > 0) into('commented', entry);
++    else if (status === 'changes_requested') into('sent-back', entry);
++    else if (!decided) into('others', entry);
++    else if (now - time(entry.review.updated) <= RECENT_DAYS * DAY_MS) into('recent', entry);
++    else into('older', entry);
++  }
++  for (const group of groups) {
++    if (group.id === 'waiting') {
++      // The longest waiting first; one with no time (an older atm's list) after them
++      const since = (e: ReviewEntry) => time(e.waiting_since ?? e.review.updated);
++      group.entries.sort((a, b) => (since(a) || Infinity) - (since(b) || Infinity));
++    } else group.entries.sort(latestFirst);
++  }
++  return groups.filter((g) => g.entries.length);
++}
++
++/** How long a review has waited, in words: "under an hour", "5 hours", "1 day", "3 days" (ATM-610) */
++export function waitedFor(since: string, now: number): string {
++  const ms = now - Date.parse(since);
++  if (!Number.isFinite(ms) || ms < 3_600_000) return 'under an hour';
++  if (ms < DAY_MS) {
++    const hours = Math.floor(ms / 3_600_000);
++    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
++  }
++  const days = Math.floor(ms / DAY_MS);
++  return `${days} ${days === 1 ? 'day' : 'days'}`;
++}
+ 
+ /** A row of the file tree: a folder (its path, how deep) or a file of the view */
+ export type TreeRow =
+diff --git a/dashboard/src/lib/reviews/types.ts b/dashboard/src/lib/reviews/types.ts
+index b92c7ecf..4c31f78d 100644
+--- a/dashboard/src/lib/reviews/types.ts
++++ b/dashboard/src/lib/reviews/types.ts
+@@ -68,6 +68,8 @@ export interface ReviewEntry {
+   /** What it waits on you for (ATM-606): its decision or round, or an answer since you last wrote; none, `null`.
+    * Optional, for an older atm's lists */
+   waiting?: 'review' | 'answered' | null;
++  /** When it began waiting on its reviewers, its latest round's time (ATM-610). Optional, for an older atm's lists */
++  waiting_since?: string | null;
+ }
+ 
+ /** A review's folder atm can't read (ATM-617): a status a newer atm wrote, a broken header */
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 1fd29289..7c107999 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -216,6 +216,51 @@ test.describe('the reviews tab', () => {
+     await expect(tab).toHaveAccessibleName('Reviews');
+   });
+ 
++  // ATM-610: unfiltered, the reviews in groups, what waits for you first; a filter shows the plain list
++  test('the list in groups: waiting for your review first, how long it has waited; a filter lists them plainly', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
++    tasksServer.setReviews({
++      reviews: [
++        {
++          review: { ...header(4, 'approved'), updated: daysAgo(1) },
++          branch: null,
++          chains: 1,
++          open: 0,
++          needs_you: false,
++        },
++        {
++          review: header(2),
++          branch: 'dev/1',
++          chains: 3,
++          open: 2,
++          needs_you: true,
++          waiting: 'review',
++          waiting_since: daysAgo(3),
++        },
++        { review: header(3, 'changes_requested'), branch: null, chains: 1, open: 1, needs_you: false },
++      ],
++      you: 'Ana',
++    });
++    await page.reload();
++    const groups = page.locator('.review-group');
++    await expect(groups).toHaveCount(3);
++    await expect(groups.locator('.review-group-title')).toHaveText([
++      'Waiting for your review 1',
++      'With open comments 1',
++      'Recently decided 1',
++    ]);
++    await expect(groups.first().locator('.review-row')).toHaveAttribute('data-review', 'CR-2');
++    await expect(groups.first().locator('.review-waited')).toHaveText('Waited 3 days');
++    // A filter: the plain list, in the server's order
++    await page.getByRole('button', { name: 'Open', exact: true }).click();
++    await expect(groups).toHaveCount(0);
++    await expect(page.locator('.review-row')).toHaveCount(3);
++  });
++
+   // ATM-617: CR-13 written by a newer atm, with a status this one doesn't know: a row saying so, not a missing review
+   test('a review atm can’t read is a row of its own, saying why, after the others', async ({ page, tasksServer }) => {
+     await openReviews(page, tasksServer);
+diff --git a/dashboard/tests/unit/ReviewList.component.test.ts b/dashboard/tests/unit/ReviewList.component.test.ts
+index f8198122..4981c758 100644
+--- a/dashboard/tests/unit/ReviewList.component.test.ts
++++ b/dashboard/tests/unit/ReviewList.component.test.ts
+@@ -92,20 +92,75 @@ describe('ReviewList', () => {
+     expect(onopen).not.toHaveBeenCalled();
+   });
+ 
+-  it('marks those that need you, and offers the first of them next', async () => {
++  it('marks those that need you, and offers the first of them shown next', async () => {
+     const { container, onopen } = show([
+       entry(3, 'waiting'),
+       entry(2, 'changes_requested', {}, { needs_you: true }),
+       entry(1, 'live', {}, { needs_you: true }),
+     ]);
++    // In groups (ATM-610): CR-1 waits for your review, so it is shown first; CR-2, sent back with open comments, after
+     expect([...container.querySelectorAll('.needs-you')].map((r) => r.getAttribute('data-review'))).toEqual([
+-      'CR-2',
+       'CR-1',
++      'CR-2',
+     ]);
+     const next = screen.getByRole('button', { name: /Next review needing you/ });
+     expect(next.textContent).toContain('2');
+     await fireEvent.click(next);
+-    expect(onopen).toHaveBeenCalledWith('CR-2', false);
++    expect(onopen).toHaveBeenCalledWith('CR-1', false);
++  });
++
++  // ATM-610: unfiltered, the list in groups, each under its heading with its count; any filter, the plain list
++  describe('in groups', () => {
++    const now = Date.now();
++    const ago = (days: number) => new Date(now - days * 86_400_000).toISOString();
++    const groupsOf = (container: HTMLElement) =>
++      [...container.querySelectorAll('.review-group')].map((g) => [
++        g.getAttribute('data-group'),
++        g.querySelector('.review-group-count')?.textContent,
++        [...g.querySelectorAll('.review-row')].map((r) => r.getAttribute('data-review')),
++      ]);
++
++    beforeEach(() => localStorage.clear());
++
++    it('each group under its heading and count; waiting for you says how long; Older folded until opened', async () => {
++      const { container } = show([
++        entry(1, 'waiting', {}, { needs_you: true, open: 0, waiting_since: ago(3) }),
++        entry(2, 'approved', { updated: ago(1) }, { open: 0 }),
++        entry(3, 'closed', { updated: ago(30) }, { open: 0 }),
++      ]);
++      expect(groupsOf(container)).toEqual([
++        ['waiting', '1', ['CR-1']],
++        ['recent', '1', ['CR-2']],
++        ['older', '1', []],
++      ]);
++      expect(screen.getByText('Waiting for your review')).toBeTruthy();
++      expect(screen.getByText('Waited 3 days')).toBeTruthy();
++      const fold = screen.getByRole('button', { name: /Older/ });
++      expect(fold).toHaveAttribute('aria-expanded', 'false');
++      await fireEvent.click(fold);
++      expect(groupsOf(container).at(-1)).toEqual(['older', '1', ['CR-3']]);
++      expect(JSON.parse(localStorage.getItem('atm-review-groups') ?? '{}')).toEqual({ olderOpen: true });
++    });
++
++    it('Older opened before stays open', () => {
++      localStorage.setItem('atm-review-groups', JSON.stringify({ olderOpen: true }));
++      const { container } = show([entry(3, 'closed', { updated: ago(30) }, { open: 0 })]);
++      expect(groupsOf(container)).toEqual([['older', '1', ['CR-3']]]);
++    });
++
++    it('a filter or a search shows the plain list, no groups', () => {
++      const entries = [
++        entry(2, 'approved', { updated: ago(1) }, { open: 0 }),
++        entry(1, 'waiting', {}, { needs_you: true, open: 0 }),
++      ];
++      const { container } = show(entries, { ...NO_QUERY, q: 'x' });
++      expect(container.querySelector('.review-group')).toBeNull();
++      expect([...container.querySelectorAll('.review-row')].map((r) => r.getAttribute('data-review'))).toEqual([
++        'CR-2',
++        'CR-1',
++      ]);
++      expect(screen.queryByText(/Waited/)).toBeNull();
++    });
+   });
+ 
+   it('offers no next review when none needs you', () => {
+diff --git a/dashboard/tests/unit/page.test.ts b/dashboard/tests/unit/page.test.ts
+index aa830383..86d9fc30 100644
+--- a/dashboard/tests/unit/page.test.ts
++++ b/dashboard/tests/unit/page.test.ts
+@@ -1,11 +1,13 @@
+ import { describe, expect, it } from 'vitest';
+ import {
++  RECENT_DAYS,
+   TREE_WIDTH,
+   chainsOf,
+   driftedOf,
+   fileTree,
+   filesIn,
+   filterChains,
++  groupReviews,
+   hashOf,
+   isResolved,
+   lineCounts,
+@@ -17,9 +19,110 @@ import {
+   treeOrder,
+   treeWidth,
+   viewedKey,
++  waitedFor,
+   type ChainFilter,
+ } from '../../src/lib/reviews/page';
+-import type { PlacedChain, ViewFile } from '../../src/lib/reviews/types';
++import type { PlacedChain, ReviewEntry, ReviewStatus, ViewFile } from '../../src/lib/reviews/types';
++
++// ATM-610: the unfiltered reviews list in groups, what waits for you first
++describe('the reviews list in groups', () => {
++  const NOW = Date.parse('2026-11-19T12:00:00Z');
++  const daysAgo = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
++  const entry = (
++    ref: string,
++    status: ReviewStatus,
++    more: { needs_you?: boolean; open?: number; updated?: string; since?: string | null } = {},
++  ): ReviewEntry => ({
++    review: {
++      id: ref,
++      reference: ref,
++      number: 1,
++      title: ref,
++      status,
++      tasks: [],
++      author: 'claude:a',
++      reviewers: ['Hakan'],
++      created: daysAgo(30),
++      updated: more.updated ?? daysAgo(1),
++    },
++    branch: null,
++    chains: more.open ?? 0,
++    open: more.open ?? 0,
++    needs_you: more.needs_you ?? false,
++    waiting_since: more.since === undefined ? daysAgo(1) : more.since,
++  });
++  const shape = (entries: ReviewEntry[]) =>
++    groupReviews(entries, NOW).map((g) => [g.id, g.entries.map((e) => e.review.reference)]);
++
++  it('each review in the first group it fits, empty groups left out', () => {
++    expect(
++      shape([
++        entry('CR-1', 'waiting', { needs_you: true, open: 2 }), // waits on you: first, though it has open comments
++        entry('CR-2', 'waiting', { open: 1 }),
++        entry('CR-3', 'changes_requested', { open: 1 }), // open comments come before sent back
++        entry('CR-4', 'changes_requested'),
++        entry('CR-5', 'draft'),
++        entry('CR-6', 'approved', { updated: daysAgo(2) }),
++        entry('CR-7', 'closed', { updated: daysAgo(20) }),
++        entry('CR-8', 'live', { needs_you: true }),
++        entry('CR-9', 'changes_requested', { needs_you: true }), // its author's to answer: not waiting for review
++      ]),
++    ).toEqual([
++      ['waiting', ['CR-1', 'CR-8']],
++      ['commented', ['CR-2', 'CR-3']],
++      ['sent-back', ['CR-4', 'CR-9']],
++      ['others', ['CR-5']],
++      ['recent', ['CR-6']],
++      ['older', ['CR-7']],
++    ]);
++    expect(shape([entry('CR-1', 'draft')])).toEqual([['others', ['CR-1']]]);
++    expect(shape([])).toEqual([]);
++  });
++
++  it('waiting for you: the longest waiting on top, by its latest round; one without a time after them', () => {
++    expect(
++      shape([
++        entry('CR-1', 'waiting', { needs_you: true, since: daysAgo(1) }),
++        entry('CR-2', 'waiting', { needs_you: true, since: null, updated: daysAgo(9) }),
++        entry('CR-3', 'waiting', { needs_you: true, since: daysAgo(4) }),
++      ]),
++    ).toEqual([['waiting', ['CR-2', 'CR-3', 'CR-1']]]);
++    const noTime = entry('CR-4', 'waiting', { needs_you: true, since: null, updated: 'never' });
++    expect(shape([noTime, entry('CR-1', 'waiting', { needs_you: true })])).toEqual([['waiting', ['CR-1', 'CR-4']]]);
++  });
++
++  it('the other groups: the latest activity first', () => {
++    expect(
++      shape([
++        entry('CR-1', 'approved', { updated: daysAgo(3) }),
++        entry('CR-2', 'approved', { updated: daysAgo(1) }),
++        entry('CR-3', 'closed', { updated: daysAgo(2) }),
++      ]),
++    ).toEqual([['recent', ['CR-2', 'CR-3', 'CR-1']]]);
++  });
++
++  it(`decided within ${RECENT_DAYS} days is recent; past that, older`, () => {
++    expect(
++      shape([
++        entry('CR-1', 'approved', { updated: daysAgo(RECENT_DAYS) }),
++        entry('CR-2', 'approved', { updated: daysAgo(RECENT_DAYS + 0.01) }),
++      ]),
++    ).toEqual([
++      ['recent', ['CR-1']],
++      ['older', ['CR-2']],
++    ]);
++  });
++
++  it('how long a review has waited, in words', () => {
++    const at = (ms: number) => new Date(NOW - ms).toISOString();
++    expect(waitedFor(at(10 * 60_000), NOW)).toBe('under an hour');
++    expect(waitedFor(at(3_600_000), NOW)).toBe('1 hour');
++    expect(waitedFor(at(5 * 3_600_000), NOW)).toBe('5 hours');
++    expect(waitedFor(at(86_400_000), NOW)).toBe('1 day');
++    expect(waitedFor(at(3.5 * 86_400_000), NOW)).toBe('3 days');
++    expect(waitedFor('not a time', NOW)).toBe('under an hour');
++  });
++});
+ 
+ // A review's page's own logic (lib/reviews/page.ts, ATM-574)
+ 
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 10c685c3..3c3bfc5f 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -255,7 +255,9 @@ old parameters from its hash and moves to the new address.
+ - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
+   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
+   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
+-  needs_you, waiting}], unreadable: [{folder, reference, problem}], you}`. `unreadable` (ATM-617) lists the project's
++  needs_you, waiting, waiting_since}], unreadable: [{folder, reference, problem}], you}`. `waiting_since` (ATM-610) is
++  its latest round's time, when it began waiting on its reviewers: the unfiltered list groups the reviews (what waits
++  for the user first, the longest waiting on top, saying for how long). `unreadable` (ATM-617) lists the project's
+   review folders atm can't read (a status a newer atm wrote, a broken header), whatever the query: the Reviews tab
+   shows each as a row saying why. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
+   the status waiting on the reviewers (`open` before 0.41.0). A review needs the user when it is waiting or live with

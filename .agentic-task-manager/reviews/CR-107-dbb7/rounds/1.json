@@ -1,0 +1,52 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "c68b3cb69add50a599f9b444902e242e86267be0",
+    "head": "47644fcc7763eb4529b49a9fc26da906df63c132"
+  },
+  "files": [
+    {
+      "path": "crates/atm-lib/src/leases.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/lifecycle.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/commands.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/linking.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/live.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/lifecycle.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/reviews.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-21T13:49:08Z"
+}

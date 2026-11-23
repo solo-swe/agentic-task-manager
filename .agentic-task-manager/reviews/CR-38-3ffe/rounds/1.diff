@@ -1,0 +1,72 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 0bd5fd53..6fc243c0 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -511,9 +511,10 @@
+   });
+ 
+   const tabs = $derived([
+-    { id: 'overview', label: 'Overview', icon: 'info', count: null },
+-    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length },
+-    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length },
++    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0 },
++    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length, open: 0 },
++    // The open ones beside the total (ATM-614): *Comments 7 (2 open)*
++    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length, open: chainCounts.open },
+   ] as const);
+ </script>
+ 
+@@ -688,10 +689,15 @@
+     <div class="review-top-row review-bar">
+       <div class="review-tabs" role="tablist" aria-label="Review">
+         {#each tabs as t (t.id)}
+-          <button role="tab" id="review-tab-{t.id}" aria-selected={tab === t.id} onclick={() => (tab = t.id)}
++          <button
++            role="tab"
++            id="review-tab-{t.id}"
++            aria-selected={tab === t.id}
++            onclick={() => (tab = t.id)}
++            aria-label={t.open ? `${t.label}: ${t.count}, ${t.open} open` : undefined}
+             ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
+                 class="review-count">{t.count}</span
+-              >{/if}</button
++              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}</button
+           >
+         {/each}
+       </div>
+@@ -1326,6 +1332,11 @@
+     font-weight: 600;
+     text-align: center;
+   }
++  /* The open comments beside the total, quieter (ATM-614) */
++  .review-count-open {
++    color: var(--text-muted);
++    font-size: var(--text-xs);
++  }
+   /* The Diffs tab's tools */
+   .review-tools {
+     display: flex;
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 671a624a..0410a69f 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -655,6 +655,19 @@ describe('ReviewPage: Comments', () => {
+   });
+ });
+ 
++describe('ReviewPage: the Comments tab’s counts (ATM-614)', () => {
++  it('the total, and the open ones beside it, named for screen readers; none open, the total alone', async () => {
++    const { rerender } = show(
++      data({ chains: [chain('t1', 'src/a.rs'), chain('t2', null), chain('t3', 'src/b.rs', {}, true)] }),
++    );
++    expect(tab('Comments: 3, 2 open')).toHaveTextContent(/Comments\s*3\s*\(2 open\)/);
++    await rerender({ page: data({ chains: [chain('t3', 'src/b.rs', {}, true)] }) });
++    const comments = tab(/Comments/);
++    expect(comments).not.toHaveAttribute('aria-label');
++    expect(comments).toHaveTextContent(/^Comments\s*1$/);
++  });
++});
++
+ describe('ReviewPage: drafts (ATM-612)', () => {
+   const drafted = (id: string, path: string | null = 'src/a.rs'): PlacedDraft => ({
+     id,

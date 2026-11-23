@@ -1,0 +1,1408 @@
+diff --git a/dashboard/src/App.svelte b/dashboard/src/App.svelte
+index 040686f1..1ced996a 100644
+--- a/dashboard/src/App.svelte
++++ b/dashboard/src/App.svelte
+@@ -23,6 +23,7 @@
+   import AppTitleBar from './lib/shell/AppTitleBar.svelte';
+   import ReviewsTab from './lib/shell/ReviewsTab.svelte';
+   import { reviewWindow } from './lib/reviews/window.svelte';
++  import SettingsMenu from './lib/shell/SettingsMenu.svelte';
+ 
+   // A project's address naming a review (/projects/<id>/reviews/CR-7) shows that review alone, over the whole window
+   const reviewing = $derived(dashboard.route.page === 'project' && !!reviewOf(addressOf(page.url)).review);
+@@ -48,7 +49,7 @@
+     return () => query.removeEventListener('change', onChange);
+   });
+ 
+-  $effect(() => applyAppearance(document.documentElement, dashboard.theme, dashboard.mode));
++  $effect(() => applyAppearance(document.documentElement, dashboard.theme, dashboard.mode, dashboard.docSize));
+ 
+   // Remember the view per project (FR-5): every change to filters, tab, panel or board options is saved
+   $effect(() => dashboard.saveView());
+@@ -56,11 +57,14 @@
+   $effect(() => dashboard.syncSprintParam());
+ </script>
+ 
++<!-- A review's tab, at the title bar's right end: the ⋯ settings, as every tab has (ATM-691) -->
++{#snippet reviewEnd()}<SettingsMenu />{/snippet}
++
+ <UpdateNotice />
+ {#if reviewing && inApp}
+   <!-- A review's page in the app (ATM-574): a tab of its own, under the window's sidebar and title bar as every tab -->
+   <Sidebar />
+-  <AppTitleBar title={reviewWindow.title || dashboard.projectName} />
++  <AppTitleBar title={reviewWindow.title || dashboard.projectName} end={reviewEnd} />
+   <main class="review-tab-main" id="app-main"><ReviewsTab /></main>
+ {:else if reviewing}
+   <!-- A review's page in the browser (ATM-574): the whole window -->
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index bbcc06d5..16975b80 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -2650,8 +2650,17 @@ button.repo-ref {
+   pointer-events: auto;
+   cursor: pointer;
+ }
++/* Its numbers subtle, gray (Hakan, ATM-692: a changed line's in bold blue drew the eye from the text): a changed line's
++   only a little darker, still gray */
++.doc-page.pickable .doc-gutter-lines div {
++  color: color-mix(in srgb, var(--text-muted) 65%, transparent);
++}
++.doc-page.pickable .doc-gutter-lines div.marked {
++  color: var(--text-muted);
++  font-weight: normal;
++}
+ .doc-page.pickable .doc-gutter-lines div:hover,
+-.doc-gutter-lines div.picked {
++.doc-page.pickable .doc-gutter-lines div.picked {
+   color: var(--accent);
+ }
+ /* A link's lines in a Markdown document: on the boxes of their text, not across the page */
+diff --git a/dashboard/src/lib/appearance.ts b/dashboard/src/lib/appearance.ts
+index fd3f5563..04737d5d 100644
+--- a/dashboard/src/lib/appearance.ts
++++ b/dashboard/src/lib/appearance.ts
+@@ -44,11 +44,28 @@ export function knownDocStyle(id: unknown): DocStyle {
+   return DOC_STYLES.find((s) => s.id === id)?.id ?? DEFAULT_DOC_STYLE;
+ }
+ 
++/** How large a Markdown document's text is (ATM-691), in the document viewer and a review's rendered sides: a scale of
++ * its document style's own size (themes/doc-styles.css reads it from <html>'s data-doc-size) */
++export const DOC_SIZES = [
++  { id: 'tiny', name: 'Tiny', scale: 0.8 },
++  { id: 'small', name: 'Small', scale: 0.9 },
++  { id: 'medium', name: 'Medium', scale: 1 },
++  { id: 'large', name: 'Large', scale: 1.15 },
++  { id: 'huge', name: 'Huge', scale: 1.3 },
++] as const;
++export type DocSize = (typeof DOC_SIZES)[number]['id'];
++export const DEFAULT_DOC_SIZE: DocSize = 'medium';
++
++export function knownDocSize(id: unknown): DocSize {
++  return DOC_SIZES.find((s) => s.id === id)?.id ?? DEFAULT_DOC_SIZE;
++}
++
+ export function resolveMode(pref: ModePref, systemPrefersLight: boolean): Mode {
+   return pref === 'system' ? (systemPrefersLight ? 'light' : 'dark') : pref;
+ }
+ 
+-export function applyAppearance(root: HTMLElement, theme: string, mode: Mode) {
++export function applyAppearance(root: HTMLElement, theme: string, mode: Mode, docSize: DocSize = DEFAULT_DOC_SIZE) {
+   root.dataset.theme = theme;
+   root.dataset.mode = mode;
++  root.dataset.docSize = docSize;
+ }
+diff --git a/dashboard/src/lib/documents/DocumentPage.svelte b/dashboard/src/lib/documents/DocumentPage.svelte
+index d24592fa..59028f6c 100644
+--- a/dashboard/src/lib/documents/DocumentPage.svelte
++++ b/dashboard/src/lib/documents/DocumentPage.svelte
+@@ -36,8 +36,12 @@
+     onover,
+     held = null,
+     overlay,
++    after,
+     page = $bindable(),
+   }: {
++    /** Drawn after a part shown, across the page (ATM-651: a review's chains under their block, in the gap the page is
++     * cut at) */
++    after?: Snippet<[PagePart]>;
+     /** A row of the margin pressed (its + or its number), as the source lines it numbers (ATM-650): the rows take a +
+      * under the pointer only with it */
+     onpress?: (lines: [number, number], extend: boolean) => void;
+@@ -67,13 +71,17 @@
+ 
+   const markdown = $derived(kind === 'markdown');
+   const shown = $derived(parts ?? [{ type: 'shown' as const, from: 1, to: lines }]);
+-  const folded = $derived(shown.some((p) => p.type === 'fold'));
++  /** Shown in parts (folded, or cut where a chain shows, ATM-651): each part draws its own lines only */
++  const folded = $derived(shown.length > 1);
+ 
+   /** Each part's lines where CompMD drew them, in the page's coordinates, and its rows: by the part's first line */
+   let placed = $state.raw<Record<number, { drawn: DrawnLine[]; rows: GutterRow[] }>>({});
+   const shownParts = $derived(shown.filter((p) => p.type === 'shown'));
+-  const drawn = $derived(shownParts.flatMap((p) => placed[p.from]?.drawn ?? []));
+-  const rows = $derived(shownParts.flatMap((p) => placed[p.from]?.rows ?? []));
++  // Each part's own lines only: a part just cut from a larger one (ATM-651) still has the larger one's until it is
++  // measured again, which would list the lines after the cut twice
++  const within = (p: PagePart, line: number) => line >= p.from && line <= p.to;
++  const drawn = $derived(shownParts.flatMap((p) => (placed[p.from]?.drawn ?? []).filter((l) => within(p, l.line))));
++  const rows = $derived(shownParts.flatMap((p) => (placed[p.from]?.rows ?? []).filter((r) => within(p, r.from))));
+   $effect(() => {
+     onplaced?.({ drawn, rows });
+   });
+@@ -81,6 +89,28 @@
+   $effect(() => {
+     void path;
+     placed = {};
++    measured = {};
++  });
++
++  /** Each part's lines as CompMD last gave them, from its own element: placed on the page again whenever the page
++   * changes size (ATM-651: a chain shown after a part moves the parts below it, which CompMD doesn't see, as their
++   * own pages didn't change; their numbers and marks stayed behind) */
++  let measured: Record<number, { lines: DrawnLine[]; from: HTMLElement }> = {};
++  function measure(part: PagePart, lines: DrawnLine[], from: HTMLElement) {
++    measured = { ...measured, [part.from]: { lines, from } };
++    place(part, lines, from);
++  }
++  $effect(() => {
++    const el = page;
++    if (!el || typeof ResizeObserver === 'undefined') return;
++    const moved = new ResizeObserver(() => {
++      for (const part of shownParts) {
++        const m = measured[part.from];
++        if (m?.from.isConnected) place(part, m.lines, m.from);
++      }
++    });
++    moved.observe(el);
++    return () => moved.disconnect();
+   });
+ 
+   // CompMD's boxes, moved into the page's coordinates; a part's margin numbers its own lines, in its own height (the
+@@ -168,7 +198,8 @@
+           style:height="{row.height}px"
+           onmousedown={onpress && row.drawn ? (e) => press(e, row) : undefined}
+         >
+-          {row.from === row.to ? row.from : `${row.from}–${row.to}`}
++          <!-- A row of several lines (a paragraph's, on one visual line) by its first: the range is the + 's to say -->
++          {row.from}
+           {#if onpress && row.drawn && (hover === row.from || isHeld(row))}
+             <LinePlus
+               line={row.from === row.to ? row.from : `${row.from}–${row.to}`}
+@@ -192,9 +223,10 @@
+             {localImage}
+             {onopen}
+             only={folded ? [part.from, part.to] : undefined}
+-            onlines={(drawnLines, from) => place(part, drawnLines, from)}
++            onlines={(drawnLines, from) => measure(part, drawnLines, from)}
+           />
+         </div>
++        {#if after}<div class="doc-after" data-after={part.to}>{@render after(part)}</div>{/if}
+       {:else}
+         {@const count = part.to - part.from + 1}
+         <button class="doc-fold" data-from={part.from} onclick={() => onunfold?.(part)}>
+@@ -206,6 +238,15 @@
+ </article>
+ 
+ <style>
++  /* What the host shows after a part (ATM-651): over the page's marks, on the page's own font */
++  .doc-after {
++    position: relative;
++    z-index: 1;
++    font-family: var(--font-sans);
++  }
++  .doc-after:empty {
++    display: none;
++  }
+   .doc-fold {
+     display: block;
+     position: relative;
+diff --git a/dashboard/src/lib/prefs.ts b/dashboard/src/lib/prefs.ts
+index 5fd3f060..b0b0afc4 100644
+--- a/dashboard/src/lib/prefs.ts
++++ b/dashboard/src/lib/prefs.ts
+@@ -19,6 +19,8 @@ export interface Prefs {
+   theme: string;
+   /** How the document viewer's page looks: a document style id (see appearance.ts DOC_STYLES) */
+   docStyle: string;
++  /** How large a document's text is: a size id (see appearance.ts DOC_SIZES) */
++  docSize: string;
+   /** The overview shows only active projects (lib/projects.ts) */
+   overviewActiveOnly: boolean;
+   /** The overview's tab: 'projects' or 'board' (lib/routes.ts) */
+diff --git a/dashboard/src/lib/reviews/DiffCode.svelte b/dashboard/src/lib/reviews/DiffCode.svelte
+index 2db627ee..8370e816 100644
+--- a/dashboard/src/lib/reviews/DiffCode.svelte
++++ b/dashboard/src/lib/reviews/DiffCode.svelte
+@@ -156,9 +156,13 @@
+     measured.forEach((m, i) => {
+       tops.push(m ? m.top : i === 0 ? (layout?.top ?? 0) : tops[i - 1] + Math.max(own[i - 1], heights?.[i - 1] ?? 0));
+     });
++    // Each row ends where the next begins, exactly (Hakan, ATM-690): at least a line's height, it overlapped the next
++    // wherever that one's text began less than a line below (after a blank line, at a new block), and the two rows'
++    // tints drew a darker line there, in the app's WebKit
+     const rows = lines.map((_, i) => {
+       const height = Math.max(own[i], heights?.[i] ?? 0);
+-      return { top: tops[i], height: i + 1 < lines.length ? Math.max(tops[i + 1] - tops[i], lineHeight) : height };
++      const next = i + 1 < lines.length ? tops[i + 1] - tops[i] : null;
++      return { top: tops[i], height: next === null ? height : next > 0 ? next : lineHeight };
+     });
+     if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
+   }
+@@ -176,13 +180,20 @@
+       heights.flatMap((h, i) => (h > one + 0.5 ? [[i + FIRST_LINE, Math.round(h * 100) / 100] as const] : [])),
+     );
+   });
+-  /** Each line's row: measured when wrapped, else the code's one line height */
+-  const rowOf = (i: number) =>
+-    wrap && wrapped?.[i]
+-      ? wrapped[i]
+-      : layout
+-        ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
+-        : null;
++  /** Each line's row: measured when wrapped, else the code's one line height; its edges on whole pixels, so the rows
++   * tile: a line height of 20.8 px put each edge inside a pixel, which both rows half covered, and their two tints drew
++   * a line between every two lines */
++  const rowOf = (i: number) => {
++    const row =
++      wrap && wrapped?.[i]
++        ? wrapped[i]
++        : layout
++          ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
++          : null;
++    if (!row) return null;
++    const top = Math.round(row.top);
++    return { top, height: Math.round(row.top + row.height) - top };
++  };
+ 
+   /** The line at a pointer's height in the run, if there is one there */
+   function lineAt(e: MouseEvent): number | null {
+@@ -208,6 +219,25 @@
+   }
+ 
+   const isPicked = (i: number) => !!picked && i >= picked[0] && i <= picked[1];
++  const isMarked = (i: number) => !!marked && i >= marked[0] && i <= marked[1];
++  /** The tints, one box per run of lines tinted alike, from its first line's top to its last line's bottom (Hakan,
++   * ATM-690): no two tinted boxes meet, or overlap, inside a run. A run is consecutive lines, whatever their rows' edges */
++  const tints = $derived.by(() => {
++    if (!layout) return [];
++    const runs: { kind: string; commented: boolean; picked: boolean; top: number; bottom: number; end: number }[] = [];
++    lines.forEach((line, i) => {
++      const row = rowOf(i);
++      if (!row) return;
++      const [kind, commented, picked] = [line.kind, isMarked(i), isPicked(i)];
++      if (kind === 'context' && !commented && !picked) return;
++      const last = runs.at(-1);
++      if (last && last.end === i - 1 && last.kind === kind && last.commented === commented && last.picked === picked) {
++        last.bottom = Math.max(last.bottom, row.top + row.height);
++        last.end = i;
++      } else runs.push({ kind, commented, picked, top: row.top, bottom: row.top + row.height, end: i });
++    });
++    return runs;
++  });
+   const label = (l: CodeLine) =>
+     numbers === 'both' ? [l.old ?? '', l.new ?? ''] : [(numbers === 'old' ? l.old : l.new) ?? ''];
+   const starts = $derived(new Set(changes));
+@@ -225,12 +255,21 @@
+   onmouseleave={() => (hover = null)}
+ >
+   {#if layout}
++    {#each tints as tint (tint.top)}
++      <div
++        class="diff-tint diff-{tint.kind}"
++        class:commented={tint.commented}
++        class:picked={tint.picked}
++        style:top="{tint.top}px"
++        style:height="{tint.bottom - tint.top}px"
++      ></div>
++    {/each}
+     {#each lines as line, i (i)}
+       {@const row = rowOf(i)!}
+       <div
+         class="diff-line diff-{line.kind}"
+         class:picked={isPicked(i)}
+-        class:commented={!!marked && i >= marked[0] && i <= marked[1]}
++        class:commented={isMarked(i)}
+         data-row={keys[i]}
+         data-change={starts.has(i) ? '' : undefined}
+         style:top="{row.top}px"
+@@ -306,37 +345,52 @@
+     overflow-wrap: anywhere;
+     overflow-x: hidden;
+   }
+-  .diff-line {
++  /* The gutter, one strip down the run's left (the numbers' column and its line): drawn per row, its rows' edges
++     showed as pale lines too */
++  .diff-code::before {
++    content: '';
++    position: absolute;
++    top: 0;
++    bottom: 0;
++    left: 0;
++    width: var(--gutter);
++    border-right: 1px solid var(--border);
++    background: color-mix(in srgb, var(--surface) 60%, transparent);
++    pointer-events: none;
++  }
++  .diff-line,
++  .diff-tint {
+     position: absolute;
+     left: 0;
+     right: 0;
+     pointer-events: none;
+   }
+-  .diff-removed {
+-    background: color-mix(in srgb, var(--red) 16%, transparent);
++  /* The tints: a box per run of lines tinted alike (the rows themselves draw none) */
++  .diff-tint.diff-removed {
++    background-color: color-mix(in srgb, var(--red) 16%, transparent);
+   }
+-  .diff-added {
+-    background: color-mix(in srgb, var(--green) 16%, transparent);
++  .diff-tint.diff-added {
++    background-color: color-mix(in srgb, var(--green) 16%, transparent);
+   }
+-  .diff-changed {
+-    background: color-mix(in srgb, var(--yellow) 14%, transparent);
++  .diff-tint.diff-changed {
++    background-color: color-mix(in srgb, var(--yellow) 14%, transparent);
+   }
+-  .diff-pad {
+-    background: repeating-linear-gradient(
++  .diff-tint.diff-pad {
++    background-image: repeating-linear-gradient(
+       135deg,
+       transparent 0 4px,
+       color-mix(in srgb, var(--border) 40%, transparent) 4px 5px
+     );
+   }
+   /* The lines of the chain selected */
+-  .diff-line.commented {
++  .diff-tint.commented {
+     box-shadow: inset 3px 0 0 var(--yellow);
+     background-image: linear-gradient(
+       color-mix(in srgb, var(--yellow) 22%, transparent),
+       color-mix(in srgb, var(--yellow) 22%, transparent)
+     );
+   }
+-  .diff-line.picked {
++  .diff-tint.picked {
+     box-shadow: inset 3px 0 0 var(--accent);
+     background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+   }
+@@ -349,8 +403,7 @@
+     width: var(--gutter);
+     padding: 0 var(--space-2) 0 0;
+     border: none;
+-    border-right: 1px solid var(--border);
+-    background: color-mix(in srgb, var(--surface) 60%, transparent);
++    background: none;
+     color: var(--text-muted);
+     font: inherit;
+     font-family: 'SF Mono', Menlo, Consolas, monospace;
+diff --git a/dashboard/src/lib/reviews/DiffView.svelte b/dashboard/src/lib/reviews/DiffView.svelte
+index 3bfa66a2..99153a49 100644
+--- a/dashboard/src/lib/reviews/DiffView.svelte
++++ b/dashboard/src/lib/reviews/DiffView.svelte
+@@ -6,7 +6,7 @@
+   import ComposerActions from './ComposerActions.svelte';
+   import DiffCode, { type CodeLine } from './DiffCode.svelte';
+   import { draftActions } from './drafts';
+-  import { focusOnShow } from './focus';
++  import { focusOnShow, focusWhenPlaced } from './focus';
+   import RenderedSide from './RenderedSide.svelte';
+   import {
+     changeStarts,
+@@ -165,7 +165,13 @@
+   const placed = $derived(
+     new Set(blocks.flatMap((b) => (b.type === 'rows' ? b.rows.flatMap((r) => chainsAfter(r).map((c) => c.id)) : []))),
+   );
+-  const elsewhere = $derived(shownView === 'source' ? chains.filter((c) => !placed.has(c.id)) : chains);
++  // Rendered (ATM-651): a chain with lines on a side shown is under its block on the page; the others (a whole
++  // file's, one on a side not shown) after the document
++  const elsewhere = $derived(
++    shownView === 'source'
++      ? chains.filter((c) => !placed.has(c.id))
++      : chains.filter((c) => !c.anchor.lines || !sides.includes(c.anchor.side)),
++  );
+ 
+   /** A block's rows cut after each row a chain ends at, so the chain shows right under its lines, and after the last
+    * line picked, so the comment being written shows right under them (inside another chain's lines too); the chains
+@@ -306,19 +312,10 @@
+     return { side: s, lines: [same[0].n, same.at(-1)!.n], quote: same.map((r) => r.text).join('\n') };
+   });
+ 
+-  // The rendered view's pick: the lines picked by their + (ATM-650) or under the text selected
++  // The rendered view's pick: the lines picked by their + (ATM-650) or under the text selected. Its comment box goes
++  // where the comment will show (ATM-651): under the block its last line is in, the page cut there (RenderedSide);
++  // not after the document, where a comment on its first lines was written a document away (ATM-627)
+   let renderedPick = $state<Picked | null>(null);
+-  // Where its comment box goes (ATM-627): right under the text picked (`below`, a client y), over the side it was
+-  // picked on, in the rendered view's coordinates. Not after the document: a comment on its first lines was written a
+-  // document away
+-  let renderedEl = $state<HTMLElement>();
+-  let pickAt = $state<{ top: number; left: number; width: number } | null>(null);
+-  function placePick(s: Side, below: number) {
+-    const within = renderedEl?.getBoundingClientRect();
+-    if (!within) return (pickAt = null);
+-    const pane = renderedEl?.querySelector(`.diff-pane.diff-${s}`)?.getBoundingClientRect() ?? within;
+-    pickAt = { top: below - within.top, left: pane.left - within.left, width: pane.width };
+-  }
+   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
+ 
+   function cancel() {
+@@ -426,6 +423,10 @@
+   />
+ {/snippet}
+ 
++{#snippet renderedComposer()}
++  {#if renderedPick}{@render composer(renderedPick)}{/if}
++{/snippet}
++
+ {#snippet composer(p: Picked)}
+   <form
+     class="diff-composer"
+@@ -444,7 +445,7 @@
+       rows="3"
+       placeholder="Leave a comment…"
+       bind:value={draft}
+-      {@attach focusOnShow}
++      {@attach shownView === 'rendered' ? focusWhenPlaced : focusOnShow}
+       onkeydown={(e) => {
+         if (e.key === 'Escape') cancel();
+         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
+@@ -552,7 +553,7 @@
+       <div class="diff-more" style:height="{(items.total - limit) * 20}px" aria-hidden="true"></div>
+     {/if}
+   {:else}
+-    <div class="diff-rendered" class:single={sides.length < 2} bind:this={renderedEl}>
++    <div class="diff-rendered" class:single={sides.length < 2}>
+       {#each sides as s (s)}
+         {@const doc = s === 'old' ? oldDoc : newDoc}
+         {#if doc}
+@@ -563,6 +564,9 @@
+             selected={selectedChain?.anchor.side === s ? selectedChain.anchor.lines : null}
+             picking={renderedPick?.side === s ? renderedPick.lines : null}
+             {docStyle}
++            chains={chains.filter((c) => c.anchor.side === s && c.anchor.lines)}
++            {chainBox}
++            composer={renderedPick?.side === s && oncomment ? renderedComposer : undefined}
+             label={sides.length < 2
+               ? s === 'old'
+                 ? 'Before (deleted)'
+@@ -571,8 +575,7 @@
+                 ? 'Before'
+                 : 'After'}
+             onpick={oncomment
+-              ? (p, below) => {
+-                  placePick(s, below);
++              ? (p) => {
+                   renderedPick = p;
+                   draft = '';
+                 }
+@@ -580,16 +583,6 @@
+           />
+         {/if}
+       {/each}
+-      {#if composing && oncomment}
+-        <div
+-          class="diff-rendered-composer"
+-          style:top="{pickAt?.top ?? 0}px"
+-          style:left="{pickAt?.left ?? 0}px"
+-          style:width={pickAt ? `${pickAt.width}px` : '100%'}
+-        >
+-          {@render composer(composing)}
+-        </div>
+-      {/if}
+     </div>
+   {/if}
+ 
+@@ -777,11 +770,6 @@
+     display: grid;
+     grid-template-columns: 1fr 1fr;
+   }
+-  /* The comment box, under the text selected, over the document below it (ATM-627) */
+-  .diff-rendered-composer {
+-    position: absolute;
+-    z-index: 2;
+-  }
+   .diff-rendered.single {
+     grid-template-columns: 1fr;
+   }
+diff --git a/dashboard/src/lib/reviews/RenderedSide.svelte b/dashboard/src/lib/reviews/RenderedSide.svelte
+index bb9b68d8..3741ccac 100644
+--- a/dashboard/src/lib/reviews/RenderedSide.svelte
++++ b/dashboard/src/lib/reviews/RenderedSide.svelte
+@@ -1,9 +1,10 @@
+ <script lang="ts">
++  import type { Snippet } from 'svelte';
+   import type { ProjectDocument } from '../documents';
+   import { loadCompmd, processText, topBlocks, type Block, type DrawnLine, type GutterRow } from '../compmd';
+-  import DocumentPage from '../documents/DocumentPage.svelte';
+-  import { linesUnder, renderedParts, type RenderedPart } from './diff';
+-  import type { Picked, Side } from './types';
++  import DocumentPage, { type PagePart } from '../documents/DocumentPage.svelte';
++  import { CONTEXT, linesUnder, renderedParts, type RenderedPart } from './diff';
++  import type { Chain, Picked, Side } from './types';
+ 
+   // One side of a Markdown file in the diff viewer's rendered view (docs/code-review-design.md §3.7, ATM-574): the
+   // document viewer's own page (ATM-645: `DocumentPage`, the same paper, width, height and margin numbers), on its
+@@ -19,8 +20,17 @@
+     picking = null,
+     label,
+     docStyle = null,
++    chains = [],
++    chainBox,
++    composer,
+     onpick,
+   }: {
++    /** This side's chains with lines (ATM-651): each shows under the block its last line is in, the page cut there */
++    chains?: readonly Chain[];
++    /** How a chain shows: the source view's own box, with reply, resolve and edit */
++    chainBox?: Snippet<[Chain]>;
++    /** The comment being written on this side's `picking` lines: where it will land, under their block */
++    composer?: Snippet;
+     doc: ProjectDocument;
+     side: Side;
+     /** The lines of this side the patch changed */
+@@ -59,11 +69,23 @@
+   });
+   /** The folds opened, by their first line */
+   let opened = $state.raw<ReadonlySet<number>>(new Set());
++  /** Where each chain, and the comment being written, ends: its block is shown, and the page is cut after it, the
++   * chain shown in the gap (ATM-651), as the source view shows a chain under its lines */
++  const ends = $derived(
++    new Set([...chains.flatMap((c) => (c.anchor.lines ? [c.anchor.lines[1]] : [])), ...(picking ? [picking[1]] : [])]),
++  );
+   const near = $derived.by((): ReadonlySet<number> => {
+     const chain = selected ? Array.from({ length: selected[1] - selected[0] + 1 }, (_, i) => selected[0] + i) : [];
+-    return new Set([...changed, ...chain]);
++    return new Set([...changed, ...chain, ...ends]);
+   });
+-  const parts = $derived(blocks ? renderedParts(blocks, near, doc.lines, opened) : null);
++  const parts = $derived(blocks ? renderedParts(blocks, near, doc.lines, opened, CONTEXT, ends) : null);
++  /** What shows after a part: the chains ending in it, the latest-starting first as the source view orders them, and
++   * the comment being written when its lines end there */
++  const chainsAfter = (part: PagePart) =>
++    chains
++      .filter((c) => c.anchor.lines && c.anchor.lines[1] >= part.from && c.anchor.lines[1] <= part.to)
++      .sort((x, y) => (y.anchor.lines?.[0] ?? 0) - (x.anchor.lines?.[0] ?? 0));
++  const writingAfter = (part: PagePart) => !!picking && picking[1] >= part.from && picking[1] <= part.to;
+ 
+   /** Where the page drew the lines, in its coordinates */
+   let drawn = $state.raw<DrawnLine[]>([]);
+@@ -172,6 +194,10 @@
+       {held}
+       bind:page={pageEl}
+     >
++      {#snippet after(part: PagePart)}
++        {#if chainBox}{#each chainsAfter(part) as chain (chain.id)}{@render chainBox(chain)}{/each}{/if}
++        {#if composer && writingAfter(part)}{@render composer()}{/if}
++      {/snippet}
+       {#snippet overlay()}
+         {#each marks as mark, i (i)}
+           <div
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 75ec3284..1e8bf126 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -850,7 +850,7 @@
+               <button
+                 aria-pressed={rendered === 'rendered'}
+                 aria-label="Rendered"
+-                title="Rendered"
++                title="Rendered, as the document viewer shows it. Its document style and text size are in Settings (⋯)"
+                 onclick={() => (rendered = 'rendered')}><Icon name="eye" size={15} /></button
+               >
+             </div>
+diff --git a/dashboard/src/lib/reviews/diff.ts b/dashboard/src/lib/reviews/diff.ts
+index ae8577ae..42665a4f 100644
+--- a/dashboard/src/lib/reviews/diff.ts
++++ b/dashboard/src/lib/reviews/diff.ts
+@@ -268,6 +268,7 @@ export function renderedParts(
+   total: number,
+   opened: ReadonlySet<number> = new Set(),
+   context = CONTEXT,
++  cuts: ReadonlySet<number> = new Set(),
+ ): RenderedPart[] {
+   if (!blocks.length || total < 1) return [{ type: 'shown', from: 1, to: Math.max(total, 1) }];
+   const near = (b: { from: number; to: number }) => {
+@@ -297,7 +298,33 @@ export function renderedParts(
+     if (last && last.type === 'shown' && part.type === 'shown') last.to = part.to;
+     else merged.push({ ...part });
+   }
+-  return merged;
++  return cutAfter(merged, blocks, cuts);
++}
++
++/** `parts` with each shown one cut after the block a line of `cuts` is in (ATM-651: a comment's chain shows in the gap,
++ * under its block, as the source view shows a chain under its lines); a line in no block cuts right after itself. A
++ * block is never cut, nor a fold */
++function cutAfter(
++  parts: RenderedPart[],
++  blocks: readonly { from: number; to: number }[],
++  cuts: ReadonlySet<number>,
++): RenderedPart[] {
++  if (!cuts.size) return parts;
++  const ends = new Set([...cuts].map((c) => blocks.find((b) => b.from <= c && c <= b.to)?.to ?? c));
++  const out: RenderedPart[] = [];
++  for (const part of parts) {
++    if (part.type !== 'shown') {
++      out.push(part);
++      continue;
++    }
++    let from = part.from;
++    for (const end of [...ends].filter((e) => e >= part.from && e < part.to).sort((a, b) => a - b)) {
++      out.push({ type: 'shown', from, to: end });
++      from = end + 1;
++    }
++    out.push({ type: 'shown', from, to: part.to });
++  }
++  return out;
+ }
+ 
+ /** `lines` as a fenced code block of `language`, the fence longer than any run of backticks in them: every line, an
+diff --git a/dashboard/src/lib/reviews/focus.ts b/dashboard/src/lib/reviews/focus.ts
+index d8fb2650..75446e09 100644
+--- a/dashboard/src/lib/reviews/focus.ts
++++ b/dashboard/src/lib/reviews/focus.ts
+@@ -3,3 +3,15 @@
+ export function focusOnShow(el: HTMLElement): void {
+   el.focus();
+ }
++
++/** The same, for a box whose place is still being drawn when it shows (ATM-651: a rendered document's comment box,
++ * under its block, the page cut there and the part above it drawn again): focused without scrolling, then brought into
++ * view, as little as that takes, once the page has drawn. Focused at once, it scrolled to where the part above it still
++ * held the whole document, a document away, and the box then sat under the file's header */
++export function focusWhenPlaced(el: HTMLElement): () => void {
++  el.focus({ preventScroll: true });
++  let frame = requestAnimationFrame(() => {
++    frame = requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest' }));
++  });
++  return () => cancelAnimationFrame(frame);
++}
+diff --git a/dashboard/src/lib/shell/SettingsPanel.svelte b/dashboard/src/lib/shell/SettingsPanel.svelte
+index aa9c0200..9ee49731 100644
+--- a/dashboard/src/lib/shell/SettingsPanel.svelte
++++ b/dashboard/src/lib/shell/SettingsPanel.svelte
+@@ -1,6 +1,6 @@
+ <script lang="ts">
+   import { inApp } from '../api/http';
+-  import { DOC_STYLES, MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../appearance';
++  import { DOC_SIZES, DOC_STYLES, MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../appearance';
+   import type { IconName } from '../ui/Icon.svelte';
+   import { dashboard } from '../state.svelte';
+   import Icon from '../ui/Icon.svelte';
+@@ -99,6 +99,19 @@
+     {#each DOC_STYLES as style (style.id)}<option value={style.id}>{style.name}</option>{/each}
+   </select>
+ </div>
++<!-- How large a document's text is (ATM-691): in the viewer and a review's rendered sides -->
++<label class="menu-label" for="doc-size-select">Text size</label>
++<div class="theme-picker doc-size-picker">
++  <span class="doc-style-sample doc-size-sample" aria-hidden="true">A</span>
++  <span class="select-chevron"><Icon name="chevron-down" size={14} /></span>
++  <select
++    id="doc-size-select"
++    value={dashboard.docSize}
++    onchange={(e) => dashboard.setDocSize((e.currentTarget as HTMLSelectElement).value)}
++  >
++    {#each DOC_SIZES as size (size.id)}<option value={size.id}>{size.name}</option>{/each}
++  </select>
++</div>
+ <!-- What needs you, from the app: the count on its icon (T-518) and a notification when it goes up (T-520) -->
+ {#if inApp}
+   <div class="menu-label">What needs you</div>
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 37e1da51..1e0a66b6 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -28,9 +28,11 @@ import { getPref, setPref, storageAvailable } from './prefs';
+ import { dashboardBuild, dashboardVersion } from './release-notes';
+ import {
+   isModePref,
++  knownDocSize,
+   knownDocStyle,
+   knownTheme,
+   resolveMode,
++  type DocSize,
+   type DocStyle,
+   type Mode,
+   type ModePref,
+@@ -385,6 +387,8 @@ export class DashboardState {
+   theme = $state(knownTheme(getPref('theme', 'default')));
+   /** The document viewer's page (T-404), per browser like the theme */
+   docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', 'auto')));
++  /** The size of a document's text (ATM-691), per browser like its style */
++  docSize = $state<DocSize>(knownDocSize(getPref('docSize', 'medium')));
+   systemPrefersLight = $state(prefersLight());
+   mode = $derived<Mode>(resolveMode(this.modePref, this.systemPrefersLight));
+ 
+@@ -888,6 +892,11 @@ export class DashboardState {
+     setPref('docStyle', this.docStyle);
+   }
+ 
++  setDocSize(id: string) {
++    this.docSize = knownDocSize(id);
++    setPref('docSize', this.docSize);
++  }
++
+   setAutoRefreshSeconds(seconds: number) {
+     this.autoRefreshSeconds = seconds;
+     setPref('autoRefreshSeconds', seconds);
+diff --git a/dashboard/src/themes/doc-styles.css b/dashboard/src/themes/doc-styles.css
+index e9dbccf1..7e97eaa3 100644
+--- a/dashboard/src/themes/doc-styles.css
++++ b/dashboard/src/themes/doc-styles.css
+@@ -8,6 +8,27 @@
+    its gutter and padding (app.css); only its paper and colours change. Fonts are the system's: the page's CSP loads
+    none from elsewhere. The same page, as `.doc-sheet`, is the diff viewer's rendered side (ATM-574). */
+ 
++/* ---- The text size (ATM-691): Settings' Text size, on <html> (appearance.ts DOC_SIZES), scales a Markdown
++   document's text in every style; the theme's own page (Auto) from the size it has ---- */
++:root {
++  --doc-scale: 1;
++}
++:root[data-doc-size='tiny'] {
++  --doc-scale: 0.8;
++}
++:root[data-doc-size='small'] {
++  --doc-scale: 0.9;
++}
++:root[data-doc-size='large'] {
++  --doc-scale: 1.15;
++}
++:root[data-doc-size='huge'] {
++  --doc-scale: 1.3;
++}
++:is(.doc-viewer, .doc-sheet):not([data-doc-style]) .doc-page[data-kind='markdown'] .compmd {
++  font-size: calc(1em * var(--doc-scale));
++}
++
+ /* ---- GitHub: the README look ---- */
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] {
+   --doc-desk: #010409;
+@@ -41,7 +62,7 @@
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd {
+   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+-  font-size: 16px;
++  font-size: calc(16px * var(--doc-scale));
+   line-height: 1.5;
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd-page {
+@@ -157,7 +178,7 @@
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd {
+   font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+-  font-size: 18px;
++  font-size: calc(18px * var(--doc-scale));
+   line-height: 1.7;
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd-page {
+@@ -251,7 +272,7 @@
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd {
+   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+-  font-size: 17px;
++  font-size: calc(17px * var(--doc-scale));
+   line-height: 1.65;
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd-page {
+@@ -360,6 +381,10 @@
+   border: 1px solid var(--border);
+   border-radius: 4px;
+ }
++/* Text size's sample: an "A" at the size chosen */
++.doc-size-sample {
++  font-size: calc(13px * var(--doc-scale));
++}
+ .doc-style-sample[data-doc-style='github'] {
+   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+   font-weight: 600;
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 7908b9ca..65d3e5ae 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -481,6 +481,13 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
+     // The window's own bar and sidebar toggle are there, as on every tab
+     await expect(page.locator('#app-titlebar')).toBeVisible();
++    // ATM-691 (Hakan): and the ⋯ at its right end, which opens Settings, the document's text size with them
++    await page.locator('#app-titlebar-end #settings-btn').click();
++    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
++    await page.locator('#settings-sheet #doc-size-select').selectOption('large');
++    await expect(page.locator('html')).toHaveAttribute('data-doc-size', 'large');
++    await page.keyboard.press('Escape');
++    await expect(page.locator('#settings-overlay')).not.toHaveClass(/open/);
+     // The selected tab joins the review's top bar under it, in one colour, as a project's tab joins its page (ATM-608)
+     const colours = await page.evaluate(() => {
+       const of = (selector: string) => getComputedStyle(document.querySelector(selector)!).backgroundColor;
+diff --git a/dashboard/tests/e2e/documents.spec.ts b/dashboard/tests/e2e/documents.spec.ts
+index e527a1fc..052315d4 100644
+--- a/dashboard/tests/e2e/documents.spec.ts
++++ b/dashboard/tests/e2e/documents.spec.ts
+@@ -300,6 +300,43 @@ test.describe('the document viewer', () => {
+     await expect(viewer(page)).not.toHaveAttribute('data-doc-style');
+     expect(await style('backgroundImage', '')).toContain('repeating-linear-gradient');
+   });
++
++  // ATM-691 (Hakan): a text size in Settings, Tiny to Huge, scaling the document's text in every style; kept
++  test('a text size from Settings scales the document’s text, in the theme’s page and a style’s; its numbers beside it', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openWithDocument(page, tasksServer);
++    const page_ = viewer(page).locator('.doc-page');
++    const size = () => page_.locator('.compmd').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
++    const medium = await size();
++    await openMenu(page, '#settings-btn');
++    await expect(page.locator('#doc-size-select')).toHaveValue('medium');
++    await expect(page.locator('#doc-size-select option')).toHaveText(['Tiny', 'Small', 'Medium', 'Large', 'Huge']);
++    // The theme's page: its own size, scaled
++    await page.locator('#doc-size-select').selectOption('huge');
++    await expect.poll(size).toBeCloseTo(medium * 1.3, 1);
++    await page.locator('#doc-size-select').selectOption('tiny');
++    await expect.poll(size).toBeCloseTo(medium * 0.8, 1);
++    // A style's page: the style's size, scaled; the heading with it
++    await page.locator('#doc-style-select').selectOption('github');
++    await page.locator('#doc-size-select').selectOption('large');
++    await expect.poll(size).toBeCloseTo(16 * 1.15, 1);
++    const heading = page_.locator('.compmd-page h1');
++    expect(await heading.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeCloseTo(16 * 1.15 * 2, 1);
++    // Each line's number still beside its text, at the new size: the last paragraph's, below everything that grew
++    await expect
++      .poll(async () => {
++        const number = await page_.locator('.doc-gutter-lines div:not(.blank)').last().boundingBox();
++        const text = await page_.locator('.compmd-page p', { hasText: 'One route.' }).boundingBox();
++        return number && text ? Math.abs(number.y + number.height / 2 - (text.y + text.height / 2)) : 99;
++      })
++      .toBeLessThan(4);
++    // Kept for the next page
++    await page.reload();
++    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
++    await expect(page.locator('html')).toHaveAttribute('data-doc-size', 'large');
++  });
+ });
+ 
+ // T-394: a code or text file's line numbers, #L links, images, refreshing in place, links to the dashboard
+diff --git a/dashboard/tests/e2e/refresh.spec.ts b/dashboard/tests/e2e/refresh.spec.ts
+index 3a5c6bb5..2e7bf033 100644
+--- a/dashboard/tests/e2e/refresh.spec.ts
++++ b/dashboard/tests/e2e/refresh.spec.ts
+@@ -132,6 +132,7 @@ test('the ⋯ settings menu: auto-refresh, mode and theme; closes on Escape and
+     'Mode',
+     'Theme',
+     'Document style',
++    'Text size',
+     'This project',
+   ]);
+   await expect(button).toHaveAttribute('aria-expanded', 'true');
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index e100bc61..3e5d3bcc 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -718,11 +718,14 @@ test.describe('a review’s page', () => {
+             now: rows('new'),
+           };
+         });
+-      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level
++      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level,
++      // and the old side's rows placed from its taller line (they follow CompMD's layout, a moment after its text's)
+       await expect
+         .poll(async () => {
+           const s = await sides();
+-          return s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
++          const text = s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
++          const rows = s.old[1] && s.now[1] ? Math.abs(s.old[1].height - s.now[1].height) : 999;
++          return Math.max(text, rows);
+         })
+         .toBeLessThan(2);
+       const s = await sides();
+@@ -732,6 +735,20 @@ test.describe('a review’s page', () => {
+       expect(Math.abs(s.old[1].height - s.now[1].height)).toBeLessThan(2);
+       // Each side's rows meet its text: fn b's row starts where the changed line's ends, on both sides
+       for (const rows of [s.old, s.now]) expect(Math.abs(rows[2].top - (rows[1].top + rows[1].height))).toBeLessThan(2);
++      // Hakan: no line drawn between two lines. Each row on whole pixels, from where the one before it ends: a row's
++      // edge inside a pixel was half covered by both rows, and their tints drew a seam there
++      const tiled = async () => {
++        const t = await sides();
++        for (const rows of [t.old, t.now]) {
++          const offset = rows[0].top % 1;
++          for (const [k, r] of rows.entries()) {
++            expect(Math.abs(((r.top - offset) % 1) - Math.round((r.top - offset) % 1))).toBeLessThan(0.01);
++            expect(Math.abs(r.height - Math.round(r.height))).toBeLessThan(0.01);
++            if (k > 0) expect(r.top - (rows[k - 1].top + rows[k - 1].height)).toBeCloseTo(0, 2);
++          }
++        }
++      };
++      await tiled();
+       // Unwrapped again: one line height each, the two sides level as before
+       await wrap.click();
+       await expect
+@@ -740,6 +757,7 @@ test.describe('a review’s page', () => {
+           return t.now[1]?.height ?? 0;
+         })
+         .toBeLessThan(30);
++      await tiled();
+     },
+   );
+ 
+@@ -804,9 +822,16 @@ test.describe('a review’s page', () => {
+             });
+           }),
+         );
++      // Once the rows are placed: they follow CompMD's layout, which comes a moment after a switch (Wrap's rows from the
++      // wrapped text's boxes; read at once, the lines after the long one were still one visual line apart)
+       const level = async (what: string) => {
++        await expect
++          .poll(async () => {
++            const found = await offsets();
++            return found.length >= 4 && found.every((d) => Math.abs(d) <= 1);
++          })
++          .toBe(true);
+         const found = await offsets();
+-        expect(found.length, what).toBeGreaterThanOrEqual(4);
+         for (const d of found) expect(Math.abs(d), `${what}: ${JSON.stringify(found)}`).toBeLessThanOrEqual(1);
+         return found;
+       };
+@@ -1115,6 +1140,27 @@ test.describe('a review’s page', () => {
+         if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
+         const diff = diffOf(page, 'docs/a.md');
+         await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
++        // Hakan: no line drawn between two lines. Its 40 added lines are tinted by one box, from the first line's top to
++        // the last's bottom: a box per line drew a pale line wherever two met, in the app's WebKit
++        await expect(diff.locator('.diff-tint')).toHaveCount(1);
++        // Once the rows are placed (wrapped: from CompMD's layout, a moment after its text)
++        await expect
++          .poll(() =>
++            diff.evaluate((d, wrapped) => {
++              const box = (el: Element | null) => el?.getBoundingClientRect();
++              const rows = d.querySelectorAll('.diff-line');
++              const [tint, first, last] = [
++                box(d.querySelector('.diff-tint')),
++                box(rows[0]),
++                box(rows[rows.length - 1]),
++              ];
++              if (!tint || !first || !last) return 99;
++              // Wrapped, each line is several visual lines tall: until then the rows are still the unwrapped ones
++              if (wrapped && first.height < 30) return 98;
++              return Math.max(Math.abs(tint.top - first.top), Math.abs(tint.bottom - last.bottom));
++            }, wrapped),
++          )
++          .toBeLessThan(1);
+         // A line in the middle of the first file, in the middle of the pane
+         const line = diff.locator('.diff-line').nth(20);
+         await line.evaluate((l) => l.scrollIntoView({ block: 'center' }));
+@@ -1464,6 +1510,11 @@ test.describe('the diff viewer on a review’s page', () => {
+     await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+     const view = diffOf(page, 'docs/plan.md');
+     await expect(view.locator('.diff-line').first()).toBeVisible();
++    // ATM-691 (Hakan): its tooltip says where its look is set
++    await expect(page.getByRole('button', { name: 'Rendered' })).toHaveAttribute(
++      'title',
++      /document style and text size are in Settings/,
++    );
+     await page.getByRole('button', { name: 'Rendered' }).click();
+     await expect(view).toHaveAttribute('data-view', 'rendered');
+     await expect(view.locator('.diff-pane')).toHaveCount(2);
+@@ -1485,11 +1536,220 @@ test.describe('the diff viewer on a review’s page', () => {
+     const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
+     const heading = (await newSide.locator('.compmd-page h1').boundingBox())!;
+     expect(number.x + number.width).toBeLessThanOrEqual(heading.x);
++    // ATM-691: the text size from Settings (on <html>) scales the rendered side's text; its numbers follow it
++    const text = newSide.locator('.compmd').first();
++    const fontSize = () => text.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
++    const medium = await fontSize();
++    await page.evaluate(() => (document.documentElement.dataset.docSize = 'huge'));
++    await expect.poll(fontSize).toBeCloseTo(medium * 1.3, 1);
++    await expect
++      .poll(async () => {
++        const n = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
++        const h = (await newSide.locator('.compmd-page h1').boundingBox())!;
++        return Math.abs(n.y + n.height / 2 - (h.y + h.height / 2));
++      })
++      .toBeLessThan(4);
+     await page.getByRole('button', { name: 'Unified' }).click();
+     await expect(view.locator('.diff-pane')).toHaveCount(1);
+     await expect(view.locator('.diff-pane')).toHaveClass(/diff-new/);
+   });
+ 
++  // ATM-651 (Hakan): a comment on rendered Markdown shows on the page, under its block (the page cut there), as the
++  // source view shows a chain under its lines: open and resolved ones, in Split and Unified; a new one once sent
++  test(
++    'Rendered: each chain shows under its block, open or resolved; a new comment shows there once sent',
++    WEBKIT_TOO,
++    async ({ page, tasksServer }) => {
++      const chain = (id: string, lines: [number, number], body: string, resolved: boolean | null = false) => ({
++        id,
++        anchor: { round: 3, path: 'docs/plan.md', side: 'new', lines, quote: null },
++        comments: [{ ...comment(`c-${id}`, body, resolved) }],
++        placed: lines,
++        drifted: null,
++      });
++      const chains = [chain('t5', [5, 5], 'Why this ending?'), chain('t6', [3, 3], 'The first step is fine.', true)];
++      await openReviews(page, tasksServer);
++      tasksServer.setReview(
++        'CR-2',
++        reviewPage({ chains, view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] } }),
++      );
++      await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
++      const view = diffOf(page, 'docs/plan.md');
++      await expect(view.locator('.diff-line').first()).toBeVisible();
++      await page.getByRole('button', { name: 'Rendered' }).click();
++      const newSide = view.locator('.diff-pane.diff-new');
++      /** The chain's box right under the paragraph it is on, on that side's page; none after the document */
++      const under = async (id: string, text: string, room = 60) => {
++        const box = newSide.locator(`.doc-after [data-chain="${id}"]`);
++        await expect(box).toBeVisible();
++        const para = (await newSide.locator('.compmd-page p', { hasText: text }).boundingBox())!;
++        const at = (await box.boundingBox())!;
++        expect(at.y).toBeGreaterThanOrEqual(para.y + para.height - 1);
++        expect(at.y - (para.y + para.height)).toBeLessThan(room);
++      };
++      for (const layout of ['Split', 'Unified'] as const) {
++        await page.getByRole('button', { name: layout }).click();
++        await under('t5', 'New ending.');
++        await under('t6', 'First step.');
++        // The resolved one folded, as in the source view; nothing after the document
++        await expect(newSide.locator('[data-chain="t6"]')).toHaveAttribute('data-resolved', '');
++        await expect(view.locator('.diff-elsewhere [data-chain]')).toHaveCount(0);
++      }
++      // A new comment: written under its block, and shown there once the page has it
++      await page.getByRole('button', { name: 'Split' }).click();
++      const plus = newSide.locator('.doc-gutter-lines [data-line="3"]');
++      await plus.hover();
++      await newSide.getByRole('button', { name: 'Comment on line 3' }).click();
++      const composer = view.locator('.doc-after .diff-composer');
++      await expect(composer).toBeVisible();
++      await composer.getByRole('textbox').fill('Say why.');
++      tasksServer.setReview(
++        'CR-2',
++        reviewPage({
++          chains: [...chains, chain('t7', [3, 3], 'Say why.')],
++          view: { round: 3, against: null, files: [file('docs/plan.md', PATCH_D)] },
++        }),
++      );
++      await composer.getByRole('button', { name: 'Comment' }).click();
++      await expect.poll(() => tasksServer.reviewChanges.at(-1)?.path).toBe('/CR-2/comments');
++      // Under the same block as the resolved one there, after it
++      await under('t7', 'First step.', 140);
++      // The lines below the chains numbered and marked where their text is now, not where it was before them
++      const ending = (await newSide.locator('.compmd-page p', { hasText: 'New ending.' }).boundingBox())!;
++      await expect
++        .poll(async () => {
++          const number = (await newSide.locator('.doc-gutter-lines [data-line="5"]').boundingBox())!;
++          return Math.abs(number.y + number.height / 2 - (ending.y + ending.height / 2));
++        })
++        .toBeLessThan(4);
++      // Its change mark on its text (the glyphs' box, inside the paragraph's line), not where the text was
++      await expect
++        .poll(() =>
++          newSide
++            .locator('.diff-block-mark.diff-added')
++            .evaluateAll(
++              (marks, top) => marks.some((m) => Math.abs(m.getBoundingClientRect().top - top) < 8),
++              ending.y,
++            ),
++        )
++        .toBe(true);
++    },
++  );
++
++  // ATM-692 (Hakan): the numbers in the margin are subtle gray, a changed line's only a little darker (it was bold blue);
++  // a row of several lines (a paragraph's two short lines on one visual line) shows its first, not a range
++  test('Rendered: line numbers subtle gray, a changed one a little darker; a row of several lines shows its first', async ({
++    page,
++    tasksServer,
++  }) => {
++    const text = (ending: string) => `# Plan\n\nFirst half\nsecond half.\n\n${ending}\n`;
++    const patch =
++      'diff --git a/docs/short.md b/docs/short.md\n--- a/docs/short.md\n+++ b/docs/short.md\n' +
++      '@@ -6 +6 @@\n-Old ending.\n+New ending.\n';
++    await openReviews(page, tasksServer);
++    tasksServer
++      .setRevisionDocument('base1', projectDocument('docs/short.md', text('Old ending.')))
++      .setRevisionDocument('head3', projectDocument('docs/short.md', text('New ending.')));
++    tasksServer.setReview(
++      'CR-2',
++      reviewPage({ view: { round: 3, against: null, files: [{ ...file('docs/short.md', patch), after: 'head3' }] } }),
++    );
++    await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/short.md'));
++    const view = diffOf(page, 'docs/short.md');
++    await expect(view.locator('.diff-line').first()).toBeVisible();
++    await page.getByRole('button', { name: 'Rendered' }).click();
++    const newSide = view.locator('.diff-pane.diff-new');
++    const changed = newSide.locator('.doc-gutter-lines [data-line="6"]');
++    await expect(changed).toHaveClass(/marked/);
++    const look = (row: typeof changed) =>
++      row.evaluate((el) => {
++        const s = getComputedStyle(el);
++        const accent = getComputedStyle(el.closest('.doc-page')!).getPropertyValue('--accent');
++        const probe = document.createElement('span');
++        probe.style.color = accent;
++        el.append(probe);
++        const accentColour = getComputedStyle(probe).color;
++        probe.remove();
++        return { colour: s.color, weight: s.fontWeight, accent: accentColour };
++      });
++    const mark = await look(changed);
++    const plain = await look(newSide.locator('.doc-gutter-lines [data-line="3"]'));
++    // Not the accent, not bold; a little darker than another line's, which is gray too
++    expect(mark.colour).not.toBe(mark.accent);
++    expect(mark.weight).toBe('400');
++    expect(plain.colour).not.toBe(mark.colour);
++    expect(plain.colour).not.toBe(plain.accent);
++    // The paragraph's two lines, on one visual line: its row says 3, not 3–4
++    const row = newSide.locator('.doc-gutter-lines [data-line="3"]');
++    await expect(row).toHaveText('3');
++    // The + still says both lines
++    await row.hover();
++    await expect(newSide.getByRole('button', { name: 'Comment on line 3–4' })).toBeVisible();
++  });
++
++  // ATM-690 (Hakan, CR-58's design in the app): a darker line at every blank line and new block of an added Markdown
++  // file, Wrap on. Each wrapped row was at least a line tall, so it overlapped the next where that one's text began less
++  // than a line below, and the two tints doubled there. The rows now meet exactly, and a run of lines is one tint
++  test(
++    'an added document, wrapped or not: one tint for its lines, and its rows meet exactly',
++    WEBKIT_TOO,
++    async ({ page, tasksServer }) => {
++      const para = (n: number) =>
++        `Paragraph ${n} says what a task's status, claim and reviews do together. ${'At some length. '.repeat(12)}\n` +
++        `It takes two source lines, each long enough to wrap. ${'Still more of it. '.repeat(10)}`;
++      const text =
++        [
++          '# The machine',
++          '',
++          para(1),
++          '',
++          '- **One:** a list item',
++          '  over two lines.',
++          '',
++          '## 2. Parts',
++          '',
++          para(2),
++        ].join('\n') + '\n';
++      const lines = text.trimEnd().split('\n');
++      const patch =
++        'diff --git a/docs/m.md b/docs/m.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/m.md\n' +
++        `@@ -0,0 +1,${lines.length} @@\n${lines.map((l) => `+${l}`).join('\n')}\n`;
++      tasksServer.setRevisionDocument(
++        'head3',
++        projectDocument('docs/m.md', text, { kind: 'markdown', line_offset: 1 }),
++      );
++      await openReviews(page, tasksServer);
++      tasksServer.setReview(
++        'CR-2',
++        reviewPage({ view: { round: 3, against: null, files: [file('docs/m.md', patch, 'added', null)] } }),
++      );
++      await page.goto(reviewPath(tasksServer, '/CR-2'));
++      await page.getByRole('tab', { name: /^Diffs/ }).click();
++      await page.getByRole('button', { name: 'Unified' }).click();
++      const diff = diffOf(page, 'docs/m.md');
++      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
++      /** How far the rows are from meeting (the most any row's top is off the one before it's bottom), and the tints */
++      const fit = () =>
++        diff.evaluate((d) => {
++          const rows = [...d.querySelectorAll('.diff-line')].map((r) => r.getBoundingClientRect());
++          let off = 0;
++          for (let i = 1; i < rows.length; i++) off = Math.max(off, Math.abs(rows[i].top - rows[i - 1].bottom));
++          return { off, tints: d.querySelectorAll('.diff-tint').length, tall: rows[2]?.height ?? 0 };
++        });
++      const wrap = page.getByRole('button', { name: 'Wrap' });
++      for (const wrapped of [true, false]) {
++        if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
++        // Wrapped: once the rows are placed from the text (a paragraph's line is then more than one line tall)
++        await expect
++          .poll(async () => {
++            const f = await fit();
++            return wrapped && f.tall < 30 ? 'unplaced' : f;
++          })
++          .toEqual({ off: 0, tints: 1, tall: expect.any(Number) });
++      }
++    },
++  );
++
+   test('Rendered (ATM-592): a document of several pages grows its page; its last paragraph is there, numbered beside it', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/DiffView.component.test.ts b/dashboard/tests/unit/DiffView.component.test.ts
+index 0716b23d..a39b499f 100644
+--- a/dashboard/tests/unit/DiffView.component.test.ts
++++ b/dashboard/tests/unit/DiffView.component.test.ts
+@@ -111,9 +111,9 @@ describe('DiffView: the layout', () => {
+     await numbers();
+     expect(container.querySelectorAll('.diff-run')).toHaveLength(2);
+     // Line 3 changed (marked on both sides), line 9 only added (a padding line on the old side)
+-    expect(container.querySelectorAll('.diff-changed')).toHaveLength(4);
+-    expect(container.querySelectorAll('.diff-new .diff-added')).toHaveLength(1);
+-    expect(container.querySelectorAll('.diff-old .diff-pad')).toHaveLength(1);
++    expect(container.querySelectorAll('.diff-line.diff-changed')).toHaveLength(4);
++    expect(container.querySelectorAll('.diff-new .diff-line.diff-added')).toHaveLength(1);
++    expect(container.querySelectorAll('.diff-old .diff-line.diff-pad')).toHaveLength(1);
+     const folds = screen.getAllByRole('button', { name: /^Show \d+ unchanged lines?$/ });
+     expect(folds.map((b) => b.textContent?.trim())).toEqual([
+       'Show 1 unchanged line',
+@@ -130,8 +130,8 @@ describe('DiffView: the layout', () => {
+     const { container } = show({ mode: 'unified' });
+     await numbers();
+     expect(container.querySelectorAll('.diff-run .diff-column')).toHaveLength(2);
+-    expect(container.querySelectorAll('.diff-removed')).toHaveLength(2);
+-    expect(container.querySelectorAll('.diff-added')).toHaveLength(3);
++    expect(container.querySelectorAll('.diff-line.diff-removed')).toHaveLength(2);
++    expect(container.querySelectorAll('.diff-line.diff-added')).toHaveLength(3);
+     expect(container.querySelector('.diff-code.both')).not.toBeNull();
+     await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
+     expect(container.querySelector('.diff-view')).toHaveAttribute('data-mode', 'split');
+@@ -171,8 +171,13 @@ describe('DiffView: the layout', () => {
+       after: at('head', 'a\nb\n'),
+     });
+     await numbers();
+-    expect(container.querySelectorAll('.diff-new .diff-added')).toHaveLength(2);
+-    expect(container.querySelectorAll('.diff-old .diff-pad')).toHaveLength(2);
++    expect(container.querySelectorAll('.diff-new .diff-line.diff-added')).toHaveLength(2);
++    expect(container.querySelectorAll('.diff-old .diff-line.diff-pad')).toHaveLength(2);
++    // Hakan: no line between two lines. The two added lines are tinted by one box, the two padding lines by another
++    expect(container.querySelectorAll('.diff-new .diff-tint')).toHaveLength(1);
++    expect(container.querySelector('.diff-new .diff-tint')).toHaveClass('diff-added');
++    expect(container.querySelectorAll('.diff-old .diff-tint')).toHaveLength(1);
++    expect(container.querySelector('.diff-old .diff-tint')).toHaveClass('diff-pad');
+     unmount();
+     show({ after: at('head', null) });
+     expect(await screen.findByRole('alert')).toHaveTextContent('f.txt: not in head');
+@@ -201,7 +206,7 @@ describe('DiffView: the layout', () => {
+         after: at('head', lines.join('\n') + '\n'),
+       });
+       await numbers();
+-      const drawn = () => container.querySelectorAll('.diff-new .diff-added').length;
++      const drawn = () => container.querySelectorAll('.diff-new .diff-line.diff-added').length;
+       expect(drawn()).toBe(100);
+       expect(container.querySelector('.diff-more')).toHaveStyle({ height: `${150 * 20}px` });
+       idle.shift()!();
+diff --git a/dashboard/tests/unit/appearance.test.ts b/dashboard/tests/unit/appearance.test.ts
+index d7c1aa0e..d30f5029 100644
+--- a/dashboard/tests/unit/appearance.test.ts
++++ b/dashboard/tests/unit/appearance.test.ts
+@@ -1,8 +1,10 @@
+ import { describe, expect, it } from 'vitest';
+ import {
+   applyAppearance,
++  DOC_SIZES,
+   DOC_STYLES,
+   isModePref,
++  knownDocSize,
+   knownDocStyle,
+   knownTheme,
+   resolveMode,
+@@ -37,9 +39,20 @@ describe('appearance', () => {
+     for (const bad of ['terminal', '', null, 3]) expect(knownDocStyle(bad)).toBe('auto');
+   });
+ 
+-  it('applies theme and mode as attributes on the root element', () => {
++  it('text sizes: Tiny to Huge, growing, Medium as written; an unknown one is Medium (ATM-691)', () => {
++    expect(DOC_SIZES.map((s) => s.id)).toEqual(['tiny', 'small', 'medium', 'large', 'huge']);
++    const scales = DOC_SIZES.map((s) => s.scale);
++    expect([...scales].sort((a, b) => a - b)).toEqual(scales);
++    expect(DOC_SIZES.find((s) => s.id === 'medium')?.scale).toBe(1);
++    expect(knownDocSize('tiny')).toBe('tiny');
++    for (const bad of ['gigantic', '', null, 2]) expect(knownDocSize(bad)).toBe('medium');
++  });
++
++  it('applies theme, mode and text size as attributes on the root element', () => {
+     const root = document.createElement('html');
+     applyAppearance(root, 'default', 'light');
+-    expect(root.dataset).toMatchObject({ theme: 'default', mode: 'light' });
++    expect(root.dataset).toMatchObject({ theme: 'default', mode: 'light', docSize: 'medium' });
++    applyAppearance(root, 'default', 'dark', 'large');
++    expect(root.dataset).toMatchObject({ mode: 'dark', docSize: 'large' });
+   });
+ });
+diff --git a/dashboard/tests/unit/diff.test.ts b/dashboard/tests/unit/diff.test.ts
+index b34df245..9fc0e976 100644
+--- a/dashboard/tests/unit/diff.test.ts
++++ b/dashboard/tests/unit/diff.test.ts
+@@ -230,6 +230,30 @@ describe('changes, keys and marks', () => {
+       expect(renderedParts([], new Set([3]), 12)).toEqual([{ type: 'shown', from: 1, to: 12 }]);
+     });
+ 
++    // ATM-651: a chain shows under its block, in a gap the page is cut at
++    it('cuts a shown part after the block a cut line is in; never a block, nor a fold, nor at a part’s end', () => {
++      // Shown 10–18 (blocks 10–11, 13–14, 16–17): a chain ending on line 13 cuts after its block (14)
++      expect(renderedParts(blocks, new Set([14]), total, new Set(), undefined, new Set([13]))).toEqual([
++        { type: 'fold', from: 1, to: 9 },
++        { type: 'shown', from: 10, to: 14 },
++        { type: 'shown', from: 15, to: 18 },
++        { type: 'fold', from: 19, to: 30 },
++      ]);
++      // Two cuts in one part, in order; one on a blank line (15) cuts right after it
++      expect(renderedParts(blocks, new Set([14]), total, new Set(), undefined, new Set([16, 10, 15]))).toEqual([
++        { type: 'fold', from: 1, to: 9 },
++        { type: 'shown', from: 10, to: 11 },
++        { type: 'shown', from: 12, to: 15 },
++        { type: 'shown', from: 16, to: 17 },
++        { type: 'shown', from: 18, to: 18 },
++        { type: 'fold', from: 19, to: 30 },
++      ]);
++      // At a part's end, or in a fold: nothing to cut
++      expect(renderedParts(blocks, new Set([14]), total, new Set(), undefined, new Set([18, 25]))).toEqual(
++        renderedParts(blocks, new Set([14]), total),
++      );
++    });
++
+     it('a block reaching into the context is shown whole, never cut', () => {
+       // A long block (lines 5–40) whose last line is near a change at 42: all of it
+       expect(
+diff --git a/dashboard/tests/unit/state.test.ts b/dashboard/tests/unit/state.test.ts
+index 9224c6f7..0eb50fd3 100644
+--- a/dashboard/tests/unit/state.test.ts
++++ b/dashboard/tests/unit/state.test.ts
+@@ -543,4 +543,13 @@ describe('DashboardState appearance', () => {
+     first.setDocStyle('terminal');
+     expect(new DashboardState().docStyle).toBe('auto');
+   });
++
++  it('remembers the text size; an unknown one is Medium (ATM-691)', () => {
++    const first = new DashboardState();
++    expect(first.docSize).toBe('medium');
++    first.setDocSize('huge');
++    expect(new DashboardState().docSize).toBe('huge');
++    first.setDocSize('gigantic');
++    expect(new DashboardState().docSize).toBe('medium');
++  });
+ });
+diff --git a/docs/tabs-and-navigation-design.md b/docs/tabs-and-navigation-design.md
+index 0ccedb7e..7d57d754 100644
+--- a/docs/tabs-and-navigation-design.md
++++ b/docs/tabs-and-navigation-design.md
+@@ -164,7 +164,7 @@ back.
+ |---|---|---|
+ | A review, its sub-tab | `/projects/<id>/reviews/<CR>` (Overview), `…/<CR>/diffs`, `…/<CR>/comments` | Overview only; the sub-tab isn't kept |
+ | Its file, round, the round against | `…/diffs?file=&round=&against=` | As now |
+-| A comment in view | `…/diffs?file=…#c12` (a chain's anchor) | None |
++| A comment in view | `…/diffs?file=…&comment=c12` (in the query, not a `#c12` anchor: the app's links refuse fragments) | None |
+ | A task's details over any page | `?task=ATM-633` | As now |
+ | A document over any page | `?doc=path:L40` | As now |
+ | The Reviews list's filter and search | `/projects/<id>/reviews?status=waiting&q=…` | Kept in the browser only |
+@@ -174,6 +174,14 @@ back.
+ Every link in atm is a real link (`<a href>` with this address), so ⌘-click, a middle click, *Copy Link* and *Open in
+ New Tab* work the same on every card, row and reference, in the browser for free and in the app through §4.5.
+ 
++**In the app, a link is `atm://` and the same address.** The app's deep links (T-459, `app/src-tauri/src/links.rs`)
++take the dashboard's path and query after `atm://`: `atm://projects/<id>/reviews/CR-7/diffs?file=docs/x.md`. The app
++registers the scheme with macOS, so the link opens the app at that page from anywhere: a chat message, a terminal, a
++note. So the app's *Copy Link* (§4.5) copies the `atm://` form, and the browser's copies its `http://localhost:…/` one.
++The two hold the same address, which the page reads with `lib/address.ts` either way. A deep link carries no
++fragment (`links.rs` refuses one), so nothing in an address is a `#` anchor: a comment in view is `?comment=c12`
++(§4.4's table).
++
+ ### 4.5 Clicks and menus
+ 
+ | Action | Browser | App |
+@@ -186,6 +194,7 @@ New Tab* work the same on every card, row and reference, in the browser for free
+ | Right-click on a title-bar tab | — | **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs** |
+ | Right-click elsewhere | The browser's | atm's: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text |
+ | ⌘[ ⌘], mouse back and forward, a swipe | The browser's (the tab's) | The tab's history |
++| ‹ › in the title bar | The browser's own buttons | Back and Forward arrows left of the sidebar toggle (Hakan, CR-63), after macOS's window buttons, as Safari, Linear and Notion have them: the active tab's history, each greyed out when there is nowhere to go; a long press or a right-click lists the entries to jump to |
+ | ⌘R, Reload | The browser's | Reloads the page and shows this tab where it was, not the window's first tab |
+ 
+ ## 5. What changes
+@@ -198,6 +207,7 @@ New Tab* work the same on every card, row and reference, in the browser for free
+ | `ReviewLink.svelte`, `reviews/open.ts`, `OverviewReviews.svelte` | A plain click opens a review in place; ⌘-click a new tab |
+ | `state.svelte.ts` | Closing task details or a document goes Back when that lands on the page under it. A review's sub-tab, the Reviews list's filter and a comment in view join the address. Help and About leave it |
+ | `App.svelte`, the dialogs | Questions belong to their tab: kept and hidden on a switch. App-wide ones stay above every tab |
++| `AppTitleBar.svelte`, `SidebarToggle.svelte`, the sidebar's top strip | Back and Forward arrows left of the sidebar toggle (in the sidebar's strip while it is open), on the active tab's history, disabled at its ends |
+ | A new context menu (`ui/`, the app only) | Right-click menus of §4.5; WebKit's default turned off in the app |
+ | `new-tab-clicks.ts`, the cards and rows | Every card and row is a real link; ⌘-click and middle click handled once, in one place |
+ | Docs | `app-desktop-ui-design.md` §3 and §6 replaced by this; `multi-project-api.md` §2.7's addresses |
+@@ -215,7 +225,8 @@ New Tab* work the same on every card, row and reference, in the browser for free
+ ## 7. Tasks it implies
+ 
+ 1. **A tab's own history:** per-tab history and scroll in the app; a switch adds nothing; Back and Forward (keys,
+-   menu, mouse, swipe) act on the tab. Tests: the three traces of §4.3 in the app and in the browser.
++   menu, mouse, swipe) act on the tab, and so do the title bar's ‹ › arrows, left of the sidebar toggle (§4.5).
++   Tests: the three traces of §4.3 in the app and in the browser; the arrows disabled at the history's ends.
+ 2. **The back button is Back:** labelled with the entry before it; Up when there is none. Closing a place over a page
+    goes Back.
+ 3. **The rest of the addresses:** a review's sub-tab, a comment in view, the Reviews list's filter; Help and About out of

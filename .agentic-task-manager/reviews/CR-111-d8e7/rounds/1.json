@@ -1,0 +1,62 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "bfedc1461070ea18cf15ed74028a1e9d215dc2dd",
+    "head": "95a59ccd9a1ddd2059f2ba4cc60c213a2f5a8c8d"
+  },
+  "files": [
+    {
+      "path": "app/src-tauri/src/commands.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/integration_tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/reads.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/reviews.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/state.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/windows.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/integration_tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/tests.rs",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-21T17:12:32Z"
+}

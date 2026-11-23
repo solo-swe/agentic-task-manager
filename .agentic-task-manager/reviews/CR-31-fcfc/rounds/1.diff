@@ -1,0 +1,248 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index b3cb35d6..7ce9d25e 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -23,6 +23,7 @@
+     reviewChains,
+     shownRows,
+     treeFolders,
++    treeOrder,
+     treeWidth,
+     TREE_WIDTH,
+     type ChainFilter,
+@@ -99,7 +100,8 @@
+ 
+   const review = $derived(page.review);
+   const view = $derived(page.view);
+-  const files = $derived(view.files);
++  // In the tree's order (ATM-596): the diffs, moving between files, the round's select and the Viewed count follow it
++  const files = $derived(treeOrder(view.files));
+   const tree = $derived(fileTree(files));
+   const ended = $derived(review.status === 'approved' || review.status === 'closed');
+   /** A live review: its working copy followed as it is made (ATM-576) */
+diff --git a/dashboard/src/lib/reviews/page.ts b/dashboard/src/lib/reviews/page.ts
+index c3a948ed..74fcdbcf 100644
+--- a/dashboard/src/lib/reviews/page.ts
++++ b/dashboard/src/lib/reviews/page.ts
+@@ -38,6 +38,12 @@ export function fileTree(files: ViewFile[]): TreeRow[] {
+   return rows;
+ }
+ 
++/** The files in the tree's order, top to bottom (ATM-596): the order of the diffs, of moving between files and of
++ * everything else the page lists files in, so the right side reads as the tree does */
++export function treeOrder(files: ViewFile[]): ViewFile[] {
++  return fileTree(files).flatMap((row) => (row.kind === 'file' ? [row.file] : []));
++}
++
+ /** A row's path: a folder's own, a file's */
+ const rowPath = (row: TreeRow) => (row.kind === 'folder' ? row.path : row.file.path);
+ 
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index fd14c8ac..1fd29289 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -797,6 +797,41 @@ test.describe('a review’s page', () => {
+       .toEqual(['docs/b.md@head3']);
+   });
+ 
++  // ATM-596 (Hakan: CompMD's CR-1 had pnpm-lock.yaml last in the tree, mid-way in the diffs)
++  test('the diffs come in the tree’s order, not git’s; the next file is the tree’s next', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    // As git lists them, by path: README.md between nothing and the folders
++    tasksServer.setReview(
++      'CR-2',
++      reviewPage({
++        view: {
++          round: 3,
++          against: null,
++          files: [file('README.md', PATCH_C), file('docs/b.md', PATCH_B, 'added', null), file('src/a.rs', PATCH_A)],
++        },
++      }),
++    );
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    await page.getByRole('tab', { name: /^Diffs/ }).click();
++    const tree = ['docs/b.md', 'src/a.rs', 'README.md'];
++    await expect
++      .poll(() => page.locator('.review-file-name').evaluateAll((els) => els.map((e) => e.getAttribute('data-file'))))
++      .toEqual(tree);
++    await expect
++      .poll(() => page.locator('.review-file-card').evaluateAll((els) => els.map((e) => e.getAttribute('data-file'))))
++      .toEqual(tree);
++    // Moving from the first file goes down the tree
++    await page.locator('.review-file-name[data-file="docs/b.md"]').click();
++    await page.locator('.review-diffs').focus();
++    await page.keyboard.press(']');
++    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'src/a.rs');
++    await page.keyboard.press(']');
++    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'README.md');
++  });
++
+   // ATM-595: a folder folds, all of them at once, kept across a reload; going to a file in a folded folder opens it
+   test('the tree’s folders fold: one, or all at once, kept across a reload; going to a file opens its folder', async ({
+     page,
+@@ -1253,29 +1288,31 @@ test.describe('the diff viewer on a review’s page', () => {
+   }) => {
+     await page.setViewportSize({ width: 1200, height: 420 });
+     await openDiffs(page, tasksServer);
++    // The files in the tree's order (ATM-596): docs/b.md (one change), src/a.rs (two), README.md (one)
+     const current = page.locator('.review-current-change');
+     const next = page.locator('#review-next-change');
+     await next.click();
+-    await expect(current).toHaveAttribute('data-row', /.+/);
+-    await expect(current).toBeInViewport();
++    await expect(card(page, 'docs/b.md').locator('.review-current-change')).toBeInViewport();
++    await next.click();
++    await expect(card(page, 'src/a.rs').locator('.review-current-change')).toBeInViewport();
+     const first = await current.getAttribute('data-row');
+     await next.click();
+     await expect(current).not.toHaveAttribute('data-row', first!);
+-    await expect(current).toBeInViewport();
++    await expect(card(page, 'src/a.rs').locator('.review-current-change')).toBeInViewport();
+     // Past src/a.rs's two changes, into the next file's
+     await next.click();
+-    await expect(card(page, 'docs/b.md').locator('.review-current-change')).toBeInViewport();
++    await expect(card(page, 'README.md').locator('.review-current-change')).toBeInViewport();
+     await page.locator('#review-prev-change').click();
+     await expect(card(page, 'src/a.rs').locator('.review-current-change')).toBeInViewport();
+     // The keys do the same
+     await page.keyboard.press('n');
+-    await expect(card(page, 'docs/b.md').locator('.review-current-change')).toBeInViewport();
++    await expect(card(page, 'README.md').locator('.review-current-change')).toBeInViewport();
+     await page.keyboard.press('p');
+     await expect(card(page, 'src/a.rs').locator('.review-current-change')).toBeInViewport();
+     await page.keyboard.press(']');
+-    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'docs/b.md');
++    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'README.md');
+     await page.keyboard.press('v');
+-    await expect(page.locator('.review-files').getByLabel('Viewed docs/b.md')).toBeChecked();
++    await expect(page.locator('.review-files').getByLabel('Viewed README.md')).toBeChecked();
+     await page.keyboard.press('[');
+     await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'src/a.rs');
+     // Not while typing
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index b77e6b03..0b1489e6 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -319,12 +319,13 @@ describe('ReviewPage: Diffs', () => {
+     expect(screen.getByText('1 of 3 viewed')).toBeTruthy();
+   });
+ 
+-  it('every file a card, in the view’s order; a file viewed is folded, its diff not made, its sides not read', async () => {
++  it('every file a card, in the tree’s order; a file viewed is folded, its diff not made, its sides not read', async () => {
+     const { container, sides } = await diffs();
++    // The view lists src/b.rs, README.md, src/a.rs; the cards follow the tree (ATM-596): the folder first, by name
+     expect([...container.querySelectorAll('.review-file-card')].map((c) => (c as HTMLElement).dataset.file)).toEqual([
++      'src/a.rs',
+       'src/b.rs',
+       'README.md',
+-      'src/a.rs',
+     ]);
+     await vi.waitFor(() => expect(container.querySelectorAll('.diff-view')).toHaveLength(2));
+     expect(card(container, 'README.md')).toHaveClass('folded');
+@@ -386,14 +387,14 @@ describe('ReviewPage: Diffs', () => {
+       grow();
+       expect(scroll.mock.contexts).not.toContain(card(container, 'src/a.rs'));
+       // Another file gone to is pinned in its turn; Next unpins it
+-      await fireEvent.keyDown(window, { key: '[' });
++      await fireEvent.keyDown(window, { key: ']' });
+       scroll.mockClear();
+       grow();
+-      expect(scroll.mock.contexts).toContain(card(container, 'README.md'));
++      expect(scroll.mock.contexts).toContain(card(container, 'src/b.rs'));
+       await fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
+       scroll.mockClear();
+       grow();
+-      expect(scroll.mock.contexts).not.toContain(card(container, 'README.md'));
++      expect(scroll.mock.contexts).not.toContain(card(container, 'src/b.rs'));
+     } finally {
+       vi.unstubAllGlobals();
+     }
+@@ -504,19 +505,20 @@ describe('ReviewPage: Diffs', () => {
+     const current = () => container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file');
+     await fireEvent.keyDown(window, { key: '[' });
+     expect(current()).toBeUndefined();
++    // In the tree's order (ATM-596): src/a.rs, src/b.rs, README.md
+     await fireEvent.keyDown(window, { key: ']' });
+-    expect(current()).toBe('README.md');
++    expect(current()).toBe('src/b.rs');
+     await fireEvent.keyDown(window, { key: ']' });
+     await fireEvent.keyDown(window, { key: ']' });
+-    expect(current()).toBe('src/a.rs');
++    expect(current()).toBe('README.md');
+     // Two jumps before the page is idle: the address is written once, with the last
+     await vi.waitFor(() => expect(onfile).toHaveBeenCalled());
+-    expect(onfile.mock.calls).toEqual([['src/a.rs']]);
++    expect(onfile.mock.calls).toEqual([['README.md']]);
+     await fireEvent.keyDown(window, { key: 'v' });
+-    expect(onviewed).toHaveBeenCalledWith(expect.objectContaining({ path: 'src/a.rs' }));
++    expect(onviewed).toHaveBeenCalledWith(expect.objectContaining({ path: 'README.md' }));
+     await fireEvent.keyDown(window, { key: '[' });
+-    expect(current()).toBe('README.md');
+-    await vi.waitFor(() => expect(onfile.mock.calls.at(-1)).toEqual(['README.md']));
++    expect(current()).toBe('src/b.rs');
++    await vi.waitFor(() => expect(onfile.mock.calls.at(-1)).toEqual(['src/b.rs']));
+   });
+ 
+   it('keys are the Diffs tab’s: not on another tab, not while typing', async () => {
+diff --git a/dashboard/tests/unit/page.test.ts b/dashboard/tests/unit/page.test.ts
+index 77ff74d5..aa830383 100644
+--- a/dashboard/tests/unit/page.test.ts
++++ b/dashboard/tests/unit/page.test.ts
+@@ -14,6 +14,7 @@ import {
+   reviewTitle,
+   shownRows,
+   treeFolders,
++  treeOrder,
+   treeWidth,
+   viewedKey,
+   type ChainFilter,
+@@ -89,6 +90,46 @@ describe('the file tree', () => {
+   });
+ });
+ 
++// ATM-596: the diffs follow the tree, not the patch's order by path
++describe('the files in the tree’s order', () => {
++  const paths = (files: ViewFile[]) => files.map((f) => f.path);
++  it('none, and one', () => {
++    expect(treeOrder([])).toEqual([]);
++    expect(paths(treeOrder([file('README.md')]))).toEqual(['README.md']);
++  });
++  it('folders before the files beside them, each level by name; a lock file at the root last', () => {
++    // As git lists them: by path, so the root's files sit between its folders
++    const git = [
++      'Cargo.toml',
++      'crates/a/src/lib.rs',
++      'crates/a/Cargo.toml',
++      'docs/plan.md',
++      'pnpm-lock.yaml',
++      'src/main.rs',
++    ].map((p) => file(p));
++    const ordered = treeOrder(git);
++    expect(paths(ordered)).toEqual([
++      'crates/a/src/lib.rs',
++      'crates/a/Cargo.toml',
++      'docs/plan.md',
++      'src/main.rs',
++      'Cargo.toml',
++      'pnpm-lock.yaml',
++    ]);
++    // The tree reads the same, top to bottom
++    const inTree = fileTree(git).flatMap((row) => (row.kind === 'file' ? [row.file.path] : []));
++    expect(paths(ordered)).toEqual(inTree);
++  });
++  it('a submodule stands where its folder is', () => {
++    const ordered = treeOrder([
++      file('z.txt'),
++      file('vendor/lib', '', { submodule: { from: 'a1', to: 'b2', repository: null } }),
++      file('a/b.txt'),
++    ]);
++    expect(paths(ordered)).toEqual(['a/b.txt', 'vendor/lib', 'z.txt']);
++  });
++});
++
+ // ATM-595: the tree's folders fold
+ describe('the file tree folded', () => {
+   const tree = fileTree([file('a/b/c.txt'), file('a/d.txt'), file('ab/e.txt'), file('f.txt')]);

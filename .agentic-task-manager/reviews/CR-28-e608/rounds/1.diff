@@ -1,0 +1,195 @@
+diff --git a/dashboard/src/lib/documents/CompMd.svelte b/dashboard/src/lib/documents/CompMd.svelte
+index ce08879e..659b356f 100644
+--- a/dashboard/src/lib/documents/CompMd.svelte
++++ b/dashboard/src/lib/documents/CompMd.svelte
+@@ -95,6 +95,8 @@
+   let undrawn = $state<string[]>([]);
+   /** Whether CompMD has drawn this text yet: `data-compmd` says so, for what measures the panel once it has */
+   let drawn = $state(false);
++  /** Drawn, but for an earlier text: hidden, the new text as written shown in its place until its turn (ATM-625) */
++  let stale = $state(false);
+   let view: View | null = null;
+   let schemes: MutationObserver | null = null;
+   /** What was last rendered: the text and the task's data, so an unchanged text is never processed again (R8) */
+@@ -114,9 +116,28 @@
+     if (asked === measuring && shown === view) onlines(lines, target);
+   }
+ 
++  /** What is drawn, as one text: an unchanged one is never processed again (R8) */
++  const key = $derived(
++    text +
++      '\u0000' +
++      JSON.stringify(task ? taskData(task) : null) +
++      '\u0000' +
++      (path ?? '') +
++      '\u0000' +
++      (only?.join('-') ?? ''),
++  );
++  // A drawn text that changed waits for its turn as the new text, as written (ATM-625): the old drawing, kept until
++  // then, had the old lines, so a run cut in two by a comment stood as tall as before it was cut, and the comment box
++  // under its first half was far below, where focusing it scrolled the pane. Before the page is updated, so nothing
++  // measures or focuses against the old drawing
++  $effect.pre(() => {
++    if (plain !== undefined && view && key !== rendered) {
++      stale = true;
++      drawn = false;
++    }
++  });
++
+   $effect(() => {
+-    const data = task ? taskData(task) : null;
+-    const key = text + '\u0000' + JSON.stringify(data) + '\u0000' + (path ?? '') + '\u0000' + (only?.join('-') ?? '');
+     const target = host;
+     if (!target || key === rendered) return;
+     rendered = key;
+@@ -163,6 +184,7 @@
+         view.on('rendered', () => {
+           secureLinks(target);
+           drawn = true;
++          stale = false;
+           turnDone?.();
+           turnDone = null;
+         });
+@@ -250,6 +272,7 @@
+ <div
+   class="compmd"
+   class:compmd-inline={inline}
++  class:compmd-stale={stale}
+   data-compmd={failed ? 'failed' : drawn ? 'ready' : 'loading'}
+   onclick={follow}
+   onauxclick={(e) => {
+@@ -261,7 +284,7 @@
+   {#if failed}
+     <p class="compmd-note" role="note">Shown as written: the formatting couldn’t load ({loadError}).</p>
+   {/if}
+-  <div class="compmd-page" hidden={failed} bind:this={host}></div>
++  <div class="compmd-page" hidden={failed || stale} bind:this={host}></div>
+   {#if plain !== undefined && !drawn && !failed}
+     <!-- Its turn not come yet: the code as written, where CompMD will draw it (ATM-587). Hidden by the style below as
+          soon as CompMD has drawn anything, before it says so: both at once made the run twice as tall for a moment -->
+@@ -274,8 +297,9 @@
+ </div>
+ 
+ <style>
+-  /* The code as written gives way the moment CompMD has drawn the text (ATM-587) */
+-  .compmd-page:not(:empty) + .compmd-waiting {
++  /* The code as written gives way the moment CompMD has drawn the text (ATM-587); not to a drawing of an earlier text
++     (ATM-625) */
++  .compmd:not(.compmd-stale) > .compmd-page:not(:empty) + .compmd-waiting {
+     display: none;
+   }
+ </style>
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index ab77f86b..555c4c77 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -521,6 +521,68 @@ test.describe('a review’s page', () => {
+     await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
+   });
+ 
++  // ATM-625 (Hakan, the app): + on a wrapped long line of a Markdown file sent the pane to near the end of the review
++  for (const wrapped of [true, false])
++    test(`+ on a line ${wrapped ? 'wrapped' : 'not wrapped'} opens the comment box where it is; the pane stays`, async ({
++      page,
++      tasksServer,
++    }) => {
++      const long = (n: number) => `Line ${n}: ${'a long sentence of the plan, '.repeat(12)}`;
++      const texts = ['docs/a.md', 'docs/b.md', 'docs/c.md'].map(
++        (path, k) => [path, Array.from({ length: 40 }, (_, n) => long(k * 100 + n)).join('\n') + '\n'] as const,
++      );
++      const patchOf = (path: string, text: string) =>
++        `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1,40 @@\n` +
++        text
++          .trimEnd()
++          .split('\n')
++          .map((l) => `+${l}`)
++          .join('\n') +
++        '\n';
++      for (const [path, text] of texts)
++        tasksServer.setRevisionDocument('head3', projectDocument(path, text, { kind: 'markdown', line_offset: 1 }));
++      await openReviews(page, tasksServer);
++      tasksServer.setReview(
++        'CR-2',
++        reviewPage({
++          view: {
++            round: 3,
++            against: null,
++            files: texts.map(([path, text]) => file(path, patchOf(path, text), 'added', null)),
++          },
++        }),
++      );
++      await page.goto(reviewPath(tasksServer, '/CR-2'));
++      await page.getByRole('tab', { name: /^Diffs/ }).click();
++      await page.getByRole('button', { name: 'Unified' }).click();
++      const wrap = page.getByRole('button', { name: 'Wrap' });
++      if (wrapped !== ((await wrap.getAttribute('aria-pressed')) === 'true')) await wrap.click();
++      const diff = diffOf(page, 'docs/a.md');
++      await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
++      // A line in the middle of the first file, in the middle of the pane
++      const line = diff.locator('.diff-line').nth(20);
++      await line.evaluate((l) => l.scrollIntoView({ block: 'center' }));
++      const pane = page.locator('.review-diffs');
++      const before = await pane.evaluate((p) => p.scrollTop);
++      // Over the line's text (CompMD's code lies over the rows; the run finds the line from the pointer's height)
++      await line.hover({ force: true });
++      await diff.locator('.diff-plus').click();
++      const box = page.getByRole('textbox', { name: /Comment/ }).first();
++      await expect(box).toBeFocused();
++      // The comment box opens under the line, in view; the pane stays (it moved 444 px, 1,564 wrapped: the run's old
++      // drawing, still all 40 lines while the box under its first half took the focus)
++      await page.waitForTimeout(300);
++      const after = await pane.evaluate((p) => p.scrollTop);
++      expect(Math.abs(after - before), `the pane moved from ${before} to ${after}`).toBeLessThan(40);
++      await expect(box).toBeInViewport();
++      const below = await box.evaluate(
++        (b, l) => b.getBoundingClientRect().top - (l as HTMLElement).getBoundingClientRect().bottom,
++        await line.elementHandle(),
++      );
++      expect(below).toBeGreaterThanOrEqual(-1);
++      expect(below).toBeLessThan(120);
++    });
++
+   // ATM-589: a run that ends with an empty line, before the fold that ends the file: the empty line is drawn, its
+   // number beside it, and nothing over the fold
+   test('a run ending with an empty line before the last fold: its number on its line, nothing over the fold', async ({
+diff --git a/dashboard/tests/unit/CompMd.component.test.ts b/dashboard/tests/unit/CompMd.component.test.ts
+index b85d2489..2b0a4457 100644
+--- a/dashboard/tests/unit/CompMd.component.test.ts
++++ b/dashboard/tests/unit/CompMd.component.test.ts
+@@ -128,6 +128,36 @@ describe('CompMd', () => {
+       expect(container.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready');
+     });
+ 
++    // ATM-625: a run cut in two by a comment kept its old drawing (all its old lines) until its next turn, so the box
++    // under its first half was far below, and focusing it scrolled the pane
++    it('drawn, then given a new text: the new text as written at once, the old drawing hidden, until its turn', async () => {
++      const idle: (() => void)[] = [];
++      vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));
++      const { raise } = await compmdWithView();
++      const { container, rerender } = render(CompMd, { text: 'one\ntwo\nthree', plain: 'one\ntwo\nthree' });
++      await vi.waitFor(() => expect(idle).toHaveLength(1));
++      idle.shift()!();
++      raise('rendered', {} as never);
++      const outer = () => container.querySelector('.compmd')!;
++      const page = () => container.querySelector('.compmd-page:not(.compmd-waiting)') as HTMLElement;
++      const waiting = () => container.querySelector('.compmd-waiting');
++      await vi.waitFor(() => expect(outer()).toHaveAttribute('data-compmd', 'ready'));
++      page().textContent = 'one two three'; // what CompMD drew
++      await rerender({ text: 'one', plain: 'one' });
++      expect(outer()).toHaveAttribute('data-compmd', 'loading');
++      expect(outer()).toHaveClass('compmd-stale');
++      expect(page().hidden).toBe(true);
++      expect(waiting()).toHaveTextContent(/^one$/);
++      // Its turn: drawn, and the plain text gives way
++      await vi.waitFor(() => expect(idle).toHaveLength(1));
++      idle.shift()!();
++      raise('rendered', {} as never);
++      await vi.waitFor(() => expect(outer()).toHaveAttribute('data-compmd', 'ready'));
++      expect(outer()).not.toHaveClass('compmd-stale');
++      expect(page().hidden).toBe(false);
++      expect(waiting()).toBeNull();
++    });
++
+     it('gone before its turn, it never renders', async () => {
+       const idle: (() => void)[] = [];
+       vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));

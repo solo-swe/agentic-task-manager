@@ -1,0 +1,418 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 5a6d45d7..b3cb35d6 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -15,10 +15,14 @@
+     chainsOf,
+     driftedOf,
+     fileTree,
++    filesIn,
+     filterChains,
+     isResolved,
+     lineCounts,
++    openedTo,
+     reviewChains,
++    shownRows,
++    treeFolders,
+     treeWidth,
+     TREE_WIDTH,
+     type ChainFilter,
+@@ -148,6 +152,62 @@
+   }
+   const viewedCount = $derived(files.filter((f) => isViewed(f)).length);
+ 
++  // The tree's folders fold (ATM-595): what is folded is kept per review for the session (a reload keeps it, nothing
++  // else does), and going to a file opens the folders on its way, so the file shown is always in the tree
++  const TREE_KEY = 'atm-review-tree:';
++  let collapsed = $state.raw<ReadonlySet<string>>(new Set());
++  let collapsedFor = '';
++  $effect.pre(() => {
++    const id = review.id;
++    if (id === collapsedFor) return;
++    collapsedFor = id;
++    let kept: unknown = null;
++    try {
++      kept = JSON.parse(sessionStorage.getItem(TREE_KEY + id) ?? 'null');
++    } catch {
++      // no storage (a private window), or not ours: nothing folded
++    }
++    collapsed = new Set(Array.isArray(kept) ? kept.filter((p): p is string => typeof p === 'string') : []);
++  });
++  function fold(next: ReadonlySet<string>) {
++    collapsed = next;
++    try {
++      sessionStorage.setItem(TREE_KEY + review.id, JSON.stringify([...next]));
++    } catch {
++      // kept for the page only
++    }
++  }
++  function toggleFolder(path: string, open = collapsed.has(path)) {
++    const rest = [...collapsed].filter((p) => p !== path);
++    fold(new Set(open ? rest : [...rest, path]));
++  }
++  function folderKeys(e: KeyboardEvent, path: string) {
++    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
++    e.preventDefault();
++    toggleFolder(path, e.key === 'ArrowRight');
++  }
++  const shownTree = $derived(shownRows(tree, collapsed));
++  $effect(() => {
++    const path = atFile;
++    if (!path) return;
++    untrack(() => {
++      const next = openedTo(collapsed, path);
++      if (next !== collapsed) fold(next);
++    });
++  });
++  /** A folded folder's sum: its files, those with comments, those not viewed yet */
++  function folderSum(path: string) {
++    const inIt = filesIn(tree, path);
++    const commented = inIt.filter((f) => chainsOf(page.chains, f).length).length;
++    const unviewed = inIt.filter((f) => !isViewed(f)).length;
++    return [
++      `${inIt.length} ${inIt.length === 1 ? 'file' : 'files'}`,
++      ...(commented ? [`${commented} with comments`] : []),
++      ...(unviewed && unviewed < inIt.length ? [`${unviewed} not viewed`] : []),
++      ...(unviewed && unviewed === inIt.length && viewedCount ? ['none viewed'] : []),
++    ].join(' · ');
++  }
++
+   // The list of diffs, and the file at its top (the tree marks it; ] [ and v act on it)
+   let list = $state<HTMLElement | null>(null);
+   let atFile = $state<string | null>(null);
+@@ -780,18 +840,58 @@
+           <span class="review-files-total"
+             ><span class="added">+{totals.added}</span> <span class="removed">−{totals.removed}</span></span
+           >
++          {#if treeFolders(tree).length}
++            <span class="review-files-folds">
++              <button
++                class="review-files-fold"
++                id="review-collapse-all"
++                title="Collapse all folders"
++                aria-label="Collapse all folders"
++                onclick={() => fold(new Set(treeFolders(tree)))}><Icon name="chevrons-down-up" size={13} /></button
++              >
++              <button
++                class="review-files-fold"
++                id="review-expand-all"
++                title="Expand all folders"
++                aria-label="Expand all folders"
++                onclick={() => fold(new Set())}><Icon name="chevrons-up-down" size={13} /></button
++              >
++            </span>
++          {/if}
+         </div>
+         {#if !files.length}<p class="review-empty">No files changed here.</p>{/if}
+-        <ul>
+-          {#each tree as row (row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`)}
++        <ul role="tree" aria-label="Files changed">
++          {#each shownTree as row (row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`)}
+             {#if row.kind === 'folder'}
+-              <li class="review-folder" style:--depth={row.depth}>
+-                <Icon name="folder" size={13} />{row.name}
++              {@const shut = collapsed.has(row.path)}
++              <li
++                class="review-folder"
++                role="treeitem"
++                aria-expanded={!shut}
++                aria-selected="false"
++                aria-level={row.depth + 1}
++                data-folder={row.path}
++                style:--depth={row.depth}
++              >
++                <button
++                  class="review-folder-toggle"
++                  aria-label="{shut ? 'Expand' : 'Collapse'} {row.path}"
++                  onclick={() => toggleFolder(row.path)}
++                  onkeydown={(e) => folderKeys(e, row.path)}
++                  ><Icon name={shut ? 'chevron-right' : 'chevron-down'} size={13} /><Icon
++                    name="folder"
++                    size={13}
++                  />{row.name}</button
++                >
++                {#if shut}<span class="review-folder-sum">{folderSum(row.path)}</span>{/if}
+               </li>
+             {:else}
+               {@const counts = lineCounts(row.file.patch)}
+               <li
+                 class="review-file"
++                role="treeitem"
++                aria-selected={row.file.path === atFile}
++                aria-level={row.depth + 1}
+                 class:current={row.file.path === atFile}
+                 class:viewed={isViewed(row.file)}
+                 style:--depth={row.depth}
+@@ -1404,6 +1504,42 @@
+   }
+   .review-folder {
+     color: var(--text-muted);
++    flex-wrap: wrap;
++  }
++  .review-folder-toggle {
++    display: inline-flex;
++    align-items: center;
++    gap: var(--space-2);
++    padding: 0;
++    border: none;
++    background: none;
++    color: inherit;
++    font: inherit;
++    cursor: pointer;
++  }
++  .review-folder-toggle:hover {
++    color: var(--text);
++  }
++  .review-folder-sum {
++    font-size: var(--text-xs);
++  }
++  .review-files-folds {
++    display: inline-flex;
++    gap: var(--space-1);
++    margin-left: var(--space-4);
++  }
++  .review-files-fold {
++    display: inline-flex;
++    padding: var(--space-1);
++    border: none;
++    border-radius: var(--radius-sm);
++    background: none;
++    color: var(--text-muted);
++    cursor: pointer;
++  }
++  .review-files-fold:hover {
++    background: var(--surface2);
++    color: var(--text);
+   }
+   .review-file:hover {
+     background: var(--surface2);
+diff --git a/dashboard/src/lib/reviews/page.ts b/dashboard/src/lib/reviews/page.ts
+index c3ab2b06..c3a948ed 100644
+--- a/dashboard/src/lib/reviews/page.ts
++++ b/dashboard/src/lib/reviews/page.ts
+@@ -38,6 +38,39 @@ export function fileTree(files: ViewFile[]): TreeRow[] {
+   return rows;
+ }
+ 
++/** A row's path: a folder's own, a file's */
++const rowPath = (row: TreeRow) => (row.kind === 'folder' ? row.path : row.file.path);
++
++/** Whether `path` is inside the folder `folder` */
++const inside = (path: string, folder: string) => path.startsWith(folder + '/');
++
++/** The rows shown with some folders collapsed (ATM-595): a collapsed folder's row stays, what is inside it hides */
++export function shownRows(rows: TreeRow[], collapsed: ReadonlySet<string>): TreeRow[] {
++  if (!collapsed.size) return rows;
++  return rows.filter((row) => {
++    const path = rowPath(row);
++    for (const folder of collapsed) if (inside(path, folder)) return false;
++    return true;
++  });
++}
++
++/** Every folder of the tree, by path */
++export function treeFolders(rows: TreeRow[]): string[] {
++  return rows.flatMap((row) => (row.kind === 'folder' ? [row.path] : []));
++}
++
++/** The folders collapsed, with those on the way to `path` opened, so its row is shown; the same set if none was */
++export function openedTo(collapsed: ReadonlySet<string>, path: string): ReadonlySet<string> {
++  const on = [...collapsed].filter((folder) => inside(path, folder));
++  if (!on.length) return collapsed;
++  return new Set([...collapsed].filter((folder) => !on.includes(folder)));
++}
++
++/** The files under a folder, at any depth */
++export function filesIn(rows: TreeRow[], folder: string): ViewFile[] {
++  return rows.flatMap((row) => (row.kind === 'file' && inside(row.file.path, folder) ? [row.file] : []));
++}
++
+ /** How many lines a file's patch adds and removes (its hunks' lines, not its headers) */
+ export function lineCounts(patch: string): { added: number; removed: number } {
+   let added = 0;
+diff --git a/dashboard/src/lib/ui/Icon.svelte b/dashboard/src/lib/ui/Icon.svelte
+index 45399afb..4fca40f3 100644
+--- a/dashboard/src/lib/ui/Icon.svelte
++++ b/dashboard/src/lib/ui/Icon.svelte
+@@ -14,6 +14,8 @@
+     ChevronLeft,
+     ChevronRight,
+     ChevronUp,
++    ChevronsDownUp,
++    ChevronsUpDown,
+     CircleCheck,
+     Code,
+     Columns2,
+@@ -67,6 +69,8 @@
+     'chevron-left': ChevronLeft,
+     'chevron-right': ChevronRight,
+     'chevron-up': ChevronUp,
++    'chevrons-down-up': ChevronsDownUp,
++    'chevrons-up-down': ChevronsUpDown,
+     'circle-check': CircleCheck,
+     code: Code,
+     'columns-2': Columns2,
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 1d5879a5..ab77f86b 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -685,6 +685,32 @@ test.describe('a review’s page', () => {
+       .toEqual(['docs/b.md@head3']);
+   });
+ 
++  // ATM-595: a folder folds, all of them at once, kept across a reload; going to a file in a folded folder opens it
++  test('the tree’s folders fold: one, or all at once, kept across a reload; going to a file opens its folder', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openDiffs(page, tasksServer);
++    const rows = page.locator('.review-files li');
++    await page.getByRole('button', { name: 'Collapse src' }).click();
++    await expect(rows).toHaveText(['docs', /A\s*b\.md/, /src\s*1 file/, /M\s*README\.md/]);
++    await expect(page.locator('.review-folder[data-folder="src"]')).toHaveAttribute('aria-expanded', 'false');
++    await page.reload();
++    await page.getByRole('tab', { name: /^Diffs/ }).click();
++    await expect(rows).toHaveText(['docs', /A\s*b\.md/, /src\s*1 file/, /M\s*README\.md/]);
++    await page.getByRole('button', { name: 'Collapse all folders' }).click();
++    await expect(rows).toHaveText([/docs\s*1 file/, /src\s*1 file/, /M\s*README\.md/]);
++    // The next file, from the keyboard: src/a.rs, in a folded folder, opens it
++    await page.locator('.review-diffs').focus();
++    await page.keyboard.press(']');
++    await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', /./);
++    const current = await page.locator('.review-file.current .review-file-name').getAttribute('data-file');
++    const folder = current!.split('/')[0];
++    await expect(page.locator(`.review-folder[data-folder="${folder}"]`)).toHaveAttribute('aria-expanded', 'true');
++    await page.getByRole('button', { name: 'Expand all folders' }).click();
++    await expect(rows).toHaveCount(5);
++  });
++
+   test('the file gone to, the round and the round against are the address’s, and are asked of the server', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 3ab7bb6d..b77e6b03 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -408,6 +408,65 @@ describe('ReviewPage: Diffs', () => {
+     expect(onfile).not.toHaveBeenCalled();
+   });
+ 
++  // ATM-595: the tree's folders fold, by click and keys, all at once, kept for the session; a jump opens them
++  describe('the tree’s folders fold', () => {
++    const treeRows = (container: HTMLElement) =>
++      [...container.querySelectorAll('.review-files li')].map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
++    beforeEach(() => sessionStorage.clear());
++
++    it('a folder collapses and expands by a click, or ← and →; folded, it sums its files', async () => {
++      const { container } = await diffs(data({ chains: [chain('k1', 'src/a.rs')] }));
++      const folder = () => container.querySelector('.review-folder[data-folder="src"]') as HTMLElement;
++      expect(container.querySelector('[role="tree"]')).not.toBeNull();
++      expect(folder()).toHaveAttribute('aria-expanded', 'true');
++      await fireEvent.click(screen.getByRole('button', { name: 'Collapse src' }));
++      expect(folder()).toHaveAttribute('aria-expanded', 'false');
++      // Its two files hidden; the sum says how many, how many have comments, and that none of them is viewed yet
++      expect(treeRows(container)).toEqual(['src 2 files · 1 with comments · none viewed', 'M README.md +1 −1']);
++      await fireEvent.keyDown(screen.getByRole('button', { name: 'Expand src' }), { key: 'ArrowRight' });
++      expect(folder()).toHaveAttribute('aria-expanded', 'true');
++      expect(treeRows(container)).toHaveLength(4);
++      await fireEvent.keyDown(screen.getByRole('button', { name: 'Collapse src' }), { key: 'ArrowLeft' });
++      expect(folder()).toHaveAttribute('aria-expanded', 'false');
++      // Other keys are left alone
++      await fireEvent.keyDown(screen.getByRole('button', { name: 'Expand src' }), { key: 'ArrowUp' });
++      expect(folder()).toHaveAttribute('aria-expanded', 'false');
++    });
++
++    it('Collapse all and Expand all; a tree without folders offers neither', async () => {
++      const { container, unmount } = await diffs();
++      await fireEvent.click(screen.getByRole('button', { name: 'Collapse all folders' }));
++      expect(treeRows(container)).toEqual(['src 2 files · none viewed', 'M README.md +1 −1']);
++      await fireEvent.click(screen.getByRole('button', { name: 'Expand all folders' }));
++      expect(treeRows(container)).toHaveLength(4);
++      unmount();
++      await diffs(data({}, { files: [file('README.md')] }));
++      expect(screen.queryByRole('button', { name: 'Collapse all folders' })).toBeNull();
++    });
++
++    it('what is folded is kept for the session, per review; going to a file in a folded folder opens it', async () => {
++      const first = await diffs();
++      await fireEvent.click(screen.getByRole('button', { name: 'Collapse src' }));
++      first.unmount();
++      // Opened again: still folded
++      const again = await diffs();
++      expect(screen.getByRole('button', { name: 'Expand src' })).toBeTruthy();
++      again.unmount();
++      // Another review: nothing folded
++      const other = data();
++      other.review = { ...other.review, id: 'another' };
++      const elsewhere = await diffs(other);
++      expect(screen.getByRole('button', { name: 'Collapse src' })).toBeTruthy();
++      elsewhere.unmount();
++      // The address names a file in the folded folder: the folder opens, the file marked
++      const { container } = show(data(), { file: 'src/a.rs' });
++      await vi.waitFor(() =>
++        expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs'),
++      );
++      expect(container.querySelector('.review-folder[data-folder="src"]')).toHaveAttribute('aria-expanded', 'true');
++    });
++  });
++
+   it('a binary file is listed, not shown; a view with no files says so', async () => {
+     const binary = await diffs(data({}, { files: [file('logo.png', { binary: true, patch: '' })] }));
+     expect(screen.getByText('A binary file: listed, not shown.')).toBeTruthy();
+diff --git a/dashboard/tests/unit/page.test.ts b/dashboard/tests/unit/page.test.ts
+index 564aad3f..77ff74d5 100644
+--- a/dashboard/tests/unit/page.test.ts
++++ b/dashboard/tests/unit/page.test.ts
+@@ -4,12 +4,16 @@ import {
+   chainsOf,
+   driftedOf,
+   fileTree,
++  filesIn,
+   filterChains,
+   hashOf,
+   isResolved,
+   lineCounts,
++  openedTo,
+   reviewChains,
+   reviewTitle,
++  shownRows,
++  treeFolders,
+   treeWidth,
+   viewedKey,
+   type ChainFilter,
+@@ -85,6 +89,35 @@ describe('the file tree', () => {
+   });
+ });
+ 
++// ATM-595: the tree's folders fold
++describe('the file tree folded', () => {
++  const tree = fileTree([file('a/b/c.txt'), file('a/d.txt'), file('ab/e.txt'), file('f.txt')]);
++  const names = (rows: ReturnType<typeof fileTree>) =>
++    rows.map((r) => (r.kind === 'folder' ? `${r.path}/` : r.file.path));
++
++  it('shows everything with nothing folded, and a folded folder’s row without what is inside it, at any depth', () => {
++    expect(shownRows(tree, new Set())).toBe(tree);
++    expect(names(shownRows(tree, new Set(['a'])))).toEqual(['a/', 'ab/', 'ab/e.txt', 'f.txt']);
++    expect(names(shownRows(tree, new Set(['a/b'])))).toEqual(['a/', 'a/b/', 'a/d.txt', 'ab/', 'ab/e.txt', 'f.txt']);
++    // A folder named like the start of another isn't its parent
++    expect(names(shownRows(tree, new Set(['a', 'a/b'])))).toEqual(['a/', 'ab/', 'ab/e.txt', 'f.txt']);
++  });
++
++  it('lists every folder, and the files under one at any depth', () => {
++    expect(treeFolders(tree)).toEqual(['a', 'a/b', 'ab']);
++    expect(filesIn(tree, 'a').map((f) => f.path)).toEqual(['a/b/c.txt', 'a/d.txt']);
++    expect(filesIn(tree, 'a/b').map((f) => f.path)).toEqual(['a/b/c.txt']);
++    expect(filesIn(tree, 'nowhere')).toEqual([]);
++  });
++
++  it('opens the folders on the way to a file, and leaves the same set when none was folded on its way', () => {
++    const folded = new Set(['a', 'a/b', 'ab']);
++    expect([...openedTo(folded, 'a/b/c.txt')]).toEqual(['ab']);
++    expect([...openedTo(folded, 'a/d.txt')]).toEqual(['a/b', 'ab']);
++    expect(openedTo(folded, 'f.txt')).toBe(folded);
++  });
++});
++
+ describe('a file’s line counts', () => {
+   it('counts its hunks’ added and removed lines, not its headers', () => {
+     const patch = [

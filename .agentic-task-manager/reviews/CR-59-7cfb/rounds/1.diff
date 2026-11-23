@@ -1,0 +1,440 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 44fe173d..a85b7a3e 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -787,9 +787,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "compmd-host"
+-version = "0.7.1"
++version = "0.8.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f58e714c07b70ba4e0148e2bc8a9085105b0cc59e812b6391d5dc85188642da9"
++checksum = "7aedf1c34e4a4a294c4131ecbdbc5edccc59ca4887a1b3ec06cf7404a39161bd"
+ dependencies = [
+  "compmd-pack",
+  "http",
+@@ -801,9 +801,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "compmd-pack"
+-version = "0.7.1"
++version = "0.8.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c89292c2bb76605fe2310e89cb5a38c13d33aa2070b0cd67ba0656667dabbad1"
++checksum = "177af57652ec46c5daee71ff66ec06f51bbeff9d3bdf0ea46c0af2562b5a6475"
+ dependencies = [
+  "semver",
+  "serde",
+@@ -4349,9 +4349,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "tauri-plugin-compmd"
+-version = "0.7.1"
++version = "0.8.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e8a433dc38ed75d00293d0f453646358d861f66a5fb471d1e3d4e112870a6ded"
++checksum = "a50f7783921128dfc3031ca5351b921650f36269852fc5988bf7513c158e228d"
+ dependencies = [
+  "compmd-host",
+  "serde_json",
+diff --git a/Cargo.toml b/Cargo.toml
+index 0def7799..59d5df3d 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -30,9 +30,9 @@ atm-api = { path = "crates/atm-api" }
+ # CompMD in a Tauri app (ADR-006, T-524): CompMD's own plugin serves the bundle the page's build wrote (the frames and
+ # the packs) on a compmd: scheme, embedded by the app's build.rs (the `build` feature). Its version is
+ # @compmd/sandbox's (dashboard/package.json): they are released together
+-tauri-plugin-compmd = "=0.7.1"
++tauri-plugin-compmd = "=0.8.0"
+ # CompMD's serving contract, which atm serve answers its bundle with as the plugin does in the app (ADR-006)
+-compmd-host = "=0.7.1"
++compmd-host = "=0.8.0"
+ clap = { version = "4.5", features = ["derive"] }
+ # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
+ clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
+diff --git a/dashboard/package.json b/dashboard/package.json
+index d898a9d3..14e4acfe 100644
+--- a/dashboard/package.json
++++ b/dashboard/package.json
+@@ -43,10 +43,10 @@
+   },
+   "devDependencies": {
+     "@comp-markdown/mermaid": "0.1.2",
+-    "@compmd/processor": "0.7.1",
+-    "@compmd/render": "0.7.1",
+-    "@compmd/sandbox": "0.7.1",
+-    "@compmd/vite": "0.7.1",
++    "@compmd/processor": "0.8.0",
++    "@compmd/render": "0.8.0",
++    "@compmd/sandbox": "0.8.0",
++    "@compmd/vite": "0.8.0",
+     "@dagrejs/dagre": "^3.1.3",
+     "@eslint/js": "^10.0.1",
+     "@playwright/test": "1.64",
+diff --git a/dashboard/pnpm-lock.yaml b/dashboard/pnpm-lock.yaml
+index c4416c57..7f764d7c 100644
+--- a/dashboard/pnpm-lock.yaml
++++ b/dashboard/pnpm-lock.yaml
+@@ -173,17 +173,17 @@ importers:
+         specifier: 0.1.2
+         version: 0.1.2
+       '@compmd/processor':
+-        specifier: 0.7.1
+-        version: 0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++        specifier: 0.8.0
++        version: 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+       '@compmd/render':
+-        specifier: 0.7.1
+-        version: 0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++        specifier: 0.8.0
++        version: 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+       '@compmd/sandbox':
+-        specifier: 0.7.1
+-        version: 0.7.1(@compmd/processor@0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++        specifier: 0.8.0
++        version: 0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       '@compmd/vite':
+-        specifier: 0.7.1
+-        version: 0.7.1(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++        specifier: 0.8.0
++        version: 0.8.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       '@dagrejs/dagre':
+         specifier: ^3.1.3
+         version: 3.1.3
+@@ -312,16 +312,19 @@ packages:
+   '@comp-markdown/mermaid@0.1.2':
+     resolution: {integrity: sha512-FpJgzLz4AtA9Ty1ZORW6p1IcjtMgoEE/hoj9O2Nh9/Oa3wXd/6B1CcgkMxgZUZIHxTU/JFC6C7VjLU8vawUYtQ==}
+ 
+-  '@compmd/processor@0.7.1':
+-    resolution: {integrity: sha512-02JHryr3QmI5R4VE2/8XtZeg5/xSzwqlqQVKIESItD2LTutCCg9VutfLpzmZqCcrYy36/G5CmKwvlMnNcMAHtA==}
++  '@compmd/host@0.8.0':
++    resolution: {integrity: sha512-gnGR1FmgoeupSySLQjKj0wmmadM9AdPg3tUjmSv6c4771maAs8slkZhGYL/snLsXt7wPkY0tZsGW2bGMAtgxvA==}
+ 
+-  '@compmd/registry@0.7.1':
+-    resolution: {integrity: sha512-bjwlpMo0xYaa2COUq1SfWCcNuXDIoRhxvb4riRQZYdL5z4bRIpFcz77EjCwLS04DxO1HWDWqnWEOXEyo/oP+cQ==}
++  '@compmd/processor@0.8.0':
++    resolution: {integrity: sha512-TqtCspcjqPEW55a1fLdRwWEuvsT9DQV3TJ4pWeIuiggmR1AgYvoo6H6z+qLGDJRuvVuKHHjjWLx3MP3KQs2cWg==}
++
++  '@compmd/registry@0.8.0':
++    resolution: {integrity: sha512-GyYYs9n2ebHWczY3z7a+JSqpBXznJe0phmqBV1L/1Voejg3e2/+Oc7FH273Dg1QEpiRr8LNlhzY7Fmi3qIOqWA==}
+     peerDependencies:
+-      '@compmd/processor': ^0.7.1
++      '@compmd/processor': ^0.8.0
+ 
+-  '@compmd/render@0.7.1':
+-    resolution: {integrity: sha512-YsCSdKgcO1IbZtsbpmKiyhzNO7u9ALAZjKHJpA29acL69DaUR7Hovs2WFt1oC1a/OhRVrINdFI2E0hGE2Ws1mw==}
++  '@compmd/render@0.8.0':
++    resolution: {integrity: sha512-6NtQMjngiFKJcL0Hu2vG4W9nOsphm2/n/YomTb0rPFWz/xTM++aX3S0jEWYLF2ANdiACVg9ye6SV/CuHr+xOBg==}
+     peerDependencies:
+       react: ^19
+       react-dom: ^19
+@@ -334,21 +337,22 @@ packages:
+       svelte:
+         optional: true
+ 
+-  '@compmd/sandbox@0.7.1':
+-    resolution: {integrity: sha512-Ps9snnZR2Mb8LxRqh87uoFh7sdTeru2fjEHa3iDp5Bz/uEVhgiUf5q+1dgipWmc4dG4boV1g/zuRqdGd3kIJEw==}
++  '@compmd/sandbox@0.8.0':
++    resolution: {integrity: sha512-bZXEc7Il6X+bj7nDL/DpfHhMCB5HocfYN4v9KeD6sxzozC+gpsEtVG2Kd/Pb8KWDOs9cYc+/iqkK/xmDEsc97A==}
+     peerDependencies:
+-      '@compmd/processor': ^0.7.1
++      '@compmd/processor': ^0.8.0
+       vite: '>=8'
+     peerDependenciesMeta:
+       vite:
+         optional: true
+ 
+-  '@compmd/vite@0.7.1':
+-    resolution: {integrity: sha512-fn3OI0JtyrskrrS2IoUw8OzlXKv4ATlSTxWR/qF+A8kakET7/JmIMGRJsPMTbclA2elQhCOtbZq9KUOJmTwu8w==}
++  '@compmd/vite@0.8.0':
++    resolution: {integrity: sha512-arHUaC5iIy4tf/9kwAo2aF0ScZNG1XSXI5E4nFdO4NpKSCqDb3yOfp5UDV86vDfWATenLI7/DfH5G3p/ZsBsVg==}
+     peerDependencies:
+       react: ^19
+       react-dom: ^19
+       svelte: ^5
++      typescript: '>=5'
+       vite: '>=8'
+     peerDependenciesMeta:
+       react:
+@@ -357,6 +361,8 @@ packages:
+         optional: true
+       svelte:
+         optional: true
++      typescript:
++        optional: true
+ 
+   '@dagrejs/dagre@3.1.3':
+     resolution: {integrity: sha512-X4aUTwOReZvthaZWOVHqlJ52/ZdhZFEM4+Lh/uR4XooUSLE6p71bcy7MPGzYnNUcNh+nj+i/qJQpCMIdQnSmrg==}
+@@ -590,6 +596,10 @@ packages:
+     resolution: {integrity: sha512-Ed6UdEj84LyYkwnxM5CvSMWAD+id9ExTYri0/+x41U9zrgNifPSS9lZm0JqBP0VfYI8yr8tY5nbNq9+p9R0kFA==}
+     engines: {node: '>=20'}
+ 
++  '@shikijs/engine-oniguruma@4.5.0':
++    resolution: {integrity: sha512-dKVmbJecVdB9recl8a/CU4jdpNXyjJQrIcesIkpS70s5HS02ohpnCSpMUbotPnEUzbAcLQ+S4hwZYbkBBiTcJw==}
++    engines: {node: '>=20'}
++
+   '@shikijs/langs@4.5.0':
+     resolution: {integrity: sha512-wwBTqwduXSz0X4v9Qa2EWeFaYJEw1clCncWjoRNQRbVDu3SPRTRWucnouYapKj3b8Q+sk/41Vbc4B5c8nuYzLA==}
+     engines: {node: '>=20'}
+@@ -2114,32 +2124,35 @@ snapshots:
+ 
+   '@comp-markdown/mermaid@0.1.2': {}
+ 
+-  '@compmd/processor@0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
++  '@compmd/host@0.8.0': {}
++
++  '@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+     dependencies:
+-      '@compmd/render': 0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/render': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+     transitivePeerDependencies:
+       - react
+       - react-dom
+       - svelte
+ 
+-  '@compmd/registry@0.7.1(@compmd/processor@0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
++  '@compmd/registry@0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
+     dependencies:
+-      '@compmd/processor': 0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/processor': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+ 
+-  '@compmd/render@0.7.1(svelte@5.57.2(@typescript-eslint/types@8.72.1))':
++  '@compmd/render@0.8.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))':
+     optionalDependencies:
+       svelte: 5.57.2(@typescript-eslint/types@8.72.1)
+ 
+-  '@compmd/render@0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
++  '@compmd/render@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+     optionalDependencies:
+       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
+ 
+-  '@compmd/sandbox@0.7.1(@compmd/processor@0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
++  '@compmd/sandbox@0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+     dependencies:
+-      '@compmd/processor': 0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/render': 0.7.1(svelte@5.57.2(@typescript-eslint/types@8.72.1))
++      '@compmd/processor': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/render': 0.8.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))
+       '@shikijs/core': 4.5.0
+       '@shikijs/engine-javascript': 4.5.0
++      '@shikijs/engine-oniguruma': 4.5.0
+       '@shikijs/langs': 4.5.0
+       '@shikijs/themes': 4.5.0
+       es-module-lexer: 2.3.2
+@@ -2153,17 +2166,19 @@ snapshots:
+       - react
+       - react-dom
+ 
+-  '@compmd/vite@0.7.1(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
++  '@compmd/vite@0.8.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+     dependencies:
+-      '@compmd/processor': 0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/registry': 0.7.1(@compmd/processor@0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
+-      '@compmd/render': 0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+-      '@compmd/sandbox': 0.7.1(@compmd/processor@0.7.1(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
++      '@compmd/host': 0.8.0
++      '@compmd/processor': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/registry': 0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
++      '@compmd/render': 0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
++      '@compmd/sandbox': 0.8.0(@compmd/processor@0.8.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+       semver: 7.8.5
+       vite: 8.3.5(@types/node@26.6.6)(yaml@2.9.1)
+       yaml: 2.9.1
+     optionalDependencies:
+       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
++      typescript: 6.0.3
+     transitivePeerDependencies:
+       - '@typescript-eslint/types'
+ 
+@@ -2338,6 +2353,11 @@ snapshots:
+       '@shikijs/vscode-textmate': 10.1.0
+       oniguruma-to-es: 4.3.6
+ 
++  '@shikijs/engine-oniguruma@4.5.0':
++    dependencies:
++      '@shikijs/types': 4.5.0
++      '@shikijs/vscode-textmate': 10.1.0
++
+   '@shikijs/langs@4.5.0':
+     dependencies:
+       '@shikijs/types': 4.5.0
+diff --git a/dashboard/pnpm-workspace.yaml b/dashboard/pnpm-workspace.yaml
+index 807f6300..6300f43d 100644
+--- a/dashboard/pnpm-workspace.yaml
++++ b/dashboard/pnpm-workspace.yaml
+@@ -1,10 +1,11 @@
+ minimumReleaseAgeExclude:
+-  - '@compmd/processor@0.7.1'
+-  - '@compmd/registry@0.7.1'
+-  - '@compmd/render@0.7.1'
+-  - '@compmd/sandbox@0.7.1'
+-  - '@compmd/vite@0.7.1'
++  - '@compmd/processor@0.7.1 || 0.8.0'
++  - '@compmd/registry@0.7.1 || 0.8.0'
++  - '@compmd/render@0.7.1 || 0.8.0'
++  - '@compmd/sandbox@0.7.1 || 0.8.0'
++  - '@compmd/vite@0.7.1 || 0.8.0'
+   - '@comp-markdown/mermaid@0.1.2'
++  - '@compmd/host@0.8.0'
+ # pnpm's settings for dashboard/ (a single package, not a workspace of several).
+ overrides:
+   # GHSA-g3hv-75wg-m249: ESLint and typescript-eslint still ask for 10.x (a development dependency; nothing ships)
+diff --git a/dashboard/src/lib/compmd-runtime.ts b/dashboard/src/lib/compmd-runtime.ts
+index 53b0d1bb..12c23295 100644
+--- a/dashboard/src/lib/compmd-runtime.ts
++++ b/dashboard/src/lib/compmd-runtime.ts
+@@ -1,8 +1,8 @@
+ // CompMD for the whole document (ATM-646): what every rendered text shares, made once, not once per text. A review
+ // page renders tens to hundreds of texts (each diff run, each comment); each paid for a sandbox of its own and an
+-// observer of its own on <html>. The CompMD pages themselves are still one per text: each one opened or closed sets
+-// the document's adopted style sheets and reads a computed style, a restyle of the whole page, until CompMD shares
+-// those per document too (its task); when it does, its shared style sheet and scheme are passed here, in one place.
++// observer of its own on <html>. The CompMD pages themselves are one per text; since CompMD 0.8.0 (ATM-648) they share
++// one style sheet per document and read the colour scheme only for a frame or a component, so opening or closing one
++// restyles nothing (the jump test in reviews.spec.ts holds it at none).
+ import { sandboxOptions, type CompmdModule } from './compmd';
+ 
+ type Sandbox = ReturnType<CompmdModule['createSandbox']>;
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 2eb557d9..5cfa4e0e 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -655,8 +655,11 @@ test.describe('the dashboard in the atm app', () => {
+     await page.evaluate(() => ((window as unknown as { beforeReload: boolean }).beforeReload = true));
+     await tasksServer.chooseMenu({ kind: 'reload' });
+     await expect.poll(() => tasksServer.windowCalls).toContain('reload_window');
++    // A look that lands while the page is going away (its context destroyed) is no answer yet: look again
+     await expect
+-      .poll(() => page.evaluate(() => (window as unknown as { beforeReload?: boolean }).beforeReload ?? false))
++      .poll(() =>
++        page.evaluate(() => (window as unknown as { beforeReload?: boolean }).beforeReload ?? false).catch(() => true),
++      )
+       .toBe(false);
+     // Loaded again: the same tabs, the same one shown, its page drawn
+     await page.waitForLoadState('load');
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 9a954f78..857b4c50 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1903,10 +1903,10 @@ test.describe('performance', { tag: '@timed' }, () => {
+   });
+ 
+   // ATM-646: a review shaped as CompMD's CR-7 (15 files, one long: ~100,000 px of cards not made yet; CR-7's was 500,000,
+-  // which only costs this test time). A jump to its last file must not restyle the whole page over and over: each
+-  // CompMD page opened or closed sets the document's adopted style sheets and reads a computed style, a full restyle
+-  // each (~1 s in the app's WebKit). Until CompMD shares those per document, the pages opened are what is in view, and
+-  // the page itself forces none
++  // which only costs this test time). A jump to its last file must not restyle the whole page over and over: with
++  // CompMD 0.7.1 each CompMD page opened or closed set the document's adopted style sheets and read a computed style,
++  // a full restyle each (~1 s in the app's WebKit). CompMD 0.8.0 shares one style sheet per document and reads the
++  // colour scheme only for a frame or a component (ATM-648): the jump restyles nothing, and the page itself forces none
+   test('a jump to the last file of a long review restyles the page only for the CompMD pages it shows (measured)', async ({
+     page,
+     tasksServer,
+@@ -1993,11 +1993,11 @@ test.describe('performance', { tag: '@timed' }, () => {
+     // The cards in view and near it, a page a side of each run: no more (the cards passed over aren't made)
+     expect(jump.pages).toBeGreaterThan(0);
+     expect(jump.pages).toBeLessThanOrEqual(8);
+-    // Each page set the sheets once opening it, once closing it (a card given back once the page settled)
+-    expect(jump.adopted).toBeLessThanOrEqual(2 * jump.pages);
+-    // CompMD 0.7.1's own reads, four a page it opens and draws (its scheme, ATM-646's CompMD task); the review's
+-    // own code forces none (it forced 68 more before: DiffCode measured every run on every change in it, ATM-644)
+-    expect(jump.computed).toBeLessThanOrEqual(4 * jump.pages);
++    // No page sets the document's sheets as it opens or closes (CompMD 0.8.0's one sheet a document; with 0.7.1, 10 for
++    // 7 pages), and nothing reads a computed style (0.7.1 read 28: its scheme, four a page; the review's own code forced
++    // 68 more before ATM-644)
++    expect(jump.adopted).toBe(0);
++    expect(jump.computed).toBe(0);
+   });
+ 
+   // ATM-587: a review shaped as CompMD's CR-1 (94 files, ~3,000 lines added: a few long files, most short, some long
+diff --git a/docs/agent/compmd-llms.txt b/docs/agent/compmd-llms.txt
+index 66df8523..ab90fb11 100644
+--- a/docs/agent/compmd-llms.txt
++++ b/docs/agent/compmd-llms.txt
+@@ -1,4 +1,4 @@
+-<!-- CompMD's llms.txt, version 0.5.0 (github.com/comp-markdown/compmd, tag v0.5.0, commit 1faa072494f9; unchanged since v0.4.0), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
++<!-- CompMD's llms.txt, version 0.8.0 (github.com/comp-markdown/compmd, spec/llms.txt at tag v0.8.0, commit 89b8fb54938c; unchanged since v0.4.0 but for one link), as atm ships it: the CompMD version the dashboard renders with. In atm, task text gets no frontmatter of its own (the dashboard adds it, with the task as md.data.task), no imports, data files, URLs or components defined in the text; skills/atm-create-tasks/SKILL.md says what renders. Update this copy with CompMD; agents read it with `atm docs compmd`. -->
+ # CompMD
+ 
+ > CompMD (Component Markdown) is CommonMark + GFM with components, containers, named slots, typed params, data, inputs and CSS-like layout. Files end in `.comp.md`. Every construct is one line, so a document stays readable in any plain Markdown renderer. This file is everything you need to write valid CompMD; the normative spec is compmd-spec-v1.md.
+@@ -509,4 +509,4 @@ F codes are errors, W codes warnings. Each line: what it means → how to fix it
+ 
+ - [The specification](compmd-spec-v1.md): normative; this file summarizes it.
+ - [A complete example](examples/complete/release.comp.md) using every construct, with its data files.
+-- [The conformance set](conformance/README.md): test cases for implementations.
++- [The conformance set](../conformance/README.md): test cases for implementations.
+diff --git a/docs/review-performance.md b/docs/review-performance.md
+index 17b0bac8..509cd780 100644
+--- a/docs/review-performance.md
++++ b/docs/review-performance.md
+@@ -173,3 +173,46 @@ CompMD's to fix, not atm's (it draws the code; atm shows it): proposed as a Comp
+ 
+ **Next:** that CompMD task; atm's own cost per side (about 75 ms, five git processes and the project opened per
+ request; 6 and 7 above, as backlog tasks).
++
++## CompMD 0.8.0 (ATM-648)
++
++CompMD 0.8.0 has both fixes the review's pages waited for:
++- in WebKit, Oniguruma's WebAssembly highlights, where Shiki's JavaScript engine compiled each regex the first time it
++  ran: the 1.5 s frame above;
++- the CompMD pages of one document share one style sheet, and read the colour scheme only for a frame or a component
++  (ATM-646's proposal): opening or closing a page no longer restyles the whole document.
++
++Measured the same way on 0.7.1 and on 0.8.0, on this Mac, atm 0.41.0 otherwise unchanged:
++- the timed e2e tests, one worker, three runs each, medians;
++- the real review (CompMD's CR-1, 94 files), one run per engine.
++
++**The real review** (`real-review.spec.ts`; 0.7.1 → 0.8.0):
++
++| | Chromium | WebKit |
++|---|---|---|
++| Opening: blocked (its slowest frame) | 167 → 83 ms (167 → 83) | **1,712 → 92 ms (1,509 → 92)** |
++| Opening: busy until | 781 → 454 ms | 1,953 → 286 ms |
++| Opening: the first lines | 517 → 271 ms | 135 → 127 ms |
++| Scrolled to the end: the last file drawn | 2,264 → 1,978 ms | 2,188 → 2,013 ms |
++| Scrolling: blocked | 183 → 133 ms | 144 → 0 ms |
++| A jump to the top: blocked | 0 → 0 ms | **1,594 → 78 ms** |
++| A jump to the end: blocked (long frames) | 0 → 0 ms | 715 → 59 ms (10 → 1) |
++| The sides: their time at atm in all (the slowest) | 26.7 → 13.4 s (492 → 240 ms) | 2.2 → 1.3 s (239 → 109 ms) |
++
++**The timed e2e tests** (`reviews.spec.ts`, `performance.spec.ts`; Chromium, medians of three):
++
++| | 0.7.1 | 0.8.0 |
++|---|---|---|
++| A jump to a long review's last file: sheets set / styles read | 10 / 28 | **0 / 0** |
++| The long review: the first file drawn / settled | 54 / 101 ms | 38 / 68 ms |
++| The long review: the slowest frame after it settled | 43 ms | 23 ms |
++| The long review: DOM nodes alive after down and back | 21,347 | 22,051 |
++| A file far down a large review: total | 62 ms | 55 ms |
++| The + following the pointer: median / slowest frame | 33 / 34 ms | 33 / 34 ms |
++
++The jump test now holds the restyles at none (`reviews.spec.ts`). The tab switches and reloads of
++`performance.spec.ts` render no CompMD, and are within their run-to-run spread: a first 0.8.0 run measured them as
++0.7.1 had (the agents tab 98 ms, the graph 110, the list 124), a later quieter one lower (67, 79, 78).
++
++**Sizes:** CompMD's WebAssembly 2,812,614 → 2,960,440 bytes (+5%); `compmd.js` 82,744 → 98,690 bytes; the frames'
++runtime 71,941 → 81,004 bytes; the dashboard's page unchanged (1,058,092 bytes).
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 579741bc..46b92a33 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1245,6 +1245,16 @@ drafts, the watch's catch-up and lease, and task keys plain from creation (ADR-0
+   - That commit comes from the round's file, which anyone who can change the review wrote. atm passes git only a full SHA (40 or 64 hex digits), so the text can never be taken for an option or a revision expression; anything else is ignored, and the key resolves as every command resolves it. A test (`review_keys.rs`) writes `HEAD`, `main` and `--output=x` there.
+   - It reads with `git ls-tree` and `git cat-file blob`, in the working copy the review is in, and only parses the result as JSON to find a task's UUID. It writes nothing and runs nothing else.
+ 
++**Release 0.42.0 (the sprint Task&review state machine; in progress, completed by the release task).** So far:
++
++- **CompMD 0.8.0 (ATM-648).** The dashboard, `atm serve` and the app render with CompMD 0.8.0: `@compmd/processor`, `render`, `sandbox` and `vite` 0.8.0, and the crates `tauri-plugin-compmd` and `compmd-host` `=0.8.0` (`compmd-pack` 0.8.0 with them). Where it differs from 0.7:
++  - **One new package, `@compmd/host` 0.8.0** (CompMD's own, MIT, by its author), which `@compmd/vite` uses to serve its bundle in development with the same contract as `compmd-host` (its WebAssembly). It serves nothing in the page atm ships.
++  - **The frames speak protocol version 5**; the page and the frame documents come from the same build, as before.
++  - **Code is highlighted with Oniguruma's WebAssembly outside Chromium** (WebKit, so the app): the host page's policy must allow `'wasm-unsafe-eval'`, which every policy atm sets already does (the dev server's, `atm serve`'s and the app's), for CompMD's processor. No policy changes.
++  - **The frames' policies, the hosting contract (`GET` only, the bundle's frames and packs, `sandbox allow-scripts`, CORS `*`, `nosniff`) and I26 are unchanged.**
++  - `minimumReleaseAgeExclude` names the `@compmd/*` packages at 0.8.0 too, and `@compmd/host@0.8.0`: released the same day, by CompMD's author, as for 0.7.
++  - **CompMD's guide for agents** (`docs/agent/compmd-llms.txt`, `atm docs compmd`) is its `spec/llms.txt` at `v0.8.0`, taken from the public repository; it differs from the copy before only by one link, so what agents read about rendering is unchanged.
++
+ ## 4. Keeping it current
+ 
+ This document changes **in the same PR** as a change that:

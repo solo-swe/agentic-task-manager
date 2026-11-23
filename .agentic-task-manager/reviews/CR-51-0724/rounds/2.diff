@@ -1,0 +1,1472 @@
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 2447cbbd..b0b9cf19 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -58,7 +58,7 @@ with the task that adds it.
+ | I2  | **Skills pre-approve no command runner**: only named `atm` commands (`atm task state`, `atm db migrate`, …), never `atm *` or a whole group (atm itself runs no command since T-437, I24)                                                                                                                                                                                                                                                                                                                                                                                                | `skills.test.ts`                                                                                                                                                               |
+ | I3  | **Agent-written text is single-quoted** in skill templates, never double-quoted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `skills.test.ts`                                                                                                                                                               |
+ | I4  | **CI logs and PR comments are evidence**, never instructions, for the push skill                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `skills.test.ts` (the rule is present)                                                                                                                                         |
+-| I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve                                                                                                                                                                                                                                                                                                                                         | request-changes                                                                                                                                                                | reject`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). atm guards the exits from review on the decision, for agents and people alike (T-438): done needs approved, back to to do or skipped needs rejected, taken back needs a decision for rework. A code review is decided by its reviewers, or with none named by anyone but its author (whose change it is: an agent, even in a live review a person opened, where the person is its reviewer, ATM-572); a person may **override** that rule, saying why (`atm review submit --override-rules '<why>'`, or the page's decision with `override_rules`), which the review records as a resolved chain naming who and why; it lifts who decides only (an approval still needs every comment resolved), and no skill pre-approves `atm review submit`, so an agent that runs it asks the user each time | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review` or `review submit`, the `with: user` rule); `review.json`, `skip.json`, `review-modes.json`, `review-states.json`, `with-user.json` (atm's side); atm-review's `a_person_may_override_who_decides_saying_why_and_it_is_recorded` and `a_review_without_an_author_yet_takes_the_first_rounds_maker_never_a_reviewer`; `reviews.test.mjs` "a live review a person opens…", "a person may override who decides…" |
++| I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve                                                                                                                                                                                                                                                                                                                                         | request-changes                                                                                                                                                                | reject`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). atm guards the exits from review on the decision, for agents and people alike (T-438): done needs approved, back to to do or skipped needs rejected, taken back needs a decision for rework. A code review is decided by its reviewers, or with none named by anyone but its author (whose change it is: an agent, even in a live review a person opened, where the person is its reviewer, ATM-572); a person may **override** that rule, saying why (`atm review submit --override-rules '<why>'`, or the page's decision with `override_rules`), which the review records as a resolved chain naming who and why; it lifts who decides only (an approval still needs every comment resolved), and no skill pre-approves `atm review submit`, so an agent that runs it asks the user each time | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review` or `review submit`, the `with: user` rule); `review.json`, `skip.json`, `review-modes.json`, `review-states.json`, `with-user.json` (atm's side); atm-review's `a_person_may_override_who_decides_saying_why_and_it_is_recorded` and `a_review_without_an_author_yet_takes_the_first_rounds_maker_never_a_reviewer`; `reviews/lifecycle.test.mjs` "a live review a person opens…", "a person may override who decides…" |
+ | I24 | **atm runs no command it is given** (T-437): no command takes a program to run (`atm loop run` is gone); atm starts only `git`, its own binary (by `current_exe`) for `atm claim hold`'s watcher (`atm _claim-watch`, which only renews one claim while the calling shell lives; the shell's start time from `sysinfo`, not `ps`) and the dashboard server (`atm _serve <home> <port>`, T-449), and the browser opener (`open` or `xdg-open`, with the URL atm made)                                                                                                                     | `security-invariants.test.ts` (every process atm starts, T-446, T-449); `cli.test.mjs` (no `loop run`); `claims.test.mjs` (`claim hold`)                                       |
+ | I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads and `atm sprint` (its commands, `move` included): no `atm task add`, `edit` or `state`, so a skip when closing asks for permission | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox                                                                                                 |
+ 
+diff --git a/tests/scripts/reviews/fixtures.mjs b/tests/scripts/reviews/fixtures.mjs
+new file mode 100644
+index 00000000..5c6de441
+--- /dev/null
++++ b/tests/scripts/reviews/fixtures.mjs
+@@ -0,0 +1,93 @@
++// What the code review tests share (they were one file, reviews.test.mjs, until ATM-642's round): the agent and
++// the person they act as, a project to review, atm run as either, the submodule fixture, a command in the background.
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import fs from 'node:fs';
++import path from 'node:path';
++import { ATM, baseEnv, git, makeProject, runAtm } from '../helpers.mjs';
++
++export const AGENT = { ATM_AGENT: 'claude:0f56a916' };
++export const HAKAN = { ATM_AGENT: 'Hakan Serce' };
++
++/** A project in git: T-1 and T-2 in progress, reviewed before they are done (`blocker`), `a.txt` committed. */
++export function project() {
++  return makeProject({
++    commit: true,
++    files: {
++      '.agentic-task-manager/tasks.json': {
++        meta: { project: 'Reviews', review: 'blocker' },
++        tasks: [
++          { id: 'T-1', name: 'One', type: 'feature', status: 'in_progress' },
++          { id: 'T-2', name: 'Two', type: 'feature', status: 'in_progress' },
++        ],
++      },
++      'a.txt': 'one\ntwo\nthree\n',
++    },
++  });
++}
++
++export function atm(args, root, env) {
++  const r = runAtm(args, root, env);
++  return { ...r, json: () => JSON.parse(r.stdout) };
++}
++
++export function ok(args, root, env) {
++  const r = atm(args, root, env);
++  assert.equal(r.code, 0, `atm ${args.join(' ')}: ${r.stderr}`);
++  return r;
++}
++
++export function task(root, id) {
++  return ok(['task', 'details', id, '--json'], root, HAKAN).json()[0];
++}
++
++export function commitFile(root, file, text, message) {
++  fs.writeFileSync(path.join(root, file), text);
++  git(['add', file], root);
++  git(['commit', '-q', '-m', message], root);
++}
++
++/** `project()` with the submodule `lib` (a repository of its own, `b.txt` committed), committed; and that repository. */
++export function projectWithSubmodule() {
++  const root = project();
++  const sub = makeProject({ commit: true, files: { 'b.txt': 'one\n' } });
++  git(['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'lib'], root);
++  git(['commit', '-q', '-m', 'add lib'], root);
++  return { root, sub };
++}
++
++/** The files of a review's round, as `atm review show --json` lists them, and the round's submodule. */
++export function roundOf(root, review, number) {
++  const shown = ok(['review', 'show', review, '--json'], root, HAKAN).json();
++  const round = shown.rounds.find((r) => r.number === number);
++  return {
++    submodule: round.submodule ?? null,
++    files: round.files.map((f) => f.path),
++  };
++}
++
++/** Start atm in the background; its stdout's lines as they come, its end, and a way to stop it. */
++export function background(args, root, env) {
++  const child = spawn(ATM, args, { cwd: root, env: { ...baseEnv(), ...env } });
++  const lines = [];
++  let stdout = '';
++  let stderr = '';
++  child.stdout.on('data', (d) => {
++    stdout += d;
++    const parts = stdout.split('\n');
++    stdout = parts.pop();
++    lines.push(...parts.filter(Boolean));
++  });
++  child.stderr.on('data', (d) => (stderr += d));
++  const ended = new Promise((resolve) => child.on('close', (code) => resolve(code)));
++  return { lines, ended, stderr: () => stderr, stop: () => child.kill() };
++}
++
++/** Until `check()` holds, or fail after `ms`. */
++export async function until(check, what, ms = 20_000) {
++  const end = Date.now() + ms;
++  while (!check()) {
++    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
++    await new Promise((resolve) => setTimeout(resolve, 50));
++  }
++}
+diff --git a/tests/scripts/reviews/keys.test.mjs b/tests/scripts/reviews/keys.test.mjs
+new file mode 100644
+index 00000000..fbeb914a
+--- /dev/null
++++ b/tests/scripts/reviews/keys.test.mjs
+@@ -0,0 +1,107 @@
++// Task keys in code reviews (ATM-594): a review names its task by its key.
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import { describe, test } from 'node:test';
++import { git, makeProject, removeDir } from '../helpers.mjs';
++import {
++  AGENT,
++  HAKAN,
++  atm,
++  background,
++  commitFile,
++  ok,
++  project,
++  projectWithSubmodule,
++  roundOf,
++  task,
++  until,
++} from './fixtures.mjs';
++
++describe('a provisional task key in reviews (ATM-594)', () => {
++  const PROVISIONAL = '0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8012';
++
++  /** A project in task keys' format, in git: ATM-12 provisional and in progress (`blocker`), `a.txt` committed. */
++  function keyed() {
++    return makeProject({
++      commit: true,
++      files: {
++        '.agentic-task-manager/tasks.json': {
++          meta: {
++            project: 'Keyed',
++            format: 2,
++            key: 'ATM',
++            next_number: 13,
++            review: 'blocker',
++          },
++          tasks: [
++            {
++              id: PROVISIONAL,
++              number: 12,
++              key_final: false,
++              name: 'Provisional',
++              type: 'feature',
++              status: 'in_progress',
++              started_by: AGENT.ATM_AGENT,
++            },
++          ],
++        },
++        'a.txt': 'one\n',
++      },
++    });
++  }
++
++  test('what atm prints names the task by its key; given back, with or without its ~, it works; the approval reaches it', () => {
++    const root = keyed();
++    try {
++      // Named as people read it, with the mark
++      commitFile(root, 'a.txt', 'one\ntwo\n', 'the change');
++      const created = ok(
++        ['review', 'create', '--title', 'Two', '--task', '~ATM-12', '--range', 'HEAD~1..HEAD', '--json'],
++        root,
++        AGENT,
++      ).json();
++      // For programs: the key, never with the mark
++      assert.deepEqual(created.tasks, ['ATM-12']);
++      assert.deepEqual(ok(['review', 'list', '--json'], root, HAKAN).json()[0].review.tasks, ['ATM-12']);
++      for (const named of ['~ATM-12', 'ATM-12', 'atm-12', PROVISIONAL])
++        assert.equal(ok(['review', 'list', '--task', named, '--json'], root, HAKAN).json().length, 1, named);
++      ok(['review', 'submit', 'CR-1', '--approve'], root, HAKAN);
++      const approved = ok(['task', 'details', '~ATM-12', '--json'], root, HAKAN).json()[0];
++      assert.equal(approved.review_state, 'approved');
++      // The agent takes the key as atm printed it, either way
++      ok(['task', 'state', '~ATM-12', 'done', '--note', 'Approved in CR-1.'], root, AGENT);
++      assert.equal(ok(['task', 'details', 'ATM-12', '--json'], root, HAKAN).json()[0].status, 'done');
++    } finally {
++      removeDir(root);
++    }
++  });
++
++  test('a review an earlier atm wrote with ~KEY reads as the key; doctor names a decision its task never got', () => {
++    const root = keyed();
++    try {
++      commitFile(root, 'a.txt', 'one\ntwo\n', 'the change');
++      ok(['review', 'create', '--title', 'Two', '--task', 'ATM-12', '--range', 'HEAD~1..HEAD'], root, AGENT);
++      // As an earlier atm left it: the task with its mark, the review approved, the task still waiting
++      const folder = fs
++        .readdirSync(path.join(root, '.agentic-task-manager/reviews'))
++        .find((f) => f.startsWith('CR-1-'));
++      const file = path.join(root, '.agentic-task-manager/reviews', folder, 'review.md');
++      fs.writeFileSync(
++        file,
++        fs
++          .readFileSync(file, 'utf8')
++          .replace('tasks = ["ATM-12"]', 'tasks = ["~ATM-12"]')
++          .replace('status = "open"', 'status = "approved"'),
++      );
++      assert.deepEqual(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.tasks, ['ATM-12']);
++      const doctor = atm(['doctor'], root, HAKAN);
++      assert.match(
++        doctor.stdout + doctor.stderr,
++        /ATM-12: CR-1 is approved but the task still waits for its review: `atm task review approve ATM-12` records the decision/,
++      );
++    } finally {
++      removeDir(root);
++    }
++  });
++});
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews/lifecycle.test.mjs
+similarity index 52%
+rename from tests/scripts/reviews.test.mjs
+rename to tests/scripts/reviews/lifecycle.test.mjs
+index fd16415b..e6e65924 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews/lifecycle.test.mjs
+@@ -1,52 +1,24 @@
+ // `atm review` (docs/code-review-design.md §3.9, ATM-566): code reviews recorded in the project, through the CLI as
+-// agents and people run it, with the tasks they review kept in step (ATM-565).
++// agents and people run it, with the tasks they review kept in step (ATM-565): a review from its opening to its
++// decision, its rounds, comments, drafts and pokes.
+ import assert from 'node:assert/strict';
+-import { spawn } from 'node:child_process';
+ import fs from 'node:fs';
+ import path from 'node:path';
+ import { describe, test } from 'node:test';
+-import { ATM, baseEnv, git, makeProject, removeDir, runAtm } from './helpers.mjs';
+-
+-const AGENT = { ATM_AGENT: 'claude:0f56a916' };
+-const HAKAN = { ATM_AGENT: 'Hakan Serce' };
+-
+-/** A project in git: T-1 and T-2 in progress, reviewed before they are done (`blocker`), `a.txt` committed. */
+-function project() {
+-  return makeProject({
+-    commit: true,
+-    files: {
+-      '.agentic-task-manager/tasks.json': {
+-        meta: { project: 'Reviews', review: 'blocker' },
+-        tasks: [
+-          { id: 'T-1', name: 'One', type: 'feature', status: 'in_progress' },
+-          { id: 'T-2', name: 'Two', type: 'feature', status: 'in_progress' },
+-        ],
+-      },
+-      'a.txt': 'one\ntwo\nthree\n',
+-    },
+-  });
+-}
+-
+-function atm(args, root, env) {
+-  const r = runAtm(args, root, env);
+-  return { ...r, json: () => JSON.parse(r.stdout) };
+-}
+-
+-function ok(args, root, env) {
+-  const r = atm(args, root, env);
+-  assert.equal(r.code, 0, `atm ${args.join(' ')}: ${r.stderr}`);
+-  return r;
+-}
+-
+-function task(root, id) {
+-  return ok(['task', 'details', id, '--json'], root, HAKAN).json()[0];
+-}
+-
+-function commitFile(root, file, text, message) {
+-  fs.writeFileSync(path.join(root, file), text);
+-  git(['add', file], root);
+-  git(['commit', '-q', '-m', message], root);
+-}
++import { git, makeProject, removeDir } from '../helpers.mjs';
++import {
++  AGENT,
++  HAKAN,
++  atm,
++  background,
++  commitFile,
++  ok,
++  project,
++  projectWithSubmodule,
++  roundOf,
++  task,
++  until,
++} from './fixtures.mjs';
+ 
+ describe('atm review', () => {
+   test('a task through a review: commented, sent back, a round, approved once its comments are resolved', () => {
+@@ -299,110 +271,6 @@ describe('atm review', () => {
+     }
+   });
+ 
+-  test('wrong uses are refused naming why', () => {
+-    const root = project();
+-    try {
+-      assert.match(atm(['review', 'create', '--title', 'x'], root, AGENT).stderr, /say what to review/);
+-      assert.match(atm(['review', 'show', 'CR-9'], root, AGENT).stderr, /no review CR-9/);
+-      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+-      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
+-      assert.match(atm(['review', 'comment', 'CR-1'], root, HAKAN).stderr, /--body or --body-file/);
+-      assert.match(
+-        atm(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '3-1', '--body', 'x'], root, HAKAN).stderr,
+-        /--lines takes/,
+-      );
+-      assert.match(atm(['review', 'list', '--status', 'nope'], root, HAKAN).stderr, /no status nope/);
+-    } finally {
+-      removeDir(root);
+-    }
+-  });
+-
+-  test('each wrong use has its exit code: 2 for a usage error, 1 for what the review or the files refuse', () => {
+-    const root = project();
+-    try {
+-      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+-      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
+-      // [args, exit code, what stderr says]
+-      const cases = [
+-        [['review', 'create', '--title', 'x'], 2, /say what to review/],
+-        [['review', 'create', '--title', 'x', '--range', 'HEAD'], 2, /--range takes BASE\.\.HEAD, not HEAD/],
+-        [['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'], 1, /can't read gone\.md/],
+-        [['review', 'create', '--title', 'x', '--range', 'HEAD~1..HEAD', '--uncommitted'], 2, /cannot be used with/],
+-        [['review', 'show', 'CR-9'], 1, /no review CR-9/],
+-        [['review', 'show', 'CR-1', '--against', '1'], 2, /--round/],
+-        [['review', 'comment', 'CR-1'], 2, /--body or --body-file/],
+-        [['review', 'comment', 'CR-1', '--body', '   '], 2, /the text is empty/],
+-        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 1, /can't read gone\.md/],
+-        [['review', 'comment', 'CR-1', '--body', 'x', '--body-file', 'a.txt'], 2, /cannot be used with/],
+-        [['review', 'comment', 'CR-1', '--lines', '2', '--body', 'x'], 2, /--file/],
+-        [
+-          ['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '0', '--body', 'x'],
+-          2,
+-          /--lines takes A-B or A, not 0/,
+-        ],
+-        [['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', 'two', '--body', 'x'], 2, /--lines takes/],
+-        [['review', 'comment', 'CR-9', '--body', 'x'], 1, /no review CR-9/],
+-        [['review', 'reply', 'CR-1', 'c9', '--body', 'x'], 1, /c9/],
+-        [['review', 'submit', 'CR-1'], 2, /submit with --approve, --request-changes or --comment/],
+-        [['review', 'submit', 'CR-1', '--comment'], 2, /needs its text, or drafts to send/],
+-        [['review', 'submit', 'CR-1', '--approve', '--request-changes'], 2, /cannot be used with/],
+-        [['review', 'wait', 'CR-1', '--timeout', '0'], 2, /--timeout takes 90s, 30m, 2h or seconds, not 0/],
+-        [['review', 'wait', 'CR-1', '--timeout', 'soon'], 2, /--timeout takes/],
+-        [['review', 'wait', 'CR-1', '--for', 'ever'], 2, /invalid value 'ever'/],
+-        [['review', 'watch', '--timeout=-5m'], 2, /--timeout takes/],
+-        [['review', 'close', 'CR-1'], 2, /--reason/],
+-        [['review', 'list', '--status', 'nope'], 2, /no status nope/],
+-      ];
+-      for (const [args, code, stderr] of cases) {
+-        const r = atm(args, root, HAKAN);
+-        assert.equal(r.code, code, `atm ${args.join(' ')}: ${r.stderr}`);
+-        assert.match(r.stderr, stderr, `atm ${args.join(' ')}`);
+-      }
+-      // None of them changed the review
+-      const review = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
+-      assert.deepEqual([review.header.status, review.chains.length], ['waiting', 0]);
+-    } finally {
+-      removeDir(root);
+-    }
+-  });
+-
+-  test('--dry-run says what each command would do and writes nothing', () => {
+-    const root = project();
+-    try {
+-      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+-      const reviews = path.join(root, '.agentic-task-manager/reviews');
+-      const create = ok(['review', 'create', '--title', 'Try', '--task', 'T-1', '--uncommitted', '-n'], root, AGENT);
+-      assert.equal(create.stdout, '[dry-run] would open a review “Try” of 1 file(s)\n');
+-      assert.equal(
+-        ok(['review', 'live', '-n'], root, AGENT).stdout,
+-        '[dry-run] would open a live review “Live review”\n',
+-      );
+-      assert.ok(!fs.existsSync(reviews), 'no review written');
+-      assert.equal(task(root, 'T-1').status, 'in_progress');
+-
+-      ok(['review', 'create', '--title', 'Real', '--task', 'T-1', '--uncommitted'], root, AGENT);
+-      ok(['review', 'comment', 'CR-1', '--body', 'Why?'], root, HAKAN);
+-      const before = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).stdout;
+-      const dry = [
+-        [['review', 'round', 'CR-1', '-n'], AGENT, '[dry-run] would add a round to CR-1\n'],
+-        [['review', 'tasks', 'CR-1', '--add', 'T-2', '-n'], AGENT, "[dry-run] would change CR-1's tasks\n"],
+-        [['review', 'comment', 'CR-1', '--body', 'More', '-n'], HAKAN, '[dry-run] would comment on CR-1\n'],
+-        [['review', 'reply', 'CR-1', 'c1', '--body', 'Because', '-n'], AGENT, '[dry-run] would reply to c1 in CR-1\n'],
+-        [['review', 'edit', 'CR-1', 'c1', '--body', 'Why not?', '-n'], HAKAN, '[dry-run] would edit c1 in CR-1\n'],
+-        [['review', 'resolve', 'CR-1', 'c1', '-n'], HAKAN, '[dry-run] would resolve c1 in CR-1\n'],
+-        [['review', 'resolve', 'CR-1', 'c1', '--reopen', '-n'], HAKAN, '[dry-run] would reopen c1 in CR-1\n'],
+-        [['review', 'submit', 'CR-1', '--request-changes', '-n'], HAKAN, '[dry-run] would submit on CR-1\n'],
+-        [['review', 'close', 'CR-1', '--reason', 'No', '-n'], AGENT, '[dry-run] would close CR-1\n'],
+-      ];
+-      for (const [args, env, stdout] of dry) assert.equal(ok(args, root, env).stdout, stdout, args.join(' '));
+-      assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).stdout, before);
+-      assert.equal(task(root, 'T-2').status, 'in_progress');
+-    } finally {
+-      removeDir(root);
+-    }
+-  });
+-
+-  // ATM-622 (Hakan): a later round naming only the file that changed showed every other file as deleted since round 1
+   test('a later files round keeps the files the last one reviewed, and since round 1 is only what changed', () => {
+     const root = project();
+     try {
+@@ -762,490 +630,3 @@ describe('atm review', () => {
+     }
+   });
+ });
+-
+-/** Start atm in the background; its stdout's lines as they come, its end, and a way to stop it. */
+-/** `project()` with the submodule `lib` (a repository of its own, `b.txt` committed), committed; and that repository. */
+-function projectWithSubmodule() {
+-  const root = project();
+-  const sub = makeProject({ commit: true, files: { 'b.txt': 'one\n' } });
+-  git(['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'lib'], root);
+-  git(['commit', '-q', '-m', 'add lib'], root);
+-  return { root, sub };
+-}
+-
+-/** The files of a review's round, as `atm review show --json` lists them, and the round's submodule. */
+-function roundOf(root, review, number) {
+-  const shown = ok(['review', 'show', review, '--json'], root, HAKAN).json();
+-  const round = shown.rounds.find((r) => r.number === number);
+-  return {
+-    submodule: round.submodule ?? null,
+-    files: round.files.map((f) => f.path),
+-  };
+-}
+-
+-describe('a provisional task key in reviews (ATM-594)', () => {
+-  const PROVISIONAL = '0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8012';
+-
+-  /** A project in task keys' format, in git: ATM-12 provisional and in progress (`blocker`), `a.txt` committed. */
+-  function keyed() {
+-    return makeProject({
+-      commit: true,
+-      files: {
+-        '.agentic-task-manager/tasks.json': {
+-          meta: {
+-            project: 'Keyed',
+-            format: 2,
+-            key: 'ATM',
+-            next_number: 13,
+-            review: 'blocker',
+-          },
+-          tasks: [
+-            {
+-              id: PROVISIONAL,
+-              number: 12,
+-              key_final: false,
+-              name: 'Provisional',
+-              type: 'feature',
+-              status: 'in_progress',
+-              started_by: AGENT.ATM_AGENT,
+-            },
+-          ],
+-        },
+-        'a.txt': 'one\n',
+-      },
+-    });
+-  }
+-
+-  test('what atm prints names the task by its key; given back, with or without its ~, it works; the approval reaches it', () => {
+-    const root = keyed();
+-    try {
+-      // Named as people read it, with the mark
+-      commitFile(root, 'a.txt', 'one\ntwo\n', 'the change');
+-      const created = ok(
+-        ['review', 'create', '--title', 'Two', '--task', '~ATM-12', '--range', 'HEAD~1..HEAD', '--json'],
+-        root,
+-        AGENT,
+-      ).json();
+-      // For programs: the key, never with the mark
+-      assert.deepEqual(created.tasks, ['ATM-12']);
+-      assert.deepEqual(ok(['review', 'list', '--json'], root, HAKAN).json()[0].review.tasks, ['ATM-12']);
+-      for (const named of ['~ATM-12', 'ATM-12', 'atm-12', PROVISIONAL])
+-        assert.equal(ok(['review', 'list', '--task', named, '--json'], root, HAKAN).json().length, 1, named);
+-      ok(['review', 'submit', 'CR-1', '--approve'], root, HAKAN);
+-      const approved = ok(['task', 'details', '~ATM-12', '--json'], root, HAKAN).json()[0];
+-      assert.equal(approved.review_state, 'approved');
+-      // The agent takes the key as atm printed it, either way
+-      ok(['task', 'state', '~ATM-12', 'done', '--note', 'Approved in CR-1.'], root, AGENT);
+-      assert.equal(ok(['task', 'details', 'ATM-12', '--json'], root, HAKAN).json()[0].status, 'done');
+-    } finally {
+-      removeDir(root);
+-    }
+-  });
+-
+-  test('a review an earlier atm wrote with ~KEY reads as the key; doctor names a decision its task never got', () => {
+-    const root = keyed();
+-    try {
+-      commitFile(root, 'a.txt', 'one\ntwo\n', 'the change');
+-      ok(['review', 'create', '--title', 'Two', '--task', 'ATM-12', '--range', 'HEAD~1..HEAD'], root, AGENT);
+-      // As an earlier atm left it: the task with its mark, the review approved, the task still waiting
+-      const folder = fs
+-        .readdirSync(path.join(root, '.agentic-task-manager/reviews'))
+-        .find((f) => f.startsWith('CR-1-'));
+-      const file = path.join(root, '.agentic-task-manager/reviews', folder, 'review.md');
+-      fs.writeFileSync(
+-        file,
+-        fs
+-          .readFileSync(file, 'utf8')
+-          .replace('tasks = ["ATM-12"]', 'tasks = ["~ATM-12"]')
+-          .replace('status = "open"', 'status = "approved"'),
+-      );
+-      assert.deepEqual(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.tasks, ['ATM-12']);
+-      const doctor = atm(['doctor'], root, HAKAN);
+-      assert.match(
+-        doctor.stdout + doctor.stderr,
+-        /ATM-12: CR-1 is approved but the task still waits for its review: `atm task review approve ATM-12` records the decision/,
+-      );
+-    } finally {
+-      removeDir(root);
+-    }
+-  });
+-});
+-
+-describe('reviews in a project with submodules (ATM-583)', () => {
+-  test('a range that moves a submodule: the move is its entry, beside the files', () => {
+-    const { root, sub } = projectWithSubmodule();
+-    try {
+-      const lib = path.join(root, 'lib');
+-      commitFile(lib, 'b.txt', 'one\ntwo\n', 'sub change');
+-      git(['add', 'lib'], root);
+-      commitFile(root, 'a.txt', 'one\nTWO\nthree\n', 'move lib');
+-      ok(['review', 'create', '--title', 'Move lib', '--task', 'T-1', '--range', 'HEAD~1..HEAD'], root, AGENT);
+-      assert.deepEqual(roundOf(root, 'CR-1', 1), {
+-        submodule: null,
+-        files: ['a.txt', 'lib'],
+-      });
+-      assert.match(ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout, /\+Subproject commit [0-9a-f]+/);
+-      // A comment on the move as a whole
+-      ok(['review', 'comment', 'CR-1', '--file', 'lib', '--body', 'Why this version?'], root, HAKAN);
+-      assert.match(ok(['review', 'comments', 'CR-1'], root, HAKAN).stdout, /^## lib · round 1/m);
+-    } finally {
+-      removeDir(root);
+-      removeDir(sub);
+-    }
+-  });
+-
+-  test('commits made inside a submodule: run there, the review is the project’s, its files under the submodule', () => {
+-    const { root, sub } = projectWithSubmodule();
+-    try {
+-      const lib = path.join(root, 'lib');
+-      commitFile(lib, 'b.txt', 'one\ntwo\n', 'sub change');
+-      // From the submodule's folder: the project's task and review, the submodule's commits
+-      ok(['review', 'create', '--title', 'In lib', '--task', 'T-1', '--range', 'HEAD~1..HEAD'], lib, AGENT);
+-      assert.equal(task(root, 'T-1').status, 'in_review');
+-      assert.ok(fs.existsSync(path.join(root, '.agentic-task-manager/reviews')), 'kept in the project');
+-      assert.ok(!fs.existsSync(path.join(lib, '.agentic-task-manager')), 'nothing written in the submodule');
+-      assert.deepEqual(roundOf(root, 'CR-1', 1), {
+-        submodule: 'lib',
+-        files: ['lib/b.txt'],
+-      });
+-      const diff = ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout;
+-      assert.match(diff, /diff --git a\/lib\/b\.txt b\/lib\/b\.txt[\s\S]*\+two/);
+-
+-      // A comment on its lines, a fix in the submodule, the next round: the comment follows
+-      ok(
+-        ['review', 'comment', 'CR-1', '--file', 'lib/b.txt', '--lines', '2', '--quote', 'two', '--body', 'Say 2.'],
+-        root,
+-        HAKAN,
+-      );
+-      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
+-      ok(['task', 'state', 'T-1', 'in_progress'], root, AGENT);
+-      commitFile(lib, 'b.txt', 'zero\none\ntwo\n', 'a line above');
+-      ok(['review', 'round', 'CR-1', '--range', 'HEAD~2..HEAD'], lib, AGENT);
+-      assert.deepEqual(roundOf(root, 'CR-1', 2), {
+-        submodule: 'lib',
+-        files: ['lib/b.txt'],
+-      });
+-      const between = ok(['review', 'show', 'CR-1', '--round', '2', '--against', '1'], root, HAKAN).stdout;
+-      assert.match(between, /\+zero/);
+-      assert.doesNotMatch(between, /\+two/);
+-
+-      // A round of the project's own after one of the submodule's: shown, but the two don't compare
+-      commitFile(root, 'a.txt', 'one\nTWO\nthree\n', 'in the project');
+-      ok(['review', 'round', 'CR-1', '--range', 'HEAD~1..HEAD'], root, AGENT);
+-      const refused = atm(['review', 'show', 'CR-1', '--round', '3', '--against', '2'], root, HAKAN);
+-      assert.equal(refused.code, 2, refused.stderr);
+-      assert.match(refused.stderr, /round 2 is of the submodule lib and round 3 of the project/);
+-    } finally {
+-      removeDir(root);
+-      removeDir(sub);
+-    }
+-  });
+-
+-  test('uncommitted changes in a submodule, and its files reviewed whole', () => {
+-    const { root, sub } = projectWithSubmodule();
+-    try {
+-      const lib = path.join(root, 'lib');
+-      fs.writeFileSync(path.join(lib, 'b.txt'), 'one\nnot committed\n');
+-      ok(['review', 'create', '--title', 'Working', '--task', 'T-1', '--uncommitted'], lib, AGENT);
+-      assert.deepEqual(roundOf(root, 'CR-1', 1), {
+-        submodule: 'lib',
+-        files: ['lib/b.txt'],
+-      });
+-      assert.match(ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout, /\+not committed/);
+-      // From the project's folder, the project's own changes: the dirty submodule is one entry
+-      fs.writeFileSync(path.join(root, 'a.txt'), 'one\nchanged\n');
+-      ok(['review', 'create', '--title', 'Project', '--task', 'T-2', '--uncommitted'], root, AGENT);
+-      assert.equal(roundOf(root, 'CR-2', 1).submodule, null);
+-      // Files reviewed whole: a submodule's from its repository; with the project's, refused
+-      ok(['review', 'create', '--title', 'A file', '--file', 'lib/b.txt', '--draft'], root, AGENT);
+-      assert.deepEqual(roundOf(root, 'CR-3', 1), {
+-        submodule: 'lib',
+-        files: ['lib/b.txt'],
+-      });
+-      const mixed = atm(
+-        ['review', 'create', '--title', 'Both', '--file', 'lib/b.txt', '--file', 'a.txt', '--draft'],
+-        root,
+-        AGENT,
+-      );
+-      assert.equal(mixed.code, 2, mixed.stderr);
+-      assert.match(mixed.stderr, /in different repositories/);
+-    } finally {
+-      removeDir(root);
+-      removeDir(sub);
+-    }
+-  });
+-
+-  test('a submodule with a task folder of its own is a project of its own', () => {
+-    const { root, sub } = projectWithSubmodule();
+-    try {
+-      const lib = path.join(root, 'lib');
+-      fs.mkdirSync(path.join(lib, '.agentic-task-manager'));
+-      fs.writeFileSync(
+-        path.join(lib, '.agentic-task-manager/tasks.json'),
+-        JSON.stringify({
+-          meta: { project: 'Lib' },
+-          tasks: [
+-            {
+-              id: 'L-1',
+-              name: 'Its own',
+-              type: 'feature',
+-              status: 'in_progress',
+-            },
+-          ],
+-        }),
+-      );
+-      const listed = ok(['task', 'list', '--json'], lib, HAKAN).json();
+-      assert.deepEqual(
+-        listed.map((t) => t.id),
+-        ['L-1'],
+-      );
+-    } finally {
+-      removeDir(root);
+-      removeDir(sub);
+-    }
+-  });
+-});
+-
+-function background(args, root, env) {
+-  const child = spawn(ATM, args, { cwd: root, env: { ...baseEnv(), ...env } });
+-  const lines = [];
+-  let stdout = '';
+-  let stderr = '';
+-  child.stdout.on('data', (d) => {
+-    stdout += d;
+-    const parts = stdout.split('\n');
+-    stdout = parts.pop();
+-    lines.push(...parts.filter(Boolean));
+-  });
+-  child.stderr.on('data', (d) => (stderr += d));
+-  const ended = new Promise((resolve) => child.on('close', (code) => resolve(code)));
+-  return { lines, ended, stderr: () => stderr, stop: () => child.kill() };
+-}
+-
+-/** Until `check()` holds, or fail after `ms`. */
+-async function until(check, what, ms = 20_000) {
+-  const end = Date.now() + ms;
+-  while (!check()) {
+-    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+-    await new Promise((resolve) => setTimeout(resolve, 50));
+-  }
+-}
+-
+-describe('agents listening (ATM-567)', () => {
+-  test('wait ends when the reviewer decides, with the comments added meanwhile; at the time up, exit code 3', async () => {
+-    const root = project();
+-    try {
+-      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+-      ok(['review', 'create', '--title', 'Wait for it', '--task', 'T-1', '--uncommitted'], root, AGENT);
+-      const timedOut = background(['review', 'wait', 'CR-1', '--timeout', '1s', '--json'], root, AGENT);
+-      assert.equal(await timedOut.ended, 3);
+-
+-      const waiting = background(['review', 'wait', 'CR-1', '--for', 'decision', '--json'], root, AGENT);
+-      await new Promise((resolve) => setTimeout(resolve, 500));
+-      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why changed?'], root, HAKAN);
+-      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
+-      assert.equal(await waiting.ended, 0, waiting.stderr());
+-      const waited = JSON.parse(waiting.lines.join('\n'));
+-      assert.equal(waited.review.status, 'changes_requested');
+-      assert.deepEqual(
+-        waited.comments.map((c) => [c.comment, c.author, c.body]),
+-        [['c1', 'Hakan Serce', 'Why changed?']],
+-      );
+-    } finally {
+-      removeDir(root);
+-    }
+-  });
+-
+-  test('the agent’s one watch hears the comments about its work only, with their task or none', async () => {
+-    // T-1 is claude:A's (a.txt), T-2 claude:B's (b.txt); one review of both
+-    const root = makeProject({
+-      commit: true,
+-      files: {
+-        '.agentic-task-manager/tasks.json': {
+-          meta: { project: 'Watch' },
+-          tasks: [
+-            {
+-              id: 'T-1',
+-              name: 'One',
+-              type: 'feature',
+-              status: 'in_progress',
+-              started_by: 'claude:A',
+-              files: ['a.txt'],
+-            },
+-            {
+-              id: 'T-2',
+-              name: 'Two',
+-              type: 'feature',
+-              status: 'in_progress',
+-              started_by: 'claude:B',
+-              files: ['b.txt'],
+-            },
+-          ],
+-        },
+-        'a.txt': 'a\n',
+-        'b.txt': 'b\n',
+-      },
+-    });
+-    const A = { ATM_AGENT: 'claude:A' };
+-    const B = { ATM_AGENT: 'claude:B' };
+-    let watching;
+-    try {
+-      fs.writeFileSync(path.join(root, 'a.txt'), 'a, changed\n');
+-      fs.writeFileSync(path.join(root, 'b.txt'), 'b, changed\n');
+-      ok(['review', 'create', '--title', 'Both', '--task', 'T-1', '--task', 'T-2', '--uncommitted'], root, A);
+-
+-      watching = background(['review', 'watch', '--json', '--timeout', '60s'], root, A);
+-      await until(() => /Watching the reviews for claude:A/.test(watching.stderr()), 'the watch to start');
+-
+-      // On B's file: not A's; on A's: T-1; naming T-2 at the whole review: not A's; A's own and B's: never
+-      ok(['review', 'comment', 'CR-1', '--file', 'b.txt', '--lines', '1', '--body', 'For B.'], root, HAKAN);
+-      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'For A.'], root, HAKAN);
+-      ok(['review', 'comment', 'CR-1', '--body', 'T-2: rename the flag.'], root, HAKAN);
+-      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'A notes.'], root, A);
+-      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'B on A.'], root, B);
+-      // A live review on the working copy, a file no task of A's touched: no task
+-      fs.writeFileSync(path.join(root, 'c.txt'), 'new\n');
+-      ok(['review', 'live'], root, B);
+-      ok(['review', 'comment', 'CR-2', '--file', 'c.txt', '--lines', '1', '--body', 'Live, no task.'], root, HAKAN);
+-
+-      await until(() => watching.lines.length >= 2, 'two comments heard');
+-      // A decision on a review of A's work is heard too, once (ATM-600)
+-      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
+-      await until(() => watching.lines.length >= 3, 'the decision heard');
+-      await new Promise((resolve) => setTimeout(resolve, 1500)); // nothing else comes
+-      // (in the order written within what is heard at once; a slow machine may hear them in two batches)
+-      const heard = watching.lines
+-        .map((l) => JSON.parse(l))
+-        .map((h) => [h.review, h.task, h.body ?? h.decision])
+-        .sort();
+-      assert.deepEqual(heard, [
+-        ['CR-1', 'T-1', 'For A.'],
+-        ['CR-1', 'T-1', 'changes_requested'],
+-        ['CR-2', null, 'Live, no task.'],
+-      ]);
+-    } finally {
+-      watching?.stop();
+-      removeDir(root);
+-    }
+-  });
+-
+-  // ATM-624 (Hakan): approvals waited unseen because the agent's watch had lapsed (a harness ends it); a new watch
+-  // tells what came meanwhile, once
+-  test('a watch catches up on what came while none was watching, once; --once stops after it; --since', () => {
+-    // T-1 is the agent's (a.txt): what is said about it is the agent's to hear
+-    const root = makeProject({
+-      commit: true,
+-      files: {
+-        '.agentic-task-manager/tasks.json': {
+-          meta: { project: 'Catch up' },
+-          tasks: [
+-            {
+-              id: 'T-1',
+-              name: 'One',
+-              type: 'feature',
+-              status: 'in_progress',
+-              started_by: AGENT.ATM_AGENT,
+-              files: ['a.txt'],
+-            },
+-          ],
+-        },
+-        'a.txt': 'a\n',
+-      },
+-    });
+-    const OTHER = { ATM_AGENT: 'claude:other' };
+-    try {
+-      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+-      ok(['review', 'create', '--title', 'Catch up', '--task', 'T-1', '--uncommitted'], root, AGENT);
+-      // The first watch ever starts from now: nothing to tell, so --once waits out its time, exit code 3
+-      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, AGENT).code, 3);
+-      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, OTHER).code, 3);
+-      const before = new Date(Date.now() - 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+-      // While no watch runs: a comment and a decision
+-      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why changed?'], root, HAKAN);
+-      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
+-      const told = (r) =>
+-        r.stdout
+-          .trim()
+-          .split('\n')
+-          .filter(Boolean)
+-          .map((l) => JSON.parse(l));
+-      // The next watch tells both at once, in order, and --once stops there
+-      const caught = atm(['review', 'watch', '--once', '--json', '--timeout', '10s'], root, AGENT);
+-      assert.equal(caught.code, 0, caught.stderr);
+-      assert.deepEqual(
+-        told(caught).map((h) => h.body ?? h.decision),
+-        ['Why changed?', 'changes_requested'],
+-      );
+-      // Told once: the watch after it has nothing old
+-      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, AGENT).code, 3);
+-      // Each agent has its own cursor: the other agent's watch (not its work) tells nothing
+-      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, OTHER).code, 3);
+-      // --since tells from that time, whatever was told
+-      const since = atm(['review', 'watch', '--once', '--json', '--since', before, '--timeout', '10s'], root, AGENT);
+-      assert.equal(since.code, 0, since.stderr);
+-      assert.deepEqual(
+-        told(since).map((h) => h.body ?? h.decision),
+-        ['Why changed?', 'changes_requested'],
+-      );
+-      assert.match(
+-        atm(['review', 'watch', '--since', 'yesterday', '--timeout', '1s'], root, AGENT).stderr,
+-        /--since needs a time like/,
+-      );
+-    } finally {
+-      removeDir(root);
+-    }
+-  });
+-
+-  // ATM-642 (Hakan): an agent's watch stopped and comments, a poke and approvals went unseen. atm knows whether a
+-  // watch runs, says so in `loop next --json`, and reminds the agent on stderr while a review of its work is open
+-  test('an agent not watching its open reviews is told so: on stderr, once a while; loop next says it; never a person', async () => {
+-    const root = makeProject({
+-      commit: true,
+-      files: {
+-        '.agentic-task-manager/tasks.json': {
+-          meta: { project: 'Watch' },
+-          tasks: [
+-            {
+-              id: 'T-1',
+-              name: 'One',
+-              type: 'feature',
+-              status: 'in_progress',
+-              started_by: AGENT.ATM_AGENT,
+-              files: ['a.txt'],
+-            },
+-            { id: 'T-2', name: 'Two', type: 'feature', status: 'todo' },
+-          ],
+-        },
+-        'a.txt': 'a\n',
+-      },
+-    });
+-    const reminded = (r) => /you aren't watching your reviews/.test(r.stderr);
+-    let watching;
+-    try {
+-      // Nothing of its open: nothing said
+-      assert.equal(reminded(ok(['task', 'list'], root, AGENT)), false);
+-      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+-      // Its review open (by the command itself), no watch: said at once, after the command's own output, on stderr
+-      // only, naming it
+-      const first = ok(['review', 'create', '--title', 'Watch me', '--task', 'T-1', '--uncommitted'], root, AGENT);
+-      assert.ok(reminded(first), first.stderr);
+-      assert.match(first.stderr, /1 open: CR-1/);
+-      assert.doesNotMatch(first.stdout, /watching/);
+-      // Said a moment ago, nothing new: quiet
+-      assert.equal(reminded(ok(['task', 'list'], root, AGENT)), false);
+-      // A person is never told; nor a command run as someone else
+-      assert.equal(reminded(ok(['task', 'list'], root, HAKAN)), false);
+-      // loop next --json says it, its JSON clean
+-      const next = JSON.parse(ok(['loop', 'next', '--json'], root, AGENT).stdout);
+-      assert.deepEqual(next.watch, { running: false, open: ['CR-1'], since_last_watch: [] });
+-      // A watch running: loop next says so, and nothing is said
+-      watching = background(['review', 'watch', '--json', '--timeout', '60s'], root, AGENT);
+-      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
+-      const live = JSON.parse(ok(['loop', 'next', '--json'], root, AGENT).stdout);
+-      assert.deepEqual(live.watch, { running: true, open: [], since_last_watch: [] });
+-    } finally {
+-      watching?.stop();
+-      removeDir(root);
+-    }
+-  });
+-});
+diff --git a/tests/scripts/reviews/listening.test.mjs b/tests/scripts/reviews/listening.test.mjs
+new file mode 100644
+index 00000000..dabdbd34
+--- /dev/null
++++ b/tests/scripts/reviews/listening.test.mjs
+@@ -0,0 +1,239 @@
++// Agents listening to the reviews of their work (ATM-567): `atm review wait`, the one `atm review watch`, its
++// catching up (ATM-624), and atm telling an agent that isn’t watching (ATM-642).
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import { describe, test } from 'node:test';
++import { git, makeProject, removeDir } from '../helpers.mjs';
++import {
++  AGENT,
++  HAKAN,
++  atm,
++  background,
++  commitFile,
++  ok,
++  project,
++  projectWithSubmodule,
++  roundOf,
++  task,
++  until,
++} from './fixtures.mjs';
++
++describe('agents listening (ATM-567)', () => {
++  test('wait ends when the reviewer decides, with the comments added meanwhile; at the time up, exit code 3', async () => {
++    const root = project();
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['review', 'create', '--title', 'Wait for it', '--task', 'T-1', '--uncommitted'], root, AGENT);
++      const timedOut = background(['review', 'wait', 'CR-1', '--timeout', '1s', '--json'], root, AGENT);
++      assert.equal(await timedOut.ended, 3);
++
++      const waiting = background(['review', 'wait', 'CR-1', '--for', 'decision', '--json'], root, AGENT);
++      await new Promise((resolve) => setTimeout(resolve, 500));
++      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why changed?'], root, HAKAN);
++      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
++      assert.equal(await waiting.ended, 0, waiting.stderr());
++      const waited = JSON.parse(waiting.lines.join('\n'));
++      assert.equal(waited.review.status, 'changes_requested');
++      assert.deepEqual(
++        waited.comments.map((c) => [c.comment, c.author, c.body]),
++        [['c1', 'Hakan Serce', 'Why changed?']],
++      );
++    } finally {
++      removeDir(root);
++    }
++  });
++
++  test('the agent’s one watch hears the comments about its work only, with their task or none', async () => {
++    // T-1 is claude:A's (a.txt), T-2 claude:B's (b.txt); one review of both
++    const root = makeProject({
++      commit: true,
++      files: {
++        '.agentic-task-manager/tasks.json': {
++          meta: { project: 'Watch' },
++          tasks: [
++            {
++              id: 'T-1',
++              name: 'One',
++              type: 'feature',
++              status: 'in_progress',
++              started_by: 'claude:A',
++              files: ['a.txt'],
++            },
++            {
++              id: 'T-2',
++              name: 'Two',
++              type: 'feature',
++              status: 'in_progress',
++              started_by: 'claude:B',
++              files: ['b.txt'],
++            },
++          ],
++        },
++        'a.txt': 'a\n',
++        'b.txt': 'b\n',
++      },
++    });
++    const A = { ATM_AGENT: 'claude:A' };
++    const B = { ATM_AGENT: 'claude:B' };
++    let watching;
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'a, changed\n');
++      fs.writeFileSync(path.join(root, 'b.txt'), 'b, changed\n');
++      ok(['review', 'create', '--title', 'Both', '--task', 'T-1', '--task', 'T-2', '--uncommitted'], root, A);
++
++      watching = background(['review', 'watch', '--json', '--timeout', '60s'], root, A);
++      await until(() => /Watching the reviews for claude:A/.test(watching.stderr()), 'the watch to start');
++
++      // On B's file: not A's; on A's: T-1; naming T-2 at the whole review: not A's; A's own and B's: never
++      ok(['review', 'comment', 'CR-1', '--file', 'b.txt', '--lines', '1', '--body', 'For B.'], root, HAKAN);
++      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'For A.'], root, HAKAN);
++      ok(['review', 'comment', 'CR-1', '--body', 'T-2: rename the flag.'], root, HAKAN);
++      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'A notes.'], root, A);
++      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'B on A.'], root, B);
++      // A live review on the working copy, a file no task of A's touched: no task
++      fs.writeFileSync(path.join(root, 'c.txt'), 'new\n');
++      ok(['review', 'live'], root, B);
++      ok(['review', 'comment', 'CR-2', '--file', 'c.txt', '--lines', '1', '--body', 'Live, no task.'], root, HAKAN);
++
++      await until(() => watching.lines.length >= 2, 'two comments heard');
++      // A decision on a review of A's work is heard too, once (ATM-600)
++      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
++      await until(() => watching.lines.length >= 3, 'the decision heard');
++      await new Promise((resolve) => setTimeout(resolve, 1500)); // nothing else comes
++      // (in the order written within what is heard at once; a slow machine may hear them in two batches)
++      const heard = watching.lines
++        .map((l) => JSON.parse(l))
++        .map((h) => [h.review, h.task, h.body ?? h.decision])
++        .sort();
++      assert.deepEqual(heard, [
++        ['CR-1', 'T-1', 'For A.'],
++        ['CR-1', 'T-1', 'changes_requested'],
++        ['CR-2', null, 'Live, no task.'],
++      ]);
++    } finally {
++      watching?.stop();
++      removeDir(root);
++    }
++  });
++
++  // ATM-624 (Hakan): approvals waited unseen because the agent's watch had lapsed (a harness ends it); a new watch
++  // tells what came meanwhile, once
++  test('a watch catches up on what came while none was watching, once; --once stops after it; --since', () => {
++    // T-1 is the agent's (a.txt): what is said about it is the agent's to hear
++    const root = makeProject({
++      commit: true,
++      files: {
++        '.agentic-task-manager/tasks.json': {
++          meta: { project: 'Catch up' },
++          tasks: [
++            {
++              id: 'T-1',
++              name: 'One',
++              type: 'feature',
++              status: 'in_progress',
++              started_by: AGENT.ATM_AGENT,
++              files: ['a.txt'],
++            },
++          ],
++        },
++        'a.txt': 'a\n',
++      },
++    });
++    const OTHER = { ATM_AGENT: 'claude:other' };
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['review', 'create', '--title', 'Catch up', '--task', 'T-1', '--uncommitted'], root, AGENT);
++      // The first watch ever starts from now: nothing to tell, so --once waits out its time, exit code 3
++      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, AGENT).code, 3);
++      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, OTHER).code, 3);
++      const before = new Date(Date.now() - 1000).toISOString().replace(/\.\d+Z$/, 'Z');
++      // While no watch runs: a comment and a decision
++      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Why changed?'], root, HAKAN);
++      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
++      const told = (r) =>
++        r.stdout
++          .trim()
++          .split('\n')
++          .filter(Boolean)
++          .map((l) => JSON.parse(l));
++      // The next watch tells both at once, in order, and --once stops there
++      const caught = atm(['review', 'watch', '--once', '--json', '--timeout', '10s'], root, AGENT);
++      assert.equal(caught.code, 0, caught.stderr);
++      assert.deepEqual(
++        told(caught).map((h) => h.body ?? h.decision),
++        ['Why changed?', 'changes_requested'],
++      );
++      // Told once: the watch after it has nothing old
++      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, AGENT).code, 3);
++      // Each agent has its own cursor: the other agent's watch (not its work) tells nothing
++      assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, OTHER).code, 3);
++      // --since tells from that time, whatever was told
++      const since = atm(['review', 'watch', '--once', '--json', '--since', before, '--timeout', '10s'], root, AGENT);
++      assert.equal(since.code, 0, since.stderr);
++      assert.deepEqual(
++        told(since).map((h) => h.body ?? h.decision),
++        ['Why changed?', 'changes_requested'],
++      );
++      assert.match(
++        atm(['review', 'watch', '--since', 'yesterday', '--timeout', '1s'], root, AGENT).stderr,
++        /--since needs a time like/,
++      );
++    } finally {
++      removeDir(root);
++    }
++  });
++
++  // ATM-642 (Hakan): an agent's watch stopped and comments, a poke and approvals went unseen. atm knows whether a
++  // watch runs, says so in `loop next --json`, and reminds the agent on stderr while a review of its work is open
++  test('an agent not watching its open reviews is told so: on stderr, once a while; loop next says it; never a person', async () => {
++    const root = makeProject({
++      commit: true,
++      files: {
++        '.agentic-task-manager/tasks.json': {
++          meta: { project: 'Watch' },
++          tasks: [
++            {
++              id: 'T-1',
++              name: 'One',
++              type: 'feature',
++              status: 'in_progress',
++              started_by: AGENT.ATM_AGENT,
++              files: ['a.txt'],
++            },
++            { id: 'T-2', name: 'Two', type: 'feature', status: 'todo' },
++          ],
++        },
++        'a.txt': 'a\n',
++      },
++    });
++    const reminded = (r) => /you aren't watching your reviews/.test(r.stderr);
++    let watching;
++    try {
++      // Nothing of its open: nothing said
++      assert.equal(reminded(ok(['task', 'list'], root, AGENT)), false);
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      // Its review open (by the command itself), no watch: said at once, after the command's own output, on stderr
++      // only, naming it
++      const first = ok(['review', 'create', '--title', 'Watch me', '--task', 'T-1', '--uncommitted'], root, AGENT);
++      assert.ok(reminded(first), first.stderr);
++      assert.match(first.stderr, /1 open: CR-1/);
++      assert.doesNotMatch(first.stdout, /watching/);
++      // Said a moment ago, nothing new: quiet
++      assert.equal(reminded(ok(['task', 'list'], root, AGENT)), false);
++      // A person is never told; nor a command run as someone else
++      assert.equal(reminded(ok(['task', 'list'], root, HAKAN)), false);
++      // loop next --json says it, its JSON clean
++      const next = JSON.parse(ok(['loop', 'next', '--json'], root, AGENT).stdout);
++      assert.deepEqual(next.watch, { running: false, open: ['CR-1'], since_last_watch: [] });
++      // A watch running: loop next says so, and nothing is said
++      watching = background(['review', 'watch', '--json', '--timeout', '60s'], root, AGENT);
++      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
++      const live = JSON.parse(ok(['loop', 'next', '--json'], root, AGENT).stdout);
++      assert.deepEqual(live.watch, { running: true, open: [], since_last_watch: [] });
++    } finally {
++      watching?.stop();
++      removeDir(root);
++    }
++  });
++});
+diff --git a/tests/scripts/reviews/submodules.test.mjs b/tests/scripts/reviews/submodules.test.mjs
+new file mode 100644
+index 00000000..c82b7153
+--- /dev/null
++++ b/tests/scripts/reviews/submodules.test.mjs
+@@ -0,0 +1,154 @@
++// Code reviews in a project with git submodules (ATM-583).
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import { describe, test } from 'node:test';
++import { git, makeProject, removeDir } from '../helpers.mjs';
++import {
++  AGENT,
++  HAKAN,
++  atm,
++  background,
++  commitFile,
++  ok,
++  project,
++  projectWithSubmodule,
++  roundOf,
++  task,
++  until,
++} from './fixtures.mjs';
++
++describe('reviews in a project with submodules (ATM-583)', () => {
++  test('a range that moves a submodule: the move is its entry, beside the files', () => {
++    const { root, sub } = projectWithSubmodule();
++    try {
++      const lib = path.join(root, 'lib');
++      commitFile(lib, 'b.txt', 'one\ntwo\n', 'sub change');
++      git(['add', 'lib'], root);
++      commitFile(root, 'a.txt', 'one\nTWO\nthree\n', 'move lib');
++      ok(['review', 'create', '--title', 'Move lib', '--task', 'T-1', '--range', 'HEAD~1..HEAD'], root, AGENT);
++      assert.deepEqual(roundOf(root, 'CR-1', 1), {
++        submodule: null,
++        files: ['a.txt', 'lib'],
++      });
++      assert.match(ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout, /\+Subproject commit [0-9a-f]+/);
++      // A comment on the move as a whole
++      ok(['review', 'comment', 'CR-1', '--file', 'lib', '--body', 'Why this version?'], root, HAKAN);
++      assert.match(ok(['review', 'comments', 'CR-1'], root, HAKAN).stdout, /^## lib · round 1/m);
++    } finally {
++      removeDir(root);
++      removeDir(sub);
++    }
++  });
++
++  test('commits made inside a submodule: run there, the review is the project’s, its files under the submodule', () => {
++    const { root, sub } = projectWithSubmodule();
++    try {
++      const lib = path.join(root, 'lib');
++      commitFile(lib, 'b.txt', 'one\ntwo\n', 'sub change');
++      // From the submodule's folder: the project's task and review, the submodule's commits
++      ok(['review', 'create', '--title', 'In lib', '--task', 'T-1', '--range', 'HEAD~1..HEAD'], lib, AGENT);
++      assert.equal(task(root, 'T-1').status, 'in_review');
++      assert.ok(fs.existsSync(path.join(root, '.agentic-task-manager/reviews')), 'kept in the project');
++      assert.ok(!fs.existsSync(path.join(lib, '.agentic-task-manager')), 'nothing written in the submodule');
++      assert.deepEqual(roundOf(root, 'CR-1', 1), {
++        submodule: 'lib',
++        files: ['lib/b.txt'],
++      });
++      const diff = ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout;
++      assert.match(diff, /diff --git a\/lib\/b\.txt b\/lib\/b\.txt[\s\S]*\+two/);
++
++      // A comment on its lines, a fix in the submodule, the next round: the comment follows
++      ok(
++        ['review', 'comment', 'CR-1', '--file', 'lib/b.txt', '--lines', '2', '--quote', 'two', '--body', 'Say 2.'],
++        root,
++        HAKAN,
++      );
++      ok(['review', 'submit', 'CR-1', '--request-changes'], root, HAKAN);
++      ok(['task', 'state', 'T-1', 'in_progress'], root, AGENT);
++      commitFile(lib, 'b.txt', 'zero\none\ntwo\n', 'a line above');
++      ok(['review', 'round', 'CR-1', '--range', 'HEAD~2..HEAD'], lib, AGENT);
++      assert.deepEqual(roundOf(root, 'CR-1', 2), {
++        submodule: 'lib',
++        files: ['lib/b.txt'],
++      });
++      const between = ok(['review', 'show', 'CR-1', '--round', '2', '--against', '1'], root, HAKAN).stdout;
++      assert.match(between, /\+zero/);
++      assert.doesNotMatch(between, /\+two/);
++
++      // A round of the project's own after one of the submodule's: shown, but the two don't compare
++      commitFile(root, 'a.txt', 'one\nTWO\nthree\n', 'in the project');
++      ok(['review', 'round', 'CR-1', '--range', 'HEAD~1..HEAD'], root, AGENT);
++      const refused = atm(['review', 'show', 'CR-1', '--round', '3', '--against', '2'], root, HAKAN);
++      assert.equal(refused.code, 2, refused.stderr);
++      assert.match(refused.stderr, /round 2 is of the submodule lib and round 3 of the project/);
++    } finally {
++      removeDir(root);
++      removeDir(sub);
++    }
++  });
++
++  test('uncommitted changes in a submodule, and its files reviewed whole', () => {
++    const { root, sub } = projectWithSubmodule();
++    try {
++      const lib = path.join(root, 'lib');
++      fs.writeFileSync(path.join(lib, 'b.txt'), 'one\nnot committed\n');
++      ok(['review', 'create', '--title', 'Working', '--task', 'T-1', '--uncommitted'], lib, AGENT);
++      assert.deepEqual(roundOf(root, 'CR-1', 1), {
++        submodule: 'lib',
++        files: ['lib/b.txt'],
++      });
++      assert.match(ok(['review', 'show', 'CR-1', '--round', '1'], root, HAKAN).stdout, /\+not committed/);
++      // From the project's folder, the project's own changes: the dirty submodule is one entry
++      fs.writeFileSync(path.join(root, 'a.txt'), 'one\nchanged\n');
++      ok(['review', 'create', '--title', 'Project', '--task', 'T-2', '--uncommitted'], root, AGENT);
++      assert.equal(roundOf(root, 'CR-2', 1).submodule, null);
++      // Files reviewed whole: a submodule's from its repository; with the project's, refused
++      ok(['review', 'create', '--title', 'A file', '--file', 'lib/b.txt', '--draft'], root, AGENT);
++      assert.deepEqual(roundOf(root, 'CR-3', 1), {
++        submodule: 'lib',
++        files: ['lib/b.txt'],
++      });
++      const mixed = atm(
++        ['review', 'create', '--title', 'Both', '--file', 'lib/b.txt', '--file', 'a.txt', '--draft'],
++        root,
++        AGENT,
++      );
++      assert.equal(mixed.code, 2, mixed.stderr);
++      assert.match(mixed.stderr, /in different repositories/);
++    } finally {
++      removeDir(root);
++      removeDir(sub);
++    }
++  });
++
++  test('a submodule with a task folder of its own is a project of its own', () => {
++    const { root, sub } = projectWithSubmodule();
++    try {
++      const lib = path.join(root, 'lib');
++      fs.mkdirSync(path.join(lib, '.agentic-task-manager'));
++      fs.writeFileSync(
++        path.join(lib, '.agentic-task-manager/tasks.json'),
++        JSON.stringify({
++          meta: { project: 'Lib' },
++          tasks: [
++            {
++              id: 'L-1',
++              name: 'Its own',
++              type: 'feature',
++              status: 'in_progress',
++            },
++          ],
++        }),
++      );
++      const listed = ok(['task', 'list', '--json'], lib, HAKAN).json();
++      assert.deepEqual(
++        listed.map((t) => t.id),
++        ['L-1'],
++      );
++    } finally {
++      removeDir(root);
++      removeDir(sub);
++    }
++  });
++});
+diff --git a/tests/scripts/reviews/wrong-uses.test.mjs b/tests/scripts/reviews/wrong-uses.test.mjs
+new file mode 100644
+index 00000000..67f7a446
+--- /dev/null
++++ b/tests/scripts/reviews/wrong-uses.test.mjs
+@@ -0,0 +1,126 @@
++// `atm review` refusing what it must: wrong uses named, their exit codes, and --dry-run writing nothing.
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import { describe, test } from 'node:test';
++import { git, makeProject, removeDir } from '../helpers.mjs';
++import {
++  AGENT,
++  HAKAN,
++  atm,
++  background,
++  commitFile,
++  ok,
++  project,
++  projectWithSubmodule,
++  roundOf,
++  task,
++  until,
++} from './fixtures.mjs';
++
++describe('atm review: refusals', () => {
++  test('wrong uses are refused naming why', () => {
++    const root = project();
++    try {
++      assert.match(atm(['review', 'create', '--title', 'x'], root, AGENT).stderr, /say what to review/);
++      assert.match(atm(['review', 'show', 'CR-9'], root, AGENT).stderr, /no review CR-9/);
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
++      assert.match(atm(['review', 'comment', 'CR-1'], root, HAKAN).stderr, /--body or --body-file/);
++      assert.match(
++        atm(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '3-1', '--body', 'x'], root, HAKAN).stderr,
++        /--lines takes/,
++      );
++      assert.match(atm(['review', 'list', '--status', 'nope'], root, HAKAN).stderr, /no status nope/);
++    } finally {
++      removeDir(root);
++    }
++  });
++
++  test('each wrong use has its exit code: 2 for a usage error, 1 for what the review or the files refuse', () => {
++    const root = project();
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
++      // [args, exit code, what stderr says]
++      const cases = [
++        [['review', 'create', '--title', 'x'], 2, /say what to review/],
++        [['review', 'create', '--title', 'x', '--range', 'HEAD'], 2, /--range takes BASE\.\.HEAD, not HEAD/],
++        [['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'], 1, /can't read gone\.md/],
++        [['review', 'create', '--title', 'x', '--range', 'HEAD~1..HEAD', '--uncommitted'], 2, /cannot be used with/],
++        [['review', 'show', 'CR-9'], 1, /no review CR-9/],
++        [['review', 'show', 'CR-1', '--against', '1'], 2, /--round/],
++        [['review', 'comment', 'CR-1'], 2, /--body or --body-file/],
++        [['review', 'comment', 'CR-1', '--body', '   '], 2, /the text is empty/],
++        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 1, /can't read gone\.md/],
++        [['review', 'comment', 'CR-1', '--body', 'x', '--body-file', 'a.txt'], 2, /cannot be used with/],
++        [['review', 'comment', 'CR-1', '--lines', '2', '--body', 'x'], 2, /--file/],
++        [
++          ['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '0', '--body', 'x'],
++          2,
++          /--lines takes A-B or A, not 0/,
++        ],
++        [['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', 'two', '--body', 'x'], 2, /--lines takes/],
++        [['review', 'comment', 'CR-9', '--body', 'x'], 1, /no review CR-9/],
++        [['review', 'reply', 'CR-1', 'c9', '--body', 'x'], 1, /c9/],
++        [['review', 'submit', 'CR-1'], 2, /submit with --approve, --request-changes or --comment/],
++        [['review', 'submit', 'CR-1', '--comment'], 2, /needs its text, or drafts to send/],
++        [['review', 'submit', 'CR-1', '--approve', '--request-changes'], 2, /cannot be used with/],
++        [['review', 'wait', 'CR-1', '--timeout', '0'], 2, /--timeout takes 90s, 30m, 2h or seconds, not 0/],
++        [['review', 'wait', 'CR-1', '--timeout', 'soon'], 2, /--timeout takes/],
++        [['review', 'wait', 'CR-1', '--for', 'ever'], 2, /invalid value 'ever'/],
++        [['review', 'watch', '--timeout=-5m'], 2, /--timeout takes/],
++        [['review', 'close', 'CR-1'], 2, /--reason/],
++        [['review', 'list', '--status', 'nope'], 2, /no status nope/],
++      ];
++      for (const [args, code, stderr] of cases) {
++        const r = atm(args, root, HAKAN);
++        assert.equal(r.code, code, `atm ${args.join(' ')}: ${r.stderr}`);
++        assert.match(r.stderr, stderr, `atm ${args.join(' ')}`);
++      }
++      // None of them changed the review
++      const review = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
++      assert.deepEqual([review.header.status, review.chains.length], ['waiting', 0]);
++    } finally {
++      removeDir(root);
++    }
++  });
++
++  test('--dry-run says what each command would do and writes nothing', () => {
++    const root = project();
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      const reviews = path.join(root, '.agentic-task-manager/reviews');
++      const create = ok(['review', 'create', '--title', 'Try', '--task', 'T-1', '--uncommitted', '-n'], root, AGENT);
++      assert.equal(create.stdout, '[dry-run] would open a review “Try” of 1 file(s)\n');
++      assert.equal(
++        ok(['review', 'live', '-n'], root, AGENT).stdout,
++        '[dry-run] would open a live review “Live review”\n',
++      );
++      assert.ok(!fs.existsSync(reviews), 'no review written');
++      assert.equal(task(root, 'T-1').status, 'in_progress');
++
++      ok(['review', 'create', '--title', 'Real', '--task', 'T-1', '--uncommitted'], root, AGENT);
++      ok(['review', 'comment', 'CR-1', '--body', 'Why?'], root, HAKAN);
++      const before = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).stdout;
++      const dry = [
++        [['review', 'round', 'CR-1', '-n'], AGENT, '[dry-run] would add a round to CR-1\n'],
++        [['review', 'tasks', 'CR-1', '--add', 'T-2', '-n'], AGENT, "[dry-run] would change CR-1's tasks\n"],
++        [['review', 'comment', 'CR-1', '--body', 'More', '-n'], HAKAN, '[dry-run] would comment on CR-1\n'],
++        [['review', 'reply', 'CR-1', 'c1', '--body', 'Because', '-n'], AGENT, '[dry-run] would reply to c1 in CR-1\n'],
++        [['review', 'edit', 'CR-1', 'c1', '--body', 'Why not?', '-n'], HAKAN, '[dry-run] would edit c1 in CR-1\n'],
++        [['review', 'resolve', 'CR-1', 'c1', '-n'], HAKAN, '[dry-run] would resolve c1 in CR-1\n'],
++        [['review', 'resolve', 'CR-1', 'c1', '--reopen', '-n'], HAKAN, '[dry-run] would reopen c1 in CR-1\n'],
++        [['review', 'submit', 'CR-1', '--request-changes', '-n'], HAKAN, '[dry-run] would submit on CR-1\n'],
++        [['review', 'close', 'CR-1', '--reason', 'No', '-n'], AGENT, '[dry-run] would close CR-1\n'],
++      ];
++      for (const [args, env, stdout] of dry) assert.equal(ok(args, root, env).stdout, stdout, args.join(' '));
++      assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).stdout, before);
++      assert.equal(task(root, 'T-2').status, 'in_progress');
++    } finally {
++      removeDir(root);
++    }
++  });
++
++  // ATM-622 (Hakan): a later round naming only the file that changed showed every other file as deleted since round 1
++});
+diff --git a/tests/scripts/run.mjs b/tests/scripts/run.mjs
+index 126aea91..332c985a 100644
+--- a/tests/scripts/run.mjs
++++ b/tests/scripts/run.mjs
+@@ -14,12 +14,23 @@ import { createInterface } from 'node:readline';
+ import { fileURLToPath } from 'node:url';
+ 
+ const dir = path.dirname(fileURLToPath(import.meta.url));
+-// `run.mjs merge.test.mjs serve.test.mjs`: only those files
++// `run.mjs merge.test.mjs serve.test.mjs`: only those files (one in a folder by its path, `reviews/watch.test.mjs`,
++// or its name)
+ const only = process.argv.slice(2).filter((a) => a.endsWith('.test.mjs'));
++// The tests here, and in the folders here, one level down (an area's tests together, `reviews/`, ATM-642)
+ const files = fs
+-  .readdirSync(dir)
+-  .filter((f) => f.endsWith('.test.mjs'))
+-  .filter((f) => !only.length || only.includes(f))
++  .readdirSync(dir, { withFileTypes: true })
++  .flatMap((e) =>
++    e.isDirectory()
++      ? fs
++          .readdirSync(path.join(dir, e.name))
++          .filter((f) => f.endsWith('.test.mjs'))
++          .map((f) => `${e.name}/${f}`)
++      : e.name.endsWith('.test.mjs')
++        ? [e.name]
++        : [],
++  )
++  .filter((f) => !only.length || only.includes(f) || only.includes(path.basename(f)))
+   .sort();
+ 
+ const limitArg = process.argv.find((a) => a.startsWith('--file-limit='));

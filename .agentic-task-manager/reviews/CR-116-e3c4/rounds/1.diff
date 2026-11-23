@@ -1,0 +1,262 @@
+diff --git a/dashboard/src/lib/details/DetailPanel.svelte b/dashboard/src/lib/details/DetailPanel.svelte
+index b4f656b3..4e56f8d0 100644
+--- a/dashboard/src/lib/details/DetailPanel.svelte
++++ b/dashboard/src/lib/details/DetailPanel.svelte
+@@ -190,8 +190,11 @@
+     if (e.target === e.currentTarget) dashboard.closeDetail();
+   }
+ 
++  // Escape closes the panel when it is open and nothing else took the key (ATM-680, audit D11): a composer, a menu or
++  // a dialog that handles its own Escape keeps the panel open
+   function onKeydown(e: KeyboardEvent) {
+-    if (e.key === 'Escape') dashboard.closeDetail();
++    if (e.key !== 'Escape' || e.defaultPrevented || !dashboard.detailOpen) return;
++    dashboard.closeDetail();
+   }
+ </script>
+ 
+diff --git a/dashboard/src/lib/graph/DepGraph.svelte b/dashboard/src/lib/graph/DepGraph.svelte
+index 31d8db18..e7d18493 100644
+--- a/dashboard/src/lib/graph/DepGraph.svelte
++++ b/dashboard/src/lib/graph/DepGraph.svelte
+@@ -1,6 +1,6 @@
+ <script lang="ts">
+   import { untrack } from 'svelte';
+-  import { dependencyChain, layoutGraph, NODE_H, NODE_W } from './layout';
++  import { dependencyChain, graphFocus, layoutGraph, NODE_H, NODE_W } from './layout';
+   import {
+     anyNodeVisible,
+     autoFitView,
+@@ -55,11 +55,8 @@
+     const kind = kindOf(dashboard.vocab, status);
+     return kind ? KIND_EMOJI[kind] : '';
+   };
+-  // When the graph overflows, the initial view centers on the task in progress, else the next one to do
+-  const focus = $derived(
+-    layout.nodes.find((n) => matching.has(n.task.id) && n.task.status === 'in_progress') ??
+-      layout.nodes.find((n) => matching.has(n.task.id) && n.task.status === 'todo'),
+-  );
++  // When the graph overflows, the initial view centers on the task in progress, else the next one to do (by kind)
++  const focus = $derived(graphFocus(layout.nodes, matching));
+ 
+   let svg: SVGSVGElement;
+   let vw = $state(0);
+@@ -168,13 +165,15 @@
+     shownKey = key;
+   });
+ 
+-  /** The user moved the view: auto-fit goes off. Animated for the zoom buttons and keys, not for dragging. */
+-  function setView(v: View, animate = false) {
++  /** The user moved the view: auto-fit goes off. Animated for the zoom buttons and keys, not for dragging. Saved with
++   * the project's view, except while a drag moves it: then once, when it ends (ATM-680, audit D13: every pointer move
++   * wrote the whole view to the browser's storage) */
++  function setView(v: View, animate = false, save = true) {
+     animateNext = animate;
+     view = clampView(v, content, viewport);
+     untouched = false;
+     dashboard.graphAutoFit = false;
+-    dashboard.graphView = view; // saved with the project's view
++    if (save) dashboard.graphView = view;
+   }
+ 
+   const zoomBy = (factor: number) => setView(zoomAt(view, view.k * factor, vw / 2, vh / 2), true);
+@@ -209,11 +208,12 @@
+       svg.setPointerCapture(e.pointerId);
+       panning = true;
+     }
+-    setView({ k: view.k, x: drag.x + dx, y: drag.y + dy });
++    setView({ k: view.k, x: drag.x + dx, y: drag.y + dy }, false, false);
+   }
+ 
+   function endDrag() {
+     if (drag?.moved) {
++      dashboard.graphView = view;
+       suppressClick = true;
+       setTimeout(() => (suppressClick = false), 0);
+     }
+diff --git a/dashboard/src/lib/graph/layout.ts b/dashboard/src/lib/graph/layout.ts
+index 405631d0..5441bf28 100644
+--- a/dashboard/src/lib/graph/layout.ts
++++ b/dashboard/src/lib/graph/layout.ts
+@@ -1,5 +1,6 @@
+ import dagre from '@dagrejs/dagre';
+ import type { Task } from '../types';
++import { taskKind } from '../vocab';
+ 
+ export const NODE_W = 160;
+ export const NODE_H = 52;
+@@ -38,6 +39,13 @@ export function truncate(str: string, max: number): string {
+   return str.length > max ? str.substring(0, max - 1) + '…' : str;
+ }
+ 
++/** The node an overflowing graph first centers on: a matching task at work, else one to do, by kind as atm says it
++ * (ATM-680, audit D12: never by status IDs, which a project names its own way); none when neither */
++export function graphFocus(nodes: GraphNode[], matching: Set<string>): GraphNode | undefined {
++  const of = (kind: string) => nodes.find((n) => matching.has(n.task.id) && taskKind(n.task) === kind);
++  return of('active') ?? of('todo');
++}
++
+ /** `id` and every task it waits for, directly or through others, following the graph's edges. */
+ export function dependencyChain(edges: GraphEdge[], id: string): Set<string> {
+   const deps = new Map<string, string[]>();
+diff --git a/dashboard/src/lib/stages.ts b/dashboard/src/lib/stages.ts
+index 4a404da6..9f627bb8 100644
+--- a/dashboard/src/lib/stages.ts
++++ b/dashboard/src/lib/stages.ts
+@@ -20,9 +20,12 @@ export function hasStage(task: Task): boolean {
+   return !!prOf(task) || !!task.merged_at;
+ }
+ 
+-/** A done-kind task's stage; undefined for tasks that aren't done */
++/** A done-kind task's stage, as atm says (`derived.stage`, ATM-680; the local rule only without it); undefined for
++ * tasks that aren't done */
+ export function stageOf(task: Task): Stage | undefined {
+   if (taskKind(task) !== 'done') return undefined;
++  const served = task.derived?.stage;
++  if (served && (STAGES as string[]).includes(served)) return served as Stage;
+   if (task.merged_at) return 'merged';
+   return prOf(task) ? 'in_pr' : 'done';
+ }
+diff --git a/dashboard/src/lib/vocab.ts b/dashboard/src/lib/vocab.ts
+index 5b79ce84..f5e02cf2 100644
+--- a/dashboard/src/lib/vocab.ts
++++ b/dashboard/src/lib/vocab.ts
+@@ -144,8 +144,11 @@ export function phaseLabel(vocab: Vocabulary, phase: number): string {
+   return name ? `Phase ${phase} · ${name}` : `Phase ${phase}`;
+ }
+ 
+-/** The task's priority ID: its own when the vocabulary has it; a missing or unknown priority is the default (DM-2). */
+-export function priorityOf(vocab: Vocabulary, task: { priority?: string }): string {
++/** The task's priority ID, as atm says (`derived.priority`, ATM-680); without it (a task atm hasn't served), its own
++ * when the vocabulary has it, a missing or unknown priority being the default (DM-2). */
++export function priorityOf(vocab: Vocabulary, task: { priority?: string; derived?: { priority?: string } }): string {
++  const served = task.derived?.priority;
++  if (served) return served;
+   return task.priority && vocab.priorities.some((p) => p.id === task.priority) ? task.priority : vocab.defaultPriority;
+ }
+ 
+diff --git a/dashboard/tests/unit/DetailPanel.component.test.ts b/dashboard/tests/unit/DetailPanel.component.test.ts
+index a301695d..edf59971 100644
+--- a/dashboard/tests/unit/DetailPanel.component.test.ts
++++ b/dashboard/tests/unit/DetailPanel.component.test.ts
+@@ -45,6 +45,23 @@ describe('DetailPanel', () => {
+   const bodyGroups = (container: HTMLElement) =>
+     [...container.querySelectorAll<HTMLElement>('#detail-body [data-group]')].map((g) => g.dataset.group);
+ 
++  // ATM-680 (audit D11): Escape closes the panel when it is open and nothing else took the key
++  it('Escape closes the open panel, not one a composer or menu already handled, and does nothing when closed', () => {
++    open({});
++    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
++    handled.preventDefault();
++    document.dispatchEvent(handled);
++    expect(dashboard.detailOpen).toBe(true);
++    fireEvent.keyDown(document, { key: 'Enter' });
++    expect(dashboard.detailOpen).toBe(true);
++    fireEvent.keyDown(document, { key: 'Escape' });
++    expect(dashboard.detailOpen).toBe(false);
++    // Closed: Escape changes nothing (no close again)
++    const close = vi.spyOn(dashboard, 'closeDetail');
++    fireEvent.keyDown(document, { key: 'Escape' });
++    expect(close).not.toHaveBeenCalled();
++  });
++
+   it('shows its sprint and release, and the sprints it was carried through, flagged from twice (SR-7.6, SR-4.5)', () => {
+     loadIntoDashboard(sprints as TasksFile);
+     const { container } = render(DetailPanel);
+diff --git a/dashboard/tests/unit/kanban.test.ts b/dashboard/tests/unit/kanban.test.ts
+index 3dae663a..804dbc38 100644
+--- a/dashboard/tests/unit/kanban.test.ts
++++ b/dashboard/tests/unit/kanban.test.ts
+@@ -130,7 +130,8 @@ describe('buildBoard', () => {
+       t('T-1', 'todo', { dependencies: ['T-9'], derived: said('T-9') }),
+       t('T-3', 'todo', { derived: said() }),
+       t('T-2', 'todo', { derived: said() }),
+-      t('T-4', 'todo', { priority: 'P0', derived: said() }),
++      // atm's priority is the one that counts (ATM-680)
++      t('T-4', 'todo', { priority: 'P0', derived: { ...said()!, priority: 'P0' } }),
+       t('T-9', 'in_progress'),
+     ];
+     const todo = boardOf(tasks, tasks, all)[0];
+diff --git a/dashboard/tests/unit/layout.test.ts b/dashboard/tests/unit/layout.test.ts
+index 5992dbf8..01863771 100644
+--- a/dashboard/tests/unit/layout.test.ts
++++ b/dashboard/tests/unit/layout.test.ts
+@@ -1,5 +1,13 @@
+ import { describe, expect, it } from 'vitest';
+-import { dependencyChain, layoutGraph, NODE_H, NODE_W, truncate, type GraphLayout } from '../../src/lib/graph/layout';
++import {
++  dependencyChain,
++  graphFocus,
++  layoutGraph,
++  NODE_H,
++  NODE_W,
++  truncate,
++  type GraphLayout,
++} from '../../src/lib/graph/layout';
+ import type { Task } from '../../src/lib/types';
+ import standard from '../fixtures/standard.json';
+ import cycle from '../fixtures/cycle.json';
+@@ -125,6 +133,25 @@ describe('dependencyChain', () => {
+   });
+ });
+ 
++// ATM-680 (audit D12): the first view's focus by kind, so a project's own status IDs get one
++describe('graphFocus', () => {
++  const kinded = (id: string, status: string, kind: string) =>
++    ({ ...task(id), status, derived: { kind, ready: true, waiting_for: [], priority: 'P2', archived: false } }) as Task;
++
++  it('a matching task at work first, else one to do, by kind whatever the status is called; none else', () => {
++    const l = layoutGraph([
++      kinded('a', 'queued', 'todo'),
++      kinded('b', 'hacking', 'active'),
++      kinded('c', 'shipped', 'done'),
++    ]);
++    const all = new Set(['a', 'b', 'c']);
++    expect(graphFocus(l.nodes, all)?.task.id).toBe('b');
++    expect(graphFocus(l.nodes, new Set(['a', 'c']))?.task.id).toBe('a');
++    expect(graphFocus(l.nodes, new Set(['c']))).toBeUndefined();
++    expect(graphFocus([], all)).toBeUndefined();
++  });
++});
++
+ describe('truncate', () => {
+   it('only shortens strings over the limit', () => {
+     expect(truncate('exactly', 7)).toBe('exactly');
+diff --git a/dashboard/tests/unit/stages.test.ts b/dashboard/tests/unit/stages.test.ts
+index 54abb450..ed3ceeee 100644
+--- a/dashboard/tests/unit/stages.test.ts
++++ b/dashboard/tests/unit/stages.test.ts
+@@ -22,6 +22,19 @@ describe('stageOf', () => {
+     expect(hasStage(task('A'))).toBe(false);
+     expect(hasStage(task('A', { merged_at: '2026-04-01T00:00:00Z' }))).toBe(true);
+   });
++
++  // ATM-680 (audit D6): atm's `derived.stage` is the task's; the local rule only for a task it hasn't served
++  it('is atm’s stage when it gave one; an unknown one falls back to the rule', () => {
++    const served = (stage: string, fields: Partial<Task> = {}) => {
++      const t = task('A', fields);
++      return { ...t, derived: { ...t.derived!, stage } } as Task;
++    };
++    expect(stageOf(served('merged'))).toBe('merged');
++    expect(stageOf(served('in_pr', { merged_at: '2026-04-01T00:00:00Z' }))).toBe('in_pr');
++    expect(stageOf(served('shipped', { pr: { number: 3 } }))).toBe('in_pr');
++    // Not done: no stage, whatever is said
++    expect(stageOf(served('merged', { status: 'in_progress' }))).toBeUndefined();
++  });
+ });
+ 
+ describe('doneSections', () => {
+diff --git a/dashboard/tests/unit/vocab.test.ts b/dashboard/tests/unit/vocab.test.ts
+index 5279ff46..82736474 100644
+--- a/dashboard/tests/unit/vocab.test.ts
++++ b/dashboard/tests/unit/vocab.test.ts
+@@ -132,6 +132,9 @@ describe('lookups', () => {
+     expect(priorityOf(v, { priority: 'must' })).toBe('must');
+     expect(priorityOf(v, {})).toBe('should');
+     expect(priorityOf(v, { priority: 'P0' })).toBe('should');
++    // atm's answer, when it gave one, is the task's (ATM-680): the local rule is only for a task it hasn't served
++    expect(priorityOf(v, { priority: 'P0', derived: { priority: 'could' } })).toBe('could');
++    expect(priorityOf(v, { priority: 'must', derived: { priority: '' } })).toBe('must');
+     expect([priorityRank(v, 'must'), priorityRank(v, 'could'), priorityRank(v, 'nope')]).toEqual([0, 2, 1]);
+     expect(priorityLabel(v, 'could')).toBe('Could');
+     expect(priorityLabel(v, 'P0')).toBe('P0');

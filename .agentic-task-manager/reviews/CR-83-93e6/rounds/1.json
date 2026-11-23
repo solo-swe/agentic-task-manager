@@ -1,0 +1,32 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "b18093734f1730ae428ec1721fd0e77924e85dc2",
+    "head": "8b580054ae1f4fa2f02ba51e81ef548266c61165"
+  },
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "packaging/README.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "packaging/release.sh",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/packaging.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T16:33:19Z"
+}

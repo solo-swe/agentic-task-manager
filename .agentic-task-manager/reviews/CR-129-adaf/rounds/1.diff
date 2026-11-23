@@ -1,0 +1,757 @@
+diff --git a/app/src-tauri/src/badge.rs b/app/src-tauri/src/badge.rs
+index 338f50a5..548cf91b 100644
+--- a/app/src-tauri/src/badge.rs
++++ b/app/src-tauri/src/badge.rs
+@@ -92,10 +92,7 @@ impl NeedsYou {
+     /// workspaces the windows show, each workspace once (ATM-677, audit A9: the badge is the app's, not the window's
+     /// that asked last).
+     pub fn badge_total(&self, window: &str, workspace: &str, total: u32) -> u32 {
+-        let mut shown = self
+-            .shown
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let mut shown = crate::locked(&self.shown);
+         shown
+             .windows
+             .insert(window.to_owned(), workspace.to_owned());
+@@ -108,19 +105,12 @@ impl NeedsYou {
+ 
+     /// `window` closed: its workspace counts no more, unless another window shows it.
+     pub fn forget(&self, window: &str) {
+-        self.shown
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+-            .windows
+-            .remove(window);
++        crate::locked(&self.shown).windows.remove(window);
+     }
+     /// `workspace`'s projects wait as `now` says: what to notify, a notice per project whose count went up since the
+     /// last time. The first time for a workspace (the app's start, a switch) only sets what was seen.
+     pub fn update(&self, workspace: &str, now: &[Waiting]) -> Vec<String> {
+-        let mut seen = self
+-            .seen
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let mut seen = crate::locked(&self.seen);
+         let counts: HashMap<String, u32> = now.iter().map(|w| (w.id.clone(), w.count)).collect();
+         let notices = seen.get(workspace).map_or_else(Vec::new, |before| {
+             now.iter()
+@@ -243,7 +233,7 @@ pub async fn needs_you<R: Runtime>(
+     let all = state
+         .needs_you()
+         .badge_total(window.label(), &workspace, total);
+-    show_badge(&window, badge.then_some(all)).map_err(|e| AppError::Failed(e.to_string()))?;
++    show_badge(&window, badge.then_some(all))?;
+     let app = window.app_handle();
+     let in_front = app
+         .webview_windows()
+diff --git a/app/src-tauri/src/commands/reads.rs b/app/src-tauri/src/commands/reads.rs
+index 4e5aaaee..29440cc2 100644
+--- a/app/src-tauri/src/commands/reads.rs
++++ b/app/src-tauri/src/commands/reads.rs
+@@ -189,7 +189,7 @@ pub fn logo_of(workspaces: &Workspaces, w: &str, p: &str) -> Result<Option<FileD
+     let Some((file, content_type)) = member(workspaces, w, p)?.logo() else {
+         return Ok(None);
+     };
+-    let data = std::fs::read(&file).map_err(|e| AppError::Failed(e.to_string()))?;
++    let data = std::fs::read(&file)?;
+     Ok(Some(FileData {
+         content_type: content_type.into(),
+         data,
+diff --git a/app/src-tauri/src/commands/reviews.rs b/app/src-tauri/src/commands/reviews.rs
+index e25f81cc..82a8b9a7 100644
+--- a/app/src-tauri/src/commands/reviews.rs
++++ b/app/src-tauri/src/commands/reviews.rs
+@@ -22,7 +22,7 @@ fn as_user(workspaces: &Workspaces, w: &str, p: &str) -> Result<atm_lib::Project
+ }
+ 
+ fn header_json(header: &atm_lib::reviews::ReviewHeader) -> Result<Value, AppError> {
+-    serde_json::to_value(header).map_err(|e| AppError::Failed(e.to_string()))
++    Ok(serde_json::to_value(header)?)
+ }
+ 
+ pub(super) fn review_ref(review: &str) -> atm_lib::reviews::ReviewRef {
+diff --git a/app/src-tauri/src/commands/state.rs b/app/src-tauri/src/commands/state.rs
+index 87341fbe..1e2535fe 100644
+--- a/app/src-tauri/src/commands/state.rs
++++ b/app/src-tauri/src/commands/state.rs
+@@ -90,18 +90,12 @@ impl AppState {
+     /// The window focused last, if it is still open.
+     #[must_use]
+     pub fn front(&self) -> Option<String> {
+-        self.front
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+-            .clone()
++        crate::locked(&self.front).clone()
+     }
+ 
+     /// `window` came to the front.
+     pub fn focused(&self, window: &str) {
+-        *self
+-            .front
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(window.to_owned());
++        *crate::locked(&self.front) = Some(window.to_owned());
+     }
+ 
+     /// `window` closed: its subscriptions end, its links go nowhere, and it is no longer in front. How many
+@@ -110,10 +104,7 @@ impl AppState {
+         self.links.forget(window);
+         self.menus.forget(window);
+         self.needs_you().forget(window);
+-        let mut front = self
+-            .front
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let mut front = crate::locked(&self.front);
+         if front.as_deref() == Some(window) {
+             *front = None;
+         }
+@@ -146,25 +137,19 @@ impl AppState {
+             let _ = channel.send(message.clone());
+         }))?;
+         let id = self.next.fetch_add(1, Ordering::Relaxed);
+-        self.subscriptions
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+-            .insert(
+-                id,
+-                Live {
+-                    window: window.to_owned(),
+-                    _subscription: subscription,
+-                },
+-            );
++        crate::locked(&self.subscriptions).insert(
++            id,
++            Live {
++                window: window.to_owned(),
++                _subscription: subscription,
++            },
++        );
+         Ok(id)
+     }
+ 
+     /// End `window`'s subscription `id` (it stops when dropped); another window's stays. Whether there was one.
+     pub(super) fn unwatch(&self, window: &str, id: u32) -> bool {
+-        let mut subscriptions = self
+-            .subscriptions
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let mut subscriptions = crate::locked(&self.subscriptions);
+         if subscriptions.get(&id).is_some_and(|s| s.window == window) {
+             subscriptions.remove(&id).is_some()
+         } else {
+@@ -176,10 +161,7 @@ impl AppState {
+     /// that made them is gone without saying so (a channel to it doesn't fail, its messages only find no callback).
+     /// Other windows' stay. How many ended.
+     pub fn unwatch_window(&self, window: &str) -> usize {
+-        let mut subscriptions = self
+-            .subscriptions
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let mut subscriptions = crate::locked(&self.subscriptions);
+         let before = subscriptions.len();
+         subscriptions.retain(|_, s| s.window != window);
+         let ended = before - subscriptions.len();
+@@ -220,6 +202,26 @@ impl From<atm_common::Error> for AppError {
+     }
+ }
+ 
++/// What the window, a file or JSON failed at: an error atm can't do anything about (ATM-682: one mapping, not one per
++/// call).
++impl From<tauri::Error> for AppError {
++    fn from(error: tauri::Error) -> Self {
++        Self::Failed(error.to_string())
++    }
++}
++
++impl From<std::io::Error> for AppError {
++    fn from(error: std::io::Error) -> Self {
++        Self::Failed(error.to_string())
++    }
++}
++
++impl From<serde_json::Error> for AppError {
++    fn from(error: serde_json::Error) -> Self {
++        Self::Failed(error.to_string())
++    }
++}
++
+ /// Which of a project's reviews are listed: the REST route's query parameters; what isn't given keeps everything.
+ #[derive(Debug, Clone, Default, Deserialize, Type)]
+ #[serde(default)]
+diff --git a/app/src-tauri/src/lib.rs b/app/src-tauri/src/lib.rs
+index 2db5792a..f2027f0f 100644
+--- a/app/src-tauri/src/lib.rs
++++ b/app/src-tauri/src/lib.rs
+@@ -37,6 +37,14 @@ use windows::{
+     close_window, minimize, open_window, set_title, shell, start_dragging, toggle_maximize,
+ };
+ 
++/// `mutex`, locked: a lock a panicking thread left poisoned is taken as it is, as the app's state is never left half
++/// changed by a panic (ATM-682: the one way the app locks).
++pub(crate) fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
++    mutex
++        .lock()
++        .unwrap_or_else(std::sync::PoisonError::into_inner)
++}
++
+ // What the app serves on its own `atm:` scheme (`assets`), embedded by build.rs
+ include!(concat!(env!("OUT_DIR"), "/atm_assets.rs"));
+ 
+diff --git a/app/src-tauri/src/links.rs b/app/src-tauri/src/links.rs
+index 2313d153..70517e0d 100644
+--- a/app/src-tauri/src/links.rs
++++ b/app/src-tauri/src/links.rs
+@@ -65,9 +65,7 @@ struct Inner {
+ 
+ impl Links {
+     fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
+-        self.inner
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
++        crate::locked(&self.inner)
+     }
+ 
+     /// A link the app was opened with, for `window`'s page: sent now, or kept for it. Whether it was a link the app
+diff --git a/app/src-tauri/src/menu.rs b/app/src-tauri/src/menu.rs
+index d4fbac11..1bebb51e 100644
+--- a/app/src-tauri/src/menu.rs
++++ b/app/src-tauri/src/menu.rs
+@@ -504,9 +504,7 @@ pub struct Menus {
+ 
+ impl Menus {
+     fn inner(&self) -> std::sync::MutexGuard<'_, ByWindow> {
+-        self.inner
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
++        crate::locked(&self.inner)
+     }
+ 
+     /// `window`'s page listens on `channel`.
+diff --git a/app/src-tauri/src/session.rs b/app/src-tauri/src/session.rs
+index c890acca..81006698 100644
+--- a/app/src-tauri/src/session.rs
++++ b/app/src-tauri/src/session.rs
+@@ -180,9 +180,7 @@ struct Inner {
+ 
+ impl Session {
+     fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
+-        self.inner
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner)
++        crate::locked(&self.inner)
+     }
+ 
+     /// Keep the windows in `path`.
+@@ -277,10 +275,7 @@ impl Session {
+     /// # Errors
+     /// When the file can't be written.
+     pub fn write(&self) -> std::io::Result<()> {
+-        let _writing = self
+-            .writing
+-            .lock()
+-            .unwrap_or_else(std::sync::PoisonError::into_inner);
++        let _writing = crate::locked(&self.writing);
+         let Some(path) = self.inner().path.clone() else {
+             return Ok(());
+         };
+@@ -402,10 +397,7 @@ pub async fn save_tabs<R: Runtime>(
+         .checked()
+         .ok_or_else(|| AppError::Invalid("no tab is one of the dashboard's pages".into()))?;
+     if state.session().show(window.label(), tabs) {
+-        state
+-            .session()
+-            .write()
+-            .map_err(|e| AppError::Failed(e.to_string()))?;
++        state.session().write()?;
+     }
+     Ok(())
+ }
+@@ -447,10 +439,8 @@ pub async fn reload_window<R: Runtime>(
+     state: State<'_, AppState>,
+ ) -> Result<(), AppError> {
+     state.session().reloading(window.label());
+-    let url = window.url().map_err(|e| AppError::Failed(e.to_string()))?;
+-    window
+-        .navigate(page_url(url))
+-        .map_err(|e| AppError::Failed(e.to_string()))
++    let url = window.url()?;
++    Ok(window.navigate(page_url(url))?)
+ }
+ 
+ #[cfg(test)]
+diff --git a/app/src-tauri/src/windows.rs b/app/src-tauri/src/windows.rs
+index fd8d3af6..d9619ddf 100644
+--- a/app/src-tauri/src/windows.rs
++++ b/app/src-tauri/src/windows.rs
+@@ -193,9 +193,7 @@ pub async fn set_title<R: Runtime>(
+     window: WebviewWindow<R>,
+     title: String,
+ ) -> Result<(), AppError> {
+-    window
+-        .set_title(&title_of(&title))
+-        .map_err(|e| AppError::Failed(e.to_string()))
++    Ok(window.set_title(&title_of(&title))?)
+ }
+ 
+ /// Open a new window at `address`, one of the dashboard's pages, checked as a deep link is; its page gets the address
+@@ -214,9 +212,8 @@ pub async fn open_window<R: Runtime>(
+         .ok_or_else(|| AppError::Invalid("not one of the dashboard's pages".into()))?;
+     let label = state.new_window_label();
+     state.links().send(&label, address);
+-    build_window(&app, &label)
+-        .map(|_| ())
+-        .map_err(|e| AppError::Failed(e.to_string()))
++    build_window(&app, &label)?;
++    Ok(())
+ }
+ 
+ #[cfg(test)]
+diff --git a/crates/atm-api/src/lib.rs b/crates/atm-api/src/lib.rs
+index f6ecb060..df3a0fda 100644
+--- a/crates/atm-api/src/lib.rs
++++ b/crates/atm-api/src/lib.rs
+@@ -52,6 +52,15 @@ struct Served {
+     page: Vec<u8>,
+ }
+ 
++impl Served {
++    /// Whether `host` (a Host header, or an Origin without its scheme) is this server's own: `localhost:<port>` or
++    /// `127.0.0.1:<port>`, never another name pointed at it (DNS rebinding). ATM-682: the one check, for both.
++    fn is_own_host(&self, host: &str) -> bool {
++        let port = self.port;
++        host == format!("localhost:{port}") || host == format!("127.0.0.1:{port}")
++    }
++}
++
+ /// The header a review change carries the session token in.
+ const SESSION_HEADER: &str = "x-atm-session";
+ /// The largest body a review change may send.
+@@ -120,10 +129,10 @@ fn from_another_site(headers: &HeaderMap) -> bool {
+ fn review_change_refused(served: &Served, host: &str, headers: &HeaderMap) -> Option<Response> {
+     let value = |name: header::HeaderName| headers.get(name).and_then(|v| v.to_str().ok());
+     // The request's Origin is this server's own (the page atm serves; never another site, never none)
+-    let port = served.port;
+     let origin_ok = value(header::ORIGIN).is_some_and(|o| {
+         o == format!("http://{host}")
+-            && (o == format!("http://localhost:{port}") || o == format!("http://127.0.0.1:{port}"))
++            && o.strip_prefix("http://")
++                .is_some_and(|own| served.is_own_host(own))
+     });
+     if !origin_ok {
+         return Some(send_error(
+@@ -284,8 +293,7 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
+         .and_then(|h| h.to_str().ok())
+         .unwrap_or_default()
+         .to_string();
+-    let port = served.port;
+-    if host != format!("localhost:{port}") && host != format!("127.0.0.1:{port}") {
++    if !served.is_own_host(&host) {
+         // A page on another site that points its own domain at 127.0.0.1 (DNS rebinding) is refused
+         return send_error(StatusCode::FORBIDDEN, "unexpected Host header");
+     }
+@@ -329,7 +337,7 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
+         let info = json!({
+             "atm": true,
+             "pid": std::process::id(),
+-            "port": port,
++            "port": served.port,
+             "version": served.version,
+             "build": served.build,
+             "home": served.home,
+diff --git a/crates/atm-cli/src/commands.rs b/crates/atm-cli/src/commands.rs
+index 9ef5102b..29156ef0 100644
+--- a/crates/atm-cli/src/commands.rs
++++ b/crates/atm-cli/src/commands.rs
+@@ -31,6 +31,19 @@ pub struct Context {
+     pub dry_run: bool,
+ }
+ 
++impl Context {
++    /// With `--dry-run`, say what would be done; whether it was a dry run, so the command stops there (ATM-682, audit
++    /// C17: the one rule). Called once the command has checked and resolved what it was given, so a dry run refuses
++    /// what the real run would, and only the change itself is left out.
++    #[must_use]
++    pub fn dry(self, what: &str) -> bool {
++        if self.dry_run {
++            println!("[dry-run] would {what}");
++        }
++        self.dry_run
++    }
++}
++
+ /// Print a JSON result, as atm prints JSON: exactly (std's `println!`, not the crate's, which drops control
+ /// characters; JSON escapes those it must, and a program reads it, not a terminal).
+ pub fn print_json(value: &Value) {
+diff --git a/crates/atm-cli/src/commands/project/settings.rs b/crates/atm-cli/src/commands/project/settings.rs
+index 04725474..2b489c07 100644
+--- a/crates/atm-cli/src/commands/project/settings.rs
++++ b/crates/atm-cli/src/commands/project/settings.rs
+@@ -25,12 +25,9 @@ fn choice(name: &str, value: Option<&str>, choices: &[&str]) -> Result<()> {
+     }
+ }
+ 
+-/// With `--dry-run`, say what would be done; whether it was a dry run.
++/// With `--dry-run`, say what would be done; whether it was a dry run ([`Context::dry`]).
+ fn dry(ctx: Context, what: &str) -> bool {
+-    if ctx.dry_run {
+-        println!("[dry-run] would {what}");
+-    }
+-    ctx.dry_run
++    ctx.dry(what)
+ }
+ 
+ /// `atm project config`: where the task files are.
+diff --git a/crates/atm-cli/src/commands/review/decide.rs b/crates/atm-cli/src/commands/review/decide.rs
+index 153f0c76..6ca0fa85 100644
+--- a/crates/atm-cli/src/commands/review/decide.rs
++++ b/crates/atm-cli/src/commands/review/decide.rs
+@@ -81,8 +81,9 @@ pub(super) fn run(command: DecideCommand, ctx: Context, cwd: &Path) -> Result<u8
+             } else {
+                 None
+             };
+-            if ctx.dry_run {
+-                println!("[dry-run] would submit on {review}");
++            // The review is found first, so a dry run refuses an unknown one as the real run does (audit C17)
++            reviews::store(&project)?.get_review(&reference(&review))?;
++            if ctx.dry(&format!("submit on {review}")) {
+                 return Ok(0);
+             }
+             // With the person's drafts on it (ATM-612): `--comment` without a text only sends them
+@@ -108,8 +109,8 @@ pub(super) fn run(command: DecideCommand, ctx: Context, cwd: &Path) -> Result<u8
+             agent,
+         } => {
+             let mut project = opened(cwd, agent.as_deref())?;
+-            if ctx.dry_run {
+-                println!("[dry-run] would close {review}");
++            reviews::store(&project)?.get_review(&reference(&review))?;
++            if ctx.dry(&format!("close {review}")) {
+                 return Ok(0);
+             }
+             reviews::close(&mut project, &reference(&review), &reason, reject_tasks)?;
+diff --git a/crates/atm-cli/src/commands/review/talk.rs b/crates/atm-cli/src/commands/review/talk.rs
+index a6c91eb2..dc0a8f43 100644
+--- a/crates/atm-cli/src/commands/review/talk.rs
++++ b/crates/atm-cli/src/commands/review/talk.rs
+@@ -183,8 +183,7 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8>
+                 round,
+                 body: text,
+             };
+-            if ctx.dry_run {
+-                println!("[dry-run] would comment on {}", found.header.reference);
++            if ctx.dry(&format!("comment on {}", found.header.reference)) {
+                 return Ok(0);
+             }
+             // On a live review, the working copy as it is now first becomes a checkpoint (ATM-576)
+@@ -202,8 +201,9 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8>
+             agent,
+         } => {
+             let project = opened(cwd, agent.as_deref())?;
+-            if ctx.dry_run {
+-                println!("[dry-run] would poke {review}");
++            // The review is found first, so a dry run refuses an unknown one as the real run does (audit C17)
++            reviews::store(&project)?.get_review(&reference(&review))?;
++            if ctx.dry(&format!("poke {review}")) {
+                 return Ok(0);
+             }
+             let id = atm_lib::review_requests::poke_review(
+@@ -227,8 +227,8 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8>
+             let project = opened(cwd, agent.as_deref())?;
+             let text = text_of(body, cwd)?;
+             let mut store = reviews::store(&project)?;
+-            if ctx.dry_run {
+-                println!("[dry-run] would reply to {comment} in {review}");
++            store.get_review(&reference(&review))?;
++            if ctx.dry(&format!("reply to {comment} in {review}")) {
+                 return Ok(0);
+             }
+             let id = Reviews::new(&mut store).reply(
+@@ -252,8 +252,8 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8>
+             let project = opened(cwd, agent.as_deref())?;
+             let text = text_of(body, cwd)?;
+             let mut store = reviews::store(&project)?;
+-            if ctx.dry_run {
+-                println!("[dry-run] would edit {comment} in {review}");
++            store.get_review(&reference(&review))?;
++            if ctx.dry(&format!("edit {comment} in {review}")) {
+                 return Ok(0);
+             }
+             Reviews::new(&mut store).edit(
+@@ -276,11 +276,9 @@ pub(super) fn run(command: TalkCommand, ctx: Context, cwd: &Path) -> Result<u8>
+         } => {
+             let project = opened(cwd, agent.as_deref())?;
+             let mut store = reviews::store(&project)?;
+-            if ctx.dry_run {
+-                println!(
+-                    "[dry-run] would {} {comment} in {review}",
+-                    if reopen { "reopen" } else { "resolve" }
+-                );
++            store.get_review(&reference(&review))?;
++            let what = if reopen { "reopen" } else { "resolve" };
++            if ctx.dry(&format!("{what} {comment} in {review}")) {
+                 return Ok(0);
+             }
+             Reviews::new(&mut store).resolve(
+@@ -345,8 +343,7 @@ pub(super) fn run_draft(command: DraftCommand, ctx: Context, cwd: &Path) -> Resu
+                 round,
+                 body: text_of(body, cwd)?,
+             };
+-            if ctx.dry_run {
+-                println!("[dry-run] would draft on {review}");
++            if ctx.dry(&format!("draft on {review}")) {
+                 return Ok(0);
+             }
+             let draft = drafts::add_draft(&project, &reference(&review), new)?;
+@@ -379,8 +376,7 @@ pub(super) fn run_draft(command: DraftCommand, ctx: Context, cwd: &Path) -> Resu
+             let update = DraftUpdate {
+                 body: text_of(body, cwd)?,
+             };
+-            if ctx.dry_run {
+-                println!("[dry-run] would change {draft} on {review}");
++            if ctx.dry(&format!("change {draft} on {review}")) {
+                 return Ok(0);
+             }
+             let changed = drafts::update_draft(&project, &reference(&review), &draft, &update)?;
+@@ -396,8 +392,7 @@ pub(super) fn run_draft(command: DraftCommand, ctx: Context, cwd: &Path) -> Resu
+             agent,
+         } => {
+             let project = opened(cwd, agent.as_deref())?;
+-            if ctx.dry_run {
+-                println!("[dry-run] would remove {draft} from {review}");
++            if ctx.dry(&format!("remove {draft} from {review}")) {
+                 return Ok(0);
+             }
+             drafts::remove_draft(&project, &reference(&review), &draft)?;
+diff --git a/crates/atm-cli/src/commands/sprint.rs b/crates/atm-cli/src/commands/sprint.rs
+index 90dccebe..5c8d252d 100644
+--- a/crates/atm-cli/src/commands/sprint.rs
++++ b/crates/atm-cli/src/commands/sprint.rs
+@@ -135,12 +135,9 @@ pub enum SprintCommand {
+     },
+ }
+ 
+-/// With `--dry-run`, say what would be done; whether it was a dry run.
++/// With `--dry-run`, say what would be done; whether it was a dry run ([`Context::dry`]).
+ fn dry(ctx: Context, what: &str) -> bool {
+-    if ctx.dry_run {
+-        println!("[dry-run] would {what}");
+-    }
+-    ctx.dry_run
++    ctx.dry(what)
+ }
+ 
+ fn plural(n: u64) -> &'static str {
+diff --git a/crates/atm-cli/src/commands/task/add.rs b/crates/atm-cli/src/commands/task/add.rs
+index bdd4fa53..c3a774bb 100644
+--- a/crates/atm-cli/src/commands/task/add.rs
++++ b/crates/atm-cli/src/commands/task/add.rs
+@@ -230,13 +230,12 @@ pub struct NoteArgs {
+ /// # Errors
+ /// An unknown task, a note too long, a store error.
+ pub fn note(args: &NoteArgs, ctx: Context, cwd: &Path) -> Result<()> {
+-    if ctx.dry_run {
+-        println!("[dry-run] would add a note to {}", args.task_id);
+-        return Ok(());
+-    }
+     let actor = agent_identity(args.agent.as_deref(), cwd);
+     let mut project = Project::open(cwd)?.with_actor(Some(actor));
+-    let stored = project.resolve_task(&args.task_id)?;
++    let stored = project.working_task(&args.task_id)?;
++    if ctx.dry(&format!("add a note to {}", args.task_id)) {
++        return Ok(());
++    }
+     let task = add_task_note(&mut project, &stored, &args.text)?;
+     let notes = task
+         .get("notes")
+diff --git a/crates/atm-cli/src/commands/task/edit.rs b/crates/atm-cli/src/commands/task/edit.rs
+index 7e77cb99..fbf48466 100644
+--- a/crates/atm-cli/src/commands/task/edit.rs
++++ b/crates/atm-cli/src/commands/task/edit.rs
+@@ -90,10 +90,6 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
+             "--sprint and --backlog can't both be given".into(),
+         ));
+     }
+-    if ctx.dry_run {
+-        println!("[dry-run] would edit task {}", args.task_id);
+-        return Ok(());
+-    }
+     let description = match &file {
+         Some(file) => Some(crate::option_file::read_option_file(
+             cwd,
+@@ -131,7 +127,7 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
+     };
+     let actor = agent_identity(args.agent.as_deref(), cwd);
+     let mut project = Project::open(cwd)?.with_actor(Some(actor));
+-    let stored = project.resolve_task(&args.task_id)?;
++    let stored = project.working_task(&args.task_id)?;
+     // Tasks named by key, alias or UUID are stored by UUID (ADR-007 §5); a reference to take away that names no task
+     // (a dangling one) is taken away as written
+     // Another project's task too, by its key (ADR-007 §7)
+@@ -144,6 +140,10 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
+     };
+     change.remove_dependencies = loose(&change.remove_dependencies);
+     change.remove_related = loose(&change.remove_related);
++    // After the description file is read and the task and its new references are found (audit C17)
++    if ctx.dry(&format!("edit task {}", args.task_id)) {
++        return Ok(());
++    }
+     let edited = edit_existing_task(&mut project, &stored, &change)?;
+     if ctx.json {
+         print_json(&Value::Object(edited.task));
+diff --git a/crates/atm-cli/src/commands/task/review.rs b/crates/atm-cli/src/commands/task/review.rs
+index 4eef00f4..d428f1c0 100644
+--- a/crates/atm-cli/src/commands/task/review.rs
++++ b/crates/atm-cli/src/commands/task/review.rs
+@@ -107,15 +107,15 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
+     };
+     let actor = agent_identity(decider.agent.as_deref(), cwd);
+     let mut project = Project::open(cwd)?.with_actor(Some(actor));
+-    if ctx.dry_run {
+-        println!("[dry-run] would {} {task_id}", command.name());
+-        return Ok(());
+-    }
+     let options = Options {
+         status: decider.status,
+         ..options
+     };
+-    let stored = project.resolve_task(&task_id)?;
++    // The task is found first, so a dry run refuses an unknown one as the real run does (audit C17)
++    let stored = project.working_task(&task_id)?;
++    if ctx.dry(&format!("{} {task_id}", command.name())) {
++        return Ok(());
++    }
+     let result = change_task_status(&mut project, command, &stored, &options)?;
+     report(command, &result, ctx, cwd);
+     Ok(())
+diff --git a/crates/atm-cli/src/commands/task/state.rs b/crates/atm-cli/src/commands/task/state.rs
+index 9507ca21..1680c9a7 100644
+--- a/crates/atm-cli/src/commands/task/state.rs
++++ b/crates/atm-cli/src/commands/task/state.rs
+@@ -167,14 +167,13 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
+             command.name()
+         )));
+     }
+-    if ctx.dry_run {
+-        println!("[dry-run] would {} {task_id}", command.name());
+-        return Ok(());
+-    }
+     let mut opts = options(command, args);
+     if let Some(duplicate) = &opts.duplicate_of {
+         opts.duplicate_of = Some(project.resolve_task(duplicate)?);
+     }
++    if ctx.dry(&format!("{} {task_id}", command.name())) {
++        return Ok(());
++    }
+     // A task finished whose change an approved live review covers as it is now needs no other review
+     // (docs/code-review-design.md §3.5): it is approved, naming the review, first. Never in the way of done itself
+     if command == Command::Done
+diff --git a/crates/atm-cli/src/commands/workspace.rs b/crates/atm-cli/src/commands/workspace.rs
+index 6a529e30..25d3cf7a 100644
+--- a/crates/atm-cli/src/commands/workspace.rs
++++ b/crates/atm-cli/src/commands/workspace.rs
+@@ -64,12 +64,9 @@ pub enum WorkspaceCommand {
+     },
+ }
+ 
+-/// With `--dry-run`, say what would be done; whether it was a dry run.
++/// With `--dry-run`, say what would be done; whether it was a dry run ([`Context::dry`]).
+ fn dry(ctx: Context, what: &str) -> bool {
+-    if ctx.dry_run {
+-        println!("[dry-run] would {what}");
+-    }
+-    ctx.dry_run
++    ctx.dry(what)
+ }
+ 
+ fn workspace(workspaces: &Workspaces, id: Option<&str>) -> Result<Arc<Workspace>> {
+diff --git a/crates/atm-lib/src/project.rs b/crates/atm-lib/src/project.rs
+index 117089bc..2bc1452c 100644
+--- a/crates/atm-lib/src/project.rs
++++ b/crates/atm-lib/src/project.rs
+@@ -139,6 +139,24 @@ impl Project {
+             .to_string())
+     }
+ 
++    /// [`Project::resolve_task`], checked: the task is among the working tasks, as a command that changes it needs
++    /// (ATM-682, audit C17: so `--dry-run` refuses what the real run would). Its stored ID.
++    ///
++    /// # Errors
++    /// As [`Project::resolve_task`]; no such working task (saying when it is archived).
++    pub fn working_task(&self, reference: &str) -> Result<String> {
++        let id = self.resolve_task(reference)?;
++        if self.store.get_task(&id)?.is_some() {
++            return Ok(id);
++        }
++        let archived = self
++            .store
++            .list_archived()?
++            .iter()
++            .any(|t| t.get("id").and_then(serde_json::Value::as_str) == Some(id.as_str()));
++        Err(crate::lookup::no_task(reference, archived))
++    }
++
+     /// A dependency or related task to store (ADR-007 §5, §7): a task of this project by [`Project::resolve_task`], or,
+     /// when the key's prefix is another registered project's, that task as `<project id>:<UUID>`.
+     ///
+diff --git a/tests/scripts/scenarios/notes.json b/tests/scripts/scenarios/notes.json
+index c80b69b1..dbc65cf7 100644
+--- a/tests/scripts/scenarios/notes.json
++++ b/tests/scripts/scenarios/notes.json
+@@ -312,6 +312,32 @@
+       }
+     }
+   },
++  {
++    "name": "atm task note --dry-run refuses an unknown task, as the real run does (audit C17)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [{ "id": "T-1", "status": "todo" }]
++        }
++      }
++    },
++    "args": ["task", "note", "T-9", "hello", "-n"],
++    "env": { "ATM_AGENT": "carol" },
++    "expect": { "exit": 1, "stderrIncludes": ["no task T-9"] }
++  },
++  {
++    "name": "atm task edit --dry-run refuses an unknown task, as the real run does (audit C17)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [{ "id": "T-1", "status": "todo" }]
++        }
++      }
++    },
++    "args": ["task", "edit", "T-9", "--name", "x", "-n"],
++    "env": { "ATM_AGENT": "carol" },
++    "expect": { "exit": 1, "stderrIncludes": ["no task T-9"] }
++  },
+   {
+     "name": "atm task note needs its text",
+     "setup": {
+diff --git a/tests/scripts/scenarios/review.json b/tests/scripts/scenarios/review.json
+index 9938302e..5d99cfd8 100644
+--- a/tests/scripts/scenarios/review.json
++++ b/tests/scripts/scenarios/review.json
+@@ -398,5 +398,18 @@
+         }
+       }
+     }
++  },
++  {
++    "name": "a review decision with --dry-run on an unknown task refuses it, as the real run does (audit C17)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [{ "id": "T-1", "status": "in_review" }]
++        }
++      }
++    },
++    "args": ["task", "review", "approve", "T-9", "--dry-run"],
++    "env": { "ATM_AGENT": "Hakan" },
++    "expect": { "exit": 1, "stderrIncludes": ["no task T-9"] }
+   }
+ ]

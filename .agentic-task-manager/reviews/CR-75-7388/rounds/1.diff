@@ -1,0 +1,32 @@
+diff --git a/dashboard/src/lib/reviews/DiffCode.svelte b/dashboard/src/lib/reviews/DiffCode.svelte
+index 2db627ee..e6d1e5f1 100644
+--- a/dashboard/src/lib/reviews/DiffCode.svelte
++++ b/dashboard/src/lib/reviews/DiffCode.svelte
+@@ -176,13 +176,20 @@
+       heights.flatMap((h, i) => (h > one + 0.5 ? [[i + FIRST_LINE, Math.round(h * 100) / 100] as const] : [])),
+     );
+   });
+-  /** Each line's row: measured when wrapped, else the code's one line height */
+-  const rowOf = (i: number) =>
+-    wrap && wrapped?.[i]
+-      ? wrapped[i]
+-      : layout
+-        ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
+-        : null;
++  /** Each line's row: measured when wrapped, else the code's one line height; its edges on whole pixels, so the rows
++   * tile: a line height of 20.8 px put each edge inside a pixel, which both rows half covered, and their two tints drew
++   * a line between every two lines */
++  const rowOf = (i: number) => {
++    const row =
++      wrap && wrapped?.[i]
++        ? wrapped[i]
++        : layout
++          ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
++          : null;
++    if (!row) return null;
++    const top = Math.round(row.top);
++    return { top, height: Math.round(row.top + row.height) - top };
++  };
+ 
+   /** The line at a pointer's height in the run, if there is one there */
+   function lineAt(e: MouseEvent): number | null {

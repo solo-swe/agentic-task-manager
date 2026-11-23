@@ -1,0 +1,37 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "5bb053f195b6e5e664d1155318d4c2a76d4d1ca8",
+    "head": "73925a5c8c850ed503849a94763bc4901447095f"
+  },
+  "files": [
+    {
+      "path": "crates/atm-review/src/rules.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ReviewPage.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ReviewPage.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/code-review-design.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T06:37:57Z"
+}

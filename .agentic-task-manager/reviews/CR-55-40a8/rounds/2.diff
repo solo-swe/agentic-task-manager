@@ -1,0 +1,853 @@
+diff --git a/crates/atm-common/src/keys.rs b/crates/atm-common/src/keys.rs
+index 7eee1a1a..0d9e3380 100644
+--- a/crates/atm-common/src/keys.rs
++++ b/crates/atm-common/src/keys.rs
+@@ -200,6 +200,28 @@ fn one<'a>(found: &[(&'a Task, bool)], reference: &str, via: Via) -> Result<Opti
+     }
+ }
+ 
++/// The tasks that have `reference` among their aliases (any case, a leading `~` ignored), working and archived: the
++/// tasks a merge moved off a number (ADR-009) that another task may hold now (ATM-630).
++#[must_use]
++pub fn alias_holders<'a>(
++    document: &'a Value,
++    archive: &'a [Task],
++    reference: &str,
++) -> Vec<&'a Task> {
++    let reference = without_draft_mark(reference);
++    let has = |t: &&Task| {
++        t.get("aliases").and_then(Value::as_array).is_some_and(|a| {
++            a.iter()
++                .filter_map(Value::as_str)
++                .any(|x| x.eq_ignore_ascii_case(reference))
++        })
++    };
++    tasks_of(document)
++        .filter(has)
++        .chain(archive.iter().filter(has))
++        .collect()
++}
++
+ /// The task a reference names (ADR-007 §5). In a keys-format document, in this order: the UUID; the current key
+ /// (`ATM-527`, any case); a key with an earlier prefix (`T-527`, from `meta.key_history`); a task's own alias (a key
+ /// that moved, an ID from before task keys). A current key wins over an alias: when a provisional number moved, the
+diff --git a/crates/atm-common/src/keys/tests.rs b/crates/atm-common/src/keys/tests.rs
+index 74cb8a2e..b98b7254 100644
+--- a/crates/atm-common/src/keys/tests.rs
++++ b/crates/atm-common/src/keys/tests.rs
+@@ -93,6 +93,28 @@ fn a_current_key_wins_over_an_alias_that_moved_off_it() {
+     assert_eq!((f.task["id"].as_str().unwrap(), f.via), (C, Via::Alias));
+ }
+ 
++/// ATM-630: who moved off a number, whoever holds it now; working and archived, any case, a `~` ignored
++#[test]
++fn the_tasks_holding_a_reference_as_an_alias() {
++    let (document, mut archive) = project();
++    archive.push(task(
++        json!({"id": OLD, "number": 3, "aliases": ["ATM-538"]}),
++    ));
++    let holders = |reference: &str| -> Vec<String> {
++        alias_holders(&document, &archive, reference)
++            .iter()
++            .map(|t| t["id"].as_str().unwrap().to_string())
++            .collect()
++    };
++    for reference in ["ATM-538", "atm-538", "~ATM-538"] {
++        assert_eq!(holders(reference), [C, OLD], "{reference}");
++    }
++    assert_eq!(holders("T-P1-03"), [A]);
++    for none in ["ATM-527", "ATM-999", "", B] {
++        assert!(holders(none).is_empty(), "{none}");
++    }
++}
++
+ #[test]
+ fn what_finds_nothing_says_why() {
+     assert_eq!(not_found("ATM-999"), "no task 'ATM-999' in this project");
+diff --git a/crates/atm-lib/src/lib.rs b/crates/atm-lib/src/lib.rs
+index 14035091..ae112c39 100644
+--- a/crates/atm-lib/src/lib.rs
++++ b/crates/atm-lib/src/lib.rs
+@@ -21,6 +21,7 @@ pub mod project;
+ pub mod query;
+ pub mod releases;
+ pub mod review_drafts;
++pub mod review_keys;
+ pub mod review_listen;
+ pub mod review_pages;
+ pub mod review_requests;
+diff --git a/crates/atm-lib/src/review_keys.rs b/crates/atm-lib/src/review_keys.rs
+new file mode 100644
+index 00000000..90393c0c
+--- /dev/null
++++ b/crates/atm-lib/src/review_keys.rs
+@@ -0,0 +1,288 @@
++//! Which task each key a review stores means (ATM-630). A review names its tasks by the keys they had when it was
++//! written. When a merge moves a task's number (ADR-009 §3), the old key is that task's alias, and another task holds
++//! it now, the one that kept it. That key is ambiguous: it names the task holding it now (ADR-007 §5), but the review
++//! may be about the one that moved. The review's own commit tells them apart. `tasks.json` at the commit its first
++//! round was made at (a range's head, a working round's base), or else at the commit that added its `review.md`, says
++//! which task held that number then. Nothing is rewritten, and a key that isn't ambiguous costs no git read.
++
++use std::path::Path;
++
++use atm_common::keys::{self, Via};
++use atm_common::{Result, TASK_DIR, Task};
++use atm_review::folder::FileStore;
++use atm_review::{ReviewHeader, RoundKind};
++use serde_json::Value;
++
++use crate::project::Project;
++
++/// The task (its ID) the review `header` means by `key`, read from `reviews` (the store of the working copy it was
++/// found in; none to resolve the key as every command does).
++///
++/// # Errors
++/// The project has no task by that key, or its tasks can't be read.
++pub fn task_of(
++    project: &Project,
++    reviews: Option<&FileStore>,
++    header: &ReviewHeader,
++    key: &str,
++) -> Result<String> {
++    let id = project.resolve_task(key)?;
++    let Some(reviews) = reviews else {
++        return Ok(id);
++    };
++    let document = project.store().document()?;
++    let archive: Vec<Task> = project
++        .store()
++        .list_archived()?
++        .into_iter()
++        .cloned()
++        .collect();
++    // Only a key some task holds now can be ambiguous: an alias or a UUID names one task
++    if !matches!(
++        keys::resolve(document, &archive, key).map(|f| f.via),
++        Ok(Via::Key | Via::EarlierPrefix)
++    ) {
++        return Ok(id);
++    }
++    let moved: Vec<String> = keys::alias_holders(document, &archive, key)
++        .iter()
++        .filter_map(|t| t.get("id").and_then(Value::as_str))
++        .filter(|other| *other != id)
++        .map(str::to_string)
++        .collect();
++    if moved.is_empty() {
++        return Ok(id);
++    }
++    Ok(match holder_then(reviews, header, key) {
++        Some(then) if then == id || moved.contains(&then) => then,
++        _ => id,
++    })
++}
++
++/// The task (its ID) that held `key` when the review was made: in `tasks.json` at its first round's commit, then at
++/// the commit that added its `review.md`; none when neither can be read (a commit gone after a squash, a review
++/// never committed, no git).
++fn holder_then(reviews: &FileStore, header: &ReviewHeader, key: &str) -> Option<String> {
++    let working_copy = reviews.folder().parent()?.parent()?;
++    let vcs = atm_vcs::GitVcs::new(working_copy);
++    let mut commits = Vec::new();
++    // A submodule's round is of the submodule's commits, which have no tasks.json of the project's
++    if let Some(round) = reviews
++        .first_round(header)
++        .filter(|r| r.submodule.is_none())
++    {
++        match round.kind {
++            RoundKind::Range { head, .. } => commits.push(head),
++            RoundKind::Working { base } => commits.push(base),
++            RoundKind::Files => {}
++        }
++    }
++    if let Some(review_md) = relative(working_copy, &reviews.folder_of(header).join("review.md"))
++        && let Some(added) = vcs.first_commit_adding(&review_md)
++    {
++        commits.push(added);
++    }
++    let tasks = format!("{TASK_DIR}/tasks.json");
++    // A round's commit is what its file says, and anyone who can change the review wrote it: only a full SHA is read,
++    // never text git could take for an option or a revision expression
++    let sha = |c: &&String| matches!(c.len(), 40 | 64) && c.bytes().all(|b| b.is_ascii_hexdigit());
++    commits.iter().filter(sha).find_map(|commit| {
++        let (_, blob) = vcs.blob_in(commit, &tasks)?;
++        let document: Value = serde_json::from_slice(&vcs.blob_bytes(&blob).ok()?).ok()?;
++        let found = keys::resolve(&document, &[], key).ok()?;
++        found.task.get("id")?.as_str().map(str::to_string)
++    })
++}
++
++/// `path` from `root`, with `/` between its parts, as git names files; none outside `root`.
++fn relative(root: &Path, path: &Path) -> Option<String> {
++    let parts: Vec<String> = path
++        .strip_prefix(root)
++        .ok()?
++        .components()
++        .map(|c| c.as_os_str().to_string_lossy().into_owned())
++        .collect();
++    (!parts.is_empty()).then(|| parts.join("/"))
++}
++
++#[cfg(test)]
++mod tests {
++    use std::path::{Path, PathBuf};
++
++    use atm_review::{Actor, NewReview, NewRound, Patch, ReviewFilter, ReviewStore, Status};
++    use serde_json::json;
++
++    use super::*;
++
++    const A: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8001";
++    const B: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8002";
++
++    struct Dir(PathBuf);
++    impl Drop for Dir {
++        fn drop(&mut self) {
++            let _ = std::fs::remove_dir_all(&self.0);
++        }
++    }
++    fn dir() -> Dir {
++        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
++        let count = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        let path = std::env::temp_dir().join(format!(
++            "atm-lib-review-keys-{}-{count}",
++            std::process::id()
++        ));
++        let _ = std::fs::remove_dir_all(&path);
++        std::fs::create_dir_all(path.join(TASK_DIR)).unwrap();
++        Dir(std::fs::canonicalize(&path).unwrap())
++    }
++    fn git(args: &[&str], cwd: &Path) {
++        let mut all = vec!["-c", "user.name=t", "-c", "user.email=t@example.com"];
++        all.extend_from_slice(args);
++        assert!(atm_db::git::git(&all, cwd).is_some(), "git {args:?}");
++    }
++    fn write_tasks(root: &Path, tasks: &Value) {
++        let document = json!({ "meta": { "project": "Keys", "format": 2, "key": "ATM", "next_number": 14 }, "tasks": tasks });
++        std::fs::write(root.join(TASK_DIR).join("tasks.json"), document.to_string()).unwrap();
++    }
++    fn task(id: &str, number: u64, aliases: &[&str]) -> Value {
++        json!({ "id": id, "number": number, "aliases": aliases, "name": id, "type": "feature", "status": "todo" })
++    }
++    /// A review of files (no commit of its own) naming ATM-12
++    fn review_of_files(store: &mut FileStore) -> ReviewHeader {
++        review(store, RoundKind::Files)
++    }
++    /// A review naming ATM-12, its first round `kind`
++    fn review(store: &mut FileStore, kind: RoundKind) -> ReviewHeader {
++        store
++            .create_review(NewReview {
++                title: "Files".into(),
++                summary: String::new(),
++                tasks: vec!["ATM-12".into()],
++                author: Some(Actor("claude:a".into())),
++                reviewers: Vec::new(),
++                status: Status::Waiting,
++                first: NewRound {
++                    kind,
++                    submodule: None,
++                    files: Vec::new(),
++                    patch: Patch::default(),
++                    by: Actor("claude:a".into()),
++                },
++            })
++            .unwrap()
++    }
++
++    /// A clash moved A off 12 (ATM-13 now, ATM-12 its alias); B holds 12. A review committed while A held 12 means A
++    /// by ATM-12, read at the commit that added its review.md; one never committed can't tell, and keeps today's rule
++    #[test]
++    fn an_old_key_another_task_holds_now_is_the_task_that_held_it_at_the_reviews_commit() {
++        let dir = dir();
++        let root = &dir.0;
++        git(&["init", "-q", "-b", "main"], root);
++        write_tasks(root, &json!([task(A, 12, &[])]));
++        let mut store = FileStore::open(&root.join(TASK_DIR)).unwrap();
++        let committed = review_of_files(&mut store);
++        git(&["add", "-A"], root);
++        git(&["commit", "-q", "-m", "A and its review"], root);
++        // The merge: A moved to 13, B holds 12 (uncommitted, as a merge leaves it before its commit)
++        write_tasks(root, &json!([task(A, 13, &["ATM-12"]), task(B, 12, &[])]));
++        let never_committed = review_of_files(&mut store);
++        let project = Project::open(root).unwrap();
++        let of = |header: &ReviewHeader, key: &str| {
++            task_of(&project, Some(&store), header, key).unwrap()
++        };
++        assert_eq!(of(&committed, "ATM-12"), A, "the task that held 12 then");
++        assert_eq!(of(&committed, "atm-12"), A, "any case");
++        assert_eq!(of(&committed, "~ATM-12"), A, "an old review's mark");
++        assert_eq!(
++            of(&never_committed, "ATM-12"),
++            B,
++            "nothing to read: the holder now"
++        );
++        // Without the review's folder, as every command resolves it
++        assert_eq!(task_of(&project, None, &committed, "ATM-12").unwrap(), B);
++        // Not ambiguous: no git read needed, the same answer either way
++        assert_eq!(of(&committed, "ATM-13"), A);
++        assert_eq!(of(&committed, B), B);
++        assert!(task_of(&project, Some(&store), &committed, "ATM-99").is_err());
++        assert_eq!(
++            store.list_reviews(&ReviewFilter::default()).unwrap().len(),
++            2,
++            "nothing rewritten"
++        );
++    }
++
++    /// A round's commit is read only when its file names a full SHA: `HEAD` (or an option) written there is never given
++    /// to git, so a review not committed yet still can't tell, and keeps today's rule
++    #[test]
++    fn a_rounds_commit_is_read_only_when_it_is_a_full_sha() {
++        let dir = dir();
++        let root = &dir.0;
++        git(&["init", "-q", "-b", "main"], root);
++        write_tasks(root, &json!([task(A, 12, &[])]));
++        git(&["add", "-A"], root);
++        git(&["commit", "-q", "-m", "A held 12"], root);
++        write_tasks(root, &json!([task(A, 13, &["ATM-12"]), task(B, 12, &[])]));
++        let mut store = FileStore::open(&root.join(TASK_DIR)).unwrap();
++        let project = Project::open(root).unwrap();
++        for head in ["HEAD", "main", "--output=x", "HEAD~0"] {
++            let header = review(
++                &mut store,
++                RoundKind::Range {
++                    base: head.into(),
++                    head: head.into(),
++                },
++            );
++            assert_eq!(
++                task_of(&project, Some(&store), &header, "ATM-12").unwrap(),
++                B,
++                "{head}"
++            );
++        }
++        // The same commit by its SHA is read: A held 12 there
++        let sha = atm_db::git::git(&["rev-parse", "HEAD"], root).unwrap();
++        let header = review(
++            &mut store,
++            RoundKind::Range {
++                base: sha.trim().into(),
++                head: sha.trim().into(),
++            },
++        );
++        assert_eq!(task_of(&project, Some(&store), &header, "ATM-12").unwrap(), A);
++    }
++
++    /// At the review's commit a third task held the number (neither the holder now nor one that moved off it): the
++    /// commit doesn't help, and the key means the holder now
++    #[test]
++    fn a_commit_naming_neither_task_leaves_the_holder_now() {
++        let dir = dir();
++        let root = &dir.0;
++        let other = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8003";
++        git(&["init", "-q", "-b", "main"], root);
++        write_tasks(root, &json!([task(other, 12, &[])]));
++        let mut store = FileStore::open(&root.join(TASK_DIR)).unwrap();
++        let header = review_of_files(&mut store);
++        git(&["add", "-A"], root);
++        git(&["commit", "-q", "-m", "another task held 12"], root);
++        write_tasks(root, &json!([task(A, 13, &["ATM-12"]), task(B, 12, &[])]));
++        let project = Project::open(root).unwrap();
++        assert_eq!(
++            task_of(&project, Some(&store), &header, "ATM-12").unwrap(),
++            B
++        );
++    }
++
++    #[test]
++    fn a_path_from_the_root_is_named_as_git_names_it() {
++        let root = Path::new("/r");
++        assert_eq!(
++            relative(
++                root,
++                Path::new("/r/.agentic-task-manager/reviews/CR-1-abcd/review.md")
++            )
++            .as_deref(),
++            Some(".agentic-task-manager/reviews/CR-1-abcd/review.md")
++        );
++        assert_eq!(relative(root, Path::new("/elsewhere/review.md")), None);
++        assert_eq!(relative(root, root), None);
++    }
++}
+diff --git a/crates/atm-lib/src/review_listen.rs b/crates/atm-lib/src/review_listen.rs
+index 8ac451d2..a954d9bd 100644
+--- a/crates/atm-lib/src/review_listen.rs
++++ b/crates/atm-lib/src/review_listen.rs
+@@ -427,7 +427,7 @@ pub fn watch(
+         // Told in the order they were written, oldest first, whichever review they are in
+         let mut news: Vec<(String, u32, Value)> = Vec::new();
+         for mut review in all(&store)? {
+-            keyed_now(now, &mut review.header);
++            keyed_now(now, &store, &mut review.header);
+             for chain in &review.chains {
+                 for (comment, parent) in with_parents(chain) {
+                     if !seen.insert(format!("{}/{}", review.header.id.0, comment.id.0)) {
+@@ -459,7 +459,7 @@ pub fn watch(
+         }
+         // Then the decisions on reviews of its work, after the words that came with them
+         for mut review in all(&store)? {
+-            keyed_now(now, &mut review.header);
++            keyed_now(now, &store, &mut review.header);
+             let status = review.header.status;
+             let was = statuses.insert(review.header.id.0.clone(), status);
+             if was == Some(status) || !decided(status) {
+@@ -479,12 +479,13 @@ pub fn watch(
+ 
+ /// A review's tasks as they are keyed now (ATM-630): a review written before a task's number moved at a merge names
+ /// the key it had (an alias now), an older one `~KEY` or an earlier prefix's; each resolved as every command resolves
+-/// one, so the agent's work is found whatever key its review was written with. One the project doesn't have stays.
+-fn keyed_now(project: &Project, header: &mut ReviewHeader) {
++/// one, so the agent's work is found whatever key its review was written with; an old key another task holds now as
++/// the review in `store` meant it ([`reviews::key_now`]). One the project doesn't have stays.
++fn keyed_now(project: &Project, store: &FileStore, header: &mut ReviewHeader) {
+     header.tasks = header
+         .tasks
+         .iter()
+-        .map(|key| reviews::task_reference(project, key))
++        .map(|key| reviews::key_now(project, Some(store), header, key))
+         .collect();
+ }
+ 
+@@ -626,9 +627,10 @@ pub fn watch_state(project: &Project, me: &str) -> Result<WatchState> {
+             ..WatchState::default()
+         });
+     }
+-    let mut headers = reviews::store(project)?.list_reviews(&ReviewFilter::default())?;
++    let store = reviews::store(project)?;
++    let mut headers = store.list_reviews(&ReviewFilter::default())?;
+     for header in &mut headers {
+-        keyed_now(project, header);
++        keyed_now(project, &store, header);
+     }
+     let mine: HashSet<String> = project
+         .store()
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index c3a2afff..f10a9952 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -84,6 +84,7 @@ pub use atm_review::{
+ 
+ use crate::changes::change_task_status;
+ use crate::project::Project;
++use crate::review_keys;
+ use crate::state::{Command, Options};
+ 
+ /// The project's reviews, in its task folder.
+@@ -281,9 +282,29 @@ fn resolve(project: &Project, keys: &[String]) -> Result<Vec<String>> {
+     keys.iter().map(|k| project.resolve_task(k)).collect()
+ }
+ 
+-/// The task IDs a review names.
+-fn named(project: &Project, header: &ReviewHeader) -> Result<Vec<String>> {
+-    resolve(project, &header.tasks)
++/// The task IDs a review in `reviews` names: each key as the review meant it (ATM-630, [`review_keys::task_of`]), so
++/// a decision reaches the task it was about even when a merge gave its old number to another.
++fn named(project: &Project, reviews: &FileStore, header: &ReviewHeader) -> Result<Vec<String>> {
++    header
++        .tasks
++        .iter()
++        .map(|key| review_keys::task_of(project, Some(reviews), header, key))
++        .collect()
++}
++
++/// How the review `header` (in `reviews`, when known) names the task it means by `key`, by its key now
++/// ([`review_keys::task_of`]); a key the project doesn't have is kept, without a leading `~`.
++#[must_use]
++pub fn key_now(
++    project: &Project,
++    reviews: Option<&FileStore>,
++    header: &ReviewHeader,
++    key: &str,
++) -> String {
++    review_keys::task_of(project, reviews, header, key).map_or_else(
++        |_| atm_common::keys::without_draft_mark(key).to_string(),
++        |id| key_of_id(project, &id),
++    )
+ }
+ 
+ /// The task a filter names (`--task`, `?task=`: a key with or without its `~`, an older ID, the UUID), as reviews name
+@@ -298,18 +319,26 @@ pub fn task_reference(project: &Project, reference: &str) -> String {
+ 
+ /// Whether a review names the task `wanted` (its key now, as [`task_reference`] gives it), by whatever key the review
+ /// was written with (ATM-630): a task whose number moved at a merge (ADR-009) is named by the key it had, its alias
+-/// now, and an older review by `~KEY` or an earlier prefix's key. Each is resolved as every command resolves one.
++/// now, and an older review by `~KEY` or an earlier prefix's key. Each is resolved as every command resolves one,
++/// except an old key another task holds now: the review in `reviews` says which it meant ([`key_now`]).
+ #[must_use]
+-pub fn names_task(project: &Project, header: &ReviewHeader, wanted: &str) -> bool {
++pub fn names_task(
++    project: &Project,
++    reviews: Option<&FileStore>,
++    header: &ReviewHeader,
++    wanted: &str,
++) -> bool {
+     header
+         .tasks
+         .iter()
+-        .any(|key| task_reference(project, key) == wanted)
++        .any(|key| key_now(project, reviews, header, key) == wanted)
+ }
+ 
+-/// The reviews among `headers` that name the task `wanted` (a key now), whatever key they were written with
++/// The reviews among `headers` (in `reviews`) that name the task `wanted` (a key now), whatever key they were written
++/// with
+ fn naming(
+     project: &Project,
++    reviews: &FileStore,
+     headers: Vec<ReviewHeader>,
+     wanted: Option<&str>,
+ ) -> Vec<ReviewHeader> {
+@@ -317,7 +346,7 @@ fn naming(
+         None => headers,
+         Some(key) => headers
+             .into_iter()
+-            .filter(|h| names_task(project, h, key))
++            .filter(|h| names_task(project, Some(reviews), h, key))
+             .collect(),
+     }
+ }
+@@ -340,9 +369,11 @@ pub fn list_naming(
+     Ok(list_everywhere(root, &every)?
+         .into_iter()
+         .filter(|f| {
+-            wanted
+-                .as_deref()
+-                .is_none_or(|key| names_task(project, &f.header, key))
++            wanted.as_deref().is_none_or(|key| {
++                // Read from the working copy it was found in: a review in another worktree is that copy's
++                let reviews = FileStore::open(&f.working_copy.join(TASK_DIR)).ok();
++                names_task(project, reviews.as_ref(), &f.header, key)
++            })
+         })
+         .collect())
+ }
+@@ -565,7 +596,7 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
+ pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) -> Result<u32> {
+     let mut reviews = store(project)?;
+     // Its tasks found first (ATM-594): a round is never kept without its tasks going back in review
+-    let ids = named(project, &reviews.get_review(reference)?.header).map_err(|e| {
++    let ids = named(project, &reviews, &reviews.get_review(reference)?.header).map_err(|e| {
+         Error::failed(format!(
+             "{}'s round can't reach its tasks, so it isn't added: {e}",
+             reference.0
+@@ -604,7 +635,7 @@ pub fn submit(
+     let by = actor_of(project);
+     let mut reviews = store(project)?;
+     // Every task it names found first (ATM-594): a decision is never kept without reaching its tasks
+-    let tasks = named(project, &reviews.get_review(reference)?.header).map_err(|e| {
++    let tasks = named(project, &reviews, &reviews.get_review(reference)?.header).map_err(|e| {
+         Error::failed(format!(
+             "{reference}'s decision can't reach its tasks, so it isn't recorded: {e}",
+             reference = reference.0
+@@ -665,7 +696,7 @@ pub fn close(
+             reason: Some(format!("{} closed: {reason}", header.reference)),
+             ..Options::default()
+         };
+-        for id in named(project, &header)? {
++        for id in named(project, &reviews, &header)? {
+             if kind_of(project, &id)?.is_some_and(|(kind, _)| kind == Kind::Review) {
+                 change_task_status(project, Command::Reject, &id, &options)?;
+             }
+@@ -689,11 +720,16 @@ pub fn set_tasks(
+     let mut reviews = store(project)?;
+     let header = reviews.get_review(reference)?.header;
+     let (added, removed) = (resolve(project, add)?, resolve(project, remove)?);
+-    let removed_keys: Vec<String> = removed.iter().map(|id| key_of_id(project, id)).collect();
++    // A key stays unless the task the review meant by it is removed (ATM-630: an old key may mean the task that moved)
+     let mut tasks: Vec<String> = header
+         .tasks
+         .iter()
+-        .filter(|t| !removed_keys.contains(t) && !remove.contains(t))
++        .filter(|t| {
++            !remove.contains(t)
++                && review_keys::task_of(project, Some(&reviews), &header, t)
++                    .ok()
++                    .is_none_or(|id| !removed.contains(&id))
++        })
+         .cloned()
+         .collect();
+     for id in &added {
+@@ -744,7 +780,12 @@ pub fn live_approval_for(project: &Project, task: &str) -> Result<Option<ReviewH
+         statuses: vec![Status::Approved],
+         task: None,
+     };
+-    for header in naming(project, reviews.list_reviews(&filter)?, Some(&key)) {
++    for header in naming(
++        project,
++        &reviews,
++        reviews.list_reviews(&filter)?,
++        Some(&key),
++    ) {
+         let review = reviews.get_review(&header.reference)?;
+         let Some(last) = review.rounds.last() else {
+             continue;
+@@ -2057,8 +2098,9 @@ mod tests {
+             created: String::new(),
+             updated: String::new(),
+         };
++        // Without its review's folder to read (review_keys' tests read one), a key resolves as every command's does
+         let names =
+-            |keys: &[&str], wanted: &str| super::names_task(&project, &header(keys), wanted);
++            |keys: &[&str], wanted: &str| super::names_task(&project, None, &header(keys), wanted);
+         // Its key then, an alias now: the task, by its key now; with an old review's mark too
+         assert!(names(&["ATM-9"], "ATM-14"));
+         assert!(names(&["~ATM-9"], "ATM-14"));
+diff --git a/crates/atm-review/src/folder.rs b/crates/atm-review/src/folder.rs
+index f6aaf424..7efc7ff9 100644
+--- a/crates/atm-review/src/folder.rs
++++ b/crates/atm-review/src/folder.rs
+@@ -161,6 +161,28 @@ impl FileStore {
+         &self.reviews_dir
+     }
+ 
++    /// The folder of the review `header` is of, in [`FileStore::folder`] (whether or not it exists).
++    #[must_use]
++    pub fn folder_of(&self, header: &ReviewHeader) -> PathBuf {
++        self.reviews_dir
++            .join(folder_name(header.number, &header.id))
++    }
++
++    /// The first round of the review `header` is of, as its folder has it; none when it has no readable one (ATM-630:
++    /// the commit it was made at says which task its keys meant then).
++    #[must_use]
++    pub fn first_round(&self, header: &ReviewHeader) -> Option<Round> {
++        let rounds = self.folder_of(header).join(ROUNDS_DIR);
++        if is_symlink(&rounds) {
++            return None;
++        }
++        let path = rounds.join("1.json");
++        let text = read_file(&path).ok()??;
++        serde_json::from_str::<Round>(&text)
++            .ok()
++            .filter(|r| r.number == 1)
++    }
++
+     /// One review's folder, read: its header, summary, comments and rounds.
+     fn read_review(folder: &Path) -> Result<Held> {
+         if is_symlink(folder) {
+diff --git a/crates/atm-vcs/src/lib.rs b/crates/atm-vcs/src/lib.rs
+index 5d0d03b1..50d60d23 100644
+--- a/crates/atm-vcs/src/lib.rs
++++ b/crates/atm-vcs/src/lib.rs
+@@ -532,6 +532,34 @@ impl GitVcs {
+         Ok(output.stdout)
+     }
+ 
++    /// The commit that first added the file `relative` to the history of `HEAD` (the oldest, when it was removed and
++    /// added again); none when the history doesn't have it, or git can't tell (ATM-630: a review's `review.md`, the
++    /// commit its task's number is read at).
++    #[must_use]
++    pub fn first_commit_adding(&self, relative: &str) -> Option<String> {
++        if relative.starts_with('-') {
++            return None;
++        }
++        let listed = ask(
++            &[
++                LITERAL,
++                "log",
++                "--diff-filter=A",
++                "--reverse",
++                "--format=%H",
++                "HEAD",
++                "--",
++                relative,
++            ],
++            &self.root,
++        )?;
++        listed
++            .lines()
++            .next()
++            .map(str::to_string)
++            .filter(|s| !s.is_empty())
++    }
++
+     /// The submodule `relative` is in, nearest the root, as (its folder, the path inside it), or none. A submodule is a
+     /// folder this repository records as a commit (mode 160000) with a checkout of its own (`.git`); git answers
+     /// nothing about the files in it from here, only from its own repository (T-408).
+@@ -1071,6 +1099,27 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn the_commit_first_adding_a_file_is_the_oldest_in_heads_history() {
++        let dir = scratch();
++        let vcs = init(&dir.0);
++        assert_eq!(vcs.first_commit_adding("a.md"), None, "no commit yet");
++        write(&vcs, "a.md", "one");
++        let added = commit_all(&vcs, "add");
++        write(&vcs, "a.md", "two");
++        commit_all(&vcs, "change");
++        assert_eq!(vcs.first_commit_adding("a.md"), Some(added.clone()));
++        // Removed and added again: still the first
++        git(&dir.0, &["rm", "-q", "a.md"]);
++        commit_all(&vcs, "remove");
++        write(&vcs, "a.md", "three");
++        commit_all(&vcs, "again");
++        assert_eq!(vcs.first_commit_adding("a.md"), Some(added));
++        for other in ["missing.md", "-a.md", "*.md"] {
++            assert_eq!(vcs.first_commit_adding(other), None, "{other}");
++        }
++    }
++
+     #[test]
+     fn a_tracked_file_is_never_ignored_and_ignore_rules_decide_the_rest() {
+         let dir = scratch();
+diff --git a/docs/adr/ADR-009-task-keys-plain-from-creation.md b/docs/adr/ADR-009-task-keys-plain-from-creation.md
+index dbb7066a..097d9bcc 100644
+--- a/docs/adr/ADR-009-task-keys-plain-from-creation.md
++++ b/docs/adr/ADR-009-task-keys-plain-from-creation.md
+@@ -55,6 +55,9 @@ Two different tasks (different UUIDs) with the same number, one from each side:
+   then merges as the larger of the two, past it.
+ - **Its old key stays an alias** (`aliases`), so a commit message, a note or a review written with it still finds
+   the task. References in the files are UUIDs: nothing is rewritten.
++- **A review written with the old key still means the task that moved** (ATM-630). Its key is ambiguous: the task
++  that kept the number holds it now. So atm reads `tasks.json` at the review's own commit (its first round's, else
++  the one that added its `review.md`) to see which task held that number then. Nothing is rewritten here either.
+ - **atm says what moved, once**: "ATM-538 is now ATM-641 (both branches made ATM-538)", from a record the merge
+   leaves for the next atm command.
+ - **A clash never stops a merge.** (ADR-007 stopped on two final numbers; with the base-branch check, two tasks on the
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index b0b9cf19..f24de4e3 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1192,6 +1192,9 @@ checklist:
+   Written review:
+   - The line and the field carry atm's own data only: review references, never review or task text. They tell the agent to run one fixed atm command (`atm review watch --json`), which runs nothing and fetches nothing. No skill instruction runs anything new or reads outside text.
+   - The watch's lease is a file in the state folder (`watches/<hash>.live`: a number, the time it lasts to), read only to say whether a watch runs. One that can't be read or written only means the agent is reminded.
++- **A review's commit, read from git (ATM-630).** When a key a review stores is ambiguous (a merge moved a task off a number another task holds now, ADR-009), atm reads `tasks.json` at the review's first round's commit, or at the commit that added its `review.md`, to see which task held it then.
++  - That commit comes from the round's file, which anyone who can change the review wrote. atm passes git only a full SHA (40 or 64 hex digits), so the text can never be taken for an option or a revision expression; anything else is ignored, and the key resolves as every command resolves it. A test (`review_keys.rs`) writes `HEAD`, `main` and `--output=x` there.
++  - It reads with `git ls-tree` and `git cat-file blob`, in the working copy the review is in, and only parses the result as JSON to find a task's UUID. It writes nothing and runs nothing else.
+ 
+ ## 4. Keeping it current
+ 
+diff --git a/tests/scripts/reviews/keys.test.mjs b/tests/scripts/reviews/keys.test.mjs
+index 910b4e56..f7978ed6 100644
+--- a/tests/scripts/reviews/keys.test.mjs
++++ b/tests/scripts/reviews/keys.test.mjs
+@@ -1,6 +1,8 @@
+ // Task keys in code reviews (ATM-594): a review names its task by its key.
+ import assert from 'node:assert/strict';
++import { spawnSync } from 'node:child_process';
+ import fs from 'node:fs';
++import os from 'node:os';
+ import path from 'node:path';
+ import { describe, test } from 'node:test';
+ import { git, makeProject, removeDir } from '../helpers.mjs';
+@@ -145,3 +147,116 @@ describe('a provisional task key in reviews (ATM-594)', () => {
+     }
+   });
+ });
++
++// ATM-630, CR-55 round 2: a real clash (ADR-009 §3). Two branches each made ATM-12, each with a review on it; the merge
++// driver moved one to ATM-13, its old key an alias, while the other still holds ATM-12. Both reviews say ATM-12, and
++// each still finds its own task, read from tasks.json at the review's own commit.
++describe('two branches made ATM-12, each reviewed; a merge moved one (ATM-630)', () => {
++  const OLDER = '0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8012';
++  const NEWER = '0193a5b3-7c1d-7e2f-8a3b-4c5d6e7f8012';
++  const OTHER = { ATM_AGENT: 'claude:other' };
++  const FILE = '.agentic-task-manager/tasks.json';
++
++  /** `name`'s task, ATM-12 in progress by `by`, on the branch checked out, with its change and its review, committed */
++  function reviewedTask(root, { id, name, file, by }) {
++    const data = JSON.parse(fs.readFileSync(path.join(root, FILE), 'utf8'));
++    data.meta.next_number = 13;
++    data.tasks.push({ id, number: 12, name, type: 'feature', status: 'in_progress', started_by: by.ATM_AGENT });
++    fs.writeFileSync(path.join(root, FILE), JSON.stringify(data, null, 2) + '\n');
++    commitFile(root, file, 'one\ntwo\n', `feat(ATM-12): ${name}`);
++    ok(['review', 'create', '--title', name, '--task', 'ATM-12', '--range', 'HEAD~1..HEAD'], root, by);
++    // As an agent commits it: the tasks and the review, not atm's runtime files (claims)
++    git(['add', FILE, '.agentic-task-manager/reviews'], root);
++    git(['commit', '-q', '-m', `review ${name}`], root);
++  }
++
++  /**
++   * The older task ("On a branch", the agent's) on branch `a`, the newer ("On main", another agent's) on main, main
++   * merged into `a` through atm's driver. With a remote, main pushed: the task not on it moves (the older). Without
++   * one, the newer moves. The project's folder.
++   */
++  function clash({ remote }) {
++    const root = makeProject({
++      commit: true,
++      files: {
++        [FILE]: { meta: { project: 'Clash', format: 2, key: 'ATM', next_number: 12, review: 'blocker' }, tasks: [] },
++      },
++    });
++    ok(['db', 'init'], root, HAKAN);
++    git(['add', '-A'], root);
++    git(['commit', '-q', '-m', 'atm init'], root);
++    if (remote) {
++      fs.mkdirSync(remote);
++      git(['init', '-q', '--bare', remote], root);
++      git(['remote', 'add', 'origin', remote], root);
++      git(['push', '-q', '-u', 'origin', 'main'], root);
++      git(['remote', 'set-head', 'origin', 'main'], root);
++    }
++    git(['switch', '-q', '-c', 'a'], root);
++    reviewedTask(root, { id: OLDER, name: 'On a branch', file: 'a.txt', by: AGENT });
++    git(['switch', '-q', 'main'], root);
++    reviewedTask(root, { id: NEWER, name: 'On main', file: 'b.txt', by: OTHER });
++    if (remote) git(['push', '-q', 'origin', 'main'], root);
++    git(['switch', '-q', 'a'], root);
++    const merged = spawnSync('git', ['merge', '--no-edit', 'main'], { cwd: root, encoding: 'utf8' });
++    assert.equal(merged.status, 0, merged.stdout + merged.stderr);
++    return root;
++  }
++
++  /** The reference of the review titled `title` */
++  const reference = (root, title) =>
++    ok(['review', 'list', '--json'], root, HAKAN)
++      .json()
++      .find((r) => r.review.title === title).review.reference;
++
++  /** The titles of the reviews `review list --task <key>` lists */
++  const listed = (root, key) =>
++    ok(['review', 'list', '--task', key, '--json'], root, HAKAN)
++      .json()
++      .map((r) => r.review.title)
++      .sort();
++
++  for (const [how, remote, moved, stayed] of [
++    ['main pushed: the task not on it moves', true, 'On a branch', 'On main'],
++    ['no remote: the newer task moves', false, 'On main', 'On a branch'],
++  ]) {
++    test(`${how}; each review still finds its own task: listed, heard, approved`, () => {
++      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'atm-clash-'));
++      const root = clash({ remote: remote && path.join(scratch, 'remote.git') });
++      try {
++        const keyOf = (name) =>
++          ok(['task', 'list', '--json'], root, HAKAN)
++            .json()
++            .find((t) => t.name === name).key;
++        // The merge moved one: ATM-13, its old key ATM-12 an alias; both reviews still say ATM-12
++        assert.deepEqual([keyOf(moved), keyOf(stayed)], ['ATM-13', 'ATM-12']);
++        for (const title of [moved, stayed])
++          assert.deepEqual(ok(['review', 'show', reference(root, title), '--json'], root, HAKAN).json().header.tasks, [
++            'ATM-12',
++          ]);
++        // Listed under its own task, by either key it answers to, and never under the other
++        assert.deepEqual(listed(root, 'ATM-13'), [moved]);
++        assert.deepEqual(listed(root, 'ATM-12'), [stayed]);
++        // A comment on the moved task's review reaches its agent, about its key now
++        const agent = moved === 'On a branch' ? AGENT : OTHER;
++        assert.equal(atm(['review', 'watch', '--once', '--timeout', '1s'], root, agent).code, 3);
++        const review = reference(root, moved);
++        const file = moved === 'On a branch' ? 'a.txt' : 'b.txt';
++        ok(['review', 'comment', review, '--file', file, '--lines', '2', '--body', 'Why two?'], root, HAKAN);
++        const heard = atm(['review', 'watch', '--once', '--json', '--timeout', '10s'], root, agent);
++        assert.equal(heard.code, 0, heard.stderr);
++        const told = JSON.parse(heard.stdout.trim().split('\n')[0]);
++        assert.deepEqual([told.review, told.body, told.task], [review, 'Why two?', 'ATM-13']);
++        // Its approval reaches the moved task, not the one holding ATM-12 now
++        const comment = ok(['review', 'comments', review, '--json'], root, HAKAN).json()[0].comments[0].id;
++        ok(['review', 'resolve', review, comment], root, HAKAN);
++        ok(['review', 'submit', review, '--approve'], root, HAKAN);
++        assert.equal(task(root, 'ATM-13').review_state, 'approved');
++        assert.notEqual(task(root, 'ATM-12').review_state, 'approved');
++      } finally {
++        removeDir(root);
++        removeDir(scratch);
++      }
++    });
++  }
++});

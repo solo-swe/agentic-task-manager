@@ -1,0 +1,15 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "files"
+  },
+  "files": [
+    {
+      "path": "docs/task-review-state-machine.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T23:08:59Z"
+}

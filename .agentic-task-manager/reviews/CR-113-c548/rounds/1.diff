@@ -1,0 +1,1214 @@
+diff --git a/crates/atm-cli/src/commands/review/open.rs b/crates/atm-cli/src/commands/review/open.rs
+index b2315e6a..b2e038a9 100644
+--- a/crates/atm-cli/src/commands/review/open.rs
++++ b/crates/atm-cli/src/commands/review/open.rs
+@@ -200,14 +200,21 @@ pub(super) fn run(command: OpenCommand, ctx: Context, cwd: &Path) -> Result<u8>
+                 );
+                 return Ok(0);
+             }
+-            let number = reviews::add_round(&mut project, &found.header.reference, round)?;
++            let added = reviews::add_round(&mut project, &found.header.reference, round)?;
++            let number = added.number;
+             if let Some(summary) = summary {
+                 reviews::edit_summary(&mut project, &found.header.reference, summary.trim_end())?;
+             }
+             if ctx.json {
+-                print_json(&json!({ "review": found.header.reference, "round": number }));
++                print_json(
++                    &json!({ "review": found.header.reference, "round": number, "recorded": added.recorded }),
++                );
+             } else {
+                 println!("{}: round {number}", found.header.reference);
++                // Its range recorded from where the round before ended (ATM-725), saying so
++                if let Some(said) = added.recorded {
++                    println!("Round {number}: {said}");
++                }
+             }
+         }
+         OpenCommand::Tasks {
+diff --git a/crates/atm-cli/src/commands/review/read.rs b/crates/atm-cli/src/commands/review/read.rs
+index 388105a4..a3d79de2 100644
+--- a/crates/atm-cli/src/commands/review/read.rs
++++ b/crates/atm-cli/src/commands/review/read.rs
+@@ -153,16 +153,16 @@ pub(super) fn run(command: ReadCommand, ctx: Context, cwd: &Path) -> Result<u8>
+             let store = reviews::store(&project)?;
+             let found = store.get_review(&reference(&review))?;
+             if let Some(round) = round {
+-                let patch = match against {
+-                    Some(from) => rounds::compare(&vcs_of(&project)?, &store, &found, from, round)?,
+-                    None => store.round_diff(&found.header.id, round)?,
+-                };
++                // The same views as the page's (ATM-725): the whole change from the review's base, or since round M
++                let since = against.map_or(rounds::Since::Base, rounds::Since::Round);
++                let view = rounds::between(&vcs_of(&project)?, &store, &found, since, round)?;
++                let patch = view.diff.patch;
+                 if ctx.json {
+                     print_json(
+-                        &json!({ "review": found.header.reference, "round": round, "against": against, "diff": patch.0 }),
++                        &json!({ "review": found.header.reference, "round": round, "against": against, "diff": patch }),
+                     );
+                 } else {
+-                    print!("{}", patch.0);
++                    print!("{patch}");
+                 }
+                 return Ok(0);
+             }
+diff --git a/crates/atm-lib/src/review_pages/view.rs b/crates/atm-lib/src/review_pages/view.rs
+index 70ca5d7f..3ed37d82 100644
+--- a/crates/atm-lib/src/review_pages/view.rs
++++ b/crates/atm-lib/src/review_pages/view.rs
+@@ -15,8 +15,9 @@ pub(super) fn round_of(review: &Review, number: u32) -> Result<&Round> {
+         })
+ }
+ 
+-/// The files of one view: the whole change of round `shown` (its base to its result), or what changed in it since
+-/// round `against`; each with its patch and the objects (a commit, or a tree) its two sides are read from.
++/// The files of one view (ATM-725, [`rounds::between`]): the whole change of round `shown`, from the review's base,
++/// or what changed since round `against`, the increments between them added up; each file with its patch and the
++/// objects (a commit, or a tree) its two sides are read from.
+ pub(super) fn view<S: RoundDiffs + ?Sized>(
+     vcs: &atm_vcs::GitVcs,
+     store: &S,
+@@ -25,33 +26,23 @@ pub(super) fn view<S: RoundDiffs + ?Sized>(
+     against: Option<u32>,
+ ) -> Result<Value> {
+     let round = round_of(review, shown)?;
+-    let id = &review.header.id;
+-    let diff = store.diff_of(id, shown)?;
+-    let (before, after, patch, listed) = match against {
+-        None => {
+-            let before = match &round.kind {
+-                RoundKind::Range { base, .. } | RoundKind::Working { base } => Some(base.clone()),
+-                RoundKind::Files => None,
+-            };
+-            let after = match &round.kind {
+-                RoundKind::Range { head, .. } => head.clone(),
+-                _ => rounds::tree(vcs, round, &diff)?.to_string(),
+-            };
+-            (before, after, diff, Some(&round.files))
+-        }
+-        Some(from) if from == shown => {
+-            return Err(Error::Invalid(format!(
+-                "round {shown} against itself: name an earlier round"
+-            )));
+-        }
+-        Some(from) => {
+-            let earlier = round_of(review, from)?;
+-            let before = rounds::tree(vcs, earlier, &store.diff_of(id, from)?)?.to_string();
+-            let after = rounds::tree(vcs, round, &diff)?.to_string();
+-            let between = rounds::compare(vcs, store, review, from, shown)?;
+-            (Some(before), after, between, None)
+-        }
+-    };
++    if against == Some(shown) {
++        return Err(Error::Invalid(format!(
++            "round {shown} against itself: name an earlier round"
++        )));
++    }
++    let since = against.map_or(rounds::Since::Base, rounds::Since::Round);
++    let made = rounds::between(vcs, store, review, since, shown)?;
++    // A files round's whole change starts from nothing: its files' left sides aren't read
++    let first_is_files = review
++        .rounds
++        .iter()
++        .min_by_key(|r| r.number)
++        .is_some_and(|r| r.kind == RoundKind::Files);
++    let before = (!(against.is_none() && first_is_files)).then(|| made.before.to_string());
++    let after = made.after.to_string();
++    let patch = reviews::Patch(made.diff.patch);
++    let listed = rounds::file_changes(made.diff.files);
+     let repo = rounds::repository(vcs, round).unwrap_or_else(|_| vcs.clone());
+     let patches = with_links(&repo, file_patches(&patch.0), before.as_ref(), &after);
+     // A moved submodule's entry: its two commits and its repository's web address, when it has one, for links
+@@ -95,32 +86,29 @@ pub(super) fn view<S: RoundDiffs + ?Sized>(
+         }
+         out
+     };
+-    // The whole change lists the round's files (a binary one has no patch); between rounds, what the diff has
+-    let files: Vec<Value> = match listed {
+-        Some(files) => files
+-            .iter()
+-            .flat_map(|f| {
+-                let found = patches.iter().find(|p| p.path == f.path).cloned();
+-                side(&found.unwrap_or_else(|| FilePatch {
+-                    path: f.path.clone(),
+-                    old_path: match &f.status {
+-                        reviews::FileStatus::Renamed { from } => from.clone(),
+-                        _ => f.path.clone(),
+-                    },
+-                    status: match &f.status {
+-                        reviews::FileStatus::Added => "added",
+-                        reviews::FileStatus::Deleted => "deleted",
+-                        reviews::FileStatus::Renamed { .. } => "renamed",
+-                        reviews::FileStatus::Modified => "modified",
+-                    },
+-                    binary: f.binary,
+-                    submodule: None,
+-                    patch: String::new(),
+-                }))
+-            })
+-            .collect(),
+-        None => patches.iter().flat_map(side).collect(),
+-    };
++    // Every file the view changes (a binary one has no patch), in the order git lists them
++    let files: Vec<Value> = listed
++        .iter()
++        .flat_map(|f| {
++            let found = patches.iter().find(|p| p.path == f.path).cloned();
++            side(&found.unwrap_or_else(|| FilePatch {
++                path: f.path.clone(),
++                old_path: match &f.status {
++                    reviews::FileStatus::Renamed { from } => from.clone(),
++                    _ => f.path.clone(),
++                },
++                status: match &f.status {
++                    reviews::FileStatus::Added => "added",
++                    reviews::FileStatus::Deleted => "deleted",
++                    reviews::FileStatus::Renamed { .. } => "renamed",
++                    reviews::FileStatus::Modified => "modified",
++                },
++                binary: f.binary,
++                submodule: None,
++                patch: String::new(),
++            }))
++        })
++        .collect();
+     Ok(json!({ "round": shown, "against": against, "files": files }))
+ }
+ 
+@@ -132,20 +120,25 @@ pub(super) fn placed<S: RoundDiffs + ?Sized>(
+     review: &Review,
+     chain: &Chain,
+     shown: u32,
++    against: Option<u32>,
+ ) -> Value {
+     let out = serde_json::to_value(chain).unwrap_or(Value::Null);
+-    with_placement(vcs, store, review, &chain.anchor, shown, out)
++    with_placement(vcs, store, review, &chain.anchor, (shown, against), out)
+ }
+ 
+-/// `out` with where `anchor` shows in round `shown`: `placed`, and `drifted`.
++/// `out` with where `anchor` shows in the view of round `shown` (since `against`): `placed`, `drifted`, and
++/// `in_view`, whether the view holds the increment of the round it was made on (ATM-725, [`rounds::in_view`]): a
++/// comment on another round is listed as such, not placed.
+ pub(super) fn with_placement<S: RoundDiffs + ?Sized>(
+     vcs: &atm_vcs::GitVcs,
+     store: &S,
+     review: &Review,
+     anchor: &Anchor,
+-    shown: u32,
++    (shown, against): (u32, Option<u32>),
+     mut out: Value,
+ ) -> Value {
++    let since = against.map_or(rounds::Since::Base, rounds::Since::Round);
++    let in_view = rounds::in_view(since, shown, anchor.round);
+     let made = || json!({ "round": anchor.round, "lines": anchor.lines });
+     let (at, drifted) = match rounds::place(vcs, store, review, anchor, shown) {
+         Ok(rounds::Placement::Whole) => (Value::Null, Value::Null),
+@@ -161,6 +154,7 @@ pub(super) fn with_placement<S: RoundDiffs + ?Sized>(
+     if let Some(map) = out.as_object_mut() {
+         map.insert("placed".into(), at);
+         map.insert("drifted".into(), drifted);
++        map.insert("in_view".into(), Value::Bool(in_view));
+     }
+     out
+ }
+@@ -179,7 +173,7 @@ pub(super) fn shown_with<S: RoundDiffs + ?Sized>(
+     let chains = review
+         .chains
+         .iter()
+-        .map(|c| placed(vcs, diffs, review, c, shown))
++        .map(|c| placed(vcs, diffs, review, c, shown, against))
+         .collect();
+     let newest = review.rounds.last().map_or(shown, |r| r.number);
+     let drafts = drafts
+@@ -201,7 +195,7 @@ pub(super) fn shown_with<S: RoundDiffs + ?Sized>(
+                         lines: *lines,
+                         quote: quote.clone(),
+                     };
+-                    with_placement(vcs, diffs, review, &anchor, shown, out)
++                    with_placement(vcs, diffs, review, &anchor, (shown, against), out)
+                 }
+                 Place::Reply { .. } => out,
+             }
+diff --git a/crates/atm-lib/src/reviews/commands.rs b/crates/atm-lib/src/reviews/commands.rs
+index 39af5fbf..2df0106e 100644
+--- a/crates/atm-lib/src/reviews/commands.rs
++++ b/crates/atm-lib/src/reviews/commands.rs
+@@ -63,20 +63,39 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
+     Ok(header)
+ }
+ 
+-/// The author's next round: the review is open again, and its tasks in progress go back in review.
++/// A round added: its number, and what atm did to its range, when it did anything (ATM-725).
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct AddedRound {
++    /// Its number.
++    pub number: u32,
++    /// Its range recorded from where the round before ended, saying so.
++    pub recorded: Option<String>,
++}
++
++/// The author's next round, recorded as its increment (ATM-725, [`atm_review::rounds::as_increment`]): the review is open again,
++/// and its tasks in progress go back in review.
+ ///
+ /// # Errors
+ /// What the review's rules refuse, or a store error.
+-pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound) -> Result<u32> {
++pub fn add_round(
++    project: &mut Project,
++    reference: &ReviewRef,
++    round: NewRound,
++) -> Result<AddedRound> {
+     let mut reviews = store(project)?;
+     // Checked whole first (ATM-633, ATM-594): a round is never kept without its tasks going back in review
+     let before = reviews.get_review(reference)?;
+     let outcome = crate::lifecycle::check(project, &before, &Event::Round, &round.by)?;
++    let (round, recorded) = match (before.rounds.iter().max_by_key(|r| r.number), project.vcs()) {
++        (Some(last), Some(vcs)) => atm_review::rounds::as_increment(&vcs, last, round),
++        _ => (round, None),
++    };
+     let number = Reviews::new(&mut reviews).add_round(reference, round)?;
+     let header = reviews.get_review(reference)?.header;
++    let added = AddedRound { number, recorded };
+     // A draft waits on no one yet: its tasks stay as they are (ATM-713)
+     if header.status == Status::Draft {
+-        return Ok(number);
++        return Ok(added);
+     }
+     // The author's own task its lapse sent back to to do, started again first (the design's hole 1); its review note
+     // says so, as opening a review does
+@@ -90,7 +109,7 @@ pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound)
+     ask_review(project, &rest, &header, &format!("round {number}"))?;
+     let lapsed = format!("round {number} (its claim had lapsed: taken back for this round)");
+     ask_review(project, &back, &header, &lapsed)?;
+-    Ok(number)
++    Ok(added)
+ }
+ 
+ /// The author changes the review's summary, its Description (with a round: `atm review round --summary-file`).
+diff --git a/crates/atm-review/src/rounds.rs b/crates/atm-review/src/rounds.rs
+index 451ead70..53878f9f 100644
+--- a/crates/atm-review/src/rounds.rs
++++ b/crates/atm-review/src/rounds.rs
+@@ -48,7 +48,9 @@ pub fn unstored(number: u32, new: NewRound, at: String) -> (Round, Patch) {
+     )
+ }
+ 
+-fn file_changes(files: Vec<ChangedFile>) -> Vec<FileChange> {
++/// The files a diff changes, as a round lists them.
++#[must_use]
++pub fn file_changes(files: Vec<ChangedFile>) -> Vec<FileChange> {
+     files
+         .into_iter()
+         .map(|f| FileChange {
+@@ -190,37 +192,160 @@ fn round_of(review: &Review, number: u32) -> Result<&Round> {
+         })
+ }
+ 
+-/// What changed from round `from` to round `to` of a review: their trees' diff, limited to the files either round
+-/// has (§3.6's "between two rounds").
++/// Where a view of a review starts (ATM-725). A review is a chain of increments, one a round: round 1's from the
++/// review's base to its result, round N's from round N−1's result to its own. A view adds up those between its start
++/// and its round: the whole change of round N from the base, or what changed since round M.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Since {
++    /// The review's base: round 1's (its commit; nothing, for files reviewed whole). The whole change.
++    Base,
++    /// Round M's result: what rounds M+1 … N changed.
++    Round(u32),
++}
++
++/// A view of a review: from `before` (a commit or a tree) to `after` (a tree), its diff and the files it changes.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct Between {
++    /// Where it starts: the review's base commit, an earlier round's tree, or the empty tree.
++    pub before: Rev,
++    /// Where it ends: the round's tree.
++    pub after: Rev,
++    /// The diff and its files.
++    pub diff: Diff,
++}
++
++/// The view of round `to` since `since` (ATM-725), the one way a view is made: round `to`'s tree against the
++/// review's base or round M's tree, so it is the increments between them added up, however each round was opened (a
++/// range from the review's base, from the round before, or from anywhere). Everything the two differ in, atm's task
++/// folder left out; where a files round is in it, only the files those rounds name (ATM-622: a files round speaks
++/// for the files it names, not for the others, which its tree doesn't have).
+ ///
+ /// # Errors
+-/// No such round, or a round's tree can't be had here (its base is gone from this clone).
+-pub fn compare<S: RoundDiffs + ?Sized>(
++/// No such round, a start not before `to`, rounds of different repositories, or a round's tree can't be had here (its
++/// base is gone from this clone).
++pub fn between<S: RoundDiffs + ?Sized>(
+     vcs: &GitVcs,
+     store: &S,
+     review: &Review,
+-    from: u32,
++    since: Since,
+     to: u32,
+-) -> Result<Patch> {
+-    let (a, b) = (round_of(review, from)?, round_of(review, to)?);
+-    let repo = shared_repository(vcs, a, b)?;
+-    let tree_a = tree(vcs, a, &store.diff_of(&review.header.id, from)?)?;
+-    let tree_b = tree(vcs, b, &store.diff_of(&review.header.id, to)?)?;
+-    let vcs = &repo;
+-    let mut paths: Vec<String> = a
+-        .files
++) -> Result<Between> {
++    let b = round_of(review, to)?;
++    let first = review
++        .rounds
+         .iter()
+-        .chain(&b.files)
+-        .map(|f| f.path.clone())
++        .min_by_key(|r| r.number)
++        .ok_or_else(|| Error::NotFound(format!("{} has no rounds", review.header.reference)))?;
++    let from = match since {
++        Since::Base => first,
++        Since::Round(m) if m >= to => {
++            return Err(Error::Invalid(format!(
++                "round {to} since round {m}: name an earlier round"
++            )));
++        }
++        Since::Round(m) => round_of(review, m)?,
++    };
++    let repo = shared_repository(vcs, from, b)?;
++    let after = tree(vcs, b, &store.diff_of(&review.header.id, to)?)?;
++    let before = match (since, &first.kind) {
++        (Since::Base, RoundKind::Range { base, .. } | RoundKind::Working { base }) => {
++            recorded(base)?
++        }
++        (Since::Base, RoundKind::Files) => Rev::object_id(&repo.empty_tree()?)?,
++        (Since::Round(m), _) => tree(vcs, from, &store.diff_of(&review.header.id, m)?)?,
++    };
++    // The rounds the view spans: from the first (the base) or from round M, to round N
++    let start = match since {
++        Since::Base => first.number,
++        Since::Round(m) => m,
++    };
++    let spanned: Vec<&Round> = review
++        .rounds
++        .iter()
++        .filter(|r| (start..=to).contains(&r.number))
+         .collect();
+-    // A files round speaks only for the files it names (ATM-622): its tree is rebuilt from them alone, so a file of the
+-    // earlier round it doesn't name isn't deleted, it just isn't in this round. One it alone names is new to the review
+-    if b.kind == RoundKind::Files {
+-        paths.retain(|p| b.files.iter().any(|f| &f.path == p));
++    let only: Vec<String> = if spanned.iter().any(|r| r.kind == RoundKind::Files) {
++        let mut paths: Vec<String> = spanned
++            .iter()
++            .flat_map(|r| r.files.iter().map(|f| f.path.clone()))
++            .collect();
++        // Round N a files round: only its files (one of an earlier round it doesn't name isn't deleted)
++        if b.kind == RoundKind::Files {
++            paths.retain(|p| b.files.iter().any(|f| &f.path == p));
++        }
++        paths.sort();
++        paths.dedup();
++        paths
++    } else {
++        Vec::new()
++    };
++    let diff = repo.diff_between(&before, &after, &only, &[TASK_DIR])?;
++    Ok(Between {
++        before,
++        after,
++        diff,
++    })
++}
++
++/// Whether a comment made on round `made_on` is in the view of round `to` since `since` (ATM-725): the view holds
++/// that round's increment. A comment on a round after it, or (since round M) on round M or before, is on another round.
++#[must_use]
++pub fn in_view(since: Since, to: u32, made_on: u32) -> bool {
++    made_on <= to
++        && match since {
++            Since::Base => true,
++            Since::Round(m) => made_on > m,
++        }
++}
++
++/// A new round as its increment (ATM-725): a commit range that doesn't start where the round before ended (a range
++/// from the review's base, or from anywhere else) is recorded from that round's head, so each round's own diff is
++/// what it changed; with the words saying so. Anything else as it is: a working or files round is rebuilt from its
++/// own base, and a range after one of those has no commit to start from; so is a range whose previous head isn't in
++/// this clone.
++#[must_use]
++pub fn as_increment(vcs: &GitVcs, previous: &Round, new: NewRound) -> (NewRound, Option<String>) {
++    let (RoundKind::Range { head: last, .. }, RoundKind::Range { base, head }) =
++        (&previous.kind, &new.kind)
++    else {
++        return (new, None);
++    };
++    if base == last || previous.submodule != new.submodule {
++        return (new, None);
++    }
++    let short = |sha: &str| sha.chars().take(12).collect::<String>();
++    let said = format!(
++        "its range started at {}, not where round {} ended ({}): recorded from there, so the round is what it changed",
++        short(base),
++        previous.number,
++        short(last)
++    );
++    // The round before's head not in this clone (made in another, or gone): kept as given, the views still add up
++    // from the rounds' trees wherever they can be had
++    let head = head.clone();
++    match repository(vcs, previous).and_then(|repo| from_range(&repo, last, &head, &new.by)) {
++        Ok(increment) => (increment, Some(said)),
++        Err(_) => (new, None),
+     }
+-    paths.sort();
+-    paths.dedup();
+-    Ok(Patch(vcs.diff_trees(&tree_a, &tree_b, &paths)?))
++}
++
++/// What changed from round `from` to round `to` of a review (§3.6's "between two rounds"): [`between`] since round
++/// `from`.
++///
++/// # Errors
++/// As [`between`]'s.
++pub fn compare<S: RoundDiffs + ?Sized>(
++    vcs: &GitVcs,
++    store: &S,
++    review: &Review,
++    from: u32,
++    to: u32,
++) -> Result<Patch> {
++    Ok(Patch(
++        between(vcs, store, review, Since::Round(from), to)?
++            .diff
++            .patch,
++    ))
+ }
+ 
+ /// A part of a file a diff changed: `old_len` lines from `old_start` became `new_len` from `new_start` (1-based).
+diff --git a/crates/atm-review/src/rounds/tests.rs b/crates/atm-review/src/rounds/tests.rs
+index be018a90..15d43ec4 100644
+--- a/crates/atm-review/src/rounds/tests.rs
++++ b/crates/atm-review/src/rounds/tests.rs
+@@ -1,6 +1,8 @@
+ use super::{Hunk, Placement, follow, hunks};
+ use atm_vcs::Rev;
+ 
++mod views;
++
+ /// A hunk that replaces `old_len` lines with `new_len` (or inserts, with no old lines).
+ fn hunk(old_start: u32, old_len: u32, new_start: u32, new_len: u32) -> Hunk {
+     let count = |n: u32| usize::try_from(n).unwrap();
+diff --git a/crates/atm-review/src/rounds/tests/views.rs b/crates/atm-review/src/rounds/tests/views.rs
+new file mode 100644
+index 00000000..08507962
+--- /dev/null
++++ b/crates/atm-review/src/rounds/tests/views.rs
+@@ -0,0 +1,262 @@
++//! ATM-725: a review's views are its rounds' increments added up, however each round was opened.
++
++use super::super::{Since, between, from_range, from_working};
++use crate::memory::MemoryStore;
++use crate::model::{Actor, Review, ReviewRef, Status};
++use crate::rules::Reviews;
++use crate::store::{NewReview, NewRound, ReviewStore};
++use atm_common::TASK_DIR;
++use atm_vcs::{GitVcs, Rev};
++
++/// A repository with a base commit and three more, each changing what the one before left; the task folder changes
++/// too, which no view shows
++struct Repo {
++    dir: crate::test_dir::TestDir,
++    vcs: GitVcs,
++    /// The base, then the three commits
++    commits: Vec<String>,
++}
++
++impl Repo {
++    fn new() -> Self {
++        let dir = crate::test_dir::TestDir::new();
++        let root = dir.path().to_path_buf();
++        let git = |args: &[&str]| {
++            let mut all = vec!["-c", "user.name=t", "-c", "user.email=t@example.com"];
++            all.extend_from_slice(args);
++            atm_fs::git::git(&all, &root).unwrap_or_else(|| panic!("git {args:?}"))
++        };
++        git(&["init", "-q"]);
++        let steps: [&[(&str, &str)]; 4] = [
++            &[
++                ("a.rs", "1\n"),
++                (".agentic-task-manager/tasks.json", "{}\n"),
++            ],
++            &[("a.rs", "1\n2\n"), ("b.rs", "b\n")],
++            &[
++                ("a.rs", "1\n2\n3\n"),
++                (".agentic-task-manager/tasks.json", "{\"x\":1}\n"),
++            ],
++            &[("c.rs", "c\n"), ("b.rs", "b\nb2\n")],
++        ];
++        let mut commits = Vec::new();
++        for (n, files) in steps.iter().enumerate() {
++            for (path, text) in *files {
++                let path = root.join(path);
++                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
++                std::fs::write(path, text).unwrap();
++            }
++            git(&["add", "-A"]);
++            git(&["commit", "-q", "-m", &format!("step {n}")]);
++            commits.push(git(&["rev-parse", "HEAD"]).trim().to_string());
++        }
++        let vcs = GitVcs::new(&root);
++        Self { dir, vcs, commits }
++    }
++
++    fn range(&self, from: usize, to: usize) -> NewRound {
++        let by = Actor::from("claude:1");
++        from_range(&self.vcs, &self.commits[from], &self.commits[to], &by).unwrap()
++    }
++
++    /// A review whose rounds are these ranges (indices into `commits`)
++    fn review(&self, ranges: &[(usize, usize)]) -> (MemoryStore, Review) {
++        let mut store = MemoryStore::new();
++        let mut reviews = Reviews::new(&mut store);
++        let (first, rest) = ranges.split_first().unwrap();
++        reviews
++            .create(NewReview {
++                title: "Rounds".into(),
++                summary: String::new(),
++                tasks: Vec::new(),
++                author: Some(Actor::from("claude:1")),
++                reviewers: Vec::new(),
++                status: Status::Waiting,
++                first: self.range(first.0, first.1),
++            })
++            .unwrap();
++        for (from, to) in rest {
++            reviews
++                .add_round(&ReviewRef::numbered(1), self.range(*from, *to))
++                .unwrap();
++        }
++        let review = store.get_review(&ReviewRef::numbered(1)).unwrap();
++        (store, review)
++    }
++
++    /// What git says changed from commit `from` to commit `to`, the task folder left out
++    fn expected(&self, from: usize, to: usize) -> String {
++        let (a, b) = (
++            Rev::object_id(&self.commits[from]).unwrap(),
++            Rev::object_id(&self.commits[to]).unwrap(),
++        );
++        self.vcs
++            .diff_between(&a, &b, &[], &[TASK_DIR])
++            .unwrap()
++            .patch
++    }
++}
++
++fn view(repo: &Repo, store: &MemoryStore, review: &Review, since: Since, to: u32) -> String {
++    between(&repo.vcs, store, review, since, to)
++        .unwrap()
++        .diff
++        .patch
++}
++
++#[test]
++fn every_view_adds_up_the_increments_whatever_ranges_the_rounds_were_opened_with() {
++    let repo = Repo::new();
++    // Round N ends at commit N, each opened differently
++    let openings: [(&str, [(usize, usize); 3]); 3] = [
++        ("cumulative, from the base", [(0, 1), (0, 2), (0, 3)]),
++        (
++            "incremental, from the round before",
++            [(0, 1), (1, 2), (2, 3)],
++        ),
++        (
++            "neither: round 3 from the base, round 2 from round 1",
++            [(0, 1), (1, 2), (0, 3)],
++        ),
++    ];
++    for (how, ranges) in openings {
++        let (store, review) = repo.review(&ranges);
++        for n in 1..=3u32 {
++            let i = usize::try_from(n).unwrap();
++            // The whole change: from the review's base, whatever round N's range started from
++            assert_eq!(
++                view(&repo, &store, &review, Since::Base, n),
++                repo.expected(0, i),
++                "{how}: whole({n})"
++            );
++            for m in 1..n {
++                let j = usize::try_from(m).unwrap();
++                assert_eq!(
++                    view(&repo, &store, &review, Since::Round(m), n),
++                    repo.expected(j, i),
++                    "{how}: since({m}, {n})"
++                );
++                // whole(N) = whole(M) + since(M, N): they meet at round M's tree, and end at round N's
++                let whole_m = between(&repo.vcs, &store, &review, Since::Base, m).unwrap();
++                let since = between(&repo.vcs, &store, &review, Since::Round(m), n).unwrap();
++                let whole_n = between(&repo.vcs, &store, &review, Since::Base, n).unwrap();
++                assert_eq!(
++                    whole_m.after, since.before,
++                    "{how}: whole({m}) ends where since({m}, {n}) starts"
++                );
++                assert_eq!(
++                    since.after, whole_n.after,
++                    "{how}: since({m}, {n}) ends where whole({n}) does"
++                );
++            }
++        }
++        // The task folder is never in a view, though commits 1 and 3 change it
++        assert!(
++            !view(&repo, &store, &review, Since::Base, 3).contains(TASK_DIR),
++            "{how}"
++        );
++        // Round 1 is its own increment: the whole change of round 1
++        assert!(
++            view(&repo, &store, &review, Since::Base, 1).contains("+b"),
++            "{how}"
++        );
++    }
++}
++
++#[test]
++fn a_working_round_after_commits_adds_only_its_own_change_since_the_round_before() {
++    let repo = Repo::new();
++    let (mut store, _) = repo.review(&[(0, 1), (1, 2)]);
++    std::fs::write(repo.dir.path().join("a.rs"), "1\n2\nworking\n").unwrap();
++    // Its base an older commit than round 2's head: still measured from round 2's result
++    let working = from_working(&repo.vcs, &repo.commits[1], &Actor::from("claude:1")).unwrap();
++    Reviews::new(&mut store)
++        .add_round(&ReviewRef::numbered(1), working)
++        .unwrap();
++    let review = store.get_review(&ReviewRef::numbered(1)).unwrap();
++    let since = view(&repo, &store, &review, Since::Round(2), 3);
++    assert!(
++        since.contains("+working") && !since.contains("+2"),
++        "{since}"
++    );
++    let whole = view(&repo, &store, &review, Since::Base, 3);
++    assert!(
++        whole.contains("+2") && whole.contains("+working") && whole.contains("+b"),
++        "{whole}"
++    );
++}
++
++/// A range that doesn't start where the round before ended is recorded from there, saying so; one that does, or a
++/// round of another kind, is kept as it is
++#[test]
++fn a_new_range_round_is_recorded_as_what_it_changed_since_the_round_before() {
++    use super::super::as_increment;
++    let repo = Repo::new();
++    let (_, review) = repo.review(&[(0, 1), (1, 2)]);
++    let last = &review.rounds[1];
++    // From the base: recorded from round 2's head, its diff only commit 3's change
++    let (cumulative, said) = as_increment(&repo.vcs, last, repo.range(0, 3));
++    assert_eq!(
++        cumulative.kind,
++        crate::model::RoundKind::Range {
++            base: repo.commits[2].clone(),
++            head: repo.commits[3].clone()
++        }
++    );
++    assert_eq!(cumulative.patch.0, repo.expected(2, 3));
++    let said = said.expect("it says so");
++    assert!(
++        said.contains("not where round 2 ended") && said.contains(&repo.commits[2][..12]),
++        "{said}"
++    );
++    // From round 2's head already: as it is, nothing said
++    let (incremental, said) = as_increment(&repo.vcs, last, repo.range(2, 3));
++    assert_eq!(incremental, repo.range(2, 3));
++    assert_eq!(said, None);
++    // A working round: as it is
++    let working = from_working(&repo.vcs, "HEAD", &Actor::from("claude:1")).unwrap();
++    let (kept, said) = as_increment(&repo.vcs, last, working.clone());
++    assert_eq!((kept, said), (working, None));
++    // The round before's head isn't in this clone (made in another): as it is, nothing said
++    let mut elsewhere = last.clone();
++    elsewhere.kind = crate::model::RoundKind::Range {
++        base: "a".repeat(40),
++        head: "b".repeat(40),
++    };
++    let (kept, said) = as_increment(&repo.vcs, &elsewhere, repo.range(0, 3));
++    assert_eq!((kept, said), (repo.range(0, 3), None));
++}
++
++/// A comment is in a view that holds its round's increment: on round 2, in whole(3) and since(1, 3), not in
++/// since(2, 3) nor in whole(1)
++#[test]
++fn a_comment_is_in_the_views_that_hold_its_rounds_increment() {
++    use super::super::in_view;
++    let cases = [
++        (Since::Base, 3, true),
++        (Since::Base, 2, true),
++        (Since::Base, 1, false),
++        (Since::Round(1), 3, true),
++        (Since::Round(1), 2, true),
++        (Since::Round(2), 3, false),
++    ];
++    for (since, to, expected) in cases {
++        assert_eq!(in_view(since, to, 2), expected, "{since:?} to {to}");
++    }
++}
++
++#[test]
++fn a_view_starts_before_its_round() {
++    let repo = Repo::new();
++    let (store, review) = repo.review(&[(0, 1), (1, 2)]);
++    for m in [2, 3] {
++        assert!(matches!(
++            between(&repo.vcs, &store, &review, Since::Round(m), 2),
++            Err(atm_common::Error::Invalid(_))
++        ));
++    }
++    assert!(matches!(
++        between(&repo.vcs, &store, &review, Since::Base, 3),
++        Err(atm_common::Error::NotFound(_))
++    ));
++}
+diff --git a/crates/atm-vcs/src/diff.rs b/crates/atm-vcs/src/diff.rs
+index 13882877..73651da5 100644
+--- a/crates/atm-vcs/src/diff.rs
++++ b/crates/atm-vcs/src/diff.rs
+@@ -222,6 +222,36 @@ impl GitVcs {
+         })
+     }
+ 
++    /// The diff from one tree (or commit) to another, with the files it changes (ATM-725: a review's views, each from
++    /// one round's result, or the review's base, to another's): only `only` when any are named, else everything but
++    /// the folders `leave_out` (atm's own task folder).
++    ///
++    /// # Errors
++    /// Either isn't a tree or a commit, a path outside a submodule's folder, or git fails.
++    pub fn diff_between(
++        &self,
++        from: &Rev,
++        to: &Rev,
++        only: &[String],
++        leave_out: &[&str],
++    ) -> Result<Diff> {
++        let spec = if only.is_empty() {
++            pathspec(leave_out)
++        } else {
++            let mut spec = vec!["--".to_string()];
++            for path in only {
++                spec.push(format!(":(literal){}", self.inside(path)?));
++            }
++            spec
++        };
++        let mut args = vec![END_OF_OPTIONS, from.as_str(), to.as_str()];
++        args.extend(spec.iter().map(String::as_str));
++        Ok(Diff {
++            patch: self.patch(&args, &[])?,
++            files: self.changed_files(&args, &[])?,
++        })
++    }
++
+     /// The diff of a commit range, `base` to `head`, the folders `leave_out` left out (atm's own task folder).
+     ///
+     /// # Errors
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index 07ecec50..15cf2851 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -67,6 +67,7 @@
+     file,
+     chains,
+     drifted,
++    elsewhere = [],
+     before,
+     after,
+     viewed,
+@@ -90,6 +91,8 @@
+     file: ViewFile;
+     chains: Chain[];
+     drifted: PlacedChain[];
++    /** Its comments made on a round the view doesn't hold (ATM-725): listed, linking to their round */
++    elsewhere?: PlacedChain[];
+     before: DocumentSource | null;
+     after: DocumentSource | null;
+     viewed: boolean;
+@@ -280,6 +283,16 @@
+           </button>
+         </p>
+       {/each}
++      {#each elsewhere as chain (chain.id)}
++        <p class="review-drifted review-elsewhere" data-chain={chain.id}>
++          A comment on round {chain.anchor.round}, which this view doesn't show:
++          <button class="review-drifted-link" onclick={() => onround(chain.anchor.round)}>
++            see it on round {chain.anchor.round}{chain.anchor.lines
++              ? `, lines ${chain.anchor.lines[0]}–${chain.anchor.lines[1]}`
++              : ''}
++          </button>
++        </p>
++      {/each}
+       {#if moved}
+         <div class="review-submodule">
+           <p class="review-submodule-move">
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 9b14c669..0f81a48d 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -17,6 +17,7 @@
+   import {
+     chainsOf,
+     driftedOf,
++    elsewhereOf,
+     fileTree,
+     filesIn,
+     filterChains,
+@@ -828,8 +829,12 @@
+             value={view.against ?? ''}
+             onchange={(e) => onround(view.round, e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+           >
+-            <option value="">Whole change</option>
+-            {#each rounds.filter((n) => n < view.round) as n (n)}<option value={n}>Since round {n}</option>{/each}
++            <!-- ATM-725: a round's whole change (from the review's base), what changed since an earlier round, or the
++                 round's own increment (since the round before) -->
++            <option value="">Round {view.round} (whole)</option>
++            {#each rounds.filter((n) => n < view.round) as n (n)}<option value={n}
++                >{n === view.round - 1 ? `Round ${view.round} only` : `Since round ${n}`}</option
++              >{/each}
+           </select>
+           <span class="review-progress" title="{viewedCount} of {files.length} files viewed">
+             <span class="review-meter"
+@@ -1151,6 +1156,7 @@
+             {imageAt}
+             chains={chainsOf(allChains, f)}
+             drifted={driftedOf(allChains, f)}
++            elsewhere={elsewhereOf(allChains, f)}
+             before={sideOf(f.before)}
+             after={sideOf(f.after)}
+             viewed={isViewed(f)}
+diff --git a/dashboard/src/lib/reviews/drafts.ts b/dashboard/src/lib/reviews/drafts.ts
+index 13f17ecd..82df240a 100644
+--- a/dashboard/src/lib/reviews/drafts.ts
++++ b/dashboard/src/lib/reviews/drafts.ts
+@@ -66,6 +66,8 @@ export function withDrafts(
+             comments: [asComment(d, you)],
+             placed: d.placed ?? null,
+             drifted: d.drifted ?? null,
++            // A draft on what a live review is now is on the round shown
++            in_view: d.in_view ?? true,
+           },
+         ]
+       : [],
+diff --git a/dashboard/src/lib/reviews/page.ts b/dashboard/src/lib/reviews/page.ts
+index 253b8fc9..e0969bd8 100644
+--- a/dashboard/src/lib/reviews/page.ts
++++ b/dashboard/src/lib/reviews/page.ts
+@@ -166,14 +166,22 @@ export function lineCounts(patch: string): { added: number; removed: number } {
+   return { added, removed };
+ }
+ 
+-/** A file's chains as the diff viewer places them: at their lines in the round shown (a drifted one at its last
+- * place), a whole file's anywhere */
++const onFile = (c: PlacedChain, file: ViewFile) =>
++  c.anchor.path === file.path || (file.old_path !== file.path && c.anchor.path === file.old_path);
++
++/** A file's chains as the diff viewer places them: those the view holds (ATM-725, atm's `in_view`), at their lines in
++ * the round shown (a drifted one at its last place), a whole file's anywhere */
+ export function chainsOf(chains: PlacedChain[], file: ViewFile): Chain[] {
+   return chains
+-    .filter((c) => c.anchor.path === file.path || (file.old_path !== file.path && c.anchor.path === file.old_path))
++    .filter((c) => c.in_view && onFile(c, file))
+     .map((c) => ({ id: c.id, comments: c.comments, anchor: { ...c.anchor, path: file.path, lines: c.placed } }));
+ }
+ 
++/** A file's chains made on a round the view doesn't hold (ATM-725): listed with the round they are on, not placed */
++export function elsewhereOf(chains: PlacedChain[], file: ViewFile): PlacedChain[] {
++  return chains.filter((c) => !c.in_view && onFile(c, file));
++}
++
+ /** The chains of the review as a whole (on no file) */
+ export function reviewChains(chains: PlacedChain[]): PlacedChain[] {
+   return chains.filter((c) => !c.anchor.path);
+@@ -181,7 +189,7 @@ export function reviewChains(chains: PlacedChain[]): PlacedChain[] {
+ 
+ /** A file's drifted chains: their text is gone from the round shown, and they link to where they were made */
+ export function driftedOf(chains: PlacedChain[], file: ViewFile): PlacedChain[] {
+-  return chains.filter((c) => c.drifted && (c.anchor.path === file.path || c.anchor.path === file.old_path));
++  return chains.filter((c) => c.in_view && c.drifted && onFile(c, file));
+ }
+ 
+ /** Whether a chain is open, as atm's rules count it: one of its top-level comments has its box unticked. A poke has no
+diff --git a/dashboard/src/lib/reviews/types.ts b/dashboard/src/lib/reviews/types.ts
+index a6582d4b..eb87e4b6 100644
+--- a/dashboard/src/lib/reviews/types.ts
++++ b/dashboard/src/lib/reviews/types.ts
+@@ -129,6 +129,9 @@ export interface ViewFile {
+ export interface PlacedChain extends Chain {
+   placed: [number, number] | null;
+   drifted: { round: number; lines: [number, number] | null } | null;
++  /** Whether the view holds the increment of the round it was made on (ATM-725, atm's): placed in the view when it
++   * does, else listed as on another round */
++  in_view: boolean;
+ }
+ 
+ /** One of the user's drafts on the review (ATM-612), as the page has it: a comment placed in the round shown as a chain
+@@ -144,6 +147,7 @@ export type PlacedDraft = { id: string; at: string; body: string } & (
+       round: number | null;
+       placed?: [number, number] | null;
+       drifted?: { round: number; lines: [number, number] | null } | null;
++      in_view?: boolean;
+     }
+   | { kind: 'reply'; to: string }
+ );
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 4ed4b79e..6c3db0e9 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -276,7 +276,8 @@ function withAtmAnswers(reference: string, page: ReviewPageFake): ReviewPageFake
+   return {
+     ...page,
+     can: { ...can, ...page.can },
+-    chains: page.chains.map((ch) => ({ ...ch, comments: ch.comments.map(mark) })),
++    // In the view (ATM-725) unless the test says it is on another round: the fixture serves one page for every view
++    chains: page.chains.map((ch) => ({ in_view: true, ...ch, comments: ch.comments.map(mark) })),
+   };
+ }
+ 
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 1ac451b6..a5381d98 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1525,6 +1525,44 @@ test.describe('a review’s page', () => {
+     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=2');
+   });
+ 
++  // ATM-725: a round's views are its whole change, what changed since an earlier round, and its own increment
++  test('the picker: Round 3 (whole), Since round 1, Round 3 only; each asked of the server', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openDiffs(page, tasksServer);
++    await expect(page.locator('#review-against option')).toHaveText([
++      'Round 3 (whole)',
++      'Since round 1',
++      'Round 3 only',
++    ]);
++    await page.selectOption('#review-against', '2');
++    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=3&against=2');
++    await page.selectOption('#review-against', '');
++    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=3');
++    // Round 1 has only its whole change (the fixture serves one page for every view: round 1's, now)
++    tasksServer.setReview('CR-2', reviewPage({ view: { ...reviewPage().view, round: 1 } }));
++    await page.selectOption('#review-round', '1');
++    await expect(page.locator('#review-against option')).toHaveText(['Round 1 (whole)']);
++  });
++
++  test('a comment on a round the view doesn’t hold is listed, linking to its round, not placed', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openDiffs(page, tasksServer);
++    // Since round 2: c1, made on round 2, is on a round the view doesn't hold
++    const chains: Record<string, unknown>[] = reviewPage().chains;
++    chains[0] = { ...chains[0], anchor: { ...reviewPage().chains[0].anchor, round: 2 }, in_view: false };
++    tasksServer.setReview('CR-2', reviewPage({ chains, view: { ...reviewPage().view, against: 2 } }));
++    await page.reload();
++    const listed = card(page, 'src/a.rs').locator('.review-elsewhere[data-chain="t1"]');
++    await expect(listed).toContainText('A comment on round 2');
++    await expect(card(page, 'src/a.rs').locator('[data-comment="c1"]')).toHaveCount(0);
++    await listed.getByRole('button', { name: /see it on round 2, lines 3–3/ }).click();
++    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=2');
++  });
++
+   test('a drifted chain links to the round it was made on', async ({ page, tasksServer }) => {
+     await openDiffs(page, tasksServer);
+     await page.getByRole('button', { name: /see it where it was made, round 1, lines 7–8/ }).click();
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 12777c7d..c1ed899f 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -32,6 +32,7 @@ const chain = (id: string, path: string | null, more: Partial<PlacedChain> = {},
+   ],
+   placed: path ? [2, 2] : null,
+   drifted: null,
++  in_view: true,
+   ...more,
+ });
+ 
+diff --git a/dashboard/tests/unit/drafts.test.ts b/dashboard/tests/unit/drafts.test.ts
+index c18a75ae..d808e0a4 100644
+--- a/dashboard/tests/unit/drafts.test.ts
++++ b/dashboard/tests/unit/drafts.test.ts
+@@ -20,6 +20,7 @@ const chain = (id: string, comments: ReviewComment[]): PlacedChain => ({
+   comments,
+   placed: [3, 4],
+   drifted: null,
++  in_view: true,
+ });
+ const onLines = (id: string, more: Partial<PlacedDraft> = {}): PlacedDraft =>
+   ({
+@@ -69,7 +70,11 @@ describe('withDrafts', () => {
+       ],
+       placed: [9, 9],
+       drifted: null,
++      in_view: true,
+     });
++    // On a round the view doesn't hold, as the server says (ATM-725)
++    const [, elsewhere] = withDrafts([chain('t1', [])], [onLines('d1', { in_view: false })], 'Hakan', 2);
++    expect(elsewhere.in_view).toBe(false);
+   });
+ 
+   it('one on what a live review is now is on the round shown; on the review, no file; drifted as the server says', () => {
+diff --git a/dashboard/tests/unit/page.test.ts b/dashboard/tests/unit/page.test.ts
+index b7f27c06..76abd9e4 100644
+--- a/dashboard/tests/unit/page.test.ts
++++ b/dashboard/tests/unit/page.test.ts
+@@ -4,6 +4,7 @@ import {
+   TREE_WIDTH,
+   chainsOf,
+   driftedOf,
++  elsewhereOf,
+   fileTree,
+   filesIn,
+   filterChains,
+@@ -163,6 +164,7 @@ const chain = (id: string, path: string | null, placed: [number, number] | null,
+     comments: [],
+     placed,
+     drifted: null,
++    in_view: true,
+     ...more,
+   }) as PlacedChain;
+ 
+@@ -348,6 +350,20 @@ describe('a file’s chains', () => {
+     expect(driftedOf(chains, file('b.md'))).toEqual([]);
+   });
+ 
++  // ATM-725: atm's `in_view`, whether the view holds the round a comment was made on
++  it('on a round the view doesn’t hold: not placed, not drifted, listed as elsewhere; the others not elsewhere', () => {
++    const other = [
++      chain('k1', 'a.md', [3, 4], { in_view: false }),
++      chain('k2', 'a.md', [9, 9], { in_view: false, drifted: { round: 1, lines: [7, 7] } }),
++      chain('k3', 'a.md', [1, 1]),
++      chain('k4', 'b.md', [1, 1], { in_view: false }),
++    ];
++    expect(chainsOf(other, file('a.md')).map((c) => c.id)).toEqual(['k3']);
++    expect(driftedOf(other, file('a.md'))).toEqual([]);
++    expect(elsewhereOf(other, file('a.md')).map((c) => c.id)).toEqual(['k1', 'k2']);
++    expect(elsewhereOf(chains, file('a.md'))).toEqual([]);
++  });
++
+   it('the review’s own are on no file', () => {
+     expect(reviewChains(chains).map((c) => c.id)).toEqual(['t3']);
+     expect(reviewChains([])).toEqual([]);
+diff --git a/docs/agent/reviews.md b/docs/agent/reviews.md
+index c0b67fe8..c2ec6ec3 100644
+--- a/docs/agent/reviews.md
++++ b/docs/agent/reviews.md
+@@ -21,19 +21,20 @@
+   made), changes_requested (sent back), approved, closed. In a filter, `open` is every review not decided yet
+   (`atm review list --status open`: draft, waiting, live or changes_requested).
+ - **Reading it:** `atm review show CR-7` (the header, rounds and counts), `atm review comments CR-7 [--open]` (every
+-  chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (a round's diff, or what changed
+-  since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`. A review
++  chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (round 2's whole change, from the
++  review's base, or what changed since round 1: each round is an increment, what it changed since the round before,
++  and a view adds them up). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`. A review
+   atm can't read (a status a newer atm wrote, a broken header) is listed after the others as *can't be read*, with
+   why, whatever the filter (on stderr with `--json`, whose list stays the reviews it can read): don't edit its files
+   to make it readable, say so to the user (`atm doctor` reports it too).
+ - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
+   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
+   tasks back in review; a task of yours whose claim lapsed meanwhile (back in to do) is taken back first, its note
+-  saying so, and a round that can't reach its tasks writes nothing. A round is the whole change as it now is, not the
+-  fix alone: a range round keeps the
+-  review's first base (`--range <the first round's base>..HEAD`, never the fix commit's own range), and a files round
+-  keeps the files the last one reviewed (naming more adds them). The reviewer sees what the fix changed as *since round
+-  N*; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
++  saying so, and a round that can't reach its tasks writes nothing. A range round ends at the change as it now is
++  (`--range <base>..HEAD`): atm records it from where the round before ended, whatever base you give, and says so
++  when it moved it; a files round keeps the files the last one reviewed (naming more adds them). The reviewer sees the
++  fix as *Round N only*, everything since an earlier round as *since round M*, and the whole change from the review's
++  base; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
+   check has changed. Start a chain of your own with `atm review comment CR-7 --file <path> --lines A-B --body '…'`
+   (without `--file`, about the review as a whole).
+ - **Resolving and deciding are the reviewer's:** a top-level comment is resolved (`atm review resolve CR-7 c9`) by a
+diff --git a/docs/code-review-design.md b/docs/code-review-design.md
+index 4d949af7..4d73a0b8 100644
+--- a/docs/code-review-design.md
++++ b/docs/code-review-design.md
+@@ -371,9 +371,24 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
+ A **round** is what the author asks the reviewers to look at: the first when the review is opened, then one each time
+ the author has addressed the comments (`atm review round`), or a live review's checkpoints.
+ 
+-- **The whole change:** the latest round's diff, against its base.
+-- **Between two rounds** (round 2 against round 1): what changed in response to the comments, from the two rounds'
+-  files (their heads, or rebuilt from their diffs, §3.3), limited to the review's files. This is the view Crit lacks.
++A review is **a chain of increments, one a round** (ATM-725): diff1 is round 1's change, from the review's base to
++round 1's result; diffN (N > 1) is what round N changed on top of round N−1, from round N−1's result to its own. A
++round's result is its tree: a range's head, or its files rebuilt from its base and its diff (§3.3). `atm review round`
++records a range from where the round before ended, whatever base it was given, and says so when it moved it. Every view
++is made one way, `rounds::between`: round N's tree against a start, so it is the increments between them added up,
++however each round was opened.
++
++| View | Is | The page's picker |
++|---|---|---|
++| Round 1 | diff1 | *Round 1 (whole)* |
++| Round N, whole | diff1 + … + diffN, from the review's base (round 1's) to round N's result | *Round N (whole)* |
++| Round N, since round M (M < N) | diffM+1 + … + diffN, from round M's result to round N's | *Since round M* |
++| Round N, since round N−1 | diffN | *Round N only* |
++
++So whole(N) = whole(M) + since(M, N), and the whole change is always measured from the review's base, never from a
++base a later round named. Atm's task folder is in no view; a view spanning a files round shows only the files those
++rounds name. A comment shows in a view that holds its round's increment (made on round K: in whole(N) for K ≤ N, in
++since(M, N) for M < K ≤ N); in any other, its file lists it as on round K, with a link there (`in_view` on each chain).
+ 
+ A chain is anchored to **a round, a file, a side (new or old), a line range, and the quoted text**. In a later round,
+ atm moves the anchor through the change between the two rounds: lines unchanged around it move with it. When the
+@@ -729,8 +744,8 @@ docs/code-review-design.md --task ATM-337`: the file reviewed whole, read render
+ text anchored by their quote. The next round is the file as revised; round 2 against round 1 shows what changed, which
+ Crit struggled with. A review of code and documents together shows each file its way. §3.2, §3.6, §3.7.
+ 
+-**U5. The whole change, or only what changed since the last round.** The round picker (§3.6): the latest round's
+-whole diff, or round 3 against round 2.
++**U5. The whole change, or only what changed since the last round.** The round picker (§3.6): a round's whole
++change from the review's base, what changed since an earlier round, or the round alone (*Round 3 only*, since round 2).
+ 
+ **U6. A batch review at the sprint's end.** The tasks in `batch` mode are reviewed together: one CR over the sprint's
+ range, naming them (`--task` repeated). A decision is each task's; a chain about one task names it in its text.
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index c9c5a2ec..2fefde72 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -333,7 +333,8 @@ old parameters from its hash and moves to the new address.
+   `"answered"` when someone else wrote in it after they last did (as the summary's `code_reviews`), else `null`. A
+   status that isn't one is `400`.
+ - `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
+-  when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
++  when none) from the review's base, or what changed in it since round `against` (ATM-725: the rounds' increments
++  between them added up, however each round was opened; docs/code-review-design.md §3.6): `{review, summary, branch, rounds, chains, view: {round,
+   against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you, can}`. `can` is what its
+   reader may do, each of `approve`, `request_changes`, `comment`, `round` and `close` as `{ok, why?}` (the review's
+   rules answering, ATM-633), and each comment and reply carries `editable`, whether they may change its text (their
+@@ -341,8 +342,9 @@ old parameters from its hash and moves to the new address.
+   file's `patch` is
+   its part of the diff, `before` and `after` the revisions its two sides are read from (`documents?path=&at=`, §2.6;
+   `null` for a side the file doesn't have). Each chain has `placed`, its lines in the round shown (followed there from
+-  the round it was made on), and `drifted`, the round and lines it was made on when its text is gone from the round
+-  shown. A round that isn't a whole number from 1 is `400`, one the review doesn't have `404`, a round against itself
++  the round it was made on), `drifted`, the round and lines it was made on when its text is gone from the round
++  shown, and `in_view`, whether the view holds the increment of the round it was made on (ATM-725; else the page lists
++  it as on that round). A round that isn't a whole number from 1 is `400`, one the review doesn't have `404`, a round against itself
+   `400`; a reference two reviews share (`CR-8`, two clones took the number) is `400` naming both (`CR-8.1`, `CR-8.2`).
+   A live review with no `round` asked for is shown as its working copy is now (ATM-576): `view.now: true`, its
+   `round` the one after its checkpoints (`rounds` lists only those) when the copy changed since the last checkpoint,
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index eb3cd6ba..c34f78e8 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1311,6 +1311,12 @@ land (I11, I13, I24, I25). Fields:
+ - **A review's page marks each comment `editable`** (ATM-723), from the same rule `edit` enforces
+   (`atm_review::rules::may_edit`). The page shows its controls only as `can` and `editable` allow, a convenience: every
+   change is still checked by atm when it is made. No skill reads it, and no route or command is added.
++- **A review's views are made from its rounds' trees** (ATM-725): `rounds::between` diffs round N's tree against the
++  review's base commit or round M's tree, the commits read from `rounds/N.json` as before (full object IDs, checked by
++  `RoundKind::check`), the paths limited to the rounds' own files when a files round is in the view (`:(literal)`
++  pathspecs, never shell). `atm review round` records a range from where the round before ended, a commit atm itself
++  recorded. `docs/agent/reviews.md` changed: agents no longer need to name the first round's base. No new route, path
++  or command.
+ 
+ ## 4. Keeping it current
+ 

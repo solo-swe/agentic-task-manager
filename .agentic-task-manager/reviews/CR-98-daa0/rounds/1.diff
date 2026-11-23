@@ -1,0 +1,600 @@
+diff --git a/dashboard/src/lib/address.ts b/dashboard/src/lib/address.ts
+index dcfa18e6..5af30cb1 100644
+--- a/dashboard/src/lib/address.ts
++++ b/dashboard/src/lib/address.ts
+@@ -45,13 +45,17 @@ export function addressParams(address: string): URLSearchParams {
+   const path = (q >= 0 ? address.slice(0, q) : address).split('#')[0];
+   const query = q >= 0 ? address.slice(q + 1).split('#')[0] : '';
+   const params = new URLSearchParams();
+-  let segments = path.split('/').filter(Boolean).map(decode);
++  const decoded = path.split('/').filter(Boolean).map(decode);
++  // A segment that doesn't decode, or is `.` or `..` (`%2E%2E` decoded), names no page: as an ID it would change the
++  // API path a read or a write goes to (ATM-676, audit D7)
++  const usable = decoded.every((s): s is string => s !== null && s !== '' && s !== '.' && s !== '..');
++  let segments: string[] = usable ? (decoded as string[]) : [];
+   // /w/<w>/…: the page in workspace <w>
+-  if (segments[0] === 'w' && segments[1]) {
++  if (usable && segments[0] === 'w' && segments[1]) {
+     if (segments[1] !== DEFAULT_WORKSPACE) params.set('workspace', segments[1]);
+     segments = segments.slice(2);
+   }
+-  if (segments.every((s): s is string => s !== null && s !== '')) {
++  if (usable) {
+     const [first, id, tab, ...rest] = segments;
+     if (first === PROJECTS && id === undefined) {
+       params.set('overview', '');
+@@ -203,6 +207,9 @@ export function isPagePath(pathname: string): boolean {
+  * anchor, nothing) */
+ export function legacyParams(hash: string): URLSearchParams | null {
+   const params = new URLSearchParams(hash.replace(/^#/, ''));
++  // A project named `.` or `..` is none (ATM-676, as in a path)
++  const project = params.get('project');
++  if (project === '.' || project === '..') params.delete('project');
+   return [...params.keys()].some((key) => LEGACY_KEYS.includes(key)) ? params : null;
+ }
+ 
+diff --git a/dashboard/src/lib/api/http.ts b/dashboard/src/lib/api/http.ts
+index 06ccc9df..dc80bde6 100644
+--- a/dashboard/src/lib/api/http.ts
++++ b/dashboard/src/lib/api/http.ts
+@@ -21,10 +21,18 @@ export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input) : f
+ /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
+ export type ProjectFile = 'claims.json' | 'worktrees.json';
+ 
++/** An ID (a workspace's, a project's, a review's) as a segment of an API path. `.` and `..` (and empty) are refused
++ * (ATM-676, audit D7): the URL parser works them out, `%2E%2E` too, so `/projects/../reviews` would be another route,
++ * and a write would go there */
++export function idSegment(id: string): string {
++  if (id === '' || id === '.' || id === '..') throw new Error(`${JSON.stringify(id)} isn't an ID`);
++  return encodeURIComponent(id);
++}
++
+ /** A project's own route in the current workspace: `default`'s v1 one, or another workspace's v2 one */
+ function projectRoute(project: string, route: string): string {
+   const prefix = workspacePrefix();
+-  const id = encodeURIComponent(project);
++  const id = idSegment(project);
+   return prefix ? `${prefix}/projects/${id}/${route}` : `/api/v1/projects/${id}/${route}`;
+ }
+ 
+@@ -32,8 +40,8 @@ function projectRoute(project: string, route: string): string {
+ export function projectFileUrl(project: string, file: ProjectFile): string {
+   const prefix = workspacePrefix();
+   return prefix
+-    ? `${prefix}/projects/${encodeURIComponent(project)}/${file.replace(/\.json$/, '')}`
+-    : `/p/${encodeURIComponent(project)}/${file}`;
++    ? `${prefix}/projects/${idSegment(project)}/${file.replace(/\.json$/, '')}`
++    : `/p/${idSegment(project)}/${file}`;
+ }
+ 
+ /** A project's tasks with what atm derives for them, and its meta (GET api/v1/projects/<id>/tasks, T-364) */
+@@ -80,7 +88,7 @@ export function reviewUrl(project: string, review: string, round?: number | null
+   if (round) params.set('round', String(round));
+   if (against) params.set('against', String(against));
+   const search = params.toString();
+-  return `${projectRoute(project, 'reviews')}/${encodeURIComponent(review)}` + (search ? `?${search}` : '');
++  return `${projectRoute(project, 'reviews')}/${idSegment(review)}` + (search ? `?${search}` : '');
+ }
+ 
+ /** An image file of the project, its bytes, for an <img> (T-392); `at`: as that commit or tree has it (a review's
+diff --git a/dashboard/src/lib/api/review-changes.ts b/dashboard/src/lib/api/review-changes.ts
+index d161b6d3..fcc8b322 100644
+--- a/dashboard/src/lib/api/review-changes.ts
++++ b/dashboard/src/lib/api/review-changes.ts
+@@ -35,8 +35,15 @@ interface Change {
+   args: Record<string, unknown>;
+ }
+ 
++/** `.` or `..` as an ID in a change's path (ATM-676, audit D7): the URL parser works it out, so the write would go to
++ * another route */
++const DOTTED = new Set(['.', '..']);
++const dotted = (segments: string[]) => segments.some((s) => DOTTED.has(s));
++
+ async function send(project: string, change: Change): Promise<ChangeResult> {
+   const workspace = apiWorkspace();
++  if (dotted([workspace, project, ...change.resource.split('/').map((s) => decodeURIComponent(s))]))
++    return { ok: false, message: 'A review, project or workspace ID can’t be . or ..' };
+   if (inApp) {
+     try {
+       const body = await invoke<Record<string, unknown>>(change.command, { workspace, project, ...change.args });
+diff --git a/dashboard/src/lib/app-tabs.svelte.ts b/dashboard/src/lib/app-tabs.svelte.ts
+index 9666281a..b2be7793 100644
+--- a/dashboard/src/lib/app-tabs.svelte.ts
++++ b/dashboard/src/lib/app-tabs.svelte.ts
+@@ -143,5 +143,15 @@ export class AppTabs {
+   }
+ }
+ 
++/** The window's session storage, or null where there is none or site data is blocked: reading `sessionStorage` itself
++ * throws then, and at module level that kept the page from loading (ATM-676, audit D5) */
++export function sessionStore(): Storage | null {
++  try {
++    return typeof sessionStorage === 'undefined' ? null : sessionStorage;
++  } catch {
++    return null;
++  }
++}
++
+ /** The window's tabs (the app's; the browser has none) */
+-export const appTabs = new AppTabs(typeof sessionStorage === 'undefined' ? null : sessionStorage);
++export const appTabs = new AppTabs(sessionStore());
+diff --git a/dashboard/src/lib/compmd.ts b/dashboard/src/lib/compmd.ts
+index 8bf6347c..591e12c2 100644
+--- a/dashboard/src/lib/compmd.ts
++++ b/dashboard/src/lib/compmd.ts
+@@ -341,7 +341,7 @@ const TASK_KEY = /~?\b[A-Z][A-Z0-9]{0,9}-\d+\b/g;
+ /** The link a task key in a text is made (ATM-593), and the key back from one */
+ export const taskHref = (key: string) => `#task=${encodeURIComponent(key)}`;
+ export function taskOfHref(href: string): string | null {
+-  return href.startsWith('#task=') ? decodeURIComponent(href.slice('#task='.length)) || null : null;
++  return href.startsWith('#task=') ? safeDecode(href.slice('#task='.length)) || null : null;
+ }
+ 
+ /** A node of CompMD's expanded tree, as far as safeTree reads it (mdast's fields) */
+@@ -396,7 +396,41 @@ export function blocksIn<T>(tree: T, [from, to]: readonly [number, number]): T {
+ }
+ 
+ const DATA_IMAGE = /^\s*data:image\//i;
+-const RAW_IMAGE = /<\s*img\b/i;
++
++/** The raw HTML tags task text keeps: CompMD's own list (its README: `details`, `summary`, `sub`, `sup`, `kbd`, `br`,
++ * and `a` with a safe `href`), less `img`, which shows its text as other images from elsewhere do. Any other tag, or one
++ * of these with an attribute that runs code, styles or loads something, shows as text before CompMD sees it (ATM-676,
++ * audit D4): defence in depth, CompMD shows other tags as text too */
++const RAW_TAGS = new Set(['details', 'summary', 'sub', 'sup', 'kbd', 'br', 'a']);
++const RAW_TAG = /<\s*\/?\s*([a-zA-Z][\w:-]*)([^>]*)/g;
++const RAW_UNSAFE_ATTRIBUTE = /(?:^|[\s"'/])(?:on\w+|style|src|srcset|formaction|action|xlink:href|xmlns(?::\w+)?)\s*=/i;
++function rawHtmlKept(html: string): boolean {
++  for (const [, name, attributes] of html.matchAll(RAW_TAG)) {
++    if (!RAW_TAGS.has(name.toLowerCase()) || RAW_UNSAFE_ATTRIBUTE.test(attributes)) return false;
++  }
++  return true;
++}
++
++const XLINK = 'http://www.w3.org/1999/xlink';
++/** What a click on rendered text follows (ATM-676, audit D4): HTML's `a` and `area`, and an SVG `a` (a diagram's),
++ * by `href` or the older `xlink:href` */
++export const LINK_SELECTOR = 'a[href], area[href], a[*|href]';
++/** A link's address, trimmed; '' when it has none */
++export function hrefOf(link: Element): string {
++  return (link.getAttribute('href') ?? link.getAttributeNS(XLINK, 'href') ?? '').trim();
++}
++/** The link a click on `target` is on, or null */
++export function linkAt(target: EventTarget | null): Element | null {
++  return target instanceof Element ? target.closest(LINK_SELECTOR) : null;
++}
++/** `text` percent-decoded, or null when it isn't valid (`%E0`): decodeURIComponent throws there (ATM-676, audit D9) */
++export function safeDecode(text: string): string | null {
++  try {
++    return decodeURIComponent(text);
++  } catch {
++    return null;
++  }
++}
+ 
+ /**
+  * The expanded tree with what task text mustn't do taken out before it renders (§3), so the browser never even asks:
+@@ -460,7 +494,7 @@ export function safeTree<T>(tree: T, { localImage, docLink, taskKnown }: Project
+         return [{ ...node, children: inside }];
+       }
+       case 'html':
+-        if (RAW_IMAGE.test(String(node.value))) return asText(node.value);
++        if (!rawHtmlKept(String(node.value))) return asText(node.value);
+         break;
+     }
+     return node.children ? [{ ...node, children: node.children.flatMap((c) => visit(c, inLink)) }] : [node];
+@@ -490,13 +524,14 @@ export function dashboardAddress(href: string, page: string = location.href): st
+  * its text. External links open in a new tab without access to this page; `#` links stay, for the panel to scroll.
+  */
+ export function secureLinks(root: ParentNode) {
+-  for (const a of root.querySelectorAll('a[href]')) {
+-    const href = a.getAttribute('href') ?? '';
++  // An image map's area and a diagram's SVG link too (ATM-676)
++  for (const a of root.querySelectorAll(LINK_SELECTOR)) {
++    const href = hrefOf(a);
+     if (!safeHref(href)) {
+       a.replaceWith(...a.childNodes);
+       continue;
+     }
+-    if (href.trim().startsWith('#') || dashboardAddress(href) !== null) continue;
++    if (href.startsWith('#') || dashboardAddress(href) !== null) continue;
+     a.setAttribute('target', '_blank');
+     a.setAttribute('rel', 'noopener noreferrer');
+   }
+diff --git a/dashboard/src/lib/documents/CompMd.svelte b/dashboard/src/lib/documents/CompMd.svelte
+index af509c8c..580ed1dc 100644
+--- a/dashboard/src/lib/documents/CompMd.svelte
++++ b/dashboard/src/lib/documents/CompMd.svelte
+@@ -3,8 +3,11 @@
+   import {
+     blocksIn,
+     dashboardAddress,
++    hrefOf,
++    linkAt,
+     loadCompmd,
+     processText,
++    safeDecode,
+     safeHref,
+     secureLinks,
+     slug,
+@@ -263,9 +266,10 @@
+    * open the document); a link to the dashboard itself here; external ones in a new tab without access to this page;
+    * any other one not at all */
+   function follow(e: MouseEvent) {
+-    const a = (e.target as Element | null)?.closest('a[href]');
++    // An image map's area and a diagram's SVG link too (ATM-676)
++    const a = linkAt(e.target);
+     if (!a || !host?.contains(a)) return;
+-    const href = (a.getAttribute('href') ?? '').trim();
++    const href = hrefOf(a);
+     if (!safeHref(href)) {
+       e.preventDefault();
+       return;
+@@ -285,7 +289,9 @@
+         onopen?.(doc);
+         return;
+       }
+-      const wanted = decodeURIComponent(href.slice(1));
++      // A malformed `%` is no heading's (ATM-676, audit D9: it threw here)
++      const wanted = safeDecode(href.slice(1));
++      if (wanted === null) return;
+       const heading = [...host.querySelectorAll('h1, h2, h3, h4, h5, h6')].find(
+         (h) => slug(h.textContent ?? '') === wanted,
+       );
+diff --git a/dashboard/src/lib/external-links.ts b/dashboard/src/lib/external-links.ts
+index 1a734264..0ea6d3d3 100644
+--- a/dashboard/src/lib/external-links.ts
++++ b/dashboard/src/lib/external-links.ts
+@@ -3,7 +3,7 @@
+ // click reaches the link, and hands the URL to the app (`openUrl`, which the app checks again); links within the page
+ // (its addresses, `?task=`, `#…`, a document's relative links) stay its own. In the browser links open as they always
+ // have, in a new tab.
+-import { dashboardAddress } from './compmd';
++import { dashboardAddress, hrefOf, linkAt } from './compmd';
+ 
+ const EXTERNAL = /^(https?|mailto):$/;
+ 
+@@ -27,7 +27,9 @@ export function externalUrl(href: string, page: string = location.href): string
+  * link kept from opening it; whether it was one. Anything else is left to the page */
+ export function sendExternalLink(e: MouseEvent, open: (url: string) => unknown): boolean {
+   if (e.defaultPrevented || e.button > 1 || !(e.target instanceof Element)) return false;
+-  const href = e.target.closest('a[href]')?.getAttribute('href');
++  // An image map's area and a diagram's SVG link too (ATM-676)
++  const link = linkAt(e.target);
++  const href = link ? hrefOf(link) : null;
+   const url = href ? externalUrl(href) : null;
+   if (!url) return false;
+   e.preventDefault();
+diff --git a/dashboard/src/lib/new-tab-clicks.ts b/dashboard/src/lib/new-tab-clicks.ts
+index 3930c968..953cdede 100644
+--- a/dashboard/src/lib/new-tab-clicks.ts
++++ b/dashboard/src/lib/new-tab-clicks.ts
+@@ -1,5 +1,6 @@
+ // In the atm app, ⌘-click, Ctrl-click or a middle click opens a task or a document in a new tab (T-515, left from
+ // T-514), as a browser opens a link. One listener on the page decides (routes/+layout.svelte); this says where to.
++import { hrefOf, linkAt } from './compmd';
+ import { docOf, withDoc } from './documents';
+ import { withTask } from './routes';
+ 
+@@ -7,7 +8,8 @@ import { withTask } from './routes';
+ export function newTabAddress(target: Element | null, address: string): string | null {
+   const task = target?.closest<HTMLElement>('.kanban-card[data-id], .task-card[data-id]')?.dataset.id;
+   if (task) return withTask(address, task);
+-  const href = target?.closest('a[href]')?.getAttribute('href');
++  const link = linkAt(target);
++  const href = link ? hrefOf(link) : null;
+   const doc = href ? docOf(href) : null;
+   return doc ? withDoc(address, doc) : null;
+ }
+diff --git a/dashboard/src/lib/repo.ts b/dashboard/src/lib/repo.ts
+index 64a8b691..e28da24f 100644
+--- a/dashboard/src/lib/repo.ts
++++ b/dashboard/src/lib/repo.ts
+@@ -102,6 +102,14 @@ export function fileRef(
+   return links ? { href: links.file(commit, path, lines), host: HOST_NAMES[links.kind] } : null;
+ }
+ 
++/** A submodule's commit in its own repository, from the address `.gitmodules` gives (ATM-676, audit D3): through
++ * safeUrl (I14), as its host builds commit links, without a trailing `.git`; null for an address that isn't http(s)
++ * (an SSH remote) or a host atm builds no links for */
++export function submoduleCommitUrl(repository: unknown, sha: string): string | null {
++  const address = repositoryOf({ repository })?.replace(/\.git$/i, '');
++  return (address && repoLinks(address)?.commit(sha)) ?? null;
++}
++
+ function refFor(meta: RepoMeta, build: (links: NonNullable<ReturnType<typeof repoLinks>>) => string): RepoRef {
+   const repository = repositoryOf(meta);
+   if (!repository) return { kind: 'hint' };
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index ae028f07..07ecec50 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -49,6 +49,7 @@
+ <script lang="ts">
+   import { untrack } from 'svelte';
+   import type { DocumentSource } from '../documents/source';
++  import { submoduleCommitUrl } from '../repo';
+   import Icon from '../ui/Icon.svelte';
+   import ChainBox from './ChainBox.svelte';
+   import ComposerActions from './ComposerActions.svelte';
+@@ -125,7 +126,8 @@
+   // are on the entry as a whole
+   const moved = $derived(file.submodule ?? null);
+   const short = (sha: string) => sha.slice(0, 7);
+-  const commitUrl = (sha: string) => (moved?.repository ? `${moved.repository}/commit/${sha}` : null);
++  // Through safeUrl, as its host builds commit links (ATM-676, audit D3): the address comes from the reviewed change
++  const commitUrl = (sha: string) => submoduleCommitUrl(moved?.repository, sha);
+   let writing = $state(false);
+   let draft = $state('');
+   let problem = $state<string | null>(null);
+diff --git a/dashboard/tests/unit/address.test.ts b/dashboard/tests/unit/address.test.ts
+index 8eb939b3..6bfc100d 100644
+--- a/dashboard/tests/unit/address.test.ts
++++ b/dashboard/tests/unit/address.test.ts
+@@ -23,6 +23,34 @@ const at = (href: string) => {
+   return { pathname: url.pathname, search: url.search, hash: url.hash };
+ };
+ 
++describe('. and .. are no IDs (ATM-676, audit D7)', () => {
++  it('a path with a . or .. segment, written or escaped, names no page', () => {
++    for (const path of [
++      '/projects/../reviews',
++      '/projects/%2E%2E',
++      '/projects/%2e/list',
++      '/projects/p1/reviews/..',
++      '/projects/p1/reviews/%2E%2E',
++      '/w/../projects/p1',
++      '/w/%2E%2E/projects/p1',
++    ]) {
++      const params = addressParams(path);
++      expect(
++        ['workspace', 'project', 'review'].map((k) => params.get(k)),
++        path,
++      ).toEqual([null, null, null]);
++    }
++    // A dot inside an ID is an ID
++    expect(addressParams('/projects/a..b/reviews/CR-1.2').get('review')).toBe('CR-1.2');
++  });
++
++  it('an old link naming project . or .. names none', () => {
++    expect(legacyParams('#project=..&view=list')?.get('project')).toBeNull();
++    expect(legacyParams('#project=.&view=list')?.get('project')).toBeNull();
++    expect(legacyParams('#project=p1')?.get('project')).toBe('p1');
++  });
++});
++
+ describe('the address (T-429)', () => {
+   it('reads the page from the path and the rest from the query', () => {
+     expect(params('/')).toEqual([]);
+diff --git a/dashboard/tests/unit/app-tabs.test.ts b/dashboard/tests/unit/app-tabs.test.ts
+index afde430b..f3fdc537 100644
+--- a/dashboard/tests/unit/app-tabs.test.ts
++++ b/dashboard/tests/unit/app-tabs.test.ts
+@@ -19,6 +19,28 @@ function memory(): Storage {
+ 
+ const addresses = (tabs: AppTabs) => tabs.tabs.map((t) => t.address);
+ 
++describe('site data blocked (ATM-676, audit D5)', () => {
++  it('the module loads when reading sessionStorage throws; its tabs work, kept nowhere', async () => {
++    const real = Object.getOwnPropertyDescriptor(window, 'sessionStorage');
++    Object.defineProperty(window, 'sessionStorage', {
++      configurable: true,
++      get() {
++        throw new DOMException('blocked', 'SecurityError');
++      },
++    });
++    try {
++      vi.resetModules();
++      const module = await import('../../src/lib/app-tabs.svelte');
++      expect(module.sessionStore()).toBeNull();
++      module.appTabs.start('/projects/p1');
++      expect(module.appTabs.tabs.map((t) => t.address)).toEqual(['/projects/p1']);
++    } finally {
++      Object.defineProperty(window, 'sessionStorage', real!);
++      vi.resetModules();
++    }
++  });
++});
++
+ describe('the app’s tabs (T-514): a tab is an address', () => {
+   it('starts with one tab at the page shown, and the active tab follows the page', () => {
+     const tabs = new AppTabs();
+diff --git a/dashboard/tests/unit/compmd-processor.test.ts b/dashboard/tests/unit/compmd-processor.test.ts
+index 94de8a16..aa7a35c0 100644
+--- a/dashboard/tests/unit/compmd-processor.test.ts
++++ b/dashboard/tests/unit/compmd-processor.test.ts
+@@ -251,6 +251,40 @@ describe('task text through the real processor', () => {
+     expect(text).toContain('rel');
+   });
+ 
++  // ATM-676 (audit D4): defence in depth, as CompMD shows other tags as text itself
++  it('safeTree: raw HTML is kept only for CompMD’s own tags, without attributes that run, style or load; any other is text', () => {
++    const htmlOf = (text: string) => {
++      const kept: string[] = [];
++      const walk = (node: { type: string; value?: string; children?: unknown[] }) => {
++        if (node.type === 'html') kept.push(String(node.value));
++        (node.children as (typeof node)[] | undefined)?.forEach(walk);
++      };
++      walk(safeTree(run(text).expanded) as never);
++      return kept;
++    };
++    for (const kept of ['<kbd>K</kbd>', 'a<br>b', 'x<sub>2</sub>', '<a href="https://example.com">s</a>'])
++      expect(htmlOf(`Press ${kept} now.`).length, kept).toBeGreaterThan(0);
++    expect(htmlOf('<details open>\n<summary>More</summary>\n\nHidden.\n\n</details>\n').length).toBeGreaterThan(0);
++    for (const text of [
++      '<area href="javascript:alert(1)">',
++      '<map name="m"><area href="https://evil.example" shape="rect"></map>',
++      '<div style="position:fixed;inset:0">cover</div>',
++      '<img src="https://example.com/x.png">',
++      // (inline, each tag is a node of its own: an `<a href>` inside would be a raw link, which secureLinks checks)
++      '<svg onload="alert(1)"><text>x</text></svg>',
++      '<kbd onclick="alert(1)">K</kbd>',
++      '<sup style="font-size:9em">big</sup>',
++      '<iframe src="https://example.com"></iframe>',
++    ]) {
++      // No opening tag is left (a lone closing one, `</kbd>`, opens nothing)
++      expect(
++        htmlOf(`See ${text} here.`).filter((h) => !/^<\//.test(h)),
++        text,
++      ).toEqual([]);
++      expect(textOf(safeTree(run(`See ${text} here.`).expanded)), text).toContain(text.slice(0, 5));
++    }
++  });
++
+   it('safeTree for a project’s text: a relative link opens the viewer, a relative image loads from this server', () => {
+     const tree = safeTree(
+       run(
+diff --git a/dashboard/tests/unit/compmd.test.ts b/dashboard/tests/unit/compmd.test.ts
+index 8914037c..7bb2cfd4 100644
+--- a/dashboard/tests/unit/compmd.test.ts
++++ b/dashboard/tests/unit/compmd.test.ts
+@@ -17,11 +17,13 @@ import {
+   gutterRows,
+   loadCompmd,
+   resetCompmd,
++  safeDecode,
+   safeHref,
+   sandboxOptions,
+   secureLinks,
+   slug,
+   taskData,
++  taskOfHref,
+   type GutterRow,
+ } from '../../src/lib/compmd';
+ import type { Task } from '../../src/lib/types';
+@@ -288,6 +290,27 @@ describe('the links CompMD renders', () => {
+     return root;
+   }
+ 
++  // ATM-676 (audit D4): an image map's area and a diagram's SVG link are links too
++  it('an area and an SVG link are made safe as a link is: an unsafe one is its text, a web one a new tab', () => {
++    const root = rendered(
++      '<map><area id="bad-area" href="javascript:alert(1)"><area id="web-area" href="https://example.com"></map>' +
++        '<svg><a id="bad-svg" href="javascript:alert(1)"><text>x</text></a>' +
++        '<a id="old-svg" xlink:href="https://example.com"><text>y</text></a></svg>',
++    );
++    expect(root.querySelector('#bad-area')).toBeNull();
++    expect(root.querySelector('#bad-svg')).toBeNull();
++    expect(root.textContent).toContain('x');
++    expect(root.querySelector('#web-area')?.getAttribute('target')).toBe('_blank');
++    expect(root.querySelector('#old-svg')?.getAttribute('rel')).toBe('noopener noreferrer');
++  });
++
++  it('a task link or anchor with a malformed % is no task and doesn’t throw (ATM-676, audit D9)', () => {
++    expect(taskOfHref('#task=%E0')).toBeNull();
++    expect(taskOfHref('#task=ATM-1')).toBe('ATM-1');
++    expect(safeDecode('%E0%A4%A')).toBeNull();
++    expect(safeDecode('a%20b')).toBe('a b');
++  });
++
+   it('web and mail links open in a new tab, without access to the page', () => {
+     const root = rendered('<a href="https://example.com">site</a> <a href="mailto:a@b.c">mail</a>');
+     for (const a of root.querySelectorAll('a')) {
+diff --git a/dashboard/tests/unit/http.test.ts b/dashboard/tests/unit/http.test.ts
+index e572a1a8..141075a2 100644
+--- a/dashboard/tests/unit/http.test.ts
++++ b/dashboard/tests/unit/http.test.ts
+@@ -2,14 +2,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import {
+   fetchFile,
+   fetchProjectFile,
++  idSegment,
++  projectFileUrl,
+   reviewUrl,
+   reviewsUrl,
+   v1DocumentAtUrl,
++  v1TasksUrl,
+   type Fetch,
+   type Validators,
+ } from '../../src/lib/api/http';
+ import { apiWorkspace, setApiWorkspace, workspacePrefix } from '../../src/lib/api/workspace';
+ 
++describe('an ID in an API path (ATM-676, audit D7)', () => {
++  it('is escaped; ., .. and empty are refused, never a path the URL parser would work out', () => {
++    expect(idSegment('a b/c')).toBe('a%20b%2Fc');
++    expect(idSegment('CR-1.2')).toBe('CR-1.2');
++    for (const id of ['', '.', '..']) expect(() => idSegment(id), id).toThrow("isn't an ID");
++    expect(() => v1TasksUrl('..')).toThrow();
++    expect(() => projectFileUrl('.', 'claims.json')).toThrow();
++    expect(() => reviewUrl('p1', '..')).toThrow();
++  });
++});
++
+ /** A fetch answering `status` with `body` and `headers`, recording what it was asked */
+ function answering(status: number, body = '', headers: Record<string, string> = {}) {
+   const fetchFn = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
+diff --git a/dashboard/tests/unit/repo.test.ts b/dashboard/tests/unit/repo.test.ts
+index 31d23a58..9fde7e50 100644
+--- a/dashboard/tests/unit/repo.test.ts
++++ b/dashboard/tests/unit/repo.test.ts
+@@ -1,5 +1,34 @@
+ import { describe, expect, it } from 'vitest';
+-import { commitRef, pullRef, repoLinks, repositoryOf } from '../../src/lib/repo';
++import { commitRef, pullRef, repoLinks, repositoryOf, submoduleCommitUrl } from '../../src/lib/repo';
++
++describe('submoduleCommitUrl (ATM-676, audit D3)', () => {
++  it('links a submodule commit as its host does, without a trailing .git', () => {
++    for (const [repository, url] of [
++      ['https://github.com/acme/lib', 'https://github.com/acme/lib/commit/abc'],
++      ['https://github.com/acme/lib.git', 'https://github.com/acme/lib/commit/abc'],
++      ['https://github.com/acme/lib/', 'https://github.com/acme/lib/commit/abc'],
++      ['https://gitlab.com/acme/group/lib.git', 'https://gitlab.com/acme/group/lib/-/commit/abc'],
++      ['https://codeberg.org/acme/lib', 'https://codeberg.org/acme/lib/commit/abc'],
++    ]) {
++      expect(submoduleCommitUrl(repository, 'abc'), repository).toBe(url);
++    }
++  });
++
++  it('no link for an address that isn’t http(s), a host it builds no links for, or none', () => {
++    for (const repository of [
++      'javascript:alert(1)//github.com/a/b',
++      'data:text/html,x',
++      'git@github.com:acme/lib.git',
++      '../lib',
++      'https://example.com/acme/lib',
++      '',
++      null,
++      undefined,
++    ]) {
++      expect(submoduleCommitUrl(repository, 'abc'), String(repository)).toBeNull();
++    }
++  });
++});
+ 
+ const github = { repository: 'https://github.com/acme/demo' };
+ 
+diff --git a/dashboard/tests/unit/review-changes.test.ts b/dashboard/tests/unit/review-changes.test.ts
+index 8c16f8f8..8068749a 100644
+--- a/dashboard/tests/unit/review-changes.test.ts
++++ b/dashboard/tests/unit/review-changes.test.ts
+@@ -148,6 +148,17 @@ describe('in the browser', () => {
+     expect(asked(fetch).url).toBe('/api/v2/workspaces/my%20work/projects/p%2F1/reviews/CR%208/comments/c%201/replies');
+   });
+ 
++  it('a workspace, project, review or comment ID of . or .. is refused, nothing sent (ATM-676, audit D7)', async () => {
++    const fetch = answering(201, {});
++    const refused = { ok: false, message: 'A review, project or workspace ID can’t be . or ..' };
++    expect(await replyTo('..', 'CR-8', 'c1', 'x')).toEqual(refused);
++    expect(await replyTo('p1', '..', 'c1', 'x')).toEqual(refused);
++    expect(await replyTo('p1', 'CR-8', '.', 'x')).toEqual(refused);
++    setApiWorkspace('..');
++    expect(await submitDecision('p1', 'CR-8', { decision: 'approve' })).toEqual(refused);
++    expect(fetch).not.toHaveBeenCalled();
++  });
++
+   it('a refusal is its message; a body that isn’t JSON, its status; a failed request, its error', async () => {
+     answering(403, { error: "the review's author can't decide it" });
+     expect(await submitDecision('p1', 'CR-7', { decision: 'approve' })).toEqual({
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 47957b02..f9b7cdf0 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -90,7 +90,7 @@ with the task that adds it.
+ 
+ | #   | Invariant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Enforced by                                                                                                                                                         |
+ | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+-| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page (in the app, in the user's browser through `open_url`, I25, T-551), except a link to the dashboard's own address, which only moves the page to that page of it (`dashboardAddress`, T-394, T-429), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
++| I14 | **Every link from task data is http(s)**, a review's submodule commit link too (ATM-676, built by its host's rules); an image map's `area` and an SVG link are links like `a` (`LINK_SELECTOR`); raw HTML in task text is CompMD's own tags only (`details`, `summary`, `sub`, `sup`, `kbd`, `br`, `a`), without an attribute that runs, styles or loads, and any other shows as text; an ID of `.` or `..` never goes into an API path (`idSegment`) (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page (in the app, in the user's browser through `open_url`, I25, T-551), except a link to the dashboard's own address, which only moves the page to that page of it (`dashboardAddress`, T-394, T-429), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
+ | I15 | **No `{@html}` on data**: only on the bundled logo (the icons are Lucide's components since T-432)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `security-invariants.test.ts` (`{@html}` only in `Logo.svelte`)                                                                                                     |
+ | I16 | **The page runs under its CSP**: nothing it does is refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | the e2e `cspGuard` fixture (every e2e test)                                                                                                                         |
+ | I17 | **No request leaves localhost**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | the e2e `externalRequestGuard` fixture                                                                                                                              |

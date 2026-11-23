@@ -1,0 +1,727 @@
+diff --git a/crates/atm-common/src/rules.rs b/crates/atm-common/src/rules.rs
+index b96c284d..db19eafd 100644
+--- a/crates/atm-common/src/rules.rs
++++ b/crates/atm-common/src/rules.rs
+@@ -133,10 +133,33 @@ pub fn is_foreign_reference(reference: &str) -> bool {
+         .is_some_and(|(project, uuid)| !project.is_empty() && crate::ids::valid_task_uuid(uuid))
+ }
+ 
+-/// The dependencies a task still waits for: those that don't have a done-kind status yet, with their status (None
+-/// for one without), and unknown IDs (status "missing"). A dependency only in the archive is done (DM-3.1):
+-/// `archived(id)` says whether the archive has it. Another project's task (`<project id>:<UUID>`, ADR-007 §7) is
+-/// looked up there, read only: done, or waited for with its status, or missing when it can't be found.
++/// The archive's task with an ID, if it has one: how the rules read the archive (an `Fn(&str) -> Result<Option<Task>>`).
++pub type ArchivedTask<'a> = dyn Fn(&str) -> Result<Option<Task>> + 'a;
++
++/// Whether `dependency`, of `kind`, is met (ATM-667, Hakan): done; or skipped as a duplicate (`duplicate_of`) of a task
++/// that is done (`duplicate_done`). Any other skipped dependency is not: skipping isn't doing. The one rule for this
++/// project's tasks, its archived ones and another project's.
++pub fn dependency_met(
++    kind: Option<Kind>,
++    dependency: &Task,
++    duplicate_done: &dyn Fn(&str) -> bool,
++) -> bool {
++    match kind {
++        Some(Kind::Done) => true,
++        Some(Kind::Skipped) => dependency
++            .get("duplicate_of")
++            .and_then(Value::as_str)
++            .filter(|d| !d.is_empty())
++            .is_some_and(duplicate_done),
++        _ => false,
++    }
++}
++
++/// The dependencies a task still waits for: those not met ([`dependency_met`]), with their status (None for one
++/// without), and unknown IDs (status "missing"). A dependency only in the archive (DM-3.1, `archived(id)` returns it)
++/// is a finished task: met unless it was skipped other than as a done task's duplicate. Another project's task
++/// (`<project id>:<UUID>`, ADR-007 §7) is looked up there, read only: met by the same rule there, or waited for with
++/// its status, or missing when it can't be found.
+ ///
+ /// # Errors
+ /// When `archived` can't read the archive.
+@@ -144,8 +167,30 @@ pub fn unfinished_dependencies(
+     vocab: &Vocabulary,
+     tasks: &[&Task],
+     task: &Task,
+-    archived: &dyn Fn(&str) -> Result<bool>,
++    archived: &ArchivedTask,
+ ) -> Result<Vec<(String, Option<Value>)>> {
++    // The last task with the ID, as a dict of the statuses by ID has it
++    let live = |id: &str| {
++        tasks
++            .iter()
++            .rev()
++            .find(|t| t.get("id").and_then(Value::as_str) == Some(id))
++            .copied()
++    };
++    // A duplicate is done here, in the archive (done or skipped, it was finished as itself), or in another project
++    let duplicate_done = |id: &str| match live(id) {
++        Some(t) => vocab.kind_of(t.get("status")) == Some(Kind::Done),
++        None if is_foreign_reference(id) => {
++            matches!(
++                FOREIGN_STATUS.get().and_then(|lookup| lookup(id)),
++                Some((true, _))
++            )
++        }
++        None => archived(id)
++            .ok()
++            .flatten()
++            .is_some_and(|t| vocab.kind_of(t.get("status")) != Some(Kind::Skipped)),
++    };
+     let mut found = Vec::new();
+     for dep in task
+         .get("dependencies")
+@@ -154,15 +199,10 @@ pub fn unfinished_dependencies(
+         .flatten()
+         .filter_map(Value::as_str)
+     {
+-        // The last task with the ID, as a dict of the statuses by ID has it
+-        match tasks
+-            .iter()
+-            .rev()
+-            .find(|t| t.get("id").and_then(Value::as_str) == Some(dep))
+-        {
+-            Some(live) => {
+-                if vocab.kind_of(live.get("status")) != Some(Kind::Done) {
+-                    found.push((dep.to_string(), live.get("status").cloned()));
++        match live(dep) {
++            Some(t) => {
++                if !dependency_met(vocab.kind_of(t.get("status")), t, &duplicate_done) {
++                    found.push((dep.to_string(), t.get("status").cloned()));
+                 }
+             }
+             None if is_foreign_reference(dep) => {
+@@ -172,11 +212,19 @@ pub fn unfinished_dependencies(
+                     None => found.push((dep.to_string(), Some(Value::String("missing".into())))),
+                 }
+             }
+-            None => {
+-                if !archived(dep)? {
+-                    found.push((dep.to_string(), Some(Value::String("missing".into()))));
++            None => match archived(dep)? {
++                // Archived, it is finished: done (whatever status an older vocabulary gave it), or skipped
++                Some(t) => {
++                    let kind = match vocab.kind_of(t.get("status")) {
++                        Some(Kind::Skipped) => Some(Kind::Skipped),
++                        _ => Some(Kind::Done),
++                    };
++                    if !dependency_met(kind, &t, &duplicate_done) {
++                        found.push((dep.to_string(), t.get("status").cloned()));
++                    }
+                 }
+-            }
++                None => found.push((dep.to_string(), Some(Value::String("missing".into())))),
++            },
+         }
+     }
+     Ok(found)
+@@ -290,7 +338,8 @@ mod tests {
+             task(json!({"id": "T-2", "status": "todo"})),
+             task(json!({"id": "T-4", "dependencies": ["T-1", "T-2", "T-3", "T-9"]})),
+         );
+-        let archived = |id: &str| Ok(id == "T-3");
++        let archived =
++            |id: &str| Ok((id == "T-3").then(|| task(json!({"id": "T-3", "status": "done"}))));
+         let found = unfinished_dependencies(&v, &[&done, &todo, &me], &me, &archived).unwrap();
+         assert_eq!(
+             found,
+@@ -301,6 +350,52 @@ mod tests {
+         );
+     }
+ 
++    /// ATM-667 (Hakan): a skipped dependency is met only as a duplicate of a task that is done; the same in the
++    /// archive, where it was met whatever it was
++    #[test]
++    fn a_skipped_dependency_is_met_only_as_a_done_tasks_duplicate() {
++        let v = vocab(json!({}));
++        let live = [
++            task(json!({"id": "T-1", "status": "done"})),
++            task(json!({"id": "T-2", "status": "todo"})),
++            task(json!({"id": "S-1", "status": "skipped", "duplicate_of": "T-1"})),
++            task(json!({"id": "S-2", "status": "skipped", "duplicate_of": "T-2"})),
++            task(json!({"id": "S-3", "status": "skipped"})),
++            task(json!({"id": "S-4", "status": "skipped", "duplicate_of": "A-1"})),
++            task(json!({"id": "S-5", "status": "skipped", "duplicate_of": "A-2"})),
++        ];
++        let archive = [
++            task(json!({"id": "A-1", "status": "done"})),
++            task(json!({"id": "A-2", "status": "skipped"})),
++            task(json!({"id": "A-3", "status": "skipped", "duplicate_of": "T-1"})),
++            task(json!({"id": "A-4", "status": "skipped"})),
++            // An older vocabulary's status: archived, it was finished
++            task(json!({"id": "A-5", "status": "closed"})),
++        ];
++        let archived = |id: &str| {
++            Ok(archive
++                .iter()
++                .find(|t| t.get("id").and_then(Value::as_str) == Some(id))
++                .cloned())
++        };
++        let waits = |dep: &str| {
++            let me = task(json!({"id": "ME", "dependencies": [dep]}));
++            let mut all: Vec<&Task> = live.iter().collect();
++            all.push(&me);
++            !unfinished_dependencies(&v, &all, &me, &archived)
++                .unwrap()
++                .is_empty()
++        };
++        // Met: done; skipped as a done task's duplicate, here or archived; archived done, or of an older status
++        for met in ["T-1", "S-1", "S-4", "A-1", "A-3", "A-5"] {
++            assert!(!waits(met), "{met} is met");
++        }
++        // Not: to do; skipped as a duplicate of one not done, or of one skipped itself; skipped with no duplicate
++        for open in ["T-2", "S-2", "S-3", "S-5", "A-2", "A-4"] {
++            assert!(waits(open), "{open} isn't met");
++        }
++    }
++
+     #[test]
+     fn priorities_rank_most_urgent_first() {
+         let v = vocab(json!({}));
+diff --git a/crates/atm-lib/src/changes.rs b/crates/atm-lib/src/changes.rs
+index b218489a..a9274688 100644
+--- a/crates/atm-lib/src/changes.rs
++++ b/crates/atm-lib/src/changes.rs
+@@ -128,7 +128,7 @@ fn archived_tasks(work: &mut Working) -> Result<Vec<Task>> {
+ fn apply_resolutions(
+     work: &mut Working,
+     vocab: &Vocabulary,
+-    archived: &dyn Fn(&str) -> Result<bool>,
++    archived: &atm_common::rules::ArchivedTask,
+ ) {
+     let here = work.here().worktree.clone();
+     let resolved = section(&mut work.claims_store, "resolved").clone();
+@@ -237,7 +237,7 @@ fn newly_ready(
+     vocab: &Vocabulary,
+     tasks: &[&Task],
+     task_id: &str,
+-    archived: &dyn Fn(&str) -> Result<bool>,
++    archived: &atm_common::rules::ArchivedTask,
+ ) -> Result<Vec<String>> {
+     let mut ready = Vec::new();
+     for t in tasks {
+@@ -271,11 +271,15 @@ pub fn change_task_status(
+     project.store_mut().change(&mut |work: &mut Working| {
+         let vocab = Vocabulary::of_document(&work.document)?;
+         let archive = archived_tasks(work)?;
+-        let in_archive = |id: &str| -> Result<bool> { Ok(archive.iter().any(|t| id_of(t) == Some(id) && !t.is_empty())) };
++        // The archived task with an ID, for the dependency rules (ATM-667); whether there is one, for the messages
++        let archived_of = |id: &str| -> Result<Option<Task>> {
++            Ok(archive.iter().rev().find(|t| id_of(t) == Some(id) && !t.is_empty()).cloned())
++        };
++        let in_archive = |id: &str| -> Result<bool> { Ok(archived_of(id)?.is_some()) };
+         let mut claims = section(&mut work.claims_store, "claims").clone();
+         let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
+         *section(&mut work.claims_store, "claims") = claims;
+-        apply_resolutions(work, &vocab, &in_archive);
++        apply_resolutions(work, &vocab, &archived_of);
+         let here = work.here().clone();
+         let (tasks, at) = snapshot(&work.document, task_id);
+         let Some(at) = at else {
+@@ -300,7 +304,7 @@ pub fn change_task_status(
+         let mut task = tasks[at].clone();
+         let waits_in = adopt_waiting(&mut task, &vocab, &work.claims_store, here.worktree.as_deref(), command);
+         let others: Vec<&Task> = tasks.iter().collect();
+-        let previous = change_status(&mut task, command, options, &vocab, &others, agent, &now_iso(), &in_archive)?;
++        let previous = change_status(&mut task, command, options, &vocab, &others, agent, &now_iso(), &archived_of)?;
+         work.tasks()[at] = Value::Object(task.clone());
+ 
+         let document = work.document.clone();
+@@ -343,7 +347,7 @@ pub fn change_task_status(
+         }
+         let (all, _) = snapshot(&work.document, task_id);
+         let all_refs: Vec<&Task> = all.iter().collect();
+-        let unblocked = if command == Command::Done { newly_ready(&vocab, &all_refs, task_id, &in_archive)? } else { Vec::new() };
++        let unblocked = if command == Command::Done { newly_ready(&vocab, &all_refs, task_id, &archived_of)? } else { Vec::new() };
+         // The archive hint after done, at most once a day per clone (CLI-5.2), so a loop doesn't repeat it
+         let today: String = now_iso().chars().take(10).collect();
+         let mut hint = if command == Command::Done { archive_hint(&work.document, &vocab, work.size()) } else { None };
+@@ -398,7 +402,10 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
+         Some(Kind::Done) // otherwise it is archived: finished
+     };
+     if kind == Some(Kind::Todo) {
+-        let store = project.store().read_claims();
++        // Live claims only, and the project's own statuses (ATM-667, audit L10): an expired claim held nothing, and a
++        // project's status IDs aren't the default ones
++        let store =
++            crate::leases::live_claims(&project.store().read_claims(), atm_common::time::now());
+         let in_claims = store
+             .get("claims")
+             .and_then(Value::as_object)
+@@ -413,8 +420,7 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
+         } else if let Some(record) =
+             record.filter(|r| r.get("worktree").and_then(Value::as_str) != here.as_deref())
+         {
+-            // The project's settings, without its lists: the default statuses' kinds
+-            kind = Vocabulary::of_meta(&Map::new())?.kind_of(record.get("status"));
++            kind = project.store().vocabulary()?.kind_of(record.get("status"));
+         }
+     }
+     match kind {
+@@ -465,10 +471,12 @@ pub fn next_task_for(
+     project.store_mut().change(&mut |work: &mut Working| {
+         let vocab = Vocabulary::of_document(&work.document)?;
+         let archive = archived_tasks(work)?;
+-        let in_archive = |id: &str| -> Result<bool> {
++        let in_archive = |id: &str| -> Result<Option<Task>> {
+             Ok(archive
+                 .iter()
+-                .any(|t| id_of(t) == Some(id) && !t.is_empty()))
++                .rev()
++                .find(|t| id_of(t) == Some(id) && !t.is_empty())
++                .cloned())
+         };
+         let mut claims = section(&mut work.claims_store, "claims").clone();
+         let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
+diff --git a/crates/atm-lib/src/foreign.rs b/crates/atm-lib/src/foreign.rs
+index ea32f9d3..14316dca 100644
+--- a/crates/atm-lib/src/foreign.rs
++++ b/crates/atm-lib/src/foreign.rs
+@@ -318,11 +318,27 @@ pub fn status(reference: &str) -> Option<(bool, Value)> {
+     let snapshot = &other.snapshot;
+     let found = resolve(&snapshot.document, &snapshot.archive, uuid).ok()?;
+     let status = found.task.get("status").cloned().unwrap_or(Value::Null);
+-    let done = found.archived
+-        || snapshot
++    // The one rule (ATM-667, `rules::dependency_met`), on that project's tasks: an archived task is finished, done
++    // unless skipped; a skipped one is met only as a done task's duplicate
++    let kind_of = |task: &Task, archived: bool| {
++        let kind = snapshot
+             .vocabulary
+             .as_ref()
+-            .is_some_and(|v| v.kind_of(found.task.get("status")) == Some(Kind::Done));
++            .and_then(|v| v.kind_of(task.get("status")));
++        match (archived, kind) {
++            (true, Some(Kind::Skipped)) | (false, _) => kind,
++            (true, _) => Some(Kind::Done),
++        }
++    };
++    let duplicate_done = |id: &str| {
++        resolve(&snapshot.document, &snapshot.archive, id)
++            .is_ok_and(|d| kind_of(d.task, d.archived) == Some(Kind::Done))
++    };
++    let done = atm_common::rules::dependency_met(
++        kind_of(found.task, found.archived),
++        found.task,
++        &duplicate_done,
++    );
+     Some((done, status))
+ }
+ 
+diff --git a/crates/atm-lib/src/leases.rs b/crates/atm-lib/src/leases.rs
+index abfd776b..3454c086 100644
+--- a/crates/atm-lib/src/leases.rs
++++ b/crates/atm-lib/src/leases.rs
+@@ -11,6 +11,29 @@ use serde_json::{Map, Value, json};
+ 
+ use crate::loop_rules::lease_minutes;
+ 
++/// A claim's agent while its lease runs, none once it has run out.
++pub(crate) fn holder(claim: &Value, now: i64) -> Option<&str> {
++    let until = claim
++        .get("lease_expires_at")
++        .and_then(Value::as_str)
++        .and_then(atm_common::time::parse_iso)?;
++    (until > now)
++        .then(|| claim.get("agent").and_then(Value::as_str))
++        .flatten()
++}
++
++/// The claims store as the loop's rule reads it (ATM-667, audit L7): its claims whose lease still runs at `now`, the
++/// rest of the store as it is. Read only: `atm project status` and the dashboard's Next up name the task `atm loop
++/// next` would, which drops expired claims first (and writes that it did).
++#[must_use]
++pub fn live_claims(store: &Map<String, Value>, now: i64) -> Map<String, Value> {
++    let mut live = store.clone();
++    if let Some(Value::Object(claims)) = live.get_mut("claims") {
++        claims.retain(|_, claim| holder(claim, now).is_some());
++    }
++    live
++}
++
+ /// When a lease taken now runs out.
+ #[must_use]
+ pub fn lease_until(document: &Value) -> String {
+diff --git a/crates/atm-lib/src/loop_rules.rs b/crates/atm-lib/src/loop_rules.rs
+index 1d0b3278..b44022de 100644
+--- a/crates/atm-lib/src/loop_rules.rs
++++ b/crates/atm-lib/src/loop_rules.rs
+@@ -285,7 +285,7 @@ pub fn loop_order<'t>(
+     sel: &Selection,
+     agent: Option<&str>,
+     with_user: bool,
+-    archived: &dyn Fn(&str) -> Result<bool>,
++    archived: &atm_common::rules::ArchivedTask,
+ ) -> Result<LoopOrder<'t>> {
+     let selected = select(vocab, tasks, sel)?;
+     if let Some(problem) = selected.problem {
+@@ -381,7 +381,7 @@ pub fn next_task<'t>(
+     sel: &Selection,
+     agent: Option<&str>,
+     with_user: bool,
+-    archived: &dyn Fn(&str) -> Result<bool>,
++    archived: &atm_common::rules::ArchivedTask,
+ ) -> Result<(Option<&'t Task>, Option<String>)> {
+     let order = loop_order(
+         vocab, document, tasks, store, here, sel, agent, with_user, archived,
+diff --git a/crates/atm-lib/src/loop_rules/tests.rs b/crates/atm-lib/src/loop_rules/tests.rs
+index 15c91fa3..7aed8d27 100644
+--- a/crates/atm-lib/src/loop_rules/tests.rs
++++ b/crates/atm-lib/src/loop_rules/tests.rs
+@@ -55,7 +55,7 @@ impl Fixture {
+             sel,
+             None,
+             false,
+-            &|_| Ok(false),
++            &|_| Ok(None),
+         )
+         .unwrap();
+         order
+@@ -78,7 +78,7 @@ impl Fixture {
+             sel,
+             None,
+             false,
+-            &|_| Ok(false),
++            &|_| Ok(None),
+         )
+         .unwrap_err()
+     }
+@@ -96,7 +96,7 @@ impl Fixture {
+             Value::Object(map) => map,
+             other => panic!("not a store: {other}"),
+         };
+-        let archived = |_: &str| Ok(false);
++        let archived = |_: &str| Ok(None);
+         let (t, reason) = next_task(
+             &vocab,
+             &self.document,
+@@ -322,7 +322,7 @@ fn a_wait_recorded_in_this_worktree_doesnt_hold_a_task_back_one_in_another_does(
+             &Selection::default(),
+             None,
+             false,
+-            &|_| Ok(false),
++            &|_| Ok(None),
+         )
+         .unwrap()
+         .ready
+@@ -448,7 +448,7 @@ fn an_archived_dependency_is_done() {
+         &Selection::default(),
+         None,
+         false,
+-        &|id| Ok(id == "T-0"),
++        &|id| Ok((id == "T-0").then(|| task(json!({"id": "T-0", "status": "done"})))),
+     )
+     .unwrap();
+     assert!(task.is_some());
+@@ -666,7 +666,7 @@ fn listed_tasks_go_in_their_order_and_unknown_ones_are_refused() {
+         &bad,
+         None,
+         false,
+-        &|_| Ok(false),
++        &|_| Ok(None),
+     )
+     .unwrap_err();
+     assert_eq!(
+diff --git a/crates/atm-lib/src/query.rs b/crates/atm-lib/src/query.rs
+index 70553378..49ac550b 100644
+--- a/crates/atm-lib/src/query.rs
++++ b/crates/atm-lib/src/query.rs
+@@ -59,14 +59,25 @@ fn id_of(task: &Task) -> Option<&str> {
+ /// # Errors
+ /// When the archive has to be read and can't be.
+ pub fn ready_ids(project: &Project) -> Result<HashSet<String>> {
++    ready_ids_of(project)
++}
++
++/// The archive's task with an ID, for the dependency rules (`rules::ArchivedTask`, ATM-667): an empty entry is none.
++///
++/// # Errors
++/// When the archive has to be read and can't be.
++pub(crate) fn archived_task(store: &dyn atm_db::Store, id: &str) -> Result<Option<Task>> {
++    Ok(store
++        .get_archived_task(id)?
++        .filter(|t| !t.is_empty())
++        .cloned())
++}
++
++fn ready_ids_of(project: &Project) -> Result<HashSet<String>> {
+     let store = project.store();
+     let vocab = store.vocabulary()?;
+     let tasks = store.list_tasks()?;
+-    let archived = |id: &str| {
+-        store
+-            .get_archived_task(id)
+-            .map(|t| t.is_some_and(|t| !t.is_empty()))
+-    };
++    let archived = |id: &str| archived_task(store, id);
+     let mut ready = HashSet::new();
+     for t in &tasks {
+         if vocab.kind_of(t.get("status")) == Some(Kind::Todo)
+@@ -330,11 +341,7 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
+     let vocab = store.vocabulary()?;
+     let tasks = store.list_tasks()?;
+     let ready = ready_ids(project)?;
+-    let archived = |id: &str| {
+-        store
+-            .get_archived_task(id)
+-            .map(|t| t.is_some_and(|t| !t.is_empty()))
+-    };
++    let archived = |id: &str| archived_task(store, id);
+     // A task a tolerant read found wrong (T-377) says so; what its broken fields would decide isn't decided
+     let troubled = if filters.archived {
+         Map::new()
+diff --git a/crates/atm-lib/src/releases.rs b/crates/atm-lib/src/releases.rs
+index ab8458de..ecda7111 100644
+--- a/crates/atm-lib/src/releases.rs
++++ b/crates/atm-lib/src/releases.rs
+@@ -19,18 +19,6 @@ fn invalid(message: impl Into<String>) -> Error {
+     Error::Invalid(message.into())
+ }
+ 
+-/// A done task's stage: merged once its PR merged, `in_pr` while its PR is open, else done; none when it isn't done.
+-fn stage_of(vocab: &Vocabulary, task: &Task) -> Option<&'static str> {
+-    if vocab.kind_of(task.get("status")) != Some(Kind::Done) {
+-        return None;
+-    }
+-    let pr = task.get("pr").is_some_and(Value::is_object);
+-    if pr && task.get("merged_at").is_some_and(atm_common::py::truthy) {
+-        return Some("merged");
+-    }
+-    Some(if pr { "in_pr" } else { "done" })
+-}
+-
+ fn release_id(release: &Map<String, Value>) -> String {
+     release.get("id").map(py_str).unwrap_or_default()
+ }
+@@ -74,7 +62,8 @@ fn release_overview(vocab: &Vocabulary, tasks: &[&Task], include_archived: bool)
+                 {
+                     by_kind[at] += 1;
+                 }
+-                if let Some(stage) = stage_of(vocab, task)
++                // The one stage rule, the task views' (ATM-667, audit L11): merged once pushed or its PR merged
++                if let Some(stage) = crate::query::task_stage(vocab, task)
+                     && let Some(at) = STAGES.iter().position(|s| *s == stage)
+                 {
+                     by_stage[at] += 1;
+diff --git a/crates/atm-lib/src/releases/tests.rs b/crates/atm-lib/src/releases/tests.rs
+index 18320b7f..53e419a2 100644
+--- a/crates/atm-lib/src/releases/tests.rs
++++ b/crates/atm-lib/src/releases/tests.rs
+@@ -158,8 +158,9 @@ fn the_release_list_counts_each_tasks_effective_release_by_kind_and_stage() {
+     let one = &listed[0];
+     assert_eq!(one["tasks"], json!(6));
+     assert_eq!(one["by_kind"], json!({"todo": 1, "done": 5}));
+-    // merged needs a PR: a merged_at without one is just done
+-    assert_eq!(one["by_stage"], json!({"done": 3, "in_pr": 1, "merged": 1}));
++    // Merged once pushed or its PR merged, as the task views and the dashboard say it (ATM-667, audit L11): a
++    // merged_at without a PR is a direct push's
++    assert_eq!(one["by_stage"], json!({"done": 2, "in_pr": 1, "merged": 2}));
+     assert_eq!(listed[1]["by_kind"], json!({"todo": 1}));
+     assert_eq!(list_releases(&p, true).unwrap().0.len(), 3);
+     let none = project(json!([]), json!({}));
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index ed893203..d7729d00 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -418,16 +418,7 @@ enum Opening {
+     Link,
+ }
+ 
+-/// A claim's agent while its lease runs, none once it has run out.
+-fn holder(claim: &Value, now: i64) -> Option<&str> {
+-    let until = claim
+-        .get("lease_expires_at")
+-        .and_then(Value::as_str)
+-        .and_then(atm_common::time::parse_iso)?;
+-    (until > now)
+-        .then(|| claim.get("agent").and_then(Value::as_str))
+-        .flatten()
+-}
++use crate::leases::holder;
+ 
+ /// The open review, other than a draft or a live one, that already carries `task`'s review, if one does.
+ fn waiting_review(project: &Project, task: &Task) -> Result<Option<String>> {
+@@ -713,7 +704,7 @@ fn check_decision(
+             &tasks,
+             project.actor(),
+             &stamp,
+-            &|_| Ok(false),
++            &|id| crate::query::archived_task(project.store(), id),
+         )
+         .map_err(|e| {
+             Error::failed(format!(
+diff --git a/crates/atm-lib/src/state.rs b/crates/atm-lib/src/state.rs
+index dd3336d0..7beea19e 100644
+--- a/crates/atm-lib/src/state.rs
++++ b/crates/atm-lib/src/state.rs
+@@ -236,7 +236,7 @@ fn check_guards(
+     vocab: &Vocabulary,
+     tasks: &[&Task],
+     agent: Option<&str>,
+-    archived: &dyn Fn(&str) -> Result<bool>,
++    archived: &atm_common::rules::ArchivedTask,
+ ) -> Result<()> {
+     let id = text(task, "id").unwrap_or_default();
+     let review_state = text(task, "review_state");
+@@ -307,7 +307,7 @@ pub fn change_status(
+     tasks: &[&Task],
+     agent: Option<&str>,
+     stamp: &str,
+-    archived: &dyn Fn(&str) -> Result<bool>,
++    archived: &atm_common::rules::ArchivedTask,
+ ) -> Result<Value> {
+     let id = text(task, "id").unwrap_or_default();
+     let current = task.get("status").cloned().unwrap_or(Value::Null);
+diff --git a/crates/atm-lib/src/state/tests.rs b/crates/atm-lib/src/state/tests.rs
+index 6391ddb4..a82168cb 100644
+--- a/crates/atm-lib/src/state/tests.rs
++++ b/crates/atm-lib/src/state/tests.rs
+@@ -14,7 +14,7 @@ fn vocab() -> Vocabulary {
+ }
+ 
+ fn run(t: &mut Task, command: Command, options: &Options, agent: Option<&str>) -> Result<Value> {
+-    let none = |_: &str| Ok(false);
++    let none = |_: &str| Ok(None);
+     change_status(
+         t,
+         command,
+@@ -125,7 +125,7 @@ fn the_destinations_agree_with_the_table() {
+ 
+ #[test]
+ fn start_needs_done_dependencies_and_records_who() {
+-    let none = |_: &str| Ok(false);
++    let none = |_: &str| Ok(None);
+     let dep = task(json!({"id": "T-0", "status": "todo"}));
+     let mut t = task(json!({"id": "T-1", "status": "todo", "dependencies": ["T-0"]}));
+     let error = change_status(
+@@ -341,7 +341,7 @@ fn run_in(
+     options: &Options,
+     agent: Option<&str>,
+ ) -> Result<Value> {
+-    let none = |_: &str| Ok(false);
++    let none = |_: &str| Ok(None);
+     change_status(t, command, options, vocab, &[], agent, "S", &none)
+ }
+ 
+@@ -557,7 +557,8 @@ fn a_task_without_a_known_status_counts_as_to_do() {
+ 
+ #[test]
+ fn a_dependency_is_done_when_it_is_finished_or_archived() {
+-    let archived = |id: &str| Ok(id == "T-A");
++    let archived =
++        |id: &str| Ok((id == "T-A").then(|| task(json!({"id": "T-A", "status": "done"}))));
+     for (deps, waiting) in [
+         (json!(["T-D"]), None),
+         (json!(["T-A"]), None),
+diff --git a/crates/atm-lib/src/status.rs b/crates/atm-lib/src/status.rs
+index 77a4c32b..cc9c75b0 100644
+--- a/crates/atm-lib/src/status.rs
++++ b/crates/atm-lib/src/status.rs
+@@ -116,11 +116,7 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
+     let all = store.list_tasks()?;
+     let claims = store.read_claims();
+     let (file_bytes, archive_bytes) = store.sizes();
+-    let archived = |id: &str| {
+-        store
+-            .get_archived_task(id)
+-            .map(|t| t.is_some_and(|t| !t.is_empty()))
+-    };
++    let archived = |id: &str| crate::query::archived_task(store, id);
+     let in_scope = Scope::new(vocab, scope)?;
+     let tasks: Vec<&Task> = all
+         .iter()
+@@ -237,11 +233,13 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
+         }
+     }
+ 
++    // Live claims only, as `atm loop next` reads them (ATM-667)
++    let live = crate::leases::live_claims(&claims, atm_common::time::now());
+     let (next, reason) = next_task(
+         vocab,
+         document,
+         &all,
+-        &claims,
++        &live,
+         here.as_str(),
+         &Selection::default(),
+         None,
+diff --git a/crates/atm-lib/src/summary.rs b/crates/atm-lib/src/summary.rs
+index 711bbbc3..69665215 100644
+--- a/crates/atm-lib/src/summary.rs
++++ b/crates/atm-lib/src/summary.rs
+@@ -304,7 +304,7 @@ fn todo_order<'t>(
+     all: &[&'t Task],
+     kinds: &[Option<Kind>],
+     loop_ready: &[&Task],
+-    archived: &dyn Fn(&str) -> Result<bool>,
++    archived: &atm_common::rules::ArchivedTask,
+ ) -> Result<Vec<Todo<'t>>> {
+     let rank = |t: &Task| {
+         let id = t.get("id");
+@@ -599,11 +599,7 @@ pub fn project_summary(project: &Project) -> Result<Value> {
+     let document = store.document()?;
+     let vocab = store.vocabulary()?;
+     let tasks = store.list_tasks()?;
+-    let archived = |id: &str| {
+-        store
+-            .get_archived_task(id)
+-            .map(|t| t.is_some_and(|t| !t.is_empty()))
+-    };
++    let archived = |id: &str| crate::query::archived_task(store, id);
+     let kinds: Vec<Option<Kind>> = tasks
+         .iter()
+         .map(|t| vocab.kind_of(t.get("status")))
+@@ -673,11 +669,13 @@ pub fn project_summary(project: &Project) -> Result<Value> {
+     };
+     // What the loop takes next with its default selection, by the very rule `atm loop next` follows
+     let here = store.working_copy().map(atm_common::Shown::shown);
++    // Live claims only, as `atm loop next` reads them (ATM-667)
++    let live_claims = crate::leases::live_claims(&claims, atm_common::time::now());
+     let order = loop_order(
+         vocab,
+         document,
+         &tasks,
+-        &claims,
++        &live_claims,
+         here.as_deref(),
+         &Selection::default(),
+         None,
+diff --git a/tests/scripts/scenarios/next.json b/tests/scripts/scenarios/next.json
+index 9f084bd6..e60bcddf 100644
+--- a/tests/scripts/scenarios/next.json
++++ b/tests/scripts/scenarios/next.json
+@@ -1,4 +1,33 @@
+ [
++  {
++    "name": "project status names the task loop next would, an expired claim not holding it (ATM-667)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "meta": { "project": "N" },
++          "tasks": [
++            { "id": "T-1", "name": "Urgent", "type": "feature", "status": "todo", "priority": "P0" },
++            { "id": "T-2", "name": "Later", "type": "feature", "status": "todo", "priority": "P2" }
++          ]
++        },
++        ".agentic-task-manager/claims-store.json": {
++          "claims": {
++            "T-1": {
++              "task": "T-1",
++              "agent": "bob",
++              "branch": "agent-2",
++              "worktree": "/elsewhere",
++              "claimed_at": "2026-05-01T10:00:00Z",
++              "lease_expires_at": "2026-05-01T11:00:00Z"
++            }
++          }
++        }
++      }
++    },
++    "args": ["project", "status"],
++    "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T11:00:01Z" },
++    "expect": { "stdoutIncludes": ["Next\n  T-1  Urgent"] }
++  },
+   {
+     "name": "lowest id in natural order (T-2 before T-5 and T-10); unmet or missing dependencies skipped",
+     "setup": {

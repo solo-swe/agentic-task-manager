@@ -1,0 +1,385 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 7eba490a..1e4499bb 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -48,6 +48,9 @@ clicks and right-click menus as in a browser). Review watches idle while they wa
+   skipped task is skipped now, not done), the pace and each sprint's estimate in the loop's order, time use, the
+   project's numbers, the time per task, people and agents. `atm project status` prints the forecast. The summaries
+   carry the overview's Progress tab (`progress`), so it loads no project's tasks.
++- **Every agent harness is an agent** (ATM-660): Codex (`codex:`), Gemini CLI (`gemini:`), OpenCode (`opencode:`)
++  and a harness naming itself in `AI_AGENT` (`agent:`) get identities of their own, as Claude Code's sessions do, so
++  a review mode holds for them too; inside any of them, `--agent` or `ATM_AGENT` naming a person is refused.
+ - **Release signing kept from compiling** (ATM-661): the release workflow compiles the app (`tauri build
+   --no-bundle`) and the CLI before any step has a signing secret; the jobs that read a secret are in a `release`
+   environment, for `v*` tags only, which Homebrew's and Skills' hand runs name as their ref; every release runner is
+diff --git a/crates/atm-cli/src/main.rs b/crates/atm-cli/src/main.rs
+index f99ab8ba..d4ea04c8 100644
+--- a/crates/atm-cli/src/main.rs
++++ b/crates/atm-cli/src/main.rs
+@@ -362,6 +362,12 @@ fn run(args: &[OsString]) -> u8 {
+     }
+     // Run as someone else: `--agent`, unless the command's `--agent` is a filter (ATM-679)
+     let other = as_someone_else(args) && !cli.command.agent_is_a_filter();
++    // An agent harness's session never acts as a person (ATM-660): `--agent` (unless it is a filter) or ATM_AGENT
++    let named = agent_arg(args).filter(|_| !cli.command.agent_is_a_filter());
++    if let Err(error) = atm_lib::actor::check_named(named.as_deref(), &cwd) {
++        report(&error.to_string(), error.code(), as_json);
++        return error.code();
++    }
+     if cli.command.renews_claims() && !other {
+         renew_own_claims(&cwd);
+     }
+@@ -399,9 +405,22 @@ fn remind_to_watch(cwd: &Path) {
+ /// Whether a command is run as someone else (`--agent`, before any `--`); the caller decides from the parsed command
+ /// whether its `--agent` is a filter instead ([`Command::agent_is_a_filter`]).
+ fn as_someone_else(args: &[OsString]) -> bool {
+-    args.iter().take_while(|a| *a != "--").any(|a| {
+-        let a = a.to_string_lossy();
+-        a == "--agent" || a.starts_with("--agent=")
++    agent_arg(args).is_some()
++}
++
++/// The name `--agent` gives (before any `--`): `--agent NAME` or `--agent=NAME`; an empty one when it has none.
++fn agent_arg(args: &[OsString]) -> Option<String> {
++    let args: Vec<String> = args
++        .iter()
++        .take_while(|a| *a != "--")
++        .map(|a| a.to_string_lossy().into_owned())
++        .collect();
++    args.iter().enumerate().find_map(|(i, a)| {
++        if a == "--agent" {
++            Some(args.get(i + 1).cloned().unwrap_or_default())
++        } else {
++            a.strip_prefix("--agent=").map(String::from)
++        }
+     })
+ }
+ 
+diff --git a/crates/atm-common/src/edits.rs b/crates/atm-common/src/edits.rs
+index fa345d88..a3d0f6f4 100644
+--- a/crates/atm-common/src/edits.rs
++++ b/crates/atm-common/src/edits.rs
+@@ -280,10 +280,15 @@ pub fn set_sprint(task: &mut Task, sprint: Option<&str>, stamp: &str) -> bool {
+     true
+ }
+ 
+-/// Whether an actor is an agent (a Claude Code session, `claude:…`); anyone else is a person.
++/// The prefixes of the identities atm gives agents (ATM-660): one per harness it recognizes (`atm_lib::actor`), and
++/// `agent:` for a harness that names itself with `AI_AGENT`. The dashboard's `actors.ts` lists the same.
++pub const AGENT_PREFIXES: [&str; 5] = ["claude:", "codex:", "gemini:", "opencode:", "agent:"];
++
++/// Whether an actor is an agent (an identity atm gave a harness's session, [`AGENT_PREFIXES`]); anyone else is a
++/// person.
+ #[must_use]
+ pub fn is_agent(actor: Option<&str>) -> bool {
+-    actor.is_some_and(|a| a.starts_with("claude:"))
++    actor.is_some_and(|a| AGENT_PREFIXES.iter().any(|p| a.starts_with(p)))
+ }
+ 
+ #[cfg(test)]
+diff --git a/crates/atm-lib/src/actor.rs b/crates/atm-lib/src/actor.rs
+index df1a19ea..6ea031ca 100644
+--- a/crates/atm-lib/src/actor.rs
++++ b/crates/atm-lib/src/actor.rs
+@@ -8,7 +8,18 @@ use atm_db::jsongit::paths::{main_worktree, project_root};
+ /// `@<worktree folder>`, so agents in separate worktrees have identities of their own.
+ #[must_use]
+ pub fn session_identity(session: &str, cwd: &Path) -> String {
+-    let mut identity = format!("claude:{}", session.chars().take(8).collect::<String>());
++    harness_session("claude", session, cwd)
++}
++
++/// A harness's session identity: `<harness>:` and 8 characters of `session` (letters, digits, `-` and `_` only), and
++/// `@<worktree folder>` in a linked git worktree.
++fn harness_session(harness: &str, session: &str, cwd: &Path) -> String {
++    let id: String = session
++        .chars()
++        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
++        .take(8)
++        .collect();
++    let mut identity = format!("{harness}:{}", if id.is_empty() { "session" } else { &id });
+     let root = project_root(cwd);
+     if main_worktree(&root) != root {
+         identity.push('@');
+@@ -22,8 +33,40 @@ pub fn session_identity(session: &str, cwd: &Path) -> String {
+     identity
+ }
+ 
+-/// Who runs a command: `agent` (`--agent`), else `ATM_AGENT`, else this Claude Code session (per linked worktree),
+-/// else git's user name (a person in a terminal), else `user@host`.
++/// The identity of the agent harness atm runs in, from the markers each puts in the environment of the commands its
++/// agent runs (ATM-660): Claude Code (`CLAUDE_CODE_SESSION_ID`, else `CLAUDECODE`), Codex (`CODEX_THREAD_ID`, else
++/// `CODEX_SANDBOX`), Gemini CLI (`GEMINI_CLI`, with `GEMINI_SESSION_ID` when it has one), `OpenCode` (`OPENCODE`) and
++/// any harness naming itself in `AI_AGENT`. None outside one. Each is `<harness>:<session>`, per linked worktree.
++#[must_use]
++pub fn harness_identity(cwd: &Path) -> Option<String> {
++    let env = |key: &str| std::env::var(key).ok().filter(|v| !v.is_empty());
++    if let Some(session) = env("CLAUDE_CODE_SESSION_ID") {
++        return Some(session_identity(&session, cwd));
++    }
++    if env("CLAUDECODE").is_some() {
++        return Some(harness_session("claude", "", cwd));
++    }
++    if let Some(thread) = env("CODEX_THREAD_ID") {
++        return Some(harness_session("codex", &thread, cwd));
++    }
++    if env("CODEX_SANDBOX").is_some() {
++        return Some(harness_session("codex", "", cwd));
++    }
++    if env("GEMINI_CLI").is_some() {
++        return Some(harness_session(
++            "gemini",
++            &env("GEMINI_SESSION_ID").unwrap_or_default(),
++            cwd,
++        ));
++    }
++    if env("OPENCODE").is_some() {
++        return Some(harness_session("opencode", "", cwd));
++    }
++    env("AI_AGENT").map(|name| harness_session("agent", &name, cwd))
++}
++
++/// Who runs a command: `agent` (`--agent`), else `ATM_AGENT`, else the agent harness's session ([`harness_identity`],
++/// per linked worktree), else git's user name (a person in a terminal), else `user@host`.
+ #[must_use]
+ pub fn agent_identity(agent: Option<&str>, cwd: &Path) -> String {
+     if let Some(agent) = agent.filter(|a| !a.is_empty()) {
+@@ -33,10 +76,34 @@ pub fn agent_identity(agent: Option<&str>, cwd: &Path) -> String {
+     if let Some(agent) = env("ATM_AGENT") {
+         return agent;
+     }
+-    if let Some(session) = env("CLAUDE_CODE_SESSION_ID") {
+-        return session_identity(&session, cwd);
++    harness_identity(cwd).unwrap_or_else(|| user_identity(cwd))
++}
++
++/// Inside an agent harness's session ([`harness_identity`]), a name given with `--agent` or `ATM_AGENT` must be an
++/// agent's (ATM-660): an agent can't run a command as a person, which would let it finish a task a review must decide.
++/// Outside one, any name is taken.
++///
++/// # Errors
++/// `Invalid`, naming the person and the session, when a harness's agent names a person.
++pub fn check_named(agent: Option<&str>, cwd: &Path) -> atm_common::Result<()> {
++    let env = |key: &str| std::env::var(key).ok().filter(|v| !v.is_empty());
++    let Some(session) = harness_identity(cwd) else {
++        return Ok(());
++    };
++    let named = agent
++        .filter(|a| !a.is_empty())
++        .map(String::from)
++        .or_else(|| env("ATM_AGENT"));
++    match named {
++        Some(name) if !atm_common::edits::is_agent(Some(&name)) => {
++            Err(atm_common::Error::Invalid(format!(
++                "{session} is an agent's session: it can't act as {name}, a person (--agent or ATM_AGENT); \
++             leave it out, or name an agent ({})",
++                atm_common::edits::AGENT_PREFIXES.join(" ")
++            )))
++        }
++        _ => Ok(()),
+     }
+-    user_identity(cwd)
+ }
+ 
+ /// The person at the machine, whatever agent's environment atm runs in: their git name, else `user@host`. What the
+diff --git a/dashboard/src/lib/actors.ts b/dashboard/src/lib/actors.ts
+index 9bf2724d..7109aa3f 100644
+--- a/dashboard/src/lib/actors.ts
++++ b/dashboard/src/lib/actors.ts
+@@ -1,11 +1,14 @@
+ // Who created, started and completed a task (docs/v4/data-model.md §4.1, dashboard D-4.5). An actor whose name starts
+-// with "claude:" is an agent (a Claude Code session); anyone else is a person.
++// with an agent harness's prefix is an agent; anyone else is a person.
+ import { taskNotes } from './notes';
+ import type { Task } from './types';
+ import { startedBy } from './work';
+ 
++/** The identities atm gives agents, one prefix per harness (ATM-660): atm-common's `AGENT_PREFIXES` */
++export const AGENT_PREFIXES = ['claude:', 'codex:', 'gemini:', 'opencode:', 'agent:'] as const;
++
+ export function isAgent(actor: string): boolean {
+-  return actor.startsWith('claude:');
++  return AGENT_PREFIXES.some((prefix) => actor.startsWith(prefix));
+ }
+ 
+ /** Who completed the task when that isn't who started it: a reviewer who approved it, or a person who finished it. */
+diff --git a/dashboard/tests/unit/actors.test.ts b/dashboard/tests/unit/actors.test.ts
+index 057a5320..9ba9d89a 100644
+--- a/dashboard/tests/unit/actors.test.ts
++++ b/dashboard/tests/unit/actors.test.ts
+@@ -1,5 +1,7 @@
++// @vitest-environment node
+ import { describe, expect, it } from 'vitest';
+-import { actorsLine, approvedBy, earlierAttempts, isAgent } from '../../src/lib/actors';
++import { readFileSync } from 'node:fs';
++import { actorsLine, AGENT_PREFIXES, approvedBy, earlierAttempts, isAgent } from '../../src/lib/actors';
+ import type { Task } from '../../src/lib/types';
+ 
+ const task = (fields: Partial<Task> = {}): Task => ({
+@@ -15,8 +17,18 @@ const task = (fields: Partial<Task> = {}): Task => ({
+ describe('actors', () => {
+   it('"claude:" actors are agents; anyone else is a person', () => {
+     expect(isAgent('claude:e5ea9db0')).toBe(true);
++    // Every harness atm recognizes (ATM-660)
++    for (const id of ['codex:abc12345', 'gemini:session', 'opencode:session', 'agent:cursor'])
++      expect(isAgent(id)).toBe(true);
+     expect(isAgent('Hakan Serce')).toBe(false);
+     expect(isAgent('ci-bot')).toBe(false);
++    expect(isAgent('codex')).toBe(false);
++  });
++
++  it('the prefixes are atm’s own (atm-common’s AGENT_PREFIXES)', () => {
++    const rust = readFileSync(new URL('../../../crates/atm-common/src/edits.rs', import.meta.url), 'utf8');
++    const listed = /pub const AGENT_PREFIXES: \[&str; \d+\] = \[([^\]]*)\]/.exec(rust)![1];
++    expect([...listed.matchAll(/"([^"]+)"/g)].map((m) => m[1])).toEqual([...AGENT_PREFIXES]);
+   });
+ 
+   it('approvedBy: who completed it, when that is not who started it (an older agent field counts)', () => {
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 11401384..7e5deccc 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -256,6 +256,12 @@ Every agent-written text in them is single-quoted (I3), and none pre-approves `a
+ - **The mode is a workflow guard, not a security boundary.** `atm done` refuses an agent's active `blocker` or
+   `async` task; it tells agents from people by the actor (`claude:…` is an agent). The actor is self-declared
+   (`--agent`, `ATM_AGENT`), so what keeps an agent inside its mode is the skills: they never pass `--agent` (I23).
++  ATM-660 (audit L2) narrows it: every harness atm recognizes gives its agent an identity of its own, from the
++  markers it puts in its commands' environment (Claude Code's, Codex's, Gemini CLI's, OpenCode's, or `AI_AGENT`;
++  `atm_lib::actor::harness_identity`, the prefixes in `atm_common::edits::AGENT_PREFIXES`), and inside such a
++  session an `--agent` or `ATM_AGENT` naming a person is refused (`check_named`, in `main`, for every command but
++  those whose `--agent` is a filter). `agents.json` tests each. A harness that sets no marker (Cursor's and Copilot's,
++  as far as is known) still counts as the person whose git name it runs under.
+   Someone who can change `tasks.json` can also set `review: none` on a task; that is the same trust as writing any
+   task (§1), and the dashboard shows every task's mode.
+ - **Approvals.** `/atm:do-task` and `/atm:loop-tasks` pre-approve `atm approve` (it replaced the pre-approved `atm
+diff --git a/tests/scripts/helpers.mjs b/tests/scripts/helpers.mjs
+index 59f4f290..b7b4bd41 100644
+--- a/tests/scripts/helpers.mjs
++++ b/tests/scripts/helpers.mjs
+@@ -35,7 +35,18 @@ process.env.GIT_CONFIG_VALUE_0 = 'false';
+ export function baseEnv() {
+   const env = { ...process.env, ATM_HOME: TEST_HOME };
+   delete env.ATM_STATE_DIR;
+-  delete env.CLAUDE_CODE_SESSION_ID;
++  // Every agent harness's markers (ATM-660, atm-lib's `harness_identity`): the suite may run inside one
++  for (const marker of [
++    'CLAUDE_CODE_SESSION_ID',
++    'CLAUDECODE',
++    'CODEX_THREAD_ID',
++    'CODEX_SANDBOX',
++    'GEMINI_CLI',
++    'GEMINI_SESSION_ID',
++    'OPENCODE',
++    'AI_AGENT',
++  ])
++    delete env[marker];
+   delete env.ATM_AGENT;
+   delete env.ATM_NOW;
+   return env;
+diff --git a/tests/scripts/scenarios/agents.json b/tests/scripts/scenarios/agents.json
+new file mode 100644
+index 00000000..bc30bacc
+--- /dev/null
++++ b/tests/scripts/scenarios/agents.json
+@@ -0,0 +1,101 @@
++[
++  {
++    "name": "a Codex session is an agent: codex: and its thread (ATM-660)",
++    "setup": {
++      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
++    },
++    "args": ["task", "add", "--name", "x", "--type", "feature", "--json"],
++    "env": { "CODEX_THREAD_ID": "abc12345-6789" },
++    "expect": { "exit": 0, "stdoutIncludes": ["\"created_by\": \"codex:abc12345\""] }
++  },
++  {
++    "name": "Codex's sandbox alone is an agent too (ATM-660)",
++    "setup": {
++      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
++    },
++    "args": ["task", "add", "--name", "x", "--type", "feature", "--json"],
++    "env": { "CODEX_SANDBOX": "seatbelt" },
++    "expect": { "exit": 0, "stdoutIncludes": ["\"created_by\": \"codex:session\""] }
++  },
++  {
++    "name": "a Gemini CLI session is an agent (ATM-660)",
++    "setup": {
++      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
++    },
++    "args": ["task", "add", "--name", "x", "--type", "feature", "--json"],
++    "env": { "GEMINI_CLI": "1" },
++    "expect": { "exit": 0, "stdoutIncludes": ["\"created_by\": \"gemini:session\""] }
++  },
++  {
++    "name": "Claude Code without its session ID, and a harness naming itself in AI_AGENT, are agents (ATM-660)",
++    "setup": {
++      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } },
++      "commands": [["sh", "-c", "CLAUDECODE=1 \"$ATM\" task add --name a --type feature --json > claude.txt"]]
++    },
++    "args": ["task", "add", "--name", "x", "--type", "feature", "--json"],
++    "env": { "AI_AGENT": "cursor" },
++    "expect": { "exit": 0, "stdoutIncludes": ["\"created_by\": \"agent:cursor\""] }
++  },
++  {
++    "name": "inside an agent's session, ATM_AGENT naming a person is refused (ATM-660)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "todo" }]
++        }
++      }
++    },
++    "args": ["task", "note", "T-1", "hello"],
++    "env": { "CLAUDE_CODE_SESSION_ID": "abcdef1234", "ATM_AGENT": "Hakan" },
++    "expect": {
++      "exit": 2,
++      "stderrIncludes": ["claude:abcdef12 is an agent's session: it can't act as Hakan, a person"]
++    }
++  },
++  {
++    "name": "inside an agent's session, --agent naming a person is refused; naming an agent is taken (ATM-660)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "todo" }]
++        }
++      },
++      "commands": [["sh", "-c", "CODEX_THREAD_ID=t1 \"$ATM\" task note T-1 ok --agent codex:other > agent.txt"]]
++    },
++    "args": ["task", "note", "T-1", "hello", "--agent", "Hakan"],
++    "env": { "CODEX_THREAD_ID": "t1" },
++    "expect": {
++      "exit": 2,
++      "stderrIncludes": ["codex:t1 is an agent's session: it can't act as Hakan, a person"],
++      "files": { "agent.txt": "T-1: note added (1 in all)\n" }
++    }
++  },
++  {
++    "name": "outside a harness, --agent may name anyone: a person at the terminal (ATM-660)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "todo" }]
++        }
++      }
++    },
++    "args": ["task", "note", "T-1", "hello", "--agent", "Hakan"],
++    "expect": { "exit": 0, "stdout": "T-1: note added (1 in all)\n" }
++  },
++  {
++    "name": "a Codex agent can't finish a blocker task without its review (ATM-660)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "in_progress", "review": "blocker" }]
++        }
++      }
++    },
++    "args": ["task", "state", "T-1", "done"],
++    "env": { "CODEX_THREAD_ID": "abc12345" },
++    "expect": {
++      "exit": 2,
++      "stderrIncludes": ["T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review"]
++    }
++  }
++]

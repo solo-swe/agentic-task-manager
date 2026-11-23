@@ -1,0 +1,27 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "99e1cab654764c3c24acef15e5e33c50bd1f5630",
+    "head": "95fdad8d6a0a4848c91100b45491e9d05f51c89f"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/documents/CompMd.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/CompMd.component.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T21:33:48Z"
+}

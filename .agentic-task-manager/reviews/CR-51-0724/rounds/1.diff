@@ -1,0 +1,699 @@
+diff --git a/crates/atm-cli/src/commands/loop_.rs b/crates/atm-cli/src/commands/loop_.rs
+index 10d73519..5ea05966 100644
+--- a/crates/atm-cli/src/commands/loop_.rs
++++ b/crates/atm-cli/src/commands/loop_.rs
+@@ -124,7 +124,13 @@ fn next(args: NextArgs, ctx: Context, cwd: &Path) -> Result<u8> {
+         );
+     }
+     if ctx.json {
+-        print_json(&json!({"task": result.task, "claim": result.claim, "reason": result.reason}));
++        // Whether the agent's reviews are watched (ATM-642): the loop starts its watch first when not
++        let watch = project
++            .actor()
++            .and_then(|me| atm_lib::review_listen::watch_state(&project, me).ok());
++        print_json(
++            &json!({"task": result.task, "claim": result.claim, "reason": result.reason, "watch": watch}),
++        );
+     } else if let Some(task) = &result.task {
+         let verb = if result.claim.is_some() {
+             "Claimed"
+diff --git a/crates/atm-cli/src/main.rs b/crates/atm-cli/src/main.rs
+index 95c85746..4fc66c86 100644
+--- a/crates/atm-cli/src/main.rs
++++ b/crates/atm-cli/src/main.rs
+@@ -204,6 +204,16 @@ impl Command {
+         self.refreshes_server() && !matches!(self, Command::Claim(ClaimCommand::Heartbeat { .. }))
+     }
+ 
++    /// Whether an agent running it is reminded that it isn't watching its reviews (ATM-642): the commands it works
++    /// with, not the watch or a wait on a review (they are the watching), nor the hook's heartbeat.
++    fn reminds_to_watch(&self) -> bool {
++        self.renews_claims()
++            && !matches!(
++                self,
++                Command::Review(ReviewCommand::Watch { .. } | ReviewCommand::Wait { .. })
++            )
++    }
++
+     /// Whether running it first brings an outdated dashboard server along (after an update, the first atm command
+     /// restarts it on the new dashboard): every command that works on a project, the hook's heartbeat too.
+     fn refreshes_server(&self) -> bool {
+@@ -227,11 +237,7 @@ impl Command {
+ /// minutes old, so most commands only read. Not for a command run as someone else (`--agent`), and never in the way of
+ /// the command itself.
+ fn renew_own_claims(args: &[OsString], cwd: &Path) {
+-    let as_someone_else = args.iter().take_while(|a| *a != "--").any(|a| {
+-        let a = a.to_string_lossy();
+-        a == "--agent" || a.starts_with("--agent=")
+-    });
+-    if as_someone_else {
++    if as_someone_else(args) {
+         return;
+     }
+     if let Ok(project) = atm_lib::Project::open(cwd) {
+@@ -357,15 +363,43 @@ fn run(args: &[OsString]) -> u8 {
+     if cli.command.renews_claims() {
+         renew_own_claims(args, &cwd);
+     }
+-    match dispatch(cli.command, ctx, &cwd) {
++    let reminds = cli.command.reminds_to_watch();
++    let code = match dispatch(cli.command, ctx, &cwd) {
+         Ok(code) => code,
+         Err(error) => {
+             report(&labelled(&error.to_string(), &cwd), error.code(), as_json);
+             error.code()
+         }
++    };
++    if reminds {
++        remind_to_watch(args, &cwd);
++    }
++    code
++}
++
++/// An agent that runs a command with a review of its work open and no watch of its reviews running is told so, once
++/// in a while, on stderr (ATM-642, `review_listen::reminder`): comments, pokes and decisions would go unseen. After
++/// the command, so its own output comes first; never with `--agent` (run as someone else), never in its way.
++fn remind_to_watch(args: &[OsString], cwd: &Path) {
++    if as_someone_else(args) {
++        return;
++    }
++    if let Ok(project) = atm_lib::Project::open(cwd) {
++        let me = atm_lib::actor::agent_identity(None, cwd);
++        if let Some(line) = atm_lib::review_listen::reminder(&project, &me) {
++            eprintln!("atm: {line}");
++        }
+     }
+ }
+ 
++/// Whether a command is run as someone else (`--agent`, before any `--`).
++fn as_someone_else(args: &[OsString]) -> bool {
++    args.iter().take_while(|a| *a != "--").any(|a| {
++        let a = a.to_string_lossy();
++        a == "--agent" || a.starts_with("--agent=")
++    })
++}
++
+ /// Run one command in `cwd`: its exit code when it ends without an error (`agents install` ends with 1 when it left a
+ /// folder alone, `loop next` with 3 when no task is available).
+ fn dispatch(command: Command, ctx: Context, cwd: &Path) -> Result<u8, Error> {
+diff --git a/crates/atm-lib/src/review_listen.rs b/crates/atm-lib/src/review_listen.rs
+index dc6eea16..fdea1355 100644
+--- a/crates/atm-lib/src/review_listen.rs
++++ b/crates/atm-lib/src/review_listen.rs
+@@ -401,12 +401,15 @@ pub fn watch(
+     let file = cursor_file(root.as_deref(), me);
+     let (mut seen, mut statuses) = starting_point(&store, &file, options.since.as_deref())?;
+     let (_subscription, told) = listen(&store)?;
++    // Known to be running while it does (ATM-642): renewed on every look, removed when it ends
++    let lease = Lease::take(lease_file(root.as_deref(), me));
+     ready();
+     let deadline = Instant::now() + timeout;
+     let mut count = 0;
+     // The first look is at once: what came while no watch ran
+     let mut first = true;
+     loop {
++        lease.renew();
+         if !first {
+             let left = deadline.saturating_duration_since(Instant::now());
+             if left.is_zero() {
+@@ -500,6 +503,207 @@ fn decision(review: &ReviewHeader, task: Option<&str>) -> Value {
+     })
+ }
+ 
++/// How long a watch's lease lasts unrenewed (ATM-642). A watch renews it on every look, at least every [`RECHECK`], so
++/// one that stopped, crashed or was killed is known to within this.
++const LEASE_SECS: i64 = 60;
++
++/// How long atm stays quiet after reminding an agent that it isn't watching, unless something new came meanwhile.
++const REMIND_EVERY_SECS: i64 = 600;
++
++/// The lease of `me`'s watch of the project at `root`: beside its cursor.
++fn lease_file(root: Option<&Path>, me: &str) -> PathBuf {
++    cursor_file(root, me).with_extension("live")
++}
++
++/// When atm last reminded `me` that it wasn't watching: beside its cursor.
++fn reminded_file(root: Option<&Path>, me: &str) -> PathBuf {
++    cursor_file(root, me).with_extension("reminded")
++}
++
++/// A running watch's lease (ATM-642): until when it is known to run, in seconds since 1970, written while it runs
++/// and removed when it ends. Several watches of one agent share it; the others renew it within [`RECHECK`].
++struct Lease(PathBuf);
++
++impl Lease {
++    fn take(file: PathBuf) -> Self {
++        let lease = Self(file);
++        lease.renew();
++        lease
++    }
++
++    /// A lease that can't be written only means atm may remind the agent that it isn't watching.
++    fn renew(&self) {
++        if let Some(dir) = self.0.parent() {
++            let _ = std::fs::create_dir_all(dir);
++        }
++        let until = atm_common::time::real_now() + LEASE_SECS;
++        let _ = atm_common::home::write_text_atomic(&self.0, &until.to_string());
++    }
++}
++
++impl Drop for Lease {
++    fn drop(&mut self) {
++        let _ = std::fs::remove_file(&self.0);
++    }
++}
++
++/// Whether a lease reading `text` still holds at `now`.
++fn holds(text: Option<&str>, now: i64) -> bool {
++    text.and_then(|t| t.trim().parse::<i64>().ok())
++        .is_some_and(|until| until > now)
++}
++
++/// Whether an agent's reviews are watched (ATM-642): what `atm loop next --json` says as `watch`, and what atm reminds
++/// an agent of when they aren't.
++#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
++pub struct WatchState {
++    /// A watch of the agent's runs now.
++    pub running: bool,
++    /// Without one: the reviews of its work not decided yet (its own, or naming a task it worked), what a watch would
++    /// tell it about, by number.
++    pub open: Vec<String>,
++    /// Of those, the ones changed since its last watch stopped: a comment or a decision it hasn't been told. None
++    /// before its first watch (that one starts from then).
++    pub since_last_watch: Vec<String>,
++}
++
++/// The open reviews of `me`'s work among `headers`, and those of them changed after `last_watch` (ISO 8601).
++fn open_and_changed(
++    headers: &[ReviewHeader],
++    mine: &HashSet<String>,
++    me: &str,
++    last_watch: Option<&str>,
++) -> (Vec<String>, Vec<String>) {
++    let mut open: Vec<&ReviewHeader> = headers
++        .iter()
++        .filter(|h| {
++            matches!(
++                h.status,
++                Status::Waiting | Status::Live | Status::ChangesRequested
++            )
++        })
++        .filter(|h| {
++            h.author.as_ref().is_some_and(|a| a.0 == me) || h.tasks.iter().any(|t| mine.contains(t))
++        })
++        .collect();
++    open.sort_by_key(|h| h.number);
++    let changed = open
++        .iter()
++        .filter(|h| last_watch.is_some_and(|at| h.updated.as_str() > at))
++        .map(|h| h.reference.0.clone())
++        .collect();
++    (
++        open.iter().map(|h| h.reference.0.clone()).collect(),
++        changed,
++    )
++}
++
++/// Whether `me`'s reviews are watched now, and if not, what is open and what changed since its last watch. Cheap
++/// enough for every command: the reviews' headers and the task list, no diffs.
++///
++/// # Errors
++/// The reviews or the tasks can't be read.
++pub fn watch_state(project: &Project, me: &str) -> Result<WatchState> {
++    let root = project.root().map(Path::to_path_buf);
++    let lease = std::fs::read_to_string(lease_file(root.as_deref(), me)).ok();
++    if holds(lease.as_deref(), atm_common::time::real_now()) {
++        return Ok(WatchState {
++            running: true,
++            ..WatchState::default()
++        });
++    }
++    let headers = reviews::store(project)?.list_reviews(&ReviewFilter::default())?;
++    let mine: HashSet<String> = project
++        .store()
++        .list_tasks()?
++        .iter()
++        .filter(|t| {
++            ["started_by", "completed_by"]
++                .iter()
++                .any(|f| t.get(*f).and_then(Value::as_str) == Some(me))
++        })
++        .map(|t| project.task_key(t))
++        .collect();
++    // The last watch stopped when it last wrote its cursor
++    let last_watch = std::fs::metadata(cursor_file(root.as_deref(), me))
++        .and_then(|m| m.modified())
++        .ok()
++        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
++        .map(|d| atm_common::time::format_iso(i64::try_from(d.as_secs()).unwrap_or(i64::MAX)));
++    let (open, since_last_watch) = open_and_changed(&headers, &mine, me, last_watch.as_deref());
++    Ok(WatchState {
++        running: false,
++        open,
++        since_last_watch,
++    })
++}
++
++/// When atm last reminded the agent, and what had changed then.
++#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
++struct Reminded {
++    at: i64,
++    changed: Vec<String>,
++}
++
++/// The reminder for `state` at `now`, after the one `last`: none while a watch runs or nothing of the agent's is
++/// open; else once every [`REMIND_EVERY_SECS`], and at once when a review changed that the last one didn't name.
++fn reminder_for(state: &WatchState, last: Option<&Reminded>, now: i64) -> Option<String> {
++    if state.running || state.open.is_empty() {
++        return None;
++    }
++    let new = state
++        .since_last_watch
++        .iter()
++        .any(|r| last.is_none_or(|l| !l.changed.contains(r)));
++    if !new && last.is_some_and(|l| now - l.at < REMIND_EVERY_SECS) {
++        return None;
++    }
++    let n = state.open.len();
++    let open = if n <= 3 {
++        state.open.join(", ")
++    } else {
++        format!("{}, … {}", state.open[..2].join(", "), state.open[n - 1])
++    };
++    let changed = if state.since_last_watch.is_empty() {
++        String::new()
++    } else {
++        format!(
++            "; changed since your last watch: {}",
++            state.since_last_watch.join(", ")
++        )
++    };
++    Some(format!(
++        "you aren't watching your reviews ({n} open: {open}{changed}). Start `atm review watch --json` as a \
++         background command and read what it prints (atm docs reviews)"
++    ))
++}
++
++/// What atm says on stderr when agent `me` runs a command with no watch of its reviews running and one of them open
++/// (ATM-642), at most every ten minutes unless one changed; none otherwise. Never in the way of the command: a state
++/// that can't be read says nothing.
++#[must_use]
++pub fn reminder(project: &Project, me: &str) -> Option<String> {
++    if !is_agent(Some(me)) {
++        return None;
++    }
++    let state = watch_state(project, me).ok()?;
++    let file = reminded_file(project.root(), me);
++    let last: Option<Reminded> = std::fs::read_to_string(&file)
++        .ok()
++        .and_then(|t| serde_json::from_str(&t).ok());
++    let now = atm_common::time::real_now();
++    let line = reminder_for(&state, last.as_ref(), now)?;
++    let reminded = Reminded {
++        at: now,
++        changed: state.since_last_watch,
++    };
++    if let (Some(dir), Ok(text)) = (file.parent(), serde_json::to_string(&reminded)) {
++        let _ = std::fs::create_dir_all(dir);
++        let _ = atm_common::home::write_text_atomic(&file, &text);
++    }
++    Some(line)
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -831,4 +1035,136 @@ mod tests {
+         );
+         assert_eq!(about(&batch, &own), NO_TASK);
+     }
++
++    #[test]
++    fn a_watch_lease_holds_until_its_time_and_a_missing_or_broken_one_never() {
++        for (text, holds_now) in [
++            (Some("1000"), true),
++            (Some(" 1000\n"), true),
++            (Some("999"), false),
++            (Some("500"), false),
++            (Some("soon"), false),
++            (Some(""), false),
++            (None, false),
++        ] {
++            assert_eq!(holds(text, 999), holds_now, "{text:?}");
++        }
++    }
++
++    #[test]
++    fn a_watch_writes_its_lease_while_it_runs_and_removes_it_when_it_ends() {
++        let dir = std::env::temp_dir().join(format!("atm-lease-{}", std::process::id()));
++        let file = dir.join("w.live");
++        {
++            let lease = Lease::take(file.clone());
++            let now = atm_common::time::real_now();
++            let text = std::fs::read_to_string(&file).unwrap();
++            assert!(holds(Some(&text), now));
++            assert!(
++                !holds(Some(&text), now + LEASE_SECS + 1),
++                "it runs out unrenewed"
++            );
++            lease.renew();
++            assert!(file.exists());
++        }
++        assert!(!file.exists());
++        let _ = std::fs::remove_dir_all(dir);
++    }
++
++    fn header(n: u32, status: Status, author: &str, tasks: &[&str], updated: &str) -> ReviewHeader {
++        let mut h = review(status, tasks).header;
++        h.number = n;
++        h.reference = ReviewRef(format!("CR-{n}"));
++        h.author = Some(Actor::from(author));
++        h.updated = updated.into();
++        h
++    }
++
++    #[test]
++    fn open_reviews_are_the_agents_own_or_naming_its_tasks_not_yet_decided_and_changed_ones_after_its_last_watch()
++     {
++        let at = "2026-11-19T05:00:00Z";
++        let headers = [
++            header(4, Status::Waiting, "claude:me", &[], "2026-11-19T05:30:00Z"),
++            header(
++                2,
++                Status::ChangesRequested,
++                "Hakan",
++                &["ATM-1"],
++                "2026-11-19T04:00:00Z",
++            ),
++            header(3, Status::Live, "claude:me", &[], at),
++            header(
++                5,
++                Status::Waiting,
++                "claude:other",
++                &["ATM-9"],
++                "2026-11-19T06:00:00Z",
++            ),
++            header(
++                6,
++                Status::Approved,
++                "claude:me",
++                &["ATM-1"],
++                "2026-11-19T06:00:00Z",
++            ),
++            header(7, Status::Closed, "claude:me", &[], "2026-11-19T06:00:00Z"),
++            header(8, Status::Draft, "claude:me", &[], "2026-11-19T06:00:00Z"),
++        ];
++        let mine: HashSet<String> = ["ATM-1".to_string()].into();
++        let (open, changed) = open_and_changed(&headers, &mine, "claude:me", Some(at));
++        assert_eq!(open, ["CR-2", "CR-3", "CR-4"]);
++        // Changed after the last watch only: CR-3 at that very time was told
++        assert_eq!(changed, ["CR-4"]);
++        // Before any watch, nothing counts as changed since one
++        let (_, none) = open_and_changed(&headers, &mine, "claude:me", None);
++        assert_eq!(none, Vec::<String>::new());
++        let (theirs, _) = open_and_changed(&headers, &HashSet::new(), "claude:other", Some(at));
++        assert_eq!(theirs, ["CR-5"]);
++    }
++
++    #[test]
++    fn the_reminder_is_said_only_without_a_watch_with_reviews_open_and_again_after_ten_minutes_or_a_change()
++     {
++        let state = |running: bool, open: &[&str], changed: &[&str]| WatchState {
++            running,
++            open: open.iter().map(|r| (*r).to_string()).collect(),
++            since_last_watch: changed.iter().map(|r| (*r).to_string()).collect(),
++        };
++        let at = |at: i64, changed: &[&str]| Reminded {
++            at,
++            changed: changed.iter().map(|r| (*r).to_string()).collect(),
++        };
++        let now = 10_000;
++        // A watch runs, or nothing of its is open: nothing said
++        assert_eq!(reminder_for(&state(true, &["CR-1"], &[]), None, now), None);
++        assert_eq!(reminder_for(&state(false, &[], &[]), None, now), None);
++        // Open, never said: said, naming them
++        let said = reminder_for(&state(false, &["CR-1", "CR-2"], &[]), None, now).unwrap();
++        assert!(said.contains("(2 open: CR-1, CR-2)"), "{said}");
++        assert!(said.contains("atm review watch --json"), "{said}");
++        // Said a minute ago, nothing new: quiet; ten minutes on, said again
++        let quiet = state(false, &["CR-1"], &["CR-1"]);
++        assert_eq!(
++            reminder_for(&quiet, Some(&at(now - 60, &["CR-1"])), now),
++            None
++        );
++        assert!(reminder_for(&quiet, Some(&at(now - REMIND_EVERY_SECS, &["CR-1"])), now).is_some());
++        // A review changed that the last one didn't name: said at once, naming it
++        let new = reminder_for(
++            &state(false, &["CR-1", "CR-2"], &["CR-2"]),
++            Some(&at(now - 60, &[])),
++            now,
++        )
++        .unwrap();
++        assert!(new.contains("changed since your last watch: CR-2"), "{new}");
++        // Many open: the first two and the last
++        let many = reminder_for(
++            &state(false, &["CR-1", "CR-2", "CR-3", "CR-9"], &[]),
++            None,
++            now,
++        )
++        .unwrap();
++        assert!(many.contains("(4 open: CR-1, CR-2, … CR-9)"), "{many}");
++    }
+ }
+diff --git a/docs/agent/reviews.md b/docs/agent/reviews.md
+index 38f18c36..efe44b76 100644
+--- a/docs/agent/reviews.md
++++ b/docs/agent/reviews.md
+@@ -61,6 +61,15 @@
+     it). `--once` stops after the first time it prints something (exit code 3 if nothing came by the time up): for a
+     harness that tells you of a background command only when it ends, run it so and start it again each time.
+     `--since <time>` prints from that time, whatever was printed before.
++    **Run it as a plain background command**, not under a monitor that caps it at a few minutes: it lasts its
++    `--timeout` (8 h).
++    **atm knows whether it runs** (ATM-642). A running watch keeps a lease, so:
++    - `atm loop next --json` says `"watch": {"running": …, "open": [...], "since_last_watch": [...]}`: `open` is
++      your reviews not decided yet, and `since_last_watch` those changed since your last watch stopped. With
++      `running: false`, start the watch before anything else; it tells you first what changed.
++    - Any atm command you run without one, while a review of your work is open, ends with one line on stderr
++      saying so: at most every ten minutes, and at once when a review changed that it didn't name yet. Never on
++      stdout, and never for a person.
+ - **A poke** (`kind: "poke"` on the watch's line; every other comment is `kind: "comment"`): a person nudging you
+   about the review as a whole, with a message or none. Answer it by looking at where the review stands, and replying to
+   the poke (`atm review reply CR-7 <its comment> --body '…'`) with what you did or what you are waiting for: the open
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 4211c278..2447cbbd 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1182,6 +1182,17 @@ checklist:
+   Docker (84; four regenerated: the standard page in both modes, which shows the Reviews tab, and the update notice in
+   both modes, which shows the version).
+ 
++**Release 0.41.0 (the sprint Code reviews in the app; in progress, completed by the release task).** So far:
++
++- **Output agents act on, and skills changed (ATM-642):**
++  - `atm loop next --json` gains `watch` (`running`, and the open reviews of the agent's work by reference);
++  - any atm command an agent runs without a running review watch, while a review of its work is open, adds one line on stderr saying so (at most every ten minutes, at once when a review changed);
++  - `atm-loop-tasks` and `atm-do-task` tell the agent to start its watch when either says so, and to run it as a plain background command.
++
++  Written review:
++  - The line and the field carry atm's own data only: review references, never review or task text. They tell the agent to run one fixed atm command (`atm review watch --json`), which runs nothing and fetches nothing. No skill instruction runs anything new or reads outside text.
++  - The watch's lease is a file in the state folder (`watches/<hash>.live`: a number, the time it lasts to), read only to say whether a watch runs. One that can't be read or written only means the agent is reminded.
++
+ ## 4. Keeping it current
+ 
+ This document changes **in the same PR** as a change that:
+diff --git a/skills/atm-do-task/SKILL.md b/skills/atm-do-task/SKILL.md
+index 5905d4b1..e326e6f5 100644
+--- a/skills/atm-do-task/SKILL.md
++++ b/skills/atm-do-task/SKILL.md
+@@ -80,7 +80,9 @@ reviews (`atm review comments <CR> --open` lists what is still open in one).
+ 
+ **Listen for the user's comments on your work** (`atm docs reviews`): once per session, if no watch of yours runs yet,
+ start `atm review watch --json` in the background and keep it; whenever it ends (its time up, or your harness stopped
+-it), start it again: it first prints what came meanwhile. It prints, one JSON object a line, each comment a
++it), start it again: it first prints what came meanwhile. Run it as a plain background command, never under a monitor
++with a short cap; an atm line on stderr saying you aren't watching your reviews means start it now. It prints, one
++JSON object a line, each comment a
+ person adds about your work in any review (a live review of your working copy, a review of your task), with the
+ review and the task it is about (or `null`), and each decision on such a review (a line with `decision`: `approved`,
+ `changes_requested` or `closed`). Look at what it printed between steps; answer each comment as Step 7b says, and act
+diff --git a/skills/atm-loop-tasks/SKILL.md b/skills/atm-loop-tasks/SKILL.md
+index 78f3aa35..16306b12 100644
+--- a/skills/atm-loop-tasks/SKILL.md
++++ b/skills/atm-loop-tasks/SKILL.md
+@@ -146,7 +146,9 @@ worked), with the review and the task (or `null`), and each decision on such a r
+ `approved`, `changes_requested` or `closed`). Step 7 answers what it printed. **Whenever the watch ends** (its time is
+ up, or your harness stopped it), start it again at once: it first prints what came while none ran, so nothing is
+ missed. Where a background command reports only when it ends, run `atm review watch --json --once` instead, and start
+-it again after each time it reports.
++it again after each time it reports. Run it as a plain background command, never under a monitor with a short cap.
++Every `atm loop next --json` says whether it runs (`watch.running`); when it is `false`, start the watch before
++the task. An atm line on stderr saying you aren't watching your reviews means the same.
+ 
+ ```
+ completed_count = 0
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index 4320dd4e..fd16415b 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -1195,4 +1195,57 @@ describe('agents listening (ATM-567)', () => {
+       removeDir(root);
+     }
+   });
++
++  // ATM-642 (Hakan): an agent's watch stopped and comments, a poke and approvals went unseen. atm knows whether a
++  // watch runs, says so in `loop next --json`, and reminds the agent on stderr while a review of its work is open
++  test('an agent not watching its open reviews is told so: on stderr, once a while; loop next says it; never a person', async () => {
++    const root = makeProject({
++      commit: true,
++      files: {
++        '.agentic-task-manager/tasks.json': {
++          meta: { project: 'Watch' },
++          tasks: [
++            {
++              id: 'T-1',
++              name: 'One',
++              type: 'feature',
++              status: 'in_progress',
++              started_by: AGENT.ATM_AGENT,
++              files: ['a.txt'],
++            },
++            { id: 'T-2', name: 'Two', type: 'feature', status: 'todo' },
++          ],
++        },
++        'a.txt': 'a\n',
++      },
++    });
++    const reminded = (r) => /you aren't watching your reviews/.test(r.stderr);
++    let watching;
++    try {
++      // Nothing of its open: nothing said
++      assert.equal(reminded(ok(['task', 'list'], root, AGENT)), false);
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      // Its review open (by the command itself), no watch: said at once, after the command's own output, on stderr
++      // only, naming it
++      const first = ok(['review', 'create', '--title', 'Watch me', '--task', 'T-1', '--uncommitted'], root, AGENT);
++      assert.ok(reminded(first), first.stderr);
++      assert.match(first.stderr, /1 open: CR-1/);
++      assert.doesNotMatch(first.stdout, /watching/);
++      // Said a moment ago, nothing new: quiet
++      assert.equal(reminded(ok(['task', 'list'], root, AGENT)), false);
++      // A person is never told; nor a command run as someone else
++      assert.equal(reminded(ok(['task', 'list'], root, HAKAN)), false);
++      // loop next --json says it, its JSON clean
++      const next = JSON.parse(ok(['loop', 'next', '--json'], root, AGENT).stdout);
++      assert.deepEqual(next.watch, { running: false, open: ['CR-1'], since_last_watch: [] });
++      // A watch running: loop next says so, and nothing is said
++      watching = background(['review', 'watch', '--json', '--timeout', '60s'], root, AGENT);
++      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
++      const live = JSON.parse(ok(['loop', 'next', '--json'], root, AGENT).stdout);
++      assert.deepEqual(live.watch, { running: true, open: [], since_last_watch: [] });
++    } finally {
++      watching?.stop();
++      removeDir(root);
++    }
++  });
+ });
+diff --git a/tests/scripts/scenarios/next.json b/tests/scripts/scenarios/next.json
+index 15b2d7d1..9f084bd6 100644
+--- a/tests/scripts/scenarios/next.json
++++ b/tests/scripts/scenarios/next.json
+@@ -223,7 +223,8 @@
+           "dependencies": []
+         },
+         "claim": null,
+-        "reason": null
++        "reason": null,
++        "watch": { "running": false, "open": [], "since_last_watch": [] }
+       }
+     },
+     "env": {
+@@ -480,7 +481,8 @@
+           "claimed_at": "2026-05-01T10:00:00Z",
+           "lease_expires_at": "2026-05-01T12:00:00Z"
+         },
+-        "reason": null
++        "reason": null,
++        "watch": { "running": false, "open": [], "since_last_watch": [] }
+       },
+       "files": {
+         ".agentic-task-manager/tasks.json": {
+diff --git a/tests/scripts/scenarios/selections.json b/tests/scripts/scenarios/selections.json
+index 9ab6b0a6..06155446 100644
+--- a/tests/scripts/scenarios/selections.json
++++ b/tests/scripts/scenarios/selections.json
+@@ -18,7 +18,8 @@
+       "json": {
+         "task": { "id": "T-3", "status": "todo", "sprint": "A", "priority": "P3" },
+         "claim": null,
+-        "reason": null
++        "reason": null,
++        "watch": { "running": false, "open": [], "since_last_watch": [] }
+       }
+     }
+   },
+@@ -52,7 +53,14 @@
+       }
+     },
+     "args": ["loop", "next", "--sprint", "b", "--json"],
+-    "expect": { "json": { "task": { "id": "T-2", "status": "todo", "sprint": "B" }, "claim": null, "reason": null } }
++    "expect": {
++      "json": {
++        "task": { "id": "T-2", "status": "todo", "sprint": "B" },
++        "claim": null,
++        "reason": null,
++        "watch": { "running": false, "open": [], "since_last_watch": [] }
++      }
++    }
+   },
+   {
+     "name": "next --sprint of a closed sprint is refused",
+@@ -78,7 +86,14 @@
+       }
+     },
+     "args": ["loop", "next", "--tasks", "T-3,T-1", "--json"],
+-    "expect": { "json": { "task": { "id": "T-3", "status": "todo" }, "claim": null, "reason": null } }
++    "expect": {
++      "json": {
++        "task": { "id": "T-3", "status": "todo" },
++        "claim": null,
++        "reason": null,
++        "watch": { "running": false, "open": [], "since_last_watch": [] }
++      }
++    }
+   },
+   {
+     "name": "next --tasks with a task that doesn't exist is refused",
+@@ -102,7 +117,14 @@
+       }
+     },
+     "args": ["loop", "next", "--all", "--json"],
+-    "expect": { "json": { "task": { "id": "T-3", "status": "todo", "sprint": "B" }, "claim": null, "reason": null } }
++    "expect": {
++      "json": {
++        "task": { "id": "T-3", "status": "todo", "sprint": "B" },
++        "claim": null,
++        "reason": null,
++        "watch": { "running": false, "open": [], "since_last_watch": [] }
++      }
++    }
+   },
+   {
+     "name": "next --backlog: the tasks with no sprint",
+@@ -118,7 +140,14 @@
+       }
+     },
+     "args": ["loop", "next", "--backlog", "--json"],
+-    "expect": { "json": { "task": { "id": "T-2", "status": "todo" }, "claim": null, "reason": null } }
++    "expect": {
++      "json": {
++        "task": { "id": "T-2", "status": "todo" },
++        "claim": null,
++        "reason": null,
++        "watch": { "running": false, "open": [], "since_last_watch": [] }
++      }
++    }
+   },
+   {
+     "name": "next: a finished sprint says so, with what got done",

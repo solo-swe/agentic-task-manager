@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "96f74134bdd6f32aa27f1d1e5388333f34938cd6",
+    "head": "aefdbc036344fdffb19ce701576e652f2ce2040b"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/reviews/DiffView.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T21:47:38Z"
+}

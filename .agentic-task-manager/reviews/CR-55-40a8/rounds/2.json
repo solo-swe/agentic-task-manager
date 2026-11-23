@@ -1,0 +1,67 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "33f63fb8801811955b846188c1041657d01db7cc",
+    "head": "a648ce59d4598af2cf6b6e5ba5b8656e043d62ab"
+  },
+  "files": [
+    {
+      "path": "crates/atm-common/src/keys.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/src/keys/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_keys.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/folder.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-vcs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/adr/ADR-009-task-keys-plain-from-creation.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/keys.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T08:53:47Z"
+}

@@ -1,0 +1,147 @@
+diff --git a/crates/atm-cli/src/commands/review.rs b/crates/atm-cli/src/commands/review.rs
+index e97210ff..4e60c860 100644
+--- a/crates/atm-cli/src/commands/review.rs
++++ b/crates/atm-cli/src/commands/review.rs
+@@ -328,7 +328,18 @@ fn new_round(
+         );
+     }
+     if !change.files.is_empty() {
+-        let paths = vcs.paths(&change.files, Some(cwd))?;
++        let mut paths = vcs.paths(&change.files, Some(cwd))?;
++        // A later files round keeps the files the last one reviewed (ATM-622): naming only the file that changed made
++        // a round of that file alone, whose whole change was that file and since which every other one looked deleted.
++        // A file gone since isn't kept
++        if previous.is_some_and(|last| last.kind == RoundKind::Files) {
++            let root = project.root().map(Path::to_path_buf).unwrap_or_default();
++            for kept in previous_files {
++                if !paths.contains(kept) && root.join(kept).is_file() {
++                    paths.push(kept.clone());
++                }
++            }
++        }
+         return rounds::from_files(&reviews::repository_of_files(&vcs, &paths)?, &paths, &by);
+     }
+     match (change.uncommitted, previous) {
+diff --git a/crates/atm-review/src/rounds.rs b/crates/atm-review/src/rounds.rs
+index 47504b8c..12699ddb 100644
+--- a/crates/atm-review/src/rounds.rs
++++ b/crates/atm-review/src/rounds.rs
+@@ -203,6 +203,11 @@ pub fn compare<S: RoundDiffs + ?Sized>(
+         .chain(&b.files)
+         .map(|f| f.path.clone())
+         .collect();
++    // A files round speaks only for the files it names (ATM-622): its tree is rebuilt from them alone, so a file of the
++    // earlier round it doesn't name isn't deleted, it just isn't in this round. One it alone names is new to the review
++    if b.kind == RoundKind::Files {
++        paths.retain(|p| b.files.iter().any(|f| &f.path == p));
++    }
+     paths.sort();
+     paths.dedup();
+     Ok(Patch(vcs.diff_trees(&tree_a, &tree_b, &paths)?))
+@@ -969,6 +974,57 @@ mod tests {
+         ));
+     }
+ 
++    // ATM-622 (Hakan, 2026-11-18): a later files round naming only the file that changed showed every other file of
++    // the review as deleted since the round before
++    #[test]
++    fn a_files_round_that_names_fewer_files_compares_only_what_it_has() {
++        use super::{compare, from_files};
++        use crate::memory::MemoryStore;
++        use crate::model::{Actor, ReviewRef, Status};
++        use crate::rules::Reviews;
++        use crate::store::{NewReview, ReviewStore};
++
++        let (dir, vcs) = repo(&[
++            ("docs/plan.md", b"# Plan\n\nOld step.\nKept step.\n"),
++            ("docs/notes.md", b"# Notes\n\nA note.\n"),
++        ]);
++        let by = Actor::from("claude:A");
++        let mut store = MemoryStore::new();
++        let mut reviews = Reviews::new(&mut store);
++        reviews
++            .create(NewReview {
++                title: "Plan".into(),
++                summary: String::new(),
++                tasks: Vec::new(),
++                author: Some(by.clone()),
++                reviewers: Vec::new(),
++                status: Status::Waiting,
++                first: from_files(&vcs, &["docs/plan.md".into(), "docs/notes.md".into()], &by)
++                    .unwrap(),
++            })
++            .unwrap();
++        write(
++            dir.path(),
++            &[("docs/plan.md", b"# Plan\n\nNew step.\nKept step.\n")],
++        );
++        reviews
++            .add_round(
++                &ReviewRef::numbered(1),
++                from_files(&vcs, &["docs/plan.md".into()], &by).unwrap(),
++            )
++            .unwrap();
++        let review = store.get_review(&ReviewRef::numbered(1)).unwrap();
++        let between = compare(&vcs, &store, &review, 1, 2).unwrap();
++        // The one line that changed, and nothing about the file round 2 didn't name
++        assert!(
++            between.0.contains("-Old step.") && between.0.contains("+New step."),
++            "{}",
++            between.0
++        );
++        assert!(!between.0.contains("notes.md"), "{}", between.0);
++        assert!(!between.0.contains("deleted file"), "{}", between.0);
++    }
++
+     #[test]
+     fn a_files_round_is_its_files_whole_as_if_added_and_compares_with_the_next() {
+         use super::{compare, from_files, place, tree};
+diff --git a/docs/agent/reviews.md b/docs/agent/reviews.md
+index 1ee55e14..7ba451db 100644
+--- a/docs/agent/reviews.md
++++ b/docs/agent/reviews.md
+@@ -23,7 +23,10 @@
+   to make it readable, say so to the user (`atm doctor` reports it too).
+ - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
+   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
+-  tasks back in review; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
++  tasks back in review. A round is the whole change as it now is, not the fix alone: a range round keeps the
++  review's first base (`--range <the first round's base>..HEAD`, never the fix commit's own range), and a files round
++  keeps the files the last one reviewed (naming more adds them). The reviewer sees what the fix changed as *since round
++  N*; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
+   check has changed. Start a chain of your own with `atm review comment CR-7 --file <path> --lines A-B --body '…'`
+   (without `--file`, about the review as a whole).
+ - **Resolving and deciding are the reviewer's:** a top-level comment is resolved (`atm review resolve CR-7 c9`) by a
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index 9b87af0d..d95a3006 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -402,6 +402,28 @@ describe('atm review', () => {
+     }
+   });
+ 
++  // ATM-622 (Hakan): a later round naming only the file that changed showed every other file as deleted since round 1
++  test('a later files round keeps the files the last one reviewed, and since round 1 is only what changed', () => {
++    const root = project();
++    try {
++      fs.writeFileSync(path.join(root, 'b.txt'), 'bee\n');
++      ok(['review', 'create', '--title', 'Two files', '--file', 'a.txt', '--file', 'b.txt'], root, AGENT);
++      const a = fs.readFileSync(path.join(root, 'a.txt'), 'utf8');
++      fs.writeFileSync(path.join(root, 'a.txt'), a.replace(/\n$/, ' changed\n'));
++      assert.equal(ok(['review', 'round', 'CR-1', '--file', 'a.txt'], root, AGENT).stdout, 'CR-1: round 2\n');
++      assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 2 · files as they are · 2 file\(s\)/);
++      const since = ok(['review', 'show', 'CR-1', '--round', '2', '--against', '1'], root, HAKAN).stdout;
++      assert.match(since, /^\+.* changed$/m);
++      assert.doesNotMatch(since, /b\.txt/);
++      // A file gone since isn't kept
++      fs.rmSync(path.join(root, 'b.txt'));
++      assert.equal(ok(['review', 'round', 'CR-1', '--file', 'a.txt'], root, AGENT).stdout, 'CR-1: round 3\n');
++      assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 3 · files as they are · 1 file\(s\)/);
++    } finally {
++      removeDir(root);
++    }
++  });
++
+   test('a draft of files as they are, with a summary: nothing in review yet; show prints its header and rounds', () => {
+     const root = project();
+     try {

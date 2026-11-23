@@ -1,0 +1,654 @@
+diff --git a/crates/atm-cli/src/commands/review.rs b/crates/atm-cli/src/commands/review.rs
+index f629338b..e97210ff 100644
+--- a/crates/atm-cli/src/commands/review.rs
++++ b/crates/atm-cli/src/commands/review.rs
+@@ -727,6 +727,18 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+                 }
+                 found.push(f);
+             }
++            // Whatever the filter (ATM-617): a review atm can't read is listed as such, never left out without a word.
++            // With --json, on stderr: the list stays the array older readers expect
++            let unreadable: Vec<String> = store
++                .unreadable()?
++                .iter()
++                .map(|u| {
++                    format!(
++                        "{} ({}): can't be read: {}. A newer atm may have written it.",
++                        u.reference, u.folder, u.problem
++                    )
++                })
++                .collect();
+             if ctx.json {
+                 print_json(&Value::Array(
+                     found
+@@ -734,9 +746,13 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+                         .map(|f| json!({ "review": as_json!(&f.header), "branch": f.branch }))
+                         .collect(),
+                 ));
+-            } else if found.is_empty() {
+-                println!("No reviews.");
++                for line in &unreadable {
++                    eprintln!("atm: {line}");
++                }
+             } else {
++                if found.is_empty() {
++                    println!("No reviews.");
++                }
+                 for f in &found {
+                     let branch = f
+                         .branch
+@@ -744,6 +760,9 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+                         .map_or_else(String::new, |b| format!(" · {b}"));
+                     println!("{}{branch}", summary_line(&f.header));
+                 }
++                for line in &unreadable {
++                    println!("{line}");
++                }
+             }
+         }
+         ReviewCommand::Show {
+diff --git a/crates/atm-lib/src/review_pages.rs b/crates/atm-lib/src/review_pages.rs
+index ff5f5b1f..8d21ee06 100644
+--- a/crates/atm-lib/src/review_pages.rs
++++ b/crates/atm-lib/src/review_pages.rs
+@@ -180,7 +180,8 @@ fn me(project: &Project) -> Actor {
+ }
+ 
+ /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
+-/// open, needs_you, waiting}], you}` (`waiting`: [`waiting_for`]'s why, or `null`).
++/// open, needs_you, waiting}], unreadable: [{folder, reference, problem}], you}` (`waiting`: [`waiting_for`]'s why,
++/// or `null`; `unreadable`: the reviews' folders atm can't read, ATM-617).
+ ///
+ /// # Errors
+ /// A status that isn't one; the project has no folder; a review that can't be read.
+@@ -226,6 +227,9 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
+     listed.sort_by(|a, b| b.0.cmp(&a.0));
+     Ok(json!({
+         "reviews": listed.into_iter().map(|(_, e)| e).collect::<Vec<_>>(),
++        // Whatever the query (ATM-617): a review atm can't read has no status or task to filter by, and left out it
++        // would only be missing
++        "unreadable": store.unreadable()?,
+         "you": me.0,
+     }))
+ }
+diff --git a/crates/atm-review/src/files.rs b/crates/atm-review/src/files.rs
+index f48e78ef..3686e0c5 100644
+--- a/crates/atm-review/src/files.rs
++++ b/crates/atm-review/src/files.rs
+@@ -48,7 +48,11 @@ pub mod review_md {
+         Status::EVERY
+             .into_iter()
+             .find(|s| s.name() == name)
+-            .ok_or_else(|| Error::Invalid(format!("review.md's header can't be read: no status {name}")))
++            .ok_or_else(|| {
++                Error::Invalid(format!(
++                    "review.md's header can't be read: no status {name}"
++                ))
++            })
+     }
+ 
+     fn date(text: &str, what: &str) -> Result<Datetime> {
+@@ -681,7 +685,10 @@ written at the margin by hand
+             let mut h = header();
+             h.status = status;
+             let text = review_md::write(&h, "").unwrap();
+-            assert!(text.contains(&format!("status = \"{}\"\n", status.name())), "{text}");
++            assert!(
++                text.contains(&format!("status = \"{}\"\n", status.name())),
++                "{text}"
++            );
+             assert_eq!(review_md::read(&text).unwrap().0.status, status);
+         }
+     }
+diff --git a/crates/atm-review/src/folder.rs b/crates/atm-review/src/folder.rs
+index b239b4eb..c30b24e4 100644
+--- a/crates/atm-review/src/folder.rs
++++ b/crates/atm-review/src/folder.rs
+@@ -47,6 +47,17 @@ struct Held {
+     comments: CommentsFile,
+ }
+ 
++/// A review's folder atm can't read (ATM-617): listed as such, never left out without a word.
++#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
++pub struct Unreadable {
++    /// The folder's name (`CR-13-3b8e`).
++    pub folder: String,
++    /// The review it is, by its folder's number (`CR-13`).
++    pub reference: String,
++    /// Why it can't be read.
++    pub problem: String,
++}
++
+ /// A project's reviews in its task folder.
+ #[derive(Debug, Clone)]
+ pub struct FileStore {
+@@ -208,20 +219,23 @@ impl FileStore {
+         })
+     }
+ 
+-    /// Every review, with its reference given, and what couldn't be read (a line each).
+-    fn read_all(&self) -> Result<(Vec<Held>, Vec<String>)> {
++    /// Every review, with its reference given, what couldn't be read (a line each), and the reviews that couldn't.
++    fn read_all(&self) -> Result<(Vec<Held>, Vec<String>, Vec<Unreadable>)> {
+         let mut held = Vec::new();
+         let mut problems = Vec::new();
++        let mut unreadable = Vec::new();
+         let entries = match std::fs::read_dir(&self.reviews_dir) {
+             Ok(entries) => entries,
+-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((held, problems)),
++            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
++                return Ok((held, problems, unreadable));
++            }
+             Err(e) => return Err(io(&self.reviews_dir)(e)),
+         };
+         for entry in entries.flatten() {
+             let name = entry.file_name().to_string_lossy().into_owned();
+-            if folder_number(&name).is_none() {
++            let Some(number) = folder_number(&name) else {
+                 continue;
+-            }
++            };
+             match Self::read_review(&entry.path()) {
+                 Ok(review) => {
+                     problems.extend(
+@@ -233,11 +247,27 @@ impl FileStore {
+                     );
+                     held.push(review);
+                 }
+-                Err(e) => problems.push(format!("{name}: {e}")),
++                Err(e) => {
++                    problems.push(format!("{name}: {e}"));
++                    unreadable.push(Unreadable {
++                        folder: name,
++                        reference: format!("CR-{number}"),
++                        problem: e.to_string(),
++                    });
++                }
+             }
+         }
+         number_references(&mut held);
+-        Ok((held, problems))
++        unreadable.sort_by(|a, b| a.folder.cmp(&b.folder));
++        Ok((held, problems, unreadable))
++    }
++
++    /// The reviews' folders atm can't read, by folder (ATM-617: `atm review list` and the Reviews tab list them).
++    ///
++    /// # Errors
++    /// The reviews' folder can't be read.
++    pub fn unreadable(&self) -> Result<Vec<Unreadable>> {
++        Ok(self.read_all()?.2)
+     }
+ 
+     /// What the reviews' files hold that atm can't read: for `atm doctor`.
+@@ -291,7 +321,7 @@ impl FileStore {
+ 
+     /// The review a reference names, as the folder holds it.
+     fn find(&self, reference: &ReviewRef) -> Result<Held> {
+-        let (held, _) = self.read_all()?;
++        let (held, ..) = self.read_all()?;
+         if let Some(found) = held.iter().find(|h| {
+             h.review.header.reference == *reference || h.review.header.id.0 == reference.0
+         }) {
+@@ -382,7 +412,7 @@ impl FileStore {
+ 
+ impl ReviewStore for FileStore {
+     fn list_reviews(&self, filter: &ReviewFilter) -> Result<Vec<ReviewHeader>> {
+-        let (held, _) = self.read_all()?;
++        let (held, ..) = self.read_all()?;
+         let mut headers: Vec<ReviewHeader> = held
+             .into_iter()
+             .map(|h| h.review.header)
+@@ -953,6 +983,48 @@ mod tests {
+         assert!(problems[0].starts_with("CR-2-abcd: "), "{problems:?}");
+     }
+ 
++    #[test]
++    fn a_review_atm_cant_read_is_kept_with_its_folder_its_reference_and_why() {
++        let dir = TestDir::new();
++        let task_dir = dir.path().join(".agentic-task-manager");
++        plant(&task_dir, 1, "Fine", "2026-11-17T03:00:00Z");
++        // A status a newer atm wrote, and a review.md that isn't one
++        let newer = plant(&task_dir, 13, "Newer", "2026-11-17T03:00:00Z");
++        let newer_md = task_dir
++            .join("reviews")
++            .join(folder_name(13, &newer.id))
++            .join("review.md");
++        let text = std::fs::read_to_string(&newer_md).unwrap();
++        assert_eq!(text.matches("open").count(), 1, "{text}");
++        std::fs::write(&newer_md, text.replace("open", "frozen")).unwrap();
++        let broken = task_dir.join("reviews/CR-14-abcd");
++        std::fs::create_dir_all(&broken).unwrap();
++        std::fs::write(broken.join("review.md"), "no header").unwrap();
++        let store = FileStore::open(&task_dir).unwrap();
++        let unreadable = store.unreadable().unwrap();
++        let named: Vec<(&str, &str)> = unreadable
++            .iter()
++            .map(|u| (u.folder.as_str(), u.reference.as_str()))
++            .collect();
++        assert_eq!(
++            named,
++            [
++                (folder_name(13, &newer.id).as_str(), "CR-13"),
++                ("CR-14-abcd", "CR-14")
++            ]
++        );
++        assert!(unreadable[0].problem.contains("frozen"), "{unreadable:?}");
++        assert_ne!(unreadable[1].problem, "");
++        // The readable one is still listed; a store with none unreadable has none
++        assert_eq!(
++            store.list_reviews(&ReviewFilter::default()).unwrap().len(),
++            1
++        );
++        let empty = TestDir::new();
++        let none = FileStore::open(&empty.path().join(".agentic-task-manager")).unwrap();
++        assert_eq!(none.unreadable().unwrap(), Vec::new());
++    }
++
+     #[test]
+     fn a_review_folder_without_review_md_or_with_a_bad_round_is_reported() {
+         let dir = TestDir::new();
+diff --git a/dashboard/src/lib/details/ReviewLink.svelte b/dashboard/src/lib/details/ReviewLink.svelte
+index ca71b4d4..dbb5cf1d 100644
+--- a/dashboard/src/lib/details/ReviewLink.svelte
++++ b/dashboard/src/lib/details/ReviewLink.svelte
+@@ -6,7 +6,7 @@
+   import { inApp } from '../api/http';
+   import { reviewPageOf } from '../address';
+   import { currentAddress, navigate } from '../navigation';
+-  import { knownStatus } from '../reviews/known.svelte';
++  import { knownStatus, knownUnreadable } from '../reviews/known.svelte';
+   import { STATUS_LABELS } from '../reviews/types';
+   import { dashboard } from '../state.svelte';
+   import { tabActions, wantsNewTab } from '../tab-actions';
+@@ -23,6 +23,8 @@
+   let { project, reference, prominent = false }: Props = $props();
+ 
+   const status = $derived(knownStatus(project, reference));
++  // A review atm can't read (ATM-617) says so, wherever its link is
++  const unreadable = $derived(knownUnreadable(project, reference));
+   const waiting = $derived(
+     dashboard.projects
+       .find((p) => p.id === project)
+@@ -49,7 +51,8 @@
+   onauxclick={open}
+   title="Open {reference}'s page"
+   ><Icon name="message-square" size={prominent ? 14 : 12} /><span class="review-link-ref">{reference}</span
+-  >{#if prominent && status}<span class="review-link-status" data-status={status}>{STATUS_LABELS[status]}</span
++  >{#if unreadable}<span class="review-link-unreadable" title={unreadable}>can't be read</span
++    >{:else if prominent && status}<span class="review-link-status" data-status={status}>{STATUS_LABELS[status]}</span
+     >{/if}{#if waiting}<span class="review-link-needs">needs you</span>{/if}</a
+ >
+ 
+@@ -82,6 +85,13 @@
+   .review-link-status::before {
+     content: '· ';
+   }
++  .review-link-unreadable {
++    color: var(--red);
++    font-weight: 400;
++  }
++  .review-link-unreadable::before {
++    content: '· ';
++  }
+   .review-link-needs {
+     color: var(--purple);
+     font-weight: 600;
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index 404924ae..2edfe827 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -8,6 +8,7 @@
+     type ReviewEntry,
+     type ReviewStatus,
+     type StatusFilter,
++    type UnreadableReview,
+   } from './types';
+ 
+   // The reviews page (docs/code-review-design.md §3.11, ATM-574): a project's reviews, the latest activity first,
+@@ -26,6 +27,7 @@
+     onlive,
+     taskHref,
+     taskLinks,
++    unreadable = [],
+   }: {
+     entries: ReviewEntry[];
+     query: Query;
+@@ -41,6 +43,8 @@
+      * click does: its details here, or with ⌘, Ctrl or a middle click a tab of its own); without them, keys as text */
+     taskHref?: (key: string) => string;
+     taskLinks?: TaskLinks;
++    /** The reviews atm can't read (ATM-617): rows of their own, with why, after the others and whatever the query */
++    unreadable?: UnreadableReview[];
+   } = $props();
+ 
+   function openTask(e: MouseEvent, key: string) {
+@@ -209,7 +213,7 @@
+ 
+   {#if problem}
+     <p class="review-problem" role="alert">{problem}</p>
+-  {:else if !entries.length}
++  {:else if !entries.length && !unreadable.length}
+     <p class="review-empty">
+       {loading
+         ? 'Loading…'
+@@ -257,6 +261,16 @@
+           </span>
+         </li>
+       {/each}
++      {#each unreadable as u (u.folder)}
++        <li class="review-row review-unreadable" data-unreadable={u.reference}>
++          <span class="review-ref">{u.reference}</span>
++          <span class="review-status status-unreadable">Can't be read</span>
++          <span class="review-meta">
++            <span class="review-unreadable-why" title={u.folder}>{u.problem}</span>
++            <span>A newer atm may have written it.</span>
++          </span>
++        </li>
++      {/each}
+     </ul>
+   {/if}
+ </div>
+@@ -459,6 +473,13 @@
+     border-color: color-mix(in srgb, var(--red) 50%, transparent);
+     background: color-mix(in srgb, var(--red) 10%, transparent);
+   }
++  .review-status.status-unreadable {
++    color: var(--red);
++    border-color: color-mix(in srgb, var(--red) 50%, transparent);
++  }
++  .review-unreadable-why {
++    color: var(--red);
++  }
+   .review-status.status-waiting,
+   .review-status.status-live {
+     color: var(--accent);
+diff --git a/dashboard/src/lib/reviews/known.svelte.ts b/dashboard/src/lib/reviews/known.svelte.ts
+index b15f6ae9..bbcb7b47 100644
+--- a/dashboard/src/lib/reviews/known.svelte.ts
++++ b/dashboard/src/lib/reviews/known.svelte.ts
+@@ -18,3 +18,20 @@ export function learnReviews(project: string, reviews: readonly { reference: str
+   for (const r of reviews)
+     if (known[key(project, r.reference)] !== r.status) known[key(project, r.reference)] = r.status;
+ }
++
++// The reviews the Reviews tab listed as unreadable (ATM-617), by project and reference, with why: a task's link to one
++// says it can't be read rather than show no status
++const unreadable = $state<Record<string, string>>({});
++
++/** Why `reference` in `project` can't be read, if the page listed it so */
++export function knownUnreadable(project: string, reference: string): string | null {
++  return unreadable[key(project, reference)] ?? null;
++}
++
++/** The reviews of `project` the list just said can't be read: every other one of the project's is readable again */
++export function learnUnreadable(project: string, reviews: readonly { reference: string; problem: string }[]): void {
++  const prefix = key(project, '');
++  const now: Record<string, string> = Object.fromEntries(reviews.map((r) => [key(project, r.reference), r.problem]));
++  for (const k of Object.keys(unreadable)) if (k.startsWith(prefix) && !(k in now)) delete unreadable[k];
++  for (const [k, problem] of Object.entries(now)) if (unreadable[k] !== problem) unreadable[k] = problem;
++}
+diff --git a/dashboard/src/lib/reviews/types.ts b/dashboard/src/lib/reviews/types.ts
+index 2f2b23c8..b92c7ecf 100644
+--- a/dashboard/src/lib/reviews/types.ts
++++ b/dashboard/src/lib/reviews/types.ts
+@@ -70,8 +70,17 @@ export interface ReviewEntry {
+   waiting?: 'review' | 'answered' | null;
+ }
+ 
++/** A review's folder atm can't read (ATM-617): a status a newer atm wrote, a broken header */
++export interface UnreadableReview {
++  folder: string;
++  reference: string;
++  problem: string;
++}
++
+ export interface ReviewList {
+   reviews: ReviewEntry[];
++  /** Optional, for an older atm's lists */
++  unreadable?: UnreadableReview[];
+   you: string;
+ }
+ 
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index c6ad2e18..36575b1c 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -25,11 +25,18 @@
+   } from '../review-data';
+   import { keepFilter, keptFilter } from '../review-filter';
+   import type { TaskLinks } from '../compmd';
+-  import { learnReviews } from '../reviews/known.svelte';
++  import { learnReviews, learnUnreadable } from '../reviews/known.svelte';
+   import ReviewList from '../reviews/ReviewList.svelte';
+   import ReviewPage from '../reviews/ReviewPage.svelte';
+   import { reviewTitle } from '../reviews/page';
+-  import { NO_QUERY, type ListQuery, type ReviewEntry, type ReviewPageData, type ViewFile } from '../reviews/types';
++  import {
++    NO_QUERY,
++    type ListQuery,
++    type ReviewEntry,
++    type ReviewPageData,
++    type UnreadableReview,
++    type ViewFile,
++  } from '../reviews/types';
+   import { reviewWindow } from '../reviews/window.svelte';
+   import { withTask } from '../routes';
+   import { tabActions } from '../tab-actions';
+@@ -61,6 +68,8 @@
+     if (project) keepFilter(project, next);
+   }
+   let entries = $state.raw<ReviewEntry[]>([]);
++  // The reviews atm can't read (ATM-617), listed after them
++  let unreadable = $state.raw<UnreadableReview[]>([]);
+   // The review shown
+   let shown = $state.raw<ReviewPageData | null>(null);
+   let loading = $state(false);
+@@ -95,10 +104,11 @@
+           id,
+           listed.reviews.map((e) => e.review),
+         );
+-        const text = JSON.stringify(listed.reviews);
++        learnUnreadable(id, listed.unreadable ?? []);
++        const text = JSON.stringify([listed.reviews, listed.unreadable]);
+         if (ask === asked && text !== entriesText) {
+           entriesText = text;
+-          entries = listed.reviews;
++          [entries, unreadable] = [listed.reviews, listed.unreadable ?? []];
+         }
+       }
+       if (ask === asked) problem = null;
+@@ -288,6 +298,7 @@
+   {:else}
+     <ReviewList
+       {entries}
++      {unreadable}
+       {query}
+       {loading}
+       {problem}
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index bd28e504..1d5879a5 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -216,6 +216,23 @@ test.describe('the reviews tab', () => {
+     await expect(tab).toHaveAccessibleName('Reviews');
+   });
+ 
++  // ATM-617: CR-13 written by a newer atm, with a status this one doesn't know: a row saying so, not a missing review
++  test('a review atm can’t read is a row of its own, saying why, after the others', async ({ page, tasksServer }) => {
++    await openReviews(page, tasksServer);
++    tasksServer.setReviews({
++      reviews: [{ review: header(2), branch: null, chains: 0, open: 0, needs_you: false }],
++      unreadable: [{ folder: 'CR-13-3b8e', reference: 'CR-13', problem: 'no status frozen' }],
++      you: 'Ana',
++    });
++    await page.reload();
++    const rows = page.locator('.review-row');
++    await expect(rows).toHaveCount(2);
++    const unreadable = rows.nth(1);
++    await expect(unreadable).toHaveAttribute('data-unreadable', 'CR-13');
++    await expect(unreadable).toHaveText("CR-13 Can't be read no status frozen A newer atm may have written it.");
++    await expect(unreadable.getByRole('link')).toHaveCount(0);
++  });
++
+   test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/DetailPanel.component.test.ts b/dashboard/tests/unit/DetailPanel.component.test.ts
+index 5776b637..18361bdc 100644
+--- a/dashboard/tests/unit/DetailPanel.component.test.ts
++++ b/dashboard/tests/unit/DetailPanel.component.test.ts
+@@ -420,6 +420,24 @@ describe('DetailPanel', () => {
+       expect(latest().querySelector('.review-link-needs')).toHaveTextContent('needs you');
+       dashboard.projects = [];
+     });
++
++    // ATM-617: a review the list said atm can't read says so in the details, with why, until a list says otherwise
++    it('a review atm can’t read says so, with why, instead of its status; readable again, its status', async () => {
++      const { learnReviews, learnUnreadable } = await import('../../src/lib/reviews/known.svelte');
++      learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
++      const container = open({ status: 'in_review', code_reviews: reviews });
++      const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
++      learnUnreadable('p1', [{ reference: 'CR-7', problem: 'no status frozen' }]);
++      learnUnreadable('p2', [{ reference: 'CR-3', problem: 'another project’s' }]);
++      flushSync();
++      expect(latest().textContent).toBe("CR-7can't be read");
++      expect(latest().querySelector('.review-link-unreadable')).toHaveAttribute('title', 'no status frozen');
++      expect(container.querySelector('[data-review="CR-3"] .review-link-unreadable')).toBeNull();
++      learnUnreadable('p1', []);
++      flushSync();
++      expect(latest().textContent).toBe('CR-7Waiting for review');
++      learnUnreadable('p2', []);
++    });
+   });
+ 
+   it('a plain description is one paragraph, as before', async () => {
+diff --git a/dashboard/tests/unit/ReviewList.component.test.ts b/dashboard/tests/unit/ReviewList.component.test.ts
+index c1b1d541..f8198122 100644
+--- a/dashboard/tests/unit/ReviewList.component.test.ts
++++ b/dashboard/tests/unit/ReviewList.component.test.ts
+@@ -196,6 +196,26 @@ describe('ReviewList', () => {
+     expect(onquery).toHaveBeenCalledWith(NO_QUERY);
+   });
+ 
++  // ATM-617: a review atm can't read is a row of its own, with why and no link, after the others; alone, it is no
++  // empty list
++  it('lists a review atm can’t read as a row of its own, after the others: its reference, why, no link', () => {
++    const unreadable = [{ folder: 'CR-13-3b8e', reference: 'CR-13', problem: 'no status frozen' }];
++    const { container, unmount } = show([entry(2, 'waiting')], { ...NO_QUERY }, { unreadable });
++    const rows = [...container.querySelectorAll('.review-row')];
++    expect(rows.map((r) => r.getAttribute('data-review') ?? r.getAttribute('data-unreadable'))).toEqual([
++      'CR-2',
++      'CR-13',
++    ]);
++    const row = within(rows[1] as HTMLElement);
++    expect(row.getByText("Can't be read")).toBeTruthy();
++    expect(row.getByText('no status frozen')).toHaveAttribute('title', 'CR-13-3b8e');
++    expect(row.queryByRole('link')).toBeNull();
++    unmount();
++    show([], { ...NO_QUERY, q: 'x' }, { unreadable });
++    expect(screen.queryByText('No review fits.')).toBeNull();
++    expect(screen.getByText('CR-13')).toBeTruthy();
++  });
++
+   it('says why it is empty: loading, nothing fits, no reviews yet; or the problem', () => {
+     const { unmount } = show([], { ...NO_QUERY }, { loading: true });
+     expect(screen.getByText('Loading…')).toBeTruthy();
+diff --git a/docs/agent/reviews.md b/docs/agent/reviews.md
+index 54a2ee9e..1ee55e14 100644
+--- a/docs/agent/reviews.md
++++ b/docs/agent/reviews.md
+@@ -17,7 +17,10 @@
+   (`atm review list --status open`: draft, waiting, live or changes_requested).
+ - **Reading it:** `atm review show CR-7` (the header, rounds and counts), `atm review comments CR-7 [--open]` (every
+   chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (a round's diff, or what changed
+-  since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`.
++  since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`. A review
++  atm can't read (a status a newer atm wrote, a broken header) is listed after the others as *can't be read*, with
++  why, whatever the filter (on stderr with `--json`, whose list stays the reviews it can read): don't edit its files
++  to make it readable, say so to the user (`atm doctor` reports it too).
+ - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
+   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
+   tasks back in review; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 2be00c21..217d3b33 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -254,7 +254,9 @@ old parameters from its hash and moves to the new address.
+ - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
+   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
+   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
+-  needs_you, waiting}], you}`. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
++  needs_you, waiting}], unreadable: [{folder, reference, problem}], you}`. `unreadable` (ATM-617) lists the project's
++  review folders atm can't read (a status a newer atm wrote, a broken header), whatever the query: the Reviews tab
++  shows each as a row saying why. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
+   the status waiting on the reviewers (`open` before 0.41.0). A review needs the user when it is waiting or live with
+   them a reviewer (anyone but its
+   author when it names none), or sent back with them its author. `waiting` (ATM-606): `"review"` when it needs them,
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index 9efbb2f6..9b87af0d 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -190,6 +190,36 @@ describe('atm review', () => {
+     }
+   });
+ 
++  test('a review atm can’t read is listed as such beside the others, never left out without a word (ATM-617)', () => {
++    const root = project();
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['review', 'create', '--title', 'Fine', '--task', 'T-1', '--uncommitted'], root, AGENT);
++      ok(['review', 'create', '--title', 'Newer', '--task', 'T-2', '--uncommitted'], root, AGENT);
++      const reviews = path.join(root, '.agentic-task-manager', 'reviews');
++      const folder = fs.readdirSync(reviews).find((name) => name.startsWith('CR-2-'));
++      const file = path.join(reviews, folder, 'review.md');
++      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('open', 'frozen'));
++      const listed = ok(['review', 'list'], root, HAKAN).stdout;
++      assert.match(listed, /CR-1 .*Fine/);
++      assert.match(
++        listed,
++        new RegExp(`CR-2 \\(${folder}\\): can't be read: .*frozen.*A newer atm may have written it`),
++      );
++      // With --json the list is still the array of what can be read, and stderr names the other
++      const json = ok(['review', 'list', '--json'], root, HAKAN);
++      assert.deepEqual(
++        json.json().map((f) => f.review.reference),
++        ['CR-1'],
++      );
++      assert.match(json.stderr, new RegExp(`atm: CR-2 \\(${folder}\\): can't be read`));
++      // Whatever the filter: it has no status to filter by
++      assert.match(ok(['review', 'list', '--status', 'closed'], root, HAKAN).stdout, /No reviews\.\nCR-2 /);
++    } finally {
++      removeDir(root);
++    }
++  });
++
+   test('an approved live review covers its task’s done until its change moves', () => {
+     const root = project();
+     try {
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index 7b8bc16e..35046a4d 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -1271,6 +1271,21 @@ describe('serve', () => {
+     assert.match(served.headers.get('content-type'), /text\/html/);
+     // Reading changed nothing: no new round, no comment
+     assert.deepEqual(JSON.parse(atm(['review', 'comments', 'CR-1', '--json'], root).stdout).length, 1);
++    // A review atm can't read (ATM-617: a newer atm's, a broken header) is listed as such, whatever the query
++    assert.deepEqual(list.unreadable, []);
++    const broken = path.join(root, '.agentic-task-manager', 'reviews', 'CR-3-abcd');
++    fs.mkdirSync(broken);
++    fs.writeFileSync(path.join(broken, 'review.md'), 'no header\n');
++    for (const query of ['', '?status=approved']) {
++      [status, list] = await get(`${reviews}${query}`);
++      assert.equal(status, 200, JSON.stringify(list));
++      assert.deepEqual(
++        list.unreadable.map((u) => [u.folder, u.reference]),
++        [['CR-3-abcd', 'CR-3']],
++        query,
++      );
++      assert.ok(list.unreadable[0].problem, JSON.stringify(list.unreadable));
++    }
+     atm(['service', 'stop'], root);
+   });
+ 

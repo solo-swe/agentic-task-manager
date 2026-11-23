@@ -1,0 +1,37 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "910c0154de25cd4de77f7c309a3031a8c69da224",
+    "head": "dc14c353d1464b5c942cbe480caea9c11f0e1a58"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/context-menus.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/ui/AppContextMenu.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/context-menus.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/tabs-and-navigation-design.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-23T00:44:17Z"
+}

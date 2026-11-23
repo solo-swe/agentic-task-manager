@@ -1,0 +1,171 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 55b73993..d4dc3f32 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -155,7 +155,9 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain
+   few dozen differing pixels pass (anti-aliasing), a real change doesn't.
+ - A test that waits in real time is a slow test: the tests reduce motion (`reducedMotion`), so scrolls and fits are
+   instant, and a timer is skipped with `page.clock` (`cards.spec.ts`). More workers than Playwright's default don't
+-  help here (the machine is saturated at 5) and break the timing budgets. Traces are recorded only on CI's retry;
++  help here (the machine is saturated at 5) and break the timing budgets. A test measured against a budget is tagged
++  `@timed` (`test.describe('…', { tag: '@timed' }, …)`): it runs in the `timed` project, once every other test has
++  passed, so no heavy test shares the machine with it (`playwright.config.ts`, ATM-641). Traces are recorded only on CI's retry;
+   locally, `--trace on` while looking into a failure.
+ 
+ ## CI
+diff --git a/dashboard/playwright.config.ts b/dashboard/playwright.config.ts
+index 9defa739..93b37b4f 100644
+--- a/dashboard/playwright.config.ts
++++ b/dashboard/playwright.config.ts
+@@ -34,8 +34,32 @@ export default defineConfig({
+     // `pnpm exec playwright test <spec> --trace on` records them while looking into a failure
+     trace: 'on-first-retry',
+   },
+-  // The dashboard at its pages' paths, as atm serve serves it (T-429)
+-  projects: [{ name: 'svelte', use: { baseURL: `http://localhost:${PORT}/` } }],
++  // The dashboard at its pages' paths, as atm serve serves it (T-429), in three projects, one after the other (ATM-641):
++  // the tests that measure time against a budget (tagged @timed) must not share the machine with heavy ones, which made
++  // them miss it (the long review's settle, 104 to 110 ms for 100, beside a review of 5,000 lines and a WebKit page
++  // busy for seconds; alone, 26 to 61).
++  // - `svelte`: every other test;
++  // - `timed`: the @timed tests, once `svelte` is done;
++  // - `measure`: a real review measured in Chromium and WebKit (real-review.spec.ts), last; it runs only when given a
++  //   review (a developer's real-review.local.json, or the environment).
++  // A project runs only once the one before it passed: with a functional test failing, the timed ones wait for its fix.
++  // One project alone: `pnpm exec playwright test --project timed --no-deps`
++  projects: [
++    {
++      name: 'svelte',
++      testIgnore: /real-review\.spec\.ts/,
++      grepInvert: /@timed/,
++      use: { baseURL: `http://localhost:${PORT}/` },
++    },
++    {
++      name: 'timed',
++      testIgnore: /real-review\.spec\.ts/,
++      grep: /@timed/,
++      dependencies: ['svelte'],
++      use: { baseURL: `http://localhost:${PORT}/` },
++    },
++    { name: 'measure', testMatch: /real-review\.spec\.ts/, dependencies: ['timed'] },
++  ],
+   webServer: {
+     command: 'node tests/e2e/serve.mjs',
+     url: `http://localhost:${PORT}/`,
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 9868bac1..37e1da51 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -652,11 +652,12 @@ export class DashboardState {
+     }
+     if (route.page !== 'project' || !this.loaded) return;
+     this.tab = viewOf(address);
+-    // Back past a task's details closes them, Forward opens them again
++    // Back past a task's details closes them, Forward opens them again. A link to the task already open, written
++    // another way (`~ATM-10`, `atm-10`, an alias), still puts its key in the address
+     if (!this.peeking) {
+       const task = taskOf(address);
+       if (task === null) this.detailOpen = false;
+-      else if (!this.detailOpen || this.detailId !== this.findTask(task)?.id) this.openAddressed(task);
++      else this.openAddressed(task);
+     }
+     // Back, or a link to another sprint of the project shown (T-323)
+     const linked = this.#sprintParam === 'pending' ? null : sprintParamOf(address, this.sprints);
+@@ -943,8 +944,10 @@ export class DashboardState {
+   private openAddressed(ref: string) {
+     const task = this.openDetail(ref);
+     if (!task || this.peeking || this.route.page !== 'project') return;
+-    const address = withTask(currentAddress(), taskLabel(task));
+-    if (address !== currentAddress()) navigate(address, { replace: true });
++    // Only when the address names it otherwise; in place, keeping the entry's own state (the document viewer's depth,
++    // which its Back goes by)
++    if (taskOf(currentAddress()) === taskLabel(task)) return;
++    navigate(withTask(currentAddress(), taskLabel(task)), { replace: true, state: entryState() });
+   }
+ 
+   closeDetail() {
+diff --git a/dashboard/tests/e2e/performance.spec.ts b/dashboard/tests/e2e/performance.spec.ts
+index 28c825cd..056c0bb3 100644
+--- a/dashboard/tests/e2e/performance.spec.ts
++++ b/dashboard/tests/e2e/performance.spec.ts
+@@ -3,7 +3,8 @@ import { expect, loadFixture, openDashboard, test } from './helpers';
+ 
+ // NFR-2: with 500 tasks, switching tabs and refreshing data render within 200 ms. Measured inside the page from the
+ // action until two animation frames later (so layout and paint are included). Shared CI runners are slower and
+-// noisier, so the budget is doubled there.
++// noisier, so the budget is doubled there. Timed (@timed): in a project of their own, after the others
++// (playwright.config.ts, ATM-641)
+ const BUDGET_MS = 200 * (process.env.CI ? 2 : 1);
+ 
+ /** Click `selector`, then wait until `done()` holds and two frames have been painted; returns elapsed ms. */
+@@ -59,7 +60,7 @@ function sinceStarted(page: Page, done: string) {
+   }, done);
+ }
+ 
+-test.describe('performance in the app: its tabs (T-525)', () => {
++test.describe('performance in the app: its tabs (T-525)', { tag: '@timed' }, () => {
+   // The large project's Kanban, List and Graph, and a small second project, in the window's tabs (T-514), as the app
+   // brings them back at its start (T-518)
+   const LARGE = 'Performance Project';
+@@ -122,7 +123,7 @@ test.describe('performance in the app: its tabs (T-525)', () => {
+   });
+ });
+ 
+-test.describe('performance with 500 tasks and a large archive', () => {
++test.describe('performance with 500 tasks and a large archive', { tag: '@timed' }, () => {
+   test.beforeEach(async ({ page, tasksServer }) => {
+     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
+     const data = loadFixture('large-500');
+@@ -152,7 +153,7 @@ test.describe('performance with 500 tasks and a large archive', () => {
+   });
+ });
+ 
+-test.describe('performance with 500 tasks', () => {
++test.describe('performance with 500 tasks', { tag: '@timed' }, () => {
+   test.beforeEach(async ({ page, tasksServer }) => {
+     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
+     await openDashboard(page, tasksServer, 'large-500');
+diff --git a/dashboard/tests/e2e/real-review.spec.ts b/dashboard/tests/e2e/real-review.spec.ts
+index 477105cf..3a4bc60b 100644
+--- a/dashboard/tests/e2e/real-review.spec.ts
++++ b/dashboard/tests/e2e/real-review.spec.ts
+@@ -10,7 +10,10 @@ import { chromium, expect, test, webkit, type Browser, type Page } from '@playwr
+ // developer's own server is untouched), in Chromium and in WebKit (the app's engine on macOS), CompMD's highlighting
+ // and rendering included. Not part of the suite: it runs only when given a project and a review,
+ //
+-//   ATM_MEASURE_PROJECT=<a project's folder> ATM_MEASURE_REVIEW=CR-1 pnpm exec playwright test real-review
++//   ATM_MEASURE_PROJECT=<a project's folder> ATM_MEASURE_REVIEW=CR-1 pnpm exec playwright test --project measure --no-deps
++//
++// In a full run it is the `measure` project, after the others (ATM-641: beside the suite's timed tests it made them
++// miss their budgets), so it never shares the machine with them.
+ //
+ // and prints what it measured (docs/review-performance.md). It imports Playwright's own `test`, not helpers.ts': the
+ // helpers' fixture plays atm serve, and this measures the real one.
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index f5859ef8..9a954f78 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1749,7 +1749,8 @@ test.describe('a live review (ATM-576)', () => {
+   });
+ });
+ 
+-test.describe('performance', () => {
++// Timed (@timed): in a project of their own, after the others (playwright.config.ts, ATM-641)
++test.describe('performance', { tag: '@timed' }, () => {
+   // As performance.spec.ts: inside the page, from the action until two frames after it is drawn
+   const BUDGET_MS = 200 * (process.env.CI ? 2 : 1);
+ 
+diff --git a/dashboard/tests/unit/state.test.ts b/dashboard/tests/unit/state.test.ts
+index 3c1f84c9..9224c6f7 100644
+--- a/dashboard/tests/unit/state.test.ts
++++ b/dashboard/tests/unit/state.test.ts
+@@ -258,6 +258,9 @@ describe('DashboardState', () => {
+         ['ATM-9', U2, 'ATM-2'],
+         [U1, U1, 'ATM-1'],
+         ['atm-2', U2, 'ATM-2'],
++        // The task already open, written another way: its key still in the address
++        ['~ATM-2', U2, 'ATM-2'],
++        ['ATM-9', U2, 'ATM-2'],
+       ]) {
+         history.replaceState(null, '', `/projects/p3/list?task=${ref}`);
+         s.onNavigate();

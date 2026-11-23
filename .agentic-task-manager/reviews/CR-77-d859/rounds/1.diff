@@ -1,0 +1,441 @@
+diff --git a/dashboard/src/App.svelte b/dashboard/src/App.svelte
+index 040686f1..1ced996a 100644
+--- a/dashboard/src/App.svelte
++++ b/dashboard/src/App.svelte
+@@ -23,6 +23,7 @@
+   import AppTitleBar from './lib/shell/AppTitleBar.svelte';
+   import ReviewsTab from './lib/shell/ReviewsTab.svelte';
+   import { reviewWindow } from './lib/reviews/window.svelte';
++  import SettingsMenu from './lib/shell/SettingsMenu.svelte';
+ 
+   // A project's address naming a review (/projects/<id>/reviews/CR-7) shows that review alone, over the whole window
+   const reviewing = $derived(dashboard.route.page === 'project' && !!reviewOf(addressOf(page.url)).review);
+@@ -48,7 +49,7 @@
+     return () => query.removeEventListener('change', onChange);
+   });
+ 
+-  $effect(() => applyAppearance(document.documentElement, dashboard.theme, dashboard.mode));
++  $effect(() => applyAppearance(document.documentElement, dashboard.theme, dashboard.mode, dashboard.docSize));
+ 
+   // Remember the view per project (FR-5): every change to filters, tab, panel or board options is saved
+   $effect(() => dashboard.saveView());
+@@ -56,11 +57,14 @@
+   $effect(() => dashboard.syncSprintParam());
+ </script>
+ 
++<!-- A review's tab, at the title bar's right end: the ⋯ settings, as every tab has (ATM-691) -->
++{#snippet reviewEnd()}<SettingsMenu />{/snippet}
++
+ <UpdateNotice />
+ {#if reviewing && inApp}
+   <!-- A review's page in the app (ATM-574): a tab of its own, under the window's sidebar and title bar as every tab -->
+   <Sidebar />
+-  <AppTitleBar title={reviewWindow.title || dashboard.projectName} />
++  <AppTitleBar title={reviewWindow.title || dashboard.projectName} end={reviewEnd} />
+   <main class="review-tab-main" id="app-main"><ReviewsTab /></main>
+ {:else if reviewing}
+   <!-- A review's page in the browser (ATM-574): the whole window -->
+diff --git a/dashboard/src/lib/appearance.ts b/dashboard/src/lib/appearance.ts
+index fd3f5563..04737d5d 100644
+--- a/dashboard/src/lib/appearance.ts
++++ b/dashboard/src/lib/appearance.ts
+@@ -44,11 +44,28 @@ export function knownDocStyle(id: unknown): DocStyle {
+   return DOC_STYLES.find((s) => s.id === id)?.id ?? DEFAULT_DOC_STYLE;
+ }
+ 
++/** How large a Markdown document's text is (ATM-691), in the document viewer and a review's rendered sides: a scale of
++ * its document style's own size (themes/doc-styles.css reads it from <html>'s data-doc-size) */
++export const DOC_SIZES = [
++  { id: 'tiny', name: 'Tiny', scale: 0.8 },
++  { id: 'small', name: 'Small', scale: 0.9 },
++  { id: 'medium', name: 'Medium', scale: 1 },
++  { id: 'large', name: 'Large', scale: 1.15 },
++  { id: 'huge', name: 'Huge', scale: 1.3 },
++] as const;
++export type DocSize = (typeof DOC_SIZES)[number]['id'];
++export const DEFAULT_DOC_SIZE: DocSize = 'medium';
++
++export function knownDocSize(id: unknown): DocSize {
++  return DOC_SIZES.find((s) => s.id === id)?.id ?? DEFAULT_DOC_SIZE;
++}
++
+ export function resolveMode(pref: ModePref, systemPrefersLight: boolean): Mode {
+   return pref === 'system' ? (systemPrefersLight ? 'light' : 'dark') : pref;
+ }
+ 
+-export function applyAppearance(root: HTMLElement, theme: string, mode: Mode) {
++export function applyAppearance(root: HTMLElement, theme: string, mode: Mode, docSize: DocSize = DEFAULT_DOC_SIZE) {
+   root.dataset.theme = theme;
+   root.dataset.mode = mode;
++  root.dataset.docSize = docSize;
+ }
+diff --git a/dashboard/src/lib/prefs.ts b/dashboard/src/lib/prefs.ts
+index 5fd3f060..b0b0afc4 100644
+--- a/dashboard/src/lib/prefs.ts
++++ b/dashboard/src/lib/prefs.ts
+@@ -19,6 +19,8 @@ export interface Prefs {
+   theme: string;
+   /** How the document viewer's page looks: a document style id (see appearance.ts DOC_STYLES) */
+   docStyle: string;
++  /** How large a document's text is: a size id (see appearance.ts DOC_SIZES) */
++  docSize: string;
+   /** The overview shows only active projects (lib/projects.ts) */
+   overviewActiveOnly: boolean;
+   /** The overview's tab: 'projects' or 'board' (lib/routes.ts) */
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 75ec3284..1e8bf126 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -850,7 +850,7 @@
+               <button
+                 aria-pressed={rendered === 'rendered'}
+                 aria-label="Rendered"
+-                title="Rendered"
++                title="Rendered, as the document viewer shows it. Its document style and text size are in Settings (⋯)"
+                 onclick={() => (rendered = 'rendered')}><Icon name="eye" size={15} /></button
+               >
+             </div>
+diff --git a/dashboard/src/lib/shell/SettingsPanel.svelte b/dashboard/src/lib/shell/SettingsPanel.svelte
+index aa9c0200..9ee49731 100644
+--- a/dashboard/src/lib/shell/SettingsPanel.svelte
++++ b/dashboard/src/lib/shell/SettingsPanel.svelte
+@@ -1,6 +1,6 @@
+ <script lang="ts">
+   import { inApp } from '../api/http';
+-  import { DOC_STYLES, MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../appearance';
++  import { DOC_SIZES, DOC_STYLES, MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../appearance';
+   import type { IconName } from '../ui/Icon.svelte';
+   import { dashboard } from '../state.svelte';
+   import Icon from '../ui/Icon.svelte';
+@@ -99,6 +99,19 @@
+     {#each DOC_STYLES as style (style.id)}<option value={style.id}>{style.name}</option>{/each}
+   </select>
+ </div>
++<!-- How large a document's text is (ATM-691): in the viewer and a review's rendered sides -->
++<label class="menu-label" for="doc-size-select">Text size</label>
++<div class="theme-picker doc-size-picker">
++  <span class="doc-style-sample doc-size-sample" aria-hidden="true">A</span>
++  <span class="select-chevron"><Icon name="chevron-down" size={14} /></span>
++  <select
++    id="doc-size-select"
++    value={dashboard.docSize}
++    onchange={(e) => dashboard.setDocSize((e.currentTarget as HTMLSelectElement).value)}
++  >
++    {#each DOC_SIZES as size (size.id)}<option value={size.id}>{size.name}</option>{/each}
++  </select>
++</div>
+ <!-- What needs you, from the app: the count on its icon (T-518) and a notification when it goes up (T-520) -->
+ {#if inApp}
+   <div class="menu-label">What needs you</div>
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 37e1da51..1e0a66b6 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -28,9 +28,11 @@ import { getPref, setPref, storageAvailable } from './prefs';
+ import { dashboardBuild, dashboardVersion } from './release-notes';
+ import {
+   isModePref,
++  knownDocSize,
+   knownDocStyle,
+   knownTheme,
+   resolveMode,
++  type DocSize,
+   type DocStyle,
+   type Mode,
+   type ModePref,
+@@ -385,6 +387,8 @@ export class DashboardState {
+   theme = $state(knownTheme(getPref('theme', 'default')));
+   /** The document viewer's page (T-404), per browser like the theme */
+   docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', 'auto')));
++  /** The size of a document's text (ATM-691), per browser like its style */
++  docSize = $state<DocSize>(knownDocSize(getPref('docSize', 'medium')));
+   systemPrefersLight = $state(prefersLight());
+   mode = $derived<Mode>(resolveMode(this.modePref, this.systemPrefersLight));
+ 
+@@ -888,6 +892,11 @@ export class DashboardState {
+     setPref('docStyle', this.docStyle);
+   }
+ 
++  setDocSize(id: string) {
++    this.docSize = knownDocSize(id);
++    setPref('docSize', this.docSize);
++  }
++
+   setAutoRefreshSeconds(seconds: number) {
+     this.autoRefreshSeconds = seconds;
+     setPref('autoRefreshSeconds', seconds);
+diff --git a/dashboard/src/themes/doc-styles.css b/dashboard/src/themes/doc-styles.css
+index e9dbccf1..7e97eaa3 100644
+--- a/dashboard/src/themes/doc-styles.css
++++ b/dashboard/src/themes/doc-styles.css
+@@ -8,6 +8,27 @@
+    its gutter and padding (app.css); only its paper and colours change. Fonts are the system's: the page's CSP loads
+    none from elsewhere. The same page, as `.doc-sheet`, is the diff viewer's rendered side (ATM-574). */
+ 
++/* ---- The text size (ATM-691): Settings' Text size, on <html> (appearance.ts DOC_SIZES), scales a Markdown
++   document's text in every style; the theme's own page (Auto) from the size it has ---- */
++:root {
++  --doc-scale: 1;
++}
++:root[data-doc-size='tiny'] {
++  --doc-scale: 0.8;
++}
++:root[data-doc-size='small'] {
++  --doc-scale: 0.9;
++}
++:root[data-doc-size='large'] {
++  --doc-scale: 1.15;
++}
++:root[data-doc-size='huge'] {
++  --doc-scale: 1.3;
++}
++:is(.doc-viewer, .doc-sheet):not([data-doc-style]) .doc-page[data-kind='markdown'] .compmd {
++  font-size: calc(1em * var(--doc-scale));
++}
++
+ /* ---- GitHub: the README look ---- */
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] {
+   --doc-desk: #010409;
+@@ -41,7 +62,7 @@
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd {
+   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+-  font-size: 16px;
++  font-size: calc(16px * var(--doc-scale));
+   line-height: 1.5;
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd-page {
+@@ -157,7 +178,7 @@
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd {
+   font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+-  font-size: 18px;
++  font-size: calc(18px * var(--doc-scale));
+   line-height: 1.7;
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd-page {
+@@ -251,7 +272,7 @@
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd {
+   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+-  font-size: 17px;
++  font-size: calc(17px * var(--doc-scale));
+   line-height: 1.65;
+ }
+ :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd-page {
+@@ -360,6 +381,10 @@
+   border: 1px solid var(--border);
+   border-radius: 4px;
+ }
++/* Text size's sample: an "A" at the size chosen */
++.doc-size-sample {
++  font-size: calc(13px * var(--doc-scale));
++}
+ .doc-style-sample[data-doc-style='github'] {
+   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+   font-weight: 600;
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 7908b9ca..65d3e5ae 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -481,6 +481,13 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
+     // The window's own bar and sidebar toggle are there, as on every tab
+     await expect(page.locator('#app-titlebar')).toBeVisible();
++    // ATM-691 (Hakan): and the ⋯ at its right end, which opens Settings, the document's text size with them
++    await page.locator('#app-titlebar-end #settings-btn').click();
++    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
++    await page.locator('#settings-sheet #doc-size-select').selectOption('large');
++    await expect(page.locator('html')).toHaveAttribute('data-doc-size', 'large');
++    await page.keyboard.press('Escape');
++    await expect(page.locator('#settings-overlay')).not.toHaveClass(/open/);
+     // The selected tab joins the review's top bar under it, in one colour, as a project's tab joins its page (ATM-608)
+     const colours = await page.evaluate(() => {
+       const of = (selector: string) => getComputedStyle(document.querySelector(selector)!).backgroundColor;
+diff --git a/dashboard/tests/e2e/documents.spec.ts b/dashboard/tests/e2e/documents.spec.ts
+index e527a1fc..052315d4 100644
+--- a/dashboard/tests/e2e/documents.spec.ts
++++ b/dashboard/tests/e2e/documents.spec.ts
+@@ -300,6 +300,43 @@ test.describe('the document viewer', () => {
+     await expect(viewer(page)).not.toHaveAttribute('data-doc-style');
+     expect(await style('backgroundImage', '')).toContain('repeating-linear-gradient');
+   });
++
++  // ATM-691 (Hakan): a text size in Settings, Tiny to Huge, scaling the document's text in every style; kept
++  test('a text size from Settings scales the document’s text, in the theme’s page and a style’s; its numbers beside it', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openWithDocument(page, tasksServer);
++    const page_ = viewer(page).locator('.doc-page');
++    const size = () => page_.locator('.compmd').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
++    const medium = await size();
++    await openMenu(page, '#settings-btn');
++    await expect(page.locator('#doc-size-select')).toHaveValue('medium');
++    await expect(page.locator('#doc-size-select option')).toHaveText(['Tiny', 'Small', 'Medium', 'Large', 'Huge']);
++    // The theme's page: its own size, scaled
++    await page.locator('#doc-size-select').selectOption('huge');
++    await expect.poll(size).toBeCloseTo(medium * 1.3, 1);
++    await page.locator('#doc-size-select').selectOption('tiny');
++    await expect.poll(size).toBeCloseTo(medium * 0.8, 1);
++    // A style's page: the style's size, scaled; the heading with it
++    await page.locator('#doc-style-select').selectOption('github');
++    await page.locator('#doc-size-select').selectOption('large');
++    await expect.poll(size).toBeCloseTo(16 * 1.15, 1);
++    const heading = page_.locator('.compmd-page h1');
++    expect(await heading.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeCloseTo(16 * 1.15 * 2, 1);
++    // Each line's number still beside its text, at the new size: the last paragraph's, below everything that grew
++    await expect
++      .poll(async () => {
++        const number = await page_.locator('.doc-gutter-lines div:not(.blank)').last().boundingBox();
++        const text = await page_.locator('.compmd-page p', { hasText: 'One route.' }).boundingBox();
++        return number && text ? Math.abs(number.y + number.height / 2 - (text.y + text.height / 2)) : 99;
++      })
++      .toBeLessThan(4);
++    // Kept for the next page
++    await page.reload();
++    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
++    await expect(page.locator('html')).toHaveAttribute('data-doc-size', 'large');
++  });
+ });
+ 
+ // T-394: a code or text file's line numbers, #L links, images, refreshing in place, links to the dashboard
+diff --git a/dashboard/tests/e2e/refresh.spec.ts b/dashboard/tests/e2e/refresh.spec.ts
+index 3a5c6bb5..2e7bf033 100644
+--- a/dashboard/tests/e2e/refresh.spec.ts
++++ b/dashboard/tests/e2e/refresh.spec.ts
+@@ -132,6 +132,7 @@ test('the ⋯ settings menu: auto-refresh, mode and theme; closes on Escape and
+     'Mode',
+     'Theme',
+     'Document style',
++    'Text size',
+     'This project',
+   ]);
+   await expect(button).toHaveAttribute('aria-expanded', 'true');
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 70f9aff3..e3c017cd 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -718,11 +718,14 @@ test.describe('a review’s page', () => {
+             now: rows('new'),
+           };
+         });
+-      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level
++      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level,
++      // and the old side's rows placed from its taller line (they follow CompMD's layout, a moment after its text's)
+       await expect
+         .poll(async () => {
+           const s = await sides();
+-          return s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
++          const text = s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
++          const rows = s.old[1] && s.now[1] ? Math.abs(s.old[1].height - s.now[1].height) : 999;
++          return Math.max(text, rows);
+         })
+         .toBeLessThan(2);
+       const s = await sides();
+@@ -819,9 +822,16 @@ test.describe('a review’s page', () => {
+             });
+           }),
+         );
++      // Once the rows are placed: they follow CompMD's layout, which comes a moment after a switch (Wrap's rows from the
++      // wrapped text's boxes; read at once, the lines after the long one were still one visual line apart)
+       const level = async (what: string) => {
++        await expect
++          .poll(async () => {
++            const found = await offsets();
++            return found.length >= 4 && found.every((d) => Math.abs(d) <= 1);
++          })
++          .toBe(true);
+         const found = await offsets();
+-        expect(found.length, what).toBeGreaterThanOrEqual(4);
+         for (const d of found) expect(Math.abs(d), `${what}: ${JSON.stringify(found)}`).toBeLessThanOrEqual(1);
+         return found;
+       };
+@@ -1479,6 +1489,11 @@ test.describe('the diff viewer on a review’s page', () => {
+     await page.goto(reviewPath(tasksServer, '/CR-2?file=docs/plan.md'));
+     const view = diffOf(page, 'docs/plan.md');
+     await expect(view.locator('.diff-line').first()).toBeVisible();
++    // ATM-691 (Hakan): its tooltip says where its look is set
++    await expect(page.getByRole('button', { name: 'Rendered' })).toHaveAttribute(
++      'title',
++      /document style and text size are in Settings/,
++    );
+     await page.getByRole('button', { name: 'Rendered' }).click();
+     await expect(view).toHaveAttribute('data-view', 'rendered');
+     await expect(view.locator('.diff-pane')).toHaveCount(2);
+@@ -1500,6 +1515,19 @@ test.describe('the diff viewer on a review’s page', () => {
+     const number = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
+     const heading = (await newSide.locator('.compmd-page h1').boundingBox())!;
+     expect(number.x + number.width).toBeLessThanOrEqual(heading.x);
++    // ATM-691: the text size from Settings (on <html>) scales the rendered side's text; its numbers follow it
++    const text = newSide.locator('.compmd').first();
++    const fontSize = () => text.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
++    const medium = await fontSize();
++    await page.evaluate(() => (document.documentElement.dataset.docSize = 'huge'));
++    await expect.poll(fontSize).toBeCloseTo(medium * 1.3, 1);
++    await expect
++      .poll(async () => {
++        const n = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
++        const h = (await newSide.locator('.compmd-page h1').boundingBox())!;
++        return Math.abs(n.y + n.height / 2 - (h.y + h.height / 2));
++      })
++      .toBeLessThan(4);
+     await page.getByRole('button', { name: 'Unified' }).click();
+     await expect(view.locator('.diff-pane')).toHaveCount(1);
+     await expect(view.locator('.diff-pane')).toHaveClass(/diff-new/);
+diff --git a/dashboard/tests/unit/appearance.test.ts b/dashboard/tests/unit/appearance.test.ts
+index d7c1aa0e..d30f5029 100644
+--- a/dashboard/tests/unit/appearance.test.ts
++++ b/dashboard/tests/unit/appearance.test.ts
+@@ -1,8 +1,10 @@
+ import { describe, expect, it } from 'vitest';
+ import {
+   applyAppearance,
++  DOC_SIZES,
+   DOC_STYLES,
+   isModePref,
++  knownDocSize,
+   knownDocStyle,
+   knownTheme,
+   resolveMode,
+@@ -37,9 +39,20 @@ describe('appearance', () => {
+     for (const bad of ['terminal', '', null, 3]) expect(knownDocStyle(bad)).toBe('auto');
+   });
+ 
+-  it('applies theme and mode as attributes on the root element', () => {
++  it('text sizes: Tiny to Huge, growing, Medium as written; an unknown one is Medium (ATM-691)', () => {
++    expect(DOC_SIZES.map((s) => s.id)).toEqual(['tiny', 'small', 'medium', 'large', 'huge']);
++    const scales = DOC_SIZES.map((s) => s.scale);
++    expect([...scales].sort((a, b) => a - b)).toEqual(scales);
++    expect(DOC_SIZES.find((s) => s.id === 'medium')?.scale).toBe(1);
++    expect(knownDocSize('tiny')).toBe('tiny');
++    for (const bad of ['gigantic', '', null, 2]) expect(knownDocSize(bad)).toBe('medium');
++  });
++
++  it('applies theme, mode and text size as attributes on the root element', () => {
+     const root = document.createElement('html');
+     applyAppearance(root, 'default', 'light');
+-    expect(root.dataset).toMatchObject({ theme: 'default', mode: 'light' });
++    expect(root.dataset).toMatchObject({ theme: 'default', mode: 'light', docSize: 'medium' });
++    applyAppearance(root, 'default', 'dark', 'large');
++    expect(root.dataset).toMatchObject({ mode: 'dark', docSize: 'large' });
+   });
+ });
+diff --git a/dashboard/tests/unit/state.test.ts b/dashboard/tests/unit/state.test.ts
+index 9224c6f7..0eb50fd3 100644
+--- a/dashboard/tests/unit/state.test.ts
++++ b/dashboard/tests/unit/state.test.ts
+@@ -543,4 +543,13 @@ describe('DashboardState appearance', () => {
+     first.setDocStyle('terminal');
+     expect(new DashboardState().docStyle).toBe('auto');
+   });
++
++  it('remembers the text size; an unknown one is Medium (ATM-691)', () => {
++    const first = new DashboardState();
++    expect(first.docSize).toBe('medium');
++    first.setDocSize('huge');
++    expect(new DashboardState().docSize).toBe('huge');
++    first.setDocSize('gigantic');
++    expect(new DashboardState().docSize).toBe('medium');
++  });
+ });

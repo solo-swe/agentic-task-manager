@@ -1,0 +1,695 @@
+diff --git a/dashboard/src/lib/details/ReviewLink.svelte b/dashboard/src/lib/details/ReviewLink.svelte
+index 404a1ede..793a3cd3 100644
+--- a/dashboard/src/lib/details/ReviewLink.svelte
++++ b/dashboard/src/lib/details/ReviewLink.svelte
+@@ -48,7 +48,8 @@
+     e.stopPropagation();
+     if (!inApp && wantsNewTab(e)) return;
+     e.preventDefault();
+-    if (inApp) tabs.open(href);
++    // In place, so the review's back button comes back here (ATM-686); ⌘-click a tab of its own
++    if (inApp && wantsNewTab(e)) tabs.open(href);
+     else navigate(href);
+   }
+ </script>
+diff --git a/dashboard/src/lib/navigation.ts b/dashboard/src/lib/navigation.ts
+index 337ba11e..f17ac60a 100644
+--- a/dashboard/src/lib/navigation.ts
++++ b/dashboard/src/lib/navigation.ts
+@@ -2,15 +2,26 @@
+ // history entries are the router's and Back and links go through it; without one (the unit tests) the browser's
+ // history is used directly. The address written last is kept, so code that reads it right after writing sees the
+ // new one, though the router's navigation finishes a moment later.
++//
++// Every entry pushed remembers the address it was reached from (ATM-686), so a page's own back button can go Back,
++// saying where to (docs/tabs-and-navigation-design.md §4.3). A replaced entry keeps what it had; one a switch of the
++// app's tabs pushes (`fresh`) has none: the entry before it is another tab's.
+ import { addressOf } from './address';
+ 
+-/** What the document viewer marks its own history entries with (state.svelte.ts documentDepth) */
+-export type EntryState = { atmDocument?: boolean; atmDocumentDepth?: number };
++/** What the document viewer marks its own history entries with (state.svelte.ts documentDepth), and where an entry
++ * was reached from in its tab: `atmFrom`, the address of the page before this one, `atmSteps` entries back (1 when
++ * missing; more when this page has had something open over it, or another file or round, since) */
++export type EntryState = { atmDocument?: boolean; atmDocumentDepth?: number; atmFrom?: string; atmSteps?: number };
++
++/** An address's page: its path, without what is open over it (the query) */
++const pathOf = (address: string) => address.split(/[?#]/)[0];
+ 
+ export interface Router {
+   go(address: string, options: { replace: boolean; state: EntryState }): void;
+   /** The current history entry's state */
+   state(): EntryState;
++  /** `steps` entries back, as the browser's Back */
++  back(steps: number): void;
+ }
+ 
+ const browserRouter: Router = {
+@@ -19,6 +30,7 @@ const browserRouter: Router = {
+     else history.pushState(state, '', address);
+   },
+   state: () => (history.state as EntryState | null) ?? {},
++  back: (steps) => history.go(-steps),
+ };
+ 
+ let router: Router = browserRouter;
+@@ -38,17 +50,46 @@ export function arrived() {
+   written = null;
+ }
+ 
+-/** Go to `address`: a new history entry, or with `replace` this one changed (no new entry for Back) */
++/** Where an entry pushed at `address` now is reached from: the one shown; or, on the same page (its path), where
++ * that page was reached from, a step further back */
++export function originOf(address: string, shown: string, shownState: EntryState): EntryState {
++  if (pathOf(address) !== pathOf(shown)) return { atmFrom: shown };
++  if (!shownState.atmFrom) return {};
++  return { atmFrom: shownState.atmFrom, atmSteps: (shownState.atmSteps ?? 1) + 1 };
++}
++
++/** Go to `address`: a new history entry, reached from the one shown, or with `replace` this one changed (no new
++ * entry for Back; it keeps where it was reached from). `fresh`: a new entry with no way back in its tab (another of
++ * the app's tabs shown) */
+ export function navigate(
+   address: string,
+-  { replace = false, state = {} }: { replace?: boolean; state?: EntryState } = {},
++  { replace = false, fresh = false, state = {} }: { replace?: boolean; fresh?: boolean; state?: EntryState } = {},
+ ) {
+   if (address === currentAddress() && !replace) return;
++  const { atmFrom, atmSteps } = router.state();
++  const where: EntryState = fresh
++    ? {}
++    : replace
++      ? { ...(atmFrom ? { atmFrom } : {}), ...(atmSteps ? { atmSteps } : {}) }
++      : originOf(address, currentAddress(), router.state());
+   written = address;
+-  router.go(address, { replace, state });
++  router.go(address, { replace, state: { ...where, ...state } });
+   if (router === browserRouter) written = null;
+ }
+ 
+ export function entryState(): EntryState {
+   return router.state();
+ }
++
++/** Where Back goes in this tab, out of this page: the page it was reached from, and how many entries back; `null`
++ * for one opened on its own (a new tab, another tab shown, a link from elsewhere, the first page) */
++export function backEntry(): { address: string; steps: number } | null {
++  const { atmFrom, atmSteps } = router.state();
++  return atmFrom ? { address: atmFrom, steps: atmSteps ?? 1 } : null;
++}
++
++/** Back out of this page to the one it was reached from (the page's back button, when `backEntry` names one) */
++export function goBack() {
++  const back = backEntry();
++  if (back) router.back(back.steps);
++}
+diff --git a/dashboard/src/lib/overview/OverviewReviews.svelte b/dashboard/src/lib/overview/OverviewReviews.svelte
+index 7c0ff44e..09022480 100644
+--- a/dashboard/src/lib/overview/OverviewReviews.svelte
++++ b/dashboard/src/lib/overview/OverviewReviews.svelte
+@@ -77,12 +77,12 @@
+   const pageOf = (entry: ReviewEntry | undefined, reference: string) =>
+     reviewPageOf(currentAddress(), entry?.project?.id ?? '', reference);
+ 
+-  /** A row opened: its review's page, in its project; in the app in a tab of its own, in the browser in place (with ⌘
+-   * or Ctrl, in a browser tab of its own) */
++  /** A row opened: its review's page, in its project, in place (its back button comes back here, ATM-686); with ⌘ or
++   * Ctrl in a tab of its own, the app's or the browser's */
+   function open(reference: string, newTab: boolean, entry?: ReviewEntry) {
+     if (!entry?.project) return;
+     const address = pageOf(entry, reference);
+-    if (inApp) tabActions().open(address);
++    if (newTab && inApp) tabActions().open(address);
+     else if (newTab) window.open(address, '_blank', 'noopener');
+     else navigate(address);
+   }
+diff --git a/dashboard/src/lib/places.ts b/dashboard/src/lib/places.ts
+new file mode 100644
+index 00000000..7865c6c0
+--- /dev/null
++++ b/dashboard/src/lib/places.ts
+@@ -0,0 +1,38 @@
++// A place's name, from its address (ATM-686): what a back button says it goes back to ("← Kanban", "← ATM-12",
++// "← All reviews"). What is open over a page names it first (a task's details, a document), then a review, then the
++// page itself.
++import { addressParams } from './address';
++
++/** A project's tabs, as their buttons name them */
++const PROJECT_TABS: Record<string, string> = {
++  kanban: 'Kanban',
++  list: 'List',
++  graph: 'Graph',
++  progress: 'Progress',
++  agents: 'Agents',
++  project: 'Project',
++  reviews: 'Reviews',
++};
++
++/** The overview's tabs (address.ts OVERVIEW_TABS), as their buttons name them */
++const OVERVIEW_TABS: Record<string, string> = {
++  projects: 'Projects',
++  board: 'Omniboard',
++  progress: 'Progress',
++  agents: 'Agents',
++  reviews: 'All reviews',
++};
++
++/** What `address` shows, in a word or two */
++export function placeName(address: string): string {
++  const params = addressParams(address);
++  const task = params.get('task');
++  if (task) return task;
++  if (params.has('doc')) return 'Document';
++  const review = params.get('review');
++  if (review) return review;
++  const view = params.get('view') ?? '';
++  if (params.has('overview')) return OVERVIEW_TABS[view] ?? 'Projects';
++  if (params.has('project')) return PROJECT_TABS[view] ?? 'Kanban';
++  return 'Projects';
++}
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 23fdb12a..bf57e788 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -51,6 +51,7 @@
+     taskHref,
+     tasks,
+     backHref,
++    backLabel = 'Reviews',
+     busy = false,
+     problem = null,
+     docStyle = null,
+@@ -81,8 +82,10 @@
+     /** What a task named in the review opens (ATM-593): the Tasks fact's keys, and the keys written in the description
+      * and the comments that name a task (`known`); `open`, its details over the review, or `newTab` a tab of its own */
+     tasks?: TaskLinks;
+-    /** The reviews page's address, for the link back */
++    /** Where the back button goes: the page the review was opened from, else the reviews page (ATM-686) */
+     backHref?: string;
++    /** That place's name, on the button */
++    backLabel?: string;
+     busy?: boolean;
+     problem?: string | null;
+     /** The document style picked in Settings, for a Markdown file's rendered view */
+@@ -547,12 +550,12 @@
+         <a
+           class="review-back"
+           href={backHref ?? '#'}
+-          title="All reviews"
++          title={backLabel === 'Reviews' ? 'All reviews' : `Back to ${backLabel}`}
+           onclick={(e) => {
+             if (!onback) return;
+             e.preventDefault();
+             onback();
+-          }}><Icon name="arrow-left" size={15} /><span>Reviews</span></a
++          }}><Icon name="arrow-left" size={15} /><span>{backLabel}</span></a
+         >
+         <span class="review-divider" aria-hidden="true"></span>
+       {/if}
+diff --git a/dashboard/src/lib/reviews/open.ts b/dashboard/src/lib/reviews/open.ts
+index fda92924..88ec4f9e 100644
+--- a/dashboard/src/lib/reviews/open.ts
++++ b/dashboard/src/lib/reviews/open.ts
+@@ -1,13 +1,9 @@
+-// Opening a review's page from outside the Reviews tab (ATM-575: the needs-you chip): in the app, in a tab of its own,
+-// as the Reviews tab opens one; in the browser, in place
++// Opening a review's page from outside the Reviews tab (ATM-575: the needs-you chip): in place, as the Reviews tab
++// opens one, so its back button comes back here (ATM-686)
+ import { reviewPageOf } from '../address';
+-import { inApp } from '../api/http';
+ import { currentAddress, navigate } from '../navigation';
+-import { tabActions } from '../tab-actions';
+ 
+ /** Open review `reference` of project `project` */
+ export function openReviewPage(project: string, reference: string): void {
+-  const address = reviewPageOf(currentAddress(), project, reference);
+-  if (inApp) tabActions().open(address);
+-  else navigate(address);
++  navigate(reviewPageOf(currentAddress(), project, reference));
+ }
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 8287f422..5791aa25 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -19,7 +19,8 @@
+     updateDraft,
+     type ChangeResult,
+   } from '../api/review-changes';
+-  import { currentAddress, navigate } from '../navigation';
++  import { backEntry, currentAddress, goBack, navigate } from '../navigation';
++  import { placeName } from '../places';
+   import {
+     LIVE_MS,
+     isViewed,
+@@ -182,11 +183,11 @@
+ 
+   const go = (address: string, replace = false) => navigate(address, { replace });
+ 
+-  /** A review opened from the list: in the app, in a tab of its own; in the browser, in place (its page has a way
+-   * back), or with ⌘ or Ctrl in a browser tab of its own */
++  /** A review opened from the list: in place (its page's back button comes back here, ATM-686), or with ⌘ or Ctrl in
++   * a tab of its own, the app's or the browser's */
+   function open(reference: string, newTab = false) {
+     const address = withReview(currentAddress(), { review: reference });
+-    if (inApp) tabActions().open(address);
++    if (newTab && inApp) tabActions().open(address);
+     else if (newTab) window.open(address, '_blank', 'noopener');
+     else go(address);
+   }
+@@ -222,6 +223,13 @@
+ 
+   const review = $derived(shown?.review.reference ?? at.review ?? '');
+   const listAddress = $derived(withReview(currentAddress(), { review: null }));
++  /** Where the review was opened from in this tab (ATM-686): its back button goes Back there, saying where; a review
++   * opened on its own (a new tab, a link from elsewhere) goes up to its reviews list. Another place over the review
++   * (a task's details) or another file or round is the same page: its way back is the review's (navigation.ts) */
++  const cameFrom = $derived.by(() => {
++    void router.url;
++    return backEntry()?.address ?? null;
++  });
+ 
+   // A task named in a review (ATM-593): this project's opens its details over the review (the review's own address,
+   // with `?task=`), closed back to the review as it was; another project's opens at its project's page. ⌘, Ctrl or a
+@@ -260,8 +268,9 @@
+         isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
+         taskHref={taskPage}
+         tasks={taskLinks}
+-        backHref={listAddress}
+-        onback={() => go(listAddress)}
++        backHref={cameFrom ?? listAddress}
++        backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
++        onback={() => (cameFrom ? goBack() : go(listAddress))}
+         {busy}
+         {problem}
+         docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
+diff --git a/dashboard/src/lib/tab-actions.ts b/dashboard/src/lib/tab-actions.ts
+index 9df2b1d0..19485086 100644
+--- a/dashboard/src/lib/tab-actions.ts
++++ b/dashboard/src/lib/tab-actions.ts
+@@ -29,7 +29,8 @@ export interface TabWindow {
+   openWindow(address: string): Promise<boolean>;
+ }
+ 
+-const window_: TabWindow = { go: (address) => navigate(address), closeWindow, openWindow };
++/** A tab shown: an entry with no way back in it, as the one before is another tab's (ATM-686) */
++const window_: TabWindow = { go: (address) => navigate(address, { fresh: true }), closeWindow, openWindow };
+ 
+ /** The actions on `tabs`, in `win` */
+ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): TabActions {
+diff --git a/dashboard/src/routes/+layout.svelte b/dashboard/src/routes/+layout.svelte
+index fa12067f..9cfe116f 100644
+--- a/dashboard/src/routes/+layout.svelte
++++ b/dashboard/src/routes/+layout.svelte
+@@ -20,7 +20,7 @@
+   import '../themes/hand-drawn.css';
+   import '../themes/doc-styles.css';
+   import { onMount, type Snippet } from 'svelte';
+-  import { afterNavigate, goto } from '$app/navigation';
++  import { afterNavigate, beforeNavigate, goto, replaceState } from '$app/navigation';
+   import { page } from '$app/state';
+   import App from '../App.svelte';
+   import { addressOf, legacyParams } from '../lib/address';
+@@ -32,7 +32,7 @@
+   import { appTabs } from '../lib/app-tabs.svelte';
+   import { sendExternalLink } from '../lib/external-links';
+   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
+-  import { arrived, currentAddress, navigate, useRouter, type EntryState } from '../lib/navigation';
++  import { arrived, currentAddress, navigate, originOf, useRouter, type EntryState } from '../lib/navigation';
+   import { newTabAddress } from '../lib/new-tab-clicks';
+   import { tabActions, wantsNewTab } from '../lib/tab-actions';
+ 
+@@ -59,6 +59,7 @@
+       // eslint-disable-next-line svelte/no-navigation-without-resolve
+       void goto(address, { replace, state, reset: false }),
+     state: () => page.state as EntryState,
++    back: (steps) => history.go(-steps),
+   });
+ 
+   /** An old link (#project=…&view=…), or an address written another way, becomes the page's own address */
+@@ -115,8 +116,18 @@
+     return watchChanges(dashboard.workspace, dashboard.projectId, () => void dashboard.reload());
+   });
+ 
++  // A link the router followed itself (an anchor's plain click) pushed an entry: it remembers the address it was
++  // reached from, as navigate's entries do (ATM-686)
++  let leaving: { address: string; state: EntryState } | null = null;
++  beforeNavigate(({ type }) => {
++    leaving = type === 'link' ? { address: currentAddress(), state: page.state as EntryState } : null;
++  });
++
+   afterNavigate(({ type }) => {
+     arrived();
++    if (type === 'link' && leaving && leaving.address !== currentAddress() && !(page.state as EntryState).atmFrom)
++      replaceState('', { ...page.state, ...originOf(currentAddress(), leaving.address, leaving.state) });
++    leaving = null;
+     // The active tab shows where the page is now (T-514)
+     if (inApp) appTabs.follow(currentAddress());
+     // The first page is the app's start, which loads it
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 2f461e98..c4695acf 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -361,10 +361,21 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('#review-list')).toBeVisible();
+     await expect(tabs).toHaveCount(1);
+ 
++    // A plain click opens it in place, as every link (ATM-686), and its back button comes back to the list
+     await page.locator('.review-row[data-review="CR-2"] .review-link').click();
++    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++    await expect(tabs).toHaveCount(1);
++    await expect(page.locator('.review-back')).toHaveText('Reviews');
++    await page.locator('.review-back').click();
++    await expect(page.locator('#review-list')).toBeVisible();
++
++    // ⌘-click: a tab of its own
++    await page.locator('.review-row[data-review="CR-2"] .review-link').click({ modifiers: ['ControlOrMeta'] });
+     await expect(tabs).toHaveCount(2);
+     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++    // Opened on its own, its back button goes up to its reviews list
++    await expect(page.locator('.review-back')).toHaveText('Reviews');
+     // The tab is the review's: its reference and title, no project chooser
+     await expect(page.locator('#dashboard-title')).toHaveText('CR-2: Trim the names');
+     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
+diff --git a/dashboard/tests/e2e/overview-reviews.spec.ts b/dashboard/tests/e2e/overview-reviews.spec.ts
+index 4fae4d1e..c6c3d6d7 100644
+--- a/dashboard/tests/e2e/overview-reviews.spec.ts
++++ b/dashboard/tests/e2e/overview-reviews.spec.ts
+@@ -46,6 +46,33 @@ test.describe('Projects Overview: the Reviews tab', () => {
+     await expect(page).toHaveURL(/\/projects\/second\/reviews\/CR-1/);
+   });
+ 
++  // ATM-686 (Hakan): a review opened from every project's reviews goes back there, not to its project's list
++  test('a review opened here goes back here, saying so', async ({ page, tasksServer }) => {
++    tasksServer.addProject('second', 'standard', 'Second Project');
++    tasksServer.setReviews({ reviews: [entry(1, 'Ours')], you: 'Ana' });
++    tasksServer.setReview('CR-1', {
++      review: header(1, 'waiting', 'Ours'),
++      summary: '',
++      branch: null,
++      rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
++      chains: [],
++      view: { round: 1, against: null, files: [] },
++      needs_you: false,
++      you: 'Ana',
++    });
++    await page.goto('/reviews');
++    await page.locator('#overview-reviews .review-row').first().getByRole('link').click();
++    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-1');
++    const back = page.locator('.review-back');
++    await expect(back).toHaveText('All reviews');
++    await back.click();
++    await expect(page).toHaveURL(/\/reviews(\?|$)/);
++    await expect(page.locator('#overview-reviews')).toBeVisible();
++    // Forward: the review again
++    await page.goForward();
++    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-1');
++  });
++
+   test('the needs-you chip counts the reviews waiting on you: one, and nothing else, it opens', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 8d97c65e..0daf905b 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1,5 +1,14 @@
+ import type { Page } from '@playwright/test';
+-import { addressOf, expect, openDashboard, projectDocument, summary, test, type TasksServer } from './helpers';
++import {
++  addressOf,
++  expect,
++  loadFixture,
++  openDashboard,
++  projectDocument,
++  summary,
++  test,
++  type TasksServer,
++} from './helpers';
+ import { E2E_SESSION } from './session.mjs';
+ 
+ // The reviews tab and a review's page (docs/code-review-design.md §3.11, ATM-574), and the diff viewer in it (§3.7,
+@@ -318,6 +327,85 @@ test.describe('the reviews tab', () => {
+     await expect(page.locator('#review-list')).toBeVisible();
+   });
+ 
++  // ATM-686 (Hakan): the back button goes back to where the review was opened from, saying where, not always to the
++  // project's reviews; through the history, so Forward comes back to the review
++  test.describe('the back button goes back where the review was opened from', () => {
++    /** The fixture's project with T-004 in review through CR-2, on `tab`, CR-2's page served */
++    async function withReviewedTask(page: Page, tasksServer: TasksServer, tab: 'kanban' | 'list') {
++      const data = loadFixture('standard');
++      Object.assign(
++        data.tasks.find((t) => t.id === 'T-004')!,
++        {
++          status: 'in_review',
++          code_reviews: [{ id: 'r2', ref: 'CR-2' }],
++        },
++      );
++      tasksServer
++        .setReviews({
++          reviews: [{ review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true }],
++          you: 'Ana',
++        })
++        .setReview('CR-2', reviewPage());
++      await openDashboard(page, tasksServer, data, { tab });
++    }
++    const back = (page: Page) => page.locator('.review-back');
++
++    test('from a Kanban card: back to the board; Forward to the review again', async ({ page, tasksServer }) => {
++      await withReviewedTask(page, tasksServer, 'kanban');
++      await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
++      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++      await expect(back(page)).toHaveText('Kanban');
++      await back(page).click();
++      await expect(page.locator('#kanban')).toBeVisible();
++      expect(new URL(page.url()).pathname).toBe(`/projects/${tasksServer.projectId}/kanban`);
++      await page.goForward();
++      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++    });
++
++    test('from a task’s details: back to them, open over the page they were on', async ({ page, tasksServer }) => {
++      await withReviewedTask(page, tasksServer, 'list');
++      await page.locator('.task-card[data-id="T-004"] .task-name').first().click();
++      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++      await page.locator('#detail-review .review-link').first().click();
++      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++      await expect(back(page)).toHaveText('T-004');
++      await back(page).click();
++      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++      const url = new URL(page.url());
++      expect([url.pathname, url.searchParams.get('task')]).toEqual([
++        `/projects/${tasksServer.projectId}/list`,
++        'T-004',
++      ]);
++    });
++
++    test('with a task’s details opened over the review and closed, and another file, still back to the board', async ({
++      page,
++      tasksServer,
++    }) => {
++      await withReviewedTask(page, tasksServer, 'kanban');
++      await page.locator('.kanban-card[data-id="T-004"] .card-review .review-link').click();
++      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++      // A task named in the review, its details over it, closed
++      await page.locator('#review-page a[data-task="T-001"]').first().click();
++      await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++      await page.keyboard.press('Escape');
++      await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
++      await expect(back(page)).toHaveText('Kanban');
++      await back(page).click();
++      await expect(page.locator('#kanban')).toBeVisible();
++    });
++
++    test('opened on its own (its address typed, a link from elsewhere): up to its reviews', async ({
++      page,
++      tasksServer,
++    }) => {
++      await openReviews(page, tasksServer, 'CR-2');
++      await expect(back(page)).toHaveText('Reviews');
++      await back(page).click();
++      await expect(page.locator('#review-list')).toBeVisible();
++    });
++  });
++
+   test('⌘ or Ctrl opens a review in a browser tab of its own; the list stays', async ({ page, tasksServer }) => {
+     // The new tab's own page has no fixture behind it (it is the page's): its address is what is checked here
+     await openReviews(page, tasksServer);
+diff --git a/dashboard/tests/unit/navigation.test.ts b/dashboard/tests/unit/navigation.test.ts
+index e2b59ade..d878e149 100644
+--- a/dashboard/tests/unit/navigation.test.ts
++++ b/dashboard/tests/unit/navigation.test.ts
+@@ -1,5 +1,13 @@
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+-import { currentAddress, entryState, navigate, type EntryState, type Router } from '../../src/lib/navigation';
++import {
++  backEntry,
++  currentAddress,
++  entryState,
++  navigate,
++  originOf,
++  type EntryState,
++  type Router,
++} from '../../src/lib/navigation';
+ 
+ // Moving between addresses (lib/navigation.ts, T-429): through the router the layout hands in, else the browser's
+ // history; the address written last is the current one until the router arrives.
+@@ -7,8 +15,13 @@ import { currentAddress, entryState, navigate, type EntryState, type Router } fr
+ /** A router that records where it was sent and keeps its own entry state */
+ function fakeRouter(state: EntryState = {}) {
+   const went: [string, { replace: boolean; state: EntryState }][] = [];
+-  const router: Router = { go: (address, options) => void went.push([address, options]), state: () => state };
+-  return { router, went };
++  const backs: number[] = [];
++  const router: Router = {
++    go: (address, options) => void went.push([address, options]),
++    state: () => state,
++    back: (steps) => void backs.push(steps),
++  };
++  return { router, went, backs };
+ }
+ 
+ /** Navigation's module state is its own: a fresh copy per test */
+@@ -25,11 +38,12 @@ describe('without a router (the browser’s history)', () => {
+     const before = history.length;
+     navigate('/projects/abc/list?task=T-1', { state: { atmDocument: true } });
+     expect([location.pathname + location.search, history.length]).toEqual(['/projects/abc/list?task=T-1', before + 1]);
+-    expect(history.state).toEqual({ atmDocument: true });
++    expect(history.state).toEqual({ atmFrom: '/', atmDocument: true });
+     expect(currentAddress()).toBe('/projects/abc/list?task=T-1');
+     navigate('/board', { replace: true });
+     expect([location.pathname, history.length]).toEqual(['/board', before + 1]);
+-    expect(entryState()).toEqual({});
++    // Replaced, the entry keeps where it was reached from, and nothing else of its state
++    expect(entryState()).toEqual({ atmFrom: '/' });
+   });
+ 
+   it('going to the address shown adds no entry; replacing it still writes it', () => {
+@@ -38,7 +52,7 @@ describe('without a router (the browser’s history)', () => {
+     navigate('/board');
+     expect(history.length).toBe(before);
+     navigate('/board', { replace: true, state: { atmDocumentDepth: 2 } });
+-    expect(entryState()).toEqual({ atmDocumentDepth: 2 });
++    expect(entryState()).toEqual({ atmFrom: '/', atmDocumentDepth: 2 });
+   });
+ 
+   it('the current address is the location as the dashboard writes it (an old #… link’s new one)', () => {
+@@ -62,7 +76,7 @@ describe('with the layout’s router', () => {
+     nav.navigate('/projects/abc');
+     nav.navigate('/projects/abc/graph', { replace: true, state: { atmDocument: true } });
+     expect(went).toEqual([
+-      ['/projects/abc', { replace: false, state: {} }],
++      ['/projects/abc', { replace: false, state: { atmFrom: '/' } }],
+       ['/projects/abc/graph', { replace: true, state: { atmDocument: true } }],
+     ]);
+     // The router hasn't moved the location yet: the address is the one written
+@@ -82,4 +96,67 @@ describe('with the layout’s router', () => {
+     nav.navigate('/board', { replace: true });
+     expect(went).toHaveLength(2);
+   });
++
++  it('the back button goes as many entries back as the page was reached from', async () => {
++    const nav = await fresh();
++    const { router, backs } = fakeRouter({ atmFrom: '/projects/abc', atmSteps: 3 });
++    nav.useRouter(router);
++    expect(nav.backEntry()).toEqual({ address: '/projects/abc', steps: 3 });
++    nav.goBack();
++    expect(backs).toEqual([3]);
++  });
++
++  it('with no page it was reached from, the back button goes nowhere', async () => {
++    const nav = await fresh();
++    const { router, backs } = fakeRouter();
++    nav.useRouter(router);
++    expect(nav.backEntry()).toBeNull();
++    nav.goBack();
++    expect(backs).toEqual([]);
++  });
++});
++
++// Where an entry was reached from (ATM-686): what a review's back button goes back to and names
++describe('where an entry was reached from', () => {
++  it('a push remembers the page before, one step back', () => {
++    navigate('/projects/abc/kanban');
++    navigate('/projects/abc/reviews/CR-1');
++    expect(backEntry()).toEqual({ address: '/projects/abc/kanban', steps: 1 });
++  });
++
++  it('a task’s details opened from the board are a place to come back to', () => {
++    navigate('/projects/abc/kanban?task=ATM-12');
++    navigate('/projects/abc/reviews/CR-1');
++    expect(backEntry()).toEqual({ address: '/projects/abc/kanban?task=ATM-12', steps: 1 });
++  });
++
++  it('on the same page (details over it, another file or round), the page’s own way back, a step further', () => {
++    navigate('/projects/abc/kanban');
++    navigate('/projects/abc/reviews/CR-1');
++    navigate('/projects/abc/reviews/CR-1?task=ATM-12');
++    expect(backEntry()).toEqual({ address: '/projects/abc/kanban', steps: 2 });
++    // The details closed (replacing the entry) and another round chosen: still the board, three back
++    navigate('/projects/abc/reviews/CR-1', { replace: true });
++    navigate('/projects/abc/reviews/CR-1?round=2');
++    expect(backEntry()).toEqual({ address: '/projects/abc/kanban', steps: 3 });
++  });
++
++  it('a page opened on its own has no way back, also after something opened over it', () => {
++    history.replaceState(null, '', '/projects/abc/reviews/CR-1');
++    navigate('/projects/abc/reviews/CR-1?task=ATM-12');
++    expect(backEntry()).toBeNull();
++  });
++
++  it('another of the app’s tabs shown (fresh) has no way back in its tab', () => {
++    navigate('/projects/abc/kanban');
++    navigate('/projects/abc/reviews/CR-1', { fresh: true });
++    expect(backEntry()).toBeNull();
++  });
++
++  it('originOf: another page is reached from the one shown; the same page from where it was', () => {
++    expect(originOf('/b', '/a?x=1', {})).toEqual({ atmFrom: '/a?x=1' });
++    expect(originOf('/a?y=2', '/a?x=1', { atmFrom: '/z' })).toEqual({ atmFrom: '/z', atmSteps: 2 });
++    expect(originOf('/a?y=2', '/a?x=1', { atmFrom: '/z', atmSteps: 2 })).toEqual({ atmFrom: '/z', atmSteps: 3 });
++    expect(originOf('/a?y=2', '/a', {})).toEqual({});
++  });
+ });
+diff --git a/dashboard/tests/unit/places.test.ts b/dashboard/tests/unit/places.test.ts
+new file mode 100644
+index 00000000..ca3c21dd
+--- /dev/null
++++ b/dashboard/tests/unit/places.test.ts
+@@ -0,0 +1,36 @@
++import { describe, expect, it } from 'vitest';
++import { placeName } from '../../src/lib/places';
++
++// A place's name from its address (lib/places.ts, ATM-686): what a review's back button says it goes back to
++
++describe('placeName', () => {
++  it.each([
++    ['/projects/abc', 'Kanban'],
++    ['/projects/abc/kanban', 'Kanban'],
++    ['/projects/abc/list', 'List'],
++    ['/projects/abc/graph', 'Graph'],
++    ['/projects/abc/progress', 'Progress'],
++    ['/projects/abc/agents', 'Agents'],
++    ['/projects/abc/project', 'Project'],
++    ['/projects/abc/reviews', 'Reviews'],
++    ['/projects', 'Projects'],
++    ['/board', 'Omniboard'],
++    ['/reviews', 'All reviews'],
++    ['/progress', 'Progress'],
++    ['/agents', 'Agents'],
++    ['/w/work/board', 'Omniboard'],
++    ['/', 'Projects'],
++  ])('a page: %s is %s', (address, name) => {
++    expect(placeName(address)).toBe(name);
++  });
++
++  it('what is open over a page names it: a task’s details, a document', () => {
++    expect(placeName('/projects/abc/kanban?task=ATM-12')).toBe('ATM-12');
++    expect(placeName('/board?task=LFB-3')).toBe('LFB-3');
++    expect(placeName('/projects/abc/list?doc=docs/x.md')).toBe('Document');
++  });
++
++  it('another review is named by its reference', () => {
++    expect(placeName('/projects/abc/reviews/CR-7?round=2')).toBe('CR-7');
++  });
++});

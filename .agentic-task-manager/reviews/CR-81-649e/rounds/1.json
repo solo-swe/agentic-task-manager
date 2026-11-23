@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "d73fa513eaf213be36ce2891b0ee4e589eb5a06a",
+    "head": "ff32e82e11aa29bc23200549fb69e3581c480fcb"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/reviews/ReviewFile.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ReviewPage.svelte",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T12:24:06Z"
+}

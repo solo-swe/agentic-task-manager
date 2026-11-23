@@ -1,0 +1,966 @@
+diff --git a/crates/atm-lib/src/review_pages/page.rs b/crates/atm-lib/src/review_pages/page.rs
+index 520a5908..ade267e7 100644
+--- a/crates/atm-lib/src/review_pages/page.rs
++++ b/crates/atm-lib/src/review_pages/page.rs
+@@ -127,6 +127,10 @@ pub fn review_page(
+         .and_then(|all| all.into_iter().find(|f| f.header.id == review.header.id))
+         .and_then(|f| f.branch);
+     let me = me(project);
++    let mut chains = chains;
++    for chain in &mut chains {
++        mark_editable(&review, chain, &me);
++    }
+     // What this reader may do, and why not (ATM-633, docs/task-review-state-machine.md §5.2): the machine's answer,
+     // so the page shows a button for what the server allows and never repeats the rules
+     let can: serde_json::Map<String, Value> =
+@@ -153,3 +157,28 @@ pub fn review_page(
+         "can": can,
+     }))
+ }
++
++/// Each comment of a placed chain, its replies too, says whether `me` may change its text (ATM-723): the review's own
++/// rule ([`atm_review::rules::may_edit`]), so the page shows Edit only where an edit would be taken.
++fn mark_editable(review: &atm_review::Review, chain: &mut Value, me: &atm_review::Actor) {
++    fn mark(review: &atm_review::Review, comment: &mut Value, me: &atm_review::Actor) {
++        let found = comment
++            .get("id")
++            .and_then(Value::as_str)
++            .and_then(|id| review.comment(&atm_review::CommentId(id.to_string())));
++        let editable = found.is_some_and(|c| atm_review::rules::may_edit(review, c, me).is_ok());
++        if let Some(map) = comment.as_object_mut() {
++            map.insert("editable".into(), Value::Bool(editable));
++            if let Some(Value::Array(replies)) = map.get_mut("replies") {
++                for reply in replies {
++                    mark(review, reply, me);
++                }
++            }
++        }
++    }
++    if let Some(Value::Array(comments)) = chain.get_mut("comments") {
++        for comment in comments {
++            mark(review, comment, me);
++        }
++    }
++}
+diff --git a/crates/atm-lib/tests/reviews/live.rs b/crates/atm-lib/tests/reviews/live.rs
+index 54de6fed..7c569ef4 100644
+--- a/crates/atm-lib/tests/reviews/live.rs
++++ b/crates/atm-lib/tests/reviews/live.rs
+@@ -72,6 +72,50 @@ fn a_live_reviews_page_says_what_its_reader_may_do_and_why_not() {
+     );
+ }
+ 
++/// ATM-723: each comment on the page says whether its reader may change it: their own comment or reply, not another's
++/// and not a poke; nothing once the review has ended
++#[test]
++fn a_reviews_page_says_which_comments_its_reader_may_edit() {
++    let dir = dir();
++    let (mut hakan, cr) = live(&dir.0);
++    let mut reviews = atm_lib::reviews::store(&hakan).unwrap();
++    let anchor = atm_lib::reviews::Anchor {
++        round: 1,
++        ..atm_lib::reviews::Anchor::default()
++    };
++    let mut rules = atm_lib::reviews::Reviews::new(&mut reviews);
++    let mine = rules.comment(&cr, anchor, "Why?", &"Hakan".into()).unwrap();
++    rules
++        .reply(&cr, &mine, "Because.", &"claude:1".into())
++        .unwrap();
++    rules.poke(&cr, "Where are we?", &"Hakan".into()).unwrap();
++    let editable = |project: &atm_lib::Project| {
++        let page = atm_lib::review_pages::review_page(project, &cr, Some(1), None).unwrap();
++        let mut seen = Vec::new();
++        for chain in page["chains"].as_array().unwrap() {
++            for comment in chain["comments"].as_array().unwrap() {
++                seen.push((comment["body"].clone(), comment["editable"].clone()));
++                for reply in comment["replies"].as_array().unwrap() {
++                    seen.push((reply["body"].clone(), reply["editable"].clone()));
++                }
++            }
++        }
++        seen
++    };
++    assert_eq!(
++        editable(&hakan),
++        [
++            (json!("Why?"), json!(true)),
++            (json!("Because."), json!(false)),
++            (json!("Where are we?"), json!(false)),
++        ]
++    );
++    let agent = reopen(&dir.0, "claude:1");
++    assert_eq!(editable(&agent)[1], (json!("Because."), json!(true)));
++    atm_lib::reviews::close(&mut hakan, &cr, "Not this way.", false).unwrap();
++    assert!(editable(&hakan).iter().all(|(_, e)| e == &json!(false)));
++}
++
+ /// ATM-576: the page shows a live review's working copy as it is now, after its checkpoints, not stored; a
+ /// comment on it makes it a checkpoint first, and is anchored there; a named round is that round
+ #[test]
+diff --git a/crates/atm-review/src/rules.rs b/crates/atm-review/src/rules.rs
+index fbd96bbd..0c8abe05 100644
+--- a/crates/atm-review/src/rules.rs
++++ b/crates/atm-review/src/rules.rs
+@@ -4,7 +4,9 @@
+ 
+ use atm_common::{Error, Result};
+ 
+-use crate::model::{Actor, Anchor, CommentId, FileStatus, Review, ReviewHeader, ReviewRef, Status};
++use crate::model::{
++    Actor, Anchor, Comment, CommentId, FileStatus, Review, ReviewHeader, ReviewRef, Status,
++};
+ use crate::store::{NewReview, NewRound, ReviewStore};
+ 
+ /// What a reviewer submits (§3.11's *Submit*).
+@@ -51,6 +53,30 @@ pub fn decides(header: &ReviewHeader, who: &Actor) -> bool {
+     }
+ }
+ 
++/// Whether `by` may change `comment`'s text on `review` (ATM-723, the one rule the page's Edit shows by): a comment of
++/// their own, not a poke (a nudge has no text to change), on a review not ended.
++///
++/// # Errors
++/// Why not, in the words the page shows.
++pub fn may_edit(review: &Review, comment: &Comment, by: &Actor) -> Result<()> {
++    if review.header.status.ended() {
++        return Err(not_now(review, "be edited"));
++    }
++    if comment.poke {
++        return Err(refused(format!(
++            "{} is a poke: it has no text to edit",
++            comment.id
++        )));
++    }
++    if &comment.author != by {
++        return Err(refused(format!(
++            "{} is {}'s to edit",
++            comment.id, comment.author.0
++        )));
++    }
++    Ok(())
++}
++
+ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+     /// The reviews in `store`.
+     pub fn new(store: &'a mut S) -> Self {
+@@ -236,12 +262,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+     ) -> Result<()> {
+         let review = self.not_ended(reference, "be edited")?;
+         let found = self.store.get_comment(&review.header.id, comment)?;
+-        if &found.author != by {
+-            return Err(refused(format!(
+-                "{comment} is {}'s to edit",
+-                found.author.0
+-            )));
+-        }
++        may_edit(&review, &found, by)?;
+         self.store.edit_comment(&review.header.id, comment, body)
+     }
+ 
+diff --git a/crates/atm-review/src/rules/tests.rs b/crates/atm-review/src/rules/tests.rs
+index ece1b843..ec22d1b2 100644
+--- a/crates/atm-review/src/rules/tests.rs
++++ b/crates/atm-review/src/rules/tests.rs
+@@ -4,6 +4,7 @@ use crate::model::{
+     Actor, Anchor, Chain, CommentId, FileChange, FileStatus, Patch, ReviewHeader, ReviewRef,
+     RoundKind, Status,
+ };
++use crate::rules;
+ use crate::store::{NewReview, NewRound, ReviewFilter, ReviewStore};
+ use atm_common::Error;
+ use std::sync::Arc;
+diff --git a/crates/atm-review/src/rules/tests/comments.rs b/crates/atm-review/src/rules/tests/comments.rs
+index 76178f3f..58966176 100644
+--- a/crates/atm-review/src/rules/tests/comments.rs
++++ b/crates/atm-review/src/rules/tests/comments.rs
+@@ -199,6 +199,44 @@ fn a_reply_is_edited_by_its_author_only_and_a_missing_comment_is_not_found() {
+     ));
+ }
+ 
++/// ATM-723: the one rule the page's Edit and `edit` share. Its author's comment or reply, while the review is open in
++/// any status; never another's, never a poke, never on an ended review
++#[test]
++fn may_edit_is_its_authors_on_a_review_not_ended_never_a_poke() {
++    for (status, open) in [
++        (Status::Draft, true),
++        (Status::Waiting, true),
++        (Status::Live, true),
++        (Status::ChangesRequested, true),
++        (Status::Approved, false),
++        (Status::Closed, false),
++    ] {
++        let mut store = MemoryStore::new();
++        let reference = at(&mut store, Status::Waiting);
++        let mut reviews = Reviews::new(&mut store);
++        let question = reviews
++            .comment(&reference, on("a.rs", 1), "Why?", &hakan())
++            .unwrap();
++        let answer = reviews
++            .reply(&reference, &question, "Because.", &agent())
++            .unwrap();
++        let poke = reviews.poke(&reference, "Where are we?", &hakan()).unwrap();
++        let mut review = store.get_review(&reference).unwrap();
++        review.header.status = status;
++        let may = |id: &CommentId, by: &Actor| {
++            rules::may_edit(&review, review.comment(id).unwrap(), by).is_ok()
++        };
++        let seen = [
++            may(&question, &hakan()),
++            may(&answer, &agent()),
++            may(&question, &agent()),
++            may(&answer, &hakan()),
++            may(&poke, &hakan()),
++        ];
++        assert_eq!(seen, [open, open, false, false, false], "{status:?}");
++    }
++}
++
+ #[test]
+ fn a_comment_is_resolved_and_reopened_by_a_decider_or_its_author_only() {
+     let mut store = MemoryStore::new();
+diff --git a/dashboard/src/lib/reviews/ChainBox.svelte b/dashboard/src/lib/reviews/ChainBox.svelte
+index 36475b8a..2c18c4d2 100644
+--- a/dashboard/src/lib/reviews/ChainBox.svelte
++++ b/dashboard/src/lib/reviews/ChainBox.svelte
+@@ -71,7 +71,7 @@
+   /** Editing one's own comment (ATM-638); none on an ended review or a page that can't */
+   const edits = commentEdits();
+   /** A comment whose text you may change here: a draft of yours, or one you wrote */
+-  const editable = (c: ReviewComment) => (c.draft ? !!drafts : !!edits && c.author === edits.you && !c.poke);
++  const editable = (c: ReviewComment) => (c.draft ? !!drafts : !!edits && !!c.editable);
+ 
+   // A draft's text, or one's own comment's, changed in place (ATM-612, ATM-638)
+   let editing = $state<string | null>(null);
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index cbe96800..9b14c669 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -9,7 +9,7 @@
+   import Icon from '../ui/Icon.svelte';
+   import ChainBox from './ChainBox.svelte';
+   import ComposerActions from './ComposerActions.svelte';
+-  import { draftedComments, setDraftActions, withDrafts, type DraftActions } from './drafts';
++  import { setDraftActions, withDrafts, type DraftActions } from './drafts';
+   import { focusOnShow } from './focus';
+   import { setCommentEdits, setDocumentLinks, setTaskLinks } from './links';
+   import type { TaskLinks } from '../compmd';
+@@ -134,12 +134,9 @@
+   // be an open comment once sent, which an approval can't be made with)
+   const allChains = $derived(withDrafts(page.chains, page.drafts, page.you, view.round));
+   const pendingDrafts = $derived(page.drafts?.length ?? 0);
+-  // Editing one's own comments (ATM-638): none on an ended review, which takes no change (no one is "you" there)
++  // Editing one's own comments (ATM-638): each comment says whether it may be (atm's `editable`, ATM-723)
+   if (untrack(() => onedit))
+     setCommentEdits({
+-      get you() {
+-        return ended ? '' : page.you;
+-      },
+       edit: (comment, body) => onedit?.(comment, body) ?? Promise.resolve('Comments can’t be changed here.'),
+     });
+   // Set once, for the boxes under the page: each calls the handlers as they are then (a round shown since, say)
+@@ -157,10 +154,11 @@
+   // In the tree's order (ATM-596): the diffs, moving between files, the round's select and the Viewed count follow it
+   const files = $derived(treeOrder(view.files));
+   const tree = $derived(fileTree(files));
+-  const ended = $derived(review.status === 'approved' || review.status === 'closed');
+-  /** A live review: its working copy followed as it is made (ATM-576) */
++  /** Something this reader may do on it (atm's `can`, ATM-723): the decisions' menu and the poke show only then */
++  const actionable = $derived(Object.values(page.can).some((answer) => answer.ok));
++  /** A live review: its working copy followed as it is made (ATM-576); how it is shown, not what may be done */
+   const live = $derived(review.status === 'live');
+-  /** Sent back to its author: more words are *Publish comments*, never a second send-back (ATM-597, CR-2) */
++  /** Sent back to its author: more words are *Publish comments* (ATM-597, CR-2), the button's name only */
+   const sentBack = $derived(review.status === 'changes_requested');
+   const rounds = $derived(page.rounds.map((r) => r.number));
+   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
+@@ -602,21 +600,8 @@
+     open: allChains.filter(isOpen).length,
+     resolved: allChains.filter((c) => isResolved(c)).length,
+   });
+-  /** Nothing left open: the decision at hand is to approve */
+-  const settled = $derived(chainCounts.open === 0);
+-  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can. A review
+-   * sent back can be approved too (ATM-609) */
+-  const approveBlocked = $derived.by(() => {
+-    // The server's answer when it gives one (ATM-633): the machine's own words
+-    const can = page.can?.approve;
+-    if (can) return can.ok ? null : (can.why ?? 'not allowed now');
+-    const drafted = draftedComments(page.drafts);
+-    const open = chainCounts.open - drafted;
+-    if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
+-    if (drafted > 0)
+-      return `Your ${drafted === 1 ? 'draft comment' : `${drafted} draft comments`} would be open once sent: send ${drafted === 1 ? 'it' : 'them'} with Comment or Request changes, or remove ${drafted === 1 ? 'it' : 'them'}`;
+-    return null;
+-  });
++  /** Why Approve can't be pressed now, in the review's rules' own words (ATM-601, ATM-633); null when it can */
++  const approveBlocked = $derived(page.can.approve.ok ? null : (page.can.approve.why ?? 'not allowed now'));
+   /** What a decision sends with it (ATM-612): the user's drafts */
+   const pendingLabel = $derived(
+     pendingDrafts ? `${pendingDrafts} ${pendingDrafts === 1 ? 'draft' : 'drafts'} will be sent with it` : null,
+@@ -669,7 +654,7 @@
+           title="The change as it is being made; a comment keeps what you saw as a checkpoint"
+           >Following the working copy</span
+         >{/if}
+-      {#if !ended && onpoke}
++      {#if actionable && onpoke}
+         <!-- A poke (ATM-611): a nudge its agent hears and answers, saying where the review stands -->
+         <div class="review-submit-anchor">
+           <button
+@@ -704,9 +689,9 @@
+           {/if}
+         </div>
+       {/if}
+-      {#if !ended}
++      {#if actionable}
+         <div class="review-submit-anchor">
+-          {#if settled && !approveBlocked}
++          {#if !approveBlocked}
+             <div class="review-split-button">
+               <button
+                 class="review-button primary approve"
+@@ -752,34 +737,35 @@
+                 aria-label="Summary"
+                 {@attach focusOnShow}></textarea>
+               <div class="review-actions">
+-                <button
+-                  class="review-button"
+-                  data-decision="comment"
+-                  disabled={busy || (!summary.trim() && !pendingDrafts)}
+-                  onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
+-                >
+-                {#if live}
+-                  <!-- A live review isn't sent back: its author ends it with a round; a reviewer approves or closes it -->
+-                  {#if onclose}
+-                    <button
+-                      class="review-button danger"
+-                      data-decision="close"
+-                      disabled={busy || !summary.trim()}
+-                      title="End it without approval; the summary says why"
+-                      onclick={() => {
+-                        onclose(summary.trim());
+-                        submitting = false;
+-                      }}>Close review</button
+-                    >
+-                  {/if}
+-                {:else if page.can?.request_changes ? page.can.request_changes.ok : !sentBack}
+-                  <!-- Sent back already, it isn't sent back again (CR-2): more words are published as comments -->
++                <!-- Each decision as atm's rules allow it (ATM-723): a live review isn't sent back, nor one sent back
++                     already (CR-2: more words are published as comments) -->
++                {#if page.can.comment.ok}
++                  <button
++                    class="review-button"
++                    data-decision="comment"
++                    disabled={busy || (!summary.trim() && !pendingDrafts)}
++                    onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
++                  >
++                {/if}
++                {#if page.can.request_changes.ok}
+                   <button
+                     class="review-button danger"
+                     data-decision="request_changes"
+                     disabled={busy}
+                     onclick={() => submit('request_changes')}>Request changes</button
+                   >
++                {:else if live && page.can.close.ok && onclose}
++                  <!-- A live review's reviewer ends it unapproved by closing it; its author ends it with a round -->
++                  <button
++                    class="review-button danger"
++                    data-decision="close"
++                    disabled={busy || !summary.trim()}
++                    title="End it without approval; the summary says why"
++                    onclick={() => {
++                      onclose(summary.trim());
++                      submitting = false;
++                    }}>Close review</button
++                  >
+                 {/if}
+                 <!-- Disabled, saying why, while the rules would refuse it (ATM-601): the reason on the wrapper, as a
+                      disabled button shows no tooltip in every engine, and as its description for screen readers -->
+diff --git a/dashboard/src/lib/reviews/drafts.ts b/dashboard/src/lib/reviews/drafts.ts
+index 0e388e58..13f17ecd 100644
+--- a/dashboard/src/lib/reviews/drafts.ts
++++ b/dashboard/src/lib/reviews/drafts.ts
+@@ -72,7 +72,3 @@ export function withDrafts(
+   );
+   return [...withReplies, ...own];
+ }
+-
+-/** How many of the user's drafts would be open comments once sent: what an approval can't be made with */
+-export const draftedComments = (drafts: PlacedDraft[] | undefined) =>
+-  (drafts ?? []).filter((d) => d.kind === 'comment').length;
+diff --git a/dashboard/src/lib/reviews/links.ts b/dashboard/src/lib/reviews/links.ts
+index cdf372ff..6fb339e5 100644
+--- a/dashboard/src/lib/reviews/links.ts
++++ b/dashboard/src/lib/reviews/links.ts
+@@ -31,10 +31,9 @@ export function taskLinks(): TaskLinks | undefined {
+ 
+ const EDITS = Symbol('review-comment-edits');
+ 
+-/** Editing one's own comments on the page (ATM-638): who you are, and what a change does (why it was refused, or
+- * null). None on a review that has ended, or a page that can't change one */
++/** Editing one's own comments on the page (ATM-638): what a change does (why it was refused, or null). Which comments
++ * may be changed is each comment's `editable`, atm's (ATM-723). None on a page that can't change one */
+ export interface CommentEdits {
+-  readonly you: string;
+   edit(comment: string, body: string): Promise<string | null>;
+ }
+ 
+diff --git a/dashboard/src/lib/reviews/types.ts b/dashboard/src/lib/reviews/types.ts
+index 75c7a5ca..a6582d4b 100644
+--- a/dashboard/src/lib/reviews/types.ts
++++ b/dashboard/src/lib/reviews/types.ts
+@@ -23,6 +23,9 @@ export interface ReviewComment {
+   poke?: boolean;
+   /** One of the user's drafts (ATM-612), not sent yet: only they see it; absent for any other comment */
+   draft?: boolean;
++  /** Whether you may change its text (ATM-723): atm's rule (yours, not a poke, the review not ended). A draft's is
++   * the drafts' own (absent: only the server's comments carry it) */
++  editable?: boolean;
+   replies: ReviewComment[];
+ }
+ 
+@@ -160,9 +163,9 @@ export interface ReviewPageData {
+   needs_you: boolean;
+   you: string;
+   /** What this reader may do, and why not (ATM-633, docs/task-review-state-machine.md §5.2): the server's state
+-   * machine answering for each action, so the page shows a button for what it allows and never repeats the rules.
+-   * Optional, for an older atm's pages */
+-  can?: Partial<Record<ReviewAction, { ok: boolean; why?: string }>>;
++   * machine answering for each action, so the page shows a button for what it allows and never repeats the rules
++   * (ATM-723: the page has no rule of its own) */
++  can: Record<ReviewAction, { ok: boolean; why?: string }>;
+ }
+ 
+ /** The actions a review's page offers, as the server's `can` names them */
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index b18ff383..4ed4b79e 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -227,6 +227,59 @@ export function board(
+   );
+ }
+ 
++interface CommentFake {
++  id: string;
++  author: string;
++  resolved: boolean | null;
++  poke?: boolean;
++  editable?: boolean;
++  replies?: CommentFake[];
++}
++type Answer = { ok: boolean; why?: string };
++export interface ReviewPageFake {
++  review: { status: string };
++  you: string;
++  chains: { comments: CommentFake[] }[];
++  can?: Record<string, Answer>;
++}
++
++/** atm's answers on a review's page (ATM-633, ATM-723), as the fixture plays atm: what its reader may do (`can`:
++ * nothing on an ended review; Approve not while a comment is open; sent back only while waiting; rounds the author's,
++ * whom the fixture's reader never is) and which comments they may edit (`editable`: their own, not a poke, the review
++ * not ended). What the page gives is kept: a test's own `can` answers, its own `editable` */
++function withAtmAnswers(reference: string, page: ReviewPageFake): ReviewPageFake {
++  const status = page.review.status;
++  const ended = status === 'approved' || status === 'closed';
++  const all = (cs: CommentFake[]): CommentFake[] => cs.flatMap((c) => [c, ...all(c.replies ?? [])]);
++  const open = page.chains.flatMap((ch) => all(ch.comments)).filter((c) => c.resolved === false);
++  const no = (why: string): Answer => ({ ok: false, why });
++  const actions = ['approve', 'request_changes', 'comment', 'round', 'close'];
++  const can: Record<string, Answer> = ended
++    ? Object.fromEntries(actions.map((a) => [a, no(`${reference} is ${status}: it can’t be changed`)]))
++    : {
++        approve: open.length
++          ? no(`${reference} can’t be approved while comments are open: ${open.map((c) => c.id).join(', ')}`)
++          : { ok: true },
++        request_changes:
++          status === 'waiting'
++            ? { ok: true }
++            : no(`${reference} is ${status.replace('_', ' ')}: it can’t be sent back`),
++        comment: { ok: true },
++        round: no(`only ${reference}’s author adds its rounds`),
++        close: { ok: true },
++      };
++  const mark = (c: CommentFake): CommentFake => ({
++    ...c,
++    editable: c.editable ?? (!ended && !c.poke && c.author === page.you),
++    replies: (c.replies ?? []).map(mark),
++  });
++  return {
++    ...page,
++    can: { ...can, ...page.can },
++    chains: page.chains.map((ch) => ({ ...ch, comments: ch.comments.map(mark) })),
++  };
++}
++
+ /** A channel's ID in an app command's arguments: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its
+  * `id`) as Playwright passes it */
+ function channelId(channel: unknown): number {
+@@ -322,9 +375,10 @@ export class TasksServer {
+     return this;
+   }
+ 
+-  /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round */
++  /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round, with atm's answers on it (`can`, each
++   * comment's `editable`) unless the page gives its own */
+   setReview(reference: string, page: unknown) {
+-    this.reviewPages.set(reference, page);
++    this.reviewPages.set(reference, withAtmAnswers(reference, page as ReviewPageFake));
+     return this;
+   }
+ 
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 8067af47..1ac451b6 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -52,6 +52,10 @@ const NEW_D = '# Plan\n\nFirst step.\n\nNew ending.\n';
+ const PATCH_D =
+   'diff --git a/docs/plan.md b/docs/plan.md\n--- a/docs/plan.md\n+++ b/docs/plan.md\n@@ -5 +5 @@\n-Old ending.\n+New ending.\n';
+ 
++/** An hour before the run: a decided review is among the recent ones whatever day the suite runs (after
++ * `RECENT_DAYS`, the list folds it under *Older*) */
++const RECENTLY = new Date(Date.now() - 60 * 60_000).toISOString();
++
+ const header = (n: number, status = 'waiting', more: Record<string, unknown> = {}) => ({
+   id: `r${n}`,
+   reference: `CR-${n}`,
+@@ -61,8 +65,8 @@ const header = (n: number, status = 'waiting', more: Record<string, unknown> = {
+   tasks: ['T-001'],
+   author: 'claude:a',
+   reviewers: [],
+-  created: '2026-11-17T10:00:00Z',
+-  updated: '2026-11-17T10:00:00Z',
++  created: RECENTLY,
++  updated: RECENTLY,
+   ...more,
+ });
+ 
+@@ -72,7 +76,7 @@ const comment = (id: string, body: string, resolved: boolean | null = false) =>
+   at: '2026-11-17T10:00:00Z',
+   body,
+   resolved,
+-  replies: [],
++  replies: [] as unknown[],
+ });
+ 
+ const file = (path: string, patch: string, status = 'modified', before: string | null = 'base1') => ({
+@@ -85,7 +89,8 @@ const file = (path: string, patch: string, status = 'modified', before: string |
+   after: 'head3',
+ });
+ 
+-/** CR-2's page: three rounds, three files, a chain in place, a drifted one, one on the review */
++/** CR-2's page: three rounds, three files, a chain in place, a drifted one, one on the review (`setReview` adds atm's
++ * answers on it, `can` and `editable`, unless it gives them) */
+ function reviewPage(more: Record<string, unknown> = {}) {
+   return {
+     review: header(2),
+@@ -2599,16 +2604,57 @@ test.describe('the diff viewer on a review’s page', () => {
+     await expect(page.locator('#review-approve, [data-decision="approve"]').first()).toBeDisabled();
+     await expect(page.locator('#review-approve-why')).toContainText(why);
+     await expect(page.locator('[data-decision="request_changes"]')).toHaveCount(0);
+-    // The server allows it now (the comment resolved elsewhere): the page follows its next answer
++    // The server allows it now (the comment resolved elsewhere): the page follows its next answer, Approve one click
++    // (ATM-723: atm's answer, not the comments the page holds)
+     const allowed = { approve: { ok: true }, request_changes: { ok: true }, comment: { ok: true } };
+     tasksServer.setReview('CR-2', reviewPage({ can: allowed }));
+     await page.goto(reviewPath(tasksServer, '/CR-2'));
+-    await page.getByRole('button', { name: 'Submit review' }).click();
++    await expect(page.locator('#review-approve')).toBeEnabled();
++    await page.getByRole('button', { name: 'Other decisions' }).click();
+     await expect(page.locator('[data-decision="approve"]')).toBeEnabled();
+     await expect(page.locator('#review-approve-why')).toHaveCount(0);
+     await expect(page.locator('[data-decision="request_changes"]')).toBeVisible();
+   });
+ 
++  // ATM-723: the controls follow atm's answers on each kind of review, the page keeping no rule of its own
++  for (const [status, offered] of [
++    ['waiting', ['comment', 'request_changes', 'approve']],
++    ['live', ['comment', 'close', 'approve']],
++    ['changes_requested', ['comment', 'approve']],
++  ] as const) {
++    test(`a ${status} review offers ${offered.join(', ')}; Edit on your own comments`, async ({
++      page,
++      tasksServer,
++    }) => {
++      await openReviews(page, tasksServer);
++      const chains = reviewPage().chains;
++      // On the review: the reviewer's comment, and the agent's reply to it
++      const theirs = { ...comment('c4', 'Thanks.', null), author: 'claude:a' };
++      // Open: a resolved comment is folded, its Edit not drawn
++      chains[2] = { ...chains[2], comments: [{ ...comment('c3', 'Nice and small.'), replies: [theirs] }] };
++      tasksServer.setReview('CR-2', reviewPage({ review: header(2, status), chains }));
++      await page.goto(reviewPath(tasksServer, '/CR-2'));
++      await page.getByRole('button', { name: /Submit review|Publish comments/ }).click();
++      await expect(page.locator('.review-submit [data-decision]')).toHaveCount(offered.length);
++      for (const decision of offered) await expect(page.locator(`[data-decision="${decision}"]`)).toBeVisible();
++      await expect(page.locator('[data-decision="approve"]')).toBeDisabled(); // c1 is open
++      const conversation = page.locator('.review-conversation');
++      const edit = (id: string) =>
++        conversation.locator(`[data-comment="${id}"] > .chain-meta`).getByRole('button', { name: 'Edit comment' });
++      await expect(edit('c3')).toHaveCount(1);
++      await expect(edit('c4')).toHaveCount(0);
++    });
++  }
++
++  test('an approved review offers no decision, no poke and no Edit', async ({ page, tasksServer }) => {
++    await openReviews(page, tasksServer);
++    tasksServer.setReview('CR-2', reviewPage({ review: header(2, 'approved') }));
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    await expect(page.locator('#review-page')).toBeVisible();
++    await expect(page.getByRole('button', { name: /Submit review|Approve|Poke/ })).toHaveCount(0);
++    await expect(page.locator('[aria-label="Edit comment"]')).toHaveCount(0);
++  });
++
+   test('every comment resolved: Submit review is Approve, and one click approves', async ({ page, tasksServer }) => {
+     await openReviews(page, tasksServer);
+     const resolved = reviewPage().chains.map((c) => ({
+@@ -2731,10 +2777,10 @@ test.describe('the diff viewer on a review’s page', () => {
+       });
+     tasksServer.answerReviewChanges(403, { error: "the review's author can't decide it" });
+     await page.getByRole('button', { name: 'Submit review' }).click();
+-    // Its comments open, Approve can't be pressed, and says why (ATM-601)
++    // Its comments open, Approve can't be pressed, and says why in atm's words (ATM-601, ATM-723)
+     const approve = page.getByRole('button', { name: 'Approve' });
+     await expect(approve).toBeDisabled();
+-    await expect(approve).toHaveAccessibleDescription(/still open: resolve them first/);
++    await expect(approve).toHaveAccessibleDescription('CR-2 can’t be approved while comments are open: c1, c2');
+     await page.getByLabel('Summary').fill('One more.');
+     await page.getByRole('button', { name: 'Comment', exact: true }).click();
+     await expect(page.getByRole('alert')).toHaveText("the review's author can't decide it");
+diff --git a/dashboard/tests/unit/ChainBox.component.test.ts b/dashboard/tests/unit/ChainBox.component.test.ts
+index 7cee0c35..2df1314f 100644
+--- a/dashboard/tests/unit/ChainBox.component.test.ts
++++ b/dashboard/tests/unit/ChainBox.component.test.ts
+@@ -11,8 +11,8 @@ vi.mock('../../src/lib/compmd', async (actual) => ({ ...(await actual()), loadCo
+ // Editing one's own comments (ATM-638): none unless a test sets it
+ const edits = vi.hoisted(() => ({ current: undefined as undefined | Record<string, unknown> }));
+ vi.mock('../../src/lib/reviews/links', async (actual) => ({ ...(await actual()), commentEdits: () => edits.current }));
+-function editing(you: string, refused: string | null = null) {
+-  const actions = { you, edit: vi.fn(async () => refused) };
++function editing(refused: string | null = null) {
++  const actions = { edit: vi.fn(async () => refused) };
+   edits.current = actions;
+   return actions;
+ }
+@@ -65,14 +65,19 @@ afterEach(() => {
+ });
+ 
+ describe('ChainBox: editing your own comment (ATM-638)', () => {
+-  it('Edit only on your own comment and reply, not on others’ or a poke', () => {
+-    editing('Ana');
++  it('Edit only where atm says the comment is editable (ATM-723), on a comment or a reply', () => {
++    editing();
+     show(
+       chain([
+         comment('c1', {
+-          replies: [comment('r1', { resolved: null }), comment('r2', { resolved: null, author: 'Bo' })],
++          editable: true,
++          replies: [
++            comment('r1', { resolved: null, editable: true }),
++            comment('r2', { resolved: null, author: 'Bo', editable: false }),
++          ],
+         }),
+-        comment('c2', { author: 'Bo' }),
++        comment('c2', { author: 'Bo', editable: false }),
++        // From atm without the field: not editable
+         comment('c3', { poke: true, resolved: null }),
+       ]),
+     );
+@@ -84,8 +89,8 @@ describe('ChainBox: editing your own comment (ATM-638)', () => {
+   });
+ 
+   it('Edit, change, Save sends it; Cancel and Escape keep the old text; a refusal keeps the box with why', async () => {
+-    const actions = editing('Ana', 'not yours');
+-    show(chain([comment('c1', { body: 'Old.' })]));
++    const actions = editing('not yours');
++    show(chain([comment('c1', { body: 'Old.', editable: true })]));
+     await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
+     const box = screen.getByRole('textbox', { name: 'Edit your comment' });
+     expect(box).toHaveValue('Old.');
+@@ -101,15 +106,15 @@ describe('ChainBox: editing your own comment (ATM-638)', () => {
+     expect(screen.queryByRole('textbox')).toBeNull();
+   });
+ 
+-  it('saved, the box closes; on an ended review (no one is you there) there is no Edit', async () => {
+-    editing('Ana');
+-    show(chain([comment('c1')]));
++  it('saved, the box closes; an editable comment on a page that can’t change one has no Edit', async () => {
++    editing();
++    show(chain([comment('c1', { editable: true })]));
+     await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
+     await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', metaKey: true });
+     await vi.waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+-    editing('');
+-    const ended = show(chain([comment('c2')]));
+-    expect(ended.container.querySelector('[aria-label="Edit comment"]')).toBeNull();
++    edits.current = undefined;
++    const elsewhere = show(chain([comment('c2', { editable: true })]));
++    expect(elsewhere.container.querySelector('[aria-label="Edit comment"]')).toBeNull();
+   });
+ });
+ 
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index b9078471..12777c7d 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -35,6 +35,27 @@ const chain = (id: string, path: string | null, more: Partial<PlacedChain> = {},
+   ...more,
+ });
+ 
++type Can = ReviewPageData['can'];
++const yes = { ok: true };
++const no = (why: string) => ({ ok: false, why });
++/** atm's answer (`can`) for a reviewer of a waiting review: every decision, and closing; rounds are its author's */
++const REVIEWER: Can = {
++  approve: yes,
++  request_changes: yes,
++  comment: yes,
++  round: no('rounds are its author’s'),
++  close: yes,
++};
++/** atm's answer for a reviewer of a review sent back, or a live one: never sent back (again) */
++const SENT_BACK: Can = { ...REVIEWER, request_changes: no('CR-7 is changes requested: it can’t be sent back') };
++const LIVE: Can = { ...REVIEWER, request_changes: no('CR-7 is live: it can’t be sent back') };
++/** atm's answer while a comment is open */
++const OPEN_WHY = 'CR-7 can’t be approved while comments are open: c-t1';
++/** atm's answer on an ended review: nothing */
++const ENDED: Can = Object.fromEntries(
++  ['approve', 'request_changes', 'comment', 'round', 'close'].map((a) => [a, no('CR-7 is approved: it can’t be')]),
++) as Can;
++
+ function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['view']> = {}): ReviewPageData {
+   return {
+     review: {
+@@ -64,6 +85,7 @@ function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['
+     view: { round: 3, against: null, files: [file('src/b.rs'), file('README.md'), file('src/a.rs')], ...view },
+     needs_you: true,
+     you: 'Ana',
++    can: REVIEWER,
+     ...more,
+   };
+ }
+@@ -721,7 +743,10 @@ describe('ReviewPage: drafts (ATM-612)', () => {
+   });
+ 
+   it('the drafts show among the comments, marked, counted on Submit review, and said in its box', async () => {
+-    const { container } = show(data({ drafts: [drafted('d1'), drafted('d2', null)] }), { ondrafts: handlers() });
++    const can = { ...REVIEWER, approve: no('CR-7 can’t be approved while comments are open: d1 (your draft)') };
++    const { container } = show(data({ drafts: [drafted('d1'), drafted('d2', null)], can }), {
++      ondrafts: handlers(),
++    });
+     expect(screen.getByRole('button', { name: /Submit review/ })).toHaveTextContent('2');
+     expect(container.querySelector('#review-pending')).toHaveTextContent('2');
+     // On the review, in the conversation; the other on its file's lines
+@@ -733,19 +758,19 @@ describe('ReviewPage: drafts (ATM-612)', () => {
+   });
+ 
+   it('with drafts, Comment needs no summary: it sends them; Approve is blocked by drafted comments, saying so', async () => {
+-    const { onsubmit } = show(data({ drafts: [drafted('d1')] }), { ondrafts: handlers() });
++    const why = 'CR-7 can’t be approved while comments are open: d1 (your draft)';
++    const can = { ...REVIEWER, approve: no(why) };
++    const { onsubmit } = show(data({ drafts: [drafted('d1')], can }), { ondrafts: handlers() });
+     await fireEvent.click(screen.getByRole('button', { name: /Submit review/ }));
+     const approve = screen.getByRole('button', { name: 'Approve' });
+     expect(approve).toBeDisabled();
+-    expect(approve).toHaveAccessibleDescription(
+-      'Your draft comment would be open once sent: send it with Comment or Request changes, or remove it',
+-    );
++    expect(approve).toHaveAccessibleDescription(why);
+     await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+     expect(onsubmit.mock.calls).toEqual([['comment', '']]);
+   });
+ 
+   it('sent back with drafts: the top button publishes them', () => {
+-    const page = data({ drafts: [drafted('d1')] });
++    const page = data({ drafts: [drafted('d1')], can: { ...SENT_BACK, approve: no('CR-7 can’t be approved') } });
+     show({ ...page, review: { ...page.review, status: 'changes_requested' } }, { ondrafts: handlers() });
+     expect(screen.getByRole('button', { name: /Publish comments/ })).toHaveTextContent('1');
+   });
+@@ -769,8 +794,18 @@ describe('ReviewPage: drafts (ATM-612)', () => {
+ });
+ 
+ describe('ReviewPage: submit', () => {
+-  /** A review with a comment still open: the decision is Submit review's */
+-  const open = (more: Partial<ReviewPageData> = {}) => data({ chains: [chain('t1', 'src/a.rs')], ...more });
++  /** A review with a comment still open, atm refusing Approve: the decision is Submit review's */
++  const open = (more: Partial<ReviewPageData> = {}) =>
++    data({ chains: [chain('t1', 'src/a.rs')], can: { ...REVIEWER, approve: no(OPEN_WHY) }, ...more });
++  /** The same, sent back, or live: atm's answer for each */
++  const openAs = (status: 'changes_requested' | 'live') => {
++    const page = open();
++    return {
++      ...page,
++      review: { ...page.review, status },
++      can: { ...(status === 'live' ? LIVE : SENT_BACK), approve: no(OPEN_WHY) },
++    };
++  };
+ 
+   it('Submit review opens the decision: request changes, with or without a summary; comment only with one', async () => {
+     const { onsubmit } = show(open());
+@@ -795,16 +830,12 @@ describe('ReviewPage: submit', () => {
+     ]);
+   });
+ 
+-  // ATM-601: pressed, it failed with atm's refusal
++  // ATM-601, ATM-723: atm refusing it, Approve is disabled with atm's words (a refusal without words still says so)
+   it.each([
+-    ['a comment is open', (p: ReviewPageData) => p, '1 comment is still open: resolve them first'],
+-    [
+-      'two are open',
+-      (p: ReviewPageData) => ({ ...p, chains: [...p.chains, { ...p.chains[0], id: 't2' }] }),
+-      '2 comments are still open: resolve them first',
+-    ],
+-  ])('while %s, Approve is disabled and says why', async (_, made, why) => {
+-    const { onsubmit } = show(made(open()));
++    ['its comments are open', OPEN_WHY, OPEN_WHY],
++    ['with no reason given', undefined, 'not allowed now'],
++  ])('atm refusing Approve (%s), it is disabled and says why', async (_, given, why) => {
++    const { onsubmit } = show(open({ can: { ...REVIEWER, approve: { ok: false, why: given } } }));
+     // No one-click Approve either
+     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+     const approve = screen.getByRole('button', { name: 'Approve' });
+@@ -816,6 +847,25 @@ describe('ReviewPage: submit', () => {
+     expect(onsubmit).not.toHaveBeenCalled();
+   });
+ 
++  it('only what atm allows is offered: a refused Request changes or Close is not there, nor Comment', async () => {
++    const can = { ...REVIEWER, approve: no(OPEN_WHY), request_changes: no('not now'), close: no('not yours') };
++    const live = { ...open({ can }), review: { ...open().review, status: 'live' as const } };
++    const { unmount } = show(live, { onclose: vi.fn() });
++    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    expect(screen.queryByRole('button', { name: /^(Request changes|Close review)$/ })).toBeNull();
++    expect(screen.getByRole('button', { name: 'Comment' })).toBeTruthy();
++    unmount();
++    show(open({ can: { ...can, comment: no('not yours'), request_changes: yes } }));
++    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull();
++    expect(screen.getByRole('button', { name: 'Request changes' })).toBeTruthy();
++  });
++
++  it('nothing allowed (an ended review, or not yours to decide): no decisions at all', () => {
++    show(open({ can: ENDED }), { onpoke: vi.fn() });
++    expect(screen.queryByRole('button', { name: /Submit review|Approve|Poke/ })).toBeNull();
++  });
++
+   it('nothing standing in the way, Approve in the panel is enabled, with no reason shown', async () => {
+     show(data({ chains: [chain('t1', 'src/a.rs', {}, true)] }));
+     await fireEvent.click(screen.getByRole('button', { name: 'Other decisions' }));
+@@ -828,7 +878,11 @@ describe('ReviewPage: submit', () => {
+   // ATM-609: a reviewer may approve a review they sent back, its comments resolved; with one open, still not
+   it('sent back, everything resolved: Approve is one click, and sends the approval', async () => {
+     const { onsubmit } = show(
+-      data({ chains: [chain('t1', 'src/a.rs', {}, true)], review: { ...open().review, status: 'changes_requested' } }),
++      data({
++        chains: [chain('t1', 'src/a.rs', {}, true)],
++        review: { ...open().review, status: 'changes_requested' },
++        can: SENT_BACK,
++      }),
+     );
+     const approve = screen.getByRole('button', { name: 'Approve' });
+     expect(approve).toBeEnabled();
+@@ -838,11 +892,9 @@ describe('ReviewPage: submit', () => {
+   });
+ 
+   it('sent back with a comment open: Approve is disabled, saying so', async () => {
+-    show({ ...open(), review: { ...open().review, status: 'changes_requested' } });
++    show(openAs('changes_requested'));
+     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+-    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(
+-      '1 comment is still open: resolve them first',
+-    );
++    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(OPEN_WHY);
+   });
+ 
+   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {
+@@ -859,9 +911,7 @@ describe('ReviewPage: submit', () => {
+   });
+ 
+   it('a review sent back still takes the reviewer’s words, as Publish comments; it isn’t sent back again (ATM-597, CR-2)', async () => {
+-    const page = open();
+-    page.review = { ...page.review, status: 'changes_requested' };
+-    const { onsubmit } = show(page);
++    const { onsubmit } = show(openAs('changes_requested'));
+     expect(screen.getByRole('button', { name: 'Comment on the review' })).toBeEnabled();
+     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+     expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
+@@ -874,10 +924,8 @@ describe('ReviewPage: submit', () => {
+   });
+ 
+   it('a live review (ATM-576): approved, commented on or closed with why, never sent back', async () => {
+-    const page = open();
+-    page.review = { ...page.review, status: 'live' };
+     const onclose = vi.fn();
+-    const { onsubmit } = show(page, { onclose });
++    const { onsubmit } = show(openAs('live'), { onclose });
+     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+     expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
+     const close = screen.getByRole('button', { name: 'Close review' });
+@@ -888,12 +936,11 @@ describe('ReviewPage: submit', () => {
+     expect(onsubmit).not.toHaveBeenCalled();
+   });
+ 
+-  it('an ended review takes no decision; a busy page none until it is done', async () => {
++  it('an ended review (atm allows nothing) takes no decision and no poke; a busy page none until it is done', async () => {
+     for (const page of [open(), data()]) {
+       for (const status of ['approved', 'closed'] as const) {
+-        page.review = { ...page.review, status };
+-        const { unmount } = show(page);
+-        expect(screen.queryByRole('button', { name: /Submit review|Approve/ })).toBeNull();
++        const { unmount } = show({ ...page, review: { ...page.review, status }, can: ENDED }, { onpoke: vi.fn() });
++        expect(screen.queryByRole('button', { name: /Submit review|Approve|Poke/ })).toBeNull();
+         unmount();
+       }
+     }
+diff --git a/dashboard/tests/unit/drafts.test.ts b/dashboard/tests/unit/drafts.test.ts
+index 328a65b3..c18a75ae 100644
+--- a/dashboard/tests/unit/drafts.test.ts
++++ b/dashboard/tests/unit/drafts.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest';
+-import { draftedComments, withDrafts } from '../../src/lib/reviews/drafts';
++import { withDrafts } from '../../src/lib/reviews/drafts';
+ import type { PlacedChain, PlacedDraft, ReviewComment } from '../../src/lib/reviews/types';
+ 
+ // The user's drafts among a review's chains (lib/reviews/drafts.ts, ATM-612): a draft comment a chain of its own,
+@@ -109,10 +109,3 @@ describe('withDrafts', () => {
+     expect(chains[0].comments[0].replies).toHaveLength(1);
+   });
+ });
+-
+-describe('draftedComments', () => {
+-  it('counts the drafts that would be open comments once sent, not the replies', () => {
+-    expect(draftedComments(undefined)).toBe(0);
+-    expect(draftedComments([onLines('d1'), reply('d2', 'c1'), onLines('d3')])).toBe(2);
+-  });
+-});
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 9f321974..c9c5a2ec 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -334,7 +334,11 @@ old parameters from its hash and moves to the new address.
+   status that isn't one is `400`.
+ - `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
+   when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
+-  against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you}`. Each file's `patch` is
++  against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you, can}`. `can` is what its
++  reader may do, each of `approve`, `request_changes`, `comment`, `round` and `close` as `{ok, why?}` (the review's
++  rules answering, ATM-633), and each comment and reply carries `editable`, whether they may change its text (their
++  own, not a poke, the review not ended; ATM-723): the page offers what these allow and has no rule of its own. Each
++  file's `patch` is
+   its part of the diff, `before` and `after` the revisions its two sides are read from (`documents?path=&at=`, §2.6;
+   `null` for a side the file doesn't have). Each chain has `placed`, its lines in the round shown (followed there from
+   the round it was made on), and `drifted`, the round and lines it was made on when its text is gone from the round
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 714668ee..eb3cd6ba 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1308,6 +1308,9 @@ land (I11, I13, I24, I25). Fields:
+   attempt, which `started_at` and `started_by` held already. atm writes them; the merge driver keeps them like
+   `blocks`. `atm db migrate` moves the label `interactive` to `with: user` once, on the project's own files, staged
+   and not committed, and says so. No skill reads them, and no command reads a new path or URL.
++- **A review's page marks each comment `editable`** (ATM-723), from the same rule `edit` enforces
++  (`atm_review::rules::may_edit`). The page shows its controls only as `can` and `editable` allow, a convenience: every
++  change is still checked by atm when it is made. No skill reads it, and no route or command is added.
+ 
+ ## 4. Keeping it current
+ 

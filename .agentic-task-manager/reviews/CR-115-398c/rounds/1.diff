@@ -1,0 +1,800 @@
+diff --git a/crates/atm-cli/src/commands.rs b/crates/atm-cli/src/commands.rs
+index 9fca3190..9ef5102b 100644
+--- a/crates/atm-cli/src/commands.rs
++++ b/crates/atm-cli/src/commands.rs
+@@ -52,12 +52,41 @@ pub fn resolved(cwd: &std::path::Path, references: &[String]) -> atm_common::Res
+ 
+ /// A text with every task UUID in it replaced by the task's label (its key, `~` while provisional: ADR-007 §1), as
+ /// people know the task: for the lines atm prints. Text without one, or a project without task keys, unchanged.
++///
++/// One [`Labeller`] a process (ATM-679, audit C8): each printed line used to open the project and read its archive
++/// again. It is opened again when the task file changed since it read it (the command wrote it: a key changed, a task
++/// added), or when a line names a task it doesn't know.
+ #[must_use]
+ pub fn labelled(cwd: &std::path::Path, text: &str) -> String {
+     if !has_uuid(text) {
+         return text.to_string();
+     }
+-    Labeller::open(cwd).text(text)
++    LABELLER.with(|cell| {
++        let mut shared = cell.borrow_mut();
++        if shared
++            .as_ref()
++            .is_none_or(|(dir, labeller)| dir != cwd || labeller.stale())
++        {
++            *shared = Some((cwd.to_path_buf(), Labeller::open(cwd)));
++        }
++        let (out, missed) = shared.as_ref().map_or_else(
++            || (text.to_string(), false),
++            |(_, labeller)| labeller.labels(text),
++        );
++        if !missed {
++            return out;
++        }
++        let fresh = Labeller::open(cwd);
++        let out = fresh.text(text);
++        *shared = Some((cwd.to_path_buf(), fresh));
++        out
++    })
++}
++
++thread_local! {
++    /// The process's labeller, and the folder it is of ([`labelled`])
++    static LABELLER: std::cell::RefCell<Option<(std::path::PathBuf, Labeller)>> =
++        const { std::cell::RefCell::new(None) };
+ }
+ 
+ fn is_uuid(s: &str) -> bool {
+@@ -73,6 +102,18 @@ fn has_uuid(s: &str) -> bool {
+ /// [`labelled`] for many texts of one project: the project opened once.
+ pub struct Labeller {
+     project: Option<(atm_lib::Project, Vec<atm_common::Task>)>,
++    /// The task file's size and time when it was read: a later write (a key changed, a task added) makes it stale
++    read: Option<(u64, std::time::SystemTime)>,
++}
++
++/// The task file's size and modification time, of the project `project` is.
++fn task_file_stamp(project: &atm_lib::Project) -> Option<(u64, std::time::SystemTime)> {
++    let file = project
++        .root()?
++        .join(atm_common::TASK_DIR)
++        .join("tasks.json");
++    let meta = std::fs::metadata(file).ok()?;
++    Some((meta.len(), meta.modified().ok()?))
+ }
+ 
+ impl Labeller {
+@@ -87,22 +128,38 @@ impl Labeller {
+                 .unwrap_or_default();
+             (project, archive)
+         });
+-        Labeller { project }
++        let read = project.as_ref().and_then(|(p, _)| task_file_stamp(p));
++        Labeller { project, read }
++    }
++
++    /// Whether the task file changed since it was read (or it can't be told).
++    fn stale(&self) -> bool {
++        match &self.project {
++            Some((project, _)) => self.read.is_none() || task_file_stamp(project) != self.read,
++            None => true,
++        }
+     }
+ 
+     /// A text with its task UUIDs as labels.
+     #[must_use]
+     pub fn text(&self, text: &str) -> String {
++        self.labels(text).0
++    }
++
++    /// A text with its task UUIDs as labels, and whether a UUID in it named no task this labeller knows (one the
++    /// command added since it was opened, or none at all).
++    fn labels(&self, text: &str) -> (String, bool) {
+         if !has_uuid(text) {
+-            return text.to_string();
++            return (text.to_string(), false);
+         }
+         let Some((project, archive)) = &self.project else {
+-            return text.to_string();
++            return (text.to_string(), true);
+         };
+         let Ok(document) = project.store().document() else {
+-            return text.to_string();
++            return (text.to_string(), true);
+         };
+         let mut out = String::new();
++        let mut missed = false;
+         let mut rest = text;
+         while rest.len() >= 36 {
+             let found = (0..=rest.len() - 36)
+@@ -113,14 +170,16 @@ impl Labeller {
+             };
+             out.push_str(&rest[..i]);
+             let uuid = &rest[i..i + 36];
+-            match atm_common::keys::resolve(document, archive, uuid) {
+-                Ok(f) => out.push_str(&project.task_label(f.task)),
+-                Err(_) => out.push_str(uuid),
++            if let Ok(f) = atm_common::keys::resolve(document, archive, uuid) {
++                out.push_str(&project.task_label(f.task));
++            } else {
++                missed = true;
++                out.push_str(uuid);
+             }
+             rest = &rest[i + 36..];
+         }
+         out.push_str(rest);
+-        out
++        (out, missed)
+     }
+ 
+     /// The project's palette (its statuses and priorities, for their styles).
+diff --git a/crates/atm-cli/src/commands/claim.rs b/crates/atm-cli/src/commands/claim.rs
+index cde82fd6..82f235ee 100644
+--- a/crates/atm-cli/src/commands/claim.rs
++++ b/crates/atm-cli/src/commands/claim.rs
+@@ -284,7 +284,14 @@ fn hold(args: &HoldArgs, ctx: Context, cwd: &Path) -> Result<()> {
+     let shell = crate::process::shell_pid();
+     #[allow(clippy::cast_precision_loss)] // reason: seconds since 1970 fit an f64 exactly
+     let deadline = real_now() as f64 + args.max_minutes * 60.0;
+-    let started = process_started(shell).unwrap_or(0);
++    // Without the shell's start time the watcher can't tell it from a later process given its pid, and quits at once:
++    // refused, not said to hold (ATM-679, audit C12). The lease renewed above stays, as any command's would
++    let started = process_started(shell).ok_or_else(|| {
++        Error::failed(format!(
++            "can't read when this shell (pid {shell}) started, so the claim on {} can't be held while it runs: renew it with `atm claim heartbeat {}` during long commands instead",
++            args.task_id, args.task_id
++        ))
++    })?;
+     let watcher = detach(
+         &[
+             "_claim-watch".into(),
+diff --git a/crates/atm-cli/src/commands/db.rs b/crates/atm-cli/src/commands/db.rs
+index 38b2c726..2f9c84f3 100644
+--- a/crates/atm-cli/src/commands/db.rs
++++ b/crates/atm-cli/src/commands/db.rs
+@@ -187,6 +187,8 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
+         return Ok(());
+     }
+     let mut project = Project::open(cwd)?;
++    // What the meta file did, for `--json` too (ATM-679, audit C11): none without one
++    let mut meta = Value::Null;
+     if let Some(meta_file) = meta_file.filter(|m| !m.is_empty()) {
+         let text = crate::option_file::read_option_file(cwd, "meta-file", meta_file)?;
+         let new = serde_json::from_str::<Value>(&text).ok();
+@@ -196,6 +198,7 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
+             )));
+         };
+         let (created, keys) = init_meta(&mut project, &new)?;
++        meta = json!({ "created": created, "keys": keys });
+         // The task data as it is now
+         project = Project::open(cwd)?;
+         if !ctx.json {
+@@ -220,6 +223,7 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
+     let setup = maintenance(cwd)?.set_up()?;
+     if ctx.json {
+         print_json(&json!({
++            "meta": meta,
+             "project_id": project_id,
+             "repository": repository,
+             "git": setup.git,
+diff --git a/crates/atm-cli/src/commands/maintenance.rs b/crates/atm-cli/src/commands/maintenance.rs
+index c847571a..03fc29c3 100644
+--- a/crates/atm-cli/src/commands/maintenance.rs
++++ b/crates/atm-cli/src/commands/maintenance.rs
+@@ -346,14 +346,38 @@ fn ensure_server(home: &Path, port: u64) -> Result<(Map<String, Value>, bool)> {
+     Ok((start_server(home, port)?, true))
+ }
+ 
+-/// Start (or reuse) the server; the URL to show: the project's (at or above `cwd`), or the overview's.
+-fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
++/// What a service command did (ATM-679, audit C11): its lines for people, and the same as one JSON object for
++/// `--json`.
++struct Said {
++    lines: Vec<String>,
++    json: Map<String, Value>,
++}
++
++impl Said {
++    fn print(&self, json: bool) {
++        if json {
++            print_json(&Value::Object(self.json.clone()));
++        } else {
++            for line in &self.lines {
++                println!("{line}");
++            }
++        }
++    }
++}
++
++/// Start (or reuse) the server; the URL to show: the project's (at or above `cwd`), or the overview's. `--json`:
++/// `{url, started, listed, migrated}`.
++fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<(String, Said)> {
+     let mut project = None;
++    let mut lines = Vec::new();
++    let mut migrated = Vec::new();
++    let mut listed = Value::Null;
+     if !overview {
+         let migration = super::db::maintenance(cwd)?.migrate(false)?;
+         for line in &migration.lines {
+             if line != "Nothing to migrate." {
+-                println!("{line}");
++                lines.push(line.clone());
++                migrated.push(line.clone());
+             }
+         }
+         if !migration.tasks_exists {
+@@ -362,11 +386,13 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
+             ));
+         }
+         let (id, shown) = Project::open(cwd)?.join_default_workspace()?;
++        listed = Value::Bool(shown);
+         if shown {
+             project = Some(id);
+         } else {
+-            println!(
++            lines.push(
+                 "This project isn't listed on the dashboard (meta.dashboard.listed is false)."
++                    .into(),
+             );
+         }
+     }
+@@ -376,15 +402,17 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
+         record.get("port").unwrap_or(&Value::Null),
+         project.as_deref(),
+     );
+-    println!(
++    lines.push(format!(
+         "Dashboard server {}: {url}",
+         if started {
+             "started"
+         } else {
+             "already running"
+         }
+-    );
+-    Ok(url)
++    ));
++    let json = json!({ "url": url, "started": started, "listed": listed, "migrated": migrated });
++    let json = json.as_object().cloned().unwrap_or_default();
++    Ok((url, Said { lines, json }))
+ }
+ 
+ /// How many checks in a row must miss a process before it counts as gone: a busy machine can make one look miss it.
+@@ -528,54 +556,75 @@ fn older_atms_servers(home: &Path, servers: &[Map<String, Value>]) -> Vec<Map<St
+         .collect()
+ }
+ 
+-fn serve_stop(home: &Path, port: u16) -> Result<()> {
++/// Stop the server, and any atm server the record doesn't name. `--json`: `{stopped: [{pid, port, recorded}],
++/// stale_record}` (the pid of a record whose server was gone, removed).
++fn serve_stop(home: &Path, port: u16) -> Result<Said> {
+     let record = read_record(home);
+     let live = record
+         .as_ref()
+         .is_some_and(|r| ask(port_of(r)).is_some_and(|i| answers_for(&i, r, home)));
+     let recorded = record.as_ref().filter(|_| live).and_then(|r| r.get("pid"));
+     let strays = unrecorded_servers(home, &servers_on(port), recorded);
+-    let Some(record) = record else {
+-        if strays.is_empty() {
+-            println!("Dashboard server is not running.");
+-            return Ok(());
+-        }
+-        return stop_strays(home, &strays);
++    let mut said = Said {
++        lines: Vec::new(),
++        json: Map::new(),
+     };
+-    if !live {
+-        let _ = std::fs::remove_file(record_path(home));
+-        if strays.is_empty() {
+-            println!(
+-                "Dashboard server is not running (removed a stale record for pid {}).",
+-                py_str_opt(record.get("pid"))
+-            );
+-            return Ok(());
++    let mut stopped = Vec::new();
++    let mut stale = Value::Null;
++    match &record {
++        None if strays.is_empty() => said.lines.push("Dashboard server is not running.".into()),
++        None => {}
++        Some(record) if !live => {
++            let _ = std::fs::remove_file(record_path(home));
++            stale = record.get("pid").cloned().unwrap_or(Value::Null);
++            if strays.is_empty() {
++                said.lines.push(format!(
++                    "Dashboard server is not running (removed a stale record for pid {}).",
++                    py_str_opt(record.get("pid"))
++                ));
++            }
++        }
++        Some(record) => {
++            if let Some(pid) = pid_of(record) {
++                stop_server(home, pid, Some(record))?;
++                said.lines
++                    .push(format!("Dashboard server stopped (pid {pid})."));
++                stopped.push(json!({ "pid": pid, "port": record.get("port"), "recorded": true }));
++            }
+         }
+-    } else if let Some(pid) = pid_of(&record) {
+-        stop_server(home, pid, Some(&record))?;
+-        println!("Dashboard server stopped (pid {pid}).");
+     }
+-    stop_strays(home, &strays)
++    let failed = stop_strays(home, &strays, &mut said.lines, &mut stopped);
++    said.json.insert("stopped".into(), Value::Array(stopped));
++    said.json.insert("stale_record".into(), stale);
++    failed.map_or(Ok(said), Err)
+ }
+ 
+ /// Stop the servers the record doesn't name: each one that is an atm server; any other answering as one is only
+-/// reported (ATM-673, audit C6), and the others are still stopped.
+-fn stop_strays(home: &Path, strays: &[Map<String, Value>]) -> Result<()> {
++/// reported (ATM-673, audit C6), and the others are still stopped. The last refusal, if any.
++fn stop_strays(
++    home: &Path,
++    strays: &[Map<String, Value>],
++    lines: &mut Vec<String>,
++    stopped: &mut Vec<Value>,
++) -> Option<Error> {
+     let mut failed = None;
+     for info in strays {
+         let Some(pid) = pid_of(info) else { continue };
+         match stop_server(home, pid, None) {
+-            Ok(()) => println!(
+-                "Stopped a dashboard server the record didn't name (pid {pid}, port {}).",
+-                py_str_opt(info.get("port"))
+-            ),
++            Ok(()) => {
++                lines.push(format!(
++                    "Stopped a dashboard server the record didn't name (pid {pid}, port {}).",
++                    py_str_opt(info.get("port"))
++                ));
++                stopped.push(json!({ "pid": pid, "port": info.get("port"), "recorded": false }));
++            }
+             Err(e) => {
+                 eprintln!("atm: port {}: {e}", py_str_opt(info.get("port")));
+                 failed = Some(e);
+             }
+         }
+     }
+-    failed.map_or(Ok(()), Err)
++    failed
+ }
+ 
+ fn real_path(path: &str) -> PathBuf {
+@@ -741,11 +790,21 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
+     if args.refresh {
+         if ctx.dry_run {
+             println!("[dry-run] would refresh the dashboard server if outdated");
+-        } else if let Some(record) = refresh_server(&home)? {
++            return Ok(());
++        }
++        let restarted = refresh_server(&home)?;
++        let url = restarted
++            .as_ref()
++            .map(|r| server_url(r.get("port").unwrap_or(&Value::Null), None));
++        if ctx.json {
++            let version = restarted.as_ref().and_then(|r| r.get("version"));
++            print_json(
++                &json!({ "restarted": restarted.is_some(), "version": version, "url": url }),
++            );
++        } else if let (Some(record), Some(url)) = (&restarted, &url) {
+             println!(
+-                "Dashboard server restarted with dashboard {}: {}",
+-                py_str_opt(record.get("version")),
+-                server_url(record.get("port").unwrap_or(&Value::Null), None)
++                "Dashboard server restarted with dashboard {}: {url}",
++                py_str_opt(record.get("version"))
+             );
+         }
+         return Ok(());
+@@ -757,7 +816,8 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
+                 return Ok(());
+             }
+             refresh_server(&home)?;
+-            let url = serve_start(&cwd, args.port, args.all)?;
++            let (url, said) = serve_start(&cwd, args.port, args.all)?;
++            said.print(ctx.json);
+             if args.open {
+                 open_browser(&url);
+             }
+@@ -767,7 +827,7 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
+                 println!("[dry-run] would stop the dashboard server");
+                 return Ok(());
+             }
+-            serve_stop(&home, args.port)?;
++            serve_stop(&home, args.port)?.print(ctx.json);
+         }
+         _ => serve_status(&home, ctx.json, args.port),
+     }
+diff --git a/crates/atm-cli/src/commands/task.rs b/crates/atm-cli/src/commands/task.rs
+index b8a19220..97f6c2f0 100644
+--- a/crates/atm-cli/src/commands/task.rs
++++ b/crates/atm-cli/src/commands/task.rs
+@@ -41,8 +41,8 @@ pub struct ListArgs {
+     /// Only tasks with this label (repeatable)
+     #[arg(long)]
+     label: Vec<String>,
+-    /// Only tasks started by this agent
+-    #[arg(long)]
++    /// Only tasks started by this agent (`--agent` until 0.43.0, which reads as running as someone else: ATM-679)
++    #[arg(long = "started-by", alias = "agent")]
+     agent: Option<String>,
+     /// Only to-do tasks whose dependencies are done
+     #[arg(long)]
+diff --git a/crates/atm-cli/src/commands/vcs.rs b/crates/atm-cli/src/commands/vcs.rs
+index 1cee3181..a54915de 100644
+--- a/crates/atm-cli/src/commands/vcs.rs
++++ b/crates/atm-cli/src/commands/vcs.rs
+@@ -137,11 +137,14 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
+                 }
+                 let result = record_commit(&mut project, vcs, &task_id, &rev)?;
+                 if ctx.json {
+-                    let mut shown = json!({"task": result["task"], "commit": result["commit"], "recorded": true});
+-                    if !result["hint"].is_null() {
+-                        shown["hint"] = result["hint"].clone();
+-                    }
+-                    print_json(&shown);
++                    // Every field the text says, always there (ATM-679, audit C11): `hint` null when there is none
++                    print_json(&json!({
++                        "task": result["task"],
++                        "commit": result["commit"],
++                        "summary": result["summary"],
++                        "recorded": true,
++                        "hint": result["hint"],
++                    }));
+                     return Ok(());
+                 }
+                 let sha = py_str(&result["commit"]);
+diff --git a/crates/atm-cli/src/main.rs b/crates/atm-cli/src/main.rs
+index 7f52b6de..f99ab8ba 100644
+--- a/crates/atm-cli/src/main.rs
++++ b/crates/atm-cli/src/main.rs
+@@ -199,6 +199,12 @@ enum Command {
+ }
+ 
+ impl Command {
++    /// Whether its `--agent` is a filter, not who runs it (ATM-679, audit C13): `task list --agent`, the old name of
++    /// `--started-by`. Its caller is the one running it, whose claims it renews.
++    fn agent_is_a_filter(&self) -> bool {
++        matches!(self, Command::Task(commands::task::TaskCommand::List(_)))
++    }
++
+     /// Whether running it renews the caller's own claims (T-439): not the commands that work on no project, nor the
+     /// heartbeat and the watcher, which renew their own.
+     fn renews_claims(&self) -> bool {
+@@ -233,10 +239,7 @@ impl Command {
+ /// no hook (T-439, docs/porting-to-rust.md §4). As `claim heartbeat --auto`: only claims whose last renewal is ten
+ /// minutes old, so most commands only read. Not for a command run as someone else (`--agent`), and never in the way of
+ /// the command itself.
+-fn renew_own_claims(args: &[OsString], cwd: &Path) {
+-    if as_someone_else(args) {
+-        return;
+-    }
++fn renew_own_claims(cwd: &Path) {
+     if let Ok(project) = atm_lib::Project::open(cwd) {
+         let actor = atm_lib::actor::agent_identity(None, cwd);
+         // No project here, or one atm can't read: the command says so itself
+@@ -357,10 +360,12 @@ fn run(args: &[OsString]) -> u8 {
+         // Never in the way of the command itself
+         let _ = commands::maintenance::refresh_server(&atm_common::home::state_dir());
+     }
+-    if cli.command.renews_claims() {
+-        renew_own_claims(args, &cwd);
++    // Run as someone else: `--agent`, unless the command's `--agent` is a filter (ATM-679)
++    let other = as_someone_else(args) && !cli.command.agent_is_a_filter();
++    if cli.command.renews_claims() && !other {
++        renew_own_claims(&cwd);
+     }
+-    let reminds = cli.command.reminds_to_watch();
++    let reminds = cli.command.reminds_to_watch() && !other;
+     let code = match dispatch(cli.command, ctx, &cwd) {
+         Ok(code) => code,
+         Err(error) => {
+@@ -369,7 +374,7 @@ fn run(args: &[OsString]) -> u8 {
+         }
+     };
+     if reminds {
+-        remind_to_watch(args, &cwd);
++        remind_to_watch(&cwd);
+     }
+     code
+ }
+@@ -377,10 +382,7 @@ fn run(args: &[OsString]) -> u8 {
+ /// An agent that runs a command with a review of its work open and no watch of its reviews running is told so, once
+ /// in a while, on stderr (ATM-642, `review_listen::reminder`): comments, pokes and decisions would go unseen. After
+ /// the command, so its own output comes first; never with `--agent` (run as someone else), never in its way.
+-fn remind_to_watch(args: &[OsString], cwd: &Path) {
+-    if as_someone_else(args) {
+-        return;
+-    }
++fn remind_to_watch(cwd: &Path) {
+     if let Ok(project) = atm_lib::Project::open(cwd) {
+         let me = atm_lib::actor::agent_identity(None, cwd);
+         if let Some(line) = atm_lib::review_listen::reminder(&project, &me) {
+@@ -394,7 +396,8 @@ fn remind_to_watch(args: &[OsString], cwd: &Path) {
+     }
+ }
+ 
+-/// Whether a command is run as someone else (`--agent`, before any `--`).
++/// Whether a command is run as someone else (`--agent`, before any `--`); the caller decides from the parsed command
++/// whether its `--agent` is a filter instead ([`Command::agent_is_a_filter`]).
+ fn as_someone_else(args: &[OsString]) -> bool {
+     args.iter().take_while(|a| *a != "--").any(|a| {
+         let a = a.to_string_lossy();
+diff --git a/crates/atm-cli/src/output.rs b/crates/atm-cli/src/output.rs
+index f5b0dd89..5e79bd5c 100644
+--- a/crates/atm-cli/src/output.rs
++++ b/crates/atm-cli/src/output.rs
+@@ -99,10 +99,14 @@ fn own_sgr(params: &str) -> bool {
+ /// window's title or a link, clear the screen, move the cursor or hide text, and a carriage return could print over a
+ /// line. Every control character goes but the line ends and tabs, the rest of its sequence staying as plain text for
+ /// the reader to see; with styling on, an SGR sequence of atm's own styles stays (the same in task text: it can only
+-/// colour). `--json` is untouched: JSON escapes control characters itself.
++/// colour). The invisible format characters go too (ATM-679, [`atm_common::py::invisible_format`]): a bidirectional
++/// override makes a line read in another order than it runs. `--json` is untouched: JSON escapes control characters
++/// itself.
+ #[must_use]
+ pub fn clean(text: &str) -> std::borrow::Cow<'_, str> {
+-    let keep = |c: char| c == '\n' || c == '\t' || !c.is_control();
++    let keep = |c: char| {
++        (c == '\n' || c == '\t' || !c.is_control()) && !atm_common::py::invisible_format(c)
++    };
+     if text.chars().all(keep) {
+         return text.into();
+     }
+@@ -454,6 +458,32 @@ mod tests {
+         t
+     }
+ 
++    /// ATM-679 (audit C9): what reaches a terminal has no control character but the line ends and tabs, and no
++    /// invisible format character (a right-to-left override makes a line read backwards); plain text is borrowed
++    #[test]
++    fn clean_drops_control_and_invisible_format_characters() {
++        let cases = [
++            (
++                "Plain text, ünïcode and emoji 🙂",
++                "Plain text, ünïcode and emoji 🙂",
++            ),
++            ("two\nlines\tand a tab", "two\nlines\tand a tab"),
++            ("a\rb\u{7}c", "abc"),
++            ("evil\u{202e}txt.exe", "eviltxt.exe"),
++            ("\u{2066}isolated\u{2069}", "isolated"),
++            ("zero\u{200b}width\u{200d}joiner\u{feff}", "zerowidthjoiner"),
++            ("soft\u{ad}hyphen\u{2060}", "softhyphen"),
++            (
++                "marks \u{200e}\u{200f} and \u{202a}\u{202b}\u{202c}\u{202d}",
++                "marks  and ",
++            ),
++        ];
++        for (text, printed) in cases {
++            assert_eq!(clean(text), printed, "{text:?}");
++        }
++        assert!(matches!(clean("as it is"), std::borrow::Cow::Borrowed(_)));
++    }
++
+     #[test]
+     fn columns_are_padded_to_the_widest_and_the_last_is_not() {
+         assert_eq!(
+diff --git a/crates/atm-common/src/py.rs b/crates/atm-common/src/py.rs
+index fca0246d..2bdb4501 100644
+--- a/crates/atm-common/src/py.rs
++++ b/crates/atm-common/src/py.rs
+@@ -141,15 +141,30 @@ pub fn repr_str(text: &str) -> String {
+     out
+ }
+ 
++/// The invisible format characters text can carry (I30, ATM-679): the soft hyphen, zero-width spaces and joiners, the
++/// left-to-right and right-to-left marks, the bidirectional embeddings, overrides and isolates (which can make a line
++/// read in another order than it runs), the word joiner and invisible operators, and the byte-order mark. The one list
++/// for what atm quotes and what it never prints.
++#[must_use]
++pub fn invisible_format(c: char) -> bool {
++    matches!(
++        c,
++        '\u{ad}'
++            | '\u{200b}'..='\u{200f}'
++            | '\u{202a}'..='\u{202e}'
++            | '\u{2060}'..='\u{2064}'
++            | '\u{2066}'..='\u{2069}'
++            | '\u{feff}'
++    )
++}
++
+ /// Python's `str.isprintable()` for one character, as far as atm's data needs it: control and format characters and
+ /// separators other than the space are not.
+ fn printable(c: char) -> bool {
+     if c == ' ' {
+         return true;
+     }
+-    !(c.is_control()
+-        || c.is_whitespace()
+-        || matches!(c, '\u{ad}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{2064}' | '\u{feff}'))
++    !(c.is_control() || c.is_whitespace() || invisible_format(c))
+ }
+ 
+ /// `repr(float)`: the shortest digits that read back as the same number, in fixed notation from 1e-4 up to 1e16
+@@ -297,6 +312,11 @@ mod tests {
+         assert_eq!(py_repr(&json!([1, "a", null])), "[1, 'a', None]");
+         assert_eq!(py_repr(&json!({"k": 2})), "{'k': 2}");
+         assert_eq!(py_repr(&json!("é\u{a0}\u{2028}")), "'é\\xa0\\u2028'");
++        // Invisible format characters are escaped, as Python's isprintable() refuses them: the isolates too (ATM-679)
++        assert_eq!(
++            py_repr(&json!("a\u{202e}b\u{2066}c\u{2069}\u{feff}")),
++            "'a\\u202eb\\u2066c\\u2069\\ufeff'"
++        );
+     }
+ 
+     #[test]
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index bf8bdc22..c3d8f020 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1330,6 +1330,12 @@ land (I11, I13, I24, I25). Fields:
+   - **Dependabot** watches atm's crates too (A11), grouped like npm; each PR still runs `cargo deny check`.
+   - **The agent sandbox's images** are pinned by digest (A11), bumped by hand with `docker buildx imagetools
+     inspect`.
++- **What atm prints for people drops the invisible format characters** (ATM-679, audit C9, I30): the bidirectional
++  embeddings, overrides and isolates, the zero-width characters, the soft hyphen and the byte-order mark go from task
++  text as control characters do, by one list (`atm_common::py::invisible_format`, which `repr` quoting shares). `--json`
++  keeps text as it is. `task list --agent` (renamed `--started-by`, the old name kept hidden) no longer counts as
++  running as someone else, so it renews its caller's claims (C13); `claim hold` refuses when it can't read the shell's
++  start time instead of saying it holds (C12).
+ 
+ ## 4. Keeping it current
+ 
+diff --git a/tests/scripts/claims.test.mjs b/tests/scripts/claims.test.mjs
+index da96378c..de924b33 100644
+--- a/tests/scripts/claims.test.mjs
++++ b/tests/scripts/claims.test.mjs
+@@ -147,6 +147,9 @@ describe('claims', () => {
+       // A failing command still renews: the agent is at work
+       assert.notEqual(runAtm(['task', 'details', 'T-404'], root, as('bob', 45)).code, 0);
+       assert.equal(claims()['T-002'].lease_expires_at, at(165));
++      // `task list --agent` is a filter (the old name of --started-by, ATM-679): its caller's claims are renewed
++      assert.equal(runAtm(['task', 'list', '--agent', 'alice'], root, as('bob', 60)).code, 0);
++      assert.deepEqual([claims()['T-001'].lease_expires_at, claims()['T-002'].lease_expires_at], [at(135), at(180)]);
+     } finally {
+       removeDir(root);
+     }
+diff --git a/tests/scripts/git.test.mjs b/tests/scripts/git.test.mjs
+index 40bd5b8d..06c58d10 100644
+--- a/tests/scripts/git.test.mjs
++++ b/tests/scripts/git.test.mjs
+@@ -289,7 +289,14 @@ describe('atm commit --record', () => {
+ 
+       const json = runAtm(['vcs', 'commit', 'T-001', '--record', 'HEAD', '--json'], root, ENV);
+       assert.equal(json.code, 0, json.stderr);
+-      assert.deepEqual(JSON.parse(json.stdout), { task: 'T-001', commit: sha, recorded: true });
++      // Every field the text says, `hint` null when there is none (ATM-679, audit C11)
++      assert.deepEqual(JSON.parse(json.stdout), {
++        task: 'T-001',
++        commit: sha,
++        summary: 'feat(T-001): Add login',
++        recorded: true,
++        hint: null,
++      });
+     } finally {
+       removeDir(root);
+     }
+diff --git a/tests/scripts/output.test.mjs b/tests/scripts/output.test.mjs
+index 077d58eb..b30571ca 100644
+--- a/tests/scripts/output.test.mjs
++++ b/tests/scripts/output.test.mjs
+@@ -107,6 +107,45 @@ describe('styles', () => {
+     }
+   });
+ 
++  // ATM-679 (audit C9): a right-to-left override makes a line read in another order than it runs; the invisible format
++  // characters go from what people read, as the control characters do, and stay in --json
++  test('task text’s bidirectional and invisible format characters are dropped; --json keeps them', () => {
++    const name = 'Pay ‮eulav‬ now ⁦x⁩ ​zero‍ ﻿bom';
++    const root = makeProject({
++      files: { '.agentic-task-manager/tasks.json': { tasks: [{ id: 'T-1', name, status: 'todo' }] } },
++    });
++    try {
++      for (const args of [
++        ['task', 'list'],
++        ['task', 'details', 'T-1'],
++      ]) {
++        const out = runAtm(args, root);
++        assert.equal(out.code, 0, out.stderr);
++        assert.ok(!/[­​-‏‪-‮⁠-⁤⁦-⁩﻿]/.test(out.stdout), args.join(' '));
++        assert.ok(out.stdout.includes('Pay eulav now x zero bom'), `${args.join(' ')}: ${JSON.stringify(out.stdout)}`);
++      }
++      assert.equal(JSON.parse(runAtm(['task', 'list', '--json'], root).stdout)[0].name, name);
++    } finally {
++      removeDir(root);
++    }
++  });
++
++  // ATM-679 (audit C11): `db init --meta-file --json` is one JSON object, what the meta file did in it
++  test('db init --meta-file --json prints one JSON object, with the keys it set', () => {
++    const root = makeProject({ files: { 'meta.json': { project: 'Named' } } });
++    try {
++      const out = runAtm(['db', 'init', '--meta-file', 'meta.json', '--json'], root);
++      assert.equal(out.code, 0, out.stderr);
++      const said = JSON.parse(out.stdout);
++      assert.deepEqual(said.meta, { created: true, keys: ['project'] });
++      assert.ok('project_id' in said && 'git' in said, out.stdout);
++      // Without a meta file: none
++      assert.equal(JSON.parse(runAtm(['db', 'init', '--json'], root).stdout).meta, null);
++    } finally {
++      removeDir(root);
++    }
++  });
++
+   test('--json is never styled, even with --color always', () => {
+     const root = project();
+     try {
+diff --git a/tests/scripts/scenarios/query.json b/tests/scripts/scenarios/query.json
+index 6d2c4740..84e2590d 100644
+--- a/tests/scripts/scenarios/query.json
++++ b/tests/scripts/scenarios/query.json
+@@ -333,7 +333,7 @@
+     }
+   },
+   {
+-    "name": "list --agent: the tasks an agent started (an older file's agent too)",
++    "name": "list --agent (the old name of --started-by): the tasks an agent started (an older file's agent too)",
+     "setup": {
+       "files": {
+         ".agentic-task-manager/tasks.json": {
+@@ -368,6 +368,23 @@
+       "stdout": "T-1  done  P2  One\nT-2  done  P2  Two\n2 tasks: 2 done\n"
+     }
+   },
++  {
++    "name": "list --started-by: the tasks an agent started (ATM-679)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "tasks": [
++            { "id": "T-1", "name": "One", "phase": 0, "status": "done", "started_by": "alice" },
++            { "id": "T-2", "name": "Two", "phase": 0, "status": "done", "started_by": "bob" }
++          ]
++        }
++      }
++    },
++    "args": ["task", "list", "--started-by", "alice"],
++    "expect": {
++      "stdout": "T-1  done  P2  One\n1 task: 1 done\n"
++    }
++  },
+   {
+     "name": "list with nothing matching",
+     "setup": {
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index 4fef705d..98721aa2 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -151,6 +151,13 @@ describe('serve', () => {
+     const again = atm(['service', 'start', '--port', String(port + 5)], root);
+     assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/projects/abcd1234`));
+     assert.equal(record(atmHome).pid, r.pid);
++    // --json: one object, never the text (ATM-679, audit C11)
++    assert.deepEqual(JSON.parse(atm(['service', 'start', '--json'], root).stdout), {
++      url: `http://localhost:${port}/projects/abcd1234`,
++      started: false,
++      listed: true,
++      migrated: [],
++    });
+ 
+     const running = atm(['service', 'status'], root).stdout;
+     assert.match(running, new RegExp(`running: http://localhost:${port}/ .*pid ${r.pid}`));
+@@ -158,11 +165,15 @@ describe('serve', () => {
+     assert.equal(status.running, true);
+     assert.equal(status.url, `http://localhost:${port}/`);
+ 
+-    assert.equal(atm(['service', 'stop'], root).stdout, `Dashboard server stopped (pid ${r.pid}).\n`);
++    assert.deepEqual(JSON.parse(atm(['service', 'stop', '--json'], root).stdout), {
++      stopped: [{ pid: r.pid, port, recorded: true }],
++      stale_record: null,
++    });
+     assert.equal(alive(r.pid), false);
+     assert.equal(record(atmHome), null);
+     assert.equal(atm(['service', 'status'], root).stdout, 'Dashboard server is not running.\n');
+     assert.equal(atm(['service', 'stop'], root).stdout, 'Dashboard server is not running.\n');
++    assert.deepEqual(JSON.parse(atm(['service', 'stop', '--json'], root).stdout), { stopped: [], stale_record: null });
+   });
+ 
+   test('one server for two projects; /api/projects lists them', async () => {

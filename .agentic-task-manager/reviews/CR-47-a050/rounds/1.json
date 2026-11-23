@@ -1,0 +1,27 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "1dc78a06c24192635f0a94094f82aeac177b3993",
+    "head": "cb63ac9933d293afe353e83241bef0753ca243e7"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/routes.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/routes.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T02:39:01Z"
+}

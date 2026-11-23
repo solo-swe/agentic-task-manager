@@ -1,0 +1,47 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "8c1b5a11c5a967ef07acc123f939018aed660126",
+    "head": "4a151b9816868b25c5ef6d7d54779cff270fe6ef"
+  },
+  "files": [
+    {
+      "path": ".github/workflows/homebrew.yml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": ".github/workflows/skills.yml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "CHANGELOG.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ci-workflow.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "packaging/README.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-23T16:00:21Z"
+}

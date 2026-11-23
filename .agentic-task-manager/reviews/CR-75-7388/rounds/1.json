@@ -1,0 +1,17 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "5b9f2d484f3be1ff6eaf285a01d4c943c39fce79",
+    "head": "2ba58595dde3e662041e9b73261a98352a0046f0"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/reviews/DiffCode.svelte",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T10:06:59Z"
+}

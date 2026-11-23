@@ -1,0 +1,37 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "73925a5c8c850ed503849a94763bc4901447095f",
+    "head": "0b3903c4d738fb8c9344d102778a1983a1481f43"
+  },
+  "files": [
+    {
+      "path": "crates/atm-docs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/documents.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/serve.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T06:42:00Z"
+}

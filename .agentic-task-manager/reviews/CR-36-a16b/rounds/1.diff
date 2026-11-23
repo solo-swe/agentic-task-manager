@@ -1,0 +1,861 @@
+diff --git a/crates/atm-api/src/pages.rs b/crates/atm-api/src/pages.rs
+index ca7f5bd2..218c8933 100644
+--- a/crates/atm-api/src/pages.rs
++++ b/crates/atm-api/src/pages.rs
+@@ -2,10 +2,14 @@
+ //! one its path names. Nothing else is served under them: a project's ID or tab is only text the page reads.
+ 
+ /// A page's path without its leading `/` and an optional trailing `/`: the root, `board`, `progress`, `agents`,
+-/// `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase letters) or a review's page,
+-/// `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as `CR-8.2`).
++/// `reviews` (every project's, ATM-575), `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase
++/// letters) or a review's page, `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as
++/// `CR-8.2`).
+ fn is_form(rest: &str) -> bool {
+-    if matches!(rest, "" | "board" | "progress" | "agents" | "projects") {
++    if matches!(
++        rest,
++        "" | "board" | "progress" | "agents" | "reviews" | "projects"
++    ) {
+         return true;
+     }
+     let Some(after) = rest.strip_prefix("projects/") else {
+@@ -59,6 +63,8 @@ mod tests {
+             "/board",
+             "/progress/",
+             "/agents",
++            "/reviews",
++            "/w/work/reviews/",
+             "/w/work",
+             "/w/work/",
+             "/w/work/board",
+@@ -78,6 +84,7 @@ mod tests {
+             "/projects//",
+             "/boards",
+             "/board/x",
++            "/reviews/CR-7",
+             "/tasks.json",
+             "/w",
+             "/w/",
+diff --git a/dashboard/src/lib/address.ts b/dashboard/src/lib/address.ts
+index 465f5372..dcfa18e6 100644
+--- a/dashboard/src/lib/address.ts
++++ b/dashboard/src/lib/address.ts
+@@ -13,7 +13,7 @@
+ 
+ /** The All projects page's tabs (T-259): the project cards, the board of every project's tasks, every project's
+  * progress (T-329) or agents (T-333) */
+-export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents'] as const;
++export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents', 'reviews'] as const;
+ export type OverviewTab = (typeof OVERVIEW_TABS)[number];
+ 
+ export function isOverviewTab(value: unknown): value is OverviewTab {
+@@ -119,9 +119,9 @@ export function formatAddress(params: URLSearchParams): string {
+ 
+ /** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (atm-api's pages.rs):
+  * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/projects/<id>/reviews/<CR>`, `/board`, `/progress`,
+- * `/agents`, each also under `/w/<w>` (and `/w/<w>` itself) */
++ * `/agents`, `/reviews` (ATM-575), each also under `/w/<w>` (and `/w/<w>` itself) */
+ export const PAGE_PATH =
+-  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents)?\/?)?$/;
++  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents|reviews)?\/?)?$/;
+ 
+ /** The review a review's page shows (/projects/<id>/reviews/<CR>), and the view of it its query names */
+ export interface ReviewAddress {
+diff --git a/dashboard/src/lib/overview/OverviewReviews.svelte b/dashboard/src/lib/overview/OverviewReviews.svelte
+new file mode 100644
+index 00000000..7c0ff44e
+--- /dev/null
++++ b/dashboard/src/lib/overview/OverviewReviews.svelte
+@@ -0,0 +1,140 @@
++<script lang="ts">
++  // Every project's reviews in one list (ATM-575, Hakan: a fourth tab on the overview): the reviews list of a project's
++  // Reviews tab (search, filters, in groups when unfiltered, what waits for you first), over the projects shown, each
++  // row saying its project; a project picker narrows it to one. A row opens its review's page, in its project.
++  import { onDestroy, untrack } from 'svelte';
++  import { reviewPageOf } from '../address';
++  import { inApp } from '../api/http';
++  import type { ProjectEntry } from '../load';
++  import { currentAddress, navigate } from '../navigation';
++  import { loadReviews } from '../review-data';
++  import { keepFilter, keptFilter } from '../review-filter';
++  import { mergeProjectReviews } from '../reviews/page';
++  import ReviewList from '../reviews/ReviewList.svelte';
++  import type { ListQuery, ReviewEntry } from '../reviews/types';
++  import { tabActions } from '../tab-actions';
++
++  let { projects }: { projects: ProjectEntry[] } = $props();
++
++  /** The projects it can list: those there (a missing one has no reviews to read) */
++  const present = $derived(projects.filter((p) => !p.missing));
++  /** The project picked, or every project ('') */
++  let picked = $state('');
++  const listed = $derived(picked ? present.filter((p) => p.id === picked) : present);
++
++  // The filter is kept as a project's is (ATM-604), under the overview's own name
++  const KEPT = '__overview';
++  let query = $state<ListQuery>(keptFilter(KEPT));
++  function chooseQuery(next: ListQuery) {
++    query = next;
++    keepFilter(KEPT, next);
++  }
++
++  let entries = $state.raw<ReviewEntry[]>([]);
++  let loading = $state(false);
++  let problem = $state<string | null>(null);
++  let shownText = '';
++  let asked = 0;
++
++  /** Each project's reviews the query keeps, asked of each at once; a project that can't answer is left out, and the
++   * list says which */
++  async function load() {
++    const ask = ++asked;
++    const from = listed;
++    loading = !entries.length;
++    const answers = await Promise.all(
++      from.map((p) =>
++        loadReviews(p.id, query).then(
++          (list) => ({ project: { id: p.id, name: p.name }, entries: list.reviews }),
++          () => null,
++        ),
++      ),
++    );
++    if (ask !== asked) return;
++    loading = false;
++    const failed = from.filter((_, i) => !answers[i]).map((p) => p.name);
++    problem = failed.length ? `Couldn't read the reviews of ${failed.join(', ')}.` : null;
++    const merged = mergeProjectReviews(answers.filter((a) => a !== null));
++    const text = JSON.stringify(merged);
++    if (text !== shownText) {
++      shownText = text;
++      entries = merged;
++    }
++  }
++
++  // Another query or project picked, or the projects listed changed: ask again
++  const asking = $derived(JSON.stringify([query, listed.map((p) => p.id)]));
++  $effect(() => {
++    void asking;
++    untrack(() => void load());
++  });
++  // The server pushes nothing about reviews: asked again every 10 s while the page is in view
++  const timer = setInterval(() => {
++    if (document.visibilityState === 'visible') void load();
++  }, 10_000);
++  onDestroy(() => clearInterval(timer));
++
++  const pageOf = (entry: ReviewEntry | undefined, reference: string) =>
++    reviewPageOf(currentAddress(), entry?.project?.id ?? '', reference);
++
++  /** A row opened: its review's page, in its project; in the app in a tab of its own, in the browser in place (with ⌘
++   * or Ctrl, in a browser tab of its own) */
++  function open(reference: string, newTab: boolean, entry?: ReviewEntry) {
++    if (!entry?.project) return;
++    const address = pageOf(entry, reference);
++    if (inApp) tabActions().open(address);
++    else if (newTab) window.open(address, '_blank', 'noopener');
++    else navigate(address);
++  }
++</script>
++
++<div class="overview-reviews" id="overview-reviews">
++  {#if present.length > 1}
++    <label class="overview-reviews-project">
++      <span>Project</span>
++      <select id="overview-reviews-project" aria-label="Project" bind:value={picked}>
++        <option value="">All projects</option>
++        {#each present as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
++      </select>
++    </label>
++  {/if}
++  <!-- A project that couldn't answer is named here, above the others' reviews (ReviewList's own problem shows instead of
++       its rows) -->
++  {#if problem}<p class="overview-reviews-problem" role="alert">{problem}</p>{/if}
++  <ReviewList
++    {entries}
++    {query}
++    {loading}
++    href={(reference, entry) => pageOf(entry, reference)}
++    onquery={chooseQuery}
++    onopen={open}
++  />
++</div>
++
++<style>
++  .overview-reviews {
++    display: flex;
++    flex-direction: column;
++  }
++  .overview-reviews-project {
++    display: flex;
++    align-items: center;
++    gap: var(--space-4);
++    padding: var(--space-6) var(--space-6) 0;
++    color: var(--text-muted);
++    font-size: var(--text-sm);
++  }
++  .overview-reviews-problem {
++    margin: var(--space-6) var(--space-6) 0;
++    color: var(--text-muted);
++  }
++  .overview-reviews-project select {
++    height: 28px;
++    padding: 0 var(--space-4);
++    border: 1px solid var(--border);
++    border-radius: var(--radius-md);
++    background: var(--surface);
++    color: var(--text);
++    font: inherit;
++  }
++</style>
+diff --git a/dashboard/src/lib/overview/ProjectCard.svelte b/dashboard/src/lib/overview/ProjectCard.svelte
+index 37eb6c97..8feb8866 100644
+--- a/dashboard/src/lib/overview/ProjectCard.svelte
++++ b/dashboard/src/lib/overview/ProjectCard.svelte
+@@ -9,6 +9,7 @@
+   import { safeUrl } from '../url';
+   import Icon from '../ui/Icon.svelte';
+   import NeedsYouMenu from '../shell/NeedsYouMenu.svelte';
++  import { openReviewPage } from '../reviews/open';
+   import ProjectLogo from '../ui/ProjectLogo.svelte';
+   import Ring from '../ui/Ring.svelte';
+   import TaskKey from '../ui/TaskKey.svelte';
+@@ -19,6 +20,8 @@
+   const s = $derived(project.summary);
+   const need = $derived(needsYou(project));
+   const needItems = $derived(project.missing ? [] : (s?.needs_you_tasks ?? []));
++  // Its reviews waiting on the user (ATM-575), in the same chip after the tasks
++  const needReviews = $derived(project.missing ? [] : (s?.needs_you_reviews ?? []));
+   const counted = $derived(s ? s.total - s.skipped : 0);
+   // A project with sprints (SR-7.7): rings for its recent sprints, and the active sprint's line
+   const sprints = $derived(s?.recent_sprints ?? null);
+@@ -90,12 +93,14 @@
+   </div>
+ 
+   <!-- What needs you: a badge on the card's top right corner, half outside it (T-335) -->
+-  {#if needItems.length || need}<div class="project-card-badge">
+-      {#if needItems.length}
+-        <!-- The tasks, from the server's summary: one opens the project on it, several are listed under the chip -->
++  {#if needItems.length || needReviews.length || need}<div class="project-card-badge">
++      {#if needItems.length || needReviews.length}
++        <!-- The tasks and reviews, from the server's summary: one opens it, several are listed under the chip -->
+         <NeedsYouMenu
+           items={needItems}
+           onopen={(task) => dashboard.openProject(project.id, { task })}
++          reviews={needReviews}
++          onreview={(reference) => openReviewPage(project.id, reference)}
+           chipClass="project-card-need"
+           align="right"
+         />
+diff --git a/dashboard/src/lib/overview/ProjectsOverview.svelte b/dashboard/src/lib/overview/ProjectsOverview.svelte
+index 53a35d9b..60a868d3 100644
+--- a/dashboard/src/lib/overview/ProjectsOverview.svelte
++++ b/dashboard/src/lib/overview/ProjectsOverview.svelte
+@@ -12,6 +12,7 @@
+   import InfoTip from '../ui/InfoTip.svelte';
+   import OverviewAgents from './OverviewAgents.svelte';
+   import OverviewProgress from './OverviewProgress.svelte';
++  import OverviewReviews from './OverviewReviews.svelte';
+   import ProjectCard from './ProjectCard.svelte';
+ 
+   const ordered = $derived(orderProjects(dashboard.projects));
+@@ -28,8 +29,15 @@
+     board: 'Omniboard',
+     progress: 'Progress',
+     agents: 'Agents',
++    reviews: 'Reviews',
+   };
+-  const ICONS = { projects: 'folder', board: 'square-kanban', progress: 'trending-up', agents: 'bot' } as const;
++  const ICONS = {
++    projects: 'folder',
++    board: 'square-kanban',
++    progress: 'trending-up',
++    agents: 'bot',
++    reviews: 'message-square',
++  } as const;
+   const buttons: Partial<Record<OverviewTab, HTMLButtonElement>> = {};
+ 
+   function onTabKeydown(e: KeyboardEvent) {
+@@ -145,6 +153,8 @@
+       <OverviewAgents projects={shown} />
+     {:else if tab === 'progress'}
+       <OverviewProgress projects={shown} />
++    {:else if tab === 'reviews'}
++      <OverviewReviews projects={shown} />
+     {:else}
+       <div class="projects-grid" id="projects-grid">
+         {#each shown as project (project.id)}
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index 88114c2f..058e19c2 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -36,9 +36,10 @@
+     loading?: boolean;
+     problem?: string | null;
+     /** A review's address, for its link */
+-    href: (reference: string) => string;
++    href: (reference: string, entry?: ReviewEntry) => string;
+     onquery: (query: Query) => void;
+-    onopen: (reference: string, newTab: boolean) => void;
++    /** `entry`: the row's, for a list of several projects' reviews (ATM-575), where a reference names one in each */
++    onopen: (reference: string, newTab: boolean, entry?: ReviewEntry) => void;
+     /** A live review opened (ATM-576): why it was refused, or null once it is open */
+     onlive?: (live: { title: string; base: string; task: string }) => Promise<string | null>;
+     /** A row's tasks (ATM-593): each key that names a task a link (`taskHref` its address, `taskLinks.open` what a
+@@ -116,10 +117,10 @@
+     onquery({ ...query, status: status_ });
+   }
+ 
+-  function open(e: MouseEvent, reference: string) {
++  function open(e: MouseEvent, entry: ReviewEntry) {
+     if (e.button !== 0 || e.shiftKey || e.altKey) return;
+     e.preventDefault();
+-    onopen(reference, e.metaKey || e.ctrlKey);
++    onopen(entry.review.reference, e.metaKey || e.ctrlKey, entry);
+   }
+ 
+   function ago(at: string): string {
+@@ -146,7 +147,7 @@
+       />
+     </label>
+     {#if waiting.length}
+-      <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false)}>
++      <button class="review-next" onclick={() => onopen(waiting[0].review.reference, false, waiting[0])}>
+         Next review needing you <span class="review-count">{waiting.length}</span>
+       </button>
+     {/if}
+@@ -277,7 +278,7 @@
+ {#snippet row(entry: ReviewEntry, waited: boolean)}
+   {@const r = entry.review}
+   <li class="review-row" class:needs-you={entry.needs_you || entry.waiting === 'answered'} data-review={r.reference}>
+-    <a class="review-link" href={href(r.reference)} onclick={(e) => open(e, r.reference)}>
++    <a class="review-link" href={href(r.reference, entry)} onclick={(e) => open(e, entry)}>
+       <span class="review-ref">{r.reference}</span>
+       <span class="review-title">{r.title}</span>
+     </a>
+@@ -291,6 +292,9 @@
+         >Waited {waitedFor(entry.waiting_since, Date.now())}</span
+       >{/if}
+     <span class="review-meta">
++      {#if entry.project}<span class="review-project" data-project={entry.project.id}
++          ><Icon name="folder" size={12} />{entry.project.name}</span
++        >{/if}
+       {#if r.tasks.length}<span class="review-tasks"
+           ><Icon name="list-todo" size={12} />{#each r.tasks as key, i (key)}{i
+               ? ', '
+diff --git a/dashboard/src/lib/reviews/open.ts b/dashboard/src/lib/reviews/open.ts
+new file mode 100644
+index 00000000..fda92924
+--- /dev/null
++++ b/dashboard/src/lib/reviews/open.ts
+@@ -0,0 +1,13 @@
++// Opening a review's page from outside the Reviews tab (ATM-575: the needs-you chip): in the app, in a tab of its own,
++// as the Reviews tab opens one; in the browser, in place
++import { reviewPageOf } from '../address';
++import { inApp } from '../api/http';
++import { currentAddress, navigate } from '../navigation';
++import { tabActions } from '../tab-actions';
++
++/** Open review `reference` of project `project` */
++export function openReviewPage(project: string, reference: string): void {
++  const address = reviewPageOf(currentAddress(), project, reference);
++  if (inApp) tabActions().open(address);
++  else navigate(address);
++}
+diff --git a/dashboard/src/lib/reviews/page.ts b/dashboard/src/lib/reviews/page.ts
+index c52a486b..a6056498 100644
+--- a/dashboard/src/lib/reviews/page.ts
++++ b/dashboard/src/lib/reviews/page.ts
+@@ -57,6 +57,14 @@ export function groupReviews(entries: ReviewEntry[], now: number): ReviewGroup[]
+   return groups.filter((g) => g.entries.length);
+ }
+ 
++/** Several projects' reviews as one list (ATM-575, the overview's Reviews): each tagged with its project, the latest
++ * activity first, as one project's list is */
++export function mergeProjectReviews(
++  lists: { project: { id: string; name: string }; entries: ReviewEntry[] }[],
++): ReviewEntry[] {
++  return lists.flatMap(({ project, entries }) => entries.map((e) => ({ ...e, project }))).sort(latestFirst);
++}
++
+ /** How long a review has waited, in words: "under an hour", "5 hours", "1 day", "3 days" (ATM-610) */
+ export function waitedFor(since: string, now: number): string {
+   const ms = now - Date.parse(since);
+diff --git a/dashboard/src/lib/reviews/types.ts b/dashboard/src/lib/reviews/types.ts
+index 4c31f78d..867b48a1 100644
+--- a/dashboard/src/lib/reviews/types.ts
++++ b/dashboard/src/lib/reviews/types.ts
+@@ -70,6 +70,8 @@ export interface ReviewEntry {
+   waiting?: 'review' | 'answered' | null;
+   /** When it began waiting on its reviewers, its latest round's time (ATM-610). Optional, for an older atm's lists */
+   waiting_since?: string | null;
++  /** The project it is in, on a list of several projects' reviews (ATM-575, the overview's Reviews); the page's own */
++  project?: { id: string; name: string };
+ }
+ 
+ /** A review's folder atm can't read (ATM-617): a status a newer atm wrote, a broken header */
+diff --git a/dashboard/src/lib/shell/Header.svelte b/dashboard/src/lib/shell/Header.svelte
+index 440ab7c0..f24e799b 100644
+--- a/dashboard/src/lib/shell/Header.svelte
++++ b/dashboard/src/lib/shell/Header.svelte
+@@ -13,6 +13,7 @@
+   import SettingsMenu from './SettingsMenu.svelte';
+   import WorkspaceSelector from './WorkspaceSelector.svelte';
+   import { inApp } from '../api/http';
++  import { openReviewPage } from '../reviews/open';
+ 
+   const onProject = $derived(dashboard.route.page === 'project');
+   // A project's page is titled by its name alone (T-271); while loading, the name it had (kept, or as the workspace
+@@ -40,6 +41,10 @@
+   // Tasks that need the user: in review, or blocked on a question for the user (D-3.3)
+   // With you: only the active sprint's, ready to start (T-347), as atm's summary counts them
+   const needYou = $derived(needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints }));
++  // And the project's reviews waiting on the user (ATM-575), from its summary: in the same chip, after the tasks
++  const reviewsNeedingYou = $derived(
++    dashboard.projects.find((p) => p.id === dashboard.projectId)?.summary?.needs_you_reviews ?? [],
++  );
+   const present = $derived(dashboard.projects.filter((p) => !p.missing));
+ </script>
+ 
+@@ -109,6 +114,8 @@
+         <NeedsYouMenu
+           items={needYou}
+           onopen={(id) => dashboard.showDetail(id)}
++          reviews={reviewsNeedingYou}
++          onreview={(reference) => dashboard.projectId && openReviewPage(dashboard.projectId, reference)}
+           chipId="attention-count"
+           menuId="needs-you-menu"
+         />
+diff --git a/dashboard/src/lib/shell/NeedsYouMenu.svelte b/dashboard/src/lib/shell/NeedsYouMenu.svelte
+index fa6a767b..a2f5f6d6 100644
+--- a/dashboard/src/lib/shell/NeedsYouMenu.svelte
++++ b/dashboard/src/lib/shell/NeedsYouMenu.svelte
+@@ -1,10 +1,12 @@
+ <script lang="ts">
+-  // A "N need(s) you" chip (D-3.3) that takes you to the task: one task opens it; several open a list of them under
++  // A "N need(s) you" chip (D-3.3) that takes you to what needs you: the tasks, and the reviews waiting on you
++  // (ATM-575: counted in the same chip, listed after the tasks). One thing opens it; several open a list of them under
+   // the chip, Bits UI's menu (T-431: the arrows, Home and End move, Enter opens, Escape or a click outside closes, and
+   // focus goes back to the chip). Used in the title bar and on the overview's project cards. It can sit in a <p>, so
+   // it is built from phrasing elements only.
+   import { tick } from 'svelte';
+   import { DropdownMenu } from 'bits-ui';
++  import type { NeedsYouReview } from '$generated/types';
+   import type { NeedsYouItem } from '../waiting';
+   import { taskLabel } from '../keys';
+   import TaskKey from '../ui/TaskKey.svelte';
+@@ -12,6 +14,8 @@
+   let {
+     items,
+     onopen,
++    reviews = [],
++    onreview,
+     chipId,
+     chipClass = '',
+     menuId,
+@@ -20,6 +24,10 @@
+     items: NeedsYouItem[];
+     /** Open task `id` (its details, or its project with its details) */
+     onopen: (id: string) => void;
++    /** The reviews waiting on you (ATM-575): listed after the tasks; none without `onreview` */
++    reviews?: NeedsYouReview[];
++    /** Open review `reference` (its page) */
++    onreview?: (reference: string) => void;
+     chipId?: string;
+     chipClass?: string;
+     menuId?: string;
+@@ -44,15 +52,20 @@
+   }
+ 
+   const REASONS = { review: 'in review', blocked: 'blocked on a question', together: 'to do with you' } as const;
+-  const label = $derived(`${items.length} need${items.length === 1 ? 's' : ''} you`);
++  const REVIEW_REASONS = { review: 'waits for your review', answered: 'answered since you wrote' } as const;
++  const listed = $derived(onreview ? reviews : []);
++  const count = $derived(items.length + listed.length);
++  const label = $derived(`${count} need${count === 1 ? 's' : ''} you`);
++  // Tasks only: worded as before reviews were listed
++  const what = $derived(listed.length ? 'what needs you' : 'the tasks that need you');
+ 
+   // The list closes when it has nothing left to list (the tasks were answered meanwhile)
+   $effect(() => {
+-    if (open && items.length < 2) open = false;
++    if (open && count < 2) open = false;
+   });
+ </script>
+ 
+-{#if items.length === 1}
++{#if count === 1 && items.length === 1}
+   <span class="menu-anchor needs-you">
+     <button
+       class="attention-chip {chipClass}"
+@@ -61,18 +74,29 @@
+       onclick={() => onopen(items[0].id)}>{label}</button
+     >
+   </span>
+-{:else if items.length}
++{:else if count === 1}
++  <span class="menu-anchor needs-you">
++    <button
++      class="attention-chip {chipClass}"
++      id={chipId}
++      title="Open {listed[0].reference} {listed[0].title}"
++      onclick={() => onreview?.(listed[0].reference)}>{label}</button
++    >
++  </span>
++{:else if count}
+   <span class="menu-anchor needs-you">
+     <DropdownMenu.Root bind:open onOpenChange={(next) => next && keepInView()}>
+       <DropdownMenu.Trigger>
+         {#snippet child({ props })}
+-          <button {...props} class="attention-chip {chipClass}" id={chipId} title="Show the tasks that need you"
+-            >{label}</button
+-          >
++          <button {...props} class="attention-chip {chipClass}" id={chipId} title="Show {what}">{label}</button>
+         {/snippet}
+       </DropdownMenu.Trigger>
+       <!-- Not modal: the page stays as it is (scrolling, a click on it closes the list), as the dashboard's popups -->
+-      <DropdownMenu.ContentStatic bind:ref={list} preventScroll={false} aria-label="Tasks that need you">
++      <DropdownMenu.ContentStatic
++        bind:ref={list}
++        preventScroll={false}
++        aria-label={listed.length ? 'What needs you' : 'Tasks that need you'}
++      >
+         {#snippet child({ props })}
+           <span
+             {...props}
+@@ -92,6 +116,17 @@
+                 {/snippet}
+               </DropdownMenu.Item>
+             {/each}
++            {#each listed as review (review.reference)}
++              <DropdownMenu.Item onSelect={() => onreview?.(review.reference)}>
++                {#snippet child({ props })}
++                  <button {...props} class="needs-you-row" data-review={review.reference}>
++                    <span class="needs-you-id">{review.reference}</span>
++                    <span class="needs-you-name">{review.title}</span>
++                    <span class="needs-you-reason">{REVIEW_REASONS[review.why]}</span>
++                  </button>
++                {/snippet}
++              </DropdownMenu.Item>
++            {/each}
+           </span>
+         {/snippet}
+       </DropdownMenu.ContentStatic>
+diff --git a/dashboard/src/params.ts b/dashboard/src/params.ts
+index 89265b4a..57278223 100644
+--- a/dashboard/src/params.ts
++++ b/dashboard/src/params.ts
+@@ -1,12 +1,13 @@
+ // The route parameters with a fixed set of values (T-429): a project's tab (/projects/<id>/[tab=view]) and the All
+-// projects page's tabs but the project cards, which are /projects ([tab=overview]: /board, /progress, /agents).
++// projects page's tabs but the project cards, which are /projects ([tab=overview]: /board, /progress, /agents,
++// /reviews).
+ // SvelteKit takes each as a Standard Schema of the parameter's text. SvelteKit's build loads this module on its own,
+ // so it imports nothing: the lists are lib/tabs.ts VIEWS and lib/address.ts OVERVIEW_TABS, which
+ // tests/unit/address.test.ts checks them against.
+ import type { ParamMatcher } from '@sveltejs/kit/params';
+ 
+ export const PROJECT_TABS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'];
+-export const OVERVIEW_PATHS = ['board', 'progress', 'agents'];
++export const OVERVIEW_PATHS = ['board', 'progress', 'agents', 'reviews'];
+ 
+ function oneOf(name: string, values: readonly string[]): ParamMatcher<string> {
+   return {
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index e5fe8575..11a77e8e 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -298,6 +298,13 @@ export class TasksServer {
+     return this;
+   }
+ 
++  /** Another project's reviews list (ATM-575, the overview's Reviews over every project); one without is a 404 */
++  private projectReviewLists = new Map<string, unknown>();
++  setProjectReviews(project: string, list: unknown) {
++    this.projectReviewLists.set(project, list);
++    return this;
++  }
++
+   /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round */
+   setReview(reference: string, page: unknown) {
+     this.reviewPages.set(reference, page);
+@@ -465,6 +472,11 @@ export class TasksServer {
+     await this.page.route(V1_REVIEWS, (route) => {
+       const url = new URL(route.request().url());
+       const [, id, review] = V1_REVIEWS.exec(route.request().url())!;
++      const other = this.projectReviewLists.get(decodeURIComponent(id));
++      if (decodeURIComponent(id) !== this.projectId && other && !review) {
++        this.reviewRequests.push(`${decodeURIComponent(id)}:${url.search}`);
++        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(other) });
++      }
+       if (decodeURIComponent(id) !== this.projectId)
+         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
+       this.reviewRequests.push(`${review ? decodeURIComponent(review) : ''}${url.search}`);
+diff --git a/dashboard/tests/e2e/overview-agents.spec.ts b/dashboard/tests/e2e/overview-agents.spec.ts
+index d8e812e9..75b48288 100644
+--- a/dashboard/tests/e2e/overview-agents.spec.ts
++++ b/dashboard/tests/e2e/overview-agents.spec.ts
+@@ -24,15 +24,20 @@ test.describe('Projects Overview: the Agents tab', () => {
+     await expect(page.locator('#detail-overlay.open')).toContainText('T-001');
+   });
+ 
+-  test('the tab is remembered, and the arrow keys move between the three tabs', async ({ page }) => {
++  test('the tab is remembered, and the arrow keys move between the tabs, round from the last to the first', async ({
++    page,
++  }) => {
+     await page.locator('#overview-tab-agents').click();
+     await expect(page.locator('#overview-agents .agent-info').first()).toBeVisible();
+     await page.reload();
+     await expect(page.locator('#overview-tab-agents')).toHaveAttribute('aria-selected', 'true');
++    // Reviews (ATM-575) after Agents, the last; then round to Projects, and back
+     await page.locator('#overview-tab-agents').press('ArrowRight');
++    await expect(page.locator('#overview-tab-reviews')).toHaveAttribute('aria-selected', 'true');
++    await page.locator('#overview-tab-reviews').press('ArrowRight');
+     await expect(page.locator('#overview-tab-projects')).toHaveAttribute('aria-selected', 'true');
+     await page.locator('#overview-tab-projects').press('ArrowLeft');
+-    await expect(page.locator('#overview-tab-agents')).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#overview-tab-reviews')).toHaveAttribute('aria-selected', 'true');
+   });
+ 
+   test('a project’s own Agents tab does not change the overview’s tab', async ({ page }) => {
+diff --git a/dashboard/tests/e2e/overview-reviews.spec.ts b/dashboard/tests/e2e/overview-reviews.spec.ts
+new file mode 100644
+index 00000000..24ba14d2
+--- /dev/null
++++ b/dashboard/tests/e2e/overview-reviews.spec.ts
+@@ -0,0 +1,77 @@
++import { expect, summary, test } from './helpers';
++
++// ATM-575: every project's reviews on the overview's Reviews tab (Hakan: a fourth tab on the overview), with a project
++// picker; and the reviews waiting on the user in the needs-you chip
++const header = (n: number, status = 'waiting', title = `Review ${n}`) => ({
++  id: `r${n}-${title}`,
++  reference: `CR-${n}`,
++  number: n,
++  title,
++  status,
++  tasks: [],
++  author: 'claude:a',
++  reviewers: [],
++  created: '2026-11-17T10:00:00Z',
++  updated: '2026-11-17T10:00:00Z',
++});
++const entry = (n: number, title: string, more: Record<string, unknown> = {}) => ({
++  review: { ...header(n, 'waiting', title), ...more },
++  branch: null,
++  chains: 1,
++  open: 1,
++  needs_you: false,
++});
++
++test.describe('Projects Overview: the Reviews tab', () => {
++  test('every project’s reviews, each saying its project; the picker narrows to one; a row opens it in its project', async ({
++    page,
++    tasksServer,
++  }) => {
++    tasksServer.addProject('second', 'standard', 'Second Project');
++    tasksServer.setReviews({ reviews: [entry(1, 'Ours', { updated: '2026-11-18T10:00:00Z' })], you: 'Ana' });
++    tasksServer.setProjectReviews('second', { reviews: [entry(1, 'Theirs')], you: 'Ana' });
++    await page.goto('/projects');
++    await page.locator('#overview-tab-reviews').click();
++    await expect(page).toHaveURL(/\/reviews(\?|$)/);
++    const rows = page.locator('#overview-reviews .review-row');
++    await expect(rows).toHaveCount(2);
++    // Both are CR-1, each in its own project
++    await expect(rows.locator('.review-project')).toHaveText(['fixture', 'Second Project']);
++    await expect(rows.nth(1).getByRole('link')).toHaveAttribute('href', /\/projects\/second\/reviews\/CR-1/);
++    // The picker: one project's
++    await page.locator('#overview-reviews-project').selectOption('second');
++    await expect(rows).toHaveCount(1);
++    await expect(rows.first()).toContainText('Theirs');
++    await rows.first().getByRole('link').click();
++    await expect(page).toHaveURL(/\/projects\/second\/reviews\/CR-1/);
++  });
++
++  test('the needs-you chip counts the reviews waiting on you: one, and nothing else, it opens', async ({
++    page,
++    tasksServer,
++  }) => {
++    tasksServer.withOwnSummary(
++      summary({
++        needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 1 },
++        needs_you_reviews: [{ reference: 'CR-7', title: 'The editor', why: 'review' }],
++      }),
++    );
++    await page.goto('/projects');
++    // On its card: one review waits, and no task: the chip opens it (several are listed under it, after the tasks)
++    const chip = page.locator('.project-card').first().locator('.attention-chip');
++    await expect(chip).toHaveText('1 needs you');
++    await expect(chip).toHaveAttribute('title', 'Open CR-7 The editor');
++    await chip.click();
++    await expect(page).toHaveURL(/\/projects\/[^/]+\/reviews\/CR-7/);
++  });
++
++  test('a project whose reviews can’t be read is named; the others are listed', async ({ page, tasksServer }) => {
++    tasksServer.addProject('second', 'standard', 'Second Project');
++    tasksServer.setReviews({ reviews: [entry(1, 'Ours')], you: 'Ana' });
++    await page.goto('/reviews');
++    await expect(page.locator('#overview-reviews .review-row')).toHaveCount(1);
++    await expect(page.locator('#overview-reviews .overview-reviews-problem')).toHaveText(
++      "Couldn't read the reviews of Second Project.",
++    );
++  });
++});
+diff --git a/dashboard/tests/e2e/serve.mjs b/dashboard/tests/e2e/serve.mjs
+index 55f81597..2a29236a 100644
+--- a/dashboard/tests/e2e/serve.mjs
++++ b/dashboard/tests/e2e/serve.mjs
+@@ -13,7 +13,7 @@ const ASSETS = root + 'dist/assets/';
+ const PAGE = root + 'dist/tasks-dashboard.html';
+ // As atm serve's (atm-api's pages.rs; src/lib/address.ts PAGE_PATH), in a workspace too (/w/<w>/…)
+ const PAGE_PATH =
+-  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents)?\/?)?$/;
++  /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+|\/reviews\/[A-Za-z0-9.-]{1,64})?)?|board|progress|agents|reviews)?\/?)?$/;
+ // As atm serve's asset route (atm-api's assets.rs): plain names, known extensions, no symlinks; every
+ // asset readable cross-origin (the sandbox's frames have an opaque origin), a frame document sandboxed
+ const ASSET = /^\/assets\/((?:[A-Za-z0-9_@][A-Za-z0-9._@-]*\/)*[A-Za-z0-9_@][A-Za-z0-9._@-]*\.(js|wasm|html))$/;
+diff --git a/dashboard/tests/unit/NeedsYouMenu.component.test.ts b/dashboard/tests/unit/NeedsYouMenu.component.test.ts
+index bdd52552..ecb26c22 100644
+--- a/dashboard/tests/unit/NeedsYouMenu.component.test.ts
++++ b/dashboard/tests/unit/NeedsYouMenu.component.test.ts
+@@ -94,6 +94,45 @@ describe('NeedsYouMenu', () => {
+     expect(menu()).toHaveClass('align-right');
+   });
+ 
++  // ATM-575: the reviews waiting on the user, counted in the same chip, listed after the tasks
++  describe('with reviews', () => {
++    const REVIEWS = [
++      { reference: 'CR-7', title: 'The editor', why: 'review' as const },
++      { reference: 'CR-9', title: 'Search', why: 'answered' as const },
++    ];
++
++    it('counted with the tasks and listed after them, with why; a row opens that review', async () => {
++      const onreview = vi.fn();
++      const { chip, menu, rows, onopen } = setup(ITEMS.slice(0, 1), { reviews: REVIEWS, onreview });
++      expect(chip).toHaveTextContent('3 need you');
++      expect(chip).toHaveAttribute('title', 'Show what needs you');
++      await fireEvent.click(chip!);
++      expect(menu()).toHaveAttribute('aria-label', 'What needs you');
++      expect(rows().map((r) => r.dataset.id ?? r.dataset.review)).toEqual(['T-005', 'CR-7', 'CR-9']);
++      expect(rows()[1]).toHaveTextContent('CR-7 The editor waits for your review');
++      expect(rows()[2]).toHaveTextContent('CR-9 Search answered since you wrote');
++      await settled();
++      await fireEvent.click(rows()[2]);
++      expect(onreview).toHaveBeenCalledWith('CR-9');
++      expect(onopen).not.toHaveBeenCalled();
++    });
++
++    it('one review and no task: the chip opens it', async () => {
++      const onreview = vi.fn();
++      const { chip, menu } = setup([], { reviews: REVIEWS.slice(0, 1), onreview });
++      expect(chip).toHaveTextContent('1 needs you');
++      await fireEvent.click(chip!);
++      expect(menu()).toBeNull();
++      expect(onreview).toHaveBeenCalledWith('CR-7');
++    });
++
++    it('without a way to open them, reviews are neither counted nor listed', () => {
++      const { chip } = setup(ITEMS.slice(0, 1), { reviews: REVIEWS });
++      expect(chip).toHaveTextContent('1 needs you');
++      expect(setup([], { reviews: REVIEWS }).chip).toBeNull();
++    });
++  });
++
+   it('closes when fewer than two tasks are left to list', async () => {
+     const { chip, menu, rerender } = setup(ITEMS.slice(0, 2));
+     await fireEvent.click(chip!);
+diff --git a/dashboard/tests/unit/ReviewList.component.test.ts b/dashboard/tests/unit/ReviewList.component.test.ts
+index 4981c758..49e7176d 100644
+--- a/dashboard/tests/unit/ReviewList.component.test.ts
++++ b/dashboard/tests/unit/ReviewList.component.test.ts
+@@ -106,7 +106,18 @@ describe('ReviewList', () => {
+     const next = screen.getByRole('button', { name: /Next review needing you/ });
+     expect(next.textContent).toContain('2');
+     await fireEvent.click(next);
+-    expect(onopen).toHaveBeenCalledWith('CR-1', false);
++    expect(onopen).toHaveBeenCalledWith('CR-1', false, expect.objectContaining({ needs_you: true }));
++  });
++
++  // ATM-575: on the overview's list of every project's reviews, each row says its project, and its link is its own
++  it('a row of another project’s list says its project, and its link and opening carry the row', async () => {
++    const theirs = { ...entry(1, 'waiting'), project: { id: 'p2', name: 'CompMD' } };
++    const href = vi.fn((reference: string, e?: ReviewEntry) => `/projects/${e?.project?.id}/reviews/${reference}`);
++    const { container, onopen } = show([theirs], { ...NO_QUERY }, { href });
++    expect(container.querySelector('.review-project')).toHaveTextContent('CompMD');
++    expect(screen.getByRole('link')).toHaveAttribute('href', '/projects/p2/reviews/CR-1');
++    await fireEvent.click(screen.getByRole('link'));
++    expect(onopen).toHaveBeenCalledWith('CR-1', false, theirs);
+   });
+ 
+   // ATM-610: unfiltered, the list in groups, each under its heading with its count; any filter, the plain list
+@@ -169,15 +180,17 @@ describe('ReviewList', () => {
+   });
+ 
+   it('opens a review on a click, in a new tab with ⌘ or Ctrl; leaves Shift, Alt and other buttons to the browser', async () => {
+-    const { onopen } = show([entry(1, 'waiting')]);
++    const one = entry(1, 'waiting');
++    const { onopen } = show([one]);
+     const link = screen.getByRole('link');
+     await fireEvent.click(link);
+     await fireEvent.click(link, { metaKey: true });
+     await fireEvent.click(link, { ctrlKey: true });
++    // With its row (ATM-575: on a list of several projects' reviews, a reference names one in each)
+     expect(onopen.mock.calls).toEqual([
+-      ['CR-1', false],
+-      ['CR-1', true],
+-      ['CR-1', true],
++      ['CR-1', false, one],
++      ['CR-1', true, one],
++      ['CR-1', true, one],
+     ]);
+     onopen.mockClear();
+     await fireEvent.click(link, { shiftKey: true });
+diff --git a/dashboard/tests/unit/page.test.ts b/dashboard/tests/unit/page.test.ts
+index 86d9fc30..64575514 100644
+--- a/dashboard/tests/unit/page.test.ts
++++ b/dashboard/tests/unit/page.test.ts
+@@ -11,6 +11,7 @@ import {
+   hashOf,
+   isResolved,
+   lineCounts,
++  mergeProjectReviews,
+   openedTo,
+   reviewChains,
+   reviewTitle,
+@@ -113,6 +114,23 @@ describe('the reviews list in groups', () => {
+     ]);
+   });
+ 
++  // ATM-575: the overview's list of every project's reviews
++  it('several projects’ reviews as one list: each with its project, the latest activity first', () => {
++    const a = { id: 'p1', name: 'atm' };
++    const b = { id: 'p2', name: 'CompMD' };
++    const merged = mergeProjectReviews([
++      { project: a, entries: [entry('CR-1', 'waiting', { updated: daysAgo(3) })] },
++      { project: b, entries: [entry('CR-1', 'waiting', { updated: daysAgo(1) }), entry('CR-2', 'draft')] },
++      { project: { id: 'p3', name: 'Empty' }, entries: [] },
++    ]);
++    expect(merged.map((e) => [e.project?.name, e.review.reference])).toEqual([
++      ['CompMD', 'CR-1'],
++      ['CompMD', 'CR-2'],
++      ['atm', 'CR-1'],
++    ]);
++    expect(mergeProjectReviews([])).toEqual([]);
++  });
++
+   it('how long a review has waited, in words', () => {
+     const at = (ms: number) => new Date(NOW - ms).toISOString();
+     expect(waitedFor(at(10 * 60_000), NOW)).toBe('under an hour');
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 3c3bfc5f..7ae98d0d 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -215,7 +215,7 @@ text the page reads, never a file it looks up.
+ | Path | The page shows |
+ |---|---|
+ | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
+-| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` its other tabs |
++| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs |
+ | `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`) |
+ | `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64), with `?round=&against=&file=` the view and the file gone to: a window of its own, without the dashboard's title bar and tabs, titled by the project's key, the reference and the title; the Reviews tab opens it in place (with ⌘ or Ctrl, in a browser tab) |
+ | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |

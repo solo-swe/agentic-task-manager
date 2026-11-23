@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "53aeba0394cf6361fd4f41869d0ef913977eb51a",
+    "head": "d73fa513eaf213be36ce2891b0ee4e589eb5a06a"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/details/ReviewLink.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/kanban.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T12:06:47Z"
+}

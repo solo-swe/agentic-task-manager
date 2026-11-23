@@ -1,0 +1,183 @@
+diff --git a/dashboard/src/lib/review-filter.ts b/dashboard/src/lib/review-filter.ts
+new file mode 100644
+index 00000000..be93d760
+--- /dev/null
++++ b/dashboard/src/lib/review-filter.ts
+@@ -0,0 +1,33 @@
++import { readStored, writeStored } from './prefs';
++import { NO_QUERY, STATUS_LABELS, type ListQuery, type ReviewStatus } from './reviews/types';
++
++// The reviews list's last filter, kept in this browser per project (ATM-604): the list opens with it. Its statuses,
++// author, reviewer, task and branch; not the search words, which are for the moment.
++
++export const REVIEW_FILTER_KEY = 'atm-review-filter';
++
++const TEXTS = ['author', 'reviewer', 'task', 'branch'] as const;
++
++/** The filter last kept for `project`, or none; anything stored that isn't one is left out. */
++export function keptFilter(project: string): ListQuery {
++  const kept = readStored(REVIEW_FILTER_KEY)[project];
++  const query: ListQuery = { ...NO_QUERY, status: [] };
++  if (!kept || typeof kept !== 'object' || Array.isArray(kept)) return query;
++  const from = kept as Record<string, unknown>;
++  if (Array.isArray(from.status))
++    query.status = from.status.filter(
++      (s): s is ReviewStatus => typeof s === 'string' && Object.hasOwn(STATUS_LABELS, s),
++    );
++  for (const key of TEXTS) if (typeof from[key] === 'string') query[key] = from[key];
++  return query;
++}
++
++/** Keeps `query`'s filter for `project` (its search words aside); an empty filter forgets the project's. */
++export function keepFilter(project: string, query: ListQuery): void {
++  const all = readStored(REVIEW_FILTER_KEY);
++  const filter = { status: query.status, ...Object.fromEntries(TEXTS.map((k) => [k, query[k]])) };
++  const empty = !query.status.length && TEXTS.every((k) => !query[k]);
++  if (empty) delete all[project];
++  else all[project] = filter;
++  writeStored(REVIEW_FILTER_KEY, Object.keys(all).length ? all : null);
++}
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 63dfd185..6dd99991 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -23,6 +23,7 @@
+     toggleViewed,
+     viewedKeys,
+   } from '../review-data';
++  import { keepFilter, keptFilter } from '../review-filter';
+   import ReviewList from '../reviews/ReviewList.svelte';
+   import ReviewPage from '../reviews/ReviewPage.svelte';
+   import { reviewTitle } from '../reviews/page';
+@@ -43,6 +44,20 @@
+ 
+   // The list
+   let query = $state<ListQuery>({ ...NO_QUERY });
++  // Opened with the project's last filter, kept in this browser (ATM-604), and again on going to another project
++  let queryOf: string | null = null;
++  $effect.pre(() => {
++    const id = project;
++    untrack(() => {
++      if (!id || id === queryOf) return;
++      queryOf = id;
++      query = keptFilter(id);
++    });
++  });
++  function chooseQuery(next: ListQuery) {
++    query = next;
++    if (project) keepFilter(project, next);
++  }
+   let entries = $state.raw<ReviewEntry[]>([]);
+   // The review shown
+   let shown = $state.raw<ReviewPageData | null>(null);
+@@ -246,7 +261,7 @@
+       {loading}
+       {problem}
+       href={(reference) => withReview(currentAddress(), { review: reference })}
+-      onquery={(next) => (query = next)}
++      onquery={chooseQuery}
+       onopen={(reference, newTab) => open(reference, newTab)}
+       onlive={startLive}
+     />
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index c34fdc7a..978d0a8e 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -177,6 +177,27 @@ test.describe('the reviews tab', () => {
+     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
+   });
+ 
++  test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    const open = page.getByRole('button', { name: 'Open', exact: true });
++    await page.getByRole('searchbox', { name: 'Search reviews' }).fill('names');
++    await open.click();
++    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
++    await page.reload();
++    await expect(open).toHaveAttribute('aria-pressed', 'true');
++    await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('');
++    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?status=open');
++    await page.getByRole('button', { name: 'Clear' }).click();
++    await expect(open).toHaveAttribute('aria-pressed', 'false');
++    await page.reload();
++    await expect(page.locator('.review-row')).toHaveCount(2);
++    await expect(open).toHaveAttribute('aria-pressed', 'false');
++    expect(tasksServer.reviewRequests.at(-1)).toBe('');
++  });
++
+   test('opens a review in place, and back; the one needing you next too', async ({ page, tasksServer }) => {
+     await openReviews(page, tasksServer);
+     await page.locator('.review-row[data-review="CR-2"] .review-link').click();
+diff --git a/dashboard/tests/unit/review-filter.test.ts b/dashboard/tests/unit/review-filter.test.ts
+new file mode 100644
+index 00000000..3dbb1032
+--- /dev/null
++++ b/dashboard/tests/unit/review-filter.test.ts
+@@ -0,0 +1,64 @@
++import { beforeEach, describe, expect, it } from 'vitest';
++import { REVIEW_FILTER_KEY, keepFilter, keptFilter } from '../../src/lib/review-filter';
++import { NO_QUERY, type ListQuery } from '../../src/lib/reviews/types';
++
++// The reviews list's last filter, kept per project (ATM-604)
++
++const query = (more: Partial<ListQuery>): ListQuery => ({ ...NO_QUERY, ...more });
++const stored = () => localStorage.getItem(REVIEW_FILTER_KEY);
++
++describe('the reviews list’s kept filter', () => {
++  beforeEach(() => localStorage.clear());
++
++  it('is none for a project with none kept', () => {
++    expect(keptFilter('p1')).toEqual(NO_QUERY);
++  });
++
++  it('is the filter last chosen, each part of it, but not the search words', () => {
++    keepFilter('p1', query({ status: ['open'], q: 'words' }));
++    keepFilter(
++      'p1',
++      query({ status: ['open', 'live'], author: 'hakan', reviewer: 'r', task: 'ATM-1', branch: 'dev', q: 'x' }),
++    );
++    expect(keptFilter('p1')).toEqual(
++      query({ status: ['open', 'live'], author: 'hakan', reviewer: 'r', task: 'ATM-1', branch: 'dev' }),
++    );
++  });
++
++  it('is each project’s own', () => {
++    keepFilter('p1', query({ status: ['open'] }));
++    keepFilter('p2', query({ status: ['approved'] }));
++    expect(keptFilter('p1').status).toEqual(['open']);
++    expect(keptFilter('p2').status).toEqual(['approved']);
++    expect(keptFilter('p3')).toEqual(NO_QUERY);
++  });
++
++  it('is forgotten when cleared, or when only search words are left; the key goes with the last project’s', () => {
++    keepFilter('p1', query({ status: ['open'] }));
++    keepFilter('p2', query({ task: 'ATM-2' }));
++    keepFilter('p1', NO_QUERY);
++    expect(keptFilter('p1')).toEqual(NO_QUERY);
++    expect(keptFilter('p2').task).toBe('ATM-2');
++    keepFilter('p2', query({ q: 'only words' }));
++    expect(stored()).toBeNull();
++  });
++
++  it('leaves out what was stored that isn’t a filter: unknown statuses, wrong types, a broken value', () => {
++    localStorage.setItem(
++      REVIEW_FILTER_KEY,
++      JSON.stringify({ p1: { status: ['open', 'nope', 3], author: 7, task: 'ATM-1' }, p2: ['open'], p3: 'open' }),
++    );
++    expect(keptFilter('p1')).toEqual(query({ status: ['open'], task: 'ATM-1' }));
++    expect(keptFilter('p2')).toEqual(NO_QUERY);
++    expect(keptFilter('p3')).toEqual(NO_QUERY);
++    localStorage.setItem(REVIEW_FILTER_KEY, '{broken');
++    expect(keptFilter('p1')).toEqual(NO_QUERY);
++  });
++
++  it('a filter kept is a copy: changing the query after does not change it', () => {
++    const chosen = query({ status: ['open'] });
++    keepFilter('p1', chosen);
++    chosen.status.push('live');
++    expect(keptFilter('p1').status).toEqual(['open']);
++  });
++});

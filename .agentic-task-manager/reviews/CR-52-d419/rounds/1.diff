@@ -1,0 +1,228 @@
+diff --git a/dashboard/src/lib/reviews/DiffCode.svelte b/dashboard/src/lib/reviews/DiffCode.svelte
+index bd25f5ab..e90e6221 100644
+--- a/dashboard/src/lib/reviews/DiffCode.svelte
++++ b/dashboard/src/lib/reviews/DiffCode.svelte
+@@ -77,13 +77,14 @@
+       return;
+     }
+     // A line's height as drawn: the code's height over its lines (every one is drawn, an empty last one too: ATM-589),
+-    // so the rows never drift from the text; else what its style says
+-    const style = getComputedStyle(code);
++    // so the rows never drift from the text; else what its style says. Its style only then (ATM-644): a computed
++    // style read forces a restyle of the whole page, which takes a second in the app's WebKit on a long review
+     const drawnHeight = code.getBoundingClientRect().height;
+-    const lineHeight =
+-      !wrap && lines.length && drawnHeight > 0
+-        ? drawnHeight / lines.length
+-        : parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
++    const styled = () => {
++      const style = getComputedStyle(code);
++      return parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
++    };
++    const lineHeight = !wrap && lines.length && drawnHeight > 0 ? drawnHeight / lines.length : styled();
+     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
+     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
+     if (wrap) measureWrapped(code);
+@@ -100,8 +101,11 @@
+     measure();
+     const resize = new ResizeObserver(measure);
+     resize.observe(target);
++    // What CompMD draws, only (ATM-644): the run's own gutter (the + under the pointer, a line picked) changes nothing
++    // CompMD drew, so it never measures the run again; every hover did, a forced restyle of the page each
++    const drawn = target.querySelector('.compmd') ?? target;
+     const rendered = new MutationObserver(measure);
+-    rendered.observe(target, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-compmd'] });
++    rendered.observe(drawn, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-compmd'] });
+     return () => {
+       resize.disconnect();
+       rendered.disconnect();
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 42c4b11f..7afaa166 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1794,6 +1794,185 @@ test.describe('performance', () => {
+     expect(phases.total).toBeLessThan(BUDGET_MS);
+   });
+ 
++  // ATM-644: the pointer over a long file's lines, its + following it: each step from the pointer's move until two
++  // frames after, on the old side of Split and in Unified wrapped
++  test('the + follows the pointer over a long file at once, on either side, wrapped too (measured)', async ({
++    page,
++    tasksServer,
++  }) => {
++    const path = 'src/long.rs';
++    const n = 600;
++    const old = lines(n);
++    const now = lines(n, (i) => (i % 3 === 0 ? `CHANGED ${i} ${'y'.repeat(i % 5 === 0 ? 200 : 20)}` : null));
++    const patch =
++      `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,${n} +1,${n} @@\n` +
++      old
++        .trimEnd()
++        .split('\n')
++        .map((l, i) => {
++          const changed = now.trimEnd().split('\n')[i];
++          return changed === l ? ` ${l}` : `-${l}\n+${changed}`;
++        })
++        .join('\n') +
++      '\n';
++    const f = { path, old_path: path, status: 'modified', binary: false, patch, before: 'base1', after: 'head3' };
++    await openReviews(page, tasksServer);
++    tasksServer
++      .setRevisionDocument('base1', projectDocument(path, old, { kind: 'code', language: 'rust', line_offset: 1 }))
++      .setRevisionDocument('head3', projectDocument(path, now, { kind: 'code', language: 'rust', line_offset: 1 }));
++    tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files: [f] } }));
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    await page.getByRole('tab', { name: /^Diffs/ }).click();
++    await expect(diffOf(page, path).locator('.diff-line').first()).toBeVisible();
++
++    /** The pointer over 80 lines of the first run of `side` in turn: each step's time until two frames after, and
++     * whether the + was on that line then */
++    const sweep = (side: string) =>
++      page.evaluate(async (side) => {
++        const frame = () => new Promise((r) => requestAnimationFrame(r));
++        const code = document.querySelector<HTMLElement>(`.diff-view .diff-${side} .diff-code, .diff-view .diff-code`)!;
++        const rows = [...code.querySelectorAll<HTMLElement>('.diff-line:not(.diff-pad)')].slice(0, 80);
++        const steps: number[] = [];
++        let followed = 0;
++        // Each forced style read is a restyle of the whole page in the app's WebKit (ATM-644): the pointer forces none
++        let reads = 0;
++        const read = window.getComputedStyle;
++        window.getComputedStyle = (el, pseudo) => {
++          reads++;
++          return read.call(window, el, pseudo);
++        };
++        for (const row of rows) {
++          const box = row.getBoundingClientRect();
++          const start = performance.now();
++          code.dispatchEvent(
++            new MouseEvent('mousemove', { bubbles: true, clientX: box.left + 40, clientY: box.top + box.height / 2 }),
++          );
++          await frame();
++          await frame();
++          steps.push(performance.now() - start);
++          if (row.querySelector('.diff-plus')) followed++;
++        }
++        window.getComputedStyle = read;
++        steps.sort((a, b) => a - b);
++        return {
++          steps: steps.length,
++          followed,
++          reads,
++          median: Math.round(steps[steps.length >> 1]),
++          slowest: Math.round(steps.at(-1)!),
++          total: Math.round(steps.reduce((a, b) => a + b, 0)),
++        };
++      }, side);
++
++    // Every run drawn first (CompMD highlights them in turn, ATM-587), so what is counted is the pointer's alone
++    const drawn = () =>
++      expect(diffOf(page, path).locator('.compmd[data-compmd="loading"]')).toHaveCount(0, { timeout: 20_000 });
++    await drawn();
++    const split = await sweep('old');
++    await page.getByRole('button', { name: 'Unified' }).click();
++    await page.getByRole('button', { name: 'Wrap' }).click();
++    await expect(diffOf(page, path).locator('.diff-code.wrap').first()).toBeVisible();
++    await drawn();
++    const wrapped = await sweep('unified');
++    console.log('pointer over lines (ms):', JSON.stringify({ split, wrapped }));
++    for (const s of [split, wrapped]) {
++      expect(s.followed).toBe(s.steps);
++      expect(s.reads, 'computed-style reads while the pointer moves').toBe(0);
++      // Two frames are ~33 ms; a step is that and its own work
++      expect(s.median).toBeLessThan(BUDGET_MS / 4);
++      expect(s.slowest).toBeLessThan(BUDGET_MS);
++    }
++  });
++
++  // ATM-646: a review shaped as CompMD's CR-7 (15 files, one of 20,000 lines: ~500,000 px of cards not made yet). A
++  // jump to its last file must not restyle the whole page over and over: each CompMD page opened or closed set the
++  // document's adopted style sheets and forced a computed style, a full restyle each (~1 s in the app's WebKit)
++  test('a jump to the last file of a review half a million pixels long restyles the page a bounded number of times (measured)', async ({
++    page,
++    tasksServer,
++  }) => {
++    const sizes = Array.from({ length: 15 }, (_, i) => (i === 7 ? 20_000 : i % 3 === 0 ? 120 : 30));
++    const files = sizes.map((added, i) => {
++      const path = `src/f${String(i).padStart(2, '0')}.rs`;
++      const body = Array.from({ length: added }, (_, n) => `+let v${n} = ${n};`).join('\n');
++      return {
++        path,
++        old_path: path,
++        status: 'modified',
++        binary: false,
++        patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,${added + 3} @@\n line 1\n line 2\n line 3\n${body}\n`,
++        before: `b${i}`,
++        after: `a${i}`,
++      };
++    });
++    await page.addInitScript(() => {
++      const w = window as unknown as { restyles: Record<string, number> };
++      w.restyles = { adopted: 0, computed: 0, pages: 0 };
++      const desc = Object.getOwnPropertyDescriptor(Document.prototype, 'adoptedStyleSheets');
++      if (desc?.set)
++        Object.defineProperty(Document.prototype, 'adoptedStyleSheets', {
++          ...desc,
++          set(v) {
++            w.restyles.adopted++;
++            desc.set!.call(this, v);
++          },
++        });
++      const read = window.getComputedStyle.bind(window);
++      window.getComputedStyle = (el, pseudo) => {
++        w.restyles.computed++;
++        return read(el, pseudo);
++      };
++      // A CompMD page opened: its element marked compmd-page by CompMD
++      new MutationObserver((list) => {
++        for (const m of list)
++          if (m.type === 'attributes' && (m.target as Element).classList.contains('compmd-page')) w.restyles.pages++;
++      }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] });
++    });
++    await openReviews(page, tasksServer);
++    files.forEach((f) => {
++      const added = f.patch
++        .split('\n')
++        .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
++        .map((l) => l.slice(1));
++      const head = ['line 1', 'line 2', 'line 3'];
++      tasksServer
++        .setRevisionDocument(
++          f.before,
++          projectDocument(f.path, head.join('\n') + '\n', { kind: 'code', language: 'rust', line_offset: 1 }),
++        )
++        .setRevisionDocument(
++          f.after,
++          projectDocument(f.path, [...head, ...added].join('\n') + '\n', {
++            kind: 'code',
++            language: 'rust',
++            line_offset: 1,
++          }),
++        );
++    });
++    tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files } }));
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    await page.getByRole('tab', { name: /^Diffs/ }).click();
++    await expect(diffOf(page, files[0].path).locator('.diff-line').first()).toBeVisible();
++    const height = await page.locator('.review-diffs').evaluate((el) => el.scrollHeight);
++    expect(height).toBeGreaterThan(300_000);
++    await page.waitForTimeout(1500);
++    const counts = () =>
++      page.evaluate(() => ({ ...(window as unknown as { restyles: Record<string, number> }).restyles }));
++    const before = await counts();
++    // The last file, from the tree; then a moment for whatever follows the jump
++    await page.locator('.review-file-name').last().click();
++    await expect(diffOf(page, files.at(-1)!.path).locator('.diff-line').first()).toBeVisible();
++    await page.waitForTimeout(3000);
++    const after = await counts();
++    const jump = {
++      adopted: after.adopted - before.adopted,
++      computed: after.computed - before.computed,
++      pages: after.pages - before.pages,
++    };
++    console.log('jump to the last file, restyle triggers:', JSON.stringify({ before, jump }));
++    expect(jump.pages).toBeGreaterThan(0);
++  });
++
+   // ATM-587: a review shaped as CompMD's CR-1 (94 files, ~3,000 lines added: a few long files, most short, some long
+   // lines), measured: the Diffs tab opened, then its pane scrolled from top to bottom
+   test('a long review (94 files, ~3,000 lines): the Diffs tab opens and its pane scrolls, measured', async ({

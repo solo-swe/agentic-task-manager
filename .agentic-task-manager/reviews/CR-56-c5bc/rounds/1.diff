@@ -1,0 +1,478 @@
+diff --git a/crates/atm-common/schema/api.schema.json b/crates/atm-common/schema/api.schema.json
+index 9adbf4ed..f28cac38 100644
+--- a/crates/atm-common/schema/api.schema.json
++++ b/crates/atm-common/schema/api.schema.json
+@@ -78,6 +78,13 @@
+           "type": "object",
+           "additionalProperties": { "$ref": "#/$defs/ForeignTask" },
+           "description": "The other projects' tasks it names (<project id>:<UUID> in dependencies, related or duplicate_of), by reference, as they are there (ADR-007 §7); absent when it names none"
++        },
++        "review_statuses": {
++          "type": "object",
++          "additionalProperties": {
++            "enum": ["draft", "waiting", "live", "changes_requested", "approved", "closed", "unreadable"]
++          },
++          "description": "Where each of its code reviews stands (ATM-621), by the review's ID as its code_reviews link it: the review's status, or unreadable for one atm can't read (ATM-617); one this working copy doesn't have is left out, and the field is absent when it has none"
+         }
+       }
+     },
+diff --git a/crates/atm-lib/src/query.rs b/crates/atm-lib/src/query.rs
+index b09e200a..b8d71d6f 100644
+--- a/crates/atm-lib/src/query.rs
++++ b/crates/atm-lib/src/query.rs
+@@ -265,6 +265,59 @@ fn foreign_views(task: &Task, lookup: &mut crate::foreign::Lookup) -> Map<String
+     out
+ }
+ 
++/// Where the project's code reviews stand (ATM-621), read once for all the task views: each review's status by its
++/// ID, and the references of those atm can't read (ATM-617). None in a project without reviews.
++#[derive(Default)]
++struct ReviewStatuses {
++    by_id: std::collections::HashMap<String, &'static str>,
++    unreadable: HashSet<String>,
++}
++
++impl ReviewStatuses {
++    fn of(project: &Project) -> Self {
++        use crate::reviews::ReviewStore as _;
++        let Ok(store) = crate::reviews::store(project) else {
++            return Self::default();
++        };
++        let by_id = store
++            .list_reviews(&crate::reviews::ReviewFilter::default())
++            .unwrap_or_default()
++            .into_iter()
++            .map(|h| (h.id.0, h.status.name()))
++            .collect();
++        let unreadable = store
++            .unreadable()
++            .unwrap_or_default()
++            .into_iter()
++            .map(|u| u.reference)
++            .collect();
++        Self { by_id, unreadable }
++    }
++
++    /// The statuses of task `t`'s code reviews (`code_reviews`: their IDs and references), by review ID: its status,
++    /// or `unreadable`; one this working copy doesn't have (another branch's) is left out
++    fn of_task(&self, t: &Task) -> Map<String, Value> {
++        let mut out = Map::new();
++        for link in t
++            .get("code_reviews")
++            .and_then(Value::as_array)
++            .into_iter()
++            .flatten()
++        {
++            let Some(id) = link.get("id").and_then(Value::as_str) else {
++                continue;
++            };
++            let reference = link.get("ref").and_then(Value::as_str).unwrap_or_default();
++            if let Some(status) = self.by_id.get(id) {
++                out.insert(id.to_string(), json!(status));
++            } else if self.unreadable.contains(reference) {
++                out.insert(id.to_string(), json!("unreadable"));
++            }
++        }
++        out
++    }
++}
++
+ /// The tasks the filters keep, each as `{task, derived}`: what atm derives for it (the REST API's tasks,
+ /// docs/layered-architecture.md §6.2): its kind, whether it is ready, the dependencies it waits for, who a blocked
+ /// task waits on, its effective priority, review mode and release, its stage, and whether it is archived. What
+@@ -289,6 +342,7 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
+         store.problems()?.tasks
+     };
+     let mut lookup = crate::foreign::Lookup::default();
++    let statuses = ReviewStatuses::of(project);
+     let mut views = Vec::new();
+     for t in list_matching(project, filters)? {
+         let kind = vocab.kind_of(t.get("status"));
+@@ -333,6 +387,11 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
+         if !others.is_empty() {
+             derived.insert("foreign".into(), Value::Object(others));
+         }
++        // Where each of its code reviews stands (ATM-621), so its badge says so from the first load
++        let reviews = statuses.of_task(t);
++        if !reviews.is_empty() {
++            derived.insert("review_statuses".into(), Value::Object(reviews));
++        }
+         // Its key beside its UUID, with task keys (ADR-007 §1)
+         let shown = atm_common::keys::with_key(store.document()?, t);
+         views.push(json!({"task": shown, "derived": derived}));
+diff --git a/dashboard/src/lib/details/DetailPanel.svelte b/dashboard/src/lib/details/DetailPanel.svelte
+index f3d906a0..d57bd3fb 100644
+--- a/dashboard/src/lib/details/DetailPanel.svelte
++++ b/dashboard/src/lib/details/DetailPanel.svelte
+@@ -79,6 +79,8 @@
+   const codeReviews = $derived(task?.code_reviews ?? []);
+   const latestReview = $derived(codeReviews.at(-1) ?? null);
+   const earlierReviews = $derived(codeReviews.slice(0, -1).reverse());
++  /** Where a review of the task stands, as its view from atm says (ATM-621) */
++  const reviewStatusOf = (id: string) => task?.derived?.review_statuses?.[id];
+   const reviewProject = $derived(dashboard.projectId);
+   const actors = $derived(task ? actorsLine(task) : '');
+   const attempts = $derived(task ? earlierAttempts(task) : []);
+@@ -500,8 +502,17 @@
+         {#if latestReview && reviewProject}
+           <!-- Its code review, the latest it names, to open (ATM-585); the earlier ones after it -->
+           <div class="detail-review-links">
+-            <ReviewLink project={reviewProject} reference={latestReview.ref} prominent />
+-            {#each earlierReviews as r (r.id)}<ReviewLink project={reviewProject} reference={r.ref} />{/each}
++            <ReviewLink
++              project={reviewProject}
++              reference={latestReview.ref}
++              status={reviewStatusOf(latestReview.id)}
++              prominent
++            />
++            {#each earlierReviews as r (r.id)}<ReviewLink
++                project={reviewProject}
++                reference={r.ref}
++                status={reviewStatusOf(r.id)}
++              />{/each}
+           </div>
+         {/if}
+         <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
+@@ -518,6 +529,7 @@
+         {#each [...earlierReviews, latestReview] as r (r.id)}<ReviewLink
+             project={reviewProject}
+             reference={r.ref}
++            status={reviewStatusOf(r.id)}
+           />{/each}
+       </div>
+     </div>
+diff --git a/dashboard/src/lib/details/ReviewLink.svelte b/dashboard/src/lib/details/ReviewLink.svelte
+index 61b5a3b3..404a1ede 100644
+--- a/dashboard/src/lib/details/ReviewLink.svelte
++++ b/dashboard/src/lib/details/ReviewLink.svelte
+@@ -1,13 +1,15 @@
+ <script lang="ts">
+-  // A task's link to one of its code reviews (ATM-585; the cards and the list share it, ATM-575): its reference, and
+-  // its status when the page knows it (the Reviews tab has listed it: never a request per task), or *needs you* when
+-  // the project's summary says so. A click opens the review's page: in the app in a tab of its own, as the Reviews
+-  // list opens one; in the browser in this tab, or another for ⌘-click, Ctrl-click or a middle click, as any link.
++  // A task's link to one of its code reviews (ATM-585; the cards and the list share it, ATM-575): its reference and
++  // where it stands (ATM-621), coloured as the Reviews list colours it: from the task's own view, which atm serves
++  // with each review's status (never a request per task), or what the page has learned since (the Reviews tab
++  // listed it); *needs you* when the project's summary says so. A click opens the review's page: in the app in a tab
++  // of its own, as the Reviews list opens one; in the browser in this tab, or another for ⌘-click, Ctrl-click or a
++  // middle click, as any link.
+   import { inApp } from '../api/http';
+   import { reviewPageOf } from '../address';
+   import { currentAddress, navigate } from '../navigation';
+   import { knownStatus, knownUnreadable } from '../reviews/known.svelte';
+-  import { STATUS_LABELS } from '../reviews/types';
++  import { STATUS_LABELS, type ReviewStatus } from '../reviews/types';
+   import { dashboard } from '../state.svelte';
+   import { tabActions, wantsNewTab } from '../tab-actions';
+   import Icon from '../ui/Icon.svelte';
+@@ -17,14 +19,22 @@
+     project: string;
+     /** Its reference (CR-7) */
+     reference: string;
+-    /** The one to look at: drawn larger, with its status */
++    /** The one to look at: drawn larger */
+     prominent?: boolean;
++    /** Where it stands, as the task's view says (`derived.review_statuses`, ATM-621): a status, or `unreadable` */
++    status?: string | null;
+   }
+-  let { project, reference, prominent = false }: Props = $props();
++  let { project, reference, prominent = false, status: given = null }: Props = $props();
+ 
+-  const status = $derived(knownStatus(project, reference));
++  /** A review's status, as atm names them (an older or newer atm's other word shows nothing) */
++  const isStatus = (s: string | null | undefined): s is ReviewStatus => !!s && Object.hasOwn(STATUS_LABELS, s);
++
++  // What the page learned since the task's view came (fresher) first, else the view's own
++  const status = $derived(knownStatus(project, reference) ?? (isStatus(given) ? given : null));
+   // A review atm can't read (ATM-617) says so, wherever its link is
+-  const unreadable = $derived(knownUnreadable(project, reference));
++  const unreadable = $derived(
++    knownUnreadable(project, reference) ?? (given === 'unreadable' ? "atm can't read this review" : null),
++  );
+   const waiting = $derived(
+     dashboard.projects
+       .find((p) => p.id === project)
+@@ -52,8 +62,9 @@
+   onauxclick={open}
+   title="Open {reference}'s page"
+   ><Icon name="message-square" size={prominent ? 14 : 12} /><span class="review-link-ref">{reference}</span
+-  >{#if unreadable}<span class="review-link-unreadable" title={unreadable}>can't be read</span
+-    >{:else if prominent && status}<span class="review-link-status" data-status={status}>{STATUS_LABELS[status]}</span
++  >{#if unreadable}<span class="review-link-unreadable" title={unreadable}>can't be read</span>{:else if status}<span
++      class="review-link-status"
++      data-status={status}>{STATUS_LABELS[status]}</span
+     >{/if}{#if waiting}<span class="review-link-needs">needs you</span>{/if}</a
+ >
+ 
+@@ -79,10 +90,21 @@
+   .review-link-ref {
+     font-family: 'SF Mono', Menlo, Consolas, monospace;
+   }
++  /* Coloured as the Reviews list colours a status (ATM-621): approved green, sent back red, waiting and live the
++     accent, closed and draft muted */
+   .review-link-status {
+     color: var(--text-muted);
+     font-weight: 400;
+   }
++  .review-link-status:is([data-status='waiting'], [data-status='live']) {
++    color: var(--accent);
++  }
++  .review-link-status[data-status='approved'] {
++    color: var(--green);
++  }
++  .review-link-status[data-status='changes_requested'] {
++    color: var(--red);
++  }
+   .review-link-status::before {
+     content: '· ';
+   }
+diff --git a/dashboard/src/lib/kanban/KanbanCard.svelte b/dashboard/src/lib/kanban/KanbanCard.svelte
+index a9fa379f..d80347da 100644
+--- a/dashboard/src/lib/kanban/KanbanCard.svelte
++++ b/dashboard/src/lib/kanban/KanbanCard.svelte
+@@ -97,7 +97,14 @@
+     </div>
+   {/if}
+   {#if codeReview && dashboard.projectId}
+-    <div class="card-review"><ReviewLink project={dashboard.projectId} reference={codeReview.ref} prominent /></div>
++    <div class="card-review">
++      <ReviewLink
++        project={dashboard.projectId}
++        reference={codeReview.ref}
++        status={task.derived?.review_statuses?.[codeReview.id]}
++        prominent
++      />
++    </div>
+   {/if}
+   {#if block}
+     <div
+diff --git a/dashboard/src/lib/tasks/TaskCard.svelte b/dashboard/src/lib/tasks/TaskCard.svelte
+index 7ec3230b..4e34ec13 100644
+--- a/dashboard/src/lib/tasks/TaskCard.svelte
++++ b/dashboard/src/lib/tasks/TaskCard.svelte
+@@ -91,7 +91,14 @@
+       </div>
+     {/if}
+     {#if codeReview && dashboard.projectId}
+-      <div class="card-review"><ReviewLink project={dashboard.projectId} reference={codeReview.ref} prominent /></div>
++      <div class="card-review">
++        <ReviewLink
++          project={dashboard.projectId}
++          reference={codeReview.ref}
++          status={task.derived?.review_statuses?.[codeReview.id]}
++          prominent
++        />
++      </div>
+     {/if}
+     {#if block}
+       <div
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 000f0948..9bcfa9a6 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -443,7 +443,9 @@ export class TasksServer {
+             });
+       }
+       return answerTasks(route, V1_TASKS, (body) =>
+-        body === this.body ? asTaskViews(body, this.archiveBody, false, this.registeredBodies) : asTaskViews(body),
++        body === this.body
++          ? this.withReviewStatuses(asTaskViews(body, this.archiveBody, false, this.registeredBodies))
++          : asTaskViews(body),
+       );
+     });
+     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
+@@ -800,6 +802,27 @@ export class TasksServer {
+     return { ok: true };
+   }
+ 
++  /** Where the default project's code reviews stand, by review ID (ATM-621): what atm reads from its reviews folder
++   * into each task's `derived.review_statuses`. The fixture's views come from atm run outside git, with no reviews
++   * folder, so a test sets them here; atm's own reading is tested by atm-lib and the CLI suite */
++  reviewStatuses: Record<string, string> = {};
++
++  /** Task views (as text) with the statuses of the reviews each task links, as atm serves them */
++  private withReviewStatuses(text: string): string {
++    if (!Object.keys(this.reviewStatuses).length) return text;
++    const parsed = JSON.parse(text) as {
++      tasks?: { task: Record<string, unknown>; derived: Record<string, unknown> }[];
++    };
++    for (const view of parsed.tasks ?? []) {
++      const links = (view.task.code_reviews ?? []) as { id: string }[];
++      const known = Object.fromEntries(
++        links.filter((l) => l.id in this.reviewStatuses).map((l) => [l.id, this.reviewStatuses[l.id]]),
++      );
++      if (Object.keys(known).length) view.derived = { ...view.derived, review_statuses: known };
++    }
++    return JSON.stringify(parsed);
++  }
++
+   /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */
+   private answerCommand(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
+     const unknown = { error: { kind: 'not_found', message: 'unknown project' } };
+@@ -828,7 +851,7 @@ export class TasksServer {
+         return {
+           ok: views(
+             project === this.projectId
+-              ? asTaskViews(body, this.archiveBody, false, this.registeredBodies)
++              ? this.withReviewStatuses(asTaskViews(body, this.archiveBody, false, this.registeredBodies))
+               : asTaskViews(body),
+           ),
+         };
+diff --git a/dashboard/tests/e2e/kanban.spec.ts b/dashboard/tests/e2e/kanban.spec.ts
+index 0d3b4e2b..54396fe0 100644
+--- a/dashboard/tests/e2e/kanban.spec.ts
++++ b/dashboard/tests/e2e/kanban.spec.ts
+@@ -220,6 +220,38 @@ test.describe('Kanban board', () => {
+     expect(new URL(page.url()).searchParams.get('task')).toBeNull();
+   });
+ 
++  // ATM-621: the badge says where the review stands, from the task's own view (atm serves each review's status with
++  // its tasks): waiting, then approved after the next refresh; the details say it too
++  test('a card’s code review badge says the review’s status, and follows its decision on the next refresh', async ({
++    page,
++    tasksServer,
++  }) => {
++    const data = loadFixture('standard');
++    Object.assign(
++      data.tasks.find((t) => t.id === 'T-004')!,
++      {
++        status: 'in_review',
++        code_reviews: [{ id: 'u2', ref: 'CR-2' }],
++      },
++    );
++    tasksServer.reviewStatuses = { u2: 'waiting' };
++    await page.clock.install();
++    // Refreshing, as by default (the specs' tasks server keeps it off unless asked)
++    await openDashboard(page, tasksServer.withAtmSummary(), data, { autoRefresh: true, tab: 'kanban' });
++    const status = card(page, 'T-004').locator('.card-review .review-link-status');
++    await expect(status).toHaveText('Waiting for review');
++    await expect(status).toHaveAttribute('data-status', 'waiting');
++    // Approved: the views change (their stamp has the reviews' files), and the next refresh shows it
++    tasksServer.reviewStatuses = { u2: 'approved' };
++    tasksServer.use({ ...data, meta: { ...data.meta, refreshed: 1 } });
++    await page.clock.runFor(6_000);
++    await expect(status).toHaveText('Approved');
++    await expect(status).toHaveAttribute('data-status', 'approved');
++    // The details say it too
++    await card(page, 'T-004').locator('.kanban-card-name').click();
++    await expect(page.locator('#detail-review .review-link-status')).toHaveText('Approved');
++  });
++
+   test('skipped tasks are hidden behind a toggle', async ({ page, tasksServer }) => {
+     await openKanban(page, tasksServer, 'kanban');
+     await expect(column(page, 'skipped')).toHaveCount(0);
+diff --git a/dashboard/tests/unit/ReviewLink.component.test.ts b/dashboard/tests/unit/ReviewLink.component.test.ts
+new file mode 100644
+index 00000000..6533e7fe
+--- /dev/null
++++ b/dashboard/tests/unit/ReviewLink.component.test.ts
+@@ -0,0 +1,48 @@
++import { render } from '@testing-library/svelte';
++import { describe, expect, it } from 'vitest';
++import ReviewLink from '../../src/lib/details/ReviewLink.svelte';
++import { learnReviews } from '../../src/lib/reviews/known.svelte';
++
++// ATM-621: a task's link to its code review says where the review stands, from the task's own view (atm serves each
++// review's status with the task), coloured as the Reviews list colours it; what the page learned since comes first
++describe('ReviewLink', () => {
++  const link = (props: Record<string, unknown>) =>
++    render(ReviewLink, { props: { project: 'p', reference: 'CR-7', ...props } }).container;
++  const status = (c: HTMLElement) => c.querySelector('.review-link-status');
++
++  it('shows each status with its label, prominent or not, its colour by data-status', () => {
++    for (const [given, label] of [
++      ['draft', 'Draft'],
++      ['waiting', 'Waiting for review'],
++      ['live', 'Live'],
++      ['changes_requested', 'Changes requested'],
++      ['approved', 'Approved'],
++      ['closed', 'Closed'],
++    ] as const) {
++      for (const prominent of [true, false]) {
++        const s = status(link({ reference: `CR-${given}`, status: given, prominent }));
++        expect(s?.textContent, `${given} ${prominent}`).toBe(label);
++        expect(s?.getAttribute('data-status')).toBe(given);
++      }
++    }
++  });
++
++  it('without a status (an older atm), or with a word atm doesn’t have, the badge as before: its reference only', () => {
++    for (const given of [undefined, null, 'archived']) {
++      const c = link({ reference: 'CR-8', status: given, prominent: true });
++      expect(c.querySelector('.review-link-ref')?.textContent).toBe('CR-8');
++      expect(status(c)).toBeNull();
++    }
++  });
++
++  it('a review atm can’t read says so instead', () => {
++    const c = link({ reference: 'CR-9', status: 'unreadable' });
++    expect(c.querySelector('.review-link-unreadable')?.textContent).toBe("can't be read");
++    expect(status(c)).toBeNull();
++  });
++
++  it('what the page learned since the task’s view came wins: an approval seen on the Reviews tab', () => {
++    learnReviews('p', [{ reference: 'CR-10', status: 'approved' }]);
++    expect(status(link({ reference: 'CR-10', status: 'waiting' }))?.textContent).toBe('Approved');
++  });
++});
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index ca12dcff..d0407970 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -143,6 +143,12 @@ typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/ge
+ task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
+ `in_pr`, `merged`) and `archived`; what doesn't apply is left out.
+ 
++- **Its code reviews' statuses** (ATM-621): a task with code reviews (`code_reviews`) has `derived.review_statuses`,
++  by review ID: each review's status (`draft`, `waiting`, `live`, `changes_requested`, `approved`, `closed`), or
++  `unreadable` for one atm can't read (ATM-617). They're read from the project's reviews once for all the views. A
++  review this working copy doesn't have is left out. The tasks' `ETag` already moves with the reviews' files
++  (ATM-606), so a decision shows on the next refresh. The task cards' and the details' review badges show them.
++
+ - **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
+   `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,
+   found }`, and when found, the project's `project_name` and `places` (`[{ workspace, project }]`, where it is
+diff --git a/tests/scripts/reviews/lifecycle.test.mjs b/tests/scripts/reviews/lifecycle.test.mjs
+index e6e65924..0d75f0d7 100644
+--- a/tests/scripts/reviews/lifecycle.test.mjs
++++ b/tests/scripts/reviews/lifecycle.test.mjs
+@@ -629,4 +629,38 @@ describe('atm review', () => {
+       removeDir(root);
+     }
+   });
++
++  // ATM-621: the task views atm serves carry where each of a task's code reviews stands (its badge says it from the
++  // first load); one atm can't read says so; a task without reviews has no such field
++  test('a task view says where each of its code reviews stands, unreadable for one atm can’t read', () => {
++    const root = project();
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['review', 'create', '--title', 'First', '--task', 'T-1', '--uncommitted'], root, AGENT);
++      const statuses = () =>
++        Object.fromEntries(
++          ok(['task', 'list', '--derived'], root, HAKAN)
++            .json()
++            .map((v) => [v.task.id, v.derived.review_statuses ?? null]),
++        );
++      const id = (n) => ok(['review', 'show', `CR-${n}`, '--json'], root, HAKAN).json().header.id;
++      const first = id(1);
++      assert.deepEqual(statuses(), { 'T-1': { [first]: 'waiting' }, 'T-2': null });
++      ok(['review', 'submit', 'CR-1', '--approve'], root, HAKAN);
++      assert.deepEqual(statuses()['T-1'], { [first]: 'approved' });
++      // A second review of T-2, then its file made unreadable (ATM-617): its link says so
++      ok(['review', 'create', '--title', 'Second', '--task', 'T-2', '--uncommitted'], root, AGENT);
++      const second = id(2);
++      const reviews = path.join(root, '.agentic-task-manager', 'reviews');
++      const file = path.join(
++        reviews,
++        fs.readdirSync(reviews).find((n) => n.startsWith('CR-2-')),
++        'review.md',
++      );
++      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('open', 'frozen'));
++      assert.deepEqual(statuses()['T-2'], { [second]: 'unreadable' });
++    } finally {
++      removeDir(root);
++    }
++  });
+ });

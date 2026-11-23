@@ -19339,7 +19339,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-23T15:59:58Z",
-      "updated_at": "2026-11-23T16:36:35Z",
+      "updated_at": "2026-11-23T17:34:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19354,7 +19354,7 @@
       "number": 741,
       "started_at": "2026-11-23T16:03:16Z",
       "started_by": "claude:0f56a916",
-      "commit": "ac7c547100340e9da4717ec45dbb18e7d95e5eea",
+      "commit": "8faf60282b7a6579aea9635ca2f539d0c437a95e",
       "code_reviews": [
         {
           "id": "01a20944-376a-717c-b942-73c274b147ca",

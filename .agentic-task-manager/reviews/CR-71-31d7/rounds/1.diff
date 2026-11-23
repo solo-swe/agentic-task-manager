@@ -1,0 +1,81 @@
+diff --git a/dashboard/src/lib/ui/TitleBarTabs.svelte b/dashboard/src/lib/ui/TitleBarTabs.svelte
+index d704acc1..a1c5bb49 100644
+--- a/dashboard/src/lib/ui/TitleBarTabs.svelte
++++ b/dashboard/src/lib/ui/TitleBarTabs.svelte
+@@ -417,9 +417,13 @@
+     min-width: 0;
+     position: relative;
+   }
++  /* It reaches a hairline below its room, over the bar's bottom line (ATM-688): the tabs fill it, so the selected one,
++     in the page's background, covers the line and joins the page under it; the others, transparent, leave it showing.
++     Clipped to its room, it had cut that pixel off, and the line ran under the selected tab too */
+   .title-bar-tabs-scroller {
++    --hairline: 1px;
+     display: flex;
+-    inset: 0;
++    inset: 0 0 calc(-1 * var(--hairline)) 0;
+     overflow-x: auto;
+     overflow-y: hidden;
+     overscroll-behavior: contain;
+@@ -457,8 +461,6 @@
+     display: flex;
+     flex: 0 0 var(--tab-width);
+     gap: var(--space-1);
+-    --hairline: 1px;
+-    margin-bottom: calc(-1 * var(--hairline));
+     min-width: 0;
+     padding: 0 var(--space-2) 0 var(--space-4);
+     position: relative;
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index e39ec1a0..7908b9ca 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -325,6 +325,48 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(page.locator('#app-tab-more')).toHaveCount(0);
+   });
+ 
++  // ATM-688 (Hakan): the bar's line runs under every tab but the selected one, which joins the page under it. The tab
++  // covers the line's pixel with the page's background; the tabs' scroller (ATM-605) clipped that pixel away
++  test('the selected tab has no line under it; the others do', { tag: '@webkit' }, async ({ page, tasksServer }) => {
++    await tasksServer.asApp();
++    tasksServer.use('standard');
++    const board = `/projects/${tasksServer.projectId}/kanban`;
++    tasksServer.restoredTabs = { addresses: [board, board, board], active: 1 };
++    await page.goto('/');
++    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(3);
++    const seen = await page.evaluate(() => {
++      const bar = document.querySelector('#app-titlebar')!.getBoundingClientRect();
++      const strip = document.querySelector('.title-bar-tabs-scroller')!.getBoundingClientRect();
++      const tabs = [...document.querySelectorAll<HTMLElement>('.title-bar-tab')];
++      const page = getComputedStyle(document.body).getPropertyValue('--bg');
++      return {
++        // The strip holds the line's row (it is the bar's last pixel)
++        stripReachesLine: strip.bottom >= bar.bottom - 0.5,
++        tabs: tabs.map((t) => ({
++          selected: t.classList.contains('selected'),
++          coversLine: t.getBoundingClientRect().bottom >= bar.bottom - 0.5,
++          background: getComputedStyle(t).backgroundColor,
++        })),
++        page,
++      };
++    });
++    expect(seen.stripReachesLine).toBe(true);
++    const selected = seen.tabs.find((t) => t.selected)!;
++    const others = seen.tabs.filter((t) => !t.selected);
++    // The selected tab reaches over the line, opaque; the others leave it showing through
++    expect(selected.coversLine).toBe(true);
++    expect(selected.background).not.toBe('rgba(0, 0, 0, 0)');
++    for (const t of others) expect(t.background).toBe('rgba(0, 0, 0, 0)');
++    // What is drawn there, under the selected tab's middle: the tab (its page colour), not the bar
++    const at = await page.evaluate(() => {
++      const bar = document.querySelector('#app-titlebar')!.getBoundingClientRect();
++      const tab = document.querySelector('.title-bar-tab.selected')!.getBoundingClientRect();
++      const hit = document.elementFromPoint(tab.left + 8, bar.bottom - 0.5);
++      return hit?.closest('.title-bar-tab.selected') !== null;
++    });
++    expect(at).toBe(true);
++  });
++
+   // ATM-685 (Hakan): when the tabs don't all fit, More ⌄ lists those out of view; one chosen there is shown, scrolled
+   // into view. In WebKit too, the app's engine on macOS
+   test(

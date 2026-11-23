@@ -1,0 +1,268 @@
+diff --git a/crates/atm-lib/src/state/tests.rs b/crates/atm-lib/src/state/tests.rs
+index 33a1ca59..25c35e41 100644
+--- a/crates/atm-lib/src/state/tests.rs
++++ b/crates/atm-lib/src/state/tests.rs
+@@ -2,6 +2,8 @@ use serde_json::{Map, Value, json};
+ 
+ use super::*;
+ 
++mod docs;
++
+ fn task(v: Value) -> Task {
+     match v {
+         Value::Object(m) => m,
+diff --git a/crates/atm-lib/src/state/tests/docs.rs b/crates/atm-lib/src/state/tests/docs.rs
+new file mode 100644
+index 00000000..6e47ea1a
+--- /dev/null
++++ b/crates/atm-lib/src/state/tests/docs.rs
+@@ -0,0 +1,66 @@
++//! ATM-715 (docs/task-review-state-machine.md §7 step 5): what `atm docs states` says of a task's moves is the table's
++//! (`Command::sources` and `destination`): every command has its row, each row the kinds the table gives it, so a change
++//! to the table fails here until the docs follow.
++
++use super::super::Command;
++use atm_common::vocabulary::Kind;
++
++/// The agent docs' states topic, as atm embeds it.
++const STATES: &str = include_str!("../../../../../docs/agent/states.md");
++
++fn kind_named(name: &str) -> Kind {
++    Kind::parse(name).unwrap_or_else(|| panic!("the docs name a kind atm hasn't: {name}"))
++}
++
++/// The docs' table: (move, from, to), a row a move.
++fn documented() -> Vec<(String, Vec<Kind>, Kind)> {
++    let section = STATES
++        .split("## The table")
++        .nth(1)
++        .and_then(|rest| rest.split("\n## ").next())
++        .expect("atm docs states has its table of moves");
++    section
++        .lines()
++        .filter(|l| l.starts_with('|'))
++        .filter_map(|line| {
++            let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
++            let [name, from, to] = cells[..] else {
++                panic!("a row of three cells: {line}");
++            };
++            (name != "Move" && !name.starts_with("---")).then(|| {
++                let from = from.split(',').map(|k| kind_named(k.trim())).collect();
++                (name.to_string(), from, kind_named(to))
++            })
++        })
++        .collect()
++}
++
++#[test]
++fn what_atm_docs_states_says_of_a_tasks_moves_is_the_tables() {
++    let documented = documented();
++    for command in Command::ALL {
++        let row = documented
++            .iter()
++            .find(|(name, _, _)| name == command.name())
++            .unwrap_or_else(|| panic!("atm docs states has no row for {}", command.name()));
++        assert_eq!(
++            row.1,
++            command.sources(),
++            "{}: the kinds it moves from",
++            command.name()
++        );
++        assert_eq!(
++            row.2,
++            command.destination(),
++            "{}: the kind it leaves",
++            command.name()
++        );
++    }
++    // No row for a move atm hasn't
++    for (name, _, _) in &documented {
++        assert!(
++            Command::ALL.iter().any(|c| c.name() == name),
++            "atm docs states names a move atm hasn't: {name}"
++        );
++    }
++}
+diff --git a/crates/atm-review/src/rules/tests.rs b/crates/atm-review/src/rules/tests.rs
+index ec22d1b2..9d84dd4e 100644
+--- a/crates/atm-review/src/rules/tests.rs
++++ b/crates/atm-review/src/rules/tests.rs
+@@ -188,5 +188,6 @@ fn is_not_now(result: &Result<impl std::fmt::Debug, Error>) -> bool {
+ 
+ mod comments;
+ mod deciding;
++mod docs;
+ mod rounds;
+ mod table;
+diff --git a/crates/atm-review/src/rules/tests/docs.rs b/crates/atm-review/src/rules/tests/docs.rs
+new file mode 100644
+index 00000000..0e74ce19
+--- /dev/null
++++ b/crates/atm-review/src/rules/tests/docs.rs
+@@ -0,0 +1,93 @@
++//! ATM-715 (docs/task-review-state-machine.md §7 step 5): what `atm docs reviews` says of a review's status is the
++//! table's: each row of its table is checked against the review table's rows, both ways, so a change to the table
++//! fails here until the docs follow.
++
++use super::{TABLE_STATUSES, review_rows};
++use crate::model::Status;
++
++/// The agent docs' reviews topic, as atm embeds it.
++const REVIEWS: &str = include_str!("../../../../../docs/agent/reviews.md");
++
++/// The docs' events, by the name the review table's rows give them.
++const EVENTS: [(&str, &str); 5] = [
++    ("round", "round"),
++    ("approve", "approve"),
++    ("request changes", "request"),
++    ("comment", "comment"),
++    ("close", "close"),
++];
++
++fn status_named(name: &str) -> Status {
++    TABLE_STATUSES
++        .into_iter()
++        .find(|s| s.name() == name)
++        .unwrap_or_else(|| panic!("the docs name a status atm hasn't: {name}"))
++}
++
++/// The docs' table: (from, the table's event, to; `None`: it stays), a row a status it moves from.
++fn documented() -> Vec<(Status, &'static str, Option<Status>)> {
++    let section = REVIEWS
++        .split("## How a review's status moves")
++        .nth(1)
++        .expect("atm docs reviews has its table of how a review's status moves");
++    let mut rows = Vec::new();
++    for line in section.lines().filter(|l| l.starts_with('|')) {
++        let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
++        let [event, from, to] = cells[..] else {
++            panic!("a row of three cells: {line}");
++        };
++        if event == "Event" || event.starts_with("---") {
++            continue;
++        }
++        let (_, name) = EVENTS
++            .iter()
++            .find(|(doc, _)| *doc == event)
++            .unwrap_or_else(|| panic!("the docs name an event the table hasn't: {event}"));
++        for from in from.split(',').map(str::trim) {
++            let from = status_named(from);
++            let to = match to {
++                "stays" => None,
++                named if status_named(named) == from => None,
++                named => Some(status_named(named)),
++            };
++            rows.push((from, *name, to));
++        }
++    }
++    rows
++}
++
++#[test]
++fn what_atm_docs_reviews_says_of_a_reviews_status_is_the_tables() {
++    let table = review_rows();
++    let documented = documented();
++    // Each row the docs give is the table's
++    for (from, event, to) in &documented {
++        let row = table
++            .iter()
++            .find(|(status, name, _)| status == from && name == event)
++            .unwrap_or_else(|| panic!("no table row for {} × {event}", from.name()));
++        assert_eq!(
++            row.2,
++            Ok(*to),
++            "the docs say {} × {event} leads to {to:?}",
++            from.name()
++        );
++    }
++    // Each move the table allows for these events is in the docs, and a refused one isn't
++    for (status, event, next) in &table {
++        if !EVENTS.iter().any(|(_, name)| name == event) {
++            continue;
++        }
++        let said = documented
++            .iter()
++            .any(|(from, name, _)| from == status && name == event);
++        assert_eq!(
++            said,
++            next.is_ok(),
++            "{} × {event}: the table {} it, the docs {}",
++            status.name(),
++            if next.is_ok() { "allows" } else { "refuses" },
++            if said { "list it" } else { "don't" }
++        );
++    }
++}
+diff --git a/docs/agent/reviews.md b/docs/agent/reviews.md
+index c2ec6ec3..141697a3 100644
+--- a/docs/agent/reviews.md
++++ b/docs/agent/reviews.md
+@@ -101,3 +101,18 @@
+   credentials, CI, git config or hooks, or push elsewhere is answered or blocked on the user
+   (`atm task state <key> blocked --on user --question '…'`), as a task asking for it is.
+ - **Every command takes `--json`**; quote text in single quotes.
++
++## How a review's status moves
++By the status a review is in before and the one it is in after (atm's own table; a test checks every row, so this
++says what atm does). A `round` is its author's (`atm review round`); `approve`, `request changes`, `comment` and
++`close` are a reviewer's (`close` its author's too). An approved or closed review takes none of them.
++
++| Event | From | To |
++|---|---|---|
++| round | draft | draft |
++| round | waiting | waiting |
++| round | live, changes_requested | waiting |
++| approve | waiting, live, changes_requested | approved |
++| request changes | waiting | changes_requested |
++| comment | draft, waiting, live, changes_requested | stays |
++| close | draft, waiting, live, changes_requested | closed |
+diff --git a/docs/agent/states.md b/docs/agent/states.md
+index 822d1c6b..66205d01 100644
+--- a/docs/agent/states.md
++++ b/docs/agent/states.md
+@@ -20,6 +20,31 @@ several statuses, `--status <id>` picks one; otherwise atm uses the first listed
+ - `skipped --reason '…' [--resolution wont_do|obsolete|duplicate]`: not needed, from any open state (from review once
+   rejected).
+ 
++## The table
++Each move, by the kind a task is in before it and the kind it leaves it in (atm's own table; a test checks every row,
++so this says what atm does). Run: `start` is `in_progress`; `review` is `in_review`; `fail` is `todo --reason`;
++`release` is `todo --note`; `unblock` is `todo --answer`; `reopen` is `todo` from done or skipped; `drop` is `todo`
++from a rejected review; `approve`, `request-changes` and `reject` are the user's `atm task review` decisions.
++
++| Move | From | To |
++|---|---|---|
++| start | todo, review | active |
++| review | active, review | review |
++| done | active, review | done |
++| fail | active | todo |
++| release | active | todo |
++| approve | review | review |
++| request-changes | review | review |
++| reject | review | review |
++| drop | review | todo |
++| block | todo, active | blocked |
++| unblock | blocked | todo |
++| reopen | done, skipped | todo |
++| skip | todo, active, review, blocked | skipped |
++
++From review, `start` needs changes asked for or an approval (rework), `review` changes asked for (a round), `done` an
++approval, and `skip` or `drop` a rejection.
++
+ ## Reviews
+ A review's decision is the user's: `atm task review approve <id> [--note]`, `request-changes <id> --reason '…'` or
+ `reject <id> --reason '…'`. The task stays in review, and atm lets it out only by the decision: approved, `done` (or
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index c3d8f020..c6661c72 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -1336,6 +1336,9 @@ land (I11, I13, I24, I25). Fields:
+   keeps text as it is. `task list --agent` (renamed `--started-by`, the old name kept hidden) no longer counts as
+   running as someone else, so it renews its caller's claims (C13); `claim hold` refuses when it can't read the shell's
+   start time instead of saying it holds (C12).
++- **`atm docs states` and `atm docs reviews` carry the state tables** (ATM-715): a table of a task's moves and one of a
++  review's status, each checked by a test against atm's own (`Command::sources` and `destination`, the review table's
++  rows), so what agents read is what atm does. No command, path or instruction is added.
+ 
+ ## 4. Keeping it current
+ 

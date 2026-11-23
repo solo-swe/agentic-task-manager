@@ -1,0 +1,51 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "working",
+    "base": "5b9f2d484f3be1ff6eaf285a01d4c943c39fce79"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/documents/DocumentPage.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/DiffView.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/RenderedSide.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/diff.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/focus.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/diff.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/codebase-audit-2026-11.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "Hakan Serce",
+  "at": "2026-11-20T09:56:42Z"
+}

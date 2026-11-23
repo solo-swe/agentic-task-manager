@@ -1,0 +1,173 @@
+diff --git a/crates/atm-cli/src/commands/vcs.rs b/crates/atm-cli/src/commands/vcs.rs
+index c800a898..ad1ec313 100644
+--- a/crates/atm-cli/src/commands/vcs.rs
++++ b/crates/atm-cli/src/commands/vcs.rs
+@@ -53,9 +53,10 @@ pub enum VcsCommand {
+         #[arg(long)]
+         agent: Option<String>,
+     },
+-    /// Record that a PR was merged, on the tasks it contains.
++    /// Record that a PR was merged, on the tasks it contains; without --pr, a direct push to the base branch. Either
++    /// way, the keys of tasks now on the base branch become final.
+     Pushed {
+-        /// The PR number
++        /// The PR number (none: a direct push)
+         #[arg(long)]
+         pr: Option<i64>,
+         /// When it was merged (ISO 8601 UTC)
+@@ -221,8 +222,41 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
+                 );
+             }
+         }
+-        VcsCommand::Pushed { pr, at, agent } => {
+-            let pr = pr.ok_or_else(|| missing("--pr"))?;
++        VcsCommand::Pushed {
++            pr: None,
++            at,
++            agent,
++        } => {
++            // A direct push (ADR-007 §3, ATM-623): nothing to record on the tasks, but the keys of those now on the
++            // base branch are final. Without it a project working on its base branch kept provisional keys
++            if at.is_some() {
++                return Err(Error::Invalid(
++                    "--at is when a PR was merged: give --pr too".into(),
++                ));
++            }
++            if ctx.dry_run {
++                let mut parts = vec!["atm vcs pushed".to_string()];
++                flags(&mut parts, "agent", &agent.iter().collect::<Vec<_>>());
++                dry_run(&parts);
++                return Ok(());
++            }
++            let mut project =
++                Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
++            let vcs = project.vcs();
++            let finalized = atm_lib::code::finalize_keys(&mut project, vcs.as_ref())?;
++            if ctx.json {
++                print_json(&json!({ "keys_final": finalized }));
++            } else if finalized.is_empty() {
++                println!("No provisional key is on the base branch yet.");
++            } else {
++                println!("Final now (on the base branch): {}", finalized.join(", "));
++            }
++        }
++        VcsCommand::Pushed {
++            pr: Some(pr),
++            at,
++            agent,
++        } => {
+             if ctx.dry_run {
+                 let mut parts = vec![format!("atm vcs pushed --pr {pr}")];
+                 flags(&mut parts, "at", &at.iter().collect::<Vec<_>>());
+diff --git a/docs/agent/commands.md b/docs/agent/commands.md
+index e8f74b54..69fc3d8a 100644
+--- a/docs/agent/commands.md
++++ b/docs/agent/commands.md
+@@ -36,6 +36,8 @@ is only how it reads: commands take the key with or without it, and `--json` giv
+ 
+ - `atm vcs pr <id>… --number N --url U`: record the pull request that contains the tasks
+ - `atm vcs pushed --pr N [--at TIME]`: record that it merged
++- `atm vcs pushed`: after a direct push to the base branch; the keys of the tasks now on it become final (either form
++  makes keys final, read from git)
+ 
+ ## Defining work
+ 
+diff --git a/skills/atm-push/SKILL.md b/skills/atm-push/SKILL.md
+index 9fd6be36..2e1403a7 100644
+--- a/skills/atm-push/SKILL.md
++++ b/skills/atm-push/SKILL.md
+@@ -70,6 +70,10 @@ and no PR was opened.
+ 
+ `git push` (with `-u origin <branch>` when the branch has no upstream yet). Never force-push.
+ 
++**direct**, once pushed to the base branch: `atm vcs pushed` (no `--pr`). The tasks the push put on the base branch get
++final keys (`~KEY-12` becomes `KEY-12`); atm reads that from git. If it says some keys are final now, commit that on
++its own (`git commit -m 'chore: task keys final' -- .agentic-task-manager/tasks.json`): it goes with the next push.
++
+ ## Step 4: The pull request (pull-request only)
+ 
+ `gh pr view --json number,url,state` says whether the branch has one.
+diff --git a/tests/scripts/dry-run.test.mjs b/tests/scripts/dry-run.test.mjs
+index 56a0b5a1..a3f2765a 100644
+--- a/tests/scripts/dry-run.test.mjs
++++ b/tests/scripts/dry-run.test.mjs
+@@ -49,6 +49,7 @@ const CASES = [
+     ['vcs', 'pushed', '--pr', '7', '--at', '2026-05-01T00:00:00Z'],
+     '[dry-run] would run: atm vcs pushed --pr 7 --at 2026-05-01T00:00:00Z\n',
+   ],
++  [['vcs', 'pushed'], '[dry-run] would run: atm vcs pushed\n'],
+   [['vcs', 'repository', 'https://github.com/o/r'], '[dry-run] would run: atm vcs repository https://github.com/o/r\n'],
+   // sprint
+   [['sprint', 'add', 'S3'], '[dry-run] would add the sprint S3\n'],
+diff --git a/tests/scripts/keys.test.mjs b/tests/scripts/keys.test.mjs
+index eedabc5e..97e0861e 100644
+--- a/tests/scripts/keys.test.mjs
++++ b/tests/scripts/keys.test.mjs
+@@ -279,6 +279,53 @@ test('a key becomes final once its task is on origin’s base branch, read from
+   }
+ });
+ 
++// ATM-623 (Hakan): a project working on its base branch, pushing straight to it, kept provisional keys: nothing made
++// them final after a push but the next `atm db migrate`
++test('a direct push makes the keys of the tasks it pushed final: atm vcs pushed without --pr', () => {
++  const remote = tempDir('atm-remote-');
++  const root = makeProject({
++    files: { [FILE]: { meta: { id: '3f2a9c1e', project: 'Fig' }, tasks: [] } },
++    git: true,
++    commit: true,
++  });
++  const add = (name) => {
++    const dir = tempDir();
++    try {
++      fs.writeFileSync(path.join(dir, 'new.json'), JSON.stringify([{ name, type: 'feature' }]));
++      assert.equal(runAtm(['task', 'add', '--json-file', path.join(dir, 'new.json')], root).code, 0);
++    } finally {
++      removeDir(dir);
++    }
++  };
++  const task = (name) => read(root, FILE).tasks.find((t) => t.name === name);
++  try {
++    git(['init', '-q', '--bare', remote], root);
++    git(['branch', '-M', 'main'], root);
++    git(['remote', 'add', 'origin', remote], root);
++    assert.equal(runAtm(['project', 'key', 'set', 'FIG'], root).code, 0);
++    git(['commit', '-q', '-am', 'keys'], root);
++    git(['push', '-q', '-u', 'origin', 'main'], root);
++    // Not pushed yet: nothing to make final
++    add('pushed');
++    git(['commit', '-q', '-am', 'one'], root);
++    assert.equal(runAtm(['vcs', 'pushed'], root).stdout, 'No provisional key is on the base branch yet.\n');
++    assert.equal(task('pushed').key_final, false);
++    // Pushed on main: final; a task added since, not pushed, stays provisional
++    git(['push', '-q', 'origin', 'main'], root);
++    add('not pushed');
++    const r = runAtm(['vcs', 'pushed', '--json'], root);
++    assert.equal(r.code, 0, r.stderr);
++    assert.deepEqual(JSON.parse(r.stdout), { keys_final: ['FIG-1'] });
++    assert.equal(task('pushed').key_final, true);
++    assert.equal(task('not pushed').key_final, false);
++    // Again: nothing more
++    assert.deepEqual(JSON.parse(runAtm(['vcs', 'pushed', '--json'], root).stdout), { keys_final: [] });
++  } finally {
++    removeDir(root);
++    removeDir(remote);
++  }
++});
++
+ test('a dependency on another registered project’s task, by its key: waits until it is done there (T-544)', () => {
+   const home = tempDir('atm-home-');
+   const env = { ATM_HOME: home };
+diff --git a/tests/scripts/refusals.test.mjs b/tests/scripts/refusals.test.mjs
+index 6688aa49..d5e56d5e 100644
+--- a/tests/scripts/refusals.test.mjs
++++ b/tests/scripts/refusals.test.mjs
+@@ -48,7 +48,8 @@ const CASES = [
+   // sprint, vcs: required options
+   [['sprint', 'move', 'T-1'], 2, "atm: Missing option '--to'."],
+   [['sprint', 'move', '--to', 'S1'], 2, 'required'],
+-  [['vcs', 'pushed'], 2, "atm: Missing option '--pr'."],
++  // Without --pr it records a direct push (ATM-623); --at is a PR's merge time
++  [['vcs', 'pushed', '--at', '2026-05-01T00:00:00Z'], 2, 'atm: --at is when a PR was merged: give --pr too'],
+   [['vcs', 'pr', 'T-1', '--url', 'https://e.com/1'], 2, "atm: Missing option '--number'."],
+   [['vcs', 'pr', '--number', '1', '--url', 'https://e.com/1'], 2, 'required'],
+   [['vcs', 'pr', 'T-1', '--number', 'one', '--url', 'u'], 2, "invalid value 'one' for '--number"],

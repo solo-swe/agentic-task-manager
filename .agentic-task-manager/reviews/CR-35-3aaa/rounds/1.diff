@@ -1,0 +1,246 @@
+diff --git a/dashboard/src/lib/documents/CompMd.svelte b/dashboard/src/lib/documents/CompMd.svelte
+index 659b356f..ee2d4d84 100644
+--- a/dashboard/src/lib/documents/CompMd.svelte
++++ b/dashboard/src/lib/documents/CompMd.svelte
+@@ -99,6 +99,9 @@
+   let stale = $state(false);
+   let view: View | null = null;
+   let schemes: MutationObserver | null = null;
++  /** Destroyed (ATM-620): nothing is drawn any more. A draw after it made a view nothing would destroy, whose listeners
++   * held the text's element and the card around it */
++  let destroyed = false;
+   /** What was last rendered: the text and the task's data, so an unchanged text is never processed again (R8) */
+   let rendered = '';
+   /** The last measurement of the lines asked for: an older one that ends after it is dropped */
+@@ -173,6 +176,11 @@
+     }
+ 
+     function draw(compmd: CompmdModule, target: HTMLElement) {
++      if (destroyed) {
++        turnDone?.();
++        turnDone = null;
++        return;
++      }
+       const processed = processText(compmd, text, task, path, { localImage, docLink, taskKnown: tasks?.known });
+       const tree = only ? blocksIn(processed.tree, only) : processed.tree;
+       const components = processed.components;
+@@ -217,6 +225,7 @@
+   });
+ 
+   onDestroy(() => {
++    destroyed = true;
+     cancelTurn?.();
+     turnDone?.();
+     schemes?.disconnect();
+diff --git a/dashboard/src/lib/render-turns.ts b/dashboard/src/lib/render-turns.ts
+index 0998fc89..10bdaebd 100644
+--- a/dashboard/src/lib/render-turns.ts
++++ b/dashboard/src/lib/render-turns.ts
+@@ -7,6 +7,8 @@
+ interface Turn {
+   where: () => Element | undefined;
+   render: () => Promise<void>;
++  /** Cancelled: not rendered, even once picked to go next (ATM-620) */
++  cancelled?: boolean;
+ }
+ 
+ const waiting = new Set<Turn>();
+@@ -57,6 +59,13 @@ function next() {
+   waiting.delete(turn);
+   running = true;
+   whenIdle(() => {
++    // Cancelled while it waited for the page to be idle (ATM-620): its render gone with it, the next one's turn. A
++    // render of a text whose CompMd was destroyed made a view nothing would destroy, holding the card it was in
++    if (turn.cancelled) {
++      running = false;
++      next();
++      return;
++    }
+     // Pressed meanwhile: back in the line, to go once it is let go
+     if (pressed) {
+       running = false;
+@@ -77,10 +86,13 @@ function next() {
+  * its text changed, or it is gone) with what this returns; one that started finishes. */
+ export function takeTurn(where: () => Element | undefined, render: () => Promise<void>): () => void {
+   listen();
+-  const turn = { where, render };
++  const turn: Turn = { where, render };
+   waiting.add(turn);
+   next();
+-  return () => waiting.delete(turn);
++  return () => {
++    turn.cancelled = true;
++    waiting.delete(turn);
++  };
+ }
+ 
+ /** For tests: the turns waiting, and whether one is running */
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index 843d8186..ee230ba6 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -316,15 +316,13 @@
+     border-radius: var(--radius-md);
+     background: var(--bg);
+     scroll-margin-top: var(--space-4);
+-    /* Off screen, the browser skips its layout and painting (ATM-587), standing in at the size it last had, else at
+-       its estimate and its header. Never shrunk (ATM-615): a skipped card's least height is 0, so the pane's column
+-       squeezed every card off screen to its border, and the pane was a few screens long */
++    /* Laid out as any element, not skipped off screen (ATM-620: `content-visibility: auto` kept every card's old
++       layout, rows long given back, alive: up to 175 MB on CMD CR-1; the rows made are bounded by FAR and CHUNK, so
++       laying out those near the view costs nothing measurable). Never shrunk (ATM-615) */
+     flex: none;
+-    content-visibility: auto;
+-    contain-intrinsic-size: auto calc(var(--card-estimate, 400px) + 48px);
+   }
+-  /* A diff still loading stands at its estimate (ATM-615): a card that leaves the view while loading is remembered at
+-     the size it had, and at a line high the pane shrank under the reader */
++  /* A diff still loading stands at its estimate (ATM-615), so the pane doesn't shrink under the reader while it
++     loads */
+   .review-file-body:has(:global(.diff-loading)) {
+     min-height: var(--card-estimate);
+   }
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 7c107999..e334c33f 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1740,5 +1740,27 @@ test.describe('performance', () => {
+     // Rows bounded by where the view is, not by a count: a 600-line file in view is 1,200 rows in split
+     expect(scrolled.farRows).toBe(0);
+     expect(scrolled.collapsed).toBe(0);
++
++    // ATM-620: memory stays bounded by where the view is, not by every card ever made. Back to the top in steps of a
++    // screen, the page settled, a garbage collection forced: the DOM nodes still alive (DevTools' count, detached ones
++    // too) within a bound set from the measurements
++    await page.evaluate(async () => {
++      const pane = document.querySelector('.review-diffs') as HTMLElement;
++      const frame = () => new Promise((r) => requestAnimationFrame(r));
++      for (let steps = 0; steps < 2000 && pane.scrollTop > 0; steps++) {
++        pane.scrollTop -= pane.clientHeight;
++        await frame();
++      }
++    });
++    await page.waitForTimeout(1000);
++    const cdp = await page.context().newCDPSession(page);
++    await cdp.send('Performance.enable');
++    await cdp.send('HeapProfiler.collectGarbage');
++    const { metrics } = await cdp.send('Performance.getMetrics');
++    const alive = metrics.find((m) => m.name === 'Nodes')!.value;
++    console.log('long review, DOM nodes alive after down and back:', alive, 'on the page:', scrolled.nodes);
++    // Measured (docs/diff-viewer-profile.md): 93,240 before the fixes (a render after its text was gone kept its
++    // card; content-visibility kept every card's old layout), 21,840 after them; the page itself about 5,400
++    expect(alive).toBeLessThan(30_000);
+   });
+ });
+diff --git a/dashboard/tests/unit/CompMd.component.test.ts b/dashboard/tests/unit/CompMd.component.test.ts
+index 2b0a4457..d943107b 100644
+--- a/dashboard/tests/unit/CompMd.component.test.ts
++++ b/dashboard/tests/unit/CompMd.component.test.ts
+@@ -171,5 +171,31 @@ describe('CompMd', () => {
+       expect(createSandbox).toHaveBeenCalledTimes(1);
+       first.unmount();
+     });
++
++    // ATM-620: a view made after its text was gone was never destroyed, and held its card in memory
++    it('gone after its turn was given, before the page was idle, it never renders, and the next one goes', async () => {
++      const idle: (() => void)[] = [];
++      vi.stubGlobal('requestIdleCallback', (act: () => void) => idle.push(act));
++      const { createSandbox } = await compmdWithView();
++      const first = render(CompMd, { text: 'one', plain: 'one' });
++      await vi.waitFor(() => expect(idle).toHaveLength(1));
++      expect(turnsWaiting().running).toBe(true);
++      first.unmount();
++      idle.shift()!();
++      expect(createSandbox).not.toHaveBeenCalled();
++      expect(turnsWaiting()).toEqual({ waiting: 0, running: false });
++    });
++  });
++
++  it('gone before CompMD has loaded, it never renders', async () => {
++    const { createSandbox } = await compmdWithView();
++    let loaded: (m: CompmdModule) => void = () => {};
++    const module = (await loadCompmd()) as CompmdModule;
++    loadCompmd.mockReturnValue(new Promise<CompmdModule>((resolve) => (loaded = resolve)));
++    const shown = render(CompMd, { text: '# Gone' });
++    shown.unmount();
++    loaded(module);
++    await new Promise((r) => setTimeout(r, 0));
++    expect(createSandbox).not.toHaveBeenCalled();
+   });
+ });
+diff --git a/dashboard/tests/unit/render-turns.test.ts b/dashboard/tests/unit/render-turns.test.ts
+index a37540d8..16e770f6 100644
+--- a/dashboard/tests/unit/render-turns.test.ts
++++ b/dashboard/tests/unit/render-turns.test.ts
+@@ -111,6 +111,24 @@ describe('takeTurn', () => {
+     expect(log).toEqual(['failing', 'next']);
+   });
+ 
++  // ATM-620: a turn picked to go next waits for the page to be idle; cancelled meanwhile (its CompMd destroyed), it
++  // never renders, and the next one goes. Rendered, it made a view nothing would destroy, holding its card in memory
++  it('a turn cancelled after it was picked, before the page was idle, never runs; the next one goes', async () => {
++    const log: string[] = [];
++    const picked = render('picked', log);
++    const next = render('next', log);
++    const cancel = takeTurn(() => at(0), picked.fn);
++    takeTurn(() => at(50), next.fn);
++    // `picked` was picked at once and waits for the page to be idle
++    expect(turnsWaiting()).toEqual({ waiting: 1, running: true });
++    cancel();
++    await runIdle();
++    await vi.waitFor(() => expect(idle).toHaveLength(1));
++    await runIdle();
++    expect(log).toEqual(['next']);
++    expect(picked.fn).not.toHaveBeenCalled();
++  });
++
+   it('while a mouse button is held (a drag picking lines), no turn starts; let go, they go on', async () => {
+     const log: string[] = [];
+     window.dispatchEvent(new MouseEvent('mousedown'));
+diff --git a/docs/diff-viewer-profile.md b/docs/diff-viewer-profile.md
+index f39134b1..3cd8c076 100644
+--- a/docs/diff-viewer-profile.md
++++ b/docs/diff-viewer-profile.md
+@@ -2,8 +2,12 @@
+ 
+ Hakan, 2026-11-18: before choosing how to make the Diffs tab lighter, understand what it costs: how many CompMD
+ renderers it makes, what each holds, what that adds up to on a large review, and where the time goes. This document
+-is that analysis. The options at the end are for Hakan to decide; nothing is built yet. The earlier work on the same
+-tab, what it built and its numbers, is in [review-performance.md](review-performance.md) (ATM-587).
++is that analysis. The earlier work on the same tab, what it built and its numbers, is in
++[review-performance.md](review-performance.md) (ATM-587).
++
++> [!NOTE]
++> **Decided and built** (Hakan, 2026-11-19): 1, 2 and 3 are built (see *Built* at the end, with the numbers before and
++> after); 4 and 5 go to CompMD as tasks, which Hakan files; 6 is measured next.
+ 
+ ## Executive summary
+ 
+@@ -262,3 +266,27 @@ for turns) WebKit draws it in 1.09 s with no frame over 180 ms. Each part proces
+   instrumentation; the estimates above say so where they are used.
+ - **Spread in WebKit** is large between runs (a skim: 8.9 to 12.5 s blocked); the comparisons above are of medians,
+   with the spread given where it decides a conclusion.
++
++## Built (ATM-620, 2026-11-19): 1, 2 and 3
++
++- **1, the render after destroy:** `render-turns.ts` marks a cancelled turn, and one picked to go next but cancelled
++  before the page was idle never renders (the next one goes); `CompMd.svelte` never draws once destroyed (a text whose
++  CompMD loaded after it was gone). Unit and component tests for both paths.
++- **2, `content-visibility` dropped** from `ReviewFile.svelte`'s cards (with `contain-intrinsic-size`); a loading card's
++  `min-height` at its estimate stays (ATM-615).
++- **3, the memory bound:** the long-review spec (`reviews.spec.ts`, its synthetic 94-file review) goes back to the top
++  after reaching the end, forces a garbage collection and reads the DOM nodes alive (`Performance.getMetrics`); it
++  must stay under 30,000.
++
++Measured on that spec's review, in Chromium (the nodes alive after down and back; the page itself holds about 5,400):
++
++| | Nodes alive | First line on opening | Slowest step after settling |
++| --- | --- | --- | --- |
++| before 1 + 2 | 93,240 | 62 ms | 30 ms |
++| after 1 + 2 | 21,840 | 45–48 ms | 23–31 ms |
++| before, CPU slowed 4× (10 runs) | 71,449 (one run reached it) | 222–270 ms | 62–66 ms |
++| after, CPU slowed 4× (10 runs) | 20,407–21,840 | 146–211 ms | 54–82 ms |
++
++The bound catches the leak (from 71,000 to 93,000 nodes) with room over the fixed count. With the CPU slowed 4×, opening
++was over the 200 ms budget before (in most runs) and is under it after in 9 of 10 runs; that budget under load is
++ATM-629's to look into, and it is not raised.

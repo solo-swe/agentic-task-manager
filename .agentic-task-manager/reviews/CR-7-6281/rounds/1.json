@@ -1,0 +1,32 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "ac80d217936e28b693653bf647e4fd7f32f77d34",
+    "head": "2786d385f982fbbfb8714ebe78ad26df8c0b84b4"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/review-filter.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/ReviewsTab.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/review-filter.test.ts",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T06:00:11Z"
+}

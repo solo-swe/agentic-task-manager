@@ -1,0 +1,385 @@
+diff --git a/dashboard/src/lib/shell/AppTitleBar.svelte b/dashboard/src/lib/shell/AppTitleBar.svelte
+index f1f90a92..26725f82 100644
+--- a/dashboard/src/lib/shell/AppTitleBar.svelte
++++ b/dashboard/src/lib/shell/AppTitleBar.svelte
+@@ -130,9 +130,10 @@
+   .app-titlebar-end {
+     align-items: center;
+     display: flex;
++    /* It and the window buttons keep their room: only the tabs' strip gives way, and scrolls (ATM-605) */
++    flex: 0 0 auto;
+     gap: var(--space-3);
+     margin-left: auto;
+-    min-width: 0;
+   }
+   /* With the sidebar open (and no menus of the page's before the tabs), the first tab starts at the sidebar's edge:
+      the sidebar's border is its left line, not a second one beside it */
+@@ -176,6 +177,7 @@
+     align-self: stretch;
+     align-items: center;
+     display: flex;
++    flex: 0 0 auto;
+   }
+   .window-button {
+     background: none;
+diff --git a/dashboard/src/lib/ui/TitleBarTabs.svelte b/dashboard/src/lib/ui/TitleBarTabs.svelte
+index 27575a6e..a594dc33 100644
+--- a/dashboard/src/lib/ui/TitleBarTabs.svelte
++++ b/dashboard/src/lib/ui/TitleBarTabs.svelte
+@@ -8,7 +8,7 @@
+   // with focus. With `onmove`, a tab is dragged along the strip with the pointer, or moved a place with ⌃⇧ (⌘⇧) and an
+   // arrow (T-532). Each tab is a button (role tab) filling the tab, its label drawn over it: a click on the label falls
+   // through to it, and controls of the label's own (a chooser, a link) keep their clicks, beside the button, not in it.
+-  import type { Snippet } from 'svelte';
++  import { untrack, type Snippet } from 'svelte';
+ 
+   interface Props {
+     /** The tabs, in order */
+@@ -47,6 +47,71 @@
+ 
+   const elements: Record<string, HTMLElement> = {};
+ 
++  // More tabs than fit (ATM-605): they scroll in a strip of their own, between the bar's other controls, which stay
++  // put; the wheel or trackpad over it scrolls the strip sideways and nothing else; ‹ and › at its ends when the
++  // tabs don't fit, each disabled at its end; the active tab is scrolled into view.
++  let scroller = $state<HTMLElement>();
++  let overflow = $state({ more: false, left: false, right: false });
++
++  function measure() {
++    const el = scroller;
++    if (!el) return;
++    const more = el.scrollWidth > el.clientWidth + 1;
++    const next = {
++      more,
++      left: more && el.scrollLeft > 1,
++      right: more && el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
++    };
++    if (next.more !== overflow.more || next.left !== overflow.left || next.right !== overflow.right) overflow = next;
++  }
++
++  /** ‹ or ›: the strip scrolled by about a tab */
++  function step(direction: -1 | 1) {
++    scroller?.scrollBy({ left: direction * width, behavior: 'smooth' });
++  }
++
++  /** A wheel's turn over the strip, up and down or sideways, scrolls it sideways; the page under it never moves */
++  function wheelSideways(el: HTMLElement) {
++    const onwheel = (e: WheelEvent) => {
++      if (e.ctrlKey) return; // a pinch: the page's zoom
++      e.preventDefault();
++      if (el.scrollWidth <= el.clientWidth) return;
++      const by = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
++      el.scrollLeft += e.deltaMode === 1 ? by * 16 : by;
++    };
++    el.addEventListener('wheel', onwheel, { passive: false });
++    // Its room changed (the window, the arrows coming or going): the active tab still in view
++    const resized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => reveal(active));
++    resized?.observe(el);
++    return () => {
++      el.removeEventListener('wheel', onwheel);
++      resized?.disconnect();
++    };
++  }
++
++  // Tabs opened, closed or moved: measured again, and the active one brought into view (its own strip only)
++  $effect(() => {
++    void tabs.length;
++    const id = active;
++    const el = scroller;
++    if (!el) return;
++    // Only on those (and on the strip's size changing, below): a scroll since, by the wheel or ‹ ›, stays
++    untrack(() => reveal(id));
++  });
++
++  /** The tab `id` brought into the strip's view, the strip scrolled as little as that takes */
++  function reveal(id: string) {
++    const el = scroller;
++    const tab = elements[id]?.parentElement;
++    if (el && tab) {
++      const start = tab.offsetLeft;
++      const end = start + tab.offsetWidth;
++      if (start < el.scrollLeft) el.scrollLeft = start;
++      else if (end > el.scrollLeft + el.clientWidth) el.scrollLeft = end - el.clientWidth;
++    }
++    measure();
++  }
++
+   // Dragging a tab (T-532): with the pointer, not HTML5 drag and drop, which WebKit (the app's webview on macOS and
+   // Linux) never starts from a button. The tab follows the pointer along the strip; the others make room as it passes,
+   // and it lands where it is let go. A press that doesn't move past THRESHOLD is a click.
+@@ -149,52 +214,84 @@
+   }
+ </script>
+ 
+-<div class="title-bar-tabs" role="tablist" aria-label={ariaLabel} style:--tab-width="{width}px">
+-  {#each tabs as tab, index (tab.id)}
+-    <div
+-      class="title-bar-tab"
+-      class:selected={tab.id === active}
+-      class:dragging={dragging === tab.id}
+-      class:sliding={dragging !== null && dragging !== tab.id}
+-      style:transform={dragging === tab.id
+-        ? `translateX(${offset}px)`
+-        : shift(index, tab.id)
+-          ? `translateX(${shift(index, tab.id)}px)`
+-          : undefined}
++<div class="title-bar-tabs" class:overflowing={overflow.more} style:--tab-width="{width}px">
++  {#if overflow.more}
++    <button
++      class="title-bar-tabs-arrow"
++      id="{idPrefix}left"
++      title="Tabs to the left"
++      aria-label="Tabs to the left"
++      tabindex="-1"
++      disabled={!overflow.left}
++      onclick={() => step(-1)}>‹</button
+     >
+-      <!-- The tab itself (Enter and Space select it, as a button's click), named by its label; dragged to move it -->
+-      <button
+-        bind:this={elements[tab.id]}
+-        class="title-bar-tab-select"
+-        role="tab"
+-        id="{idPrefix}{tab.id}"
+-        aria-selected={tab.id === active}
+-        aria-labelledby="{idPrefix}{tab.id}-label"
+-        aria-keyshortcuts={onmove ? 'Control+Shift+ArrowLeft Control+Shift+ArrowRight' : undefined}
+-        tabindex={tab.id === active ? 0 : -1}
+-        onclick={() => onclick(tab.id)}
+-        onauxclick={(e) => onauxclick(e, tab.id)}
+-        onkeydown={(e) => onkeydown(e, index)}
+-        onpointerdown={(e) => onpointerdown(e, tab.id, index)}
+-        {onpointermove}
+-        {onpointerup}
+-        onpointercancel={onpointerup}
+-      ></button>
+-      <div class="title-bar-tab-label" id="{idPrefix}{tab.id}-label">{@render label(tab)}</div>
+-      {#if onclose}
++  {/if}
++  <!-- Only this scrolls: the tabs, between the bar's other controls; never the page -->
++  <div
++    class="title-bar-tabs-scroller"
++    role="tablist"
++    aria-label={ariaLabel}
++    bind:this={scroller}
++    onscroll={measure}
++    {@attach wheelSideways}
++  >
++    {#each tabs as tab, index (tab.id)}
++      <div
++        class="title-bar-tab"
++        class:selected={tab.id === active}
++        class:dragging={dragging === tab.id}
++        class:sliding={dragging !== null && dragging !== tab.id}
++        style:transform={dragging === tab.id
++          ? `translateX(${offset}px)`
++          : shift(index, tab.id)
++            ? `translateX(${shift(index, tab.id)}px)`
++            : undefined}
++      >
++        <!-- The tab itself (Enter and Space select it, as a button's click), named by its label; dragged to move it -->
+         <button
+-          class="title-bar-tab-close"
+-          title="Close Tab"
+-          aria-label="Close Tab"
+-          tabindex="-1"
+-          onclick={(e) => {
+-            e.stopPropagation();
+-            onclose(tab.id);
+-          }}>×</button
+-        >
+-      {/if}
+-    </div>
+-  {/each}
++          bind:this={elements[tab.id]}
++          class="title-bar-tab-select"
++          role="tab"
++          id="{idPrefix}{tab.id}"
++          aria-selected={tab.id === active}
++          aria-labelledby="{idPrefix}{tab.id}-label"
++          aria-keyshortcuts={onmove ? 'Control+Shift+ArrowLeft Control+Shift+ArrowRight' : undefined}
++          tabindex={tab.id === active ? 0 : -1}
++          onclick={() => onclick(tab.id)}
++          onauxclick={(e) => onauxclick(e, tab.id)}
++          onkeydown={(e) => onkeydown(e, index)}
++          onpointerdown={(e) => onpointerdown(e, tab.id, index)}
++          {onpointermove}
++          {onpointerup}
++          onpointercancel={onpointerup}
++        ></button>
++        <div class="title-bar-tab-label" id="{idPrefix}{tab.id}-label">{@render label(tab)}</div>
++        {#if onclose}
++          <button
++            class="title-bar-tab-close"
++            title="Close Tab"
++            aria-label="Close Tab"
++            tabindex="-1"
++            onclick={(e) => {
++              e.stopPropagation();
++              onclose(tab.id);
++            }}>×</button
++          >
++        {/if}
++      </div>
++    {/each}
++  </div>
++  {#if overflow.more}
++    <button
++      class="title-bar-tabs-arrow"
++      id="{idPrefix}right"
++      title="Tabs to the right"
++      aria-label="Tabs to the right"
++      tabindex="-1"
++      disabled={!overflow.right}
++      onclick={() => step(1)}>›</button
++    >
++  {/if}
+   {#if onnew}
+     <button class="title-bar-tab-new" id="{idPrefix}new" title="New Tab" aria-label="New Tab" onclick={onnew}>+</button>
+   {/if}
+@@ -204,8 +301,41 @@
+   .title-bar-tabs {
+     align-self: stretch;
+     display: flex;
++    flex: 0 1 auto;
+     min-width: 0;
+   }
++  /* The tabs' own scroller: clipped to its room, its scroll bar hidden (the wheel and ‹ › scroll it), a scroll at its
++     end never passed on to the page */
++  .title-bar-tabs-scroller {
++    display: flex;
++    min-width: 0;
++    overflow-x: auto;
++    overflow-y: hidden;
++    overscroll-behavior: contain;
++    position: relative;
++    scrollbar-width: none;
++  }
++  .title-bar-tabs-scroller::-webkit-scrollbar {
++    display: none;
++  }
++  .title-bar-tabs-arrow {
++    align-self: center;
++    background: none;
++    border: none;
++    border-radius: var(--radius-sm);
++    color: var(--text-muted);
++    flex: 0 0 22px;
++    font-size: var(--text-lg);
++    height: 28px;
++    line-height: 1;
++  }
++  .title-bar-tabs-arrow:hover:not(:disabled) {
++    background: var(--surface);
++    color: var(--text);
++  }
++  .title-bar-tabs-arrow:disabled {
++    opacity: 0.35;
++  }
+   .title-bar-tab {
+     align-items: center;
+     border-left: 1px solid var(--border);
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index f0e60692..504d2ee1 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -227,6 +227,60 @@ test.describe('the dashboard in the atm app', () => {
+     expect(tasksServer.windowTitles.slice(titles)).not.toContain('Task Dashboard');
+   });
+ 
++  test('more tabs than fit scroll in their own strip, with ‹ ›; the window buttons and the page stay put (ATM-605)', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.windowShell = { system_menu_bar: true, system_window_buttons: false };
++    tasksServer.use('standard');
++    const board = `/projects/${tasksServer.projectId}/kanban`;
++    tasksServer.restoredTabs = { addresses: Array.from({ length: 12 }, () => board), active: 11 };
++    await page.setViewportSize({ width: 1000, height: 700 });
++    await page.goto('/');
++    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(12);
++    const scroller = page.locator('.title-bar-tabs-scroller');
++    const left = page.getByRole('button', { name: 'Tabs to the left' });
++    const right = page.getByRole('button', { name: 'Tabs to the right' });
++    const state = () =>
++      page.evaluate(() => {
++        const bar = document.querySelector('#app-titlebar')!;
++        const strip = document.querySelector('.title-bar-tabs-scroller')!;
++        const buttons = document.querySelector('#window-buttons')!.getBoundingClientRect();
++        return {
++          barFits: bar.scrollWidth <= bar.clientWidth,
++          buttonsIn: buttons.right <= window.innerWidth && buttons.left > 0,
++          pageX: document.scrollingElement!.scrollLeft,
++          pageY: document.scrollingElement!.scrollTop,
++          strip: strip.scrollLeft,
++        };
++      });
++    // The last tab, active, is in view: the strip at its end, only ‹ to press; the bar fits the window
++    await expect(left).toBeEnabled();
++    await expect(right).toBeDisabled();
++    const atEnd = await state();
++    expect(atEnd).toMatchObject({ barFits: true, buttonsIn: true, pageX: 0 });
++    expect(atEnd.strip).toBeGreaterThan(0);
++    // The wheel over the strip scrolls it, and only it
++    await scroller.hover();
++    await page.mouse.wheel(0, -400);
++    await expect.poll(async () => (await state()).strip).toBeLessThan(atEnd.strip);
++    expect(await state()).toMatchObject({ pageX: 0, pageY: atEnd.pageY, buttonsIn: true });
++    // ‹ to the start, then › away from it
++    await page.mouse.wheel(0, -10_000);
++    await expect(left).toBeDisabled();
++    await expect.poll(async () => (await state()).strip).toBe(0);
++    await right.click();
++    await expect.poll(async () => (await state()).strip).toBeGreaterThan(0);
++    await expect(left).toBeEnabled();
++    // Fewer tabs, all fitting: no arrows
++    tasksServer.restoredTabs = { addresses: [board, board], active: 0 };
++    await page.reload();
++    await expect(page.locator('.title-bar-tab [role="tab"]')).toHaveCount(2);
++    await expect(left).toHaveCount(0);
++    await expect(right).toHaveCount(0);
++  });
++
+   test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/TitleBarTabs.component.test.ts b/dashboard/tests/unit/TitleBarTabs.component.test.ts
+index fdf74169..359e147d 100644
+--- a/dashboard/tests/unit/TitleBarTabs.component.test.ts
++++ b/dashboard/tests/unit/TitleBarTabs.component.test.ts
+@@ -120,4 +120,35 @@ describe('TitleBarTabs (a reusable title-bar tab strip)', () => {
+       '180px',
+     );
+   });
++
++  // ATM-605: more tabs than fit scroll in their own strip (measured for real in e2e's app.spec.ts)
++  it('scrolls only its own strip: a wheel over it scrolls it sideways, the page never; ‹ › only when they overflow', async () => {
++    const { container } = render(TitleBarTabs<Tab>, { tabs: TABS, active: 'a', label, onselect: vi.fn() });
++    const strip = container.querySelector<HTMLElement>('.title-bar-tabs-scroller')!;
++    expect(strip.getAttribute('role')).toBe('tablist');
++    // All fitting: no arrows, and the wheel still goes nowhere else
++    expect(container.querySelector('.title-bar-tabs-arrow')).toBeNull();
++    const still = new WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true });
++    strip.dispatchEvent(still);
++    expect(still.defaultPrevented).toBe(true);
++    expect(strip.scrollLeft).toBe(0);
++    // Wider than its room: up and down turns into sideways, as does sideways; a pinch (Ctrl) is the page's zoom
++    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 1000 });
++    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 300 });
++    strip.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true }));
++    expect(strip.scrollLeft).toBe(40);
++    strip.dispatchEvent(new WheelEvent('wheel', { deltaX: 25, deltaY: 5, bubbles: true, cancelable: true }));
++    expect(strip.scrollLeft).toBe(65);
++    const pinch = new WheelEvent('wheel', { deltaY: 40, ctrlKey: true, bubbles: true, cancelable: true });
++    strip.dispatchEvent(pinch);
++    expect(pinch.defaultPrevented).toBe(false);
++    expect(strip.scrollLeft).toBe(65);
++    // A scroll measures it again: both arrows, neither end reached
++    await fireEvent.scroll(strip);
++    const arrows = [...container.querySelectorAll<HTMLButtonElement>('.title-bar-tabs-arrow')];
++    expect(arrows.map((a) => [a.getAttribute('aria-label'), a.disabled])).toEqual([
++      ['Tabs to the left', false],
++      ['Tabs to the right', false],
++    ]);
++  });
+ });
