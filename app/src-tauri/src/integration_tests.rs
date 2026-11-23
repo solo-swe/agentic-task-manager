@@ -4,7 +4,7 @@
 
 use super::commands::{
     AppError, ReviewFilters, TaskFilters, claims_of, document_of, file_of, logo_of, projects_of,
-    review_of, reviews_of, search_in, tasks_of, workspaces_of, worktrees_of,
+    review_of, reviews_of, search_in, stats_of, tasks_of, workspaces_of, worktrees_of,
 };
 use super::*;
 use serde_json::{Value, json};
@@ -254,6 +254,19 @@ fn expected_answers(
             .expect("tasks"),
         ),
         (
+            "project_stats",
+            with(json!({"tasks": ["T-1"], "from": null, "to": null})),
+            stats_of(
+                workspaces,
+                "work",
+                "abcd1234",
+                Some(vec!["T-1".into()]),
+                None,
+                None,
+            )
+            .expect("stats"),
+        ),
+        (
             "claims",
             at.clone(),
             claims_of(workspaces, "work", "abcd1234").expect("claims"),
@@ -388,6 +401,7 @@ fn the_main_windows_capability_lets_it_call_the_commands() {
             list_projects,
             search,
             project_tasks,
+            project_stats,
             claims,
             worktrees,
             document,

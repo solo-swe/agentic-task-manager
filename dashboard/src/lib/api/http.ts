@@ -50,6 +50,24 @@ export function v1TasksUrl(project: string): string {
   return projectRoute(project, 'tasks');
 }
 
+/** A slice of a project's tasks and a period, as the stats route takes them (ATM-722): the IDs (none, the whole
+ * project) and the period's start and end in ms */
+export interface StatsRequest {
+  tasks?: readonly string[];
+  from?: number;
+  to?: number;
+}
+
+/** A project's stats, progress and forecast for `request` (GET …/projects/<id>/stats, ATM-722) */
+export function statsUrl(project: string, request: StatsRequest = {}): string {
+  const query = new URLSearchParams();
+  if (request.tasks) query.set('tasks', request.tasks.join(','));
+  if (request.from !== undefined) query.set('from', String(Math.round(request.from)));
+  if (request.to !== undefined) query.set('to', String(Math.round(request.to)));
+  const text = query.toString();
+  return projectRoute(project, 'stats') + (text ? `?${text}` : '');
+}
+
 /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
 export function v1DocumentUrl(project: string, path: string): string {
   return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;

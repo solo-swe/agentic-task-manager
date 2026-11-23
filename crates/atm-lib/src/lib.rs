@@ -32,6 +32,7 @@ pub mod reviews;
 pub mod settings;
 pub mod sprints;
 pub mod state;
+pub mod stats;
 pub mod status;
 pub mod summary;
 pub mod tasks;

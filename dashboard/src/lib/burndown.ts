@@ -1,7 +1,7 @@
 // Burndown series (FR-4.1): remaining tasks and total scope over time, plus a forecast from now to the estimated
 // finish. Skipped-kind tasks are not part of the scope; blocked and in-review tasks stay "remaining" (they are not
 // done), and the forecast doesn't cover them (they wait on someone, not on agent work).
-import { nextInLoop, sprintKey, type Forecast } from './forecast';
+import { sprintKey, type Forecast } from './forecast';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import { completedAt } from './timeline';
 import type { Task } from './types';
@@ -52,9 +52,10 @@ export type BurndownRange = 'sprint' | '14d' | 'all';
 export const BURNDOWN_RANGES: BurndownRange[] = ['sprint', '14d', 'all'];
 const DAY = 24 * 60 * 60_000;
 
-/** The sprint (its key) the "sprint" range and the chart's markers are about: the focused one, else the loop's next */
+/** The sprint (its key) the "sprint" range and the chart's markers are about: the focused one, else the loop's next,
+ * as atm says it (ATM-722) */
 export function rangeSprint(forecast: Forecast, focus?: string): string | undefined {
-  return focus ?? nextInLoop(forecast)?.key;
+  return focus ?? forecast.next;
 }
 
 /** Where the range starts, or undefined for all time (also when the sprint has no times to start from): the sprint's

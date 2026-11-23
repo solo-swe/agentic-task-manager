@@ -43,6 +43,11 @@ clicks and right-click menus as in a browser). Review watches idle while they wa
   approved or sent back (ATM-657).
 - **The dashboard reads atm's answers** instead of its own rules (ATM-680, ATM-714, ATM-716 to ATM-723): kinds,
   priority, stage, release, waiting, the review list's groups and the review page's buttons.
+- **Stats, progress and the forecast from atm** (ATM-722): `GET …/projects/<p>/stats` (the app's `project_stats`, the
+  CLI's `atm project stats`) for a slice of the tasks and a period: progress by status, type and sprint (an archived
+  skipped task is skipped now, not done), the pace and each sprint's estimate in the loop's order, time use, the
+  project's numbers, the time per task, people and agents. `atm project status` prints the forecast. The summaries
+  carry the overview's Progress tab (`progress`), so it loads no project's tasks.
 - **Every document style is GitHub's width**; GitHub is the default and first, Theme last (ATM-706).
 - **In the app, the regular themes' board scrolls as a whole** (ATM-707).
 - **Review watches don't depend on the agent remembering** (ATM-708): `--once` in the skills, unread events on every

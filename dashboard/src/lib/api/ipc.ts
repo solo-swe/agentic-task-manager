@@ -92,6 +92,14 @@ function projectCall(workspace: string, project: string, route: string[], query:
   switch (first) {
     case 'tasks':
       return { command: 'project_tasks', args: { ...at, filters: taskFilters(query) } };
+    case 'stats': {
+      const ms = (name: string) => (query.get(name) ? Number(query.get(name)) : null);
+      const tasks = query.get('tasks');
+      return {
+        command: 'project_stats',
+        args: { ...at, tasks: tasks ? tasks.split(',').filter(Boolean) : null, from: ms('from'), to: ms('to') },
+      };
+    }
     case 'documents':
       return { command: 'document', args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined } };
     case 'files':

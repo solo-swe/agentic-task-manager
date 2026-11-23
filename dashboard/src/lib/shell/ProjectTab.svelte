@@ -1,7 +1,7 @@
 <script lang="ts">
   import { formatMinutes } from '../format';
-  import { actors, vocabCounts } from '../projectinfo';
-  import { projectStats, timeHistogram } from '../projectstats';
+  import { actorsOf, vocabCounts } from '../projectinfo';
+  import { histogramOf, numbersOf } from '../projectstats';
   import { repositoryOf } from '../repo';
   import { dashboard } from '../state.svelte';
   import InfoTip from '../ui/InfoTip.svelte';
@@ -17,11 +17,6 @@
   });
   const tasks = $derived(dashboard.history);
   const vocab = $derived(dashboard.vocab);
-  // Recomputed with every reload of the tasks
-  const now = $derived.by(() => {
-    void tasks;
-    return Date.now();
-  });
 
   const project = $derived({
     id: dashboard.projectId ?? '',
@@ -30,7 +25,9 @@
   });
   const repository = $derived(repositoryOf(dashboard.meta));
   const workflow = $derived(dashboard.vocab.workflow);
-  const who = $derived(actors(tasks, now));
+  // Who worked on it, its numbers and the time per task: atm's (ATM-722), over the whole history
+  const who = $derived(actorsOf(dashboard.stats));
+  const histogram = $derived(histogramOf(dashboard.stats));
   const counts = $derived(vocabCounts(tasks, vocab, dashboard.sprints));
   // Each component with how many tasks (archived ones too) are in it
   const componentCounts = $derived(
@@ -45,17 +42,8 @@
   const closed = $derived(counts.sprints.filter((s) => s.state === 'closed'));
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-  // Stats (T-253): archived tasks not loaded yet count from meta.archived
-  const stats = $derived(
-    projectStats(
-      tasks,
-      dashboard.meta,
-      now,
-      vocab,
-      dashboard.archiveLoaded ? 0 : dashboard.archivedCount,
-      dashboard.sprints,
-    ),
-  );
+  // Stats (T-253)
+  const stats = $derived(numbersOf(dashboard.stats));
   const hours = (msValue: number) => (msValue ? formatMinutes(msValue / 60_000) : '0 m');
   const day = (t: number) =>
     new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -284,7 +272,7 @@
           {stats.parallelism.toFixed(1)} agents working on average while any works
         </p>
       {/if}
-      <TaskTimeHistogram histogram={timeHistogram(tasks)} />
+      {#if histogram}<TaskTimeHistogram {histogram} />{/if}
     </section>
   </div>
 </div>

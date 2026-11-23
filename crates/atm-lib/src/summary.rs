@@ -827,6 +827,8 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         "board": board(&shown, &tasks, &kinds, &todo_refs, current, &live, true),
         "board_active_sprint": sprint_board,
         "stats": project_stats(project, document, vocab, &tasks, current),
+        // The overview's Progress tab (ATM-722): from the summary, no project's tasks loaded for it
+        "progress": crate::stats::overview(project, current * 1000)?,
     }))
 }
 

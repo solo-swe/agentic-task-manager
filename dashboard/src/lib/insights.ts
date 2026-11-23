@@ -1,92 +1,11 @@
-// Numbers behind the Progress and Activity widgets in the top bar: completion shares (overall, per phase, per type)
-// and activity over time (completions, who was working, time per task).
+// Numbers behind the Activity widget in the top bar: activity over time (completions, who was working, time per
+// task). Progress (overall, per sprint and type) is atm's (ATM-722, lib/stats.ts).
 import { isAgent } from './actors';
 import { keyOf } from './keys';
 import { completions, type Completion } from './timeline';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, taskKind, type StatusKind, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 import { startedBy, withYou, workMinutes, workSpans } from './work';
-
-export interface Share {
-  key: string;
-  label: string;
-  done: number;
-  /** Tasks that count: all but the skipped ones, which are neither done nor still to do */
-  total: number;
-  /** Skipped tasks, shown apart */
-  skipped: number;
-  /** done / total, 0–1; 1 when every task was skipped, 0 when there are no tasks */
-  ratio: number;
-}
-
-export interface StatusCount {
-  status: string;
-  count: number;
-}
-
-export interface ProgressBreakdown {
-  /** Every task of the project, the archived ones included */
-  overall: Share;
-  /** Archived tasks: counted as done in `overall`, and in the other numbers only when they were passed in */
-  archived: number;
-  byStatus: StatusCount[];
-  byPhase: Share[];
-  byType: Share[];
-}
-
-/** The status split's order: by kind, finished first; statuses without a kind last */
-const KIND_ORDER: StatusKind[] = ['done', 'active', 'review', 'todo', 'blocked', 'skipped'];
-
-/** Completion of a group of tasks, as atm counts it: done / (total − skipped). A group of only skipped tasks is
- * finished (nothing is left to do). */
-export function share(key: string, label: string, tasks: Task[]): Share {
-  const done = tasks.filter((t) => taskKind(t) === 'done').length;
-  const skipped = tasks.filter((t) => taskKind(t) === 'skipped').length;
-  const total = tasks.length - skipped;
-  return { key, label, done, total, skipped, ratio: total ? done / total : skipped ? 1 : 0 };
-}
-
-function groupBy<K>(tasks: Task[], key: (t: Task) => K): Map<K, Task[]> {
-  const groups = new Map<K, Task[]>();
-  for (const t of tasks) groups.set(key(t), [...(groups.get(key(t)) ?? []), t]);
-  return groups;
-}
-
-/**
- * The Progress widget's numbers. `tasks` is tasks.json's tasks, or the history once the archive is loaded;
- * `unloadedArchived` is how many archived tasks are not among them (meta.archived until the archive is loaded): they
- * are all finished, so the overall share counts them as done without loading the archive (T-238), and archiving
- * never lowers the percentage. A skipped one among them counts as done until the archive is loaded and the numbers
- * become exact.
- */
-export function progressBreakdown(
-  tasks: Task[],
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
-  unloadedArchived = 0,
-  archived = unloadedArchived,
-): ProgressBreakdown {
-  const statusCounts = groupBy(tasks, (t) => t.status);
-  const rank = (s: string) => {
-    const kind = kindOf(vocab, s);
-    return kind ? KIND_ORDER.indexOf(kind) : KIND_ORDER.length;
-  };
-  const current = share('all', 'All tasks', tasks);
-  const done = current.done + unloadedArchived;
-  const total = current.total + unloadedArchived;
-  return {
-    overall: { ...current, done, total, ratio: total ? done / total : current.ratio },
-    archived,
-    byStatus: [...statusCounts]
-      .map(([status, list]) => ({ status, count: list.length }))
-      .sort((a, b) => rank(a.status) - rank(b.status) || a.status.localeCompare(b.status)),
-    byPhase: [...groupBy(tasks, (t) => t.phase)]
-      .sort(([a], [b]) => a - b)
-      .map(([phase, list]) => share(String(phase), `Phase ${phase}`, list)),
-    byType: [...groupBy(tasks, (t) => t.type)]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([type, list]) => share(type, type, list)),
-  };
-}
 
 // ---- activity over time ----
 

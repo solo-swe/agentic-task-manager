@@ -755,7 +755,10 @@ commands, which mirror them: `list_workspaces`, `list_projects`, `search`, `proj
 changed (the workspace and project, no path, no content), for a change outside `.git/` and the task folder in a
 file git doesn't ignore (one `git check-ignore --stdin` per settled burst, the paths fed on stdin, never as
 arguments). It reads nothing it sends, and ends with `unsubscribe` or the window's page; in the main window's
-capability.
+capability. ATM-722 adds the stats route (`…/projects/<p>/stats`, a GET under I11) and its command `project_stats`:
+read-only, of a registered project's task data only (the same `member` lookup), the query's task IDs compared as text
+and never used as paths, `from` and `to` whole numbers (anything else is `400`); in the main window's capability.
+`atm project stats` prints the same, for the e2e fixture.
 
 - **Each command is a read through the same atm-lib call as its route** (`Workspace`, `Member`), so it has the same
   checks: the task folder's symlink checks, the size limit, the document viewer's path rules. A test per read checks

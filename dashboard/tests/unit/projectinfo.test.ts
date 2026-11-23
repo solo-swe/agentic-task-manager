@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actors, vocabCounts } from '../../src/lib/projectinfo';
+import { actorsOf, vocabCounts } from '../../src/lib/projectinfo';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
 import { fromServedSprints } from '../../src/lib/sprints';
@@ -11,52 +11,16 @@ const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
 const task = (id: string, fields: Partial<Task>): Task =>
   withKinds([{ id, name: id, phase: 0, type: 'feature', description: '', status: 'todo', ...fields } as Task])[0];
 
-describe('actors (T-252)', () => {
-  const tasks = [
-    // Hakan created all four; a session started and finished two; Hakan approved one review
-    task('T-1', {
-      created_by: 'Hakan',
-      started_by: 'claude:a',
-      started_at: at(0),
-      completed_by: 'claude:a',
-      completed_at: at(30),
-      status: 'done',
-    }),
-    task('T-2', {
-      created_by: 'Hakan',
-      started_by: 'claude:b',
-      started_at: at(10),
-      review_requested_at: at(40),
-      completed_by: 'Hakan',
-      completed_at: at(60),
-      status: 'done',
-    }),
-    // Before v4: `agent`, and a task nobody recorded
-    task('T-3', { created_by: 'Hakan', agent: 'claude:c', started_at: at(60), status: 'in_progress' }),
-    task('T-4', { created_by: 'Hakan', started_at: at(100), completed_at: at(110), status: 'done' }),
-    // A person did one themselves
-    task('T-5', { created_by: 'claude:a', started_by: 'Ana', started_at: at(0), status: 'in_progress' }),
-  ];
-
-  it('people with what they created, started and completed, most active first', () => {
-    expect(actors(tasks, T0 + 120 * 60_000).people).toEqual([
-      { name: 'Hakan', created: 4, started: 0, completed: 1 },
-      { name: 'Ana', created: 0, started: 1, completed: 0 },
-    ]);
-  });
-
-  it('agents in one line: sessions, tasks started and completed, agent time (parallel agents add up)', () => {
-    const { agents } = actors(tasks, T0 + 120 * 60_000);
-    // Sessions a, b, c; T-4 (nobody recorded) counts as agent work but has no session. Completed: T-1 by a, and
-    // T-4, finished without a completed_by (before v4); T-2 was Hakan's approval
-    expect(agents.sessions).toBe(3);
-    expect([agents.started, agents.completed]).toEqual([4, 2]);
-    // T-1 30 m, T-2 30 m (to the review), T-3 60 m (running until now), T-4 10 m; Ana's T-5 isn't agent time
-    expect(agents.agentMs / 60_000).toBe(130);
-  });
-
-  it('no tasks: nobody, and no agent time', () => {
-    expect(actors([], T0)).toEqual({ people: [], agents: { sessions: 0, started: 0, completed: 0, agentMs: 0 } });
+// Who worked on it is atm's (ATM-722: atm-lib's stats::people, its cases there); the dashboard reads its answer
+describe('actorsOf', () => {
+  it('atm’s people as they are, its agents in the panel’s names; nobody before atm answers', () => {
+    const people = [{ name: 'Hakan', created: 4, started: 0, completed: 1 }];
+    const served = { actors: { people, agents: { sessions: 3, started: 4, completed: 2, agent_ms: 600 } } };
+    expect(actorsOf(served as unknown as Parameters<typeof actorsOf>[0])).toEqual({
+      people,
+      agents: { sessions: 3, started: 4, completed: 2, agentMs: 600 },
+    });
+    expect(actorsOf(null)).toEqual({ people: [], agents: { sessions: 0, started: 0, completed: 0, agentMs: 0 } });
   });
 });
 

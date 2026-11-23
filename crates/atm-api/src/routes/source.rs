@@ -14,6 +14,7 @@ use atm_lib::review_requests::{
     ReviewTasks,
 };
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewRef};
+use atm_lib::stats::StatsQuery;
 use atm_lib::workspaces::{Member, Workspace, Workspaces, file_stamp};
 use serde_json::{Map, Value};
 
@@ -61,6 +62,11 @@ pub trait ProjectSource {
     /// # Errors
     /// Task data too large; a filter naming no such sprint or release (`Invalid`); unreadable task data.
     fn tasks(&self, filters: &Filters) -> Result<Value>;
+    /// Its stats, progress and forecast for a slice and a period (ATM-722).
+    ///
+    /// # Errors
+    /// Task data too large; unreadable task data.
+    fn stats(&self, query: &StatsQuery) -> Result<Value>;
     /// What the other projects its tasks name are now, for the tasks' `ETag`.
     fn others_version(&self) -> Value;
     /// The claims of all its worktrees.
@@ -270,6 +276,10 @@ impl ProjectSource for Member {
 
     fn tasks(&self, filters: &Filters) -> Result<Value> {
         Member::tasks(self, filters)
+    }
+
+    fn stats(&self, query: &StatsQuery) -> Result<Value> {
+        Member::stats(self, query)
     }
 
     fn others_version(&self) -> Value {

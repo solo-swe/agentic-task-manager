@@ -9,6 +9,7 @@
     "allow-list-projects",
     "allow-search",
     "allow-project-tasks",
+    "allow-project-stats",
     "allow-claims",
     "allow-worktrees",
     "allow-document",

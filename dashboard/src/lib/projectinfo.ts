@@ -1,8 +1,7 @@
 // The Project tab's Information (docs/project-stats-proposal.md §3, T-252): who worked on the project, how it pushes,
 // and its vocabularies with how many tasks use each entry. From the history (archived tasks too), whatever the filters.
-import { isAgent } from './actors';
+import type { Stats } from '$generated/types';
 import { NO_SPRINTS, type SprintModel, type SprintState } from './sprints';
-import { timeUse } from './timeuse';
 import type { Task } from './types';
 import {
   DEFAULT_VOCABULARY,
@@ -16,7 +15,6 @@ import {
   type StatusKind,
   type Vocabulary,
 } from './vocab';
-import { isDone, startedBy } from './work';
 
 export interface Person {
   name: string;
@@ -36,43 +34,21 @@ export interface AgentsSummary {
 
 const count = <K>(map: Map<K, number>, key: K) => map.set(key, (map.get(key) ?? 0) + 1);
 
-/**
- * The people (anyone who isn't a Claude Code session) with the tasks they created, started and completed, most
- * active first; and the agents in one summary. Tasks from before atm recorded who started them (`agent`, or nobody)
- * count as agent work, as on the Agents tab.
- */
-export function actors(tasks: Task[], now: number): { people: Person[]; agents: AgentsSummary } {
-  const people = new Map<string, Person>();
-  const person = (name: string) => {
-    if (!people.has(name)) people.set(name, { name, created: 0, started: 0, completed: 0 });
-    return people.get(name)!;
-  };
-  const sessions = new Set<string>();
-  const agents = { sessions: 0, started: 0, completed: 0, agentMs: 0 };
-  const agentWork: Task[] = [];
-  for (const t of tasks) {
-    const starter = startedBy(t);
-    if (t.created_by && !isAgent(t.created_by)) person(t.created_by).created++;
-    if (starter && !isAgent(starter)) person(starter).started++;
-    else if (t.started_at || starter) {
-      agents.started++;
-      if (starter) sessions.add(starter);
-      agentWork.push(t);
-    }
-    // Before v4 nobody recorded who completed a task: a finished task an agent started counts as the agent's
-    if (t.completed_by && !isAgent(t.completed_by)) person(t.completed_by).completed++;
-    else if (t.completed_by) {
-      agents.completed++;
-      sessions.add(t.completed_by);
-    } else if (isDone(t) && agentWork.at(-1) === t) agents.completed++;
-    if (t.created_by && isAgent(t.created_by)) sessions.add(t.created_by);
-  }
-  agents.sessions = sessions.size;
-  agents.agentMs = timeUse(agentWork, null, now)?.agentMs ?? 0;
-  const total = (p: Person) => p.created + p.started + p.completed;
+/** The people and the agents, as atm counts them (ATM-722: the stats route's `actors`): the people with the tasks they
+ * created, started and completed, most active first; the agents in one summary. None before atm has answered */
+export function actorsOf(stats: Stats | null | undefined): { people: Person[]; agents: AgentsSummary } {
+  const served = stats?.actors as
+    | { people?: Person[]; agents?: { sessions: number; started: number; completed: number; agent_ms: number } }
+    | undefined;
+  const agents = served?.agents;
   return {
-    people: [...people.values()].sort((a, b) => total(b) - total(a) || a.name.localeCompare(b.name)),
-    agents,
+    people: served?.people ?? [],
+    agents: {
+      sessions: agents?.sessions ?? 0,
+      started: agents?.started ?? 0,
+      completed: agents?.completed ?? 0,
+      agentMs: agents?.agent_ms ?? 0,
+    },
   };
 }
 

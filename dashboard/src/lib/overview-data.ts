@@ -1,17 +1,20 @@
-// The overview's views across projects: Agents (T-333), Activity (T-328), Progress (T-329). Each project's tasks, its
-// archive (T-355) and claims come from the routes a project's page uses (api/v1/projects/<id>/tasks, with
+// The overview's views across projects: Agents (T-333), Activity (T-328), Progress (T-329). Progress is drawn from the
+// projects' summaries (ATM-722: atm's figures, no project's tasks loaded for it). For the others, each project's
+// tasks, its archive (T-355) and claims come from the routes a project's page uses (api/v1/projects/<id>/tasks, with
 // ?archived=true for the archive, and p/<id>/claims.json), loaded while the overview is shown; a refresh asks
 // conditionally, so an unchanged answer costs a 304. The charts a project's page has then run over every project's
 // tasks (mergedTasks), or per project and combined (combinedTimeline).
+import type { ActiveSprint } from '$generated/types';
 import { agentTimeline, UNATTRIBUTED, type AgentBar, type AgentLane, type AgentTimeline } from './agents';
+import type { Burndown } from './burndown';
 import { loadClaims, type Claim, type ClaimMap } from './claims';
 import { median } from './insights';
 import { browserFetch, type Fetch } from './api/http';
 import { loadArchive, loadTasks, type ProjectEntry, type Validators } from './load';
-import { splitReleases, type Release } from './releases';
-import { activeSprint, type Sprint, type SprintModel } from './sprints';
+import type { Release } from './releases';
+import type { SprintModel } from './sprints';
 import type { Task, TasksFile } from './types';
-import { taskKind, type Vocabulary } from './vocab';
+import type { Vocabulary } from './vocab';
 
 export interface ProjectSource {
   project: ProjectEntry;
@@ -116,32 +119,76 @@ export function mergedTasks(sources: readonly ProjectSource[]): MergedTasks {
   return { tasks, claims, origin };
 }
 
-/** One project's row on the overview's Progress tab (T-329) */
+/** One project's row on the overview's Progress tab (T-329), from its summary (ATM-722: atm's figures, no project's
+ * tasks loaded) */
 export interface ProjectProgress {
   project: ProjectEntry;
-  /** Done-kind tasks, and every task but the skipped ones */
+  /** Done-kind tasks, and every task but the skipped ones, the archived ones too */
   done: number;
   total: number;
   /** Its active sprint, with atm's figures, if one is active */
-  sprint?: Sprint;
+  sprint?: ActiveSprint;
   /** Its releases still open, in its order, with atm's figures */
   releases: { id: string; name?: string; done: number; total: number }[];
 }
 
-export function projectProgress({ project, tasks, sprints, releases }: ProjectSource): ProjectProgress {
-  const kinds = tasks.map(taskKind);
-  const active = activeSprint(sprints);
+/** The rows of the projects that have a summary */
+export function progressRows(projects: readonly ProjectEntry[]): ProjectProgress[] {
+  return projects.flatMap((project) => {
+    const summary = project.summary;
+    if (!summary?.progress) return [];
+    const { progress } = summary;
+    return [
+      {
+        project,
+        done: progress.done,
+        total: progress.total,
+        ...(summary.active_sprint ? { sprint: summary.active_sprint } : {}),
+        releases: progress.open_releases.map((r) => ({
+          id: r.id,
+          ...(r.name ? { name: r.name } : {}),
+          done: r.done,
+          total: r.total,
+        })),
+      },
+    ];
+  });
+}
+
+const DAY = 86_400_000;
+
+/** Every project's burndown as one (T-329), from their summaries' daily series: the scope and what was left at the end
+ * of each day, added up, from `from` (or the first day) to now; and the forecast from the agent work left in all of
+ * them, one after another, at each one's pace. The chart draws it */
+export function overviewBurndown(projects: readonly ProjectEntry[], now: number, from?: number): Burndown {
+  const series = projects.flatMap((p) => (p.summary?.progress ? [p.summary.progress] : []));
+  const byDay = new Map<number, { scope: number; remaining: number }>();
+  for (const s of series)
+    for (const [day, scope, remaining] of s.burndown) {
+      const at = byDay.get(day) ?? { scope: 0, remaining: 0 };
+      byDay.set(day, { scope: at.scope + scope, remaining: at.remaining + remaining });
+    }
+  if (byDay.size === 0) return { points: [], untimed: true };
+  const days = [...byDay.keys()].sort((a, b) => a - b);
+  // A project's series ends today: days before its first count none of it
+  const points = days
+    .map((day) => ({ t: Math.min((day + 1) * DAY, now), ...byDay.get(day)! }))
+    .filter((p) => from === undefined || p.t > from);
+  const forecasts = series.flatMap((s) => (s.forecast ? [s.forecast] : []));
+  const current = points.at(-1);
+  const waiting = forecasts.reduce((n, f) => n + f.waiting, 0);
+  const minutes = (key: 'likely' | 'low' | 'high') => forecasts.reduce((n, f) => n + f.minutes[key], 0);
   return {
-    project,
-    done: kinds.filter((k) => k === 'done').length,
-    total: kinds.filter((k) => k !== 'skipped').length,
-    ...(active ? { sprint: active } : {}),
-    releases: splitReleases(releases).open.map((r) => ({
-      id: r.id,
-      ...(r.name ? { name: r.name } : {}),
-      done: r.done,
-      total: r.total,
-    })),
+    points,
+    ...(current && forecasts.length && current.remaining > waiting
+      ? {
+          forecast: {
+            from: { t: now, remaining: current.remaining },
+            to: { t: now + minutes('likely') * 60_000, remaining: waiting },
+            range: { low: now + minutes('low') * 60_000, high: now + minutes('high') * 60_000 },
+          },
+        }
+      : {}),
   };
 }
 
@@ -162,23 +209,23 @@ export interface VelocityBar {
 
 /**
  * Tasks done per period across projects, whose sprints don't line up (T-329): a bar per period, oldest first, split by
- * project so the chart stacks them, and the average per period.
+ * project so the chart stacks them (in `projects`' order), and the average per period. From the summaries' days with
+ * completions (ATM-722, atm's count), each day's counted at its middle.
  */
-export function velocityByPeriod(
-  sources: readonly ProjectSource[],
+export function velocityOf(
+  projects: readonly ProjectEntry[],
   now: number,
   unit: VelocityUnit = 'week',
 ): { bars: VelocityBar[]; average: number } {
   const { ms, count } = VELOCITY_UNITS.find((u) => u.unit === unit)!;
-  const done = sources.map(({ tasks }) =>
-    tasks
-      .filter((t) => taskKind(t) === 'done')
-      .map((t) => Date.parse(t.completed_at ?? ''))
-      .filter((t) => !Number.isNaN(t)),
+  const done = projects.map((p) =>
+    (p.summary?.progress?.done_days ?? []).map(([day, n]) => ({ at: day * DAY + DAY / 2, n })),
   );
   const bars = Array.from({ length: count }, (_, i) => {
     const start = now - (count - i) * ms;
-    const byProject = done.map((times) => times.filter((t) => t > start && t <= start + ms).length);
+    const byProject = done.map((days) =>
+      days.filter((d) => d.at > start && d.at <= start + ms).reduce((n, d) => n + d.n, 0),
+    );
     return { start, byProject, total: byProject.reduce((n, c) => n + c, 0) };
   });
   return { bars, average: bars.reduce((n, b) => n + b.total, 0) / count };

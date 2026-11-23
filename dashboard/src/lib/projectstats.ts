@@ -1,21 +1,14 @@
-// The Project tab's Stats (docs/project-stats-proposal.md §4, T-253): the project's numbers over its whole history.
-// Work time as everywhere else (work.ts, timeuse.ts); no git calls: commits and PRs are what atm recorded on tasks.
-import { keyOf } from './keys';
-import { median } from './insights';
-import { completions } from './timeline';
-import { NO_SPRINTS, type SprintModel } from './sprints';
-import { mergeIntervals, timeUse } from './timeuse';
-import type { Task } from './types';
-import { DEFAULT_VOCABULARY, taskKind, type Vocabulary } from './vocab';
-import { ms, startedBy, withYou, workMinutes, workSpans } from './work';
-import { isAgent } from './actors';
+// The Project tab's Stats (docs/project-stats-proposal.md §4, T-253): the project's numbers over its whole history, and
+// the time per task, as atm works them out (ATM-722: the stats route's `stats` and `histogram`, atm-lib's
+// `stats::time`). No git calls: commits and PRs are what atm recorded on tasks.
+import type { Stats } from '$generated/types';
 
 export interface ProjectStats {
   /** The earliest created_at, else meta.created; null when neither is known */
   started: number | null;
   /** From the first task start to the last completion, or to now while tasks are open; null without a start */
   duration: { from: number; to: number; ongoing: boolean } | null;
-  /** Archived tasks count as done: they are finished, and only finished tasks are archived */
+  /** Archived tasks counted as what they are */
   tasks: { total: number; done: number; open: number; skipped: number };
   /** The project's sprints, and how many are closed (T-323) */
   sprints: { total: number; closed: number };
@@ -33,67 +26,41 @@ export interface ProjectStats {
   parallelism: number | null;
 }
 
-export function projectStats(
-  tasks: Task[],
-  meta: { created?: unknown } | undefined,
-  now: number,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
-  /** Archived tasks not in `tasks` (the archive isn't loaded yet): meta.archived */
-  unloadedArchived = 0,
-  model: SprintModel = NO_SPRINTS,
-): ProjectStats {
-  const kind = taskKind;
-  const min = (values: (number | null)[]) => {
-    const known = values.filter((v): v is number => v !== null);
-    return known.length ? Math.min(...known) : null;
-  };
+/** No numbers yet (before atm has answered) */
+export const NO_STATS: ProjectStats = {
+  started: null,
+  duration: null,
+  tasks: { total: 0, done: 0, open: 0, skipped: 0 },
+  sprints: { total: 0, closed: 0 },
+  taskCommits: 0,
+  pullRequests: null,
+  agentMs: 0,
+  aloneMs: 0,
+  withYouMs: 0,
+  maxAgents: 0,
+  parallelism: null,
+};
 
-  const created = min(tasks.map((t) => ms(t.created_at)));
-  const metaCreated = typeof meta?.created === 'string' ? ms(meta.created) : null;
-  const firstStart = min(tasks.map((t) => ms(t.started_at)));
-  const open = tasks.filter((t) => kind(t) !== 'done' && kind(t) !== 'skipped').length;
-  const lastDone = completions(tasks).at(-1)?.time ?? null;
-  const duration =
-    firstStart === null
-      ? null
-      : open > 0
-        ? { from: firstStart, to: now, ongoing: true }
-        : { from: firstStart, to: Math.max(firstStart, lastDone ?? firstStart), ongoing: false };
+type Served = Record<string, unknown>;
+const num = (v: unknown, or = 0) => (typeof v === 'number' ? v : or);
 
-  const prs = new Set(tasks.map((t) => t.pr?.number).filter((n): n is number => typeof n === 'number'));
-  const workflow = vocab.workflow?.type;
-
-  // Agent work: tasks an agent started, or nobody recorded (before v4), as in the Information's Agents line
-  const agentTasks = tasks.filter((t) => {
-    const starter = startedBy(t);
-    return !starter || isAgent(starter);
-  });
-  const use = timeUse(agentTasks, null, now);
-  const together = agentTasks.filter(withYou);
-  const alone = agentTasks.filter((t) => !withYou(t));
-  // Time with at least one agent at work: the union of the work's stretches, atm's (short pauses not included)
-  const working = mergeIntervals(agentTasks.flatMap((t) => workSpans(t, now))).reduce(
-    (sum, iv) => sum + iv.end - iv.start,
-    0,
-  );
-
+/** atm's numbers as the Stats panel reads them */
+export function numbersOf(stats: Stats | null | undefined): ProjectStats {
+  const s = stats?.stats as Served | undefined;
+  if (!s) return NO_STATS;
+  const duration = s.duration as { from: number; to: number; ongoing: boolean } | null;
   return {
-    started: created ?? metaCreated,
-    duration,
-    tasks: {
-      total: tasks.length + unloadedArchived,
-      done: tasks.filter((t) => kind(t) === 'done').length + unloadedArchived,
-      open,
-      skipped: tasks.filter((t) => kind(t) === 'skipped').length,
-    },
-    sprints: { total: model.sprints.length, closed: model.sprints.filter((s) => s.state === 'closed').length },
-    taskCommits: tasks.filter((t) => typeof t.commit === 'string' && t.commit).length,
-    pullRequests: prs.size === 0 && workflow === 'direct' ? null : prs.size,
-    agentMs: use?.agentMs ?? 0,
-    aloneMs: timeUse(alone, null, now)?.agentMs ?? 0,
-    withYouMs: timeUse(together, null, now)?.agentMs ?? 0,
-    maxAgents: use?.maxAgents ?? 0,
-    parallelism: use && working > 0 ? use.agentMs / working : null,
+    started: typeof s.started === 'number' ? s.started : null,
+    duration: duration ?? null,
+    tasks: s.tasks as ProjectStats['tasks'],
+    sprints: s.sprints as ProjectStats['sprints'],
+    taskCommits: num(s.task_commits),
+    pullRequests: typeof s.pull_requests === 'number' ? s.pull_requests : null,
+    agentMs: num(s.agent_ms),
+    aloneMs: num(s.alone_ms),
+    withYouMs: num(s.with_you_ms),
+    maxAgents: num(s.max_agents),
+    parallelism: typeof s.parallelism === 'number' ? s.parallelism : null,
   };
 }
 
@@ -131,39 +98,34 @@ export interface TimeHistogram {
   slowest: TimedTask[];
 }
 
-/** Bins that widen with time, so short and long tasks both read: 0–5 m … 3–4 h, 4 h+ */
-export const TIME_BINS = [0, 5, 10, 20, 30, 45, 60, 90, 120, 180, 240];
+const timed = (t: Served): TimedTask => ({
+  id: String(t.id),
+  ...(typeof t.key === 'string' ? { key: t.key } : {}),
+  name: typeof t.name === 'string' ? t.name : '',
+  minutes: num(t.minutes),
+  withYou: t.with_you === true,
+});
 
-const binLabel = (m: number) => (m < 60 ? `${m} m` : `${m / 60} h`);
-
-/**
- * Every done task's work time, binned: atm's (ATM-721), every attempt and round, less its reviews and blocks. Tasks
- * without any work are left out.
- */
-export function timeHistogram(tasks: Task[]): TimeHistogram {
-  const timed: TimedTask[] = tasks.flatMap((t) => {
-    const minutes = taskKind(t) === 'done' ? workMinutes(t, 0) : null;
-    return minutes === null ? [] : [{ id: t.id, ...keyOf(t), name: t.name, minutes, withYou: withYou(t) }];
-  });
-  const bins: TimeBin[] = TIME_BINS.map((from, i) => {
-    const to = TIME_BINS[i + 1] ?? Infinity;
-    const inBin = timed.filter((t) => t.minutes >= from && t.minutes < to);
-    return {
-      from,
-      to,
-      label: to === Infinity ? `${binLabel(from)}+` : `${binLabel(from)}–${binLabel(to)}`,
-      alone: inBin.filter((t) => !t.withYou),
-      withYou: inBin.filter((t) => t.withYou),
-    };
-  });
-  const minutes = timed.map((t) => t.minutes);
+/** atm's time per task as the histogram reads it; none before atm has answered */
+export function histogramOf(stats: Stats | null | undefined): TimeHistogram | null {
+  const h = stats?.histogram as Served | undefined;
+  if (!h) return null;
+  const list = (v: unknown) => (Array.isArray(v) ? (v as Served[]).map(timed) : []);
+  const orNull = (v: unknown) => (typeof v === 'number' ? v : null);
   return {
-    bins,
-    medianAlone: median(timed.filter((t) => !t.withYou).map((t) => t.minutes)),
-    medianWithYou: median(timed.filter((t) => t.withYou).map((t) => t.minutes)),
-    min: minutes.length ? Math.min(...minutes) : null,
-    max: minutes.length ? Math.max(...minutes) : null,
-    average: minutes.length ? minutes.reduce((a, b) => a + b, 0) / minutes.length : null,
-    slowest: [...timed].sort((a, b) => b.minutes - a.minutes).slice(0, 5),
+    bins: (h.bins as Served[]).map((b) => ({
+      from: num(b.from),
+      // The last bin has no upper bound
+      to: typeof b.to === 'number' ? b.to : Infinity,
+      label: String(b.label),
+      alone: list(b.alone),
+      withYou: list(b.with_you),
+    })),
+    medianAlone: orNull(h.median_alone),
+    medianWithYou: orNull(h.median_with_you),
+    min: orNull(h.min),
+    max: orNull(h.max),
+    average: orNull(h.average),
+    slowest: list(h.slowest),
   };
 }

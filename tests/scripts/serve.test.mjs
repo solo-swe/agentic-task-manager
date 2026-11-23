@@ -255,7 +255,20 @@ describe('serve', () => {
     const url = `http://localhost:${port}/api/projects`;
     const first = await fetch(url);
     const byId = Object.fromEntries((await first.json()).projects.map((p) => [p.id, p]));
-    assert.deepEqual(byId.abcd1234.summary, {
+    // The overview's Progress tab (ATM-722), checked on its own: its burndown has a point a day, from the first task's
+    // (1 February, day 20485 since 1970) to today. Its total leaves the skipped task out; no pace, so no forecast
+    const { progress, ...rest } = byId.abcd1234.summary;
+    const day = (iso) => Math.floor(Date.parse(iso) / 86_400_000);
+    assert.deepEqual([progress.done, progress.total, progress.open_releases, progress.forecast], [3, 7, [], null]);
+    assert.deepEqual(progress.done_days, [
+      [day('2026-02-01'), 1],
+      [day('2026-03-13'), 1],
+      [day('2026-03-15'), 1],
+    ]);
+    assert.deepEqual(progress.burndown[0], [day('2026-02-01'), 7, 6]);
+    assert.deepEqual(progress.burndown.at(-1), [day('2026-03-15'), 7, 4]);
+    assert.equal(progress.burndown.length, day('2026-03-15') - day('2026-02-01') + 1);
+    assert.deepEqual(rest, {
       total: 8,
       done: 3,
       skipped: 1,

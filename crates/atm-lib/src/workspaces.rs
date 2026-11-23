@@ -357,6 +357,22 @@ impl Member {
         task_snapshot(&Workspace::project_tolerant(&self.entry)?, filters)
     }
 
+    /// Its stats, progress and forecast for `query`'s slice and period, now ([`crate::stats::project_stats`]); read
+    /// tolerantly, as its tasks are.
+    ///
+    /// # Errors
+    /// As [`Member::tasks`].
+    pub fn stats(&self, query: &crate::stats::StatsQuery) -> Result<Value> {
+        if too_large(&self.stamp) {
+            return Err(Error::TooLarge(format!(
+                "larger than {} MB",
+                MAX_SERVED_BYTES / 1_000_000
+            )));
+        }
+        let now = atm_common::time::now() * 1000;
+        crate::stats::project_stats(&Workspace::project_tolerant(&self.entry)?, query, now)
+    }
+
     /// What the other projects its tasks name are now ([`foreign::named_version`]): with [`Member::stamp`], what its
     /// task views depend on, for the tasks route's `ETag` (docs/cross-project-freshness-design.md §5.3 D). Null when
     /// it can't be opened.

@@ -15,8 +15,8 @@ use crate::edit::open_sprint;
 use crate::project::Project;
 
 mod views;
-pub(crate) use views::due_fields;
 pub use views::{TaskSprint, sprint_views, task_sprints};
+pub(crate) use views::{due_fields, planned_vocabulary};
 
 /// A refusal of what was asked (exit code 2).
 fn invalid(message: impl Into<String>) -> Error {

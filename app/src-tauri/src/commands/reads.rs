@@ -68,6 +68,35 @@ pub fn tasks_of(
     Ok(member(workspaces, w, p)?.tasks(&filters.into())?)
 }
 
+/// `GET …/projects/<p>/stats` (ATM-722): the slice's IDs or keys (none, the whole project) and the period, in ms.
+///
+/// # Errors
+/// No such workspace or project, task data too large, a period that ends before it starts.
+pub fn stats_of(
+    workspaces: &Workspaces,
+    w: &str,
+    p: &str,
+    tasks: Option<Vec<String>>,
+    from: Option<f64>,
+    to: Option<f64>,
+) -> Result<Value, AppError> {
+    #[allow(clippy::cast_possible_truncation)]
+    // reason: ms since 1970 from the page, far inside i64
+    let ms = |t: Option<f64>| t.filter(|v| v.is_finite()).map(|v| v as i64);
+    let (from, to) = (ms(from), ms(to));
+    if let (Some(f), Some(t)) = (from, to)
+        && t < f
+    {
+        return Err(atm_common::Error::Invalid(format!("to ({t}) is before from ({f})")).into());
+    }
+    let query = atm_lib::stats::StatsQuery {
+        tasks: tasks.map(|t| t.into_iter().filter(|id| !id.is_empty()).collect()),
+        from,
+        to,
+    };
+    Ok(member(workspaces, w, p)?.stats(&query)?)
+}
+
 /// `GET …/projects/<p>/claims`.
 ///
 /// # Errors
@@ -225,6 +254,23 @@ pub async fn project_tasks(
     filters: TaskFilters,
 ) -> Result<Json, AppError> {
     tasks_of(&state.workspaces, &workspace, &project, filters).map(Json)
+}
+
+/// A project's stats, progress and forecast for a slice of its tasks and a period (ATM-722).
+///
+/// # Errors
+/// As [`stats_of`].
+#[tauri::command]
+#[specta::specta]
+pub async fn project_stats(
+    state: State<'_, AppState>,
+    workspace: String,
+    project: String,
+    tasks: Option<Vec<String>>,
+    from: Option<f64>,
+    to: Option<f64>,
+) -> Result<Json, AppError> {
+    stats_of(&state.workspaces, &workspace, &project, tasks, from, to).map(Json)
 }
 
 /// A project's live claims.

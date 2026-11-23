@@ -18,6 +18,7 @@ mod logo;
 mod query;
 mod reviews;
 mod source;
+mod stats;
 mod tasks;
 #[cfg(test)]
 mod test_support;
@@ -134,6 +135,8 @@ fn error_response(error: &atm_common::Error) -> Response {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProjectRead<'a> {
     Tasks,
+    /// Its stats, progress and forecast (ATM-722)
+    Stats,
     Documents,
     Files,
     Claims,
@@ -151,6 +154,7 @@ impl<'a> ProjectRead<'a> {
     fn named(rest: &[&'a str]) -> Option<Self> {
         Some(match rest {
             ["tasks"] => Self::Tasks,
+            ["stats"] => Self::Stats,
             ["documents"] => Self::Documents,
             ["files"] => Self::Files,
             ["claims"] => Self::Claims,
@@ -179,6 +183,7 @@ fn serve_project_read(
     let project = project.as_ref();
     match read {
         ProjectRead::Tasks => tasks::get_tasks(project, query, request),
+        ProjectRead::Stats => stats::get_stats(project, query),
         ProjectRead::Documents => documents::get_document(project, query, request),
         ProjectRead::Files => documents::get_file(project, query, request),
         ProjectRead::Logo => logo::get_logo(project, request),
@@ -248,6 +253,7 @@ pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) 
         && !id.is_empty()
         && let Some(
             read @ (ProjectRead::Tasks
+            | ProjectRead::Stats
             | ProjectRead::Documents
             | ProjectRead::Files
             | ProjectRead::Reviews

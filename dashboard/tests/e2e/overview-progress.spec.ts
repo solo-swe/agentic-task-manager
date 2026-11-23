@@ -1,13 +1,14 @@
-import { expect, test } from './helpers';
+import { atmSummaryOf, expect, test } from './helpers';
 
-// T-329: a Progress tab on the Projects Overview, every project's progress
+// T-329: a Progress tab on the Projects Overview, every project's progress, from the projects' summaries (ATM-722:
+// atm's figures, so the overview loads no project's tasks for it)
 test.describe('Projects Overview: the Progress tab', () => {
   test('a row per project, the burndown and velocity of all; a row opens the project’s Progress tab', async ({
     page,
     tasksServer,
   }) => {
-    tasksServer.use('agents');
-    tasksServer.addProject('second', 'sprints', 'Second Project');
+    tasksServer.use('agents').withAtmSummary();
+    tasksServer.addProject('second', 'sprints', 'Second Project', atmSummaryOf('sprints'));
     await page.goto('/projects');
     await page.locator('#overview-tab-progress').click();
     await expect(page).toHaveURL(/\/progress(\?|$)/);

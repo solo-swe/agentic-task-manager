@@ -13,6 +13,7 @@ use atm_lib::review_requests::{
     ReviewTasks,
 };
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewId, ReviewRef, Status};
+use atm_lib::stats::StatsQuery;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::Response;
 use serde_json::{Map, Value, json};
@@ -29,6 +30,7 @@ pub(super) enum Call {
     Searched(String, String),
     Project(String, String),
     Tasks(Filters),
+    Stats(StatsQuery),
     OthersVersion,
     Claims,
     Worktrees,
@@ -127,6 +129,8 @@ impl Default for FakeReviews {
 pub(super) struct FakeProject {
     pub stamp: Value,
     pub tasks: Result<Value>,
+    /// What its stats answer (ATM-722)
+    pub stats: Result<Value>,
     pub others: Value,
     pub claims: Vec<Value>,
     pub worktrees: Vec<Value>,
@@ -154,6 +158,7 @@ impl Default for FakeProject {
         Self {
             stamp: json!({"tasks": [1, 1], "archive": null, "claims": [1, 1], "copies": [1]}),
             tasks: Ok(json!({"tasks": [], "meta": {}})),
+            stats: Ok(json!({"progress": {}, "forecast": {}})),
             others: json!({}),
             claims: Vec::new(),
             worktrees: Vec::new(),
@@ -314,6 +319,11 @@ impl ProjectSource for Bound<FakeProject> {
     fn tasks(&self, filters: &Filters) -> Result<Value> {
         self.calls.note(Call::Tasks(filters.clone()));
         self.fake.tasks.clone()
+    }
+
+    fn stats(&self, query: &StatsQuery) -> Result<Value> {
+        self.calls.note(Call::Stats(query.clone()));
+        self.fake.stats.clone()
     }
 
     fn others_version(&self) -> Value {

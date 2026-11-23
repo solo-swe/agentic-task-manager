@@ -1835,7 +1835,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 739
+    "next_number": 741
   },
   "tasks": [
     {
@@ -16579,7 +16579,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-23T09:59:47Z",
+      "updated_at": "2026-11-23T10:28:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16598,7 +16598,7 @@
       "review": "async",
       "started_at": "2026-11-23T09:50:03Z",
       "started_by": "claude:0f56a916",
-      "commit": "fa26dc3a882a695dae2ed14171b975d4b965f9b8",
+      "commit": "0deac327e4dc0f41d0e76c14ab7be662f90840f0",
       "code_reviews": [
         {
           "id": "01a207d8-efbd-709d-a951-35af7a9a3aed",
@@ -18884,6 +18884,67 @@
       "sprint": "Sidebar overhaul",
       "review": "async",
       "number": 738
+    },
+    {
+      "id": "01a207f5-b8d8-77e2-b9e8-b65158981919",
+      "name": "Activity pill chart changes on click and on tab switch",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "sidebar"
+      ],
+      "description": "The bar chart in the Activity pill, on a project's tab and on All projects, changes when the user clicks the pill, and changes again after switching to another tab and back. It must show the same chart every time.\n\n## Decision (Hakan)\nThe pill's all-time chart **leaves the archive out**: it charts the completions in `tasks.json` only, before and after the panel is opened, and never triggers an archive load. The panel's deep dive may still load and include the archive for its periods (D-5.2).\n\n## Likely cause\n`ActivityWidget.svelte` charts the pill from `dashboard.history` (line 43), and opening the panel calls `dashboard.wantArchive()` (line 91): once the archive arrives, `history` holds archived completions too, so the pill's bars change on the first click. Switching tabs likely reloads the project without the archive, which changes them back. Confirm this, and find the cause on All projects separately: `OverviewActivity.svelte` builds its own source from `dashboard.projectSources`, which leaves archives out, so something else changes there (check what re-derives on click and on returning to the tab, e.g. `dashboard.loadedAt` moving the buckets, or the sources being reloaded).\n\n## Change\n- The pill's series from the non-archived tasks only (`dashboard.tasks` for a project, the merged sources on All projects); the deep dive keeps using `history` where its period needs the archive.\n- The pill's tooltip and aria label say it is the task file's completions, without the archive.\n- Whatever changes the All projects pill on click or tab return, fixed so the same data gives the same bars.\n- Record the causes found in the task's notes.\n\n## Tests\n- Unit tests for the series the pill charts: with and without a loaded archive, the same result.\n- An e2e test in the Activity specs, on a project and on All projects: read the pill's bars, open and close the panel, switch to another tab and back, and the bars are unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/progress/ActivityWidget.svelte",
+        "dashboard/src/lib/overview/OverviewActivity.svelte",
+        "dashboard/src/lib/state.svelte.ts"
+      ],
+      "created_at": "2026-11-23T10:31:13Z",
+      "updated_at": "2026-11-23T10:31:18Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:3c21f374",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:31:13Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "number": 739,
+      "review": "async"
+    },
+    {
+      "id": "01a20808-570f-738e-a5c5-e9142ff2e1c9",
+      "name": "Loop runner: a fresh agent session per task (evaluate, then implement if worth it)",
+      "type": "feature",
+      "priority": "P2",
+      "description": "Long `/atm-loop-tasks` sessions carry every finished task's context into the next one, which is a large share of usage-limit consumption. Instead of one long session, atm could run the loop from outside and start a **fresh, headless agent session per task**: a full main agent (same model, same `AGENTS.md`, memory and skills), not a subagent, briefed by the task itself.\n\n```\natm loop run --agent '<harness command template, e.g. claude -p \"/atm-do-task {task}\">' [selection] [--max N]\n```\n\n## Step 1: Evaluate (stop here for a decision)\n- Do a few tasks the fresh way by hand (`/clear`, then `/atm-do-task <id>` with no other context) and compare with tasks done inside a long loop: did the fresh session miss anything (decisions said only in chat, conventions), and what did each cost (tool calls, tokens, from the session transcripts)?\n- Write the findings, what a fresh session lacked and what a task must carry so it doesn't, in `docs/fresh-session-loop.md`, commit it, and block this task `--on user` asking whether to implement. Subagents went badly before in this project, so the user decides from evidence, not from this description.\n\n## Step 2: Implement (only after the user says go)\n- `atm loop run` in `atm-cli` (logic in `atm-lib`, per the layer rule): claims the next task (`atm loop next --claim`), starts the configured command with the task's key filled in, waits for it, reads back the outcome (done, in review, blocked, back to to do) and goes on; `--max`, the selection flags and exit codes as `atm loop next`'s.\n- The command template comes **only from the user's config or the command line, never from task text** (rule 7); the task key is passed as an argument, never interpolated into a shell string.\n- The review watch moves to the runner: comments that arrive are handed to a session started to answer them (or to the next task's session).\n- `--pause` and `--with-user` keep working as prompts in the runner's terminal; the end-of-loop `/atm-push` runs in its own session.\n- Headless runs get only the skill's pre-approved commands (`skills/claude-code.json` for Claude Code), nothing broader.\n\n## Must not break the other harness integrations\n- **`/atm-loop-tasks` stays as it is** for harnesses without a headless mode and for users who loop in one session; the runner is an addition, not a replacement.\n- The skills stay portable (`name` and `description` frontmatter only, detail from `atm docs`): nothing Claude Code-specific goes into `skills/atm-*/SKILL.md`; harness-specific command templates are config examples in `docs/agent/` (Claude Code, Codex, Gemini CLI, opencode, ...), documented as examples, none hard-coded as a default.\n- `atm agents install` / `status` / `uninstall` for every harness (claude, agents, antigravity, and the tools that read them: codex, copilot, cursor, opencode, gemini) are unchanged: their tests in `tests/scripts/` pass as they are.\n- The public skills export (`.github/workflows/skills.yml`, `solo-swe/skills`) still exports the same skills.\n\n## Security\nAn atm command that starts processes is a new entry point: update `docs/security-architecture.md` in the same PR, and run the agent sandbox (or its written review, §3.3) since it changes what agents act on.\n\n## Tests\n- `atm-lib` unit tests for the runner's loop with a fake agent process (each outcome, a crash, a timeout, a lease expiring, nothing ready).\n- A CLI scenario in `tests/scripts/` running a stub agent command that finishes, blocks and fails tasks.\n- The existing `atm agents` and loop tests unchanged and passing.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/fresh-session-loop.md",
+        "crates/atm-lib/src/loop_runner.rs",
+        "crates/atm-cli/src/commands/loop_run.rs",
+        "docs/agent/loop.md",
+        "docs/security-architecture.md",
+        "tests/scripts/loop-run.test.mjs"
+      ],
+      "created_at": "2026-11-23T10:51:34Z",
+      "updated_at": "2026-11-23T10:51:34Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "review": "async",
+      "number": 740
     }
   ]
 }

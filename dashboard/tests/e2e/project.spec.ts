@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, openDashboard, test, type TasksData } from './helpers';
+import { atmNowFor, expect, openDashboard, test, type TasksData } from './helpers';
 
 // The Project tab (T-252): the project as a whole, Information on the left. Times are UTC on 1 May; now is 10:00.
 const NOW = new Date('2026-05-01T10:00:00Z');
@@ -75,6 +75,8 @@ const items = (page: Page, block: string) => page.locator(`#project-${block} .vo
 test.describe('Project tab', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(NOW);
+    // atm works the stats out to its now (ATM-722): the page's
+    atmNowFor(NOW);
   });
 
   test('the name, no description line, and Information: repository, workflow, people, agents (T-252, T-267)', async ({

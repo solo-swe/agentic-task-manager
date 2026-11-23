@@ -117,6 +117,7 @@ describe('DashboardState', () => {
           '/api/v2/workspaces/work/projects/w1/tasks',
           '/api/v2/workspaces/work/projects/w1/claims',
           '/api/v2/workspaces/work/projects/w1/worktrees',
+          '/api/v2/workspaces/work/projects/w1/stats',
         ]);
         s.openWorkspace('default');
         expect(location.pathname).toBe('/');
@@ -134,7 +135,14 @@ describe('DashboardState', () => {
       await s.load();
       expect(s.route).toEqual({ page: 'project', id: 'p2' });
       expect(s.projectId).toBe('p2');
-      expect(urls()).toEqual(['/api/projects', v1Tasks('p2'), '/p/p2/claims.json', '/p/p2/worktrees.json']);
+      // and its stats, atm's figures (ATM-722)
+      expect(urls()).toEqual([
+        '/api/projects',
+        v1Tasks('p2'),
+        '/p/p2/claims.json',
+        '/p/p2/worktrees.json',
+        '/api/v1/projects/p2/stats',
+      ]);
     });
 
     it('with several, lands on the overview without opening a project; it reads every project’s tasks', async () => {

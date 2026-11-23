@@ -77,7 +77,8 @@ import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
-import type { ForeignTask } from '$generated/types';
+import type { ForeignTask, Stats } from '$generated/types';
+import { loadStats } from './stats';
 import { findTask, refView, taskLabel, type OtherProject, type RefView } from './keys';
 import { latest, type Ticket } from './latest';
 import type { ListGroupBy } from './list-groups';
@@ -249,6 +250,8 @@ export class DashboardState {
   sprints = $state.raw<SprintModel>(NO_SPRINTS);
   /** The project's releases, with their figures, as atm serves them (ATM-720) */
   releases = $state.raw<Release[]>([]);
+  /** The whole project's stats, progress and forecast, as atm serves them (ATM-722); null before they come */
+  stats = $state.raw<Stats | null>(null);
   /** The project's components, as atm serves them with the vocabulary, in their order; tasks name them by ID (T-323) */
   components = $derived(this.vocab.components);
   /** Open tasks left in closed sprints, which no loop takes until they are moved (T-323), as atm says it (ATM-719) */
@@ -616,6 +619,7 @@ export class DashboardState {
     this.vocab = DEFAULT_VOCABULARY;
     this.sprints = NO_SPRINTS;
     this.releases = [];
+    this.stats = null;
     this.projectName = DEFAULT_PROJECT_NAME;
     this.detailOpen = false;
     this.detailId = null;
@@ -865,7 +869,7 @@ export class DashboardState {
    * time they come, or a newer load was asked for (ATM-675) */
   private async loadProjectData(project: string, ticket: Ticket): Promise<boolean> {
     const key = this.#keptKey(project);
-    const [result, claims, trees] = await Promise.all([
+    const [result, claims, trees, , stats] = await Promise.all([
       // The validators are this project's (switchProject forgets another's), from its page or the Omniboard
       loadTasks(project, browserFetch, this.#validators),
       loadClaims(project),
@@ -877,10 +881,16 @@ export class DashboardState {
       this.#archiveWanted
         ? this.refreshArchive().catch((e) => console.error('Reloading the archive failed:', e))
         : undefined,
+      // The whole project's figures (ATM-722), on every load: they run to now. A failure leaves the last ones
+      loadStats(project).catch((e): null => {
+        console.error('Loading the stats failed:', e);
+        return null;
+      }),
     ]);
     // Another project shown meanwhile (a quick switch of tab), or a newer load: this answer is not the page's, the
     // worktrees neither
     if (!ticket.current(key)) return false;
+    if (stats) this.stats = stats;
     if (!trees.unchanged) {
       this.#worktreesValidators = trees.validators;
       this.#worktrees = trees.worktrees;

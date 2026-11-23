@@ -160,6 +160,15 @@ fn with_planned<T>(
     Ok(f(&migrated, &working, &archived, true))
 }
 
+/// The project's vocabulary with the sprints the views count: its own, or for an unmigrated project those its phases
+/// would make (as [`with_planned`]), so the stats (ATM-722) see the same sprints as the sprint views.
+///
+/// # Errors
+/// A task file that can't be read.
+pub(crate) fn planned_vocabulary(project: &Project) -> Result<Vocabulary> {
+    with_planned(project, |vocab, _, _, _| vocab.clone())
+}
+
 /// The project's sprints for the dashboard, `{sprints, backlog, from_phases}`: each sprint in its order (closed ones
 /// too) with its figures over the working tasks and the archive, how many unfinished tasks are in no sprint, and
 /// whether they are an unmigrated project's phases (which can't be changed until `atm db migrate`).

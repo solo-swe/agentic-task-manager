@@ -25,6 +25,7 @@ const WORKSPACES = /\/api\/v2\/workspaces(\?.*)?$/;
 const AGENT_SKILLS = ['atm-do-task', 'atm-serve'];
 const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
+const V1_STATS = /\/api\/v1\/projects\/([^/]+)\/stats(\?.*)?$/;
 const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
 const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
 /** A project's reviews, or one review's page (ATM-574) */
@@ -139,6 +140,51 @@ function atmViews(
     for (const folder of [dir, ...others]) rmSync(folder, { recursive: true, force: true });
   }
 }
+/** Whether `body` is a task file atm reads (an object with a list of tasks) */
+function isTaskFile(body: string): boolean {
+  try {
+    const data = JSON.parse(body) as unknown;
+    return !!data && typeof data === 'object' && Array.isArray((data as TasksData).tasks);
+  } catch {
+    return false;
+  }
+}
+
+/** Stats already worked out, by the files and the query they are of */
+const statsCache = new Map<string, string>();
+
+/**
+ * GET …/projects/<id>/stats for a project holding `body` (and `archive`), with the slice and period `query` asks
+ * (ATM-722): atm-cli's own (`atm project stats`), so the dashboard is tested against atm's rules, not a copy of them.
+ */
+export function asStats(body: string, archive: string | null, query: URLSearchParams): string {
+  const key = JSON.stringify([body, archive, query.toString(), atmNow]);
+  const cached = statsCache.get(key);
+  if (cached !== undefined) return cached;
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-stats-'));
+  try {
+    mkdirSync(path.join(dir, '.agentic-task-manager'));
+    writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
+    if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
+    const slice = (query.get('tasks') ?? '').split(',').filter(Boolean);
+    const args = [
+      'project',
+      'stats',
+      ...slice.flatMap((id) => ['--task', id]),
+      ...(query.get('from') ? ['--from', query.get('from')!] : []),
+      ...(query.get('to') ? ['--to', query.get('to')!] : []),
+    ];
+    const [program, ...rest] = atm(args);
+    const r = spawnSync(program, rest, { cwd: dir, encoding: 'utf8', maxBuffer: 64 << 20, env: atmEnv(dir) });
+    if (r.status !== 0) throw new Error(`atm project stats failed: ${r.error?.message ?? r.stderr}`);
+    const answer = JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', ...JSON.parse(r.stdout) });
+    statsCache.set(key, answer);
+    return answer;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /** The id of the project the fixture serves by default */
 export const FIXTURE_PROJECT = 'fixture';
 
@@ -175,6 +221,11 @@ function atmSummary(body: string): Record<string, unknown> {
   }
 }
 
+/** The summary atm serve would give a project holding `data` (a fixture by name or inline tasks): atm-cli's own */
+export function atmSummaryOf(data: string | TasksData): Record<string, unknown> {
+  return atmSummary(toBody(data));
+}
+
 /** A project summary as api/projects gives it (docs/multi-project-api.md 3.2), with chosen fields */
 export function summary(fields: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -192,6 +243,7 @@ export function summary(fields: Record<string, unknown> = {}): Record<string, un
     needs_you: { review: 0, blocked_on_user: 0 },
     last_activity: '2026-01-01T00:00:00Z',
     completions_14d: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 1],
+    progress: { done: 4, total: 10, open_releases: [], done_days: [], burndown: [], forecast: null },
     ...fields,
   };
 }
@@ -530,6 +582,21 @@ export class TasksServer {
           ? this.withReviewStatuses(asTaskViews(body, this.archiveBody, false, this.registeredBodies))
           : asTaskViews(body),
       );
+    });
+    await this.page.route(V1_STATS, (route) => {
+      const url = new URL(route.request().url());
+      const id = decodeURIComponent(V1_STATS.exec(url.href)![1]);
+      const other = this.others.get(id);
+      const body = id === this.projectId ? this.body : (other?.body ?? null);
+      // A body that isn't a task file (a test of the dashboard's error handling) has no stats, as atm refuses it
+      if (body === null || !isTaskFile(body))
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
+      const archive = id === this.projectId ? this.archiveBody : null;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: asStats(body, archive, url.searchParams),
+      });
     });
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
     await this.page.route(ARCHIVE_JSON, (route) => {
@@ -952,6 +1019,14 @@ export class TasksServer {
           ),
         };
       }
+      case 'project_stats': {
+        if (!body || !isTaskFile(body)) return unknown;
+        const query = new URLSearchParams();
+        if (Array.isArray(args.tasks)) query.set('tasks', (args.tasks as string[]).join(','));
+        if (typeof args.from === 'number') query.set('from', String(args.from));
+        if (typeof args.to === 'number') query.set('to', String(args.to));
+        return { ok: views(asStats(body, project === this.projectId ? this.archiveBody : null, query)) };
+      }
       case 'project_reviews':
         return body ? { ok: this.reviewList ?? { reviews: [], you: 'Ana' } } : unknown;
       case 'project_review': {
@@ -1170,6 +1245,13 @@ export const test = base.extend<Fixtures>({
   tasksServer: async ({ page }, use) => {
     const server = new TasksServer(page);
     await server.install();
+    // atm works the figures out to its now (ATM-722: the stats): a spec that fixes the page's clock runs atm at that
+    // time too, so both say the same
+    const setFixedTime = page.clock.setFixedTime.bind(page.clock);
+    page.clock.setFixedTime = async (time) => {
+      atmNowFor(new Date(time));
+      return setFixedTime(time);
+    };
     await use(server);
     atmNowFor(undefined);
   },

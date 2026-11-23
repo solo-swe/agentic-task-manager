@@ -1,29 +1,25 @@
 <script lang="ts">
   import { BACKLOG } from '../filters';
-  import { forecastSprints, type SprintForecast } from '../forecast';
+  import { fromServed, type SprintForecast } from '../forecast';
   import { formatWhen } from '../format';
-  import { progressBreakdown } from '../insights';
   import { notDone, RESOLUTION_LABELS } from '../relations';
   import { dashboard } from '../state.svelte';
+  import { progressOf } from '../stats';
   import { kindStyle, phaseColor, typeStyle } from '../theme';
   import { kindOf, statusLabel as vocabStatusLabel } from '../vocab';
   import Icon from '../ui/Icon.svelte';
   import Ring from '../ui/Ring.svelte';
 
-  // Compact: a progress bar. Click: overall completion, the status split, and completion per phase and type.
-  // Archived tasks count (all done): from meta.archived until the archive is loaded, then from the history (T-238)
-  const p = $derived(
-    dashboard.archiveLoaded
-      ? progressBreakdown(dashboard.history, dashboard.vocab, 0, dashboard.archivedCount)
-      : progressBreakdown(dashboard.tasks, dashboard.vocab, dashboard.archivedCount),
-  );
+  // Compact: a progress bar. Click: overall completion, the status split, and completion per sprint and type. atm's
+  // figures (ATM-722), archived tasks counted as what they are
+  const p = $derived(progressOf(dashboard.stats?.progress));
   const pct = $derived(Math.round(p.overall.ratio * 100));
   let open = $state(false);
-  // The popover's breakdown by phase and type needs the archived tasks themselves
+  // The popover's "Not done" counts the archived tasks' resolutions: it needs them loaded
   $effect(() => {
     if (open && dashboard.archivedCount > 0) dashboard.wantArchive();
   });
-  const archivedNote = $derived(p.archived ? ` (${p.archived} archived, done)` : '');
+  const archivedNote = $derived(p.archived ? ` (${p.archived} archived)` : '');
   let root: HTMLElement;
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const statusStyle = (status: string) => kindStyle(kindOf(dashboard.vocab, status));
@@ -34,7 +30,7 @@
   const source = $derived(dashboard.archiveLoaded ? dashboard.history : dashboard.tasks);
   // The finished tasks that weren't done, by resolution (SR-2.8)
   const ended = $derived(notDone(source));
-  const rows = $derived(forecastSprints(source, Date.now(), source, dashboard.sprints).sprints);
+  const rows = $derived(fromServed(dashboard.stats?.forecast, dashboard.sprints).sprints);
   const openRows = $derived(rows.filter((r) => r.sprint?.state !== 'closed'));
   const closedRows = $derived(rows.filter((r) => r.sprint?.state === 'closed'));
   const closedTitle = $derived.by(() => {

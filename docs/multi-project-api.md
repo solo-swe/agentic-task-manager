@@ -243,6 +243,22 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
   per stamp of its own data. A `tasks.json` over the size limit gets `413`, as the raw file does; an unknown project
   `404`.
 
+### 2.5a `api/v1/projects/<id>/stats`: stats, progress and the forecast
+
+atm-lib's `stats::project_stats` (ATM-722, docs/dashboard-derived-state.md group F): what the Progress tab, the Progress
+widget and the Project tab show, by atm's rules, so the dashboard draws them and works none of them out. The query:
+`tasks` a slice (IDs or keys, comma-separated or repeated; none, the whole project) and `from`, `to` a period (ms since
+1970; a `to` before `from` is `400`). The answer (`Stats` in `api.schema.json`), times in ms:
+
+- of the slice: `progress` (`overall`, `archived`, `by_status`, `by_type`, `by_sprint`, archived tasks counted as what
+  they are), `forecast` (`pace`, `sprints` in the loop's order with their counts and estimates, the whole project's
+  estimates on a slice's rows, and `next`, the row the loop works on next) and `time_use` (working, waiting on you,
+  idle, agent time, over the period);
+- of the whole project: `stats` (its numbers), `histogram` (the time per done task) and `actors` (people and agents).
+
+Never cached (no `ETag`): the figures run to now. The app's command is `project_stats`; the CLI's `atm project stats`,
+and `atm project status` prints the forecast.
+
 ### 2.6 `documents` and `files`: a project's files for the document viewer
 
 The document viewer's routes (T-392, docs/compmd-viewer-design.md §4), answered by atm-lib (`lib/documents.py`), which
@@ -496,6 +512,7 @@ and `key_final` too, as the task views give them; a project before task keys has
 | `completions_14d` | 14 integers, oldest first, ending with today: done-kind tasks by the UTC day of `completed_at` (tasks without `completed_at` aren't counted) |
 | `board` | the cards for the All projects board (§3.3) |
 | `board_active_sprint` | the same columns, of the active sprint's tasks only, with their own counts: the board's default view (T-340, §3.3); `null` without an active sprint. Absent before 0.26, when the dashboard shows `board` |
+| `progress` | the overview's Progress tab (ATM-722, atm-lib's `stats::overview`), so the overview loads no project's tasks for it: `done` and `total` (all but the skipped, the archive too), `open_releases` (`[{ id, name, done, total }]`, the planned ones), `done_days` (`[[day, count]]`, days since 1970 in UTC, for the velocity chart), `burndown` (`[[day, scope, remaining]]` at the end of each day from the first task's to today) and `forecast` (`{ minutes: { likely, low, high }, waiting }`, the agent work left at the agents' pace and the open tasks waiting on someone; `null` without a pace) |
 | `stats` | the overview card's line (T-255), archived tasks included (a task in both files counted once, from `tasks.json`; an unreadable archive left out): `started`, the earliest `created_at` (else `meta.created`, else `null`); `tasks`, how many; `agent_minutes`, the agent time as the Project tab counts it: the work (`started_at` until the review request or completion, until now while active) of tasks an agent (`claude:…`) or nobody recorded started, each agent's spans merged, added up. Computed when the summary is (a change to `tasks.json` or the claims), so a running task's time grows between changes only then |
 
 ### 3.3 The board

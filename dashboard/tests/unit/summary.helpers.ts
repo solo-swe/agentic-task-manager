@@ -34,6 +34,7 @@ export function summary(fields: Partial<ProjectSummary> = {}): ProjectSummary {
     board: emptyBoard(),
     board_active_sprint: null,
     stats: { started: null, tasks: 0, agent_minutes: 0 },
+    progress: { done: 0, total: 0, open_releases: [], done_days: [], burndown: [], forecast: null },
     ...fields,
   };
 }

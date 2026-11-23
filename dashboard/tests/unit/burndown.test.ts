@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { ForecastRow } from '$generated/types';
 import { burndown, rangeStart } from '../../src/lib/burndown';
-import { forecastSprints } from '../../src/lib/forecast';
+import { fromServed, NO_FORECAST, type Forecast } from '../../src/lib/forecast';
+import type { SprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
 import progress from '../fixtures/progress.json';
@@ -12,13 +14,54 @@ const tasks = progressTasks;
 const at = (iso: string) => Date.parse(iso);
 // Not migrated: its phases read as the sprints "Phase 0" (closed), "Phase 1" and "Phase 2"
 const model = sprintModel(progress.meta, tasks, DEFAULT_VOCABULARY);
-const forecastAll = (list: Task[], now: number) => forecastSprints(list, now, list, model);
+
+/** atm's forecast (ATM-722, atm-lib's rules) as a test gives it: each row's sprint (null: the backlog) and its estimate's
+ * minutes (likely, low, high) from NOW, and the row the loop works on next */
+function forecastWith(
+  m: SprintModel,
+  rows: [string | null, [number, number, number]?][],
+  next: string | null = rows[0]?.[0] ?? null,
+): Forecast {
+  const row = ([sprint, minutes]: [string | null, [number, number, number]?]): ForecastRow => ({
+    sprint,
+    total: 1,
+    done: 0,
+    skipped: 0,
+    remaining: 1,
+    blocked: 0,
+    in_review: 0,
+    state: 'in_progress',
+    ...(minutes
+      ? {
+          estimate: {
+            minutes: { likely: minutes[0], low: minutes[1], high: minutes[2] },
+            finish_at: {
+              likely: NOW + minutes[0] * 60_000,
+              low: NOW + minutes[1] * 60_000,
+              high: NOW + minutes[2] * 60_000,
+            },
+          },
+        }
+      : {}),
+  });
+  return fromServed(
+    { pace: { likely: 8.5, low: 7.5, high: 10.5, based_on: 8 }, sprints: rows.map(row), next: { sprint: next } },
+    m,
+  );
+}
+
+// The fixture's, as atm forecasts it: Phase 1's work first (8.5 minutes), then Phase 2's (to 51 in all)
+const FIXTURE_FORECAST = forecastWith(
+  model,
+  [['Phase 0'], ['Phase 1', [8.5, 7.5, 10.5]], ['Phase 2', [51, 45, 63]]],
+  'Phase 1',
+);
 const series = (b: ReturnType<typeof burndown>) =>
   b.points.map((p) => [new Date(p.t).toISOString().slice(5, 16), p.scope, p.remaining]);
 
 describe('burndown', () => {
   it('steps scope and remaining at every creation and completion, ending now', () => {
-    const b = burndown(tasks, forecastAll(tasks, NOW), NOW);
+    const b = burndown(tasks, FIXTURE_FORECAST, NOW);
     expect(series(b)).toEqual([
       ['04-01T08:00', 10, 10],
       ['04-01T09:06', 10, 9],
@@ -35,7 +78,7 @@ describe('burndown', () => {
   });
 
   it('forecasts from now to the estimated finish; blocked work stays', () => {
-    const b = burndown(tasks, forecastAll(tasks, NOW), NOW);
+    const b = burndown(tasks, FIXTURE_FORECAST, NOW);
     expect(b.forecast).toEqual({
       from: { t: NOW, remaining: 7 },
       to: { t: at('2026-04-06T12:51:00Z'), remaining: 1 },
@@ -44,7 +87,7 @@ describe('burndown', () => {
   });
 
   it('can focus on one sprint', () => {
-    const f = forecastAll(tasks, NOW);
+    const f = FIXTURE_FORECAST;
     const p1 = burndown(tasks, f, NOW, 'Phase 1', undefined, model);
     expect(p1.points[0]).toMatchObject({ scope: 6, remaining: 6 });
     expect(p1.points.at(-1)).toMatchObject({ scope: 6, remaining: 2 });
@@ -71,7 +114,7 @@ describe('burndown', () => {
     };
     const inSprints = tasks.map((x) => ({ ...x, sprint: x.phase === 0 ? 'Old' : 'Now' }));
     const m = sprintModel(meta, inSprints, DEFAULT_VOCABULARY);
-    const f = forecastSprints(inSprints, NOW, inSprints, m);
+    const f = forecastWith(m, [['Old'], ['Now', [30, 20, 40]]], 'Now');
     const old = burndown(inSprints, f, NOW, 'Old', undefined, m);
     expect(old.end).toBe(at('2026-04-02T16:00:00Z'));
     expect(old.points.at(-1)!.t).toBe(old.end);
@@ -88,7 +131,7 @@ describe('burndown', () => {
   it('uses the earliest known time for tasks without created_at', () => {
     const t = taskWith;
     const old = [t('a', 'done', { updated_at: '2026-04-02T10:00:00Z' }, false), t('b', 'todo')];
-    const b = burndown(old, forecastAll(old, NOW), NOW);
+    const b = burndown(old, NO_FORECAST, NOW);
     expect(series(b)).toEqual([
       ['04-02T10:00', 2, 1],
       ['04-06T12:00', 2, 1],
@@ -96,7 +139,7 @@ describe('burndown', () => {
   });
 
   it('is empty without tasks', () => {
-    expect(burndown([], forecastAll([], NOW), NOW)).toEqual({ points: [] });
+    expect(burndown([], NO_FORECAST, NOW)).toEqual({ points: [] });
   });
 
   it("follows a project's kinds: skipped-kind out of scope; review and blocked left for the forecast's end", () => {
@@ -128,14 +171,14 @@ describe('burndown', () => {
       t('e', 'awaiting_user', created, false),
       t('f', 'dropped', created, false),
     ];
-    const b = burndown(all, forecastSprints(all, NOW, all), NOW);
+    const b = burndown(all, forecastWith(model, [[null, [10, 10, 10]]]), NOW);
     expect(b.points.at(-1)).toMatchObject({ scope: 5, remaining: 2 });
     expect(b.forecast!.to.remaining).toBe(1);
   });
 });
 
 describe('burndown range (T-240)', () => {
-  const forecast = forecastAll(tasks, NOW);
+  const forecast = FIXTURE_FORECAST;
 
   it('"sprint" starts when the sprint the loop works on started (without a start, its first task); a focused one, when it did', () => {
     const starts = (phase: number) =>
@@ -161,7 +204,7 @@ describe('burndown range (T-240)', () => {
     const untimed = withKinds(
       tasks.map(({ id, name, phase, type, status, description }) => ({ id, name, phase, type, status, description })),
     );
-    expect(burndown(untimed, forecastSprints(untimed, NOW), NOW).untimed).toBe(true);
+    expect(burndown(untimed, NO_FORECAST, NOW).untimed).toBe(true);
     expect(burndown(tasks, forecast, NOW).untimed).toBeUndefined();
   });
 });

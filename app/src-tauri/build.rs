@@ -20,6 +20,7 @@ fn main() {
         "list_projects",
         "search",
         "project_tasks",
+        "project_stats",
         "claims",
         "worktrees",
         "document",

@@ -716,7 +716,8 @@
         "completions_14d",
         "board",
         "board_active_sprint",
-        "stats"
+        "stats",
+        "progress"
       ],
       "properties": {
         "total": { "type": "integer" },
@@ -760,7 +761,168 @@
           "anyOf": [{ "$ref": "#/$defs/ProjectBoard" }, { "type": "null" }],
           "description": "The same, of the active sprint's tasks only; null without an active sprint (T-340)"
         },
-        "stats": { "$ref": "#/$defs/ProjectStats" }
+        "stats": { "$ref": "#/$defs/ProjectStats" },
+        "progress": { "$ref": "#/$defs/OverviewProgress" }
+      }
+    },
+    "OverviewProgress": {
+      "type": "object",
+      "description": "What the overview's Progress tab shows of a project (ATM-722): no project's tasks are loaded for it",
+      "required": ["done", "total", "open_releases", "done_days", "burndown", "forecast"],
+      "properties": {
+        "done": { "type": "integer" },
+        "total": { "type": "integer", "description": "All its tasks but the skipped, the archived ones too" },
+        "open_releases": { "type": "array", "items": { "$ref": "#/$defs/OpenRelease" } },
+        "done_days": {
+          "type": "array",
+          "items": { "type": "array", "items": { "type": "integer" } },
+          "description": "[day, completions] for each day with some: days since 1970, in UTC"
+        },
+        "burndown": {
+          "type": "array",
+          "items": { "type": "array", "items": { "type": "integer" } },
+          "description": "[day, scope, remaining] at the end of each day, from the first task's to today"
+        },
+        "forecast": {
+          "anyOf": [{ "$ref": "#/$defs/WorkLeft" }, { "type": "null" }],
+          "description": "The agent work left at the agents' pace; null without a pace"
+        }
+      }
+    },
+    "OpenRelease": {
+      "type": "object",
+      "description": "A planned release's figures",
+      "required": ["id", "done", "total"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": ["string", "null"] },
+        "done": { "type": "integer" },
+        "total": { "type": "integer" }
+      }
+    },
+    "WorkLeft": {
+      "type": "object",
+      "description": "The agent work left at the agents' pace",
+      "required": ["minutes", "waiting"],
+      "properties": {
+        "minutes": { "$ref": "#/$defs/Spread" },
+        "waiting": { "type": "integer", "description": "Open tasks waiting on someone, not on agent work" }
+      }
+    },
+    "Spread": {
+      "type": "object",
+      "description": "A likely value and the quartiles around it",
+      "required": ["likely", "low", "high"],
+      "properties": { "likely": { "type": "number" }, "low": { "type": "number" }, "high": { "type": "number" } }
+    },
+    "Share": {
+      "type": "object",
+      "description": "A group's completion: done of all but the skipped",
+      "required": ["key", "label", "done", "total", "skipped", "ratio"],
+      "properties": {
+        "key": { "type": ["string", "null"], "description": "The group's: a type, a sprint (null for the backlog), or all" },
+        "label": { "type": "string" },
+        "done": { "type": "integer" },
+        "total": { "type": "integer" },
+        "skipped": { "type": "integer" },
+        "ratio": { "type": "number", "description": "0–1; 1 when every task was skipped" }
+      }
+    },
+    "ForecastRow": {
+      "type": "object",
+      "description": "A sprint's tasks counted (the backlog's: sprint null), and when they may be done",
+      "required": ["sprint", "total", "done", "skipped", "remaining", "blocked", "in_review", "state"],
+      "properties": {
+        "sprint": { "type": ["string", "null"] },
+        "total": { "type": "integer" },
+        "done": { "type": "integer" },
+        "skipped": { "type": "integer" },
+        "remaining": { "type": "integer", "description": "Agent work left on them" },
+        "blocked": { "type": "integer" },
+        "in_review": { "type": "integer" },
+        "state": { "type": "string", "enum": ["done", "in_progress", "not_started"] },
+        "completed_at": { "type": "number", "description": "ms; once every task is finished" },
+        "estimate": { "$ref": "#/$defs/Estimate" }
+      }
+    },
+    "Estimate": {
+      "type": "object",
+      "description": "Working minutes until a sprint is done, and the times then (ms)",
+      "required": ["minutes", "finish_at"],
+      "properties": { "minutes": { "$ref": "#/$defs/Spread" }, "finish_at": { "$ref": "#/$defs/Spread" } }
+    },
+    "StatusCount": {
+      "type": "object",
+      "required": ["status", "count"],
+      "properties": { "status": { "type": "string" }, "count": { "type": "integer" } }
+    },
+    "Progress": {
+      "type": "object",
+      "description": "How far along a slice is: overall, by status, type and sprint (archived tasks as they are)",
+      "required": ["overall", "archived", "by_status", "by_type", "by_sprint"],
+      "properties": {
+        "overall": { "$ref": "#/$defs/Share" },
+        "archived": { "type": "integer" },
+        "by_status": { "type": "array", "items": { "$ref": "#/$defs/StatusCount" } },
+        "by_type": { "type": "array", "items": { "$ref": "#/$defs/Share" } },
+        "by_sprint": { "type": "array", "items": { "$ref": "#/$defs/Share" } }
+      }
+    },
+    "Pace": {
+      "type": "object",
+      "description": "Minutes per task: the middle of the last 10, and the quartiles",
+      "required": ["likely", "low", "high", "based_on"],
+      "properties": {
+        "likely": { "type": "number" },
+        "low": { "type": "number" },
+        "high": { "type": "number" },
+        "based_on": { "type": "integer" }
+      }
+    },
+    "Forecast": {
+      "type": "object",
+      "required": ["pace", "sprints"],
+      "properties": {
+        "pace": { "anyOf": [{ "$ref": "#/$defs/Pace" }, { "type": "null" }] },
+        "sprints": { "type": "array", "items": { "$ref": "#/$defs/ForecastRow" } },
+        "next": {
+          "anyOf": [{ "$ref": "#/$defs/NextInLoop" }, { "type": "null" }],
+          "description": "The row the loop works on next, by the whole project's; null when nothing is left"
+        }
+      }
+    },
+    "NextInLoop": {
+      "type": "object",
+      "required": ["sprint"],
+      "properties": { "sprint": { "type": ["string", "null"], "description": "null: the backlog" } }
+    },
+    "TimeUse": {
+      "type": "object",
+      "description": "Where the time went: working, waiting on you, idle (ms); waiting and idle as [start, end] pairs",
+      "required": ["from", "to", "working_ms", "waiting_ms", "idle_ms", "agent_ms", "max_agents", "waiting", "idle"],
+      "properties": {
+        "from": { "type": "number" },
+        "to": { "type": "number" },
+        "working_ms": { "type": "number" },
+        "waiting_ms": { "type": "number" },
+        "idle_ms": { "type": "number" },
+        "agent_ms": { "type": "number" },
+        "max_agents": { "type": "integer" },
+        "waiting": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } },
+        "idle": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } }
+      }
+    },
+    "Stats": {
+      "type": "object",
+      "description": "GET …/projects/<p>/stats (ATM-722): the slice's progress, forecast and time use; the project's own numbers",
+      "required": ["progress", "forecast", "time_use", "stats", "histogram", "actors"],
+      "properties": {
+        "progress": { "$ref": "#/$defs/Progress" },
+        "forecast": { "$ref": "#/$defs/Forecast" },
+        "time_use": { "anyOf": [{ "$ref": "#/$defs/TimeUse" }, { "type": "null" }] },
+        "stats": { "type": "object", "description": "The project's numbers", "additionalProperties": true },
+        "histogram": { "type": "object", "description": "The time per done task, binned", "additionalProperties": true },
+        "actors": { "type": "object", "description": "The people and the agents", "additionalProperties": true }
       }
     },
     "StatusSprint": {
