@@ -4,6 +4,80 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [0.43.0] - Unreleased
+
+The sprint *Audit and tabs*: the codebase audit's findings fixed (security, the review store, the CLI, the server,
+the app), one state machine for tasks and their reviews, the dashboard's own copies of atm's rules moved behind
+atm's API, and the app's tabs as browsers have them (each tab its own history, an address for everything it shows,
+clicks and right-click menus as in a browser). Review watches idle while they wait.
+
+### Added
+- **A tab's own history** (ATM-694, ATM-695, ATM-696): in the app each title-bar tab has its own Back and Forward
+  (⌘[ ⌘], the Go menu, the mouse, a swipe, and ‹ › arrows left of the sidebar toggle, with a list on a long press);
+  switching tabs adds to no history. A page's back button is Back, labelled with where it goes; closing a place over a
+  page goes Back.
+- **An address for everything a tab shows** (ATM-697): a review's sub-tab (`…/<CR>/diffs`, `…/comments`), a comment in
+  view (`?comment=c12`), the Reviews list's filter and search. Help and About are the app's own, in no address.
+- **Clicks as in a browser** (ATM-698): every card and row is a real link; ⌘-click and a middle click open it in a new
+  tab in the background, ⇧⌘-click brought forward; a plain click opens a review in place.
+- **atm's own right-click menus in the app** (ATM-699): on a link, card or row (Open, Open in New Tab, Open in New
+  Window, Copy Link as `atm://`), on a title-bar tab (New Tab, Duplicate, Move to New Window, Copy Link, Close, Close
+  Other Tabs), over selected text (Copy), and elsewhere (Back, Forward, Reload). WebKit's own menu is off; a field you
+  type in keeps the system's.
+- **Pop-ups by kind** (ATM-700): a question (Submit review, a poke) stays on its tab across a switch, there again on
+  return; Settings and the app's other sheets stay above every tab.
+- **What atm derives, served on every task** (ATM-717 to ATM-721): `derived.waiting` (who a task waits on and since
+  when), `needs_you`, `agent_work`, `review` (the review it waits on), `work` (its work time over every attempt and
+  round), `resolution`, `required_by`, `related_by`, `duplicated_by` and `in_closed_sprint`; the resolved vocabulary,
+  and `…/sprints` and `…/releases` routes with their figures by one rule.
+- **The review page's controls from atm** (ATM-723): `can` for every action, and `editable` on each comment.
+- **Review rounds as increments** (ATM-725): round N is its own diff; "since round M" and "whole" are built from them.
+- `task list --started-by` (the filter that `--agent` was, still read as it, ATM-679); `--json` for `service
+  start/stop/refresh`, `db init --meta-file` and `vcs commit --record`.
+- **The agent docs' state tables** (ATM-715): `atm docs states` and `atm docs reviews` list every move, each checked
+  against atm's own rules by a test.
+
+### Changed
+- **One state machine for tasks and their reviews** (ATM-633, ATM-712, ATM-713): every entry point goes through it;
+  its table test found and fixed three bugs. `atm loop next` hands a task back from review to its agent once
+  approved or sent back (ATM-657).
+- **The dashboard reads atm's answers** instead of its own rules (ATM-680, ATM-714, ATM-716 to ATM-723): kinds,
+  priority, stage, release, waiting, the review list's groups and the review page's buttons.
+- **Every document style is GitHub's width**; GitHub is the default and first, Theme last (ATM-706).
+- **In the app, the regular themes' board scrolls as a whole** (ATM-707).
+- **Review watches don't depend on the agent remembering** (ATM-708): `--once` in the skills, unread events on every
+  command, a Claude Code hook.
+- **A review watch looks only when something it reads changes** (ATM-727): the reviews, the task file, and the
+  working copy while a live review is open; missed events count as a change. It stops once its shell is gone. Before,
+  each watch looked in full every 5 s, 8–12% of a core each.
+- Tag a release with plain git; the Release workflow checks the tag is `main`'s (ATM-705).
+
+### Fixed
+- **Security** (the audit): a comment's body or path can't forge another comment (ATM-658); revisions from a review's
+  files are checked before git sees them (ATM-659); `--*-file` options never read a key or environment file
+  (ATM-662); vocabulary IDs and sprint names are shell-safe (ATM-665); `ATM_NOW` only in test builds, leases and
+  timeouts bounded (ATM-666); document routes refuse `.git` in any case and GETs from other sites (ATM-671); every
+  answer keeps `nosniff` and CORP (ATM-672); the service never kills a process it didn't start (ATM-673); the
+  dashboard's links and storage (ATM-676); invisible format characters are dropped from output (ATM-679); Homebrew
+  inputs checked, host keys pinned, images pinned, `cargo` in Dependabot (ATM-678).
+- **Rules:** one rule for a met dependency, live claims and a task's stage (ATM-667); pending sprint reviews aren't
+  archived and claims are seen in every worktree (ATM-668); `db init --meta-file` changes only the keys it may
+  (ATM-669); errors are typed, so the server answers 400 and 409 (ATM-664); the review watch judges again what wasn't
+  the agent's work yet (ATM-663).
+- **Reviews:** reversed line ranges refused, renames parsed, a decision reaches all its tasks or none (ATM-670); the
+  store refuses writes over an unreadable claims store, and round and draft writes are crash-safe (ATM-674); a live
+  review against an earlier round (ATM-710).
+- **The dashboard and the app:** only the latest load applies, one review page per review (ATM-675); the app's window
+  state, deep links across a reload, a navigation guard (ATM-677); right-click on selected text and the menu above
+  every layer (ATM-699).
+
+### Developer
+- The large Rust files split as the Rust guide says (ATM-711); atm-lib's helpers shared (`Project::change`, one task
+  lookup, one expiry step, `in_both`, `Status` groups; ATM-681).
+- Unit tests wait for CompMD's settling before jsdom goes (ATM-709).
+- Designs: the state machine (`docs/task-review-state-machine.md`), the dashboard's derived state
+  (`docs/dashboard-derived-state.md`).
+
 ## [0.42.0] - 2026-11-20
 
 A review's pages, finished: rendered Markdown commented on as on code, its comments in a margin beside the page with

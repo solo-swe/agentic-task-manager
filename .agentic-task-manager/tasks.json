@@ -13758,7 +13758,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T16:21:15Z",
+      "updated_at": "2026-11-23T09:46:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13773,7 +13773,15 @@
         "01a1f0a7-f9d3-77df-81fe-542effbd4355"
       ],
       "number": 660,
-      "review": "async"
+      "review": "async",
+      "notes": [
+        {
+          "at": "2026-11-23T09:46:53Z",
+          "kind": "note",
+          "text": "Hakan, in chat (2026-11-23): all three. A person only on positive evidence (the app or server path, or an interactive terminal with no harness variables). Each harness’s variables give an agent identity. Inside a harness session, an --agent or ATM_AGENT naming a person is refused.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225d75c0aa3a",
@@ -13798,7 +13806,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T16:21:16Z",
+      "updated_at": "2026-11-23T09:46:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13810,7 +13818,15 @@
       "sprint": "Audit and tabs",
       "with": "user",
       "number": 661,
-      "review": "async"
+      "review": "async",
+      "notes": [
+        {
+          "at": "2026-11-23T09:46:54Z",
+          "kind": "note",
+          "text": "Hakan, in chat (2026-11-23): yes, change the release, Homebrew and skills workflows. Build with no signing secrets, then sign; environment: release on the secret-holding jobs; runners pinned; the CI test. Hakan sets up the GitHub side before the next release: the release environment (v* tags), its secrets and a v* tag ruleset.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225e61ea5857",
@@ -16543,7 +16559,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §3's mismatches and task 7 of §7.\n\n## Change\n- `docs/app-desktop-ui-design.md` §3 and §6 replaced by a pointer to the tabs and navigation design, and what it says of tab menus and shortcuts brought in line with what was built.\n- `docs/multi-project-api.md` §2.7: the new addresses (a review's sub-tab, a comment in view, the Reviews list's filter), and a review page has a title bar and tabs in the app.\n- What's new and the changelog entries for the sprint's work.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c15508e8883f",
         "01a1f8be-9f92-7355-9694-c156588f4b10",
@@ -16558,7 +16574,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-22T16:21:25Z",
+      "updated_at": "2026-11-23T09:50:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16574,7 +16590,9 @@
       ],
       "sprint": "Audit and tabs",
       "number": 701,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-23T09:50:03Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8d9-79c7-7484-b094-c9afad23fb21",
@@ -18093,7 +18111,7 @@
       "description": "Step 6 of [the plan](docs/dashboard-derived-state.md), group F, decision 2.\n\n## atm\n- `…/stats`, with the matching app command. It holds:\n  - the project's stats;\n  - the time histogram;\n  - people and agents;\n  - the agents' lanes;\n  - progress overall, by type and by sprint (archived tasks counted as they are);\n  - the pace and the forecast per sprint, in the loop's order.\n- The CLI can print the forecast (`atm project status`).\n- `api/projects`' summaries carry what the overview's Progress tab shows.\n\n## Dashboard\nDelete:\n- `projectStats`, `progressBreakdown` (and its phase grouping);\n- `forecastSprints`, `pace`, `nextInLoop`;\n- `actors`;\n- `projectProgress`, `velocityByPeriod`.\n\nThe overview no longer loads every project's tasks for its Progress tab.\n\n## Tests\n- atm-lib's tables: archived skipped tasks; the loop's order.\n- The route test.\n- The overview's Progress e2e on summaries.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1fecd-5725-722d-8d45-22d2f1a2543f",
         "01a1fecd-5725-722d-8d45-22d3de5844fe"
@@ -18106,7 +18124,7 @@
         "dashboard/src/lib/projectinfo.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-23T00:18:16Z",
+      "updated_at": "2026-11-23T09:53:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18135,7 +18153,9 @@
           "text": "Filtered views: the Progress tab with filters, the Agents tab narrowed and the Activity period recompute forecast, time use and lanes over a slice. My proposal: `…/stats` takes the slice (`?tasks=<ids>`) and a period (`?from=&to=`), and the dashboard keeps only the filtering. Or does the dashboard keep the slice maths, and only the whole-project figures move? → Hakan, in chat: the slice maths go to the API too (the route takes the slice and the period).; Size: it is about 1,250 lines of rules plus a route, an app command, the CLI forecast and the summaries. Split it into four tasks (stats and histogram / forecast and CLI / people and agent lanes / the overview from summaries), or keep it as one? → Hakan, in chat: keep it as one task.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-23T09:53:50Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d54f6238cf",
@@ -18467,7 +18487,7 @@
       "description": "`atm review watch` burns CPU while it waits for a review to change. On Hakan's Mac (2026-11-23) four watches each averaged 8–12% of a core over hours, and one `--once` watch was at 98%. A watch should sit idle until a review changes.\n\n## Change\n- Find the busy loop in atm-lib's `review_listen` (`watch.rs`, `wait.rs`, `lease.rs`, the store's change channel) and fix it, so a waiting watch uses next to no CPU: it blocks on the change notice, or wakes at its recheck interval, never spins.\n- A watch whose shell has gone (its parent stopped) should not keep running: an orphaned watch was seen, started hours before. Check how a watch notices it, and stop then.\n\n## Tests\n- A watch with nothing to report stays idle: its CPU time over a few seconds of waiting is near zero (a CLI test in `tests/scripts/`).\n- The existing watch tests: a change is still reported at once.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_listen/watch.rs",
@@ -18475,7 +18495,7 @@
         "crates/atm-lib/src/review_listen/lease.rs"
       ],
       "created_at": "2026-11-23T01:57:18Z",
-      "updated_at": "2026-11-23T02:18:20Z",
+      "updated_at": "2026-11-23T09:49:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18489,7 +18509,7 @@
       "number": 727,
       "started_at": "2026-11-23T01:57:24Z",
       "started_by": "claude:0f56a916",
-      "commit": "96c52f15521b5606e874f657aa6c6ab210e26d93",
+      "commit": "fef31229bfb4ded963838ee7f9bdd5fd8c83fb30",
       "code_reviews": [
         {
           "id": "01a20632-7575-7462-a4ae-7729a5d7830f",
@@ -18497,15 +18517,41 @@
         }
       ],
       "review_requested_at": "2026-11-23T02:18:20Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-23T02:18:20Z",
           "kind": "review",
           "text": "CR-125: Review watch idle while it waits; it stops once its shell is gone",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T09:47:44Z",
+          "kind": "note",
+          "text": "Approved: in CR-125 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T09:49:54Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T09:49:59Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan in chat (CR-125, round 2): a watch looks only when the reviews, the task file or (with a live review) the working copy change; missed events count; it stops once its shell is gone.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-23T02:18:20Z",
+          "to": "2026-11-23T09:49:54Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T09:49:59Z",
+      "completed_by": "claude:0f56a916"
     }
   ]
 }

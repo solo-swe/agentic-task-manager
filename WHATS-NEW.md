@@ -2,6 +2,16 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.43.0] - Unreleased
+
+- In the app, each tab remembers where you have been: Back and Forward, and the arrows in the title bar, go through
+  that tab's own pages.
+- Cards, rows and links behave as in a browser: ⌘-click opens a new tab, and right-click shows Open, Open in New Tab,
+  Copy Link and more.
+- A review you were writing waits on its tab while you look at another, and Settings stays open as you switch.
+- Every page you can see has its own link, down to a review's Diffs tab and a comment in it.
+- Agents listening for your review comments no longer slow your computer down while they wait.
+
 ## [0.42.0] - 2026-11-20
 
 - Comment on rendered Markdown in a review just as on code, and see the comments beside the page, each with a line

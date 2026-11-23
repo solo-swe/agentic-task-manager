@@ -157,25 +157,37 @@ rows under it: everything else stays the same.
 
 ## 3. Tabs
 
-**Tabs drawn by the page, in the title bar, the same on all three.** A tab is an **address** (the page's, e.g.
-`/projects/atm/kanban?task=T-12`): the window has one page and one dashboard state, and switching tabs navigates to the
-tab's address, as a click on a project does today. So the dashboard's state stays one (`state.svelte.ts`), the
-router, deep links and T-506's subscriptions work as they do, and a tab costs nothing while it isn't shown.
+> [!NOTE]
+> **How a tab behaves is [the tabs and navigation design](tabs-and-navigation-design.md)'s** (ATM-653, built in
+> ATM-694 to ATM-701): a tab's own history and its Back and Forward, the pop-ups by kind, an address for everything a
+> tab shows, and the clicks and right-click menus (its §4). This section keeps what is the window's: the tab strip,
+> and several windows.
+
+**Tabs drawn by the page, in the title bar, the same on all three.** A tab is a place with its own history (an
+**address** and the entries before it, e.g. `/projects/atm/kanban?task=T-12`): the window has one page and one
+dashboard state, and switching tabs shows the tab's address without adding to any history. So the dashboard's state
+stays one (`state.svelte.ts`), the router, deep links and T-506's subscriptions work as they do, and a tab costs nothing
+while it isn't shown.
 
 - **The tab strip:** each tab its project's logo and name (or the page's title), a close button, and the needs-you
   count of its project; drag to reorder; the **+**, ⌘T and File ▸ New Tab open the workspace's overview. The drag is
   the page's own, with the pointer (T-532): HTML5 drag and drop never starts from a button in WebKit, the app's webview
   on macOS and Linux. The tab follows the pointer, the others slide aside, and the order is kept (`save_tabs`); a
   press that doesn't move is a click, and ⌃⇧← / ⌃⇧→ (⌘⇧ on macOS) move the focused tab a place.
-- **Switching** (a click, ⌃Tab and ⌃⇧Tab, ⌘⇧] and ⌘⇧[; ⌘1–⌘6 stay the views'): the page navigates to the tab's
-  address.
+- **Switching** (a click; Window ▸ Next Tab ⌃Tab and Previous Tab ⌃⇧Tab, on all three; ⌘1–⌘6 stay the views', and
+  ⌘[ ⌘] are Back and Forward, the tab's own): the page shows the tab's address, adding to no history.
   The project's data is loaded again through the commands (the same as switching projects now); the tab keeps what is
   in its address (the view, the open task or document, the sprint) and the page's preferences keep the rest.
   **To measure** in the tabs' task: a switch within the e2e budget (200 ms, `tests/e2e/performance.spec.ts`) for a
   large project; if not, the page keeps the last few projects' data, a cache in `state.svelte.ts`, not a state per tab.
-- **Open in a new tab:** ⌘-click (Ctrl-click, a middle click) on a project in the sidebar, a task, a link to a document.
-- **Close Tab** (⌘W) closes the tab; closing the last one closes the window.
-- **Move Tab to New Window** (the tab's context menu, the Window menu): the app opens a window on the tab's address
+- **Open in a new tab:** ⌘-click (Ctrl-click, a middle click) on any card, row or link opens it in the background,
+  ⇧⌘-click brought forward, and a right-click's **Open in New Tab** (ATM-698, ATM-699); a plain click opens in place, a
+  review too.
+- **Close Tab** (⌘W, a middle click on the tab, its right-click menu's **Close**) closes the tab; closing the last one
+  closes the window.
+- **A tab's right-click menu** (ATM-699): New Tab, Duplicate, Move to New Window, Copy Link (its `atm://` address),
+  Close, Close Other Tabs.
+- **Move Tab to New Window** (the tab's right-click menu, the Window menu): the app opens a window on the tab's address
   (`open_window`), and the tab leaves this one. Dragging a tab out of the window comes later, if wanted.
 - **Kept per window:** the tabs, their order and the active one are the window's (§7 brings them back).
 
@@ -235,6 +247,11 @@ GitHub, Help, About and Connect your agents move to the menus (§6). The browser
 
 ## 6. Menus and shortcuts
 
+> [!NOTE]
+> What Back, Forward and the clicks do, and the right-click menus on links, tabs and elsewhere, are [the tabs and
+> navigation design](tabs-and-navigation-design.md)'s §4.3 and §4.5. The table below is the menu as built
+> (`app/src-tauri/src/menu.rs`).
+
 **One menu, defined once, in Rust** (`tauri::menu`, in `tauri` itself: no plugin): `Submenu`s of `MenuItem`s,
 `CheckMenuItem`s for the toggles, `PredefinedMenuItem`s for the system's own (Services, Hide, Quit, Cut, Copy,
 Paste, …), and `AboutMetadata` for About.
@@ -255,11 +272,16 @@ the window in front.
 |---|---|
 | **atm** (macOS; on Windows and Linux its items go to File and Help) | About atm · Check for Updates… · Settings… ⌘, · Connect Your Agents… · Services, Hide, Quit |
 | **File** | New Tab ⌘T · New Window ⌘N · Close Tab ⌘W · Copy Link to This Page ⌥⌘C · (Windows, Linux: Settings…, Exit) |
-| **Edit** | Undo, Cut, Copy, Paste, Select All · Find ⌘F (the sidebar's search) |
-| **View** | Graph ⌘1 · Kanban ⌘2 · List ⌘3 · Agents ⌘4 · Progress ⌘5 · Project ⌘6 · Show Sidebar ⌃⌘S · Show Filters ⌥⌘F · Include Archived Tasks · Reload ⌘R · Enter Full Screen |
-| **Go** | Back ⌘[ · Forward ⌘] · Projects Overview ⇧⌘O · each project of the workspace · Workspace ▸ (each workspace) |
-| **Window** | Minimize, Zoom · Next Tab, Previous Tab · Move Tab to New Window · the open windows |
-| **Help** | atm Help ⌘? · What's New · atm on GitHub · CompMD · (Windows, Linux: About atm, Check for Updates…) |
+| **Edit** | Undo, Redo, Cut, Copy, Paste, Select All · Find ⌘F (the sidebar's search) |
+| **View** | Graph ⌘1 · Kanban ⌘2 · List ⌘3 · Agents ⌘4 · Progress ⌘5 · Project ⌘6 · Show Sidebar ⌃⌘S (Ctrl+B) · Show Filters ⌥⌘F · Include Archived Tasks · Reload ⌘R (this tab, where it was) · Enter Full Screen (macOS) |
+| **Go** | Back ⌘[ (Alt+←) · Forward ⌘] (Alt+→), the active tab's history · Projects Overview ⇧⌘O · each project of the workspace · Workspace ▸ (each workspace) |
+| **Window** | Minimize, Zoom (macOS) · Next Tab ⌃Tab · Previous Tab ⌃⇧Tab · Move Tab to New Window · the open windows (macOS) |
+| **Help** | atm Help ⌘? (F1) · What's New · atm on GitHub · CompMD · (Windows, Linux: About atm, Check for Updates…) |
+
+**Right-click menus** (ATM-699, the app only; the browser keeps its own): on a link, card or row **Open**, **Open in New
+Tab**, **Open in New Window**, **Copy Link**; on a title-bar tab its six items (§3); over selected text **Copy**, then
+**Back**, **Forward**, **Reload**; elsewhere **Back**, **Forward**, **Reload**. In a field you type in, the system's
+text items. WebKit's own menu is turned off: its Reload would load the page's route, not the app's page.
 
 - **State the menu shows** (the current view checked, Show/Hide Sidebar, Include Archived): the page tells the app
   with one command, `menu_state`, when it changes, for its own window; the app updates the items when that window is in
