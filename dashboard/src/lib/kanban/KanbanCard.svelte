@@ -4,11 +4,10 @@
   import ReviewLink from '../details/ReviewLink.svelte';
   import type { KanbanCard } from '../kanban';
   import { dashboard } from '../state.svelte';
-  import { phaseColor, typeStyle } from '../theme';
+  import { taskCardState } from '../card-state';
   import { markdownPlainText } from '../plain-text';
   import { REVIEW_STATE_LABELS } from '../review';
-  import { priorityOf, taskKind } from '../vocab';
-  import { waitLine } from '../waiting';
+  import { priorityOf } from '../vocab';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
   import LabelChips from '../ui/LabelChips.svelte';
@@ -20,26 +19,16 @@
   // `showSprint`: the board shows tasks of more than one sprint, so the card names its own (SR-7.3)
   let { card, showSprint = false }: { card: KanbanCard; showSprint?: boolean } = $props();
   const task = $derived(card.task);
-  const sprint = $derived(dashboard.sprints.sprintOf(task));
-  // A sprint keeps its colour: by its place in the project's sprints; the backlog is muted
-  const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
-  const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
-  const ts = $derived(typeStyle(task.type));
-  // Open in a closed sprint (reopened after it closed, T-323): the badge says so
-  const stranded = $derived(dashboard.leftovers.includes(task));
-  const kind = $derived(taskKind(task));
-  const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
-  // Who it waits on, as atm says it (ATM-717): one line, agreeing with its review's chip
-  const wait = $derived(waitLine(task, dashboard.loadedAt));
+  // Its sprint and colour, type, kind, claim, wait and review: the same as the Task List card's (ATM-683); a link on
+  // the card for its code review opens the review, not the task
+  const state = $derived(taskCardState(task, dashboard));
+  const { sprint, sprintColor: pc, typeStyle: ts, stranded, kind, claim, wait, codeReview } = $derived(state);
   // The tasks it waits for, by their keys (ADR-007)
   const waitingOn = $derived(
     card.readiness && !card.readiness.ready
       ? card.readiness.waitingOn.map((id) => dashboard.refOf(id).label).join(', ')
       : '',
   );
-
-  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
-  const codeReview = $derived(kind === 'review' ? (task.derived?.review ?? null) : null);
   const href = $derived(dashboard.taskAddress(task));
 </script>
 

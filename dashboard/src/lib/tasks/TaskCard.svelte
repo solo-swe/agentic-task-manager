@@ -4,13 +4,13 @@
   import ReviewLink from '../details/ReviewLink.svelte';
   import { scrollToTask } from '../scroll';
   import { dashboard } from '../state.svelte';
-  import { kindStyle, phaseColor, typeStyle } from '../theme';
+  import { kindStyle } from '../theme';
   import type { Task } from '../types';
+  import { taskCardState } from '../card-state';
   import { cardFacts, cardNote } from '../cardfacts';
   import { markdownPlainText } from '../plain-text';
   import { noteKindLabel } from '../notes';
-  import { statusLabel, taskKind, typeLabel } from '../vocab';
-  import { waitLine } from '../waiting';
+  import { statusLabel, typeLabel } from '../vocab';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
   import LabelChips from '../ui/LabelChips.svelte';
@@ -22,21 +22,11 @@
   // `showSprint`: the list shows tasks of more than one sprint and doesn't group by them, so the card names its own
   let { task, showSprint = false }: { task: Task; showSprint?: boolean } = $props();
 
-  const sprint = $derived(dashboard.sprints.sprintOf(task));
-  // A sprint keeps its colour: by its place in the project's sprints; the backlog is muted (as on the Kanban)
-  const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
-  const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
-  const ts = $derived(typeStyle(task.type));
-  // Open in a closed sprint (reopened after it closed, T-323): the badge says so
-  const stranded = $derived(dashboard.leftovers.includes(task));
-  const kind = $derived(taskKind(task));
+  // Its sprint and colour, type, kind, claim, wait and review: the same as the Kanban card's (ATM-683)
+  const card = $derived(taskCardState(task, dashboard));
+  const { sprint, sprintColor: pc, typeStyle: ts, stranded, kind, claim, wait, codeReview } = $derived(card);
   const ss = $derived(kindStyle(kind));
   const deps = $derived(task.dependencies ?? []);
-  const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
-  // Who it waits on, as atm says it (ATM-717): one line, agreeing with its review's chip
-  const wait = $derived(waitLine(task, dashboard.loadedAt));
-  // Its code review, while it is in review (ATM-619): the one it waits on, as atm says it (ATM-717)
-  const codeReview = $derived(kind === 'review' ? (task.derived?.review ?? null) : null);
   // The row's width (T-338): the description's start and the latest note on the left, who and when on the right
   const excerpt = $derived(task.description ? markdownPlainText(task.description) : '');
   const note = $derived(cardNote(task));
