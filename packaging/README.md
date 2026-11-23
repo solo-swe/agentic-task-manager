@@ -76,8 +76,10 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
 
 Set as the secrets of the repository's **`release` environment** (Settings → Environments → `release`; ATM-661,
 audit A5), not as repository secrets, so only a job that names the environment can read them. The environment's
-deployment rule allows only tags matching `v*`, and a tag ruleset for `v*` (who may create, move or delete a release
-tag) goes with it. Both are set by hand on GitHub. The Homebrew and Skills workflows run on a published release (its
+deployment rule allows only tags matching `v*`, and a tag ruleset for `v*` (only an admin may create, move or delete a
+release tag) goes with it: `.github/rulesets/release-tags.json`, applied as `main.json` is. Both were set up on
+2026-11-23 (ATM-741). A secret goes into the environment with `gh secret set <NAME> --env release`; a job in the
+environment also reads the repository's secrets, so remove a repository secret once its environment copy is set. The Homebrew and Skills workflows run on a published release (its
 tag); run by hand, they name the tag as their ref: `gh workflow run Homebrew --ref v0.43.0 -f tag=v0.43.0`.
 
 | Secret | What it is |

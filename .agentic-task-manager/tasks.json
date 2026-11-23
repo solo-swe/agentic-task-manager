@@ -19330,7 +19330,7 @@
       "description": "Ship the sprint *Audit and tabs* as 0.43.0 on `dev/0.43.0`, as AGENTS.md's *Versions* and *CI* sections describe: the audit's fixes and refactors, the app's tabs and navigation, the stats from atm, the review watch that idles, and every agent harness counted as an agent.\n\n## Before the release, on GitHub (Hakan's; ATM-661, CR-131)\n- Create the `release` environment, with a deployment rule allowing only tags matching `v*`.\n- Move the nine secrets from the repository's secrets into the environment's (`packaging/README.md`, *Secrets and keys*, lists them). Until then the jobs that name the environment read none.\n- Add a tag ruleset for `v*` (who may create, move or delete a release tag).\n- After the release: the app job's signing step should have compiled nothing (its log), as the step before it compiles the app with no secrets.\n\n## Change\n- **The version:** already 0.43.0 (ATM-701).\n- **`CHANGELOG.md` and `WHATS-NEW.md`:** the `[0.43.0]` entries dated the release day; WHATS-NEW's 3–6 bullets checked against what the sprint added since ATM-701 wrote them.\n- **Screenshots:** regenerate the Linux baselines the sprint changed (`pnpm run test:e2e:visual:update`, Docker), look at them, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): the 0.43.0 entry. Skills and `docs/agent/` changed this sprint, so the agent sandbox, or without an API key the written skill review in §3.3; the new entry points (the stats route and command, ATM-722) and the CI changes (ATM-661) are in it.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPushing, the release PR from `dev/0.43.0` to `main`, merging, tagging and publishing are Hakan's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "CHANGELOG.md",
@@ -19339,7 +19339,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-23T15:59:58Z",
-      "updated_at": "2026-11-23T16:03:16Z",
+      "updated_at": "2026-11-23T16:36:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19353,7 +19353,24 @@
       "with": "user",
       "number": 741,
       "started_at": "2026-11-23T16:03:16Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "ac7c547100340e9da4717ec45dbb18e7d95e5eea",
+      "code_reviews": [
+        {
+          "id": "01a20944-376a-717c-b942-73c274b147ca",
+          "ref": "CR-134"
+        }
+      ],
+      "review_requested_at": "2026-11-23T16:36:35Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-23T16:36:35Z",
+          "kind": "review",
+          "text": "CR-134: Release 0.43.0",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
