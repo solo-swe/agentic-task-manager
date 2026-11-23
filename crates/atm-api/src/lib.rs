@@ -52,6 +52,15 @@ struct Served {
     page: Vec<u8>,
 }
 
+impl Served {
+    /// Whether `host` (a Host header, or an Origin without its scheme) is this server's own: `localhost:<port>` or
+    /// `127.0.0.1:<port>`, never another name pointed at it (DNS rebinding). ATM-682: the one check, for both.
+    fn is_own_host(&self, host: &str) -> bool {
+        let port = self.port;
+        host == format!("localhost:{port}") || host == format!("127.0.0.1:{port}")
+    }
+}
+
 /// The header a review change carries the session token in.
 const SESSION_HEADER: &str = "x-atm-session";
 /// The largest body a review change may send.
@@ -120,10 +129,10 @@ fn from_another_site(headers: &HeaderMap) -> bool {
 fn review_change_refused(served: &Served, host: &str, headers: &HeaderMap) -> Option<Response> {
     let value = |name: header::HeaderName| headers.get(name).and_then(|v| v.to_str().ok());
     // The request's Origin is this server's own (the page atm serves; never another site, never none)
-    let port = served.port;
     let origin_ok = value(header::ORIGIN).is_some_and(|o| {
         o == format!("http://{host}")
-            && (o == format!("http://localhost:{port}") || o == format!("http://127.0.0.1:{port}"))
+            && o.strip_prefix("http://")
+                .is_some_and(|own| served.is_own_host(own))
     });
     if !origin_ok {
         return Some(send_error(
@@ -284,8 +293,7 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
         .and_then(|h| h.to_str().ok())
         .unwrap_or_default()
         .to_string();
-    let port = served.port;
-    if host != format!("localhost:{port}") && host != format!("127.0.0.1:{port}") {
+    if !served.is_own_host(&host) {
         // A page on another site that points its own domain at 127.0.0.1 (DNS rebinding) is refused
         return send_error(StatusCode::FORBIDDEN, "unexpected Host header");
     }
@@ -329,7 +337,7 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
         let info = json!({
             "atm": true,
             "pid": std::process::id(),
-            "port": port,
+            "port": served.port,
             "version": served.version,
             "build": served.build,
             "home": served.home,
