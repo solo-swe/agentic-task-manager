@@ -134,8 +134,6 @@ impl Command {
 /// How a skipped task ended, when it isn't the default (SR-2.8).
 const SKIP_RESOLUTIONS: [&str; 3] = ["wont_do", "obsolete", "duplicate"];
 const WAITING_ON: [&str; 2] = ["user", "agent"];
-/// Review states that make a task in review work for an agent again (SR-3.9).
-const REWORK_STATES: [&str; 2] = ["changes_requested", "approved"];
 const DECISIONS: [&str; 3] = ["approved", "changes_requested", "rejected"];
 
 /// A status command's options, as `atm task state` and `atm task review` take them.
@@ -245,11 +243,7 @@ fn check_guards(
     let state_is = |s: &str| review_state.as_deref() == Some(s);
     match command {
         Command::Start => {
-            if kind == Kind::Review
-                && !review_state
-                    .as_deref()
-                    .is_some_and(|s| REWORK_STATES.contains(&s))
-            {
+            if kind == Kind::Review && !atm_common::rules::awaits_agent(review_state.as_deref()) {
                 return Err(fail(format!(
                     "can't start {id}: it waits for its review (atm task review approve or request-changes {id} decides it)"
                 )));

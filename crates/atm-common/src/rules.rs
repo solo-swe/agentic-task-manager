@@ -11,6 +11,14 @@ use crate::error::{Error, Result};
 use crate::py::{repr_str, truthy};
 use crate::vocabulary::{Kind, REVIEW_MODES, Vocabulary};
 
+/// Whether a task in review is back with its agent (SR-3.9; ATM-681: the one rule): its review's decision came back,
+/// `approved` (the agent finishes it) or `changes_requested` (the agent reworks it). `rejected` is the user's, and the
+/// rest still wait for the reviewer.
+#[must_use]
+pub fn awaits_agent(review_state: Option<&str>) -> bool {
+    matches!(review_state, Some("approved" | "changes_requested"))
+}
+
 /// Whether `id` is in a list-or-text field, as Python's `in` reads it: an element of a list, part of a text.
 #[must_use]
 pub fn contains(field: Option<&Value>, id: &str) -> bool {
@@ -292,6 +300,20 @@ mod tests {
 
     fn vocab(meta: Value) -> Vocabulary {
         Vocabulary::of_meta(&task(meta)).unwrap()
+    }
+
+    #[test]
+    fn a_task_in_review_is_back_with_its_agent_once_approved_or_sent_back() {
+        for (state, back) in [
+            (Some("approved"), true),
+            (Some("changes_requested"), true),
+            (Some("rejected"), false),
+            (Some("waiting"), false),
+            (Some(""), false),
+            (None, false),
+        ] {
+            assert_eq!(awaits_agent(state), back, "{state:?}");
+        }
     }
 
     #[test]

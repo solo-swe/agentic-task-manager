@@ -16,9 +16,6 @@ use serde_json::{Map, Value};
 /// (T-439), as every atm command an agent runs renews its claims.
 pub const DEFAULT_LEASE_MINUTES: f64 = 120.0;
 
-/// Review states that make a task in review work for an agent again (SR-3.9).
-const REWORK_STATES: [&str; 2] = ["changes_requested", "approved"];
-
 /// The project's lease length in minutes: `meta.lease_minutes` when it is a positive number (or a text of one).
 #[must_use]
 pub fn lease_minutes(document: &Value) -> f64 {
@@ -301,9 +298,7 @@ pub fn loop_order<'t>(
     let mut candidates: Vec<(&Task, bool, usize)> = Vec::new();
     for (t, r) in selected.tasks.iter().zip(&selected.rank) {
         let rework = kind(t) == Some(Kind::Review)
-            && t.get("review_state")
-                .and_then(Value::as_str)
-                .is_some_and(|s| REWORK_STATES.contains(&s))
+            && atm_common::rules::awaits_agent(t.get("review_state").and_then(Value::as_str))
             && offered_to(document, t, agent);
         if rework {
             candidates.push((t, true, *r));

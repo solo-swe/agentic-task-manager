@@ -97,7 +97,7 @@ pub fn of(vocab: &Vocabulary, task: &Task, context: Context<'_>) -> Answer {
     };
     let (waiting, needs_you, agent_work) = match kind {
         Some(Kind::Review) => match state {
-            Some("approved" | "changes_requested") => (
+            back if atm_common::rules::awaits_agent(back) => (
                 waiting(
                     On::Agent,
                     text(task, "reviewed_at").or_else(|| text(task, "updated_at")),
