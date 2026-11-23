@@ -15112,7 +15112,7 @@
       "description": "Audit §2's repetition ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported)). No behaviour changes; the existing tests are the check.\n\n- `impl Project { fn change<T>(&mut self, f: impl FnMut(&mut Working) -> Result<T>) -> Result<T> }`, replacing about 30 `let mut outcome = None` sites.\n- One `task_at(work, id) -> Result<usize>` (returning `NotFound`, saying when the task is archived) for the six copies.\n- One `expire(work, vocab) -> Vec<Value>` for the four expiry preambles, and one `section(store, key)`.\n- One `REWORK_STATES` (or `rules::awaits_agent`), one `id_of` (`Task::id()`), one `valid_label`, `find_release`, `in_open_pr`, `http_url`; `Vocabulary::active_sprint()` and `sprint_id_of(task)`; `set_or_remove(map, fields)`, `count_by_kind(vocab, tasks)`, `for_each_task_in_both(work, f)`.\n- Status groups of reviews as methods on `atm_review::Status` (`is_decision`, `is_open`, `waits_on_reviewers`, `task_command`); one `actor_of`; `home::keyed_state_file(kind, parts)`.\n\nDo it in steps, one helper per commit, with the full Rust suite between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "todo",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-2259e5eae26e",
         "01a1f7bc-bb84-7190-99d9-226323bfa33b"
@@ -15124,7 +15124,7 @@
         "crates/atm-review/src/model.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T01:52:55Z",
+      "updated_at": "2026-11-23T09:17:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15136,9 +15136,14 @@
       "sprint": "Audit and tabs",
       "number": 681,
       "review": "async",
-      "started_at": "2026-11-22T23:44:03Z",
-      "started_by": "claude:0f56a916",
-      "commit": "bb5701908a50cddd467ea8af05e47b8d4e725a99"
+      "commit": "bb5701908a50cddd467ea8af05e47b8d4e725a99",
+      "notes": [
+        {
+          "at": "2026-11-23T09:17:40Z",
+          "kind": "failure",
+          "text": "lease expired (claude:0f56a916)"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22728aee8e9c",
@@ -18462,7 +18467,7 @@
       "description": "`atm review watch` burns CPU while it waits for a review to change. On Hakan's Mac (2026-11-23) four watches each averaged 8–12% of a core over hours, and one `--once` watch was at 98%. A watch should sit idle until a review changes.\n\n## Change\n- Find the busy loop in atm-lib's `review_listen` (`watch.rs`, `wait.rs`, `lease.rs`, the store's change channel) and fix it, so a waiting watch uses next to no CPU: it blocks on the change notice, or wakes at its recheck interval, never spins.\n- A watch whose shell has gone (its parent stopped) should not keep running: an orphaned watch was seen, started hours before. Check how a watch notices it, and stop then.\n\n## Tests\n- A watch with nothing to report stays idle: its CPU time over a few seconds of waiting is near zero (a CLI test in `tests/scripts/`).\n- The existing watch tests: a change is still reported at once.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/review_listen/watch.rs",
@@ -18470,7 +18475,7 @@
         "crates/atm-lib/src/review_listen/lease.rs"
       ],
       "created_at": "2026-11-23T01:57:18Z",
-      "updated_at": "2026-11-23T01:57:24Z",
+      "updated_at": "2026-11-23T02:18:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18483,7 +18488,24 @@
       "review": "async",
       "number": 727,
       "started_at": "2026-11-23T01:57:24Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "96c52f15521b5606e874f657aa6c6ab210e26d93",
+      "code_reviews": [
+        {
+          "id": "01a20632-7575-7462-a4ae-7729a5d7830f",
+          "ref": "CR-125"
+        }
+      ],
+      "review_requested_at": "2026-11-23T02:18:20Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-23T02:18:20Z",
+          "kind": "review",
+          "text": "CR-125: Review watch idle while it waits; it stops once its shell is gone",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }

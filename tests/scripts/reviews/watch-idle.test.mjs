@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { ATM, baseEnv, removeDir, tempDir } from '../helpers.mjs';
+import { ATM, baseEnv, makeProject, removeDir, tempDir } from '../helpers.mjs';
 import { AGENT, HAKAN, background, ok, project, until } from './fixtures.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,6 +60,83 @@ describe('a review watch while it waits (ATM-727)', () => {
       await until(() => watching.lines.length >= 1, 'the decision heard', 10_000);
       assert.equal(JSON.parse(watching.lines[0]).decision, 'changes_requested');
       assert.ok(Date.now() - asked < 4_000, `heard after ${Date.now() - asked} ms`);
+    } finally {
+      watching?.stop();
+      removeDir(root);
+      removeDir(home);
+    }
+  });
+
+  // Hakan on CR-125: no timed looks at all; what a look reads is watched instead
+  test('a running watch hears at once what becomes the agent’s when it takes the task (the task file watched)', async () => {
+    const root = makeProject({
+      commit: true,
+      files: {
+        '.agentic-task-manager/tasks.json': {
+          meta: { project: 'Takes' },
+          tasks: [{ id: 'T-1', name: 'One', type: 'feature', status: 'todo', files: ['a.txt'] }],
+        },
+        'a.txt': 'a\n',
+      },
+    });
+    const home = tempDir('atm-watch-home-');
+    const A = { ATM_AGENT: 'claude:A', ATM_HOME: home };
+    const B = { ATM_AGENT: 'claude:B', ATM_HOME: home };
+    let watching;
+    try {
+      // B worked T-1 and had it sent back; nothing of it is A's
+      ok(['task', 'state', 'T-1', 'in_progress'], root, B);
+      fs.writeFileSync(path.join(root, 'a.txt'), 'a, changed\n');
+      ok(['review', 'create', '--title', 'One', '--task', 'T-1', '--uncommitted'], root, B);
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Name it better.'], root, { ...HAKAN, ATM_HOME: home });
+      ok(['review', 'submit', 'CR-1', '--request-changes'], root, { ...HAKAN, ATM_HOME: home });
+      watching = background(['review', 'watch', '--json', '--timeout', '30s', '--since', '2000-01-01T00:00:00Z'], root, A);
+      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
+      await until(() => cursorOf(home) !== undefined, 'the first look');
+      await sleep(1_000);
+      assert.equal(watching.lines.length, 0, 'not A’s work');
+      // A takes the task back: the task file changes, and the watch tells both at once
+      const taken = Date.now();
+      ok(['task', 'state', 'T-1', 'in_progress'], root, A);
+      await until(() => watching.lines.length >= 2, 'both told', 10_000);
+      assert.ok(Date.now() - taken < 4_000, `told after ${Date.now() - taken} ms`);
+    } finally {
+      watching?.stop();
+      removeDir(root);
+      removeDir(home);
+    }
+  });
+
+  test('the working copy wakes a watch only while a live review is open', async () => {
+    const root = project();
+    const home = tempDir('atm-watch-home-');
+    const env = { ...AGENT, ATM_HOME: home };
+    let watching;
+    /** The cursor's time once it has stopped moving: what was written before may be told late (FSEvents) */
+    const settled = async () => {
+      let last = fs.statSync(cursorOf(home)).mtimeMs;
+      for (let quiet = 0; quiet < 3; ) {
+        await sleep(500);
+        const now = fs.statSync(cursorOf(home)).mtimeMs;
+        quiet = now === last ? quiet + 1 : 0;
+        last = now;
+      }
+      return last;
+    };
+    try {
+      watching = background(['review', 'watch', '--json', '--timeout', '40s'], root, env);
+      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
+      await until(() => cursorOf(home) !== undefined, 'the first look');
+      // No live review: an edit there is nothing to the watch
+      let before = await settled();
+      fs.writeFileSync(path.join(root, 'a.txt'), 'edited\n');
+      await sleep(2_000);
+      assert.equal(fs.statSync(cursorOf(home)).mtimeMs, before, 'woken by the working copy without a live review');
+      // A live review opened: the next edit there wakes it
+      ok(['review', 'live'], root, env);
+      before = await settled();
+      fs.writeFileSync(path.join(root, 'a.txt'), 'edited again\n');
+      await until(() => fs.statSync(cursorOf(home)).mtimeMs !== before, 'the edit to wake the watch', 4_000);
     } finally {
       watching?.stop();
       removeDir(root);

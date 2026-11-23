@@ -26,7 +26,9 @@ use crate::reviews::{
     Status,
 };
 
-/// How often a listener looks again even without being told: a watcher can miss an event (a busy file system).
+/// How often a watch wakes with nothing told (ATM-727), only to see whether its time is up or its shell is gone, and to
+/// renew its lease: it looks only when told of a change. A watcher that missed events says so (a rescan), which counts
+/// as a change (atm-fs).
 const RECHECK: Duration = Duration::from_secs(5);
 
 mod cursor;

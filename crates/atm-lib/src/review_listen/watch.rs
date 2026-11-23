@@ -1,28 +1,78 @@
 //! The agent's one watch (§3.9): each person's comment and decision about its work, as it comes.
 
+use std::sync::mpsc::Sender;
+
+use atm_db::subscription::{Keep, OnChange, Subscription, watch_tree_where};
+
 use super::{
-    Duration, FileStore, HashMap, HashSet, Instant, Lease, Mine, Path, Project, RECHECK, Result,
-    Review, ReviewHeader, Status, Value, about_my_work, all_reviews, cursor_file, decided,
-    decision_about_my_work, heard, inbox_file, is_agent, json, keyed_now, lease_file, listen,
-    old_seen_key, parse_iso, reviews, save_cursor, seen_key, starting_point, with_parents, work_of,
+    Arc, Duration, FileStore, HashMap, HashSet, Instant, Lease, Mine, Path, PathBuf, Project,
+    RECHECK, Receiver, Result, Review, ReviewFilter, ReviewHeader, ReviewStore, Status, Value,
+    about_my_work, all_reviews, channel, cursor_file, decided, decision_about_my_work, heard,
+    inbox_file, is_agent, json, keyed_now, lease_file, old_seen_key, parse_iso, reviews,
+    save_cursor, seen_key, starting_point, with_parents, work_of,
 };
 
-/// How often a watch looks in full though nothing it can see moved (ATM-727): a comment not about the agent's work
-/// yet may become so as the agent edits a file (ATM-663, R5), which neither the reviews nor the task file show.
-const FULL_RECHECK: Duration = Duration::from_secs(60);
+/// What a look reads, each watched for changes (ATM-727: a watch looks only when told, never on a timer; a look reads
+/// every review, the tasks and git's working copy):
+/// - the reviews, every comment and decision;
+/// - the task file: a task the agent takes or finishes changes which comments are its work (ATM-663, R5);
+/// - the working copy, while a live review is open: a file the agent edits makes a comment on it the agent's. Without
+///   one, nothing there matters to a watch, and building in it (`target/`) would wake it for nothing.
+struct Sources {
+    told: Receiver<()>,
+    sent: Sender<()>,
+    _reviews: Subscription,
+    _tasks: Option<Subscription>,
+    working_copy: Option<Subscription>,
+}
 
-/// What a look reads, cheaply (ATM-727): the reviews' stamp ([`FileStore::stamp`]) and the task file's time. A
-/// recheck while it stays the same doesn't look: a look reads every review, the tasks and git's working copy.
-fn quiet_stamp(
-    store: &FileStore,
-    root: Option<&Path>,
-) -> ((u64, u128), Option<std::time::SystemTime>) {
-    let tasks = root.and_then(|r| {
-        std::fs::metadata(r.join(atm_common::TASK_DIR).join(atm_common::TASKS_FILE))
-            .and_then(|m| m.modified())
-            .ok()
-    });
-    (store.stamp(), tasks)
+impl Sources {
+    fn notice(sent: &Sender<()>) -> OnChange {
+        let sent = sent.clone();
+        Arc::new(move || {
+            let _ = sent.send(());
+        })
+    }
+
+    fn of(store: &FileStore, root: Option<&Path>) -> Result<Self> {
+        let (sent, told) = channel();
+        let reviews = store.subscribe(Self::notice(&sent))?;
+        // The task file alone: atm's lock files come and go beside it on every command
+        let tasks = root
+            .map(|r| r.join(atm_common::TASK_DIR))
+            .filter(|dir| dir.is_dir())
+            .map(|dir| {
+                let keep: Keep = Arc::new(|paths: &[PathBuf]| {
+                    paths
+                        .iter()
+                        .any(|p| p.file_name().is_some_and(|n| n == atm_common::TASKS_FILE))
+                });
+                watch_tree_where(&[dir], keep, Self::notice(&sent))
+            })
+            .transpose()?;
+        Ok(Self {
+            told,
+            sent,
+            _reviews: reviews,
+            _tasks: tasks,
+            working_copy: None,
+        })
+    }
+
+    /// The working copy watched while a live review is open, not otherwise (a project outside git has none to watch).
+    fn follow_working_copy(&mut self, project: &Project, store: &FileStore) {
+        let live = ReviewFilter {
+            statuses: vec![Status::Live],
+            task: None,
+        };
+        let any_live = store.list_reviews(&live).is_ok_and(|l| !l.is_empty());
+        if !any_live {
+            self.working_copy = None;
+        } else if self.working_copy.is_none() {
+            self.working_copy =
+                reviews::subscribe_working_copy(project, Self::notice(&self.sent)).ok();
+        }
+    }
 }
 
 /// The process that started this one, while it runs (ATM-727): once the shell that ran a watch is gone, the watch is
@@ -75,8 +125,8 @@ pub fn watch(
     let store = reviews::store(project)?;
     let file = cursor_file(root.as_deref(), me);
     let (mut seen, mut statuses) = starting_point(&store, &file, options.since.as_deref())?;
-    let (_subscription, told) = listen(&store)?;
-    // Known to be running while it does (ATM-642): renewed on every look, removed when it ends
+    let mut sources = Sources::of(&store, root.as_deref())?;
+    // Known to be running while it does (ATM-642): renewed on every wake, removed when it ends
     let lease = Lease::take(lease_file(root.as_deref(), me));
     ready();
     let deadline = Instant::now() + timeout;
@@ -84,7 +134,6 @@ pub fn watch(
     let mut count = 0;
     // The first look is at once: what came while no watch ran
     let mut first = true;
-    let mut last_look = (quiet_stamp(&store, root.as_deref()), Instant::now());
     loop {
         lease.renew();
         if !first {
@@ -92,23 +141,18 @@ pub fn watch(
             if left.is_zero() {
                 return Ok(count);
             }
-            let notified = told.recv_timeout(left.min(RECHECK)).is_ok();
+            // Woken by a change, or by its timer only to see whether its time is up or its shell gone
+            let notified = sources.told.recv_timeout(left.min(RECHECK)).is_ok();
             // Its shell gone (stopped by its harness): no one reads it any more (ATM-727)
             if parent() != started_by {
                 return Ok(count);
             }
-            // Told of no change, and nothing it reads moved: no look, unless the last full one is old (ATM-727)
-            if !notified
-                && quiet_stamp(&store, root.as_deref()) == last_look.0
-                && last_look.1.elapsed() < FULL_RECHECK
-            {
+            if !notified {
                 continue;
             }
         }
         first = false;
-        while told.try_recv().is_ok() {}
-        // Taken before the look, so a change made while it reads is seen by the next
-        last_look = (quiet_stamp(&store, root.as_deref()), Instant::now());
+        while sources.told.try_recv().is_ok() {}
         let news = look(
             project,
             root.as_deref(),
@@ -118,6 +162,8 @@ pub fn watch(
             &mut seen,
             &mut statuses,
         )?;
+        // A live review opened or ended meanwhile: the working copy watched as long as one is open
+        sources.follow_working_copy(project, &store);
         let told_now = news.len();
         for heard in news {
             emit(heard);

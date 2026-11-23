@@ -1,7 +1,7 @@
 //! `atm review wait`: until a reviewer submits on a review, or decides it.
 
 use super::{
-    Arc, Chain, Comment, Duration, FileStore, HashSet, Instant, Project, RECHECK, Receiver, Result,
+    Arc, Chain, Comment, Duration, FileStore, HashSet, Instant, Project, Receiver, Result,
     ReviewHeader, ReviewRef, ReviewStore, Status, Value, channel, json, reviews,
 };
 
@@ -89,7 +89,19 @@ pub fn wait(
     let seen: HashSet<String> = start.comments().map(|c| c.id.0.clone()).collect();
     let (_subscription, told) = listen(&store)?;
     let deadline = Instant::now() + timeout;
+    // Looked at once, then each time the reviews change (ATM-727): never on a timer
+    let mut look = true;
     loop {
+        if !look {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Ok(None);
+            }
+            look = told.recv_timeout(left).is_ok();
+            continue;
+        }
+        while told.try_recv().is_ok() {}
+        look = false;
         let review = store.get_review(&ReviewRef(start.header.id.0.clone()))?;
         let new: Vec<Value> = review
             .chains
@@ -116,10 +128,5 @@ pub fn wait(
         if done {
             return Ok(Some(json!({ "review": review.header, "comments": new })));
         }
-        let left = deadline.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            return Ok(None);
-        }
-        let _ = told.recv_timeout(left.min(RECHECK));
     }
 }
