@@ -23,8 +23,8 @@ Documents item, §1); the build becomes tasks of the sprint *Sidebar overhaul* o
   files, key files. Hidden folders otherwise listed (`.github/`), as the viewer shows them.
 - **Submodules:** not entered. A submodule is listed as a folder you can't open, named as one; its documents are
   that project's, when it is registered.
-- **At most 5,000 documents**; past that, the first 5,000 by path and a line saying how many more there are
-  (search narrows them, §4).
+- **At most 500 documents** (Hakan, CR-137); past that, the first 500 by path and a line saying how many more there
+  are. The search (§4) then asks the route (`?q=`), which matches before it cuts, so every document can be found.
 
 ## 3. What each entry says
 
@@ -60,7 +60,8 @@ and the listed files' sizes and mtimes), as the other routes' `ETag`s are.
   (`/projects/<id>/documents?view=recent&q=sidebar`); the open folders are kept per project in the preferences
   (they would make the address long).
 - **Each row** is its title, its file name, and how long ago it changed; an untracked one says *new*.
-- **The search** filters by title and path as you type, in the page (the list is already loaded), in the tab's header
+- **The search** filters by title and path as you type, in the page (the list is already loaded; when the route cut
+  it at 500, by asking the route with `?q=` instead), in the tab's header
   line where the other searches are (the sidebar design §6).
 - **A click opens the document in the viewer, in place**: `?doc=docs/x.md` over the Documents page, a step in the
   tab's history, so Back closes it and returns to the list where it was. ⌘-click opens it in a new tab.
@@ -70,7 +71,7 @@ and the listed files' sizes and mtimes), as the other routes' `ETag`s are.
 
 | Route | Answer |
 |---|---|
-| `GET …/projects/<id>/documents` (no `path`) | `{documents: [{path, title, bytes, modified_at, tracked}], submodules: [path], more: n}`; `ETag` |
+| `GET …/projects/<id>/documents` (no `path`; `?q=` matches titles and paths, at most 200 characters, before the cap) | `{documents: [{path, title, bytes, modified_at, tracked}], submodules: [path], more: n}`; `ETag` |
 
 - The same route's `?path=` answers one document, as now; without it, the list. `…` is `api/v2/workspaces/<w>` (and
   the v1 form for the default workspace).
