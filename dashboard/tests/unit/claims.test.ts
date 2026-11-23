@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { claimSummary, formatAgo, loadClaims, parseClaims, shortAgent, type Claim } from '../../src/lib/claims';
+import { claimSummary, loadClaims, parseClaims, shortAgent, type Claim } from '../../src/lib/claims';
+import { formatAgo } from '../../src/lib/format';
 
 const NOW = Date.parse('2026-05-01T10:30:00Z');
 const claim = (task: string, overrides: Partial<Claim> = {}): Claim => ({

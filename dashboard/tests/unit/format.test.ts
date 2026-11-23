@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { formatMinutes, formatMinutesRange, formatWhen } from '../../src/lib/format';
+import { formatAgoOrDate, formatMinutes, formatMinutesRange, formatWhen } from '../../src/lib/format';
+
+describe('formatAgoOrDate', () => {
+  const now = Date.parse('2026-05-01T12:00:00Z');
+  const before = (seconds: number) => new Date(now - seconds * 1000).toISOString();
+  it.each([
+    [30, 'just now'],
+    [60, '1 min ago'],
+    [3599, '59 min ago'],
+    [3600, '1 h ago'],
+    [86_399, '23 h ago'],
+    [86_400, '1 d ago'],
+    [86_400 * 30 - 1, '29 d ago'],
+  ])('%i s ago: %s', (seconds, text) => {
+    expect(formatAgoOrDate(before(seconds), now)).toBe(text);
+  });
+
+  it('its date after 30 days; the text as it is when it is no time', () => {
+    expect(formatAgoOrDate('2026-03-01T10:00:00Z', now)).toBe('2026-03-01');
+    expect(formatAgoOrDate('soon', now)).toBe('soon');
+  });
+});
 
 describe('formatMinutes', () => {
   it('rounds to whole minutes and switches to hours', () => {

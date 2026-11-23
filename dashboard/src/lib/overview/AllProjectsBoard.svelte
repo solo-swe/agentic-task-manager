@@ -11,7 +11,8 @@
     type AllBoardColumn,
     type BoardMatch,
   } from '../allboard';
-  import { formatAgo, shortAgent } from '../claims';
+  import { shortAgent } from '../claims';
+  import { formatAgo } from '../format';
   import { searchProjects, type ProjectEntry } from '../load';
   import { dashboard } from '../state.svelte';
   import { kindStyle, priorityStyle, typeStyle } from '../theme';

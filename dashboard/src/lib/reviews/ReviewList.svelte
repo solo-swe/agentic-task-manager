@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TaskLinks } from '../compmd';
+  import { formatAgoOrDate } from '../format';
   import { readStored, writeStored } from '../prefs';
   import Icon from '../ui/Icon.svelte';
   import { groupReviews, waitedFor } from './page';
@@ -135,14 +136,7 @@
     onopen(entry.review.reference, e.metaKey || e.ctrlKey, entry);
   }
 
-  function ago(at: string): string {
-    const seconds = (Date.now() - Date.parse(at)) / 1000;
-    if (!Number.isFinite(seconds)) return at;
-    if (seconds < 60) return 'just now';
-    const [unit, size] =
-      seconds < 3600 ? ['min', 60] : seconds < 86400 ? ['h', 3600] : seconds < 86400 * 30 ? ['d', 86400] : [null, 0];
-    return unit ? `${Math.floor(seconds / (size as number))} ${unit} ago` : at.slice(0, 10);
-  }
+  const ago = (at: string) => formatAgoOrDate(at, Date.now());
 </script>
 
 <div class="review-list" id="review-list">

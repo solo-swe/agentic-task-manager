@@ -1,6 +1,6 @@
 <script lang="ts">
   // One project on the overview (docs/multi-project-dashboard-proposal.md 3.5), from its server summary
-  import { formatAgo } from '../claims';
+  import { formatAgo } from '../format';
   import type { ProjectEntry } from '../load';
   import { needsYou, statsLine } from '../projects';
   import { dashboard } from '../state.svelte';

@@ -1,8 +1,8 @@
 // What a Task List card shows beyond its chips (T-338): who created and worked on the task, when, how long it took,
 // and its latest outcome or handoff, from what the task already holds (no new data loads).
 import { approvedBy } from './actors';
-import { formatAgo, shortAgent } from './claims';
-import { formatMinutes } from './format';
+import { shortAgent } from './claims';
+import { formatAgo, formatMinutes } from './format';
 import { taskNotes } from './notes';
 import type { Note, Task } from './types';
 import { taskKind } from './vocab';

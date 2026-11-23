@@ -15196,7 +15196,7 @@
       "description": "Audit §3-§5's repetition ([the report](docs/codebase-audit-2026-11.md#8-cross-cutting-themes), theme 5). No behaviour changes but C17's dry-run rule.\n\n## CLI\n- A flattened `#[derive(Args)] struct As { agent: Option<String> }` with `fn open(&self, cwd) -> Result<Project>` (38 fields, 17 calls).\n- `trait Shown { fn json(&self) -> Value; fn lines(&self) -> Vec<String>; }` and one `show(ctx, &out)` (92 branches).\n- One `dry(ctx, what)` called after validating and resolving, never before (49 sites).\n\n## Server\n- A `Member { project, stamp }` held for a request, so a document GET opens the project once, not four times.\n- `change::<Body, Out>(made, body, op)` for the eleven review change handlers; one `json_of`; one `conditional(request, tag, headers, load)`; `off_workers(f)`; `Served::is_own_host`.\n\n## App\n- One `with_user(state, w, p, |project| …)` for the fourteen review commands; `fn locked(m)`; `impl From<tauri::Error>` and `From<io::Error>` for `AppError`; one command list that generates the manifest and the capability.\n\nOne area per commit, the full suite between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-22603f058a59"
       ],
@@ -15207,7 +15207,7 @@
         "app/src-tauri/src/commands.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T11:45:10Z",
+      "updated_at": "2026-11-23T11:47:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15221,7 +15221,23 @@
       "review": "async",
       "started_at": "2026-11-23T11:23:32Z",
       "started_by": "claude:0f56a916",
-      "commit": "ec421337316e4d5e6f40b4d3bb9b42344eb9b510"
+      "commit": "2ef792e0b4e1e365e78a40b3f73e111a9404277c",
+      "code_reviews": [
+        {
+          "id": "01a2083b-1ee3-73a3-acf7-c6c40326adaf",
+          "ref": "CR-129"
+        }
+      ],
+      "review_requested_at": "2026-11-23T11:47:02Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-23T11:47:02Z",
+          "kind": "review",
+          "text": "CR-129: The front ends: one locked(), one dry-run rule, one host check",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-227337ddbf84",
@@ -15235,7 +15251,7 @@
       "description": "Audit §7's repetition ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported-4)). No behaviour change; the e2e suite is the check.\n\n- One `request<T>(url, {method, body, since})` in `api/http.ts` returning `{status, body, etag}` and mapping `{error}` the same way, for the six fetch wrappers; URL building only in `http.ts`; `ipcFetch` honours `init` (D14).\n- One `formatAgo` and `formatDateTime` in `format.ts` for the three \"ago\" formats and the bare `toLocaleString()` calls.\n- `taskCardState(task)`, `<SprintBadge>`, `<TaskWaits>` for `TaskCard` and `KanbanCard`.\n- Split `ReviewPage.svelte` (1,855 lines: the file tree, submit, overview, comments, keys) and `state.svelte.ts` (1,146: the saved view, the app update, the project cache, the loader).\n- Start moving `app.css`'s component styles into their components (`.detail-*` first); inline `font-size:13px` and colours in `DetailPanel` become classes on tokens.\n- Hand-made popovers (Progress, Activity), the project selector's listbox and the card's `div role=button` become Bits UI pieces or buttons.\n\nOne piece per commit.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-226b057c6a44"
       ],
@@ -15247,7 +15263,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T16:21:22Z",
+      "updated_at": "2026-11-23T11:47:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15258,7 +15274,9 @@
       ],
       "sprint": "Audit and tabs",
       "number": 683,
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-23T11:47:08Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83db95b7695d",

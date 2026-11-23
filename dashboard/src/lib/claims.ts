@@ -1,6 +1,6 @@
 // Live claims (which agent works on which task), from the gitignored claims.json snapshot that `atm` writes next to
 // tasks.json, served as p/<id>/claims.json. The file is optional: a project without one simply has no claims.
-import { formatMinutes } from './format';
+import { formatAgo } from './format';
 import { browserFetch, projectFileUrl, type Fetch } from './api/http';
 
 export interface Claim {
@@ -51,11 +51,6 @@ export function shortAgent(agent: string): string {
   const at = agent.indexOf('@');
   const colon = agent.indexOf(':', at + 1);
   return at > 0 && colon > at ? agent.slice(0, colon) : agent;
-}
-
-export function formatAgo(iso: string, now: number): string {
-  const minutes = (now - Date.parse(iso)) / 60_000;
-  return minutes < 1 ? 'just now' : `${formatMinutes(minutes)} ago`;
 }
 
 /** One line for a card: "claude:e5ea9db0 · dev/x · 12 m ago". */
