@@ -19383,7 +19383,7 @@
       "description": "Today the app's sidebar only sets the current tab's project, which the tab selector chevron already does. Design what replaces it, in `docs/sidebar-overhaul-design.md`, together with the user.\n\n## The sidebar (app)\nA **scope selector** (All, or one project) and six items for the selected scope, each with a proper icon:\n\n1. **Overview**: the project's current Project tab, or the All Project Cards view for All.\n2. **Inbox** (new): raw user input, later analyzed and either turned into tasks or discarded. A simpler task list of its own, with archiving, and three states only: *created*, *discarded* (with a reason), *injected* (with links to the tasks made from it). Lets the user jot input from the app or webapp quickly without distracting working agents.\n3. **Tasks**: a page with the current Board, List and Dependencies tabs (no Dependencies for All).\n4. **Code Reviews**: the current Reviews tab's content.\n5. **Documents** (new): a list of all documents in the repo, opened in the viewer to read.\n6. **Analysis**: the current Progress and Agents tabs.\n\n## Tabs and navigation\n- Clicking an item always opens a **new tab**, never replaces the current one.\n- The tab selector chevron goes away in the app (it stays in the webapp).\n- A tab's title reads `[<short project name>|All] - [Overview|Inbox|Tasks|…]`, with the item's icon.\n- A link inside a tab (a review, say) opens **in the same tab**, and Back returns to where the user was, never a random place. Build on [the tabs design](docs/tabs-and-navigation-design.md).\n\n## The webapp\nNo sidebar: still a single page with tabs, one per item (Inbox and Documents are just more tabs).\n\n## Also in the design\n- The All-projects activity pill moves inside the tab.\n- The All-projects search and the Reviews search move up in the tab, placed like the project search.\n\n## Then\n- Write **Inbox** as its own design document (`docs/inbox-design.md`): data model, states, archiving, API, how agents analyze and inject items.\n- Write **Documents** as its own design document (`docs/documents-design.md`): which files are listed, how they are found, the viewer.\n- Decompose all three designs into implementation tasks in this sprint with `/atm-create-tasks`, so it becomes the full sprint.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/sidebar-overhaul-design.md",
@@ -19391,9 +19391,9 @@
         "docs/documents-design.md"
       ],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T22:41:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19402,7 +19402,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "with": "user",
-      "number": 728
+      "number": 728,
+      "started_at": "2026-11-23T22:41:58Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d97e12924d39",
