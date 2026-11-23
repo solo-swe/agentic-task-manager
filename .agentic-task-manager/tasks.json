@@ -1830,7 +1830,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 727
+    "next_number": 728
   },
   "tasks": [
     {
@@ -15124,7 +15124,7 @@
         "crates/atm-review/src/model.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T01:31:45Z",
+      "updated_at": "2026-11-23T01:52:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15138,7 +15138,7 @@
       "review": "async",
       "started_at": "2026-11-22T23:44:03Z",
       "started_by": "claude:0f56a916",
-      "commit": "9a9832a59e22693bfc174505fdb03de3d545f021"
+      "commit": "bb5701908a50cddd467ea8af05e47b8d4e725a99"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22728aee8e9c",
@@ -18449,6 +18449,41 @@
           "by": "claude:0f56a916"
         }
       ]
+    },
+    {
+      "id": "01a2061f-351f-71f3-a573-ea15e4c70a99",
+      "name": "Review watch: idle while it waits, no busy loop; none left running once its shell is gone",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "review",
+        "perf"
+      ],
+      "description": "`atm review watch` burns CPU while it waits for a review to change. On Hakan's Mac (2026-11-23) four watches each averaged 8–12% of a core over hours, and one `--once` watch was at 98%. A watch should sit idle until a review changes.\n\n## Change\n- Find the busy loop in atm-lib's `review_listen` (`watch.rs`, `wait.rs`, `lease.rs`, the store's change channel) and fix it, so a waiting watch uses next to no CPU: it blocks on the change notice, or wakes at its recheck interval, never spins.\n- A watch whose shell has gone (its parent stopped) should not keep running: an orphaned watch was seen, started hours before. Check how a watch notices it, and stop then.\n\n## Tests\n- A watch with nothing to report stays idle: its CPU time over a few seconds of waiting is near zero (a CLI test in `tests/scripts/`).\n- The existing watch tests: a change is still reported at once.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/review_listen/watch.rs",
+        "crates/atm-lib/src/review_listen/wait.rs",
+        "crates/atm-lib/src/review_listen/lease.rs"
+      ],
+      "created_at": "2026-11-23T01:57:18Z",
+      "updated_at": "2026-11-23T01:57:24Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-23T01:57:18Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "review": "async",
+      "number": 727,
+      "started_at": "2026-11-23T01:57:24Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

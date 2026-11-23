@@ -7,6 +7,38 @@ use super::{
     old_seen_key, parse_iso, reviews, save_cursor, seen_key, starting_point, with_parents, work_of,
 };
 
+/// How often a watch looks in full though nothing it can see moved (ATM-727): a comment not about the agent's work
+/// yet may become so as the agent edits a file (ATM-663, R5), which neither the reviews nor the task file show.
+const FULL_RECHECK: Duration = Duration::from_secs(60);
+
+/// What a look reads, cheaply (ATM-727): the reviews' stamp ([`FileStore::stamp`]) and the task file's time. A
+/// recheck while it stays the same doesn't look: a look reads every review, the tasks and git's working copy.
+fn quiet_stamp(
+    store: &FileStore,
+    root: Option<&Path>,
+) -> ((u64, u128), Option<std::time::SystemTime>) {
+    let tasks = root.and_then(|r| {
+        std::fs::metadata(r.join(atm_common::TASK_DIR).join(atm_common::TASKS_FILE))
+            .and_then(|m| m.modified())
+            .ok()
+    });
+    (store.stamp(), tasks)
+}
+
+/// The process that started this one, while it runs (ATM-727): once the shell that ran a watch is gone, the watch is
+/// another process's (the system's), and nothing reads what it prints. 0 where it can't be known (Windows): it never
+/// changes there.
+fn parent() -> u32 {
+    #[cfg(unix)]
+    {
+        std::os::unix::process::parent_id()
+    }
+    #[cfg(not(unix))]
+    {
+        0
+    }
+}
+
 /// What a watch is asked for, beyond its time (ATM-624).
 #[derive(Debug, Clone, Default)]
 pub struct WatchOptions {
@@ -48,9 +80,11 @@ pub fn watch(
     let lease = Lease::take(lease_file(root.as_deref(), me));
     ready();
     let deadline = Instant::now() + timeout;
+    let started_by = parent();
     let mut count = 0;
     // The first look is at once: what came while no watch ran
     let mut first = true;
+    let mut last_look = (quiet_stamp(&store, root.as_deref()), Instant::now());
     loop {
         lease.renew();
         if !first {
@@ -58,10 +92,23 @@ pub fn watch(
             if left.is_zero() {
                 return Ok(count);
             }
-            let _ = told.recv_timeout(left.min(RECHECK));
+            let notified = told.recv_timeout(left.min(RECHECK)).is_ok();
+            // Its shell gone (stopped by its harness): no one reads it any more (ATM-727)
+            if parent() != started_by {
+                return Ok(count);
+            }
+            // Told of no change, and nothing it reads moved: no look, unless the last full one is old (ATM-727)
+            if !notified
+                && quiet_stamp(&store, root.as_deref()) == last_look.0
+                && last_look.1.elapsed() < FULL_RECHECK
+            {
+                continue;
+            }
         }
         first = false;
         while told.try_recv().is_ok() {}
+        // Taken before the look, so a change made while it reads is seen by the next
+        last_look = (quiet_stamp(&store, root.as_deref()), Instant::now());
         let news = look(
             project,
             root.as_deref(),
