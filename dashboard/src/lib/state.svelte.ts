@@ -869,7 +869,7 @@ export class DashboardState {
    * time they come, or a newer load was asked for (ATM-675) */
   private async loadProjectData(project: string, ticket: Ticket): Promise<boolean> {
     const key = this.#keptKey(project);
-    const [result, claims, trees, , stats] = await Promise.all([
+    const loads = Promise.all([
       // The validators are this project's (switchProject forgets another's), from its page or the Omniboard
       loadTasks(project, browserFetch, this.#validators),
       loadClaims(project),
@@ -881,16 +881,20 @@ export class DashboardState {
       this.#archiveWanted
         ? this.refreshArchive().catch((e) => console.error('Reloading the archive failed:', e))
         : undefined,
-      // The whole project's figures (ATM-722), on every load: they run to now. A failure leaves the last ones
-      loadStats(project).catch((e): null => {
-        console.error('Loading the stats failed:', e);
-        return null;
-      }),
     ]);
+    // The whole project's figures (ATM-722), on every load: they run to now. Asked for with the rest, but the tasks
+    // never wait for them (the figures take atm longer to work out): they come in when they come, if the page still
+    // shows the project. A failure leaves the last ones
+    void loadStats(project).then(
+      (stats) => {
+        if (ticket.current(key)) this.stats = stats;
+      },
+      (e) => console.error('Loading the stats failed:', e),
+    );
+    const [result, claims, trees] = await loads;
     // Another project shown meanwhile (a quick switch of tab), or a newer load: this answer is not the page's, the
     // worktrees neither
     if (!ticket.current(key)) return false;
-    if (stats) this.stats = stats;
     if (!trees.unchanged) {
       this.#worktreesValidators = trees.validators;
       this.#worktrees = trees.worktrees;

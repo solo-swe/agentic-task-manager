@@ -15263,7 +15263,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T11:51:06Z",
+      "updated_at": "2026-11-23T11:53:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15277,7 +15277,7 @@
       "review": "async",
       "started_at": "2026-11-23T11:47:08Z",
       "started_by": "claude:0f56a916",
-      "commit": "87369329af0cfb909cea642404ab0317d56957fc"
+      "commit": "4052ba85374ded04eb491f0ad8bd3da2b25e2708"
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83db95b7695d",
@@ -18457,7 +18457,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-23T00:47:10Z",
+      "updated_at": "2026-11-23T11:54:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18546,6 +18546,30 @@
           "at": "2026-11-23T00:47:10Z",
           "kind": "note",
           "text": "ATM-699: CR-117 passed with two misses Hakan found by hand. Selected text went to WebKit’s menu, whose Reload ATM-699 removed. The menu was drawn under the details panel and the sheets. The e2e tried the menu only on the bare page. Worth asking: test a new overlay inside each layer (details, sheet), and treat a design line like “the system’s items over text” as a case to try in the app.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T11:54:02Z",
+          "kind": "note",
+          "text": "ATM-722: moving figures to atm broke 23 e2e specs at once, for three reasons the unit tests could not see: phases not read as sprints, the fixture atm running on the real clock while the page clock was fixed, and the overview spec giving no summaries. Worth a fast e2e of the touched area before the full run, and a fixture that follows the page clock by default (done now).",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T11:54:04Z",
+          "kind": "note",
+          "text": "CR ranges: a task done in steps between other tasks (ATM-681, nine commits before and three after ATM-722) gets a review whose range holds the other tasks commits too. The summary lists its own, but the diff mixes them. Worth asking: a review of a list of commits, or doing a task in one run.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T11:54:06Z",
+          "kind": "note",
+          "text": "The audit refactors (ATM-681 to 683) are each several days of work: 92 json branches, 49 dry-run sites, two 1,000+ line files to split. Each went to review with its tractable pieces done and the rest listed under To look at. Worth deciding: a follow-up task per remaining piece, or close them as done enough.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T11:54:08Z",
+          "kind": "note",
+          "text": "Agent slips this session: a grep pattern with backticks and a | inside the quotes was rejected as a complex command. Now saved: one plain word per grep. Also a test run started while the agent was still editing, so it ran on half-changed files and had to run again.",
           "by": "claude:0f56a916"
         }
       ]

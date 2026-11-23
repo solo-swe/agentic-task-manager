@@ -1225,10 +1225,12 @@ export class TasksServer {
     return this;
   }
 
-  /** Work out the task views now, when the data is set, so no request waits for atm (the timing tests measure them) */
+  /** Work out the task views and the whole project's stats now, when the data is set, so no request waits for atm:
+   * the timing tests measure them, and atm runs in this process, so a request working one out holds up the others */
   private warm() {
     if (this.body !== null) asTaskViews(this.body, this.archiveBody);
     if (this.body !== null && this.archiveBody !== null) asTaskViews(this.body, this.archiveBody, true);
+    if (this.body !== null && isTaskFile(this.body)) asStats(this.body, this.archiveBody, new URLSearchParams());
   }
 
   fail(status = 404) {

@@ -145,6 +145,22 @@ describe('DashboardState', () => {
       ]);
     });
 
+    it('the tasks never wait for the stats: they show while atm still works the figures out; the figures follow', async () => {
+      const answering = server({ projects: [project('p2')] });
+      let answerStats: (r: Response) => void = () => {};
+      fetchMock = vi.fn((url: string) =>
+        String(url).endsWith('/stats') ? new Promise<Response>((resolve) => (answerStats = resolve)) : answering(url),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const s = new DashboardState();
+      await s.load();
+      expect(s.loaded).toBe(true);
+      expect(s.tasks.length).toBeGreaterThan(0);
+      expect(s.stats).toBeNull();
+      answerStats(new Response(JSON.stringify({ progress: { archived: 0 } }), { status: 200 }));
+      await vi.waitFor(() => expect(s.stats).toEqual({ progress: { archived: 0 } }));
+    });
+
     it('with several, lands on the overview without opening a project; it reads every project’s tasks', async () => {
       fetchMock = server({ projects: [project('p2'), project('p3')] });
       vi.stubGlobal('fetch', fetchMock);
