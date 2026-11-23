@@ -33,6 +33,14 @@ impl Vocabulary {
         })
     }
 
+    /// The active sprint, if one is (ATM-681: the one lookup; the vocabulary allows one at most).
+    #[must_use]
+    pub fn active_sprint(&self) -> Option<&Map<String, Value>> {
+        self.sprints
+            .iter()
+            .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
+    }
+
     /// The release whose ID is `id` (exactly, as stored: ATM-681's one lookup), if there is one.
     #[must_use]
     pub fn find_release(&self, id: &Value) -> Option<&Map<String, Value>> {
@@ -284,6 +292,21 @@ mod tests {
 
     fn vocab(meta: Value) -> Vocabulary {
         Vocabulary::of_meta(&task(meta)).unwrap()
+    }
+
+    #[test]
+    fn the_active_sprint_is_the_one_active_and_none_without() {
+        let id = |v: &Vocabulary| v.active_sprint().and_then(|s| s.get("id")).cloned();
+        // The vocabulary refuses two active sprints, so there is at most one to find
+        let one = vocab(json!({"sprints": [
+            {"id": "A", "state": "closed"},
+            {"id": "B", "state": "active"},
+            {"id": "C", "state": "planned"}
+        ]}));
+        assert_eq!(id(&one), Some(json!("B")));
+        let none = vocab(json!({"sprints": [{"id": "A", "state": "planned"}, {"id": "B"}]}));
+        assert_eq!(id(&none), None);
+        assert_eq!(id(&vocab(json!({}))), None);
     }
 
     #[test]

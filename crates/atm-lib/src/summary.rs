@@ -151,10 +151,7 @@ fn recent_sprints(vocab: &Vocabulary, tasks: &[&Task], kinds: &[Option<Kind>]) -
 }
 
 fn active_sprint(vocab: &Vocabulary) -> Option<&Map<String, Value>> {
-    vocab
-        .sprints
-        .iter()
-        .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
+    vocab.active_sprint()
 }
 
 fn in_sprint(vocab: &Vocabulary, task: &Task, sprint: &Map<String, Value>) -> bool {

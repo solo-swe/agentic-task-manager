@@ -518,11 +518,7 @@ pub fn start_sprint(project: &mut Project, name: &str) -> Result<Value> {
             }
             _ => {}
         }
-        if let Some(active) = vocab
-            .sprints
-            .iter()
-            .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
-        {
+        if let Some(active) = vocab.active_sprint() {
             return Err(invalid(format!(
                 "the sprint {} is active; close it first (one active sprint at a time)",
                 py_repr(&json!(sprint_id(active)))
@@ -872,9 +868,7 @@ fn move_target(vocab: &Vocabulary, task: &Task, to: &str) -> Result<Option<Strin
     match to {
         "backlog" => Ok(None),
         "active" => vocab
-            .sprints
-            .iter()
-            .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
+            .active_sprint()
             .map(|s| Some(sprint_id(s)))
             .ok_or_else(|| invalid("no sprint is active (atm sprint start <name>)")),
         "next" => {

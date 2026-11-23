@@ -160,10 +160,7 @@ pub fn of(vocab: &Vocabulary, task: &Task, context: Context<'_>) -> Answer {
 /// Whether `task` is in the active sprint, or there is none: when work to do together with the user is due.
 #[must_use]
 pub fn in_active_scope(vocab: &Vocabulary, task: &Task) -> bool {
-    let active = vocab
-        .sprints
-        .iter()
-        .find(|s| s.get("state").and_then(Value::as_str) == Some("active"));
+    let active = vocab.active_sprint();
     active.is_none_or(|a| {
         vocab
             .find_sprint(task.get("sprint"))

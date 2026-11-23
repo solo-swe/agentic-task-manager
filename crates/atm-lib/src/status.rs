@@ -40,11 +40,7 @@ fn counts(tasks: &[&Task], key: impl Fn(&Task) -> Vec<String>) -> Map<String, Va
 }
 
 fn active_sprint(vocab: &Vocabulary, tasks: &[&Task]) -> Value {
-    let Some(active) = vocab
-        .sprints
-        .iter()
-        .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
-    else {
+    let Some(active) = vocab.active_sprint() else {
         return Value::Null;
     };
     let id = active.get("id").and_then(Value::as_str);

@@ -16352,14 +16352,14 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 5 of §7.\n\n## Change\nA context menu component in `ui/`, used in the app only (the browser keeps its own):\n- on a link, card or row: **Open**, **Open in New Tab**, **Open in New Window**, **Copy Link** (the `atm://` form, §4.4);\n- on a title-bar tab: **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs**;\n- elsewhere: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text.\n\nWebKit's default menu is turned off in the app, as its Reload bypasses the app's reload.\n\n## Tests\ne2e in the app: each menu's items and what each does; Copy Link copies the `atm://` address.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c1592d63e49a",
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
       "files": [],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-23T00:44:17Z",
+      "updated_at": "2026-11-23T00:47:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16416,6 +16416,18 @@
           "kind": "review",
           "text": "CR-124: Right-click on selected text: atm’s menu with Copy; the menu above every layer",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:46:35Z",
+          "kind": "note",
+          "text": "Approved: in CR-124 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:47:01Z",
+          "kind": "outcome",
+          "text": "Approved in CR-124: selected text gets atm’s menu with Copy (WebKit’s brought its Reload back); a field keeps the system’s; the menu is drawn above every layer.",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -16423,13 +16435,19 @@
           "from": "2026-11-22T19:35:55Z",
           "to": "2026-11-23T00:25:45Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-23T00:44:17Z",
+          "to": "2026-11-23T00:46:35Z",
+          "outcome": "approved"
         }
       ],
       "started_at": "2026-11-23T00:31:23Z",
       "started_by": "claude:0f56a916",
       "commit": "dc14c353d1464b5c942cbe480caea9c11f0e1a58",
       "review_requested_at": "2026-11-23T00:44:17Z",
-      "review_state": "waiting"
+      "completed_at": "2026-11-23T00:47:01Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15b77d909a3",
@@ -18339,7 +18357,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-22T21:59:10Z",
+      "updated_at": "2026-11-23T00:47:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18422,6 +18440,12 @@
           "at": "2026-11-22T21:59:10Z",
           "kind": "note",
           "text": "ATM-719: under machine load (average ~20) vitest workers fail to start and `pnpm run check` takes 10+ min; a run looked hung for 15 min. Worth asking: run unit tests per area during a task, the whole suite once, and look at what loads the machine (Xcode, the two demo servers left running).",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:47:10Z",
+          "kind": "note",
+          "text": "ATM-699: CR-117 passed with two misses Hakan found by hand. Selected text went to WebKit’s menu, whose Reload ATM-699 removed. The menu was drawn under the details panel and the sheets. The e2e tried the menu only on the bare page. Worth asking: test a new overlay inside each layer (details, sheet), and treat a design line like “the system’s items over text” as a case to try in the app.",
           "by": "claude:0f56a916"
         }
       ]
