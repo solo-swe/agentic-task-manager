@@ -21,9 +21,7 @@ pub struct StatusReport {
     pub has_sprints: bool,
 }
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
+use atm_common::task_id as id_of;
 
 fn name_of(task: &Task) -> Value {
     task.get("name").cloned().unwrap_or_else(|| json!(""))

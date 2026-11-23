@@ -55,9 +55,7 @@ pub struct Selection {
     pub task_type: Option<String>,
 }
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
+use atm_common::task_id as id_of;
 
 fn sprint_id<'v>(vocab: &'v Vocabulary, task: &Task) -> Option<&'v str> {
     vocab

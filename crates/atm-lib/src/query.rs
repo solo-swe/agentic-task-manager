@@ -44,15 +44,10 @@ pub struct Filters {
     pub archived: bool,
 }
 
-/// In PR: a recorded PR, not merged yet (DM-4.3).
-#[must_use]
-pub fn in_open_pr(task: &Task) -> bool {
-    task.get("pr").is_some_and(Value::is_object) && !task.get("merged_at").is_some_and(truthy)
-}
+/// In PR: a recorded PR, not merged yet (DM-4.3): atm-common's one rule.
+pub use atm_common::archive::in_open_pr;
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
+use atm_common::task_id as id_of;
 
 /// The IDs of the to-do tasks whose dependencies are all done (a dependency only in the archive is done).
 ///

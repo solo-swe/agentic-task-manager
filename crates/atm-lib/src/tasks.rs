@@ -38,9 +38,7 @@ pub struct TaskView {
     pub duplicated_by: Vec<String>,
 }
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
+use atm_common::task_id as id_of;
 
 /// The links that point at a task, among `tasks` (SR-2.8, ATM-719): the tasks that depend on it, relate to it and
 /// duplicate it. Worked out once for every task, as the tasks route serves each one's (`derived.required_by`,

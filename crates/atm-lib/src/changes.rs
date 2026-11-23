@@ -82,9 +82,7 @@ pub struct StatusChange {
     pub view: Option<TaskView>,
 }
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
+use atm_common::task_id as id_of;
 
 /// The tasks as a list to read, and the index of the one with this ID (the first, as `find_task` takes it).
 fn snapshot(document: &Value, task_id: &str) -> (Vec<Task>, Option<usize>) {

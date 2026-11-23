@@ -51,6 +51,21 @@ pub fn started_by(task: &Task) -> Option<&serde_json::Value> {
         .or_else(|| task.get("agent"))
 }
 
+/// A task's ID, when it has one as text (ATM-681: the one copy).
+#[must_use]
+pub fn task_id(task: &Task) -> Option<&str> {
+    task.get("id").and_then(serde_json::Value::as_str)
+}
+
+/// Whether `label` is a label atm accepts: lowercase letters, digits, `-` and `_`, 1 to 32 characters.
+#[must_use]
+pub fn valid_label(label: &str) -> bool {
+    (1..=32).contains(&label.len())
+        && label
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,5 +90,30 @@ mod tests {
             Some(&json!("b"))
         );
         assert_eq!(started_by(&task(json!({}))), None);
+    }
+
+    #[test]
+    fn a_tasks_id_is_its_text_id_only() {
+        let task = |v: serde_json::Value| v.as_object().unwrap().clone();
+        assert_eq!(task_id(&task(json!({"id": "T-1"}))), Some("T-1"));
+        assert_eq!(task_id(&task(json!({"id": 7}))), None);
+        assert_eq!(task_id(&task(json!({}))), None);
+    }
+
+    #[test]
+    fn a_label_is_lowercase_letters_digits_dash_and_underscore_up_to_32() {
+        for (label, ok) in [
+            ("ux", true),
+            ("spike-2", true),
+            ("a_b", true),
+            (&"a".repeat(32), true),
+            (&"a".repeat(33), false),
+            ("", false),
+            ("UX", false),
+            ("a b", false),
+            ("é", false),
+        ] {
+            assert_eq!(valid_label(label), ok, "{label:?}");
+        }
     }
 }

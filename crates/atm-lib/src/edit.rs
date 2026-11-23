@@ -98,12 +98,7 @@ fn py_list(value: Option<&Value>, key: &str) -> Result<Vec<Value>> {
 }
 
 /// The label rule: lowercase letters, digits, `-` and `_`, at most 32 characters.
-fn valid_label(label: &str) -> bool {
-    (1..=32).contains(&label.len())
-        && label
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
-}
+use atm_common::valid_label;
 
 fn check_labels(labels: &[Value]) -> Result<()> {
     for label in labels {
