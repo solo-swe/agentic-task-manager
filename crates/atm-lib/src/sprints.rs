@@ -930,20 +930,7 @@ pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec
         let vocab = Vocabulary::of_document(&work.document)?;
         let mut plans: Vec<(usize, Option<String>)> = Vec::new();
         for task_id in ids {
-            let at = work.document["tasks"]
-                .as_array()
-                .and_then(|list| list.iter().position(|t| id_of(t) == Some(task_id.as_str())));
-            let Some(at) = at else {
-                let archived = work.archive()?["tasks"]
-                    .as_array()
-                    .is_some_and(|list| list.iter().any(|t| id_of(t) == Some(task_id.as_str())));
-                let hint = if archived {
-                    " (it is archived: atm db unarchive brings it back)"
-                } else {
-                    ""
-                };
-                return Err(Error::NotFound(format!("no task {task_id}{hint}")));
-            };
+            let at = crate::lookup::task_at(work, task_id)?;
             let task = work.document["tasks"][at]
                 .as_object()
                 .cloned()

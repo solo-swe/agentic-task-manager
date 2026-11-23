@@ -13,32 +13,12 @@ use atm_db::working::Working;
 use atm_vcs::GitVcs;
 use serde_json::{Map, Value, json};
 
+use crate::lookup::{no_task, task_at};
 use crate::project::Project;
 
 fn needs_git(vcs: Option<&GitVcs>) -> Result<&GitVcs> {
     vcs.filter(|v| v.in_repository())
         .ok_or_else(|| Error::failed("atm vcs commit needs a git repository"))
-}
-
-/// The position of the task with this ID in the change's document, or an error that says when it is archived.
-fn task_at(work: &mut Working, task_id: &str) -> Result<usize> {
-    let at = work.document["tasks"].as_array().and_then(|list| {
-        list.iter()
-            .position(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
-    });
-    if let Some(at) = at {
-        return Ok(at);
-    }
-    let archived = work.archive()?["tasks"].as_array().is_some_and(|list| {
-        list.iter()
-            .any(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
-    });
-    let hint = if archived {
-        " (it is archived: atm db unarchive brings it back)"
-    } else {
-        ""
-    };
-    Err(Error::NotFound(format!("no task {task_id}{hint}")))
 }
 
 /// Apply the workflow's trailer rule: `forbid` removes Co-Authored-By lines, `{require}` adds the missing lines.
@@ -173,12 +153,10 @@ pub fn commit_task(
     let task = if let Some(task) = store.get_task(task_id)? {
         task.clone()
     } else {
-        let hint = if store.get_archived_task(task_id)?.is_some() {
-            " (it is archived: atm db unarchive brings it back)"
-        } else {
-            ""
-        };
-        return Err(Error::NotFound(format!("no task {task_id}{hint}")));
+        return Err(no_task(
+            task_id,
+            store.get_archived_task(task_id)?.is_some(),
+        ));
     };
     let meta = store
         .document()?

@@ -17,6 +17,7 @@ pub mod edit;
 pub mod foreign;
 pub mod leases;
 pub mod lifecycle;
+mod lookup;
 pub mod loop_rules;
 pub mod maintenance;
 pub mod project;

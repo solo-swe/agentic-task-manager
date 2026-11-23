@@ -283,8 +283,7 @@ pub fn change_task_status(
         let here = work.here().clone();
         let (tasks, at) = snapshot(&work.document, task_id);
         let Some(at) = at else {
-            let hint = if in_archive(task_id)? { " (it is archived: atm db unarchive brings it back)" } else { "" };
-            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
+            return Err(crate::lookup::no_task(task_id, in_archive(task_id)?));
         };
         if OWN_LEASE_COMMANDS.contains(&command) {
             let then = format!("atm task state {task_id} {}", command_state(command));
@@ -550,12 +549,7 @@ pub fn add_task_note(project: &mut Project, task_id: &str, text: &str) -> Result
             let archived = archived_tasks(work)?
                 .iter()
                 .any(|t| id_of(t) == Some(task_id));
-            let hint = if archived {
-                " (it is archived: atm db unarchive brings it back)"
-            } else {
-                ""
-            };
-            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
+            return Err(crate::lookup::no_task(task_id, archived));
         };
         let mut task = tasks[at].clone();
         let stamp = now_iso();

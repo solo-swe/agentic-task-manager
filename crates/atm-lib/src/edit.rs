@@ -854,18 +854,7 @@ pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit)
     let actor = project.actor().map(String::from);
     project.change(|work: &mut Working| {
         let mut archived = Archived::default();
-        let at = work.document["tasks"].as_array().and_then(|list| {
-            list.iter()
-                .position(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
-        });
-        let Some(at) = at else {
-            let hint = if archived.has(work, &json!(task_id))? {
-                " (it is archived: atm db unarchive brings it back)"
-            } else {
-                ""
-            };
-            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
-        };
+        let at = crate::lookup::task_at(work, task_id)?;
         let mut task = work.document["tasks"][at]
             .as_object()
             .cloned()

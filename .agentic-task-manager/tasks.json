@@ -17744,7 +17744,7 @@
         "crates/atm-review/src/model.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T23:44:03Z",
+      "updated_at": "2026-11-22T23:55:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17757,7 +17757,8 @@
       "number": 681,
       "review": "async",
       "started_at": "2026-11-22T23:44:03Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "9edf734a888b3125c25c2d0bee9b9f0ed253a118"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22728aee8e9c",
