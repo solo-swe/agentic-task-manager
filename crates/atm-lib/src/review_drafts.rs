@@ -9,7 +9,6 @@
 
 use std::path::{Path, PathBuf};
 
-use atm_common::sha256::sha256_hex;
 use atm_common::{Error, Result};
 use serde::{Deserialize, Serialize};
 
@@ -117,7 +116,7 @@ impl Drafts {
             root.map(|r| r.display().to_string()).unwrap_or_default()
         );
         self.dir
-            .join(format!("{}.json", &sha256_hex(key.as_bytes())[..16]))
+            .join(atm_common::home::keyed_file_name(&key, ".json"))
     }
 
     fn read(file: &Path) -> Result<Kept> {

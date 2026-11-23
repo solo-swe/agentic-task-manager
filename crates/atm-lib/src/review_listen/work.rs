@@ -2,7 +2,7 @@
 
 use super::{
     Chain, Comment, FileStore, HashMap, Kind, Path, PathBuf, Project, Review, ReviewHeader, Status,
-    Value, reviews, sha256_hex,
+    Value, reviews,
 };
 
 /// What the agent works on, as atm's records have it now.
@@ -31,10 +31,7 @@ pub(super) fn declared_files(task: &atm_common::Task) -> Vec<String> {
 /// task on every look made a look take seconds. In atm's state folder, a file per project.
 pub(super) fn commit_files_file(root: Option<&Path>) -> PathBuf {
     let key = root.map(|r| r.display().to_string()).unwrap_or_default();
-    atm_common::home::state_dir().join("watches").join(format!(
-        "{}.commits.json",
-        &sha256_hex(key.as_bytes())[..16]
-    ))
+    atm_common::home::keyed_state_file("watches", &key, ".commits.json")
 }
 
 pub(super) fn work_of(project: &Project, me: &str) -> Work {

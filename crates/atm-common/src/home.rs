@@ -51,6 +51,19 @@ pub fn state_dir() -> PathBuf {
     state
 }
 
+/// A file's name for `key` (a folder, a session and a folder, …): the first 16 hex digits of its SHA-256, then `ext`,
+/// so a key of any length or character makes a short, safe name (ATM-681: the one rule).
+#[must_use]
+pub fn keyed_file_name(key: &str, ext: &str) -> String {
+    format!("{}{ext}", &crate::sha256::sha256_hex(key.as_bytes())[..16])
+}
+
+/// The file for `key` in the state folder's `kind` folder (`watches`, …), named by [`keyed_file_name`].
+#[must_use]
+pub fn keyed_state_file(kind: &str, key: &str, ext: &str) -> PathBuf {
+    state_dir().join(kind).join(keyed_file_name(key, ext))
+}
+
 /// The legacy folder an older atm may still write to, when `home` is the state folder its content moved to (T-501):
 /// `~/.agentic-task-manager` once it holds the move's note, and only for the platform's state folder, never one set
 /// with `ATM_STATE_DIR` or `ATM_HOME` (a test's or another setup's must never take in the user's projects).
@@ -181,6 +194,16 @@ fn write_atomic(path: &Path, text: &str, private: bool) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_keyed_file_is_named_by_its_keys_hash_whatever_the_key() {
+        // SHA-256("") starts e3b0c44298fc1c14
+        assert_eq!(keyed_file_name("", ".json"), "e3b0c44298fc1c14.json");
+        let odd = keyed_file_name("/a/b\u{0}claude:1/../x", ".commits.json");
+        assert_eq!(odd.len(), 16 + ".commits.json".len());
+        assert!(odd[..16].chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(keyed_file_name("a", ".json"), keyed_file_name("b", ".json"));
+    }
 
     #[test]
     fn a_file_is_replaced_whole() {

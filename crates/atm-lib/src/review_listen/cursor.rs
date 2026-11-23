@@ -20,9 +20,7 @@ pub(super) fn cursor_file(root: Option<&Path>, me: &str) -> PathBuf {
         "{}\u{0}{me}",
         root.map(|r| r.display().to_string()).unwrap_or_default()
     );
-    atm_common::home::state_dir()
-        .join("watches")
-        .join(format!("{}.json", &sha256_hex(key.as_bytes())[..16]))
+    atm_common::home::keyed_state_file("watches", &key, ".json")
 }
 
 /// The last watch's cursor; none when there was none, or it can't be read (then the watch starts from now).
