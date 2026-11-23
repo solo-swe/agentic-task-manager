@@ -362,6 +362,12 @@ fn run(args: &[OsString]) -> u8 {
     }
     // Run as someone else: `--agent`, unless the command's `--agent` is a filter (ATM-679)
     let other = as_someone_else(args) && !cli.command.agent_is_a_filter();
+    // An agent harness's session never acts as a person (ATM-660): `--agent` (unless it is a filter) or ATM_AGENT
+    let named = agent_arg(args).filter(|_| !cli.command.agent_is_a_filter());
+    if let Err(error) = atm_lib::actor::check_named(named.as_deref(), &cwd) {
+        report(&error.to_string(), error.code(), as_json);
+        return error.code();
+    }
     if cli.command.renews_claims() && !other {
         renew_own_claims(&cwd);
     }
@@ -399,9 +405,22 @@ fn remind_to_watch(cwd: &Path) {
 /// Whether a command is run as someone else (`--agent`, before any `--`); the caller decides from the parsed command
 /// whether its `--agent` is a filter instead ([`Command::agent_is_a_filter`]).
 fn as_someone_else(args: &[OsString]) -> bool {
-    args.iter().take_while(|a| *a != "--").any(|a| {
-        let a = a.to_string_lossy();
-        a == "--agent" || a.starts_with("--agent=")
+    agent_arg(args).is_some()
+}
+
+/// The name `--agent` gives (before any `--`): `--agent NAME` or `--agent=NAME`; an empty one when it has none.
+fn agent_arg(args: &[OsString]) -> Option<String> {
+    let args: Vec<String> = args
+        .iter()
+        .take_while(|a| *a != "--")
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    args.iter().enumerate().find_map(|(i, a)| {
+        if a == "--agent" {
+            Some(args.get(i + 1).cloned().unwrap_or_default())
+        } else {
+            a.strip_prefix("--agent=").map(String::from)
+        }
     })
 }
 

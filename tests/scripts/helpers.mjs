@@ -35,7 +35,18 @@ process.env.GIT_CONFIG_VALUE_0 = 'false';
 export function baseEnv() {
   const env = { ...process.env, ATM_HOME: TEST_HOME };
   delete env.ATM_STATE_DIR;
-  delete env.CLAUDE_CODE_SESSION_ID;
+  // Every agent harness's markers (ATM-660, atm-lib's `harness_identity`): the suite may run inside one
+  for (const marker of [
+    'CLAUDE_CODE_SESSION_ID',
+    'CLAUDECODE',
+    'CODEX_THREAD_ID',
+    'CODEX_SANDBOX',
+    'GEMINI_CLI',
+    'GEMINI_SESSION_ID',
+    'OPENCODE',
+    'AI_AGENT',
+  ])
+    delete env[marker];
   delete env.ATM_AGENT;
   delete env.ATM_NOW;
   return env;

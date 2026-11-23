@@ -1,0 +1,101 @@
+[
+  {
+    "name": "a Codex session is an agent: codex: and its thread (ATM-660)",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
+    "args": ["task", "add", "--name", "x", "--type", "feature", "--json"],
+    "env": { "CODEX_THREAD_ID": "abc12345-6789" },
+    "expect": { "exit": 0, "stdoutIncludes": ["\"created_by\": \"codex:abc12345\""] }
+  },
+  {
+    "name": "Codex's sandbox alone is an agent too (ATM-660)",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
+    "args": ["task", "add", "--name", "x", "--type", "feature", "--json"],
+    "env": { "CODEX_SANDBOX": "seatbelt" },
+    "expect": { "exit": 0, "stdoutIncludes": ["\"created_by\": \"codex:session\""] }
+  },
+  {
+    "name": "a Gemini CLI session is an agent (ATM-660)",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
+    "args": ["task", "add", "--name", "x", "--type", "feature", "--json"],
+    "env": { "GEMINI_CLI": "1" },
+    "expect": { "exit": 0, "stdoutIncludes": ["\"created_by\": \"gemini:session\""] }
+  },
+  {
+    "name": "Claude Code without its session ID, and a harness naming itself in AI_AGENT, are agents (ATM-660)",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } },
+      "commands": [["sh", "-c", "CLAUDECODE=1 \"$ATM\" task add --name a --type feature --json > claude.txt"]]
+    },
+    "args": ["task", "add", "--name", "x", "--type", "feature", "--json"],
+    "env": { "AI_AGENT": "cursor" },
+    "expect": { "exit": 0, "stdoutIncludes": ["\"created_by\": \"agent:cursor\""] }
+  },
+  {
+    "name": "inside an agent's session, ATM_AGENT naming a person is refused (ATM-660)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "todo" }]
+        }
+      }
+    },
+    "args": ["task", "note", "T-1", "hello"],
+    "env": { "CLAUDE_CODE_SESSION_ID": "abcdef1234", "ATM_AGENT": "Hakan" },
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["claude:abcdef12 is an agent's session: it can't act as Hakan, a person"]
+    }
+  },
+  {
+    "name": "inside an agent's session, --agent naming a person is refused; naming an agent is taken (ATM-660)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "todo" }]
+        }
+      },
+      "commands": [["sh", "-c", "CODEX_THREAD_ID=t1 \"$ATM\" task note T-1 ok --agent codex:other > agent.txt"]]
+    },
+    "args": ["task", "note", "T-1", "hello", "--agent", "Hakan"],
+    "env": { "CODEX_THREAD_ID": "t1" },
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["codex:t1 is an agent's session: it can't act as Hakan, a person"],
+      "files": { "agent.txt": "T-1: note added (1 in all)\n" }
+    }
+  },
+  {
+    "name": "outside a harness, --agent may name anyone: a person at the terminal (ATM-660)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "todo" }]
+        }
+      }
+    },
+    "args": ["task", "note", "T-1", "hello", "--agent", "Hakan"],
+    "expect": { "exit": 0, "stdout": "T-1: note added (1 in all)\n" }
+  },
+  {
+    "name": "a Codex agent can't finish a blocker task without its review (ATM-660)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "in_progress", "review": "blocker" }]
+        }
+      }
+    },
+    "args": ["task", "state", "T-1", "done"],
+    "env": { "CODEX_THREAD_ID": "abc12345" },
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review"]
+    }
+  }
+]

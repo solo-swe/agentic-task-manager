@@ -280,10 +280,15 @@ pub fn set_sprint(task: &mut Task, sprint: Option<&str>, stamp: &str) -> bool {
     true
 }
 
-/// Whether an actor is an agent (a Claude Code session, `claude:…`); anyone else is a person.
+/// The prefixes of the identities atm gives agents (ATM-660): one per harness it recognizes (`atm_lib::actor`), and
+/// `agent:` for a harness that names itself with `AI_AGENT`. The dashboard's `actors.ts` lists the same.
+pub const AGENT_PREFIXES: [&str; 5] = ["claude:", "codex:", "gemini:", "opencode:", "agent:"];
+
+/// Whether an actor is an agent (an identity atm gave a harness's session, [`AGENT_PREFIXES`]); anyone else is a
+/// person.
 #[must_use]
 pub fn is_agent(actor: Option<&str>) -> bool {
-    actor.is_some_and(|a| a.starts_with("claude:"))
+    actor.is_some_and(|a| AGENT_PREFIXES.iter().any(|p| a.starts_with(p)))
 }
 
 #[cfg(test)]

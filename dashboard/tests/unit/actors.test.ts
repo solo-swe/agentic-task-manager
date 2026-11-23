@@ -1,5 +1,7 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { actorsLine, approvedBy, earlierAttempts, isAgent } from '../../src/lib/actors';
+import { readFileSync } from 'node:fs';
+import { actorsLine, AGENT_PREFIXES, approvedBy, earlierAttempts, isAgent } from '../../src/lib/actors';
 import type { Task } from '../../src/lib/types';
 
 const task = (fields: Partial<Task> = {}): Task => ({
@@ -15,8 +17,18 @@ const task = (fields: Partial<Task> = {}): Task => ({
 describe('actors', () => {
   it('"claude:" actors are agents; anyone else is a person', () => {
     expect(isAgent('claude:e5ea9db0')).toBe(true);
+    // Every harness atm recognizes (ATM-660)
+    for (const id of ['codex:abc12345', 'gemini:session', 'opencode:session', 'agent:cursor'])
+      expect(isAgent(id)).toBe(true);
     expect(isAgent('Hakan Serce')).toBe(false);
     expect(isAgent('ci-bot')).toBe(false);
+    expect(isAgent('codex')).toBe(false);
+  });
+
+  it('the prefixes are atm’s own (atm-common’s AGENT_PREFIXES)', () => {
+    const rust = readFileSync(new URL('../../../crates/atm-common/src/edits.rs', import.meta.url), 'utf8');
+    const listed = /pub const AGENT_PREFIXES: \[&str; \d+\] = \[([^\]]*)\]/.exec(rust)![1];
+    expect([...listed.matchAll(/"([^"]+)"/g)].map((m) => m[1])).toEqual([...AGENT_PREFIXES]);
   });
 
   it('approvedBy: who completed it, when that is not who started it (an older agent field counts)', () => {

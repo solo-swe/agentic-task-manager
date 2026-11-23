@@ -48,6 +48,9 @@ clicks and right-click menus as in a browser). Review watches idle while they wa
   skipped task is skipped now, not done), the pace and each sprint's estimate in the loop's order, time use, the
   project's numbers, the time per task, people and agents. `atm project status` prints the forecast. The summaries
   carry the overview's Progress tab (`progress`), so it loads no project's tasks.
+- **Every agent harness is an agent** (ATM-660): Codex (`codex:`), Gemini CLI (`gemini:`), OpenCode (`opencode:`)
+  and a harness naming itself in `AI_AGENT` (`agent:`) get identities of their own, as Claude Code's sessions do, so
+  a review mode holds for them too; inside any of them, `--agent` or `ATM_AGENT` naming a person is refused.
 - **Release signing kept from compiling** (ATM-661): the release workflow compiles the app (`tauri build
   --no-bundle`) and the CLI before any step has a signing secret; the jobs that read a secret are in a `release`
   environment, for `v*` tags only, which Homebrew's and Skills' hand runs name as their ref; every release runner is

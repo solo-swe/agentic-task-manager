@@ -256,6 +256,12 @@ Every agent-written text in them is single-quoted (I3), and none pre-approves `a
 - **The mode is a workflow guard, not a security boundary.** `atm done` refuses an agent's active `blocker` or
   `async` task; it tells agents from people by the actor (`claude:…` is an agent). The actor is self-declared
   (`--agent`, `ATM_AGENT`), so what keeps an agent inside its mode is the skills: they never pass `--agent` (I23).
+  ATM-660 (audit L2) narrows it: every harness atm recognizes gives its agent an identity of its own, from the
+  markers it puts in its commands' environment (Claude Code's, Codex's, Gemini CLI's, OpenCode's, or `AI_AGENT`;
+  `atm_lib::actor::harness_identity`, the prefixes in `atm_common::edits::AGENT_PREFIXES`), and inside such a
+  session an `--agent` or `ATM_AGENT` naming a person is refused (`check_named`, in `main`, for every command but
+  those whose `--agent` is a filter). `agents.json` tests each. A harness that sets no marker (Cursor's and Copilot's,
+  as far as is known) still counts as the person whose git name it runs under.
   Someone who can change `tasks.json` can also set `review: none` on a task; that is the same trust as writing any
   task (§1), and the dashboard shows every task's mode.
 - **Approvals.** `/atm:do-task` and `/atm:loop-tasks` pre-approve `atm approve` (it replaced the pre-approved `atm

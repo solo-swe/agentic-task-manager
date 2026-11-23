@@ -13755,7 +13755,7 @@
       "description": "Audit finding L2 ([the report](docs/codebase-audit-2026-11.md#l2-high-security-the-review-gate-rests-on-the-actors-name-starting-with-claude-checked-in-part)). To be designed with Hakan: it changes who atm treats as a person.\n\n`agent_identity` (`crates/atm-lib/src/actor.rs:28`) falls back to the git user name unless `CLAUDE_CODE_SESSION_ID` is set, and `is_agent` (`crates/atm-common/src/edits.rs:239`) is `starts_with(\"claude:\")`. So an agent in Codex, Cursor, Copilot, OpenCode or Gemini (all installed by `atm agents install`), or one passing `--agent '<a name>'`, counts as a person: `state.rs:272` lets it mark a `blocker` task done with no review, and a `batch` task gets no `sprint_review: pending`.\n\n## Options to decide\n- Detect the other harnesses' environment variables, and give them identities of their own.\n- Inside a harness session, refuse an `--agent` or `ATM_AGENT` that would produce a person's identity.\n- Treat an actor as a person only on positive evidence (the app or server path through `user_identity`, or an interactive terminal with no harness variables).\n\n## Tests\nScenarios: each harness's environment gives an agent identity; `--agent 'Hakan'` inside a Claude Code session is refused or still an agent; a blocker task can't be done without review from any of them.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/actor.rs",
@@ -13763,7 +13763,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T09:46:53Z",
+      "updated_at": "2026-11-23T12:07:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13786,7 +13786,9 @@
           "text": "Hakan, in chat (2026-11-23): all three. A person only on positive evidence (the app or server path, or an interactive terminal with no harness variables). Each harness’s variables give an agent identity. Inside a harness session, an --agent or ATM_AGENT naming a person is refused.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-23T12:07:36Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225d75c0aa3a",
@@ -13801,7 +13803,7 @@
       "description": "Audit findings A1 and A5 ([the report](docs/codebase-audit-2026-11.md#a1-medium-high-security-signing-secrets-are-in-the-environment-while-the-app-compiles-checked)). With Hakan: the GitHub settings (an environment, a tag ruleset) are his to apply.\n\n- **A1:** `.github/workflows/release.yml:130-144` runs `tauri build` (every crate's build script and proc macro, the npm packages) with the updater key, its password and the notary key in its environment. Compile both targets in an earlier step without secrets (`cargo build --release --locked -p atm-app --target …`), then bundle and sign, where cargo has nothing left to build. Or bundle unsigned and sign the archive in its own step.\n- **A5:** no job declares an `environment:` and the only ruleset covers `main`. Propose a `release` environment restricted to `v*` tags holding the signing and deploy-key secrets, a tag ruleset for `v*`, and a workflow check that the tag's commit is on `origin/main`.\n- Pin the release, Homebrew and skills workflows' runners by version, as CI's are (A11).\n\n## Tests\n`dashboard/tests/unit/ci-workflow.test.ts`: no step that runs `cargo build` or `tauri build` has a signing secret in its `env`; the release jobs name the environment; runners are pinned.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         ".github/workflows/release.yml",
@@ -13811,7 +13813,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T12:04:44Z",
+      "updated_at": "2026-11-23T12:07:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13830,10 +13832,25 @@
           "kind": "note",
           "text": "Hakan, in chat (2026-11-23): yes, change the release, Homebrew and skills workflows. Build with no signing secrets, then sign; environment: release on the secret-holding jobs; runners pinned; the CI test. Hakan sets up the GitHub side before the next release: the release environment (v* tags), its secrets and a v* tag ruleset.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T12:07:31Z",
+          "kind": "review",
+          "text": "CR-131: The release compiles with no signing secret; the secrets in a release environment",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T12:04:44Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "4a151b9816868b25c5ef6d7d54779cff270fe6ef",
+      "code_reviews": [
+        {
+          "id": "01a2084d-e031-771f-ae24-3d1f4f10f3e3",
+          "ref": "CR-131"
+        }
+      ],
+      "review_requested_at": "2026-11-23T12:07:31Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225e61ea5857",
