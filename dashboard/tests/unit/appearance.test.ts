@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAppearance,
+  DEFAULT_DOC_STYLE,
   DOC_SIZES,
   DOC_STYLES,
   isModePref,
@@ -33,10 +34,13 @@ describe('appearance', () => {
     for (const t of THEMES) expect(t.swatch).toHaveLength(4);
   });
 
-  it('document styles: Auto first, then GitHub, Docs and Magazine; an unknown one is Auto (T-404)', () => {
-    expect(DOC_STYLES.map((s) => s.id)).toEqual(['auto', 'github', 'docs', 'magazine']);
+  it('document styles: GitHub first and the default, then Docs and Magazine, the theme’s page last (T-404, ATM-706)', () => {
+    expect(DOC_STYLES.map((s) => s.id)).toEqual(['github', 'docs', 'magazine', 'auto']);
+    expect(DEFAULT_DOC_STYLE).toBe('github');
     expect(knownDocStyle('magazine')).toBe('magazine');
-    for (const bad of ['terminal', '', null, 3]) expect(knownDocStyle(bad)).toBe('auto');
+    // A reader who chose the theme's page keeps it
+    expect(knownDocStyle('auto')).toBe('auto');
+    for (const bad of ['terminal', '', null, 3]) expect(knownDocStyle(bad)).toBe('github');
   });
 
   it('text sizes: Tiny to Huge, growing, Medium as written; an unknown one is Medium (ATM-691)', () => {

@@ -84,7 +84,7 @@
 
   const short = $derived(series.bucketMs < 86_400_000);
   const when = (t: number) => (short ? formatDateTime(t) : formatDate(t));
-  // Time per task, two medians: tasks agents do alone, and `interactive` ones that include working with you
+  // Time per task, two medians: tasks agents do alone, and those done with you (`with: user`)
   const perTask = $derived(
     [
       { key: 'alone', label: 'agents alone', withYou: false },
@@ -152,10 +152,9 @@
     {/each}
     <InfoTip label="time per task">
       <p>
-        The typical (median) time from a task's start until it asked for a review, or was done. <strong
-          >Agents alone</strong
-        >: tasks agents do by themselves. <strong>With you</strong>: tasks labelled <code>interactive</code>, which
-        include working with you.
+        The typical (median) work time of a task: every attempt at it, without the time it waited for a review or was
+        blocked. <strong>Agents alone</strong>: tasks agents do by themselves. <strong>With you</strong>: tasks done
+        together with you, which include working with you.
       </p>
       <p>A task whose lease expired is measured from its restart.</p>
     </InfoTip>
@@ -314,9 +313,9 @@
         Time per task {period} <span>(from start to done; one dot per task, at its completion)</span>
         <InfoTip label="time per task">
           <p>
-            Each task's work time, from its start until it asked for a review or was done, at the time it was done.
-            Solid dots and the solid line (the typical time) are tasks agents did alone; <strong>hollow</strong> dots
-            and the dashed line are <code>interactive</code> tasks, done with you.
+            Each task's work time (every attempt, without its reviews and blocks), at the time it was done. Solid dots
+            and the solid line (the typical time) are tasks agents did alone; <strong>hollow</strong> dots and the dashed
+            line are tasks done with you.
           </p>
           <p>
             The scale stops at the slowest 10%: slower tasks are <strong>triangles</strong> on the top edge, their time in

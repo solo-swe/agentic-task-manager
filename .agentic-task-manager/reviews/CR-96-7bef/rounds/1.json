@@ -1,0 +1,62 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "748cacf34dbfcacc103d1830bdc27bab49662279",
+    "head": "83a4b47d85fea9d82d9b0e24c16c33aafc7f7c80"
+  },
+  "files": [
+    {
+      "path": "crates/atm-api/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/documents.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/logo.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/source.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/test_support.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/jsongit/logo.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-docs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/serve.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T22:03:22Z"
+}

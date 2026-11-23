@@ -5,6 +5,7 @@
 // page is served at several paths (/projects/<id>/…, T-429).
 
 import { isTauri } from '@tauri-apps/api/core';
+import { dashboardVersion } from '../release-notes';
 import { ipcFetch } from './ipc';
 import { workspacePrefix } from './workspace';
 
@@ -21,10 +22,18 @@ export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input) : f
 /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
 export type ProjectFile = 'claims.json' | 'worktrees.json';
 
+/** An ID (a workspace's, a project's, a review's) as a segment of an API path. `.` and `..` (and empty) are refused
+ * (ATM-676, audit D7): the URL parser works them out, `%2E%2E` too, so `/projects/../reviews` would be another route,
+ * and a write would go there */
+export function idSegment(id: string): string {
+  if (id === '' || id === '.' || id === '..') throw new Error(`${JSON.stringify(id)} isn't an ID`);
+  return encodeURIComponent(id);
+}
+
 /** A project's own route in the current workspace: `default`'s v1 one, or another workspace's v2 one */
 function projectRoute(project: string, route: string): string {
   const prefix = workspacePrefix();
-  const id = encodeURIComponent(project);
+  const id = idSegment(project);
   return prefix ? `${prefix}/projects/${id}/${route}` : `/api/v1/projects/${id}/${route}`;
 }
 
@@ -32,8 +41,8 @@ function projectRoute(project: string, route: string): string {
 export function projectFileUrl(project: string, file: ProjectFile): string {
   const prefix = workspacePrefix();
   return prefix
-    ? `${prefix}/projects/${encodeURIComponent(project)}/${file.replace(/\.json$/, '')}`
-    : `/p/${encodeURIComponent(project)}/${file}`;
+    ? `${prefix}/projects/${idSegment(project)}/${file.replace(/\.json$/, '')}`
+    : `/p/${idSegment(project)}/${file}`;
 }
 
 /** A project's tasks with what atm derives for them, and its meta (GET api/v1/projects/<id>/tasks, T-364) */
@@ -41,14 +50,39 @@ export function v1TasksUrl(project: string): string {
   return projectRoute(project, 'tasks');
 }
 
+/** A slice of a project's tasks and a period, as the stats route takes them (ATM-722): the IDs (none, the whole
+ * project) and the period's start and end in ms */
+export interface StatsRequest {
+  tasks?: readonly string[];
+  from?: number;
+  to?: number;
+}
+
+/** A project's stats, progress and forecast for `request` (GET …/projects/<id>/stats, ATM-722) */
+export function statsUrl(project: string, request: StatsRequest = {}): string {
+  const query = new URLSearchParams();
+  if (request.tasks) query.set('tasks', request.tasks.join(','));
+  if (request.from !== undefined) query.set('from', String(Math.round(request.from)));
+  if (request.to !== undefined) query.set('to', String(Math.round(request.to)));
+  const text = query.toString();
+  return projectRoute(project, 'stats') + (text ? `?${text}` : '');
+}
+
 /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
 export function v1DocumentUrl(project: string, path: string): string {
   return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;
 }
 
-/** A file of the project as a commit or tree has it: a review round's side (ATM-574) */
+/** atm's version, the page's own (the same build serves both): what an answer the browser keeps for good is kept
+ * under (ATM-672, audit H9), so a newer atm's isn't read from an older one's */
+function keptFor(): string {
+  const version = dashboardVersion();
+  return version ? `&v=${encodeURIComponent(version)}` : '';
+}
+
+/** A file of the project as a commit or tree has it: a review round's side (ATM-574), kept per atm version */
 export function v1DocumentAtUrl(project: string, path: string, revision: string): string {
-  return `${v1DocumentUrl(project, path)}&at=${encodeURIComponent(revision)}`;
+  return `${v1DocumentUrl(project, path)}&at=${encodeURIComponent(revision)}${keptFor()}`;
 }
 
 /** What the reviews page lists by (docs/multi-project-api.md §2.9): each one given must fit */
@@ -80,14 +114,15 @@ export function reviewUrl(project: string, review: string, round?: number | null
   if (round) params.set('round', String(round));
   if (against) params.set('against', String(against));
   const search = params.toString();
-  return `${projectRoute(project, 'reviews')}/${encodeURIComponent(review)}` + (search ? `?${search}` : '');
+  return `${projectRoute(project, 'reviews')}/${idSegment(review)}` + (search ? `?${search}` : '');
 }
 
 /** An image file of the project, its bytes, for an <img> (T-392); `at`: as that commit or tree has it (a review's
  * image file's side, ATM-689) */
 export function v1FileUrl(project: string, path: string, at?: string): string {
   return (
-    `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}` + (at ? `&at=${encodeURIComponent(at)}` : '')
+    `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}` +
+    (at ? `&at=${encodeURIComponent(at)}${keptFor()}` : '')
   );
 }
 

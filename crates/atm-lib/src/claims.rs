@@ -7,7 +7,7 @@ use atm_common::{Error, Result, Vocabulary};
 use atm_db::working::Working;
 use serde_json::{Map, Value, json};
 
-use crate::leases::{check_holder, drop_expired_claims, lease_until, own_lease_expired};
+use crate::leases::{check_holder, expire, lease_until, own_lease_expired, section};
 use crate::loop_rules::lease_minutes;
 use crate::project::Project;
 
@@ -27,21 +27,12 @@ pub struct Renewed {
 
 /// The claims section of the claims store, made a map when it isn't one.
 fn claims_of(store: &mut Map<String, Value>) -> &mut Map<String, Value> {
-    let entry = store.entry("claims").or_insert_with(|| json!({}));
-    if !entry.is_object() {
-        *entry = json!({});
-    }
-    entry
-        .as_object_mut()
-        .expect("the section was made an object just above")
+    section(store, "claims")
 }
 
 fn no_live_claim(task_id: &str, gone: bool) -> Error {
     let why = if gone { " (its lease expired)" } else { "" };
-    Error::Failed {
-        message: format!("{task_id} has no live claim{why}"),
-        code: 4,
-    }
+    Error::Conflict(format!("{task_id} has no live claim{why}"))
 }
 
 fn renew(claim: &mut Value, document: &Value) {
@@ -58,8 +49,8 @@ fn renew(claim: &mut Value, document: &Value) {
 pub fn renew_lease(project: &mut Project, task_id: &str, expire: bool) -> Result<Renewed> {
     let agent = project.actor().map(String::from);
     let agent = agent.as_deref();
-    let mut outcome: Option<Renewed> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    // None where the change deferred its error: the store returns that error instead
+    let outcome = project.change(|work: &mut Working| {
         let document = work.document.clone();
         if !expire {
             let claims = claims_of(&mut work.claims_store);
@@ -77,17 +68,14 @@ pub fn renew_lease(project: &mut Project, task_id: &str, expire: bool) -> Result
                 .get_mut(task_id)
                 .ok_or_else(|| no_live_claim(task_id, false))?;
             renew(claim, &document);
-            outcome = Some(Renewed {
+            return Ok(Some(Renewed {
                 claim: claim.clone(),
                 minutes: lease_minutes(&document),
                 expired: Vec::new(),
-            });
-            return Ok(());
+            }));
         }
         let vocab = Vocabulary::of_document(&work.document)?;
-        let mut claims = claims_of(&mut work.claims_store).clone();
-        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
-        *claims_of(&mut work.claims_store) = claims;
+        let expired = crate::leases::expire(work, &vocab);
         let claims = claims_of(&mut work.claims_store);
         if !claims.get(task_id).is_some_and(atm_common::py::truthy) {
             let own = own_lease_expired(&expired, &work.document, &vocab, task_id, agent, None);
@@ -96,7 +84,7 @@ pub fn renew_lease(project: &mut Project, task_id: &str, expire: bool) -> Result
                 .any(|c| c.get("task").and_then(Value::as_str) == Some(task_id));
             // The expiry is written first, so `atm task details` agrees with the error
             work.defer(own.unwrap_or_else(|| no_live_claim(task_id, gone)));
-            return Ok(());
+            return Ok(None);
         }
         check_holder(claims, task_id, agent, "heartbeat")?;
         let document = work.document.clone();
@@ -104,12 +92,11 @@ pub fn renew_lease(project: &mut Project, task_id: &str, expire: bool) -> Result
             .get_mut(task_id)
             .ok_or_else(|| no_live_claim(task_id, false))?;
         renew(claim, &document);
-        outcome = Some(Renewed {
+        Ok(Some(Renewed {
             claim: claim.clone(),
             minutes: lease_minutes(&document),
             expired,
-        });
-        Ok(())
+        }))
     })?;
     outcome.ok_or_else(|| no_live_claim(task_id, false))
 }
@@ -150,21 +137,18 @@ pub fn renew_due_claims(project: &mut Project) -> Result<Vec<Value>> {
     if due(claims, agent).is_empty() {
         return Ok(Vec::new());
     }
-    let mut renewed = Vec::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let document = work.document.clone();
         let claims = claims_of(&mut work.claims_store);
-        renewed = due(claims, agent)
+        Ok(due(claims, agent)
             .into_iter()
             .filter_map(|id| {
                 let claim = claims.get_mut(&id)?;
                 renew(claim, &document);
                 Some(claim.clone())
             })
-            .collect();
-        Ok(())
-    })?;
-    Ok(renewed)
+            .collect())
+    })
 }
 
 /// The live claims, by task, after dropping those whose lease ran out (their tasks back to to do).
@@ -181,27 +165,22 @@ pub struct LiveClaims {
 /// # Errors
 /// A store error.
 pub fn expire_claims(project: &mut Project) -> Result<LiveClaims> {
-    let mut outcome = LiveClaims {
-        claims: Vec::new(),
-        expired: Vec::new(),
-    };
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
-        let mut claims = claims_of(&mut work.claims_store).clone();
-        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
-        let mut live: Vec<Value> = claims.values().cloned().collect();
+        let expired = expire(work, &vocab);
+        let mut live: Vec<Value> = claims_of(&mut work.claims_store)
+            .values()
+            .cloned()
+            .collect();
         live.sort_by(|a, b| {
             atm_common::py::py_str_opt(a.get("task"))
                 .cmp(&atm_common::py::py_str_opt(b.get("task")))
         });
-        *claims_of(&mut work.claims_store) = claims;
-        outcome = LiveClaims {
+        Ok(LiveClaims {
             claims: live,
             expired,
-        };
-        Ok(())
-    })?;
-    Ok(outcome)
+        })
+    })
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ import { DEFAULT_WORKSPACE } from './workspace';
 
 /** A command's error, as the app sends it (`AppError`) */
 interface AppError {
-  kind: 'not_found' | 'invalid' | 'refused' | 'too_large' | 'failed';
+  kind: 'not_found' | 'invalid' | 'refused' | 'too_large' | 'conflict' | 'failed';
   message: string;
 }
 
@@ -23,6 +23,8 @@ const STATUS: Record<AppError['kind'], number> = {
   invalid: 400,
   refused: 403,
   too_large: 413,
+  // Another holds it (ATM-664), as the server answers it
+  conflict: 409,
   failed: 500,
 };
 
@@ -90,6 +92,14 @@ function projectCall(workspace: string, project: string, route: string[], query:
   switch (first) {
     case 'tasks':
       return { command: 'project_tasks', args: { ...at, filters: taskFilters(query) } };
+    case 'stats': {
+      const ms = (name: string) => (query.get(name) ? Number(query.get(name)) : null);
+      const tasks = query.get('tasks');
+      return {
+        command: 'project_stats',
+        args: { ...at, tasks: tasks ? tasks.split(',').filter(Boolean) : null, from: ms('from'), to: ms('to') },
+      };
+    }
     case 'documents':
       return { command: 'document', args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined } };
     case 'files':

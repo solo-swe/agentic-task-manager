@@ -158,8 +158,9 @@ fn the_release_list_counts_each_tasks_effective_release_by_kind_and_stage() {
     let one = &listed[0];
     assert_eq!(one["tasks"], json!(6));
     assert_eq!(one["by_kind"], json!({"todo": 1, "done": 5}));
-    // merged needs a PR: a merged_at without one is just done
-    assert_eq!(one["by_stage"], json!({"done": 3, "in_pr": 1, "merged": 1}));
+    // Merged once pushed or its PR merged, as the task views and the dashboard say it (ATM-667, audit L11): a
+    // merged_at without a PR is a direct push's
+    assert_eq!(one["by_stage"], json!({"done": 2, "in_pr": 1, "merged": 2}));
     assert_eq!(listed[1]["by_kind"], json!({"todo": 1}));
     assert_eq!(list_releases(&p, true).unwrap().0.len(), 3);
     let none = project(json!([]), json!({}));
@@ -418,4 +419,79 @@ fn a_release_is_marked_released_by_hand_and_open_tasks_refuse_it() {
     let planned = mark_release(&mut p, "1.0", &Mark::Planned, false).unwrap();
     assert_eq!(planned.release, json!({"id": "1.0", "state": "planned"}));
     assert!(mark_release(&mut p, "2.0", &Mark::Planned, false).is_err());
+}
+
+/// ATM-720: the releases as atm serves them with the tasks, so the dashboard counts nothing itself
+#[test]
+fn each_release_with_its_sprints_counts_by_stage_and_notes() {
+    let p = project_with_archive(
+        json!([
+            // Its own release, merged
+            {"id": "T-1", "key": "ATM-1", "name": "a", "type": "feature", "status": "done", "release": "1.0",
+             "pr": {"number": 7}, "merged_at": "2026-11-13T03:00:00Z"},
+            // Its sprint's release, in a PR
+            {"id": "T-2", "name": "b", "type": "bugfix", "status": "done", "sprint": "S", "pr": {"number": 8}},
+            // Skipped: not counted, not in the notes
+            {"id": "T-3", "name": "c", "type": "feature", "status": "skipped", "release": "1.0"},
+            // Open: in the notes' open list
+            {"id": "T-4", "key": "ATM-4", "name": "d", "type": "feature", "status": "todo", "sprint": "S"},
+            // Another release's
+            {"id": "T-5", "name": "e", "type": "feature", "status": "done", "release": "2.0"}
+        ]),
+        // The archive counts too
+        json!([{"id": "T-0", "name": "z", "type": "feature", "status": "done", "release": "1.0"}]),
+        json!({
+            "releases": [{"id": "1.0", "name": "First"}, {"id": "2.0", "state": "archived"}],
+            "sprints": [{"id": "S", "release": "1.0"}, {"id": "Other"}]
+        }),
+    );
+    let views = release_views(&p).unwrap();
+    let figures: Vec<Value> = views
+        .iter()
+        .map(|r| {
+            json!([
+                r["id"],
+                r["state"],
+                r["sprints"],
+                r["total"],
+                r["done"],
+                r["in_pr"],
+                r["merged"]
+            ])
+        })
+        .collect();
+    assert_eq!(
+        figures,
+        [
+            json!(["1.0", "planned", ["S"], 4, 3, 1, 1]),
+            // Archived releases come too: the dashboard decides whether to show them
+            json!(["2.0", "archived", [], 1, 1, 0, 0])
+        ]
+    );
+    assert_eq!(views[0]["name"], json!("First"));
+    let notes = &views[0]["notes"];
+    let done: Vec<Value> = notes["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|g| {
+            g["tasks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| json!([g["type"], t["id"], t.get("key")]))
+        })
+        .collect();
+    assert_eq!(
+        done,
+        [
+            json!(["feature", "T-1", "ATM-1"]),
+            json!(["feature", "T-0", null]),
+            json!(["bugfix", "T-2", null])
+        ]
+    );
+    assert_eq!(
+        notes["open"],
+        json!([{"id": "T-4", "key": "ATM-4", "name": "d", "status": "todo"}])
+    );
 }

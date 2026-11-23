@@ -23,6 +23,9 @@ export interface ReviewComment {
   poke?: boolean;
   /** One of the user's drafts (ATM-612), not sent yet: only they see it; absent for any other comment */
   draft?: boolean;
+  /** Whether you may change its text (ATM-723): atm's rule (yours, not a poke, the review not ended). A draft's is
+   * the drafts' own (absent: only the server's comments carry it) */
+  editable?: boolean;
   replies: ReviewComment[];
 }
 
@@ -44,9 +47,6 @@ export type ReviewStatus = 'draft' | 'waiting' | 'live' | 'changes_requested' | 
 
 /** A status filter: one status, or `open`, every review not decided yet (draft, waiting, live, sent back) */
 export type StatusFilter = ReviewStatus | 'open';
-
-/** The statuses of an open review, one not decided yet (as atm-review's `Status::OPEN`) */
-export const OPEN_STATUSES: readonly ReviewStatus[] = ['draft', 'waiting', 'live', 'changes_requested'];
 
 /** A review's header (`review.md`'s): what lists and searches need */
 export interface ReviewHeader {
@@ -74,6 +74,8 @@ export interface ReviewEntry {
   waiting?: 'review' | 'answered' | null;
   /** When it began waiting on its reviewers, its latest round's time (ATM-610). Optional, for an older atm's lists */
   waiting_since?: string | null;
+  /** Decided: approved or closed, as atm says it (ATM-714) */
+  ended: boolean;
   /** The project it is in, on a list of several projects' reviews (ATM-575, the overview's Reviews); the page's own */
   project?: { id: string; name: string };
 }
@@ -126,6 +128,9 @@ export interface ViewFile {
 export interface PlacedChain extends Chain {
   placed: [number, number] | null;
   drifted: { round: number; lines: [number, number] | null } | null;
+  /** Whether the view holds the increment of the round it was made on (ATM-725, atm's): placed in the view when it
+   * does, else listed as on another round */
+  in_view: boolean;
 }
 
 /** One of the user's drafts on the review (ATM-612), as the page has it: a comment placed in the round shown as a chain
@@ -141,6 +146,7 @@ export type PlacedDraft = { id: string; at: string; body: string } & (
       round: number | null;
       placed?: [number, number] | null;
       drifted?: { round: number; lines: [number, number] | null } | null;
+      in_view?: boolean;
     }
   | { kind: 'reply'; to: string }
 );
@@ -159,7 +165,14 @@ export interface ReviewPageData {
   view: { round: number; against: number | null; now?: boolean; files: ViewFile[] };
   needs_you: boolean;
   you: string;
+  /** What this reader may do, and why not (ATM-633, docs/task-review-state-machine.md §5.2): the server's state
+   * machine answering for each action, so the page shows a button for what it allows and never repeats the rules
+   * (ATM-723: the page has no rule of its own) */
+  can: Record<ReviewAction, { ok: boolean; why?: string }>;
 }
+
+/** The actions a review's page offers, as the server's `can` names them */
+export type ReviewAction = 'approve' | 'request_changes' | 'comment' | 'round' | 'close';
 
 /** What the reviews page lists by: each one given (not empty) must fit */
 export interface ListQuery {

@@ -40,11 +40,13 @@
           },
           "derived": {
             "kind": "todo",
+            "required_by": ["T-3"],
             "ready": true,
             "waiting_for": [],
             "priority": "P2",
             "effective_review": "none",
-            "archived": false
+            "archived": false,
+            "agent_work": true
           }
         },
         {
@@ -62,7 +64,9 @@
             "waiting_for": ["T-2"],
             "priority": "P0",
             "effective_review": "none",
-            "archived": false
+            "archived": false,
+            "waiting": { "on": "dependencies" },
+            "agent_work": true
           }
         }
       ]
@@ -330,7 +334,7 @@
     }
   },
   {
-    "name": "list --agent: the tasks an agent started (an older file's agent too)",
+    "name": "list --agent (the old name of --started-by): the tasks an agent started (an older file's agent too)",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -363,6 +367,23 @@
     "args": ["task", "list", "--agent", "alice"],
     "expect": {
       "stdout": "T-1  done  P2  One\nT-2  done  P2  Two\n2 tasks: 2 done\n"
+    }
+  },
+  {
+    "name": "list --started-by: the tasks an agent started (ATM-679)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-1", "name": "One", "phase": 0, "status": "done", "started_by": "alice" },
+            { "id": "T-2", "name": "Two", "phase": 0, "status": "done", "started_by": "bob" }
+          ]
+        }
+      }
+    },
+    "args": ["task", "list", "--started-by", "alice"],
+    "expect": {
+      "stdout": "T-1  done  P2  One\n1 task: 1 done\n"
     }
   },
   {

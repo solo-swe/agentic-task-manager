@@ -20,6 +20,31 @@ several statuses, `--status <id>` picks one; otherwise atm uses the first listed
 - `skipped --reason '…' [--resolution wont_do|obsolete|duplicate]`: not needed, from any open state (from review once
   rejected).
 
+## The table
+Each move, by the kind a task is in before it and the kind it leaves it in (atm's own table; a test checks every row,
+so this says what atm does). Run: `start` is `in_progress`; `review` is `in_review`; `fail` is `todo --reason`;
+`release` is `todo --note`; `unblock` is `todo --answer`; `reopen` is `todo` from done or skipped; `drop` is `todo`
+from a rejected review; `approve`, `request-changes` and `reject` are the user's `atm task review` decisions.
+
+| Move | From | To |
+|---|---|---|
+| start | todo, review | active |
+| review | active, review | review |
+| done | active, review | done |
+| fail | active | todo |
+| release | active | todo |
+| approve | review | review |
+| request-changes | review | review |
+| reject | review | review |
+| drop | review | todo |
+| block | todo, active | blocked |
+| unblock | blocked | todo |
+| reopen | done, skipped | todo |
+| skip | todo, active, review, blocked | skipped |
+
+From review, `start` needs changes asked for or an approval (rework), `review` changes asked for (a round), `done` an
+approval, and `skip` or `drop` a rejection.
+
 ## Reviews
 A review's decision is the user's: `atm task review approve <id> [--note]`, `request-changes <id> --reason '…'` or
 `reject <id> --reason '…'`. The task stays in review, and atm lets it out only by the decision: approved, `done` (or

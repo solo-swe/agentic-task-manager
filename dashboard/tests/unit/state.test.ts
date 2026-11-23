@@ -117,6 +117,7 @@ describe('DashboardState', () => {
           '/api/v2/workspaces/work/projects/w1/tasks',
           '/api/v2/workspaces/work/projects/w1/claims',
           '/api/v2/workspaces/work/projects/w1/worktrees',
+          '/api/v2/workspaces/work/projects/w1/stats',
         ]);
         s.openWorkspace('default');
         expect(location.pathname).toBe('/');
@@ -134,7 +135,30 @@ describe('DashboardState', () => {
       await s.load();
       expect(s.route).toEqual({ page: 'project', id: 'p2' });
       expect(s.projectId).toBe('p2');
-      expect(urls()).toEqual(['/api/projects', v1Tasks('p2'), '/p/p2/claims.json', '/p/p2/worktrees.json']);
+      // and its stats, atm's figures (ATM-722)
+      expect(urls()).toEqual([
+        '/api/projects',
+        v1Tasks('p2'),
+        '/p/p2/claims.json',
+        '/p/p2/worktrees.json',
+        '/api/v1/projects/p2/stats',
+      ]);
+    });
+
+    it('the tasks never wait for the stats: they show while atm still works the figures out; the figures follow', async () => {
+      const answering = server({ projects: [project('p2')] });
+      let answerStats: (r: Response) => void = () => {};
+      fetchMock = vi.fn((url: string) =>
+        String(url).endsWith('/stats') ? new Promise<Response>((resolve) => (answerStats = resolve)) : answering(url),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const s = new DashboardState();
+      await s.load();
+      expect(s.loaded).toBe(true);
+      expect(s.tasks.length).toBeGreaterThan(0);
+      expect(s.stats).toBeNull();
+      answerStats(new Response(JSON.stringify({ progress: { archived: 0 } }), { status: 200 }));
+      await vi.waitFor(() => expect(s.stats).toEqual({ progress: { archived: 0 } }));
     });
 
     it('with several, lands on the overview without opening a project; it reads every project’s tasks', async () => {
@@ -292,6 +316,94 @@ describe('DashboardState', () => {
       history.replaceState(null, '', '/projects/nope');
       await s.load();
       expect(s.route).toEqual({ page: 'unknown', id: 'nope' });
+    });
+  });
+
+  describe('answers out of order (ATM-675, audit D1)', () => {
+    afterEach(() => {
+      history.replaceState(null, '', '/');
+      localStorage.clear();
+    });
+    const OTHER = {
+      meta: { project: 'Other', id: 'other' },
+      tasks: [{ id: 'T-1', name: 'Other', type: 'feature', status: 'todo' }],
+    };
+    /** The server, but the next requests whose URL `holds` matches wait, each until released with a body */
+    function holding(base: ReturnType<typeof server>, holds: (url: string) => boolean) {
+      const waiting: ((body: unknown) => void)[] = [];
+      const fn = vi.fn((url: string) => {
+        if (!holds(String(url))) return base(url);
+        return new Promise<Response>((answer) => waiting.push((body) => answer(new Response(JSON.stringify(body)))));
+      });
+      return { fn, waiting };
+    }
+    const tasksOf = (id: string) => (url: string) => url.startsWith(v1Tasks(id)) && !url.includes('archived');
+
+    it("project A's answer coming after B is shown changes nothing", async () => {
+      const held = holding(server({ projects: [project('p2'), project('p3')] }), tasksOf('p3'));
+      vi.stubGlobal('fetch', held.fn);
+      history.replaceState(null, '', '/projects/p3');
+      const s = new DashboardState();
+      const first = s.load();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      history.replaceState(null, '', '/projects/p2');
+      s.onNavigate();
+      await vi.waitFor(() => expect([s.projectId, s.loaded]).toEqual(['p2', true]));
+      held.waiting[0](asTaskViews(OTHER));
+      await first;
+      expect([s.projectId, s.projectName, s.tasks.length]).toEqual(['p2', 'Standard Project', 12]);
+    });
+
+    it("an older poll's answer coming after a newer one's changes nothing", async () => {
+      const s = new DashboardState();
+      await s.load();
+      let holdNext = true;
+      const held = holding(server(), (url) => tasksOf('p1')(url) && holdNext && !(holdNext = false));
+      vi.stubGlobal('fetch', held.fn);
+      const older = s.reload();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      await s.reload(); // the newer one: the server's answer now
+      expect(s.projectName).toBe('Standard Project');
+      held.waiting[0](asTaskViews(OTHER));
+      await older;
+      expect([s.projectName, s.tasks.length]).toEqual(['Standard Project', 12]);
+    });
+
+    it('a poll waits while a load is still out; a reload asked for goes ahead', async () => {
+      const s = new DashboardState();
+      await s.load();
+      const held = holding(server(), tasksOf('p1'));
+      vi.stubGlobal('fetch', held.fn);
+      const out = s.reload();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      s.poll();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(held.waiting).toHaveLength(1);
+      const asked = s.reload();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(2));
+      for (const answer of held.waiting) answer(asTaskViews(standard));
+      await Promise.all([out, asked]);
+      // Nothing out: the next poll asks
+      s.poll();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(3));
+      held.waiting[2](asTaskViews(standard));
+    });
+
+    it("project A's archive coming after B is shown is not B's", async () => {
+      const archiveOf = (id: string) => (url: string) => url.startsWith(v1Tasks(id)) && url.includes('archived');
+      const held = holding(server({ projects: [project('p2'), project('p3')] }), archiveOf('p3'));
+      vi.stubGlobal('fetch', held.fn);
+      history.replaceState(null, '', '/projects/p3');
+      const s = new DashboardState();
+      await s.load();
+      s.wantArchive();
+      await vi.waitFor(() => expect(held.waiting).toHaveLength(1));
+      history.replaceState(null, '', '/projects/p2');
+      s.onNavigate();
+      await vi.waitFor(() => expect([s.projectId, s.loaded]).toEqual(['p2', true]));
+      held.waiting[0]({ ...asTaskViews(OTHER), archived: true });
+      await new Promise((r) => setTimeout(r, 0));
+      expect([s.archive, s.archiveLoaded]).toEqual([[], false]);
     });
   });
 
@@ -535,13 +647,16 @@ describe('DashboardState appearance', () => {
     expect(next.theme).toBe('default');
   });
 
-  it('remembers the document style; an unknown one is Auto (T-404)', () => {
+  it('remembers the document style; none chosen, or an unknown one, is GitHub (T-404, ATM-706)', () => {
     const first = new DashboardState();
-    expect(first.docStyle).toBe('auto');
+    expect(first.docStyle).toBe('github');
     first.setDocStyle('docs');
     expect(new DashboardState().docStyle).toBe('docs');
-    first.setDocStyle('terminal');
+    // The theme's own page, once chosen, stays chosen
+    first.setDocStyle('auto');
     expect(new DashboardState().docStyle).toBe('auto');
+    first.setDocStyle('terminal');
+    expect(new DashboardState().docStyle).toBe('github');
   });
 
   it('remembers the text size; an unknown one is Medium (ATM-691)', () => {

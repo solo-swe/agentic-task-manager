@@ -1,0 +1,42 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "d4c5f8edf02b3449dd7a6cde0157022e4dc7f729",
+    "head": "919378580c1f8f0114b70e69b199c65bbdb22bcb"
+  },
+  "files": [
+    {
+      "path": ".github/workflows/release.yml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "AGENTS.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ci-workflow.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "packaging/README.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "packaging/release.sh",
+      "status": "deleted",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/packaging.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T17:13:24Z"
+}

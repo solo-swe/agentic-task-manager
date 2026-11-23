@@ -37,8 +37,62 @@ fn copy_views(project: &Project, folder: &str) -> HashMap<String, Value> {
 /// there differs from the main one's (or that only it has), under `tasks`, as views worked out in that working copy.
 /// A copy of a task decided in another working copy (the claims store's `resolved`) is left out: it is stale until
 /// `atm loop next` runs there, and would otherwise outrank the decision.
+///
+/// Each other copy also says which of its tasks the board shows from it, under `shown` (ATM-724): a task's copy that
+/// got further than every other, by the merge driver's ranking (`kind_rank`), the first listed on a tie (main first);
+/// a task only linked copies have, from the first of them.
 #[must_use]
 pub fn worktree_copies(project: &Project) -> Vec<Value> {
+    let mut listed = copies(project);
+    let vocab = project.store().vocabulary().ok();
+    let rank = |task: &Value| {
+        let kind = vocab.and_then(|v| v.kind_of(task.get("status")));
+        atm_db::jsongit::merge::kind_rank(kind)
+    };
+    // The best copy of each task so far: its rank and the working copy it is from (none: main)
+    let mut best: HashMap<String, (u8, Option<usize>)> = HashMap::new();
+    for (at, tree) in listed.iter().enumerate() {
+        if tree["main"] == json!(true) {
+            for t in project
+                .store()
+                .copy_tasks(tree["path"].as_str().unwrap_or_default())
+            {
+                if let Some(id) = t["id"].as_str() {
+                    best.insert(id.to_string(), (rank(&t), None));
+                }
+            }
+            continue;
+        }
+        for view in tree["tasks"].as_array().into_iter().flatten() {
+            let Some(id) = view["task"]["id"].as_str() else {
+                continue;
+            };
+            let here = rank(&view["task"]);
+            match best.get(id) {
+                Some((there, _)) if here <= *there => {}
+                _ => {
+                    best.insert(id.to_string(), (here, Some(at)));
+                }
+            }
+        }
+    }
+    for (at, tree) in listed.iter_mut().enumerate() {
+        if tree["main"] == json!(true) {
+            continue;
+        }
+        let mut shown: Vec<&String> = best
+            .iter()
+            .filter(|(_, (_, from))| *from == Some(at))
+            .map(|(id, _)| id)
+            .collect();
+        shown.sort();
+        tree["shown"] = json!(shown);
+    }
+    listed
+}
+
+/// The working copies with the tasks that differ in each other one, as views.
+fn copies(project: &Project) -> Vec<Value> {
     let store = project.store();
     let claims = store.read_claims();
     let stale: Vec<(Option<&Value>, &str)> = claims

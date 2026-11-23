@@ -2,7 +2,8 @@
 # (docs/security-architecture.md §3.1). Everything else is refused and logged, which is what the verdict reads.
 services:
   proxy:
-    image: ubuntu/squid:latest
+    # Pinned by digest (ATM-678, audit A11), bumped by hand (`docker buildx imagetools inspect ubuntu/squid:latest`)
+    image: ubuntu/squid:latest@sha256:6a097f68bae708cedbabd6188d68c7e2e7a38cedd05a176e1cc0ba29e3bbe029
     volumes:
       - ./squid.conf:/etc/squid/squid.conf:ro
       # Out of the agent's reach: the verdict trusts this log

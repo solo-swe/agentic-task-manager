@@ -25,13 +25,15 @@ pub(super) fn get_document(
     let path = parameter(query, "path");
     let at = parameter(query, "at");
     if !at.is_empty() {
+        // A full object ID only, as a round records its sides (ATM-671, audit H6): never a name or an expression git
+        // would work out (`:/<regex>` searches every commit's message)
         if !is_object_id(&at) {
-            return match project.document_at(&path, &at) {
-                Ok(document) => ok_json(&document, None),
-                Err(e) => error_response(&e),
-            };
+            return error_response(&atm_common::Error::Invalid(format!(
+                "at={at}: a revision is a full object ID"
+            )));
         }
-        let tag = etag(&json!(["document-at", at, path]));
+        // atm's version in the tag (ATM-672, audit H9): another atm may answer the same revision otherwise
+        let tag = etag(&json!(["document-at", VERSION, at, path]));
         if unchanged(request, &tag) {
             return not_modified(&tag, &[KEPT]);
         }
@@ -64,16 +66,17 @@ pub(super) fn get_document(
     }
 }
 
-/// What a file at a full object ID is sent with: this browser only, for a year, never asked again
+/// What a file at a full object ID is sent with: this browser only, for a year, never asked again. Kept per atm
+/// version (ATM-672, audit H9): the page asks for it with its version (`&v=`, `lib/api/http.ts`), so another atm's
+/// answer is another address, and the tag names the version too
 const KEPT: (&str, &str) = ("Cache-Control", "private, max-age=31536000, immutable");
 
-/// A full git object ID: 40 hex digits (SHA-1) or 64 (SHA-256), in lower case as git writes them. Anything shorter
-/// could name another object later; a name (`HEAD`, a branch) moves.
+/// atm's version, which an answer kept for good is tagged with
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The one rule for a revision a page names (ATM-671): atm-lib's, which the app's commands keep too
 fn is_object_id(revision: &str) -> bool {
-    matches!(revision.len(), 40 | 64)
-        && revision
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    atm_lib::workspaces::is_object_id(revision)
 }
 
 /// `GET …/projects/<p>/files?path=`: an image's bytes (whose bytes match its type), sandboxed. The `ETag` is the
@@ -83,8 +86,14 @@ pub(super) fn get_file(project: &dyn ProjectSource, query: &str, request: &Heade
     let path = parameter(query, "path");
     let at = parameter(query, "at");
     if !at.is_empty() {
-        let kept = is_object_id(&at);
-        let tag = etag(&json!(["image-at", at, path]));
+        // A full object ID only, as for a document (ATM-671)
+        if !is_object_id(&at) {
+            return error_response(&atm_common::Error::Invalid(format!(
+                "at={at}: a revision is a full object ID"
+            )));
+        }
+        let kept = true;
+        let tag = etag(&json!(["image-at", VERSION, at, path]));
         if kept && unchanged(request, &tag) {
             return not_modified(&tag, &[IMAGE_HEADERS[0], IMAGE_HEADERS[1], KEPT]);
         }
@@ -252,19 +261,15 @@ mod tests {
         assert_eq!(again.status, StatusCode::NOT_MODIFIED);
         assert!(again.header("content-security-policy").ends_with("sandbox"));
         assert_eq!(calls.taken(), []);
-        // A name that can move: read each time, never kept
+        // Anything but a full object ID (a name that moves): refused, unasked (ATM-671)
         let moving = answer(get_file(
             project.as_ref(),
             "path=pic.gif&at=HEAD",
             &having(&first.tag()),
         ));
-        assert_eq!(moving.status, StatusCode::OK);
+        assert_eq!(moving.status, StatusCode::BAD_REQUEST);
         assert_eq!(moving.tag(), "");
-        assert_eq!(moving.header("cache-control"), "no-cache");
-        assert_eq!(
-            calls.taken(),
-            [Call::ImageAt("pic.gif".into(), "HEAD".into())]
-        );
+        assert_eq!(calls.taken(), []);
         // What atm-docs refuses: its status
         for (error, status) in refusals() {
             let (project, _) = bound(FakeProject {
@@ -336,26 +341,22 @@ mod tests {
         assert_eq!(image.json(), json!({"error": "not an image"}));
     }
 
-    /// A review round's side: the file as a commit or tree has it, asked of atm-lib with the revision as given (it
-    /// checks it); never the working copy's version, never tagged
+    /// A review round's side is named by a full object ID (ATM-671, audit H6): anything else (a short ID, a name that
+    /// moves, an expression git would work out, an option) is refused before atm-lib is asked
     #[test]
-    fn a_document_at_a_revision_is_atm_libs_answer_untagged() {
-        for (query, path, revision) in [
-            ("path=docs%2Fa+b.md&at=3fa1", PATH, "3fa1"),
-            ("at=HEAD&path=a.md", "a.md", "HEAD"),
-            ("path=&at=t1", "", "t1"),
-            ("path=a.md&at=--output%3Dx", "a.md", "--output=x"),
+    fn a_document_at_anything_but_a_full_object_id_is_refused_unasked() {
+        for query in [
+            "path=docs%2Fa+b.md&at=3fa1",
+            "at=HEAD&path=a.md",
+            "path=&at=t1",
+            "path=a.md&at=--output%3Dx",
+            "path=a.md&at=%3A%2Ffix",
         ] {
             let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), Some("aaaa")));
             let answer = answer(get_document(project.as_ref(), query, &having("\"any\"")));
-            assert_eq!(answer.status, StatusCode::OK, "{query}");
-            assert_eq!(answer.json(), json!({"path": "a.md", "revision": "t1"}));
+            assert_eq!(answer.status, StatusCode::BAD_REQUEST, "{query}");
             assert_eq!(answer.tag(), "", "{query}");
-            assert_eq!(
-                calls.taken(),
-                [Call::DocumentAt(path.into(), revision.into())],
-                "{query}"
-            );
+            assert_eq!(calls.taken(), [], "{query}");
         }
         // No revision: the working copy's
         let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
@@ -381,7 +382,15 @@ mod tests {
                 "private, max-age=31536000, immutable"
             );
             let tag = first.tag();
-            assert_ne!(tag, "");
+            // Tagged with atm's version too (ATM-672, audit H9): another atm's answer is another tag
+            assert_eq!(
+                tag,
+                etag(&json!(["document-at", VERSION, revision, "a.md"]))
+            );
+            assert_ne!(
+                tag,
+                etag(&json!(["document-at", "0.0.0", revision, "a.md"]))
+            );
             assert_eq!(
                 calls.taken(),
                 [Call::DocumentAt("a.md".into(), revision.into())]
@@ -455,7 +464,11 @@ mod tests {
                 at_revision: Err(error.clone()),
                 ..FakeProject::default()
             });
-            let answer = answer(get_document(project.as_ref(), "path=a.md&at=x", &plain()));
+            let answer = answer(get_document(
+                project.as_ref(),
+                &format!("path=a.md&at={SHA1}"),
+                &plain(),
+            ));
             assert_eq!(answer.status, status, "{error}");
             assert_eq!(answer.json(), json!({"error": error.to_string()}));
         }

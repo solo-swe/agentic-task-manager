@@ -1,0 +1,92 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "253350177c9b96ee3bb8c5d6c1bd10445c7b248b",
+    "head": "c97ed602c4072e78d65c7a6902b733a87ad0d15b"
+  },
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/claims.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/jsongit/merge.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/query.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/query/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/workspaces.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/worktrees.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/claims.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/worktrees.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/claims.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/kanban.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/claims.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/derived-rules.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/worktrees.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/serve.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-23T15:49:15Z"
+}

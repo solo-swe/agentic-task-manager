@@ -1,12 +1,12 @@
 // What a Task List card shows beyond its chips (T-338): who created and worked on the task, when, how long it took,
 // and its latest outcome or handoff, from what the task already holds (no new data loads).
 import { approvedBy } from './actors';
-import { formatAgo, shortAgent } from './claims';
-import { formatMinutes } from './format';
+import { shortAgent } from './claims';
+import { formatAgo, formatMinutes } from './format';
 import { taskNotes } from './notes';
 import type { Note, Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
-import { ms, startedBy, workSpan } from './work';
+import { taskKind } from './vocab';
+import { ms, startedBy, workMinutes } from './work';
 
 export interface CardPerson {
   role: 'created' | 'worked' | 'finished';
@@ -21,8 +21,8 @@ export interface CardFacts {
   took: string | null;
 }
 
-export function cardFacts(task: Task, now: number, vocab: Vocabulary = DEFAULT_VOCABULARY): CardFacts {
-  const kind = kindOf(vocab, task.status);
+export function cardFacts(task: Task, now: number): CardFacts {
+  const kind = taskKind(task);
   const people: CardPerson[] = [];
   if (task.created_by) people.push({ role: 'created', who: shortAgent(task.created_by) });
   const worker = startedBy(task);
@@ -38,12 +38,13 @@ export function cardFacts(task: Task, now: number, vocab: Vocabulary = DEFAULT_V
   else if (kind === 'active' || kind === 'review') when = ago('started', task.started_at);
   else when = ago('created', task.created_at);
 
-  const span = workSpan(task, now, vocab);
-  const minutes = span ? (span.end - span.start) / 60_000 : 0;
+  // atm's work time (ATM-721): every attempt and round
+  const minutes = workMinutes(task, now);
+  const live = !!task.derived?.work?.live;
   const took =
-    !span || (!span.live && minutes < 1)
+    minutes === null || (!live && minutes < 1)
       ? null
-      : span.live
+      : live
         ? `${formatMinutes(minutes)} so far`
         : `took ${formatMinutes(minutes)}`;
   return { people, when, took };

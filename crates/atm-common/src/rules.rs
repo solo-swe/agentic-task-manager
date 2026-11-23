@@ -11,6 +11,14 @@ use crate::error::{Error, Result};
 use crate::py::{repr_str, truthy};
 use crate::vocabulary::{Kind, REVIEW_MODES, Vocabulary};
 
+/// Whether a task in review is back with its agent (SR-3.9; ATM-681: the one rule): its review's decision came back,
+/// `approved` (the agent finishes it) or `changes_requested` (the agent reworks it). `rejected` is the user's, and the
+/// rest still wait for the reviewer.
+#[must_use]
+pub fn awaits_agent(review_state: Option<&str>) -> bool {
+    matches!(review_state, Some("approved" | "changes_requested"))
+}
+
 /// Whether `id` is in a list-or-text field, as Python's `in` reads it: an element of a list, part of a text.
 #[must_use]
 pub fn contains(field: Option<&Value>, id: &str) -> bool {
@@ -31,6 +39,35 @@ impl Vocabulary {
                 .and_then(Value::as_str)
                 .is_some_and(|id| id.to_lowercase() == name)
         })
+    }
+
+    /// The sprint `task` is in (its `sprint`, compared case-insensitively), if the project has it (ATM-681: the one
+    /// lookup).
+    #[must_use]
+    pub fn sprint_of(&self, task: &Task) -> Option<&Map<String, Value>> {
+        self.find_sprint(task.get("sprint"))
+    }
+
+    /// The ID of the sprint `task` is in, as the project writes it, if the project has that sprint.
+    #[must_use]
+    pub fn sprint_id_of(&self, task: &Task) -> Option<&str> {
+        self.sprint_of(task)
+            .and_then(|s| s.get("id"))
+            .and_then(Value::as_str)
+    }
+
+    /// The active sprint, if one is (ATM-681: the one lookup; the vocabulary allows one at most).
+    #[must_use]
+    pub fn active_sprint(&self) -> Option<&Map<String, Value>> {
+        self.sprints
+            .iter()
+            .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
+    }
+
+    /// The release whose ID is `id` (exactly, as stored: ATM-681's one lookup), if there is one.
+    #[must_use]
+    pub fn find_release(&self, id: &Value) -> Option<&Map<String, Value>> {
+        self.releases.iter().find(|r| r.get("id") == Some(id))
     }
 
     /// `release`, when `meta.releases` has it.
@@ -55,10 +92,10 @@ impl Vocabulary {
         } else {
             ids.join(", ")
         };
-        Err(Error::Failed {
-            message: format!("no release {}; the releases: {known}", repr_str(release)),
-            code: 2,
-        })
+        Err(Error::Invalid(format!(
+            "no release {}; the releases: {known}",
+            repr_str(release)
+        )))
     }
 
     /// A task's release: its own, else its sprint's (SR-2.6), if any.
@@ -133,10 +170,33 @@ pub fn is_foreign_reference(reference: &str) -> bool {
         .is_some_and(|(project, uuid)| !project.is_empty() && crate::ids::valid_task_uuid(uuid))
 }
 
-/// The dependencies a task still waits for: those that don't have a done-kind status yet, with their status (None
-/// for one without), and unknown IDs (status "missing"). A dependency only in the archive is done (DM-3.1):
-/// `archived(id)` says whether the archive has it. Another project's task (`<project id>:<UUID>`, ADR-007 §7) is
-/// looked up there, read only: done, or waited for with its status, or missing when it can't be found.
+/// The archive's task with an ID, if it has one: how the rules read the archive (an `Fn(&str) -> Result<Option<Task>>`).
+pub type ArchivedTask<'a> = dyn Fn(&str) -> Result<Option<Task>> + 'a;
+
+/// Whether `dependency`, of `kind`, is met (ATM-667, Hakan): done; or skipped as a duplicate (`duplicate_of`) of a task
+/// that is done (`duplicate_done`). Any other skipped dependency is not: skipping isn't doing. The one rule for this
+/// project's tasks, its archived ones and another project's.
+pub fn dependency_met(
+    kind: Option<Kind>,
+    dependency: &Task,
+    duplicate_done: &dyn Fn(&str) -> bool,
+) -> bool {
+    match kind {
+        Some(Kind::Done) => true,
+        Some(Kind::Skipped) => dependency
+            .get("duplicate_of")
+            .and_then(Value::as_str)
+            .filter(|d| !d.is_empty())
+            .is_some_and(duplicate_done),
+        _ => false,
+    }
+}
+
+/// The dependencies a task still waits for: those not met ([`dependency_met`]), with their status (None for one
+/// without), and unknown IDs (status "missing"). A dependency only in the archive (DM-3.1, `archived(id)` returns it)
+/// is a finished task: met unless it was skipped other than as a done task's duplicate. Another project's task
+/// (`<project id>:<UUID>`, ADR-007 §7) is looked up there, read only: met by the same rule there, or waited for with
+/// its status, or missing when it can't be found.
 ///
 /// # Errors
 /// When `archived` can't read the archive.
@@ -144,8 +204,30 @@ pub fn unfinished_dependencies(
     vocab: &Vocabulary,
     tasks: &[&Task],
     task: &Task,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &ArchivedTask,
 ) -> Result<Vec<(String, Option<Value>)>> {
+    // The last task with the ID, as a dict of the statuses by ID has it
+    let live = |id: &str| {
+        tasks
+            .iter()
+            .rev()
+            .find(|t| t.get("id").and_then(Value::as_str) == Some(id))
+            .copied()
+    };
+    // A duplicate is done here, in the archive (done or skipped, it was finished as itself), or in another project
+    let duplicate_done = |id: &str| match live(id) {
+        Some(t) => vocab.kind_of(t.get("status")) == Some(Kind::Done),
+        None if is_foreign_reference(id) => {
+            matches!(
+                FOREIGN_STATUS.get().and_then(|lookup| lookup(id)),
+                Some((true, _))
+            )
+        }
+        None => archived(id)
+            .ok()
+            .flatten()
+            .is_some_and(|t| vocab.kind_of(t.get("status")) != Some(Kind::Skipped)),
+    };
     let mut found = Vec::new();
     for dep in task
         .get("dependencies")
@@ -154,15 +236,10 @@ pub fn unfinished_dependencies(
         .flatten()
         .filter_map(Value::as_str)
     {
-        // The last task with the ID, as a dict of the statuses by ID has it
-        match tasks
-            .iter()
-            .rev()
-            .find(|t| t.get("id").and_then(Value::as_str) == Some(dep))
-        {
-            Some(live) => {
-                if vocab.kind_of(live.get("status")) != Some(Kind::Done) {
-                    found.push((dep.to_string(), live.get("status").cloned()));
+        match live(dep) {
+            Some(t) => {
+                if !dependency_met(vocab.kind_of(t.get("status")), t, &duplicate_done) {
+                    found.push((dep.to_string(), t.get("status").cloned()));
                 }
             }
             None if is_foreign_reference(dep) => {
@@ -172,11 +249,19 @@ pub fn unfinished_dependencies(
                     None => found.push((dep.to_string(), Some(Value::String("missing".into())))),
                 }
             }
-            None => {
-                if !archived(dep)? {
-                    found.push((dep.to_string(), Some(Value::String("missing".into()))));
+            None => match archived(dep)? {
+                // Archived, it is finished: done (whatever status an older vocabulary gave it), or skipped
+                Some(t) => {
+                    let kind = match vocab.kind_of(t.get("status")) {
+                        Some(Kind::Skipped) => Some(Kind::Skipped),
+                        _ => Some(Kind::Done),
+                    };
+                    if !dependency_met(kind, &t, &duplicate_done) {
+                        found.push((dep.to_string(), t.get("status").cloned()));
+                    }
                 }
-            }
+                None => found.push((dep.to_string(), Some(Value::String("missing".into())))),
+            },
         }
     }
     Ok(found)
@@ -230,6 +315,51 @@ mod tests {
 
     fn vocab(meta: Value) -> Vocabulary {
         Vocabulary::of_meta(&task(meta)).unwrap()
+    }
+
+    #[test]
+    fn a_task_in_review_is_back_with_its_agent_once_approved_or_sent_back() {
+        for (state, back) in [
+            (Some("approved"), true),
+            (Some("changes_requested"), true),
+            (Some("rejected"), false),
+            (Some("waiting"), false),
+            (Some(""), false),
+            (None, false),
+        ] {
+            assert_eq!(awaits_agent(state), back, "{state:?}");
+        }
+    }
+
+    #[test]
+    fn the_active_sprint_is_the_one_active_and_none_without() {
+        let id = |v: &Vocabulary| v.active_sprint().and_then(|s| s.get("id")).cloned();
+        // The vocabulary refuses two active sprints, so there is at most one to find
+        let one = vocab(json!({"sprints": [
+            {"id": "A", "state": "closed"},
+            {"id": "B", "state": "active"},
+            {"id": "C", "state": "planned"}
+        ]}));
+        assert_eq!(id(&one), Some(json!("B")));
+        let none = vocab(json!({"sprints": [{"id": "A", "state": "planned"}, {"id": "B"}]}));
+        assert_eq!(id(&none), None);
+        assert_eq!(id(&vocab(json!({}))), None);
+    }
+
+    #[test]
+    fn a_release_is_found_by_its_exact_id() {
+        let v = vocab(json!({"releases": [{"id": "1.0"}, {"id": "Beta"}]}));
+        assert!(v.find_release(&json!("1.0")).is_some());
+        assert!(v.find_release(&json!("Beta")).is_some());
+        assert!(
+            v.find_release(&json!("beta")).is_none(),
+            "not in another case"
+        );
+        assert!(v.find_release(&json!("2.0")).is_none());
+        assert!(
+            v.find_release(&json!(1.0)).is_none(),
+            "a number isn't the text"
+        );
     }
 
     #[test]
@@ -290,7 +420,8 @@ mod tests {
             task(json!({"id": "T-2", "status": "todo"})),
             task(json!({"id": "T-4", "dependencies": ["T-1", "T-2", "T-3", "T-9"]})),
         );
-        let archived = |id: &str| Ok(id == "T-3");
+        let archived =
+            |id: &str| Ok((id == "T-3").then(|| task(json!({"id": "T-3", "status": "done"}))));
         let found = unfinished_dependencies(&v, &[&done, &todo, &me], &me, &archived).unwrap();
         assert_eq!(
             found,
@@ -299,6 +430,52 @@ mod tests {
                 ("T-9".into(), Some(json!("missing")))
             ]
         );
+    }
+
+    /// ATM-667 (Hakan): a skipped dependency is met only as a duplicate of a task that is done; the same in the
+    /// archive, where it was met whatever it was
+    #[test]
+    fn a_skipped_dependency_is_met_only_as_a_done_tasks_duplicate() {
+        let v = vocab(json!({}));
+        let live = [
+            task(json!({"id": "T-1", "status": "done"})),
+            task(json!({"id": "T-2", "status": "todo"})),
+            task(json!({"id": "S-1", "status": "skipped", "duplicate_of": "T-1"})),
+            task(json!({"id": "S-2", "status": "skipped", "duplicate_of": "T-2"})),
+            task(json!({"id": "S-3", "status": "skipped"})),
+            task(json!({"id": "S-4", "status": "skipped", "duplicate_of": "A-1"})),
+            task(json!({"id": "S-5", "status": "skipped", "duplicate_of": "A-2"})),
+        ];
+        let archive = [
+            task(json!({"id": "A-1", "status": "done"})),
+            task(json!({"id": "A-2", "status": "skipped"})),
+            task(json!({"id": "A-3", "status": "skipped", "duplicate_of": "T-1"})),
+            task(json!({"id": "A-4", "status": "skipped"})),
+            // An older vocabulary's status: archived, it was finished
+            task(json!({"id": "A-5", "status": "closed"})),
+        ];
+        let archived = |id: &str| {
+            Ok(archive
+                .iter()
+                .find(|t| t.get("id").and_then(Value::as_str) == Some(id))
+                .cloned())
+        };
+        let waits = |dep: &str| {
+            let me = task(json!({"id": "ME", "dependencies": [dep]}));
+            let mut all: Vec<&Task> = live.iter().collect();
+            all.push(&me);
+            !unfinished_dependencies(&v, &all, &me, &archived)
+                .unwrap()
+                .is_empty()
+        };
+        // Met: done; skipped as a done task's duplicate, here or archived; archived done, or of an older status
+        for met in ["T-1", "S-1", "S-4", "A-1", "A-3", "A-5"] {
+            assert!(!waits(met), "{met} is met");
+        }
+        // Not: to do; skipped as a duplicate of one not done, or of one skipped itself; skipped with no duplicate
+        for open in ["T-2", "S-2", "S-3", "S-5", "A-2", "A-4"] {
+            assert!(waits(open), "{open} isn't met");
+        }
     }
 
     #[test]

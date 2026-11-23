@@ -48,9 +48,7 @@
   const narrowed = $derived(given === undefined && dashboard.unscoped.length < dashboard.base.length);
   const matching = $derived(new Set(dashboard.unscoped.map((t) => t.id)));
   const timeline = $derived(
-    given !== undefined
-      ? given
-      : agentTimeline(dashboard.base, dashboard.claims, now, narrowed ? matching : undefined, dashboard.vocab),
+    given !== undefined ? given : agentTimeline(dashboard.base, dashboard.claims, now, narrowed ? matching : undefined),
   );
   const bounds = $derived<TimeWindow>(
     timeline

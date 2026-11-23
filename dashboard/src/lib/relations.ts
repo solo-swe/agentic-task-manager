@@ -1,8 +1,7 @@
-// How a finished task ended and what it is linked to without blocking (docs/sprints-and-releases-design.md SR-2.8):
-// atm stores a resolution only when it isn't the default, and `related` on one side only, so the dashboard reads
-// both the way `atm show` prints them.
+// How a finished task ended and what it is linked to without blocking (docs/sprints-and-releases-design.md SR-2.8),
+// as atm says them (ATM-719): its resolution with the default filled in, and the links pointing at it
+// (`derived.resolution`, `related_by`, `duplicated_by`), as `atm task details` prints them.
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
 
 export const RESOLUTION_LABELS: Record<string, string> = {
   done: 'done',
@@ -11,13 +10,10 @@ export const RESOLUTION_LABELS: Record<string, string> = {
   obsolete: 'obsolete',
 };
 
-/** How a finished task ended: its own resolution, else the default (done, or won't do for a skipped task);
- * undefined while it isn't finished */
-export function resolutionOf(task: Task, vocab: Vocabulary = DEFAULT_VOCABULARY): string | undefined {
-  const kind = kindOf(vocab, task.status);
-  if (kind === 'done') return task.resolution || 'done';
-  if (kind === 'skipped') return task.resolution || 'wont_do';
-  return undefined;
+/** How a finished task ended, as atm says it: its own resolution, else the default (done, or won't do for a skipped
+ * task); undefined while it isn't finished */
+export function resolutionOf(task: Task): string | undefined {
+  return task.derived?.resolution;
 }
 
 export interface Relations {
@@ -27,16 +23,13 @@ export interface Relations {
   duplicatedBy: string[];
 }
 
-/** A task's links that don't block, both ways, among `tasks` */
-export function relationsOf(task: Task, tasks: Task[]): Relations {
+/** A task's links that don't block, both ways: its own, and those atm finds pointing at it */
+export function relationsOf(task: Task): Relations {
   const own = (task.related ?? []).filter((id) => typeof id === 'string' && id !== task.id);
-  const others = tasks
-    .filter((t) => t.id !== task.id && (t.related ?? []).includes(task.id) && !own.includes(t.id))
-    .map((t) => t.id);
   return {
-    related: [...own, ...others],
+    related: [...own, ...(task.derived?.related_by ?? [])],
     duplicateOf: task.duplicate_of || undefined,
-    duplicatedBy: tasks.filter((t) => t.duplicate_of === task.id).map((t) => t.id),
+    duplicatedBy: task.derived?.duplicated_by ?? [],
   };
 }
 
@@ -44,13 +37,10 @@ const NOT_DONE_ORDER = ['wont_do', 'obsolete', 'duplicate'];
 
 /** The finished tasks that weren't done, by resolution (won't do, obsolete, duplicate), for the Progress panel,
  * which counts them apart from done; resolutions it doesn't know come last */
-export function notDone(
-  tasks: Task[],
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
-): { resolution: string; count: number }[] {
+export function notDone(tasks: Task[]): { resolution: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const t of tasks) {
-    const resolution = resolutionOf(t, vocab);
+    const resolution = resolutionOf(t);
     if (resolution && resolution !== 'done') counts.set(resolution, (counts.get(resolution) ?? 0) + 1);
   }
   const rank = (r: string) => (NOT_DONE_ORDER.includes(r) ? NOT_DONE_ORDER.indexOf(r) : NOT_DONE_ORDER.length);

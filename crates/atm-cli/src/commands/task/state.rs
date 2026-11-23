@@ -167,13 +167,12 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
             command.name()
         )));
     }
-    if ctx.dry_run {
-        println!("[dry-run] would {} {task_id}", command.name());
-        return Ok(());
-    }
     let mut opts = options(command, args);
     if let Some(duplicate) = &opts.duplicate_of {
         opts.duplicate_of = Some(project.resolve_task(duplicate)?);
+    }
+    if ctx.dry(&format!("{} {task_id}", command.name())) {
+        return Ok(());
     }
     // A task finished whose change an approved live review covers as it is now needs no other review
     // (docs/code-review-design.md §3.5): it is approved, naming the review, first. Never in the way of done itself

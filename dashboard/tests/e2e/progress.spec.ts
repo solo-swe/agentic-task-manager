@@ -348,7 +348,7 @@ test.describe('Progress tab: burndown title, info and range (T-240)', () => {
     await page.locator('#burndown-info').click();
     const popover = page.locator('.infotip-popover');
     await expect(popover).toContainText('one agent, one task at a time');
-    await expect(popover).toContainText('interactive');
+    await expect(popover).toContainText('with you are left out of the pace');
     await page.keyboard.press('Escape');
     await expect(popover).toHaveCount(0);
   });

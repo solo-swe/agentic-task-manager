@@ -2,7 +2,7 @@
 // counts in each; tasks in none get their own row, last.
 import { componentLabel, componentOrder, taskComponents, type Component } from './components';
 import type { Task } from './types';
-import { kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 
 export interface ComponentProgress {
   /** The component's ID; '' for the tasks in no component */
@@ -18,11 +18,7 @@ export interface ComponentProgress {
   blocked: number;
 }
 
-export function componentProgress(
-  tasks: readonly Task[],
-  components: readonly Component[],
-  vocab: Vocabulary,
-): ComponentProgress[] {
+export function componentProgress(tasks: readonly Task[], components: readonly Component[]): ComponentProgress[] {
   const rows = new Map<string, ComponentProgress>();
   const row = (id: string) => {
     let r = rows.get(id);
@@ -34,7 +30,7 @@ export function componentProgress(
     return r;
   };
   for (const t of tasks) {
-    const kind = kindOf(vocab, t.status);
+    const kind = taskKind(t);
     const ids = taskComponents(t, components);
     for (const id of ids.length ? ids : ['']) {
       const r = row(id);
@@ -43,8 +39,9 @@ export function componentProgress(
         continue;
       }
       r.total++;
+      // Back with its agent (approved, sent back) is open work, as atm says (ATM-717: `derived.agent_work`)
       if (kind === 'done') r.done++;
-      else if (kind === 'review') r.inReview++;
+      else if (kind === 'review' && t.derived?.agent_work !== true) r.inReview++;
       else if (kind === 'blocked') r.blocked++;
       else r.open++;
     }

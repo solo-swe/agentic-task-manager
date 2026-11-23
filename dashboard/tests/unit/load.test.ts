@@ -17,6 +17,7 @@ import archive from '../fixtures/archive.json';
 import standard from '../fixtures/standard.json';
 import noMeta from '../fixtures/no-meta.json';
 import { asTaskViews, v1Tasks } from './api.helpers';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
@@ -244,7 +245,10 @@ describe('loadTasks', () => {
     if (result.unchanged) return;
     expect(result.loaded.tasks).toHaveLength(12);
     // The task as stored, with what atm derives for it beside its own fields (T-366)
-    expect(result.loaded.tasks[0]).toEqual({ ...standard.tasks[0], derived: {} });
+    expect(result.loaded.tasks[0]).toEqual({ ...standard.tasks[0], derived: { sprint: 'Phase 0' } });
+    // The sprints atm serves with them (ATM-720): here the fixture's phases
+    expect(result.loaded.sprints.sprints.map((s) => s.id)).toEqual(['Phase 0', 'Phase 1', 'Phase 2']);
+    expect(result.loaded.sprints.sprintOf(result.loaded.tasks[0])).toBe('Phase 0');
     expect(result.loaded.projectName).toBe('Standard Project'); // its meta, in the same snapshot
     expect(result.validators).toEqual({ etag: '"abc"', lastModified: 'Sat, 24 Oct 2026 10:00:00 GMT' });
   });
@@ -265,6 +269,36 @@ describe('loadTasks', () => {
       vi.fn().mockResolvedValue(new Response(JSON.stringify(asTaskViews(standard, 4321)))),
     );
     expect(!result.unchanged && result.loaded.bytes).toBe(4321);
+  });
+
+  it('takes the vocabulary as atm resolved it (ATM-718); the defaults from a server that sends none', async () => {
+    const vocabulary = {
+      statuses: [
+        { id: 'open', label: 'Open', kind: 'todo' },
+        { id: 'shipped', label: 'Shipped', kind: 'done' },
+      ],
+      types: [{ id: 'chore', label: 'Chore' }],
+      priorities: [{ id: 'must', label: 'Must' }],
+      default_priority: 'must',
+      labels: [],
+      components: [{ id: 'api', label: 'API', paths: [] }],
+      workflow: { type: 'direct' },
+      review: 'none',
+      phases: [],
+    };
+    const served = await loadTasks(
+      'p1',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...asTaskViews(standard), vocabulary }))),
+    );
+    const vocab = !served.unchanged ? served.loaded.vocab : null;
+    expect(vocab?.statuses.map((s) => s.id)).toEqual(['open', 'shipped']);
+    expect([vocab?.defaultPriority, vocab?.components[0].label, vocab?.workflow?.type]).toEqual([
+      'must',
+      'API',
+      'direct',
+    ]);
+    const none = await loadTasks('p1', vi.fn().mockResolvedValue(new Response(JSON.stringify(asTaskViews(standard)))));
+    expect(!none.unchanged && none.loaded.vocab).toBe(DEFAULT_VOCABULARY);
   });
 
   it('a 304 without having asked is an error', async () => {

@@ -11,8 +11,8 @@ vi.mock('../../src/lib/compmd', async (actual) => ({ ...(await actual()), loadCo
 // Editing one's own comments (ATM-638): none unless a test sets it
 const edits = vi.hoisted(() => ({ current: undefined as undefined | Record<string, unknown> }));
 vi.mock('../../src/lib/reviews/links', async (actual) => ({ ...(await actual()), commentEdits: () => edits.current }));
-function editing(you: string, refused: string | null = null) {
-  const actions = { you, edit: vi.fn(async () => refused) };
+function editing(refused: string | null = null) {
+  const actions = { edit: vi.fn(async () => refused) };
   edits.current = actions;
   return actions;
 }
@@ -65,14 +65,19 @@ afterEach(() => {
 });
 
 describe('ChainBox: editing your own comment (ATM-638)', () => {
-  it('Edit only on your own comment and reply, not on others’ or a poke', () => {
-    editing('Ana');
+  it('Edit only where atm says the comment is editable (ATM-723), on a comment or a reply', () => {
+    editing();
     show(
       chain([
         comment('c1', {
-          replies: [comment('r1', { resolved: null }), comment('r2', { resolved: null, author: 'Bo' })],
+          editable: true,
+          replies: [
+            comment('r1', { resolved: null, editable: true }),
+            comment('r2', { resolved: null, author: 'Bo', editable: false }),
+          ],
         }),
-        comment('c2', { author: 'Bo' }),
+        comment('c2', { author: 'Bo', editable: false }),
+        // From atm without the field: not editable
         comment('c3', { poke: true, resolved: null }),
       ]),
     );
@@ -84,8 +89,8 @@ describe('ChainBox: editing your own comment (ATM-638)', () => {
   });
 
   it('Edit, change, Save sends it; Cancel and Escape keep the old text; a refusal keeps the box with why', async () => {
-    const actions = editing('Ana', 'not yours');
-    show(chain([comment('c1', { body: 'Old.' })]));
+    const actions = editing('not yours');
+    show(chain([comment('c1', { body: 'Old.', editable: true })]));
     await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
     const box = screen.getByRole('textbox', { name: 'Edit your comment' });
     expect(box).toHaveValue('Old.');
@@ -101,15 +106,15 @@ describe('ChainBox: editing your own comment (ATM-638)', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
   });
 
-  it('saved, the box closes; on an ended review (no one is you there) there is no Edit', async () => {
-    editing('Ana');
-    show(chain([comment('c1')]));
+  it('saved, the box closes; an editable comment on a page that can’t change one has no Edit', async () => {
+    editing();
+    show(chain([comment('c1', { editable: true })]));
     await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
     await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', metaKey: true });
     await vi.waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
-    editing('');
-    const ended = show(chain([comment('c2')]));
-    expect(ended.container.querySelector('[aria-label="Edit comment"]')).toBeNull();
+    edits.current = undefined;
+    const elsewhere = show(chain([comment('c2', { editable: true })]));
+    expect(elsewhere.container.querySelector('[aria-label="Edit comment"]')).toBeNull();
   });
 });
 

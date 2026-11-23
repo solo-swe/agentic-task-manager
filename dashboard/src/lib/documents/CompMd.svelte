@@ -3,8 +3,11 @@
   import {
     blocksIn,
     dashboardAddress,
+    hrefOf,
+    linkAt,
     loadCompmd,
     processText,
+    safeDecode,
     safeHref,
     secureLinks,
     slug,
@@ -263,9 +266,10 @@
    * open the document); a link to the dashboard itself here; external ones in a new tab without access to this page;
    * any other one not at all */
   function follow(e: MouseEvent) {
-    const a = (e.target as Element | null)?.closest('a[href]');
+    // An image map's area and a diagram's SVG link too (ATM-676)
+    const a = linkAt(e.target);
     if (!a || !host?.contains(a)) return;
-    const href = (a.getAttribute('href') ?? '').trim();
+    const href = hrefOf(a);
     if (!safeHref(href)) {
       e.preventDefault();
       return;
@@ -285,7 +289,9 @@
         onopen?.(doc);
         return;
       }
-      const wanted = decodeURIComponent(href.slice(1));
+      // A malformed `%` is no heading's (ATM-676, audit D9: it threw here)
+      const wanted = safeDecode(href.slice(1));
+      if (wanted === null) return;
       const heading = [...host.querySelectorAll('h1, h2, h3, h4, h5, h6')].find(
         (h) => slug(h.textContent ?? '') === wanted,
       );

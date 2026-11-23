@@ -1,0 +1,132 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "b1711bf597feab0b7aeff92658fea30a2c023392",
+    "head": "18370f3845ada2cec9a5059c5f9fa45e28e0b398"
+  },
+  "files": [
+    {
+      "path": "crates/atm-common/schema/api.schema.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/query.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/query/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/sprints/views.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/sprints/views/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/tasks.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/details/DetailPanel.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/filters.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/relations.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/scope.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/sprints.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/stages.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/DetailPanel.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/components.helpers.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/filters.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/relations.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/scope.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/sprints.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/stages.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/view-store.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/views.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/query.json",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-22T23:43:05Z"
+}

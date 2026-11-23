@@ -127,7 +127,8 @@ test.describe('themes', () => {
     // The document style below it (T-404): the same combo box, a sample of its type where the theme has its swatch,
     // its select as wide as the theme's
     const docStyle = page.locator('.doc-style-picker');
-    await expect(page.getByLabel('Document style', { exact: true })).toHaveValue('auto');
+    // GitHub by default (ATM-706)
+    await expect(page.getByLabel('Document style', { exact: true })).toHaveValue('github');
     await expect(docStyle.locator('.doc-style-sample')).toHaveText('Aa');
     const [a, b] = [await picker.locator('select').boundingBox(), await docStyle.locator('select').boundingBox()];
     expect([b!.x, b!.width]).toEqual([a!.x, a!.width]);

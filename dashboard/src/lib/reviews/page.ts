@@ -39,7 +39,8 @@ export function groupReviews(entries: ReviewEntry[], now: number): ReviewGroup[]
   const into = (id: ReviewGroup['id'], entry: ReviewEntry) => groups.find((g) => g.id === id)!.entries.push(entry);
   for (const entry of entries) {
     const status = entry.review.status;
-    const decided = status === 'approved' || status === 'closed';
+    // Decided, as atm says it (ATM-714)
+    const decided = entry.ended;
     if (entry.needs_you && (status === 'waiting' || status === 'live')) into('waiting', entry);
     else if (entry.open > 0) into('commented', entry);
     else if (status === 'changes_requested') into('sent-back', entry);
@@ -166,12 +167,20 @@ export function lineCounts(patch: string): { added: number; removed: number } {
   return { added, removed };
 }
 
-/** A file's chains as the diff viewer places them: at their lines in the round shown (a drifted one at its last
- * place), a whole file's anywhere */
+const onFile = (c: PlacedChain, file: ViewFile) =>
+  c.anchor.path === file.path || (file.old_path !== file.path && c.anchor.path === file.old_path);
+
+/** A file's chains as the diff viewer places them: those the view holds (ATM-725, atm's `in_view`), at their lines in
+ * the round shown (a drifted one at its last place), a whole file's anywhere */
 export function chainsOf(chains: PlacedChain[], file: ViewFile): Chain[] {
   return chains
-    .filter((c) => c.anchor.path === file.path || (file.old_path !== file.path && c.anchor.path === file.old_path))
+    .filter((c) => c.in_view && onFile(c, file))
     .map((c) => ({ id: c.id, comments: c.comments, anchor: { ...c.anchor, path: file.path, lines: c.placed } }));
+}
+
+/** A file's chains made on a round the view doesn't hold (ATM-725): listed with the round they are on, not placed */
+export function elsewhereOf(chains: PlacedChain[], file: ViewFile): PlacedChain[] {
+  return chains.filter((c) => !c.in_view && onFile(c, file));
 }
 
 /** The chains of the review as a whole (on no file) */
@@ -181,7 +190,7 @@ export function reviewChains(chains: PlacedChain[]): PlacedChain[] {
 
 /** A file's drifted chains: their text is gone from the round shown, and they link to where they were made */
 export function driftedOf(chains: PlacedChain[], file: ViewFile): PlacedChain[] {
-  return chains.filter((c) => c.drifted && (c.anchor.path === file.path || c.anchor.path === file.old_path));
+  return chains.filter((c) => c.in_view && c.drifted && onFile(c, file));
 }
 
 /** Whether a chain is open, as atm's rules count it: one of its top-level comments has its box unticked. A poke has no

@@ -1,5 +1,6 @@
 import dagre from '@dagrejs/dagre';
 import type { Task } from '../types';
+import { taskKind } from '../vocab';
 
 export const NODE_W = 160;
 export const NODE_H = 52;
@@ -36,6 +37,13 @@ export interface GraphLayout {
 
 export function truncate(str: string, max: number): string {
   return str.length > max ? str.substring(0, max - 1) + '…' : str;
+}
+
+/** The node an overflowing graph first centers on: a matching task at work, else one to do, by kind as atm says it
+ * (ATM-680, audit D12: never by status IDs, which a project names its own way); none when neither */
+export function graphFocus(nodes: GraphNode[], matching: Set<string>): GraphNode | undefined {
+  const of = (kind: string) => nodes.find((n) => matching.has(n.task.id) && taskKind(n.task) === kind);
+  return of('active') ?? of('todo');
 }
 
 /** `id` and every task it waits for, directly or through others, following the graph's edges. */

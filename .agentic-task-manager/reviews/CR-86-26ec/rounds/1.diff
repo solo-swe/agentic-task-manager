@@ -1,0 +1,326 @@
+diff --git a/crates/atm-lib/src/review_drafts/tests.rs b/crates/atm-lib/src/review_drafts/tests.rs
+index db2c1cd2..c6bc0b21 100644
+--- a/crates/atm-lib/src/review_drafts/tests.rs
++++ b/crates/atm-lib/src/review_drafts/tests.rs
+@@ -36,7 +36,12 @@ fn round() -> NewRound {
+             head: "b".into(),
+         },
+         submodule: None,
+-        files: Vec::new(),
++        // The file the drafts are on: a comment is on one of its round's files (ATM-658)
++        files: vec![atm_review::model::FileChange {
++            path: "src/a.rs".into(),
++            status: reviews::FileStatus::Modified,
++            binary: false,
++        }],
+         patch: Patch(String::new()),
+         by: "claude:1".into(),
+     }
+diff --git a/crates/atm-review/src/files.rs b/crates/atm-review/src/files.rs
+index e692ebda..44e3779d 100644
+--- a/crates/atm-review/src/files.rs
++++ b/crates/atm-review/src/files.rs
+@@ -204,6 +204,37 @@ pub mod comments_md {
+         )
+     }
+ 
++    /// The mark before a body line that would read as a comment's first line (ATM-658).
++    const ESCAPE: char = '\\';
++
++    /// Whether a body line, at any indent and under any number of escape marks, has the shape of a comment's first
++    /// line (`- **author** · at · cN`, with or without a box), which `read_item` would take for a reply or a comment
++    /// by whoever it names.
++    fn comment_shaped(line: &str) -> bool {
++        read_item(line.trim_start_matches(' ').trim_start_matches(ESCAPE)).is_some()
++    }
++
++    /// A body line as it is written: one of a comment's shape gets an escape mark after its own indent, so it is
++    /// read back as body, never as a comment (ATM-658, I31). Every other line is as it was, so older files read the same.
++    fn escape_body_line(line: &str) -> String {
++        if !comment_shaped(line) {
++            return line.to_string();
++        }
++        let rest = line.trim_start_matches(' ');
++        format!("{}{ESCAPE}{rest}", &line[..line.len() - rest.len()])
++    }
++
++    /// A body line as it was given: one escape mark less on a line of a comment's shape (see [`escape_body_line`]).
++    fn unescape_body_line(line: &str) -> String {
++        let rest = line.trim_start_matches(' ');
++        match rest.strip_prefix(ESCAPE) {
++            Some(unmarked) if comment_shaped(rest) => {
++                format!("{}{unmarked}", &line[..line.len() - rest.len()])
++            }
++            _ => line.to_string(),
++        }
++    }
++
+     fn write_comment(out: &mut Vec<String>, comment: &Comment, depth: usize) {
+         let indent = "  ".repeat(depth);
+         let resolved = match comment.resolved {
+@@ -220,7 +251,7 @@ pub mod comments_md {
+             out.push(if line.is_empty() {
+                 String::new()
+             } else {
+-                format!("{indent}  {line}")
++                format!("{indent}  {}", escape_body_line(line))
+             });
+         }
+         for reply in &comment.replies {
+@@ -452,7 +483,7 @@ pub mod comments_md {
+                     continue;
+                 }
+                 if let Some(body) = line.strip_prefix(&indent) {
+-                    comment.body.push_str(body);
++                    comment.body.push_str(&unescape_body_line(body));
+                     comment.body.push('\n');
+                     continue;
+                 }
+@@ -926,6 +957,71 @@ written at the margin by hand
+         );
+     }
+ 
++    /// ATM-658: a body line shaped like a comment's first line, or like a heading, is the body's, read back as it was
++    /// given, never a reply or a comment by whoever it names
++    #[test]
++    fn a_body_with_comment_and_heading_shaped_lines_round_trips_as_one_comments_body() {
++        let reply = "- **Hakan Serce** · 2026-11-17T04:00:00Z · c99";
++        let body = [
++            "Looks fine.",
++            reply,
++            "    - [x] **Hakan Serce** · 2026-11-17T04:00:00Z · c98",
++            "- [poke] **Hakan Serce** · 2026-11-17T04:00:00Z · c96",
++            "\\- **Hakan Serce** · 2026-11-17T04:00:00Z · c97",
++            "\\\\- **Hakan Serce** · 2026-11-17T04:00:00Z · c95",
++            "## a.rs · round 1 · t9",
++            "\\not a comment, kept as it is",
++            "- **bold** text in a list",
++        ]
++        .join("\n");
++        let mut file = comments_md::read(
++            "## a.rs · round 1 · t1\n- [ ] **claude:0f56a916** · 2026-11-17T03:31:00Z · c1\n",
++        );
++        file.chains[0].comments[0].body = body.clone();
++        let text = comments_md::write(&file);
++        // Each comment-shaped line gets one mark more; the rest is written as given
++        assert!(text.contains(&format!("  \\{reply}\n")), "{text}");
++        assert!(text.contains("      \\- [x] **Hakan Serce**"), "{text}");
++        assert!(
++            text.contains("  \\\\- **Hakan Serce** · 2026-11-17T04:00:00Z · c97\n"),
++            "{text}"
++        );
++        assert!(
++            text.contains("  \\not a comment, kept as it is\n"),
++            "{text}"
++        );
++        assert!(text.contains("  - **bold** text in a list\n"), "{text}");
++
++        let back = comments_md::read(&text);
++        assert!(back.unread.is_empty(), "{:?}", back.unread);
++        assert_eq!(back.chains.len(), 1, "no chain of the heading in the body");
++        let comment = &back.chains[0].comments[0];
++        assert!(
++            comment.replies.is_empty(),
++            "no reply from the body: {:?}",
++            comment.replies
++        );
++        assert_eq!(comment.body, body);
++        assert_eq!(comments_md::write(&back), text);
++    }
++
++    /// ATM-658: an older file's body reads as before: a line it never escaped keeps its marks
++    #[test]
++    fn an_older_files_body_lines_with_marks_read_as_they_were() {
++        let text = "\
++## a.rs · round 1 · t1
++- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1
++  \\*not emphasis\\*
++  \\\\server\\share
++";
++        let file = comments_md::read(text);
++        assert_eq!(
++            file.chains[0].comments[0].body,
++            "\\*not emphasis\\*\n\\\\server\\share"
++        );
++        assert_eq!(comments_md::write(&file), text);
++    }
++
+     #[test]
+     fn a_comment_without_text_and_a_chain_without_comments_read_back() {
+         let text = "\
+diff --git a/crates/atm-review/src/folder.rs b/crates/atm-review/src/folder.rs
+index 7efc7ff9..d911cc28 100644
+--- a/crates/atm-review/src/folder.rs
++++ b/crates/atm-review/src/folder.rs
+@@ -646,7 +646,8 @@ mod tests {
+     use super::{FileStore, folder_name, list_everywhere};
+     use crate::files::review_md;
+     use crate::model::{
+-        Actor, Anchor, Patch, ReviewHeader, ReviewId, ReviewRef, RoundKind, Status,
++        Actor, Anchor, FileChange, FileStatus, Patch, ReviewHeader, ReviewId, ReviewRef, RoundKind,
++        Status,
+     };
+     use crate::rules::{Reviews, Verdict};
+     use crate::store::{NewReview, NewRound, ReviewFilter, ReviewStore};
+@@ -672,7 +673,11 @@ mod tests {
+                     head: "b2".into(),
+                 },
+                 submodule: None,
+-                files: Vec::new(),
++                files: vec![FileChange {
++                    path: "src/a.rs".into(),
++                    status: FileStatus::Modified,
++                    binary: false,
++                }],
+                 patch: Patch("diff --git a/x b/x\n+one\n".into()),
+                 by: agent(),
+             },
+diff --git a/crates/atm-review/src/rules.rs b/crates/atm-review/src/rules.rs
+index 0fa322f5..a91b75f1 100644
+--- a/crates/atm-review/src/rules.rs
++++ b/crates/atm-review/src/rules.rs
+@@ -4,7 +4,7 @@
+ 
+ use atm_common::{Error, Result};
+ 
+-use crate::model::{Actor, Anchor, CommentId, Review, ReviewHeader, ReviewRef, Status};
++use crate::model::{Actor, Anchor, CommentId, FileStatus, Review, ReviewHeader, ReviewRef, Status};
+ use crate::store::{NewReview, NewRound, ReviewStore};
+ 
+ /// What a reviewer submits (§3.11's *Submit*).
+@@ -184,11 +184,30 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+         by: &Actor,
+     ) -> Result<CommentId> {
+         let review = self.not_ended(reference, "be commented on")?;
+-        if !review.rounds.iter().any(|r| r.number == anchor.round) {
++        let Some(round) = review.rounds.iter().find(|r| r.number == anchor.round) else {
+             return Err(Error::Invalid(format!(
+                 "{} has no round {}",
+                 review.header.reference, anchor.round
+             )));
++        };
++        // A path is one of the round's files, and has no control character: comments.md's heading carries it, so a
++        // newline in it could add a heading or a comment of its own (ATM-658, I31)
++        if let Some(path) = &anchor.path {
++            if path.chars().any(char::is_control) {
++                return Err(Error::Invalid(
++                    "a comment's file can't have a control character (a newline, a tab, …) in its path".into(),
++                ));
++            }
++            // A renamed file's old path is the round's too (its old side)
++            let in_round = round.files.iter().any(|f| {
++                &f.path == path || matches!(&f.status, FileStatus::Renamed { from } if from == path)
++            });
++            if !in_round {
++                return Err(Error::Invalid(format!(
++                    "{} isn't one of round {}'s files in {}",
++                    path, anchor.round, review.header.reference
++                )));
++            }
+         }
+         if body.trim().is_empty() {
+             return Err(Error::Invalid("a comment needs some text".into()));
+@@ -510,7 +529,8 @@ mod tests {
+     use super::{Reviews, Verdict, decides, is_author};
+     use crate::memory::MemoryStore;
+     use crate::model::{
+-        Actor, Anchor, Chain, CommentId, Patch, ReviewHeader, ReviewRef, RoundKind, Status,
++        Actor, Anchor, Chain, CommentId, FileChange, FileStatus, Patch, ReviewHeader, ReviewRef,
++        RoundKind, Status,
+     };
+     use crate::store::{NewReview, NewRound, ReviewFilter, ReviewStore};
+ 
+@@ -520,6 +540,14 @@ mod tests {
+     fn hakan() -> Actor {
+         Actor::from("Hakan Serce")
+     }
++    /// A round's file, changed.
++    fn changed(path: &str) -> FileChange {
++        FileChange {
++            path: path.into(),
++            status: FileStatus::Modified,
++            binary: false,
++        }
++    }
+     fn round(by: &Actor) -> NewRound {
+         NewRound {
+             kind: RoundKind::Range {
+@@ -527,7 +555,9 @@ mod tests {
+                 head: "b2".into(),
+             },
+             submodule: None,
+-            files: Vec::new(),
++            files: ["a.rs", "x", "crates/atm-cli/src/process.rs"]
++                .map(changed)
++                .to_vec(),
+             patch: Patch("diff --git a/x b/x\n".into()),
+             by: by.clone(),
+         }
+@@ -1195,6 +1225,55 @@ mod tests {
+         assert_eq!(review.rounds[1].by, someone());
+     }
+ 
++    #[test]
++    /// ATM-658: comments.md's heading carries the path, so it is one of the round's files and has no control character
++    fn a_comment_is_on_one_of_its_rounds_files_whose_path_has_no_control_character() {
++        let mut store = MemoryStore::new();
++        let mut reviews = Reviews::new(&mut store);
++        let mut first = round(&agent());
++        first.files.push(FileChange {
++            path: "src/new.rs".into(),
++            status: FileStatus::Renamed {
++                from: "src/old.rs".into(),
++            },
++            binary: false,
++        });
++        reviews
++            .create(NewReview {
++                first,
++                ..new_review(Status::Waiting)
++            })
++            .unwrap();
++        // One of its files, a renamed one by either path, or the review as a whole
++        for path in ["a.rs", "src/new.rs", "src/old.rs"] {
++            reviews
++                .comment(&cr(1), on(path, 1), "Fine.", &hakan())
++                .unwrap();
++        }
++        let whole = Anchor {
++            round: 1,
++            ..Anchor::default()
++        };
++        reviews
++            .comment(&cr(1), whole, "Overall fine.", &hakan())
++            .unwrap();
++        // A file the round doesn't have, and one whose path would add lines to comments.md
++        for (path, says) in [
++            ("b.rs", "b.rs isn't one of round 1's files in CR-1"),
++            ("a.rs\n## (the review) · round 1 · t9", "control character"),
++            ("a.rs\r", "control character"),
++            ("a\tb.rs", "control character"),
++        ] {
++            match reviews.comment(&cr(1), on(path, 1), "Hm.", &hakan()) {
++                Err(Error::Invalid(message)) => {
++                    assert!(message.contains(says), "{path:?}: {message}");
++                }
++                other => panic!("{path:?}: {other:?}"),
++            }
++        }
++        assert_eq!(reviews.store().get_review(&cr(1)).unwrap().chains.len(), 4);
++    }
++
+     #[test]
+     fn anyone_comments_on_a_round_the_review_has_and_replies_with_some_text() {
+         let mut store = MemoryStore::new();
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index ceb6f652..91bc9ea4 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -72,6 +72,7 @@ with the task that adds it.
+ | I8  | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `tests/scripts/scenarios/security.json`                                                                                          |
+ | I9  | **The merge driver's command comes from the clone's own git config**, never from the repository; the path git gives it (`%P`, 0.40.0) only picks the merge by its file name (`tasks.json`, a review's `comments.md` or `review.md`) and is never opened                                                                                                                                                                                                                                                                                                                                                                                                     | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`, `crates/atm-lib/src/maintenance.rs`, `crates/atm-review/src/merge.rs`) |
+ | I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::for_people` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's; it also shows tasks named by UUID by their key, ATM-557), whose `output::clean` drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal"                                                             |
++| I31 | **A comment's text can't forge another comment** (ATM-658): in `comments.md`, a comment's body line that has the shape of a comment's first line (`- **author** · at · cN`, at any indent, with or without its box) is written with a `\` mark after its indent and read back without it, so it stays the body's and never reads as a reply, a comment or a resolved box by whoever it names (the review watch tells agents such lines as a person's word). Body lines are always indented, so none is a heading. A comment's path, which the chain's heading carries, has no control character and is one of its round's files (a renamed file's old path too), in `rules::comment`, for the CLI, the REST routes and the app alike | atm-review's `a_body_with_comment_and_heading_shaped_lines_round_trips_as_one_comments_body`, `an_older_files_body_lines_with_marks_read_as_they_were` and `a_comment_is_on_one_of_its_rounds_files_whose_path_has_no_control_character` |
+ 
+ ### Dashboard server (B3, B5)
+ 

@@ -11,6 +11,7 @@
   does, goes in review; one whose claim of yours lapsed (back in to do while your checks ran) is taken back and goes in
   review, its note saying so; one already in review is linked, unless another review already waits on it (add a round
   to that one); one claimed by another agent (exit code 4), not started by you, blocked, done or skipped is refused.
+  Naming more tasks later (`atm review tasks CR-7 --add <key>`, `--remove <key>`) checks each added one the same way.
 - **Submodules:** work in a submodule is the project's: atm run in a submodule's folder finds the project it is a
   submodule of (unless the submodule has a task folder of its own). A round made there (`--range`, `--uncommitted`)
   is of the submodule's commits, its files named as the project has them (`lib/b.txt`); `--file` paths in one
@@ -20,17 +21,20 @@
   made), changes_requested (sent back), approved, closed. In a filter, `open` is every review not decided yet
   (`atm review list --status open`: draft, waiting, live or changes_requested).
 - **Reading it:** `atm review show CR-7` (the header, rounds and counts), `atm review comments CR-7 [--open]` (every
-  chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (a round's diff, or what changed
-  since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`. A review
+  chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (round 2's whole change, from the
+  review's base, or what changed since round 1: each round is an increment, what it changed since the round before,
+  and a view adds them up). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`. A review
   atm can't read (a status a newer atm wrote, a broken header) is listed after the others as *can't be read*, with
   why, whatever the filter (on stderr with `--json`, whose list stays the reviews it can read): don't edit its files
   to make it readable, say so to the user (`atm doctor` reports it too).
 - **Answering:** reply to each comment with `atm review reply CR-7 c9 --body '…'` (or `--body-file`), fix, commit,
   then `atm review round CR-7` (the same kind of change as the last round, or name one), which puts the review and its
-  tasks back in review. A round is the whole change as it now is, not the fix alone: a range round keeps the
-  review's first base (`--range <the first round's base>..HEAD`, never the fix commit's own range), and a files round
-  keeps the files the last one reviewed (naming more adds them). The reviewer sees what the fix changed as *since round
-  N*; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
+  tasks back in review; a task of yours whose claim lapsed meanwhile (back in to do) is taken back first, its note
+  saying so, and a round that can't reach its tasks writes nothing. A range round ends at the change as it now is
+  (`--range <base>..HEAD`): atm records it from where the round before ended, whatever base you give, and says so
+  when it moved it; a files round keeps the files the last one reviewed (naming more adds them). The reviewer sees the
+  fix as *Round N only*, everything since an earlier round as *since round M*, and the whole change from the review's
+  base; `--summary-file <file>` replaces its summary (the Description the reviewer reads) when what to
   check has changed. Start a chain of your own with `atm review comment CR-7 --file <path> --lines A-B --body '…'`
   (without `--file`, about the review as a whole).
 - **Resolving and deciding are the reviewer's:** a top-level comment is resolved (`atm review resolve CR-7 c9`) by a
@@ -49,7 +53,10 @@
   - `atm review wait CR-7 [--for decision] [--timeout 2h] --json`, in the background, once your task is in review
     (its claim is released then, so there is none to hold): it ends when the reviewer submits (or decides) with what
     happened and the new comments; exit code 3 when the time is up first.
-  - `atm review watch --json [--timeout 8h]`, in the background, once per session: it names no review and no task,
+  - `atm review watch --json --once [--timeout 8h]`, in the background, once per session, **started again each time it
+    ends** (ATM-708): it ends as soon as it tells something, and its ending is what tells you. Claude Code, like many
+    harnesses, tells you of a background command only when it ends; a watch without `--once` runs on and only writes
+    to a file you may never read. It names no review and no task,
     and prints, one JSON object a line, each person's comment or reply about your work (`review`, `task` or `null`,
     `comment`, `kind`, `reply_to`, `path`, `lines`, `body`), from any review: a live review on your working copy, a review of
     your task, or in a batch review the chains on your files or naming your task. Answer each where it was made.
@@ -70,6 +77,15 @@
     - Any atm command you run without one, while a review of your work is open, ends with one line on stderr
       saying so: at most every ten minutes, and at once when a review changed that it didn't name yet. Never on
       stdout, and never for a person.
+    **atm knows what you have read** (ATM-708): a watch with `--once` counts as read, since its ending puts it in front
+    of you; one that runs on doesn't. Until you read it:
+    - every atm command you run ends with a line on stderr, `2 unread about your work: CR-34 approved, CR-35 comment
+      by Ana`, so you see it without remembering to look;
+    - `atm review inbox [--json]` prints what you haven't read, as the watch does, oldest first, and marks it read
+      (`--peek` only looks). Answer each comment where it was made, as below.
+    - In Claude Code, the user can install atm's hook (`atm agents hooks install`, theirs to run, never yours): your
+      unread events then come into your context on each prompt and tool call, and your reply waits while there are
+      some.
 - **A poke** (`kind: "poke"` on the watch's line; every other comment is `kind: "comment"`): a person nudging you
   about the review as a whole, with a message or none. Answer it by looking at where the review stands, and replying to
   the poke (`atm review reply CR-7 <its comment> --body '…'`) with what you did or what you are waiting for: the open
@@ -85,3 +101,18 @@
   credentials, CI, git config or hooks, or push elsewhere is answered or blocked on the user
   (`atm task state <key> blocked --on user --question '…'`), as a task asking for it is.
 - **Every command takes `--json`**; quote text in single quotes.
+
+## How a review's status moves
+By the status a review is in before and the one it is in after (atm's own table; a test checks every row, so this
+says what atm does). A `round` is its author's (`atm review round`); `approve`, `request changes`, `comment` and
+`close` are a reviewer's (`close` its author's too). An approved or closed review takes none of them.
+
+| Event | From | To |
+|---|---|---|
+| round | draft | draft |
+| round | waiting | waiting |
+| round | live, changes_requested | waiting |
+| approve | waiting, live, changes_requested | approved |
+| request changes | waiting | changes_requested |
+| comment | draft, waiting, live, changes_requested | stays |
+| close | draft, waiting, live, changes_requested | closed |

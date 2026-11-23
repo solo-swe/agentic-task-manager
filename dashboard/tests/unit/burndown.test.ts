@@ -1,24 +1,67 @@
 import { describe, expect, it } from 'vitest';
+import type { ForecastRow } from '$generated/types';
 import { burndown, rangeStart } from '../../src/lib/burndown';
-import { forecastSprints } from '../../src/lib/forecast';
-import { sprintModel } from '../../src/lib/sprints';
+import { fromServed, NO_FORECAST, type Forecast } from '../../src/lib/forecast';
+import type { SprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
-import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
 import progress from '../fixtures/progress.json';
+import { progressTasks, sprintModel, taskWith, vocabulary, withKinds } from './views';
 
-// Expected numbers: tests/fixtures/progress.md
+// Expected numbers: tests/fixtures/progress.md; atm's answers for its tasks (ATM-717): views.ts
 const NOW = Date.parse('2026-04-06T12:00:00Z');
-const tasks = progress.tasks as Task[];
+const tasks = progressTasks;
 const at = (iso: string) => Date.parse(iso);
 // Not migrated: its phases read as the sprints "Phase 0" (closed), "Phase 1" and "Phase 2"
-const model = sprintModel(progress.meta, tasks, resolveVocabulary(progress.meta));
-const forecastAll = (list: Task[], now: number) => forecastSprints(list, now, list, DEFAULT_VOCABULARY, model);
+const model = sprintModel(progress.meta, tasks, DEFAULT_VOCABULARY);
+
+/** atm's forecast (ATM-722, atm-lib's rules) as a test gives it: each row's sprint (null: the backlog) and its estimate's
+ * minutes (likely, low, high) from NOW, and the row the loop works on next */
+function forecastWith(
+  m: SprintModel,
+  rows: [string | null, [number, number, number]?][],
+  next: string | null = rows[0]?.[0] ?? null,
+): Forecast {
+  const row = ([sprint, minutes]: [string | null, [number, number, number]?]): ForecastRow => ({
+    sprint,
+    total: 1,
+    done: 0,
+    skipped: 0,
+    remaining: 1,
+    blocked: 0,
+    in_review: 0,
+    state: 'in_progress',
+    ...(minutes
+      ? {
+          estimate: {
+            minutes: { likely: minutes[0], low: minutes[1], high: minutes[2] },
+            finish_at: {
+              likely: NOW + minutes[0] * 60_000,
+              low: NOW + minutes[1] * 60_000,
+              high: NOW + minutes[2] * 60_000,
+            },
+          },
+        }
+      : {}),
+  });
+  return fromServed(
+    { pace: { likely: 8.5, low: 7.5, high: 10.5, based_on: 8 }, sprints: rows.map(row), next: { sprint: next } },
+    m,
+  );
+}
+
+// The fixture's, as atm forecasts it: Phase 1's work first (8.5 minutes), then Phase 2's (to 51 in all)
+const FIXTURE_FORECAST = forecastWith(
+  model,
+  [['Phase 0'], ['Phase 1', [8.5, 7.5, 10.5]], ['Phase 2', [51, 45, 63]]],
+  'Phase 1',
+);
 const series = (b: ReturnType<typeof burndown>) =>
   b.points.map((p) => [new Date(p.t).toISOString().slice(5, 16), p.scope, p.remaining]);
 
 describe('burndown', () => {
   it('steps scope and remaining at every creation and completion, ending now', () => {
-    const b = burndown(tasks, forecastAll(tasks, NOW), NOW);
+    const b = burndown(tasks, FIXTURE_FORECAST, NOW);
     expect(series(b)).toEqual([
       ['04-01T08:00', 10, 10],
       ['04-01T09:06', 10, 9],
@@ -35,7 +78,7 @@ describe('burndown', () => {
   });
 
   it('forecasts from now to the estimated finish; blocked work stays', () => {
-    const b = burndown(tasks, forecastAll(tasks, NOW), NOW);
+    const b = burndown(tasks, FIXTURE_FORECAST, NOW);
     expect(b.forecast).toEqual({
       from: { t: NOW, remaining: 7 },
       to: { t: at('2026-04-06T12:51:00Z'), remaining: 1 },
@@ -44,13 +87,13 @@ describe('burndown', () => {
   });
 
   it('can focus on one sprint', () => {
-    const f = forecastAll(tasks, NOW);
-    const p1 = burndown(tasks, f, NOW, 'Phase 1', DEFAULT_VOCABULARY, undefined, model);
+    const f = FIXTURE_FORECAST;
+    const p1 = burndown(tasks, f, NOW, 'Phase 1', undefined, model);
     expect(p1.points[0]).toMatchObject({ scope: 6, remaining: 6 });
     expect(p1.points.at(-1)).toMatchObject({ scope: 6, remaining: 2 });
     // Phase 1's estimate (8.5 min) only covers T-009; T-010 is blocked
     expect(p1.forecast!.to).toEqual({ t: NOW + 8.5 * 60_000, remaining: 1 });
-    const p0 = burndown(tasks, f, NOW, 'Phase 0', DEFAULT_VOCABULARY, undefined, model);
+    const p0 = burndown(tasks, f, NOW, 'Phase 0', undefined, model);
     expect(p0.points.at(-1)!.remaining).toBe(0);
     expect(p0.forecast).toBeUndefined();
   });
@@ -59,19 +102,26 @@ describe('burndown', () => {
     const meta = {
       sprints: [
         { id: 'Old', state: 'closed', start: '2026-04-01T08:00:00Z', end: '2026-04-02T16:00:00Z' },
-        { id: 'Now', state: 'active', start: '2026-04-02T16:00:00Z', due: '2026-04-08' },
+        // atm says when its due date has passed (ATM-720: the end of that day, the project's day)
+        {
+          id: 'Now',
+          state: 'active',
+          start: '2026-04-02T16:00:00Z',
+          due: '2026-04-08',
+          due_end: '2026-04-08T23:59:59Z',
+        },
       ],
     };
     const inSprints = tasks.map((x) => ({ ...x, sprint: x.phase === 0 ? 'Old' : 'Now' }));
-    const m = sprintModel(meta, inSprints, resolveVocabulary(meta));
-    const f = forecastSprints(inSprints, NOW, inSprints, DEFAULT_VOCABULARY, m);
-    const old = burndown(inSprints, f, NOW, 'Old', DEFAULT_VOCABULARY, undefined, m);
+    const m = sprintModel(meta, inSprints, DEFAULT_VOCABULARY);
+    const f = forecastWith(m, [['Old'], ['Now', [30, 20, 40]]], 'Now');
+    const old = burndown(inSprints, f, NOW, 'Old', undefined, m);
     expect(old.end).toBe(at('2026-04-02T16:00:00Z'));
     expect(old.points.at(-1)!.t).toBe(old.end);
     expect(old.forecast).toBeUndefined();
     expect(old.due).toBeUndefined();
     // Not focused: the sprint the loop works on gives the due date
-    const all = burndown(inSprints, f, NOW, undefined, DEFAULT_VOCABULARY, undefined, m);
+    const all = burndown(inSprints, f, NOW, undefined, undefined, m);
     expect(all.due).toBe(at('2026-04-08T23:59:59Z'));
     expect(all.end).toBeUndefined();
     expect(rangeStart('sprint', inSprints, f, NOW, undefined, m)).toBe(at('2026-04-02T16:00:00Z'));
@@ -79,17 +129,9 @@ describe('burndown', () => {
   });
 
   it('uses the earliest known time for tasks without created_at', () => {
-    const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
-      id,
-      name: id,
-      phase: 0,
-      type: 'feature',
-      description: '',
-      status,
-      ...extra,
-    });
-    const old = [t('a', 'done', { updated_at: '2026-04-02T10:00:00Z' }), t('b', 'todo')];
-    const b = burndown(old, forecastAll(old, NOW), NOW);
+    const t = taskWith;
+    const old = [t('a', 'done', { updated_at: '2026-04-02T10:00:00Z' }, false), t('b', 'todo')];
+    const b = burndown(old, NO_FORECAST, NOW);
     expect(series(b)).toEqual([
       ['04-02T10:00', 2, 1],
       ['04-06T12:00', 2, 1],
@@ -97,51 +139,46 @@ describe('burndown', () => {
   });
 
   it('is empty without tasks', () => {
-    expect(burndown([], forecastAll([], NOW), NOW)).toEqual({ points: [] });
+    expect(burndown([], NO_FORECAST, NOW)).toEqual({ points: [] });
   });
 
   it("follows a project's kinds: skipped-kind out of scope; review and blocked left for the forecast's end", () => {
-    const vocab = resolveVocabulary({
+    // A project's own statuses: atm gives each task its kind
+    const vocab = vocabulary({
       statuses: [
-        { id: 'backlog', kind: 'todo' },
-        { id: 'doing', kind: 'active' },
-        { id: 'awaiting_user', kind: 'review' },
-        { id: 'shipped', kind: 'done' },
-        { id: 'dropped', kind: 'skipped' },
+        { id: 'backlog', label: 'Backlog', kind: 'todo' },
+        { id: 'doing', label: 'Doing', kind: 'active' },
+        { id: 'awaiting_user', label: 'Awaiting you', kind: 'review' },
+        { id: 'shipped', label: 'Shipped', kind: 'done' },
+        { id: 'dropped', label: 'Dropped', kind: 'skipped' },
       ],
     });
-    const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
-      id,
-      name: id,
-      phase: 0,
-      type: 'feature',
-      description: '',
-      status,
-      ...extra,
-    });
+    const t = (id: string, status: string, extra: Partial<Task> = {}, agentWork = true) =>
+      withKinds([taskWith(id, status, extra, agentWork)], vocab)[0];
     const created = { created_at: '2026-04-01T09:00:00Z' };
     const shipped = (id: string, h: number) =>
-      t(id, 'shipped', {
-        ...created,
-        started_at: `2026-04-01T${h}:00:00Z`,
-        completed_at: `2026-04-01T${h}:10:00Z`,
-      });
+      t(
+        id,
+        'shipped',
+        { ...created, started_at: `2026-04-01T${h}:00:00Z`, completed_at: `2026-04-01T${h}:10:00Z` },
+        false,
+      );
     const all = [
       shipped('a', 10),
       shipped('b', 11),
       shipped('c', 12),
       t('d', 'backlog', created),
-      t('e', 'awaiting_user', created),
-      t('f', 'dropped', created),
+      t('e', 'awaiting_user', created, false),
+      t('f', 'dropped', created, false),
     ];
-    const b = burndown(all, forecastSprints(all, NOW, all, vocab), NOW, undefined, vocab);
+    const b = burndown(all, forecastWith(model, [[null, [10, 10, 10]]]), NOW);
     expect(b.points.at(-1)).toMatchObject({ scope: 5, remaining: 2 });
     expect(b.forecast!.to.remaining).toBe(1);
   });
 });
 
 describe('burndown range (T-240)', () => {
-  const forecast = forecastAll(tasks, NOW);
+  const forecast = FIXTURE_FORECAST;
 
   it('"sprint" starts when the sprint the loop works on started (without a start, its first task); a focused one, when it did', () => {
     const starts = (phase: number) =>
@@ -155,7 +192,7 @@ describe('burndown range (T-240)', () => {
   it('a range starts the chart at its start, with the state then; nothing before it', () => {
     const from = rangeStart('sprint', tasks, forecast, NOW, undefined, model)!;
     const whole = burndown(tasks, forecast, NOW);
-    const ranged = burndown(tasks, forecast, NOW, undefined, undefined, from);
+    const ranged = burndown(tasks, forecast, NOW, undefined, from);
     expect(ranged.points[0].t).toBe(from);
     expect(ranged.points.every((p) => p.t >= from)).toBe(true);
     const before = [...whole.points].reverse().find((p) => p.t <= from)!;
@@ -164,15 +201,10 @@ describe('burndown range (T-240)', () => {
   });
 
   it('without any time on any task, there is no timeline', () => {
-    const untimed = tasks.map(({ id, name, phase, type, status, description }) => ({
-      id,
-      name,
-      phase,
-      type,
-      status,
-      description,
-    }));
-    expect(burndown(untimed, forecastSprints(untimed, NOW), NOW).untimed).toBe(true);
+    const untimed = withKinds(
+      tasks.map(({ id, name, phase, type, status, description }) => ({ id, name, phase, type, status, description })),
+    );
+    expect(burndown(untimed, NO_FORECAST, NOW).untimed).toBe(true);
     expect(burndown(tasks, forecast, NOW).untimed).toBeUndefined();
   });
 });

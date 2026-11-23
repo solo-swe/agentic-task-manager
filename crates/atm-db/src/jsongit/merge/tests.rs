@@ -465,8 +465,8 @@ fn notes_from_both_sides_are_kept_once_each_oldest_first() {
 }
 
 #[test]
-fn past_blocks_and_reviews_are_kept_one_per_start_oldest_first_ours_where_both_have_it() {
-    for key in ["blocks", "reviews"] {
+fn past_blocks_reviews_and_attempts_are_kept_one_per_start_oldest_first_ours_where_both_have_it() {
+    for key in ["blocks", "reviews", "attempts"] {
         let (task, conflicts) = merge_one(
             json!({}),
             json!({key: [{"from": "02", "to": "03"}]}),
@@ -614,18 +614,27 @@ fn a_clashing_id_takes_the_next_number_of_its_pattern_or_a_suffix() {
     }
 }
 
+/// ATM-674, audit R13: a key both branches changed keeps ours, and says so, as a task's fields do
 #[test]
-fn meta_values_merge_three_ways_and_one_both_changed_keeps_ours_silently() {
+fn meta_values_merge_three_ways_and_one_both_changed_keeps_ours_and_is_reported() {
+    let workflow = |base: &str| json!({"type": "pull-request", "base": base});
     let (merged, conflicts) = merge_task_files(
-        &json!({"meta": {"project": "p", "a": 1, "gone": 1, "both": 1}, "tasks": []}),
-        &json!({"meta": {"project": "q", "a": 1, "gone": 1, "both": 2}, "tasks": []}),
-        &json!({"meta": {"project": "p", "a": 2, "new": 3, "both": 3}, "tasks": []}),
+        &json!({"meta": {"project": "p", "a": 1, "gone": 1, "both": 1, "workflow": workflow("main")}, "tasks": []}),
+        &json!({"meta": {"project": "q", "a": 1, "gone": 1, "both": 2, "workflow": workflow("dev")}, "tasks": []}),
+        &json!({"meta": {"project": "p", "a": 2, "new": 3, "both": 3, "workflow": workflow("next")}, "tasks": []}),
     );
-    assert!(conflicts.is_empty(), "{conflicts:?}");
+    assert_eq!(conflicts, ["meta: both branches changed both, workflow"]);
     assert_eq!(
         merged["meta"],
-        json!({"project": "q", "a": 2, "both": 2, "new": 3})
+        json!({"project": "q", "a": 2, "both": 2, "workflow": workflow("dev"), "new": 3})
     );
+    // One side alone changed it: no conflict
+    let (_, quiet) = merge_task_files(
+        &json!({"meta": {"workflow": workflow("main")}, "tasks": []}),
+        &json!({"meta": {"workflow": workflow("dev")}, "tasks": []}),
+        &json!({"meta": {"workflow": workflow("main")}, "tasks": []}),
+    );
+    assert!(quiet.is_empty(), "{quiet:?}");
 }
 
 #[test]

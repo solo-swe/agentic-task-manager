@@ -1,0 +1,82 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "061e8805a7505be4d39dd1e7713e5efb4e4779f5",
+    "head": "cb994c4dbe920efa4b32eb687a978856e07f54dd"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/compmd.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/details/DetailPanel.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/graph/DepGraph.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/keys.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/overview/ProjectCard.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/tasks/TaskCard.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/ui/TaskKey.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/waiting.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/keys.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/fixtures/keys-other.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/fixtures/keys.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ProjectCard.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/keys.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T02:16:28Z"
+}

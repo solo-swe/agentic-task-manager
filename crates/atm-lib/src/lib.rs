@@ -3,6 +3,7 @@
 //! Part of atm's Rust port (T-415): docs/porting-to-rust.md, docs/layered-architecture.md, docs/guides/rust.md.
 
 pub mod actor;
+pub mod agent_hooks;
 pub mod agents;
 pub mod archive;
 pub mod changes;
@@ -15,6 +16,8 @@ pub use atm_docs as documents;
 pub mod edit;
 pub mod foreign;
 pub mod leases;
+pub mod lifecycle;
+mod lookup;
 pub mod loop_rules;
 pub mod maintenance;
 pub mod project;
@@ -29,9 +32,13 @@ pub mod reviews;
 pub mod settings;
 pub mod sprints;
 pub mod state;
+pub mod stats;
 pub mod status;
 pub mod summary;
 pub mod tasks;
+pub mod vocabulary;
+pub mod waiting;
+pub mod work;
 pub mod workspaces;
 pub mod worktrees;
 

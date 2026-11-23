@@ -1,0 +1,782 @@
+diff --git a/app/src-tauri/src/commands.rs b/app/src-tauri/src/commands.rs
+index e467552b..8d52073c 100644
+--- a/app/src-tauri/src/commands.rs
++++ b/app/src-tauri/src/commands.rs
+@@ -467,7 +467,7 @@ pub fn review_of(
+     Ok(member(workspaces, w, p)?.review(&review_ref(review), round, against)?)
+ }
+ 
+-/// `GET …/projects/<p>/files?path=`.
++/// `GET …/projects/<p>/files?path=` (`&at=`: as a commit or tree has it, a review's image file's side, ATM-689).
+ ///
+ /// # Errors
+ /// As [`document_of`], and a file that isn't an image.
+@@ -476,8 +476,13 @@ pub fn file_of(
+     w: &str,
+     p: &str,
+     path: &str,
++    at: Option<&str>,
+ ) -> Result<FileData, AppError> {
+-    let (data, content_type) = member(workspaces, w, p)?.image(path)?;
++    let member = member(workspaces, w, p)?;
++    let (data, content_type) = match at.filter(|a| !a.is_empty()) {
++        Some(revision) => member.image_at(path, revision)?,
++        None => member.image(path)?,
++    };
+     Ok(FileData {
+         content_type: content_type.into(),
+         data,
+@@ -941,7 +946,7 @@ pub async fn project_review(
+     .map(Json)
+ }
+ 
+-/// An image of a project.
++/// An image of a project (`at`: as a commit or tree has it).
+ ///
+ /// # Errors
+ /// As [`file_of`].
+@@ -952,8 +957,15 @@ pub async fn file(
+     workspace: String,
+     project: String,
+     path: String,
++    at: Option<String>,
+ ) -> Result<FileData, AppError> {
+-    file_of(&state.workspaces, &workspace, &project, &path)
++    file_of(
++        &state.workspaces,
++        &workspace,
++        &project,
++        &path,
++        at.as_deref(),
++    )
+ }
+ 
+ /// A project's logo, if it has one.
+diff --git a/app/src-tauri/src/lib.rs b/app/src-tauri/src/lib.rs
+index 4a30ea61..7793bd70 100644
+--- a/app/src-tauri/src/lib.rs
++++ b/app/src-tauri/src/lib.rs
+@@ -650,8 +650,13 @@ mod integration_tests {
+         assert_eq!(listed["reviews"], json!([]), "{listed}");
+         assert_eq!(ok(rest(&home, &format!("{p}/reviews"), "")), listed);
+         let (status, _, bytes) = rest(&home, &format!("{p}/files"), "path=pixel.png");
+-        let image = file_of(&workspaces, "work", "abcd1234", "pixel.png").expect("the image");
++        let image = file_of(&workspaces, "work", "abcd1234", "pixel.png", None).expect("the image");
+         assert_eq!((status, bytes), (200, image.data));
++        // At a revision too (a review's image file's side, ATM-689)
++        let (status, _, bytes) = rest(&home, &format!("{p}/files"), "path=pixel.png&at=HEAD");
++        let then =
++            file_of(&workspaces, "work", "abcd1234", "pixel.png", Some("HEAD")).expect("at HEAD");
++        assert_eq!((status, bytes), (200, then.data));
+         let (status, _, bytes) = rest(&home, &format!("{p}/logo"), "");
+         let logo = logo_of(&workspaces, "work", "abcd1234")
+             .expect("the logo")
+@@ -748,7 +753,16 @@ mod integration_tests {
+                 "file",
+                 with(json!({"path": "pixel.png"})),
+                 serde_json::to_value(
+-                    file_of(workspaces, "work", "abcd1234", "pixel.png").expect("file"),
++                    file_of(workspaces, "work", "abcd1234", "pixel.png", None).expect("file"),
++                )
++                .expect("json"),
++            ),
++            (
++                "file",
++                with(json!({"path": "pixel.png", "at": "HEAD"})),
++                serde_json::to_value(
++                    file_of(workspaces, "work", "abcd1234", "pixel.png", Some("HEAD"))
++                        .expect("file at HEAD"),
+                 )
+                 .expect("json"),
+             ),
+diff --git a/crates/atm-api/src/routes/documents.rs b/crates/atm-api/src/routes/documents.rs
+index 34b880b9..1ad5bffe 100644
+--- a/crates/atm-api/src/routes/documents.rs
++++ b/crates/atm-api/src/routes/documents.rs
+@@ -77,9 +77,31 @@ fn is_object_id(revision: &str) -> bool {
+ }
+ 
+ /// `GET …/projects/<p>/files?path=`: an image's bytes (whose bytes match its type), sandboxed. The `ETag` is the
+-/// file's size and mtime.
++/// file's size and mtime. With `&at=<revision>`, the image as that commit or tree has it (a review's image file's
++/// sides, ATM-689), kept by the browser as `documents?at=` is when named by a full object ID.
+ pub(super) fn get_file(project: &dyn ProjectSource, query: &str, request: &HeaderMap) -> Response {
+     let path = parameter(query, "path");
++    let at = parameter(query, "at");
++    if !at.is_empty() {
++        let kept = is_object_id(&at);
++        let tag = etag(&json!(["image-at", at, path]));
++        if kept && unchanged(request, &tag) {
++            return not_modified(&tag, &[IMAGE_HEADERS[0], IMAGE_HEADERS[1], KEPT]);
++        }
++        return match project.image_at(&path, &at) {
++            Ok((data, content_type)) if kept => send(
++                StatusCode::OK,
++                data,
++                content_type,
++                Some(&tag),
++                &[IMAGE_HEADERS[0], IMAGE_HEADERS[1], KEPT],
++            ),
++            Ok((data, content_type)) => {
++                send(StatusCode::OK, data, content_type, None, &IMAGE_HEADERS)
++            }
++            Err(e) => error_response(&e),
++        };
++    }
+     let (size, modified) = match project.file_version(&path) {
+         Ok(version) => version,
+         Err(e) => return error_response(&e),
+@@ -208,6 +230,53 @@ mod tests {
+         );
+     }
+ 
++    /// ATM-689: an image at a revision (a review's image file's side): at a full object ID, sandboxed, tagged and kept
++    /// (a 304 without reading); at a name that can move, sandboxed, neither tagged nor kept; a refusal its status
++    #[test]
++    fn an_image_at_a_revision_is_its_bytes_kept_only_at_a_full_object_id() {
++        let id = "ab".repeat(20);
++        let (project, calls) = bound(FakeProject::default());
++        let query = format!("path=docs%2Fpic.gif&at={id}");
++        let first = answer(get_file(project.as_ref(), &query, &plain()));
++        assert_eq!(first.status, StatusCode::OK);
++        assert_eq!(first.body, b"GIF89a");
++        assert_eq!(first.header("content-type"), "image/gif");
++        assert!(first.header("content-security-policy").ends_with("sandbox"));
++        assert_eq!(first.header("x-content-type-options"), "nosniff");
++        assert_eq!(first.header("cache-control"), KEPT.1);
++        assert_eq!(
++            calls.taken(),
++            [Call::ImageAt("docs/pic.gif".into(), id.clone())]
++        );
++        let again = answer(get_file(project.as_ref(), &query, &having(&first.tag())));
++        assert_eq!(again.status, StatusCode::NOT_MODIFIED);
++        assert!(again.header("content-security-policy").ends_with("sandbox"));
++        assert_eq!(calls.taken(), []);
++        // A name that can move: read each time, never kept
++        let moving = answer(get_file(
++            project.as_ref(),
++            "path=pic.gif&at=HEAD",
++            &having(&first.tag()),
++        ));
++        assert_eq!(moving.status, StatusCode::OK);
++        assert_eq!(moving.tag(), "");
++        assert_eq!(moving.header("cache-control"), "no-cache");
++        assert_eq!(
++            calls.taken(),
++            [Call::ImageAt("pic.gif".into(), "HEAD".into())]
++        );
++        // What atm-docs refuses: its status
++        for (error, status) in refusals() {
++            let (project, _) = bound(FakeProject {
++                image_at: Err(error.clone()),
++                ..FakeProject::default()
++            });
++            let refused = answer(get_file(project.as_ref(), &query, &plain()));
++            assert_eq!(refused.status, status, "{error}");
++            assert_eq!(refused.tag(), "");
++        }
++    }
++
+     fn answer_of(project: &dyn ProjectSource, tag: &str) -> Answer {
+         answer(get_file(project, "path=pixel.png", &having(tag)))
+     }
+diff --git a/crates/atm-api/src/routes/source.rs b/crates/atm-api/src/routes/source.rs
+index 8fc9eab5..d6659a44 100644
+--- a/crates/atm-api/src/routes/source.rs
++++ b/crates/atm-api/src/routes/source.rs
+@@ -88,6 +88,12 @@ pub trait ProjectSource {
+     /// # Errors
+     /// As [`ProjectSource::file_version`], and a file that isn't an image.
+     fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)>;
++    /// The image at `path` as the commit or tree `revision` has it, and its content type (a review's image file's
++    /// side, ATM-689).
++    ///
++    /// # Errors
++    /// As [`ProjectSource::document_at`], and a file that isn't an image.
++    fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)>;
+     /// The document at `path` as the commit or tree `revision` has it (a review round's side).
+     ///
+     /// # Errors
+@@ -311,6 +317,10 @@ impl ProjectSource for Member {
+         Member::image(self, path)
+     }
+ 
++    fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)> {
++        Member::image_at(self, path, revision)
++    }
++
+     fn document_at(&self, path: &str, revision: &str) -> Result<Value> {
+         Member::document_at(self, path, revision)
+     }
+diff --git a/crates/atm-api/src/routes/test_support.rs b/crates/atm-api/src/routes/test_support.rs
+index bfe0f200..946f4750 100644
+--- a/crates/atm-api/src/routes/test_support.rs
++++ b/crates/atm-api/src/routes/test_support.rs
+@@ -38,6 +38,7 @@ pub(super) enum Call {
+     Document(String),
+     Image(String),
+     DocumentAt(String, String),
++    ImageAt(String, String),
+     Reviews(ReviewQuery),
+     Review(ReviewRef, Option<u32>, Option<u32>),
+     AsUser,
+@@ -138,6 +139,8 @@ pub(super) struct FakeProject {
+     pub reviews: Result<FakeReviews>,
+     /// A file at a revision: what any is
+     pub at_revision: Result<Value>,
++    /// An image at a revision: what any is
++    pub image_at: Result<(Vec<u8>, &'static str)>,
+     /// What listing its reviews answers
+     pub listed: Result<Value>,
+     /// What a review's page answers
+@@ -159,6 +162,7 @@ impl Default for FakeProject {
+             head: Some("aaaa".into()),
+             reviews: Ok(FakeReviews::default()),
+             at_revision: Ok(json!({"path": "a.md", "revision": "t1"})),
++            image_at: Ok((b"GIF89a".to_vec(), "image/gif")),
+             listed: Ok(json!({"reviews": [], "you": "Ana"})),
+             page: Ok(json!({"review": {"reference": "CR-1"}, "view": {"files": []}})),
+             live_stamp: Ok(None),
+@@ -394,6 +398,11 @@ impl ProjectSource for Bound<FakeProject> {
+         self.file(path)?.image
+     }
+ 
++    fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)> {
++        self.calls.note(Call::ImageAt(path.into(), revision.into()));
++        self.fake.image_at.clone()
++    }
++
+     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>> {
+         self.calls.note(Call::AsUser);
+         Ok(Box::new(Bound {
+diff --git a/crates/atm-docs/src/lib.rs b/crates/atm-docs/src/lib.rs
+index d277f725..c8cc0dc8 100644
+--- a/crates/atm-docs/src/lib.rs
++++ b/crates/atm-docs/src/lib.rs
+@@ -347,6 +347,64 @@ pub fn read_document(vcs: Option<&GitVcs>, path: &str) -> Result<Value> {
+ /// `Invalid` for a path or revision that isn't one; `NotFound` when the commit or the file isn't there; `Refused` and
+ /// `TooLarge` as [`read_document`].
+ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Result<Value> {
++    let found = file_at(vcs, revision, path)?;
++    let rendered = render(found.path, found.kind, found.detail, &found.data);
++    Ok(json!({
++        "path": found.path,
++        "kind": rendered.kind,
++        "language": rendered.language,
++        "text": rendered.text,
++        "document": rendered.document,
++        "line_offset": rendered.line_offset,
++        "lines": rendered.lines,
++        "bytes": found.data.len(),
++        "modified_at": null,
++        "tracked": true,
++        "commit": found.commit,
++        "revision": found.object,
++        "submodule": null,
++    }))
++}
++
++/// (bytes, content type) of an image as a commit or a tree has it, for an `<img>` (the files route's `at`: a review's
++/// image file, its old and new sides, ATM-689): [`read_document_at`]'s checks, then [`read_image`]'s: only the image
++/// types the viewer shows, whose bytes match their name.
++///
++/// # Errors
++/// `Refused` for any other file, as well as [`read_document_at`]'s errors.
++pub fn read_image_at(
++    vcs: Option<&GitVcs>,
++    revision: &str,
++    path: &str,
++) -> Result<(Vec<u8>, &'static str)> {
++    let found = file_at(vcs, revision, path)?;
++    let ("image", Some(content_type)) = (found.kind, found.detail) else {
++        return Err(Error::Refused(format!(
++            "{}: only images are served as files",
++            found.path
++        )));
++    };
++    if !image_matches(&found.data, content_type) {
++        return Err(Error::Refused(format!(
++            "{}: isn't the image its name says",
++            found.path
++        )));
++    }
++    Ok((found.data, content_type))
++}
++
++/// A file as a commit or a tree has it, checked, with its bytes: what [`read_document_at`] and [`read_image_at`] show.
++struct FileAt<'a> {
++    path: &'a str,
++    kind: &'static str,
++    detail: Option<&'static str>,
++    data: Vec<u8>,
++    commit: Option<String>,
++    object: String,
++}
++
++/// The file `path` at `revision`, after every check the reads at a revision make (see [`read_document_at`]).
++fn file_at<'a>(vcs: Option<&GitVcs>, revision: &str, path: &'a str) -> Result<FileAt<'a>> {
+     // A file a review names, at its revision: hidden ones too (ATM-598)
+     let path = document_path(path)?;
+     let Some(vcs) = vcs else {
+@@ -393,22 +451,14 @@ pub fn read_document_at(vcs: Option<&GitVcs>, revision: &str, path: &str) -> Res
+         )));
+     }
+     let data = repo.blob_bytes(&blob)?;
+-    let rendered = render(path, kind, detail, &data);
+-    Ok(json!({
+-        "path": path,
+-        "kind": rendered.kind,
+-        "language": rendered.language,
+-        "text": rendered.text,
+-        "document": rendered.document,
+-        "line_offset": rendered.line_offset,
+-        "lines": rendered.lines,
+-        "bytes": data.len(),
+-        "modified_at": null,
+-        "tracked": true,
+-        "commit": commit,
+-        "revision": object,
+-        "submodule": null,
+-    }))
++    Ok(FileAt {
++        path,
++        kind,
++        detail,
++        data,
++        commit,
++        object,
++    })
+ }
+ 
+ /// A file's bytes as the viewer shows them.
+@@ -919,6 +969,57 @@ mod tests {
+         );
+     }
+ 
++    /// ATM-689: a review's image file shows its sides, each read as its revision has it
++    #[test]
++    fn an_image_at_a_revision_is_its_bytes_as_that_commit_has_them_only_when_it_is_one() {
++        let repo = Repo::new();
++        let vcs = repo.vcs();
++        repo.commit("pic.gif", "GIF89a-old");
++        repo.git(&["tag", "old"]);
++        repo.commit("pic.gif", "GIF89a-new");
++        assert_eq!(
++            read_image_at(Some(&vcs), "old", "pic.gif").unwrap(),
++            (b"GIF89a-old".to_vec(), "image/gif")
++        );
++        assert_eq!(
++            read_image_at(Some(&vcs), "HEAD", "pic.gif").unwrap().0,
++            b"GIF89a-new".to_vec()
++        );
++        // In a tree too (a round rebuilt from its diff)
++        let tree = vcs.resolve_tree("old").unwrap();
++        assert_eq!(
++            read_image_at(Some(&vcs), &tree, "pic.gif").unwrap().0,
++            b"GIF89a-old".to_vec()
++        );
++        // Not an image, or not the image its name says: refused; not there then: not found
++        repo.commit("fake.png", "<html>");
++        for (path, what) in [
++            ("a.md", "not an image"),
++            ("fake.png", "not the image its name says"),
++        ] {
++            assert!(
++                matches!(
++                    read_image_at(Some(&vcs), "HEAD", path),
++                    Err(Error::Refused(_))
++                ),
++                "{what}"
++            );
++        }
++        assert!(matches!(
++            read_image_at(Some(&vcs), "first", "pic.gif"),
++            Err(Error::NotFound(_))
++        ));
++        // The path's and the revision's checks, as every read at a revision
++        assert!(matches!(
++            read_image_at(Some(&vcs), "HEAD", "../pic.gif"),
++            Err(Error::Invalid(_))
++        ));
++        assert!(matches!(
++            read_image_at(Some(&vcs), "--output=x", "pic.gif"),
++            Err(Error::Invalid(_))
++        ));
++    }
++
+     /// A review's round rebuilt from its diff is a tree no commit has: read the same way, with no commit named
+     #[test]
+     fn a_file_in_a_tree_is_read_as_the_tree_has_it() {
+diff --git a/crates/atm-lib/src/workspaces.rs b/crates/atm-lib/src/workspaces.rs
+index a54b605a..136660fa 100644
+--- a/crates/atm-lib/src/workspaces.rs
++++ b/crates/atm-lib/src/workspaces.rs
+@@ -420,6 +420,15 @@ impl Member {
+         read_image(self.project()?.vcs().as_ref(), path)
+     }
+ 
++    /// The image at `path` as the commit or tree `revision` has it, and its content type (a review's image file, its
++    /// sides, ATM-689).
++    ///
++    /// # Errors
++    /// As [`Member::document_at`], and a file that isn't an image.
++    pub fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)> {
++        crate::documents::read_image_at(self.project()?.vcs().as_ref(), revision, path)
++    }
++
+     /// Be told when its data changes (its store's subscription), until the subscription is dropped. `on_change` runs
+     /// on the store's thread.
+     ///
+diff --git a/dashboard/src/lib/api/http.ts b/dashboard/src/lib/api/http.ts
+index ed4f2f53..06ccc9df 100644
+--- a/dashboard/src/lib/api/http.ts
++++ b/dashboard/src/lib/api/http.ts
+@@ -83,9 +83,12 @@ export function reviewUrl(project: string, review: string, round?: number | null
+   return `${projectRoute(project, 'reviews')}/${encodeURIComponent(review)}` + (search ? `?${search}` : '');
+ }
+ 
+-/** An image file of the project, its bytes, for an <img> (T-392) */
+-export function v1FileUrl(project: string, path: string): string {
+-  return `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}`;
++/** An image file of the project, its bytes, for an <img> (T-392); `at`: as that commit or tree has it (a review's
++ * image file's side, ATM-689) */
++export function v1FileUrl(project: string, path: string, at?: string): string {
++  return (
++    `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}` + (at ? `&at=${encodeURIComponent(at)}` : '')
++  );
+ }
+ 
+ /** The current workspace's projects, with their summaries (api/projects for `default`) */
+diff --git a/dashboard/src/lib/api/ipc.ts b/dashboard/src/lib/api/ipc.ts
+index c1feed1e..79b1d030 100644
+--- a/dashboard/src/lib/api/ipc.ts
++++ b/dashboard/src/lib/api/ipc.ts
+@@ -93,7 +93,11 @@ function projectCall(workspace: string, project: string, route: string[], query:
+     case 'documents':
+       return { command: 'document', args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined } };
+     case 'files':
+-      return { command: 'file', args: { ...at, path: query.get('path') ?? '' }, image: true };
++      return {
++        command: 'file',
++        args: { ...at, path: query.get('path') ?? '', at: query.get('at') || undefined },
++        image: true,
++      };
+     case 'claims':
+     case 'claims.json':
+       return { command: 'claims', args: at };
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index da740ead..10eb54a9 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -52,6 +52,7 @@
+   import ChainBox from './ChainBox.svelte';
+   import ComposerActions from './ComposerActions.svelte';
+   import DiffView from './DiffView.svelte';
++  import ReviewImage, { isImage } from './ReviewImage.svelte';
+   import { draftActions } from './drafts';
+   import { focusOnShow } from './focus';
+   import { lineCounts } from './page';
+@@ -75,6 +76,7 @@
+     docStyle = null,
+     root = null,
+     wanted = false,
++    imageAt,
+     onfold,
+     onviewed,
+     oncomment,
+@@ -100,6 +102,8 @@
+     root?: HTMLElement | null;
+     /** The file just gone to: made at once */
+     wanted?: boolean;
++    /** An image's address as revision `revision` has it, at `path` (ATM-689): a binary image file shows its sides */
++    imageAt?: (revision: string, path: string) => string;
+     onfold: () => void;
+     onviewed: () => void;
+     /** A comment on lines (`picked`), or on the file as a whole (none: a submodule's move) */
+@@ -312,6 +316,13 @@
+             </button>
+           {/if}
+         </div>
++      {:else if file.binary && imageAt && isImage(file.path) && (file.before || file.after)}
++        <!-- An image (ATM-689): its sides as their revisions have them, side by side: the old one where it was removed
++             or changed, the new one where it was added or changed -->
++        <div class="review-images">
++          {#if file.before}<ReviewImage url={imageAt(file.before, file.old_path)} label="Before" />{/if}
++          {#if file.after}<ReviewImage url={imageAt(file.after, file.path)} label="After" />{/if}
++        </div>
+       {:else if file.binary}
+         <p class="review-empty">A binary file: listed, not shown.</p>
+       {:else if near}
+@@ -464,6 +475,12 @@
+     padding: var(--space-6);
+     color: var(--text-muted);
+   }
++  /* An image's sides, side by side, each as wide as half the card at most (ATM-689) */
++  .review-images {
++    display: flex;
++    gap: var(--space-6);
++    padding: var(--space-6);
++  }
+   .review-submodule {
+     display: flex;
+     flex-direction: column;
+diff --git a/dashboard/src/lib/reviews/ReviewImage.svelte b/dashboard/src/lib/reviews/ReviewImage.svelte
+new file mode 100644
+index 00000000..a457bc36
+--- /dev/null
++++ b/dashboard/src/lib/reviews/ReviewImage.svelte
+@@ -0,0 +1,70 @@
++<script lang="ts" module>
++  /** The image types the viewer shows (atm-docs' `DOC_KINDS`): a binary file of one of these shows its images */
++  const IMAGE = /\.(png|jpe?g|gif|webp|svg)$/i;
++
++  /** Whether a review's binary file is an image it can show (ATM-689) */
++  export function isImage(path: string): boolean {
++    return IMAGE.test(path);
++  }
++</script>
++
++<script lang="ts">
++  import { imageSource } from '../api/images';
++
++  // One side of a review's image file (ATM-689): the image as its revision has it, read through the files route (in the
++  // app, its command, as a data: URL), under its label (Before, After); why not, when it can't be read
++  let { url, label }: { url: string; label: string } = $props();
++
++  let source = $state<string | null>(null);
++  let failed = $state(false);
++  $effect(() => {
++    const asked = url;
++    source = null;
++    failed = false;
++    void imageSource(asked).then((s) => {
++      if (asked !== url) return;
++      if (s) source = s;
++      else failed = true;
++    });
++  });
++</script>
++
++<figure class="review-image" data-side={label.toLowerCase()}>
++  <figcaption>{label}</figcaption>
++  {#if source}
++    <img src={source} alt="{label}: the image" onerror={() => (failed = true)} hidden={failed} />
++  {/if}
++  {#if failed}<p class="review-image-failed">This image can't be shown.</p>{/if}
++</figure>
++
++<style>
++  .review-image {
++    align-items: flex-start;
++    display: flex;
++    flex: 1 1 0;
++    flex-direction: column;
++    gap: var(--space-2);
++    margin: 0;
++    min-width: 0;
++  }
++  figcaption {
++    color: var(--text-muted);
++    font-size: var(--text-xs);
++    font-weight: 600;
++    text-transform: uppercase;
++  }
++  img {
++    /* A checkerboard behind it, so a transparent image's edges show, as image viewers do */
++    background: repeating-conic-gradient(var(--surface2) 0% 25%, var(--bg) 0% 50%) 50% / 16px 16px;
++    border: 1px solid var(--border);
++    border-radius: var(--radius-sm);
++    max-height: 70vh;
++    max-width: 100%;
++    object-fit: contain;
++  }
++  .review-image-failed {
++    color: var(--text-muted);
++    font-size: var(--text-sm);
++    margin: 0;
++  }
++</style>
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 270c0f0b..75ec3284 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -47,6 +47,7 @@
+     project = null,
+     file = null,
+     side,
++    imageAt,
+     isViewed,
+     taskHref,
+     tasks,
+@@ -76,6 +77,8 @@
+     file?: string | null;
+     /** A side's files: the commit or tree a round's side is read from */
+     side: (revision: string) => DocumentSource;
++    /** An image's address at a revision (ATM-689): a review's image file shows its sides; without it, listed only */
++    imageAt?: (revision: string, path: string) => string;
+     isViewed: (file: ViewFile) => boolean;
+     /** A task's address, for its link */
+     taskHref?: (key: string) => string;
+@@ -1089,6 +1092,7 @@
+         {#each files as f (f.path)}
+           <ReviewFile
+             file={f}
++            {imageAt}
+             chains={chainsOf(allChains, f)}
+             drifted={driftedOf(allChains, f)}
+             before={sideOf(f.before)}
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 5791aa25..0795d1ee 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -3,7 +3,7 @@
+   import { onDestroy, untrack } from 'svelte';
+   import { addressOf, reviewOf, withReview } from '../address';
+   import { watchWorkingCopy } from '../api/changes';
+-  import { inApp } from '../api/http';
++  import { inApp, v1FileUrl } from '../api/http';
+   import { setWindowTitle } from '../api/shell';
+   import {
+     addComment,
+@@ -265,6 +265,7 @@
+         project={shortName}
+         file={at.file}
+         side={(revision) => revisionDocuments(project, revision)}
++        imageAt={(revision, path) => v1FileUrl(project, path, revision)}
+         isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
+         taskHref={taskPage}
+         tasks={taskLinks}
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 9bcfa9a6..7805163f 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -270,9 +270,9 @@ export class TasksServer {
+   private images = new Map<string, { contentType: string; body: Buffer }>();
+   fileRequests: string[] = [];
+ 
+-  /** Serve an image of the default project through the files route */
+-  setImage(path: string, contentType: string, body: Buffer) {
+-    this.images.set(path, { contentType, body });
++  /** Serve an image of the default project through the files route; with `at`, as that revision has it (`&at=`) */
++  setImage(path: string, contentType: string, body: Buffer, at?: string) {
++    this.images.set(at ? `${at}:${path}` : path, { contentType, body });
+   }
+ 
+   /** Answer the documents route for `path` with an error, as atm serve refuses a file */
+@@ -550,9 +550,13 @@ export class TasksServer {
+       });
+     });
+     await this.page.route(V1_FILES, (route) => {
+-      const path = new URL(route.request().url()).searchParams.get('path') ?? '';
+-      this.fileRequests.push(path);
+-      const image = isDefault(route.request().url(), V1_FILES) ? this.images.get(path) : undefined;
++      const query = new URL(route.request().url()).searchParams;
++      const path = query.get('path') ?? '';
++      const at = query.get('at');
++      this.fileRequests.push(at ? `${path}@${at}` : path);
++      const image = isDefault(route.request().url(), V1_FILES)
++        ? this.images.get(at ? `${at}:${path}` : path)
++        : undefined;
+       return image
+         ? route.fulfill({ status: 200, contentType: image.contentType, body: image.body })
+         : route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "not in the project"}' });
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 7a627ca7..e100bc61 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -965,6 +965,68 @@ test.describe('a review’s page', () => {
+     },
+   );
+ 
++  // ATM-689 (Hakan, CR-60's screenshots): a binary file isn't in the round's diff, but an image shows its sides, each
++  // as its revision has it; another binary file stays listed, not shown
++  test('an image file shows its images: a new one its after side, a changed one both; another binary file is listed', async ({
++    page,
++    tasksServer,
++  }) => {
++    const png = Buffer.from(
++      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
++      'base64',
++    );
++    const binary = (path: string, status: string, before: string | null, after: string | null) => ({
++      path,
++      old_path: path,
++      status,
++      binary: true,
++      patch: '',
++      before,
++      after,
++    });
++    tasksServer.setImage('docs/new.png', 'image/png', png, 'head3');
++    tasksServer.setImage('docs/shot.png', 'image/png', png, 'base1');
++    tasksServer.setImage('docs/shot.png', 'image/png', png, 'head3');
++    await openReviews(page, tasksServer);
++    tasksServer.setReview(
++      'CR-2',
++      reviewPage({
++        chains: [],
++        view: {
++          round: 3,
++          against: null,
++          files: [
++            binary('docs/new.png', 'added', null, 'head3'),
++            binary('docs/shot.png', 'modified', 'base1', 'head3'),
++            binary('bin/tool.wasm', 'modified', 'base1', 'head3'),
++          ],
++        },
++      }),
++    );
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    await page.getByRole('tab', { name: /^Diffs/ }).click();
++    const sides = (path: string) => card(page, path).locator('.review-image');
++    // Added: its after side; changed: before and after, side by side
++    await expect(sides('docs/new.png')).toHaveCount(1);
++    await expect(sides('docs/new.png').locator('figcaption')).toHaveText('After');
++    await expect(sides('docs/shot.png').locator('figcaption')).toHaveText(['Before', 'After']);
++    // Each image loaded, from its revision
++    for (const path of ['docs/new.png', 'docs/shot.png'])
++      await expect
++        .poll(() =>
++          sides(path)
++            .locator('img')
++            .evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).naturalWidth)),
++        )
++        .toEqual(path === 'docs/new.png' ? [1] : [1, 1]);
++    expect(tasksServer.fileRequests).toEqual(
++      expect.arrayContaining(['docs/new.png@head3', 'docs/shot.png@base1', 'docs/shot.png@head3']),
++    );
++    // Not an image: listed, not shown
++    await expect(card(page, 'bin/tool.wasm')).toContainText('A binary file: listed, not shown.');
++    await expect(sides('bin/tool.wasm')).toHaveCount(0);
++  });
++
+   // ATM-626 (Hakan, the app): the Rendered view of a new Markdown document showed only about its first page
+   for (const added of [true, false])
+     test(`Rendered: a long ${added ? 'new' : 'changed'} document is drawn to its end`, async ({
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index d0407970..d56422e7 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -206,6 +206,9 @@ reads the working copy through the version control. `path` is relative to the pr
+   `no-store`.
+ - `files?path=` answers an image's bytes (PNG, JPEG, GIF, WebP, SVG whose bytes match its name) with its type,
+   `Cache-Control: no-cache`, `nosniff` and a sandboxing CSP; any other file `403`. The ETag is the size and mtime.
++  With `&at=<revision>` (ATM-689: a review's image file, its old and new sides), the image as that commit or tree has
++  it, through `documents?…&at=`'s checks and then the image's; kept as `documents?…&at=` is at a full object ID
++  (tagged by the revision and the path, `immutable`), neither tagged nor kept at any other revision.
+ - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; git's or atm's own
+   folder (`.git`, `.agentic-task-manager`), an environment file (`.env`, `.env.local`; not `.env.example`), a key file
+   (`*.pem`, `id_rsa*`, …) or one git ignores `403` (other hidden files, `.github/` or `.gitignore`, are shown: CR-3); a missing file, or one reached through a
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 46b92a33..7c5fa0e3 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -78,7 +78,7 @@ with the task that adds it.
+ | #   | Invariant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Enforced by                                                                                                                                             |
+ | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+ | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `serve.test.mjs` "a request for another Host is refused"                                                                                                |
+-| I11 | **Nothing changes state over HTTP but a project's reviews, from atm's own page**: GET and HEAD everywhere, and POST, PATCH, PUT and DELETE only on the review routes (ATM-572, docs/code-review-design.md §3.12: `POST …/projects/<p>/reviews`, `PATCH …/reviews/<CR>`, `PUT …/reviews/<CR>/tasks`, `POST …/reviews/<CR>/decisions`, `POST …/reviews/<CR>/comments`, `PATCH …/comments/<c>`, `POST …/comments/<c>/replies`, `POST …/reviews/<CR>/pokes` (ATM-611: a review-level comment marked as a poke, with the same checks; an agent's identity is refused), `POST …/reviews/<CR>/drafts`, `PATCH …/drafts/<d>` and `DELETE …/drafts/<d>` (ATM-612: the user's drafts, written to their own state folder's `drafts/`, a file per project, review and person, **never to the repository or the review's folder**, so no other person, no agent and no commit sees them until a decision sends them as the user's comments; DELETE only there, with the same checks and an empty JSON body; an agent's identity is refused; their read, `GET …/reviews/<CR>/drafts`, and the review's page answer the asking user's drafts only)). Each such request must carry the Host check (I10), an `Origin` that is the server's own, this start's session token (random, 244 bits, in the page atm serves as `<meta name="atm-session">`, which another site can't read) in `X-Atm-Session`, and a JSON body (at most 1 MB; a plain form can't send one); no CORS preflight is answered (OPTIONS is 405), so no other site's page can send the header. Each route is one atm-lib call (`review_requests`), acting as the user at the machine (their git name: never an agent's identity, whatever environment started the server), each body read with `deny_unknown_fields`, texts at most 100,000 characters, files inside the repository, revisions resolved to commits before git sees them (never an option); a review's decisions keep its rules (its author can't decide it, I23). The one other exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks | documents                                                                                                                                               | files | claims | worktrees | logo | reviews | reviews/<CR>`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search`(reads every project's`tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json`and`logo`(computed through atm-lib; the task files themselves are no longer served as stored, T-374),`api/v1/projects/<id>/tasks`(a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of`find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…`(atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack:`.js`, `.wasm`and`.html`only, embedded in the binary from the build's`dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/reviews`and`…/reviews/<CR>`(a project's code reviews and a review's page, read through atm-lib as the user, ATM-574),`api/v1/projects/<id>/documents?path=`(with`&at=<rev>`: as a commit or tree has it, the revision resolved before git sees it, the same path checks, ATM-574) and `…/files?path=`(a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path, never in `.git` or `.agentic-task-manager`, not an environment file (`.env`, `.env.local`, …; `.env.example`, `.sample` and `.template` are shown), not a key file, not a file git ignores; other hidden files, `.github/` or `.gitignore`, are shown (ATM-598, CR-3) (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink;`files`only an image whose bytes match its type, sandboxed),`whoami`and`/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "review changes (ATM-572)…" (each route; refused without the token, with another, from another origin, as a form, with an unknown field; no preflight answered; ATM-612's drafts kept in the state folder, not the repository, a DELETE refused without the token), "review reads (ATM-574)…" (read-only; a revision that is an option or no object refused); atm-api's `routes` unit tests (each route on a fake atm-lib), "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-docs/src/lib.rs`'s tests (moved from atm-lib, ATM-570; a file at a revision passes the same checks, its revision never an option for git) |
++| I11 | **Nothing changes state over HTTP but a project's reviews, from atm's own page**: GET and HEAD everywhere, and POST, PATCH, PUT and DELETE only on the review routes (ATM-572, docs/code-review-design.md §3.12: `POST …/projects/<p>/reviews`, `PATCH …/reviews/<CR>`, `PUT …/reviews/<CR>/tasks`, `POST …/reviews/<CR>/decisions`, `POST …/reviews/<CR>/comments`, `PATCH …/comments/<c>`, `POST …/comments/<c>/replies`, `POST …/reviews/<CR>/pokes` (ATM-611: a review-level comment marked as a poke, with the same checks; an agent's identity is refused), `POST …/reviews/<CR>/drafts`, `PATCH …/drafts/<d>` and `DELETE …/drafts/<d>` (ATM-612: the user's drafts, written to their own state folder's `drafts/`, a file per project, review and person, **never to the repository or the review's folder**, so no other person, no agent and no commit sees them until a decision sends them as the user's comments; DELETE only there, with the same checks and an empty JSON body; an agent's identity is refused; their read, `GET …/reviews/<CR>/drafts`, and the review's page answer the asking user's drafts only)). Each such request must carry the Host check (I10), an `Origin` that is the server's own, this start's session token (random, 244 bits, in the page atm serves as `<meta name="atm-session">`, which another site can't read) in `X-Atm-Session`, and a JSON body (at most 1 MB; a plain form can't send one); no CORS preflight is answered (OPTIONS is 405), so no other site's page can send the header. Each route is one atm-lib call (`review_requests`), acting as the user at the machine (their git name: never an agent's identity, whatever environment started the server), each body read with `deny_unknown_fields`, texts at most 100,000 characters, files inside the repository, revisions resolved to commits before git sees them (never an option); a review's decisions keep its rules (its author can't decide it, I23). The one other exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks | documents                                                                                                                                               | files | claims | worktrees | logo | reviews | reviews/<CR>`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search`(reads every project's`tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json`and`logo`(computed through atm-lib; the task files themselves are no longer served as stored, T-374),`api/v1/projects/<id>/tasks`(a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of`find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…`(atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack:`.js`, `.wasm`and`.html`only, embedded in the binary from the build's`dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/reviews`and`…/reviews/<CR>`(a project's code reviews and a review's page, read through atm-lib as the user, ATM-574),`api/v1/projects/<id>/documents?path=`(with`&at=<rev>`: as a commit or tree has it, the revision resolved before git sees it, the same path checks, ATM-574) and `…/files?path=`(a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path, never in `.git` or `.agentic-task-manager`, not an environment file (`.env`, `.env.local`, …; `.env.example`, `.sample` and `.template` are shown), not a key file, not a file git ignores; other hidden files, `.github/` or `.gitignore`, are shown (ATM-598, CR-3) (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink;`files`only an image whose bytes match its type, sandboxed; `files` with `&at=<rev>` too (a review's image file's sides, ATM-689): the image as that commit or tree has it, through the same checks as `documents?…&at=` and then the image's),`whoami`and`/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "review changes (ATM-572)…" (each route; refused without the token, with another, from another origin, as a form, with an unknown field; no preflight answered; ATM-612's drafts kept in the state folder, not the repository, a DELETE refused without the token), "review reads (ATM-574)…" (read-only; a revision that is an option or no object refused); atm-api's `routes` unit tests (each route on a fake atm-lib), "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-docs/src/lib.rs`'s tests (moved from atm-lib, ATM-570; a file at a revision passes the same checks, its revision never an option for git) |
+ | I12 | **Only the registered projects' data is served**: their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project (a git submodule's checkout is inside it; a file in it is ignored by the submodule's own rules)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
+ | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts`                                                 |
+ 

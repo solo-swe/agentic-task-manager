@@ -6,7 +6,7 @@
   import InfoTip from '../ui/InfoTip.svelte';
 
   // Time per task (docs/project-stats-proposal.md §4.1, T-254): how many tasks took how long, in bins that widen with
-  // time; each bar agents alone (solid) under with you (hatched, `interactive` tasks), one hue, told apart by texture.
+  // time; each bar agents alone (solid) under with you (hatched, tasks done with you), one hue, told apart by texture.
   // A median marker per kind under the axis; the five slowest tasks under the chart.
   let { histogram }: { histogram: TimeHistogram } = $props();
 

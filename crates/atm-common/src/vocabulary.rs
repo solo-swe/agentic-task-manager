@@ -168,6 +168,54 @@ fn fail(message: impl Into<String>) -> Error {
     Error::failed(message)
 }
 
+/// The punctuation a sprint name may have besides letters, digits and spaces (ATM-665): what names have (`Task&review
+/// state machine`, `Code reviews: records and CLI`, `The atm app, continued`, a generated `Nov 20-3:05pm`), and
+/// nothing a shell reads specially: no `$`, backtick, `;`, `|`, quotes, `!`, `<`, `>`, `\`, `*`, `?` or newline.
+const SPRINT_NAME_PUNCTUATION: &str = "._-&,:()/+#";
+
+/// What the loop and `sprint move --to` take as words, never a sprint's name: a sprint so named couldn't be meant.
+pub const RESERVED_SPRINT_NAMES: [&str; 4] = ["backlog", "new", "active", "next"];
+
+/// Why `name` isn't a sprint's name, or none: at most [`MAX_SPRINT_NAME`] characters, no space at either end, and
+/// letters, digits, spaces and [`SPRINT_NAME_PUNCTUATION`] only (agents paste it into `--sprint '<name>'`, ATM-665).
+/// The reserved words are refused where a sprint is named, not on load ([`reserved_sprint_name`]).
+#[must_use]
+pub fn sprint_name_problem(name: &str) -> Option<String> {
+    let shown = repr_str(name);
+    if name.trim().is_empty() || name != strip(name) || name.chars().count() > MAX_SPRINT_NAME {
+        return Some(format!(
+            "{shown} is not a sprint name (at most {MAX_SPRINT_NAME} characters, no space at either end)"
+        ));
+    }
+    let bad: Vec<char> = name
+        .chars()
+        .filter(|c| !(c.is_alphanumeric() || *c == ' ' || SPRINT_NAME_PUNCTUATION.contains(*c)))
+        .collect();
+    if bad.is_empty() {
+        return None;
+    }
+    // Each as Rust writes a char ('$', '`', '\'', '\n'): readable whatever it is
+    let mut listed: Vec<String> = Vec::new();
+    for c in bad {
+        let shown = format!("{c:?}");
+        if !listed.contains(&shown) {
+            listed.push(shown);
+        }
+    }
+    Some(format!(
+        "{shown} is not a sprint name: {} not allowed (letters, digits, spaces and {SPRINT_NAME_PUNCTUATION})",
+        listed.join(", ")
+    ))
+}
+
+/// Whether `name` is one of [`RESERVED_SPRINT_NAMES`], in any case.
+#[must_use]
+pub fn reserved_sprint_name(name: &str) -> bool {
+    RESERVED_SPRINT_NAMES
+        .iter()
+        .any(|r| r.eq_ignore_ascii_case(name.trim()))
+}
+
 fn one_of(value: &Value, choices: &[&str]) -> bool {
     value.as_str().is_some_and(|s| choices.contains(&s))
 }
@@ -220,6 +268,14 @@ fn terms(meta: &Map<String, Value>, key: &str, need_kind: bool) -> Result<Option
             })?;
         if seen.contains(&id) {
             return Err(fail(format!("meta.{key}: \"{id}\" is listed twice")));
+        }
+        // Agents paste these into commands (`atm task state <id> <status>`): shell-safe, as releases' and components'
+        // IDs are (ATM-665)
+        if !crate::ids::valid_short_id(id) {
+            return Err(fail(format!(
+                "meta.{key}: {} is not an ID atm takes: letters, digits, `.`, `_` and `-`, starting with a letter or digit, at most 64",
+                repr_str(id)
+            )));
         }
         seen.push(id);
         let label = item
@@ -382,11 +438,8 @@ fn check_sprints(meta: &Map<String, Value>) -> Result<Vec<Map<String, Value>>> {
             .ok_or_else(|| {
                 fail("meta.sprints: every sprint needs an \"id\", its name (a non-empty string)")
             })?;
-        if name != strip(name) || name.chars().count() > MAX_SPRINT_NAME {
-            return Err(fail(format!(
-                "meta.sprints: {} is not a sprint name (at most {MAX_SPRINT_NAME} characters, no space at either end)",
-                repr_str(name)
-            )));
+        if let Some(problem) = sprint_name_problem(name) {
+            return Err(fail(format!("meta.sprints: {problem}")));
         }
         let folded = name.to_lowercase();
         if seen.contains(&folded) {

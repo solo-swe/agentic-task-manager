@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "05b4ccf9d7a56a32d504e5d75c55cd06003d5e8b",
+    "head": "0d12af23600e0095ebbda4a063a99e743cb1d37f"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/documents.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T00:48:02Z"
+}

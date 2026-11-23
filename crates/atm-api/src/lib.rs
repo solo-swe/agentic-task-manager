@@ -25,7 +25,7 @@ use std::time::Duration;
 use atm_common::dashboard::{
     PAGE, SERVER_RECORD, WHOAMI, home_id, page_csp, page_tags, script_hashes,
 };
-use atm_common::home::write_text_atomic;
+use atm_common::home::write_private_atomic;
 use atm_common::py::to_json;
 use atm_common::time::now_iso;
 use axum::Router;
@@ -50,6 +50,15 @@ struct Served {
     session: String,
     /// The page, with the session token in it
     page: Vec<u8>,
+}
+
+impl Served {
+    /// Whether `host` (a Host header, or an Origin without its scheme) is this server's own: `localhost:<port>` or
+    /// `127.0.0.1:<port>`, never another name pointed at it (DNS rebinding). ATM-682: the one check, for both.
+    fn is_own_host(&self, host: &str) -> bool {
+        let port = self.port;
+        host == format!("localhost:{port}") || host == format!("127.0.0.1:{port}")
+    }
 }
 
 /// The header a review change carries the session token in.
@@ -98,15 +107,32 @@ fn same_token(a: &str, b: &str) -> bool {
             == 0
 }
 
+/// Whether a request comes from another site's page (ATM-671): the browser says so (`Sec-Fetch-Site: cross-site`), or
+/// its `Origin` isn't on this machine (`localhost` or `127.0.0.1`, any port: the dashboard's dev server, on another
+/// port, sends its requests on). A client without these headers (atm itself, a script) is none.
+fn from_another_site(headers: &HeaderMap) -> bool {
+    let value = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+    if value("sec-fetch-site").is_some_and(|s| s.eq_ignore_ascii_case("cross-site")) {
+        return true;
+    }
+    value(header::ORIGIN.as_str()).is_some_and(|origin| {
+        let host = origin
+            .strip_prefix("http://")
+            .and_then(|rest| rest.split(':').next())
+            .unwrap_or_default();
+        !(host == "localhost" || host == "127.0.0.1")
+    })
+}
+
 /// Why a review change is refused before anything is read (docs/code-review-design.md §3.12): it must come from the
 /// page this server served, with its token, as JSON. None when it may go on.
 fn review_change_refused(served: &Served, host: &str, headers: &HeaderMap) -> Option<Response> {
     let value = |name: header::HeaderName| headers.get(name).and_then(|v| v.to_str().ok());
     // The request's Origin is this server's own (the page atm serves; never another site, never none)
-    let port = served.port;
     let origin_ok = value(header::ORIGIN).is_some_and(|o| {
         o == format!("http://{host}")
-            && (o == format!("http://localhost:{port}") || o == format!("http://127.0.0.1:{port}"))
+            && o.strip_prefix("http://")
+                .is_some_and(|own| served.is_own_host(own))
     });
     if !origin_ok {
         return Some(send_error(
@@ -195,9 +221,20 @@ fn send(
     for (name, value) in all {
         response = response.header(name, value);
     }
-    response
-        .body(Body::from(body))
-        .unwrap_or_else(|_| Response::new(Body::empty()))
+    response.body(Body::from(body)).unwrap_or_else(|_| {
+        // A header the builder refused (ATM-672, audit H11): a bare 500, never a 200 without the security headers
+        let mut failed = Response::new(Body::empty());
+        *failed.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        let headers = failed.headers_mut();
+        for (name, value) in [
+            ("cache-control", "no-store"),
+            ("x-content-type-options", "nosniff"),
+            ("cross-origin-resource-policy", "same-origin"),
+        ] {
+            headers.insert(name, header::HeaderValue::from_static(value));
+        }
+        failed
+    })
 }
 
 /// `{"error": message}` with `status`.
@@ -256,8 +293,7 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
         .and_then(|h| h.to_str().ok())
         .unwrap_or_default()
         .to_string();
-    let port = served.port;
-    if host != format!("localhost:{port}") && host != format!("127.0.0.1:{port}") {
+    if !served.is_own_host(&host) {
         // A page on another site that points its own domain at 127.0.0.1 (DNS rebinding) is refused
         return send_error(StatusCode::FORBIDDEN, "unexpected Host header");
     }
@@ -265,6 +301,14 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
         return serve_checked_review_change(Arc::clone(&served), host, request).await;
     }
     let path = request.uri().path();
+    // A read another site's page sends (ATM-671, audit H5): reads write too (`recent.json`) and run git, so a GET
+    // from elsewhere is refused. Opening the page itself from another site is fine, and so are its assets
+    if !pages::is_page(path)
+        && !path.starts_with(assets::PREFIX)
+        && from_another_site(request.headers())
+    {
+        return send_error(StatusCode::FORBIDDEN, "a read comes from atm's own page");
+    }
     if pages::is_page(path) {
         let policy = page_csp(&served.hashes, &format!("http://{host}"));
         return send(
@@ -293,7 +337,7 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
         let info = json!({
             "atm": true,
             "pid": std::process::id(),
-            "port": port,
+            "port": served.port,
             "version": served.version,
             "build": served.build,
             "home": served.home,
@@ -434,7 +478,8 @@ pub fn serve(home: &Path, first_port: u16) -> Result<(), String> {
             "home": served.home,
             "started_at": now_iso(),
         });
-        write_text_atomic(&record_path, &(to_json(&record) + "\n")).map_err(|e| e.to_string())?;
+        write_private_atomic(&record_path, &(to_json(&record) + "\n"))
+            .map_err(|e| e.to_string())?;
         stopped().await;
         forget(&record_path);
         Ok(())

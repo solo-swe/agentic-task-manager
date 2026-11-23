@@ -17,6 +17,35 @@ export function formatMinutesRange(low: number, high: number): string {
   return a === b ? a : `${a} – ${b}`;
 }
 
+/** How long ago `iso` was, to the minute: "just now", "12 m ago", "1 h 10 m ago" (a card's claim and times). */
+export function formatAgo(iso: string, now: number): string {
+  const minutes = (now - Date.parse(iso)) / 60_000;
+  return minutes < 1 ? 'just now' : `${formatMinutes(minutes)} ago`;
+}
+
+/** How long ago `iso` was, in its largest unit: "just now", "5 min ago", "3 h ago", "12 d ago"; its date after 30
+ * days, and the text as it is when it isn't a time (a list's "updated"). */
+export function formatAgoOrDate(iso: string, now: number): string {
+  const seconds = (now - Date.parse(iso)) / 1000;
+  if (!Number.isFinite(seconds)) return iso;
+  if (seconds < 60) return 'just now';
+  const units: [string, number][] = [
+    ['min', 60],
+    ['h', 3600],
+    ['d', 86400],
+  ];
+  const limits = [3600, 86400, 86400 * 30];
+  const at = limits.findIndex((limit) => seconds < limit);
+  if (at < 0) return iso.slice(0, 10);
+  const [unit, size] = units[at];
+  return `${Math.floor(seconds / size)} ${unit} ago`;
+}
+
+/** A moment in full, date and time, in the viewer's locale (a note's, a claim's, a merge's); "" without one. */
+export function formatDateTime(iso: string | undefined | null): string {
+  return iso ? new Date(iso).toLocaleString() : '';
+}
+
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 

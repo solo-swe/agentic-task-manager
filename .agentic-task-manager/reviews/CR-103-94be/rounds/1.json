@@ -1,0 +1,132 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "c1e3743732a4839d71ff6bafb0efa1018531a50e",
+    "head": "48823f76c1374ecc63bcf009b74d775dfa3d0216"
+  },
+  "files": [
+    {
+      "path": "crates/atm-lib/src/review_pages.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages/list.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages/page.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages/patches.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages/view.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages/waiting.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/commands.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/doctor.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/linking.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/live.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/naming.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/repo.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/decisions.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/doctor.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/fixtures.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/keys.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/listing.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/live.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/main.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/opening.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/submodules.rs",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T23:49:06Z"
+}

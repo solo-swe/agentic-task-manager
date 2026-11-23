@@ -1,0 +1,56 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "093a6f9be3da0a3fdeeab939347ecab1679af20b",
+    "head": "ba2bbdd194c32f86f7d568d1130b8b0854f1b6d4"
+  },
+  "files": [
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/fixtures.mjs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/keys.test.mjs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/lifecycle.test.mjs",
+      "status": {
+        "renamed": {
+          "from": "tests/scripts/reviews.test.mjs"
+        }
+      },
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/listening.test.mjs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/submodules.test.mjs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/wrong-uses.test.mjs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/run.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T07:30:25Z"
+}

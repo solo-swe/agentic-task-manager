@@ -8,6 +8,9 @@ import type { ParamMatcher } from '@sveltejs/kit/params';
 
 export const PROJECT_TABS = ['kanban', 'list', 'graph', 'progress', 'agents', 'project', 'reviews'];
 export const OVERVIEW_PATHS = ['board', 'progress', 'agents', 'reviews'];
+/** A review page's sub-tabs after its path (ATM-697: /projects/<id>/reviews/<CR>/[section=section]); the Overview is
+ * the review's own path (lib/address.ts REVIEW_SECTIONS) */
+export const REVIEW_SECTION_PATHS = ['diffs', 'comments'];
 
 function oneOf(name: string, values: readonly string[]): ParamMatcher<string> {
   return {
@@ -23,4 +26,5 @@ function oneOf(name: string, values: readonly string[]): ParamMatcher<string> {
 export const params = {
   view: oneOf('project tab', PROJECT_TABS),
   overview: oneOf('overview tab', OVERVIEW_PATHS),
+  section: oneOf('review sub-tab', REVIEW_SECTION_PATHS),
 };

@@ -1,0 +1,320 @@
+diff --git a/dashboard/src/lib/compmd-runtime.ts b/dashboard/src/lib/compmd-runtime.ts
+new file mode 100644
+index 00000000..53b0d1bb
+--- /dev/null
++++ b/dashboard/src/lib/compmd-runtime.ts
+@@ -0,0 +1,48 @@
++// CompMD for the whole document (ATM-646): what every rendered text shares, made once, not once per text. A review
++// page renders tens to hundreds of texts (each diff run, each comment); each paid for a sandbox of its own and an
++// observer of its own on <html>. The CompMD pages themselves are still one per text: each one opened or closed sets
++// the document's adopted style sheets and reads a computed style, a restyle of the whole page, until CompMD shares
++// those per document too (its task); when it does, its shared style sheet and scheme are passed here, in one place.
++import { sandboxOptions, type CompmdModule } from './compmd';
++
++type Sandbox = ReturnType<CompmdModule['createSandbox']>;
++type View = ReturnType<Sandbox['open']>;
++
++let shared: { compmd: CompmdModule; sandbox: Sandbox } | null = null;
++
++/** The document's one sandbox, made the first time it is asked for */
++export function sandboxOf(compmd: CompmdModule, make = sandboxOptions): Sandbox {
++  if (shared?.compmd !== compmd) shared = { compmd, sandbox: compmd.createSandbox(make(compmd)) };
++  return shared.sandbox;
++}
++
++/** The views open, told when the dashboard's theme or mode changes */
++const following = new Set<Pick<View, 'scheme'>>();
++let schemes: MutationObserver | null = null;
++
++/** `view` follows the dashboard's theme and mode (attributes on <html>; its color-scheme follows them): one observer
++ * for every view, made with the first and gone with the last. What stops following it back. */
++export function followScheme(view: Pick<View, 'scheme'>): () => void {
++  following.add(view);
++  if (!schemes && typeof MutationObserver !== 'undefined') {
++    schemes = new MutationObserver(() => {
++      for (const v of following) v.scheme();
++    });
++    schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
++  }
++  return () => {
++    following.delete(view);
++    if (following.size === 0) {
++      schemes?.disconnect();
++      schemes = null;
++    }
++  };
++}
++
++/** Forget the sandbox and the views (tests) */
++export function resetRuntime() {
++  shared = null;
++  following.clear();
++  schemes?.disconnect();
++  schemes = null;
++}
+diff --git a/dashboard/src/lib/documents/CompMd.svelte b/dashboard/src/lib/documents/CompMd.svelte
+index ee2d4d84..61a7793d 100644
+--- a/dashboard/src/lib/documents/CompMd.svelte
++++ b/dashboard/src/lib/documents/CompMd.svelte
+@@ -6,7 +6,6 @@
+     loadCompmd,
+     processText,
+     safeHref,
+-    sandboxOptions,
+     secureLinks,
+     slug,
+     taskData,
+@@ -15,6 +14,7 @@
+     type TaskLinks,
+     type DrawnLine,
+   } from '../compmd';
++  import { followScheme, sandboxOf } from '../compmd-runtime';
+   import { docOf, referenceTo, viewerLink, type DocumentRef } from '../documents';
+   import { navigate } from '../navigation';
+   import { takeTurn } from '../render-turns';
+@@ -98,7 +98,8 @@
+   /** Drawn, but for an earlier text: hidden, the new text as written shown in its place until its turn (ATM-625) */
+   let stale = $state(false);
+   let view: View | null = null;
+-  let schemes: MutationObserver | null = null;
++  /** Stops this view following the dashboard's theme (the document's one observer, compmd-runtime) */
++  let unfollow: (() => void) | null = null;
+   /** Destroyed (ATM-620): nothing is drawn any more. A draw after it made a view nothing would destroy, whose listeners
+    * held the text's element and the card around it */
+   let destroyed = false;
+@@ -187,8 +188,8 @@
+       if (!view) {
+         // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
+         // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
+-        // app, under the origin CompMD's plugin gives the page, ADR-006)
+-        view = compmd.createSandbox(sandboxOptions(compmd)).open(target, { components });
++        // app, under the origin CompMD's plugin gives the page, ADR-006). The document's one sandbox (ATM-646)
++        view = sandboxOf(compmd).open(target, { components });
+         view.on('rendered', () => {
+           secureLinks(target);
+           drawn = true;
+@@ -215,9 +216,8 @@
+         // After a render is painted, when the page or a block in it changes size, when fonts load
+         view.on('layout', () => void measureLines(shown, target));
+         // The dashboard switches theme and mode by attributes on <html> (its color-scheme follows): the frames,
+-        // and a diagram's light or dark theme, follow when told
+-        schemes = new MutationObserver(() => view?.scheme());
+-        schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
++        // and a diagram's light or dark theme, follow when told; one observer for every view (ATM-646)
++        unfollow = followScheme(shown);
+       }
+       view.render(tree);
+       failed = false;
+@@ -228,7 +228,7 @@
+     destroyed = true;
+     cancelTurn?.();
+     turnDone?.();
+-    schemes?.disconnect();
++    unfollow?.();
+     view?.destroy();
+   });
+ 
+diff --git a/dashboard/src/lib/reviews/DiffCode.svelte b/dashboard/src/lib/reviews/DiffCode.svelte
+index e90e6221..815b6040 100644
+--- a/dashboard/src/lib/reviews/DiffCode.svelte
++++ b/dashboard/src/lib/reviews/DiffCode.svelte
+@@ -53,6 +53,8 @@
+   } = $props();
+ 
+   const source = $derived(lines.map((l) => l.text).join('\n'));
++  /** Nothing in it to highlight: padding rows and empty lines only */
++  const blank = $derived(lines.every((l) => l.kind === 'pad' || l.text.trim() === ''));
+   const text = $derived(
+     fenced(
+       lines.map((l) => l.text),
+@@ -239,8 +241,16 @@
+       </div>
+     {/each}
+   {/if}
+-  <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
+-  <CompMd {text} plain={source} />
++  {#if blank}
++    <!-- Nothing to highlight (a side of added or removed lines only: its padding rows, ATM-646): no CompMD page, whose
++         opening and closing each restyle the whole page; the text as written, as a run waits for its turn below -->
++    <div class="compmd" data-compmd="ready">
++      <div class="compmd-page compmd-waiting"><pre><code>{source}</code></pre></div>
++    </div>
++  {:else}
++    <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
++    <CompMd {text} plain={source} />
++  {/if}
+ </div>
+ 
+ <style>
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index d0029546..da740ead 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -168,26 +168,42 @@
+   });
+   // A card made and then far from the view gives back its diff (ATM-587: the page holds the rows near the view, not
+   // every file's), standing in at the height it had, and is made again when it comes near; not while a comment is
+-  // being written in it, nor the file gone to
++  // being written in it, nor the file gone to. Not while a jump is still being made (ATM-646): each CompMD page closed
++  // restyles the whole page (a second each in the app's WebKit on a long review), so those a jump scrolled away from
++  // wait until the page has settled, and stay made if they came near again meanwhile
+   let body = $state<HTMLElement>();
+   /** The height its diff had, when made: what it stands at once given back */
+   let measured = $state(0);
+   $effect(() => {
+     const target = el;
+     if (!target || !near || wanted || typeof IntersectionObserver === 'undefined') return;
++    let later: (() => void) | null = null;
++    const giveBack = () => {
++      later = null;
++      const writingHere = target.querySelector('textarea, [contenteditable="true"]') !== null;
++      if (writingHere || target.contains(document.activeElement)) return;
++      // Only a drawn diff's height (ATM-615): one still loading is a line high, and the card stood at that
++      if (body && !body.querySelector('.diff-loading')) measured = body.offsetHeight;
++      near = false;
++    };
+     const far = new IntersectionObserver(
+       (entries) => {
+-        if (entries.some((e) => e.isIntersecting)) return;
+-        const writingHere = target.querySelector('textarea, [contenteditable="true"]') !== null;
+-        if (writingHere || target.contains(document.activeElement)) return;
+-        // Only a drawn diff's height (ATM-615): one still loading is a line high, and the card stood at that
+-        if (body && !body.querySelector('.diff-loading')) measured = body.offsetHeight;
+-        near = false;
++        if (entries.some((e) => e.isIntersecting)) {
++          later?.();
++          later = null;
++          return;
++        }
++        // At once, as the view moves; only right after a jump, once the page has settled
++        if (!holding()) giveBack();
++        else later ??= whenSettled(giveBack);
+       },
+       { root, rootMargin: `${FAR}px 0px` },
+     );
+     far.observe(target);
+-    return () => far.disconnect();
++    return () => {
++      far.disconnect();
++      later?.();
++    };
+   });
+   /** How tall a diff not made yet stands: the height it had, else about its lines, so the scroll bar is about right */
+   // No cap (ATM-587, CompMD's CR-1): a 600-line file stood at 4,000 px and grew to 12,000 once drawn, so the end of the
+@@ -337,6 +353,12 @@
+        laying out those near the view costs nothing measurable). Never shrunk (ATM-615) */
+     flex: none;
+   }
++  /* A card not made yet stands at its estimate, an empty box (ATM-646): contained, so a restyle or repaint of the rest
++     of the review has nothing to do in it; a long review is mostly these (CMD CR-7: ~500,000 px). Empty, so none of
++     ATM-620's leak (that was content-visibility keeping made cards' old layout) */
++  .review-file-later {
++    contain: strict;
++  }
+   /* A diff still loading stands at its estimate (ATM-615), so the pane doesn't shrink under the reader while it
+      loads */
+   .review-file-body:has(:global(.diff-loading)) {
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 7afaa166..fe00c0a1 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1884,14 +1884,16 @@ test.describe('performance', () => {
+     }
+   });
+ 
+-  // ATM-646: a review shaped as CompMD's CR-7 (15 files, one of 20,000 lines: ~500,000 px of cards not made yet). A
+-  // jump to its last file must not restyle the whole page over and over: each CompMD page opened or closed set the
+-  // document's adopted style sheets and forced a computed style, a full restyle each (~1 s in the app's WebKit)
+-  test('a jump to the last file of a review half a million pixels long restyles the page a bounded number of times (measured)', async ({
++  // ATM-646: a review shaped as CompMD's CR-7 (15 files, one long: ~100,000 px of cards not made yet; CR-7's was 500,000,
++  // which only costs this test time). A jump to its last file must not restyle the whole page over and over: each
++  // CompMD page opened or closed sets the document's adopted style sheets and reads a computed style, a full restyle
++  // each (~1 s in the app's WebKit). Until CompMD shares those per document, the pages opened are what is in view, and
++  // the page itself forces none
++  test('a jump to the last file of a long review restyles the page only for the CompMD pages it shows (measured)', async ({
+     page,
+     tasksServer,
+   }) => {
+-    const sizes = Array.from({ length: 15 }, (_, i) => (i === 7 ? 20_000 : i % 3 === 0 ? 120 : 30));
++    const sizes = Array.from({ length: 15 }, (_, i) => (i === 7 ? 5_000 : i % 3 === 0 ? 120 : 30));
+     const files = sizes.map((added, i) => {
+       const path = `src/f${String(i).padStart(2, '0')}.rs`;
+       const body = Array.from({ length: added }, (_, n) => `+let v${n} = ${n};`).join('\n');
+@@ -1954,7 +1956,7 @@ test.describe('performance', () => {
+     await page.getByRole('tab', { name: /^Diffs/ }).click();
+     await expect(diffOf(page, files[0].path).locator('.diff-line').first()).toBeVisible();
+     const height = await page.locator('.review-diffs').evaluate((el) => el.scrollHeight);
+-    expect(height).toBeGreaterThan(300_000);
++    expect(height).toBeGreaterThan(100_000);
+     await page.waitForTimeout(1500);
+     const counts = () =>
+       page.evaluate(() => ({ ...(window as unknown as { restyles: Record<string, number> }).restyles }));
+@@ -1970,7 +1972,14 @@ test.describe('performance', () => {
+       pages: after.pages - before.pages,
+     };
+     console.log('jump to the last file, restyle triggers:', JSON.stringify({ before, jump }));
++    // The cards in view and near it, a page a side of each run: no more (the cards passed over aren't made)
+     expect(jump.pages).toBeGreaterThan(0);
++    expect(jump.pages).toBeLessThanOrEqual(8);
++    // Each page set the sheets once opening it, once closing it (a card given back once the page settled)
++    expect(jump.adopted).toBeLessThanOrEqual(2 * jump.pages);
++    // CompMD 0.7.1's own reads, four a page it opens and draws (its scheme, ATM-646's CompMD task); the review's
++    // own code forces none (it forced 68 more before: DiffCode measured every run on every change in it, ATM-644)
++    expect(jump.computed).toBeLessThanOrEqual(4 * jump.pages);
+   });
+ 
+   // ATM-587: a review shaped as CompMD's CR-1 (94 files, ~3,000 lines added: a few long files, most short, some long
+diff --git a/dashboard/tests/unit/compmd-runtime.test.ts b/dashboard/tests/unit/compmd-runtime.test.ts
+new file mode 100644
+index 00000000..996c3cea
+--- /dev/null
++++ b/dashboard/tests/unit/compmd-runtime.test.ts
+@@ -0,0 +1,48 @@
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { followScheme, resetRuntime, sandboxOf } from '../../src/lib/compmd-runtime';
++import type { CompmdModule } from '../../src/lib/compmd';
++
++// ATM-646: what every rendered text shares, made once for the document
++describe('CompMD for the whole document', () => {
++  afterEach(() => resetRuntime());
++
++  const module = () => {
++    const sandbox = { open: vi.fn() };
++    return { compmd: { createSandbox: vi.fn(() => sandbox) } as unknown as CompmdModule, sandbox };
++  };
++  const options = () => ({ frames: 'f/', modules: () => undefined, page: 'host' as const });
++
++  it('one sandbox for every text, made the first time; a new module (tests, a reload) makes its own', () => {
++    const a = module();
++    expect(sandboxOf(a.compmd, options)).toBe(a.sandbox);
++    expect(sandboxOf(a.compmd, options)).toBe(a.sandbox);
++    expect(a.compmd.createSandbox).toHaveBeenCalledTimes(1);
++    const b = module();
++    expect(sandboxOf(b.compmd, options)).toBe(b.sandbox);
++    expect(b.compmd.createSandbox).toHaveBeenCalledTimes(1);
++  });
++
++  it("one observer on <html> tells every view the dashboard's theme changed; it goes with the last view", async () => {
++    const changed = () => new Promise((r) => setTimeout(r, 0));
++    const one = { scheme: vi.fn() };
++    const two = { scheme: vi.fn() };
++    const stopOne = followScheme(one);
++    const stopTwo = followScheme(two);
++    document.documentElement.setAttribute('data-mode', 'dark');
++    await changed();
++    expect([one.scheme.mock.calls.length, two.scheme.mock.calls.length]).toEqual([1, 1]);
++    // Other attributes aren't the theme
++    document.documentElement.setAttribute('lang', 'en');
++    await changed();
++    expect(one.scheme).toHaveBeenCalledTimes(1);
++    // A view gone isn't told; the last one gone, nothing is
++    stopOne();
++    document.documentElement.setAttribute('data-theme', 'paper');
++    await changed();
++    expect([one.scheme.mock.calls.length, two.scheme.mock.calls.length]).toEqual([1, 2]);
++    stopTwo();
++    document.documentElement.setAttribute('data-mode', 'light');
++    await changed();
++    expect(two.scheme).toHaveBeenCalledTimes(2);
++  });
++});

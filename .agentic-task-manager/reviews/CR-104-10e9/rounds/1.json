@@ -1,0 +1,107 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "733030e5b328fe5c5ea4145c52b344793de55c35",
+    "head": "a316f2e077a3a19e283d2cfa699ff7d2c9ec34cb"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/review.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/decide.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/listen.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/open.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/read.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/talk.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/cursor.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/inbox.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/lease.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/tests/cursor.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/tests/heard.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/tests/inbox.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/tests/lease.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/tests/work.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/wait.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/watch.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/work.rs",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-21T00:06:34Z"
+}

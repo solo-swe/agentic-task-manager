@@ -1,0 +1,496 @@
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 8f754418..bd3b815a 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -325,13 +325,153 @@ fn ask_review(
+     Ok(())
+ }
+ 
+-/// Open a review, link its tasks, and put those in progress in review (an open one; a draft or a live one leaves
+-/// them as they are).
++/// What opening a review that waits on its reviewers does to one of its tasks (ATM-631).
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++enum Opening {
++    /// In progress, held by the author or by no one: into review.
++    Review,
++    /// The author's own claim lapsed (the task back in to do, or about to be): started again, then into review.
++    TakeBack,
++    /// Already in review, with no other review waiting on it: linked, as it is.
++    Link,
++}
++
++/// A claim's agent while its lease runs, none once it has run out.
++fn holder(claim: &Value, now: i64) -> Option<&str> {
++    let until = claim
++        .get("lease_expires_at")
++        .and_then(Value::as_str)
++        .and_then(atm_common::time::parse_iso)?;
++    (until > now)
++        .then(|| claim.get("agent").and_then(Value::as_str))
++        .flatten()
++}
++
++/// The open review, other than a draft or a live one, that already carries `task`'s review, if one does.
++fn waiting_review(project: &Project, task: &Task) -> Result<Option<String>> {
++    let links = task
++        .get("code_reviews")
++        .and_then(Value::as_array)
++        .cloned()
++        .unwrap_or_default();
++    let reviews = store(project)?;
++    for reference in links
++        .iter()
++        .filter_map(|l| l.get("ref").and_then(Value::as_str))
++    {
++        let Ok(found) = reviews.get_review(&ReviewRef(reference.to_string())) else {
++            continue;
++        };
++        if matches!(
++            found.header.status,
++            Status::Waiting | Status::ChangesRequested
++        ) {
++            return Ok(Some(reference.to_string()));
++        }
++    }
++    Ok(None)
++}
++
++/// What opening a review waiting on its reviewers does to each of `ids`, decided before anything is written, so the
++/// review is never kept beside a task that didn't follow it (ATM-631). Exit code 4 when another agent holds a task.
++///
++/// # Errors
++/// A task another agent holds, one blocked, done or skipped, one in to do that the author didn't start, or one
++/// another review already waits on: each says what to do instead.
++fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>> {
++    let me = project.actor().map(String::from);
++    let now = atm_common::time::now();
++    let claims = crate::query::list_claims(project);
++    let vocab: &Vocabulary = project.store().vocabulary()?;
++    let mut planned = Vec::with_capacity(ids.len());
++    for id in ids {
++        let Some(task) = project.store().get_task(id)? else {
++            return Err(Error::failed(format!("no task {id}")));
++        };
++        let key = project.task_key(task);
++        let claim = claims
++            .iter()
++            .find(|c| c.get("task").and_then(Value::as_str) == Some(id.as_str()));
++        let held_by = claim.and_then(|c| holder(c, now));
++        if let Some(other) = held_by.filter(|agent| Some(*agent) != me.as_deref()) {
++            return Err(Error::Failed {
++                message: format!(
++                    "can't open a review of {key}: it is claimed by {other}, who opens its review"
++                ),
++                code: 4,
++            });
++        }
++        // The author's own claim, run out but not yet dropped: the task is about to go back to to do
++        let own_lapsed = claim.is_some_and(|c| {
++            held_by.is_none() && c.get("agent").and_then(Value::as_str) == me.as_deref()
++        });
++        let started_by_me = task.get("started_by").and_then(Value::as_str) == me.as_deref();
++        let kind = vocab.kind_of(task.get("status")).unwrap_or(Kind::Todo);
++        planned.push(match kind {
++            Kind::Active if own_lapsed => Opening::TakeBack,
++            Kind::Active => Opening::Review,
++            Kind::Todo if started_by_me && me.is_some() => Opening::TakeBack,
++            Kind::Todo => {
++                return Err(Error::failed(format!(
++                    "can't open a review of {key}: it is to do, and you didn't start it. Start it first \
++                     (atm task state {key} in_progress), then open its review"
++                )));
++            }
++            Kind::Review => match waiting_review(project, task)? {
++                Some(other) => {
++                    return Err(Error::failed(format!(
++                        "can't open a review of {key}: {other} already waits on it. Add a round to it instead \
++                         (atm review round {other})"
++                    )));
++                }
++                None => Opening::Link,
++            },
++            Kind::Blocked => {
++                return Err(Error::failed(format!(
++                    "can't open a review of {key}: it is blocked. Its question is answered first \
++                     (atm task state {key} todo --answer '…'), then it is started again"
++                )));
++            }
++            Kind::Done | Kind::Skipped => {
++                return Err(Error::failed(format!(
++                    "can't open a review of {key}: it is {}. Reopen it (atm task state {key} todo) to review new \
++                     work on it",
++                    if kind == Kind::Done { "done" } else { "skipped" }
++                )));
++            }
++        });
++    }
++    Ok(planned)
++}
++
++/// Open a review, link its tasks, and put them in review (one waiting on its reviewers; a draft or a live one leaves
++/// them as they are). An agent's review waiting on its reviewers has every task checked first ([`openings`]): the
++/// command either opens the review with all its tasks in review, or refuses and writes nothing (ATM-631). A task whose
++/// own claim lapsed while the agent worked (the checks ran long) is started again first, and its note says so. A
++/// person's review puts the tasks in progress in review and links the others as they are (a review of files for a
++/// task an agent hasn't started yet).
+ ///
+ /// # Errors
+-/// What the review's rules refuse (`atm_review::rules`), an unknown task, or a store error.
++/// What the review's rules refuse (`atm_review::rules`), an unknown task, a task [`openings`] refuses, or a store
++/// error.
+ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader> {
+     let ids = resolve(project, &new.tasks)?;
++    // An agent opening a review of its work: checked first (ATM-631). A person may open one of files for a task not
++    // started yet, for an agent to answer when it takes the task (the sandbox's red-team review): it is linked, as it is
++    let by_agent = is_agent(project.actor());
++    let taken_back: Vec<String> = if new.status == Status::Waiting && by_agent {
++        let planned = openings(project, &ids)?;
++        ids.iter()
++            .zip(planned)
++            .filter(|(_, opening)| *opening == Opening::TakeBack)
++            .map(|(id, _)| id.clone())
++            .collect()
++    } else {
++        Vec::new()
++    };
++    for id in &taken_back {
++        change_task_status(project, Command::Start, id, &Options::default())?;
++    }
+     // A live review a person opens is of an agent's work (§3.5): the person reviews it; the change is the agent's at
+     // work in this copy, else its tasks', else nobody's yet (an agent's first round, or a task linked later, names it)
+     if new.status == Status::Live
+@@ -355,7 +495,14 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
+     }
+     link(project, &header, &ids, true)?;
+     if header.status == Status::Waiting {
+-        ask_review(project, &ids, &header, &header.title)?;
++        let (back, rest): (Vec<String>, Vec<String>) =
++            ids.into_iter().partition(|id| taken_back.contains(id));
++        ask_review(project, &rest, &header, &header.title)?;
++        let lapsed = format!(
++            "{} (its claim had lapsed: taken back to open this review)",
++            header.title
++        );
++        ask_review(project, &back, &header, &lapsed)?;
+     }
+     Ok(header)
+ }
+@@ -749,6 +896,235 @@ mod tests {
+         assert_eq!(summary(&hakan)["needs_you_reviews"][0]["why"], "answered");
+     }
+ 
++    /// A project of `tasks`, its claims `claims` (by task ID), as `actor`.
++    fn project_of(root: &Path, actor: &str, tasks: &Value, claims: &Value) -> Project {
++        let folder = root.join(".agentic-task-manager");
++        std::fs::create_dir_all(&folder).unwrap();
++        let document =
++            json!({ "meta": { "project": "Reviews", "review": "blocker" }, "tasks": tasks });
++        std::fs::write(folder.join("tasks.json"), document.to_string()).unwrap();
++        std::fs::write(
++            folder.join("claims-store.json"),
++            json!({ "claims": claims }).to_string(),
++        )
++        .unwrap();
++        reopen(root, actor)
++    }
++    fn claim(task: &str, agent: &str, until: &str) -> Value {
++        json!({ "task": task, "agent": agent, "lease_expires_at": until, "claimed_at": "2026-11-19T10:00:00Z" })
++    }
++    const LATER: &str = "2999-01-01T00:00:00Z";
++    const LAPSED: &str = "2000-01-01T00:00:00Z";
++    fn waiting(project: &mut Project, tasks: &[&str]) -> atm_common::Result<super::ReviewHeader> {
++        super::create(
++            project,
++            NewReview {
++                title: "The change".into(),
++                summary: String::new(),
++                tasks: tasks.iter().map(|t| (*t).to_string()).collect(),
++                author: Some("claude:1".into()),
++                reviewers: vec!["Hakan".into()],
++                status: Status::Waiting,
++                first: round(),
++            },
++        )
++    }
++    fn no_review(project: &Project) -> bool {
++        super::store(project)
++            .unwrap()
++            .get_review(&ReviewRef("CR-1".into()))
++            .is_err()
++    }
++
++    /// One case of opening a review: its name, the task, its claims, opened or the refusal's words, its status after
++    type Case = (
++        &'static str,
++        Value,
++        Value,
++        Result<(), &'static str>,
++        &'static str,
++    );
++
++    /// ATM-631: opening a review waiting on its reviewers puts each task in review, or refuses and writes nothing
++    #[test]
++    fn opening_a_review_moves_each_task_into_review_or_writes_nothing() {
++        let task = |status: &str, started_by: Option<&str>| {
++            let mut t = json!({ "id": "T-1", "name": "One", "type": "feature", "status": status });
++            if let Some(agent) = started_by {
++                t["started_by"] = json!(agent);
++            }
++            t
++        };
++        let cases: [Case; 9] = [
++            (
++                "in progress, claimed by the author",
++                task("in_progress", Some("claude:1")),
++                json!({ "T-1": claim("T-1", "claude:1", LATER) }),
++                Ok(()),
++                "in_review",
++            ),
++            (
++                "in progress, no claim",
++                task("in_progress", None),
++                json!({}),
++                Ok(()),
++                "in_review",
++            ),
++            (
++                "in progress, the author's claim run out",
++                task("in_progress", Some("claude:1")),
++                json!({ "T-1": claim("T-1", "claude:1", LAPSED) }),
++                Ok(()),
++                "in_review",
++            ),
++            (
++                "to do after the author's claim lapsed",
++                task("todo", Some("claude:1")),
++                json!({}),
++                Ok(()),
++                "in_review",
++            ),
++            (
++                "claimed by another agent",
++                task("in_progress", Some("claude:2")),
++                json!({ "T-1": claim("T-1", "claude:2", LATER) }),
++                Err("claimed by claude:2"),
++                "in_progress",
++            ),
++            (
++                "to do, never started by the author",
++                task("todo", Some("claude:2")),
++                json!({}),
++                Err("you didn't start it"),
++                "todo",
++            ),
++            (
++                "blocked",
++                task("blocked", Some("claude:1")),
++                json!({}),
++                Err("it is blocked"),
++                "blocked",
++            ),
++            (
++                "done",
++                task("done", Some("claude:1")),
++                json!({}),
++                Err("it is done"),
++                "done",
++            ),
++            (
++                "skipped",
++                task("skipped", Some("claude:1")),
++                json!({}),
++                Err("it is skipped"),
++                "skipped",
++            ),
++        ];
++        for (case, t, claims, expected, after) in cases {
++            let dir = dir();
++            let mut project = project_of(&dir.0, "claude:1", &json!([t]), &claims);
++            let opened = waiting(&mut project, &["T-1"]);
++            match expected {
++                Ok(()) => {
++                    opened.unwrap_or_else(|e| panic!("{case}: {e}"));
++                    let t = task_of(&project, "T-1");
++                    assert_eq!(t["code_reviews"][0]["ref"], "CR-1", "{case}");
++                }
++                Err(words) => {
++                    let message = opened.expect_err(case).to_string();
++                    assert!(message.contains(words), "{case}: {message}");
++                    assert!(no_review(&project), "{case}: a review was kept");
++                }
++            }
++            assert_eq!(task_of(&project, "T-1")["status"], after, "{case}");
++        }
++    }
++
++    #[test]
++    fn a_task_taken_back_after_its_claim_lapsed_says_so_and_is_claimed_again() {
++        let dir = dir();
++        let tasks = json!([{ "id": "T-1", "name": "One", "type": "feature", "status": "todo", "started_by": "claude:1" }]);
++        let mut project = project_of(&dir.0, "claude:1", &tasks, &json!({}));
++        waiting(&mut project, &["T-1"]).unwrap();
++        let t = task_of(&project, "T-1");
++        assert_eq!(t["status"], "in_review");
++        assert!(
++            t["notes"].to_string().contains("its claim had lapsed"),
++            "{}",
++            t["notes"]
++        );
++    }
++
++    #[test]
++    fn a_task_in_review_is_linked_unless_another_review_waits_on_it() {
++        let dir = dir();
++        let mut project = project(&dir.0, "claude:1");
++        waiting(&mut project, &["T-1"]).unwrap();
++        // CR-1 waits on T-1: a second review is refused, and points to a round of CR-1
++        let refused = waiting(&mut project, &["T-1"]).unwrap_err().to_string();
++        assert!(
++            refused.contains("CR-1 already waits on it")
++                && refused.contains("atm review round CR-1"),
++            "{refused}"
++        );
++        // In review with no review waiting on it (CR-1 closed): linked, still in review
++        let mut reviews = super::store(&project).unwrap();
++        super::Reviews::new(&mut reviews)
++            .close(&ReviewRef("CR-1".into()), "Replaced.", &"claude:1".into())
++            .unwrap();
++        let second = waiting(&mut project, &["T-1"]).unwrap();
++        let t = task_of(&project, "T-1");
++        assert_eq!(t["status"], "in_review");
++        assert!(t["code_reviews"].to_string().contains(&second.reference.0));
++    }
++
++    #[test]
++    fn a_review_refused_for_one_task_moves_none_of_the_others() {
++        let dir = dir();
++        let tasks = json!([
++            { "id": "T-1", "name": "One", "type": "feature", "status": "todo", "started_by": "claude:1" },
++            { "id": "T-2", "name": "Two", "type": "feature", "status": "done" },
++        ]);
++        let mut project = project_of(&dir.0, "claude:1", &tasks, &json!({}));
++        assert!(waiting(&mut project, &["T-1", "T-2"]).is_err());
++        assert!(no_review(&project));
++        assert_eq!(task_of(&project, "T-1")["status"], "todo");
++    }
++
++    /// A person's review of files for a task an agent hasn't started (the sandbox's red-team review): linked, as it is
++    #[test]
++    fn a_persons_review_of_a_task_not_started_links_it_as_it_is() {
++        let dir = dir();
++        let tasks = json!([{ "id": "T-1", "name": "One", "type": "feature", "status": "todo" }]);
++        let mut project = project_of(&dir.0, "Hakan", &tasks, &json!({}));
++        waiting(&mut project, &["T-1"]).unwrap();
++        let t = task_of(&project, "T-1");
++        assert_eq!(t["status"], "todo");
++        assert_eq!(t["code_reviews"][0]["ref"], "CR-1");
++    }
++
++    #[test]
++    fn a_draft_review_leaves_its_tasks_as_they_are_whatever_their_state() {
++        let dir = dir();
++        let tasks = json!([{ "id": "T-1", "name": "One", "type": "feature", "status": "done" }]);
++        let mut project = project_of(&dir.0, "claude:1", &tasks, &json!({}));
++        let draft = NewReview {
++            title: "Draft".into(),
++            summary: String::new(),
++            tasks: vec!["T-1".into()],
++            author: Some("claude:1".into()),
++            reviewers: Vec::new(),
++            status: Status::Draft,
++            first: round(),
++        };
++        super::create(&mut project, draft).unwrap();
++        assert_eq!(task_of(&project, "T-1")["status"], "done");
++    }
++
++    fn task_of(project: &Project, id: &str) -> Value {
++        task(&reopen(project.root().unwrap(), "claude:1"), id)
++    }
++
+     #[test]
+     fn a_review_of_two_tasks_puts_both_in_review_and_its_decisions_are_theirs() {
+         let dir = dir();
+diff --git a/docs/agent/reviews.md b/docs/agent/reviews.md
+index 7873a04f..ba16fc8c 100644
+--- a/docs/agent/reviews.md
++++ b/docs/agent/reviews.md
+@@ -5,8 +5,12 @@
+   against `HEAD` or `--base`), or files as they are (`--file PATH`, repeatable). atm's own task folder is never part of
+   it.
+ - **Opening one for your task:** `atm review create --title '<one line>' --task <key> --range <base>..HEAD
+-[--summary-file <file>]`. An open review puts its tasks that are in progress in review, with the review's link in
+-  their note; you don't also run `atm task state <key> in_review`. `--draft` keeps it a draft (nothing in review yet).
++[--summary-file <file>]`. It puts its tasks in review, with the review's link in their note; you don't also run
++  `atm task state <key> in_review`. `--draft` keeps it a draft (nothing in review yet). Opened by an agent, it either
++  opens the review with every task in review or refuses and writes nothing, naming what to do instead: a task you hold, or no one
++  does, goes in review; one whose claim of yours lapsed (back in to do while your checks ran) is taken back and goes in
++  review, its note saying so; one already in review is linked, unless another review already waits on it (add a round
++  to that one); one claimed by another agent (exit code 4), not started by you, blocked, done or skipped is refused.
+ - **Submodules:** work in a submodule is the project's: atm run in a submodule's folder finds the project it is a
+   submodule of (unless the submodule has a task folder of its own). A round made there (`--range`, `--uncommitted`)
+   is of the submodule's commits, its files named as the project has them (`lib/b.txt`); `--file` paths in one
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index ad3e77d5..aacb70bc 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -565,6 +565,59 @@ describe('atm review', () => {
+     }
+   });
+ 
++  // ATM-631: never a review on disk beside a task that didn't move
++  test('opening a review puts its task in review or refuses and writes nothing; a task whose own claim lapsed is taken back', () => {
++    const root = makeProject({
++      commit: true,
++      files: {
++        '.agentic-task-manager/tasks.json': {
++          meta: { project: 'Reviews', review: 'blocker' },
++          tasks: [
++            { id: 'T-1', name: 'Mine', type: 'feature', status: 'todo' },
++            { id: 'T-2', name: 'Theirs', type: 'feature', status: 'todo' },
++            { id: 'T-3', name: 'Finished', type: 'feature', status: 'done' },
++            { id: 'T-4', name: 'Not started', type: 'feature', status: 'todo' },
++          ],
++        },
++        'a.txt': 'one\n',
++      },
++    });
++    const OTHER = { ATM_AGENT: 'claude:other' };
++    const refused = (taskId, env, pattern, code = 1) => {
++      const r = atm(['review', 'create', '--title', 'x', '--task', taskId, '--uncommitted'], root, env);
++      assert.equal(r.code, code, `${taskId}: ${r.stderr}`);
++      assert.match(r.stderr, pattern);
++      assert.equal(ok(['review', 'list', '--json'], root, HAKAN).json().length, 0, `${taskId}: a review was kept`);
++    };
++    try {
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['task', 'state', 'T-2', 'in_progress'], root, OTHER);
++      refused('T-2', AGENT, /claimed by claude:other, who opens its review/, 4);
++      assert.equal(task(root, 'T-2').status, 'in_progress');
++      refused('T-3', AGENT, /it is done\. Reopen it \(atm task state T-3 todo\)/);
++      refused('T-4', AGENT, /it is to do, and you didn't start it\. Start it first \(atm task state T-4 in_progress\)/);
++      assert.equal(task(root, 'T-4').status, 'todo');
++
++      // T-1 started with a lease of under a second; it lapses while the checks run, then its review is opened
++      const tasksFile = path.join(root, '.agentic-task-manager/tasks.json');
++      const data = JSON.parse(fs.readFileSync(tasksFile, 'utf8'));
++      data.meta.lease_minutes = 0.01;
++      fs.writeFileSync(tasksFile, JSON.stringify(data));
++      ok(['task', 'state', 'T-1', 'in_progress'], root, AGENT);
++      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
++      // The usual lease again, for the claim taken back (a lease is fixed when it is taken)
++      delete data.meta.lease_minutes;
++      fs.writeFileSync(tasksFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(tasksFile, 'utf8')), meta: data.meta }));
++      const opened = ok(['review', 'create', '--title', 'Mine', '--task', 'T-1', '--uncommitted', '--json'], root, AGENT);
++      assert.equal(opened.json().reference, 'CR-1');
++      const t1 = task(root, 'T-1');
++      assert.equal(t1.status, 'in_review');
++      assert.match(JSON.stringify(t1.notes), /CR-1: Mine \(its claim had lapsed: taken back to open this review\)/);
++    } finally {
++      removeDir(root);
++    }
++  });
++
+   test('tasks --remove takes a task out; list by --task and --mine', () => {
+     const root = project();
+     try {

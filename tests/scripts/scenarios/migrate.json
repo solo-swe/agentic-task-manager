@@ -69,6 +69,7 @@
         "finish_times_filled": 0,
         "sprints_from_phases": null,
         "with_user_from_label": 0,
+        "interactive_label_moved": 0,
         "key_final_dropped": 0,
         "renumbered": []
       }
@@ -236,6 +237,7 @@
         "finish_times_filled": 0,
         "sprints_from_phases": null,
         "with_user_from_label": 0,
+        "interactive_label_moved": 0,
         "key_final_dropped": 0,
         "renumbered": []
       },

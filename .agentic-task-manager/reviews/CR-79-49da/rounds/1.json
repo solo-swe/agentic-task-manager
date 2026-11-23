@@ -1,0 +1,127 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "0b2da4d1df03ca5fd5323f8f9bd020a87ca494e3",
+    "head": "53aeba0394cf6361fd4f41869d0ef913977eb51a"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/App.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/appearance.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/documents/DocumentPage.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/prefs.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ChainBox.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/DiffCode.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/DiffView.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/RenderedSide.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ReviewPage.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/diff.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/SettingsPanel.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/themes/doc-styles.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/documents.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/refresh.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/DiffView.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/appearance.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/diff.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/state.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/tabs-and-navigation-design.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T12:00:14Z"
+}

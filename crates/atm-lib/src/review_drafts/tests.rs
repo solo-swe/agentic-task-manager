@@ -32,11 +32,17 @@ fn dir() -> Dir {
 fn round() -> NewRound {
     NewRound {
         kind: RoundKind::Range {
-            base: "a".into(),
-            head: "b".into(),
+            // Commits as atm records them, full IDs (ATM-659)
+            base: "a".repeat(40),
+            head: "b".repeat(40),
         },
         submodule: None,
-        files: Vec::new(),
+        // The file the drafts are on: a comment is on one of its round's files (ATM-658)
+        files: vec![atm_review::model::FileChange {
+            path: "src/a.rs".into(),
+            status: reviews::FileStatus::Modified,
+            binary: false,
+        }],
         patch: Patch(String::new()),
         by: "claude:1".into(),
     }
@@ -184,6 +190,27 @@ fn a_draft_is_kept_outside_the_review_numbered_and_listed_in_order() {
             .any(|f| f.file_name().to_string_lossy().contains("draft"))
     });
     assert!(!found);
+}
+
+/// ATM-674, audit R11: drafts added at once (two tabs, the dashboard and a terminal) are all kept, each its own number
+#[test]
+fn drafts_added_at_once_are_all_kept() {
+    let s = setup(Status::Waiting);
+    std::thread::scope(|scope| {
+        for n in 0..8 {
+            let (repo, drafts) = (&s.repo, &s.drafts);
+            scope.spawn(move || {
+                let hakan = open(repo, "Hakan");
+                super::add_draft_in(&hakan, &cr(), on_lines(&format!("Draft {n}.")), drafts)
+                    .unwrap();
+            });
+        }
+    });
+    let listed = super::list_drafts_in(&open(&s.repo, "Hakan"), &cr(), &s.drafts).unwrap();
+    let mut ids: Vec<&str> = listed.iter().map(|d| d.id.as_str()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!((listed.len(), ids.len()), (8, 8), "{listed:?}");
 }
 
 #[test]

@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { KanbanCard } from '../../src/lib/kanban';
-import { doneSections, hasStage, stageOf, workflowType } from '../../src/lib/stages';
+import { doneSections, hasStage, stageOf } from '../../src/lib/stages';
 import type { Task } from '../../src/lib/types';
+import { withKinds } from './views';
 
-const task = (id: string, fields: Partial<Task> = {}): Task => ({
-  id,
-  name: id,
-  phase: 0,
-  type: 'feature',
-  description: '',
-  status: 'done',
-  ...fields,
-});
+/** A task as atm serves it: with its kind */
+const task = (id: string, fields: Partial<Task> = {}): Task =>
+  withKinds([{ id, name: id, phase: 0, type: 'feature', description: '', status: 'done', ...fields } as Task])[0];
 const card = (t: Task): KanbanCard => ({ task: t, nextUp: false });
 
 describe('stageOf', () => {
@@ -26,6 +21,18 @@ describe('stageOf', () => {
     expect(stageOf(task('A', { pr: { url: 'u' } as unknown as Task['pr'] }))).toBe('done');
     expect(hasStage(task('A'))).toBe(false);
     expect(hasStage(task('A', { merged_at: '2026-04-01T00:00:00Z' }))).toBe(true);
+  });
+
+  // ATM-680, ATM-719: atm's `derived.stage` is the task's, whatever its own fields say; no rule of the dashboard's
+  it('is atm’s stage; one it doesn’t know, or none, is no stage', () => {
+    const served = (stage: string | undefined, fields: Partial<Task> = {}) => {
+      const t = task('A', fields);
+      return { ...t, derived: { ...t.derived!, stage } } as Task;
+    };
+    expect(stageOf(served('merged'))).toBe('merged');
+    expect(stageOf(served('in_pr', { merged_at: '2026-04-01T00:00:00Z' }))).toBe('in_pr');
+    expect(stageOf(served('shipped', { pr: { number: 3 } }))).toBeUndefined();
+    expect(stageOf(served(undefined, { pr: { number: 3 } }))).toBeUndefined();
   });
 });
 
@@ -48,13 +55,5 @@ describe('doneSections', () => {
     expect(sections[1].url).toBe('https://example.com/pr/7');
     expect(sections[0].url).toBeUndefined(); // a javascript: URL is never a link (T-225)
     expect(doneSections([card(task('B'))]).map((s) => s.id)).toEqual(['done']);
-  });
-});
-
-describe('workflowType', () => {
-  it('reads meta.workflow.type', () => {
-    expect(workflowType({ workflow: { type: 'pull-request' } })).toBe('pull-request');
-    expect(workflowType({ workflow: 'direct' })).toBeUndefined();
-    expect(workflowType(undefined)).toBeUndefined();
   });
 });

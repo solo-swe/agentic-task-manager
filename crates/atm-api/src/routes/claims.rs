@@ -9,11 +9,17 @@ use super::source::ProjectSource;
 use super::{etag, stamped};
 use crate::send_conditional;
 
-/// `GET …/projects/<p>/claims` (`/p/<p>/claims.json`): the claims of all its worktrees, from the shared claims store.
-/// The `ETag` changes with the claims store.
+/// `GET …/projects/<p>/claims` (`/p/<p>/claims.json`): the claims of all its worktrees held now, from the shared
+/// claims store (an expired lease left out by atm-lib, ATM-724). The `ETag` changes with the claims store and with
+/// which claims are held, so a lease running out is a new version though nothing was written.
 pub(super) fn get_claims(project: &dyn ProjectSource, request: &HeaderMap) -> Response {
-    let tag = etag(&json!(["claims", project.stamp()["claims"]]));
-    let body = || to_json(&stamped(json!({"claims": project.claims()}))).into_bytes();
+    let claims = project.claims();
+    let held: Vec<_> = claims
+        .iter()
+        .map(|c| json!([c["task"], c["agent"]]))
+        .collect();
+    let tag = etag(&json!(["claims", project.stamp()["claims"], held]));
+    let body = || to_json(&stamped(json!({"claims": claims}))).into_bytes();
     send_conditional(request, &tag, body, "application/json", &[])
 }
 
@@ -83,7 +89,8 @@ mod tests {
         assert_eq!(again.status, StatusCode::NOT_MODIFIED);
         assert_eq!(again.tag(), tag);
         assert_eq!(again.body, b"");
-        assert_eq!(calls.taken(), [], "a 304 doesn't read the claims");
+        // The claims are read for the tag: which are held moves with the clock, not only with the store (ATM-724)
+        assert_eq!(calls.taken(), [Call::Claims]);
         // Another version the client has: the claims again
         assert_eq!(
             answer(get_claims(project.as_ref(), &having("\"other\""))).status,
@@ -105,6 +112,21 @@ mod tests {
             answer(get_claims(moved.as_ref(), &having(&tag))).status,
             StatusCode::NOT_MODIFIED
         );
+    }
+
+    #[test]
+    fn a_lease_running_out_is_a_new_version_though_the_store_is_unchanged() {
+        // Held, then atm-lib leaves it out (its lease ran out): the store's stamp is the same
+        let (held, _) = bound(fake(
+            vec![claim("T-1", "claude:a", "/main")],
+            json!([1, 1]),
+            json!([1]),
+        ));
+        let tag = answer(get_claims(held.as_ref(), &plain())).tag();
+        let (expired, _) = bound(fake(Vec::new(), json!([1, 1]), json!([1])));
+        let after = answer(get_claims(expired.as_ref(), &having(&tag)));
+        assert_eq!(after.status, StatusCode::OK);
+        assert_eq!(after.unstamped(), json!({"claims": []}));
     }
 
     #[test]

@@ -1,0 +1,37 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "bb5701908a50cddd467ea8af05e47b8d4e725a99",
+    "head": "fef31229bfb4ded963838ee7f9bdd5fd8c83fb30"
+  },
+  "files": [
+    {
+      "path": "crates/atm-fs/src/watch.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/wait.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen/watch.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/watch-idle.test.mjs",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-23T09:30:56Z"
+}

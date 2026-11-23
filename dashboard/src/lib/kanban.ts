@@ -2,7 +2,7 @@ import { BACKLOG } from './filters';
 import { compareTasks } from './keys';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, priorityOf, priorityRank, type StatusKind, type Vocabulary } from './vocab';
+import { DEFAULT_VOCABULARY, priorityOf, taskKind, priorityRank, type StatusKind, type Vocabulary } from './vocab';
 
 /** A column per status of the vocabulary, plus "other" for statuses nobody defines. */
 export type ColumnId = string;
@@ -123,7 +123,6 @@ export interface KanbanLane {
 /** One swimlane per sprint with tasks, in the project's order, the backlog last (FR-3.7, SR-7.3); all with the
  * same columns as the ungrouped board so they line up. */
 export function buildLanes(tasks: Task[], allTasks: Task[], options: BoardOptions): KanbanLane[] {
-  const vocab = options.vocab ?? DEFAULT_VOCABULARY;
   const model = options.sprints ?? NO_SPRINTS;
   const columns = buildBoard(tasks, allTasks, options).map((c) => c.id);
   const keyOf = (t: Task) => model.sprintOf(t) ?? BACKLOG;
@@ -134,7 +133,7 @@ export function buildLanes(tasks: Task[], allTasks: Task[], options: BoardOption
     return {
       key,
       index: model.sprints.findIndex((s) => s.id === key),
-      done: own.filter((t) => kindOf(vocab, t.status) === 'done').length,
+      done: own.filter((t) => taskKind(t) === 'done').length,
       total: own.length,
       columns: buildBoard(own, allTasks, options, columns),
     };

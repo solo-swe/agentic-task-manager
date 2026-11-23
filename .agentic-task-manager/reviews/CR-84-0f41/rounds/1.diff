@@ -1,0 +1,386 @@
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 4de74d2d..00bf5b75 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -1,8 +1,9 @@
+ name: Release
+ 
+-# Push a tag like v0.33.0 (packaging/release.sh) to build atm for every platform and the atm app's universal DMG, sign
+-# and notarize the macOS builds, and attach them, with their checksums, to a draft GitHub release. Publishing the draft
+-# updates the Homebrew formula and cask (homebrew.yml). The secrets it needs are listed in packaging/README.md.
++# Push a tag like v0.33.0 on the merged main (packaging/README.md, *A release*) to build atm for every platform and the
++# atm app's universal DMG, sign and notarize the macOS builds, and attach them, with their checksums, to a draft GitHub
++# release. Publishing the draft updates the Homebrew formula and cask (homebrew.yml). The secrets it needs are listed in
++# packaging/README.md. The tag is a plain `git tag` (ATM-705): the first job checks it, before anything is built.
+ on:
+   push:
+     tags: ["v*"]
+@@ -13,8 +14,27 @@ permissions:
+   contents: read
+ 
+ jobs:
++  # The tag names main's version (Cargo.toml's, in the tagged commit), and the commit is on main: a tag on a release
++  # branch, or one whose version wasn't bumped, builds nothing
++  tag:
++    name: The tag is main's version
++    runs-on: ubuntu-24.04
++    steps:
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
++        with:
++          persist-credentials: false
++          fetch-depth: 0
++      - name: The tag is the workspace's version
++        run: |
++          version="${GITHUB_REF_NAME#v}"
++          grep -qx "version = \"$version\"" Cargo.toml || { echo "Cargo.toml isn't at $version"; exit 1; }
++      - name: The tagged commit is on main
++        run: |
++          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "$GITHUB_REF_NAME isn't on main"; exit 1; }
++
+   build:
+     name: Build (${{ matrix.target }})
++    needs: tag
+     strategy:
+       fail-fast: true
+       matrix:
+@@ -32,11 +52,6 @@ jobs:
+           persist-credentials: false
+       # The toolchain rust-toolchain.toml pins, with the target
+       - run: rustup target add ${{ matrix.target }}
+-      - name: The tag is the workspace's version
+-        shell: bash
+-        run: |
+-          version="${GITHUB_REF_NAME#v}"
+-          grep -qx "version = \"$version\"" Cargo.toml || { echo "Cargo.toml isn't at $version"; exit 1; }
+       # atm embeds the dashboard and CompMD's runtime, built first (dashboard/dist/, never committed: T-477), with
+       # pnpm at the version CI installs, from the npm registry
+       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+@@ -90,16 +105,13 @@ jobs:
+   # cask puts on PATH), the app signed and notarized by Tauri's bundler, the DMG by packaging/notarize-dmg.sh
+   app-macos:
+     name: The app (universal DMG)
++    needs: tag
+     runs-on: macos-latest
+     steps:
+       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+         with:
+           persist-credentials: false
+       - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+-      - name: The tag is the workspace's version
+-        run: |
+-          version="${GITHUB_REF_NAME#v}"
+-          grep -qx "version = \"$version\"" Cargo.toml || { echo "Cargo.toml isn't at $version"; exit 1; }
+       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+         with:
+           node-version: 24
+diff --git a/AGENTS.md b/AGENTS.md
+index b9e7084c..075428b5 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -165,8 +165,9 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain
+   locally, `--trace on` while looking into a failure.
+ 
+ ## CI
+-- **Releases of the CLI** (T-452, [packaging/README.md](packaging/README.md)): `packaging/release.sh <version> --push`
+-  tags the merged `origin/main` `v<version>` (from any branch and working tree); `.github/workflows/release.yml` builds, signs and notarizes, and drafts the GitHub
++- **Releases of the CLI** (T-452, [packaging/README.md](packaging/README.md)): a plain tag on the merged
++  `main` (`git tag -a v<version> origin/main -m 'atm <version>'`, pushed; the Release workflow checks it's `main`'s
++  version, ATM-705); `.github/workflows/release.yml` builds, signs and notarizes, and drafts the GitHub
+   release; publishing it runs `.github/workflows/homebrew.yml`, which updates `Formula/atm.rb` in
+   `solo-swe/homebrew-tap`, and `.github/workflows/skills.yml`, which exports the skills to `solo-swe/skills`, the public
+   skills repo our apps share ([ADR-002](docs/adr/ADR-002-atm-public-skills-repo.md)). Their secrets are listed in the
+diff --git a/dashboard/tests/unit/ci-workflow.test.ts b/dashboard/tests/unit/ci-workflow.test.ts
+index 4f28b3fe..1abecb0d 100644
+--- a/dashboard/tests/unit/ci-workflow.test.ts
++++ b/dashboard/tests/unit/ci-workflow.test.ts
+@@ -127,6 +127,17 @@ describe('release workflows (I18, I19; T-452)', () => {
+     expect(release).toMatch(/^on:\n {2}push:\n {4}tags: \["v\*"\]$/m);
+     expect(homebrew).toMatch(/^on:\n {2}release:\n {4}types: \[published\]$/m);
+   });
++
++  // The tag is a plain `git tag` (ATM-705): the release checks it before building
++  it('builds only once the tag is checked: the version Cargo.toml has, on a commit on main', () => {
++    const job = (name: string) => release.split(/^ {2}(?=[\w-]+:\n)/m).find((j) => j.startsWith(`${name}:`)) ?? '';
++    const tag = job('tag');
++    expect(tag).toMatch(/fetch-depth: 0/);
++    expect(tag).toMatch(/grep -qx "version = \\"\$version\\"" Cargo\.toml/);
++    expect(tag).toMatch(/git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
++    for (const name of ['build', 'app-macos']) expect(job(name)).toMatch(/^ {4}needs: tag$/m);
++    expect(job('release')).toMatch(/^ {4}needs: \[build, app-macos\]$/m);
++  });
+ });
+ 
+ describe('Dependabot (I19, T-275)', () => {
+diff --git a/packaging/README.md b/packaging/README.md
+index b7c4dbc2..9f74f712 100644
+--- a/packaging/README.md
++++ b/packaging/README.md
+@@ -28,7 +28,6 @@ server with its own `atm service stop`.
+ 
+ | File | What it does |
+ |---|---|
+-| `release.sh <version> [--push]` | Fetches `main` and tags its commit on GitHub (`origin/main`) `v<version>`, once that commit's `Cargo.toml` has the version and the tag exists nowhere yet (and pushes the tag with `--push`). It never tags `HEAD`, so it runs from any branch and working tree (ATM-705); on a local `main` with commits not pushed yet, it tags what is pushed and says those commits aren't in it (a version bump not pushed yet: it refuses, as `origin/main` doesn't have the version) |
+ | `keychain-macos.sh` | Imports the Developer ID certificate into a keychain of the release job's own; the macOS jobs run it first |
+ | `sign-macos.sh <binary>` | Signs a macOS build with the Developer ID (hardened runtime) and notarizes it; the release workflow runs it |
+ | `notarize-dmg.sh <dmg>` | Signs the app's DMG, notarizes it and staples the ticket to it (Tauri's bundler has signed and notarized the app inside) |
+@@ -47,8 +46,17 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
+ 
+ 1. The release PR is merged to `main`; the version is in `Cargo.toml`, with its `CHANGELOG.md` and `WHATS-NEW.md` entries
+    (`check-versions.mjs`).
+-2. `packaging/release.sh 0.33.0 --push` tags the merged `origin/main` `v0.33.0` and pushes the tag (from any branch:
+-   there is no need to check out `main`).
++2. Tag the merged `main` as it is on GitHub, from any branch and working tree, and push the tag:
++
++   ```sh
++   git fetch origin main
++   git tag -a v0.33.0 origin/main -m 'atm 0.33.0'
++   git push origin v0.33.0
++   ```
++
++   A plain tag (ATM-705): the Release workflow's first job checks it, and builds nothing for a tag whose version isn't
++   the tagged commit's `Cargo.toml`, or whose commit isn't on `main`. A wrong tag is deleted with
++   `git push origin :refs/tags/v0.33.0` and `git tag -d v0.33.0`, and made again.
+ 3. `.github/workflows/release.yml` builds atm for macOS (arm64, x86_64), Linux (x86_64, arm64, on Ubuntu 22.04 for an
+    older glibc) and Windows (x86_64), signs and notarizes the macOS builds; builds the app as one universal DMG
+    (arm64 and x86_64, its CLI a universal binary made with `lipo`), signed and notarized, its ticket stapled; and
+diff --git a/packaging/release.sh b/packaging/release.sh
+deleted file mode 100755
+index b2132ead..00000000
+--- a/packaging/release.sh
++++ /dev/null
+@@ -1,50 +0,0 @@
+-#!/bin/sh
+-# Start a release of the atm CLI: tag the merged main as it is on GitHub (origin/main), once its Cargo.toml has the
+-# version. Pushing the tag (`--push`, or by hand) runs .github/workflows/release.yml, which builds, signs and drafts the
+-# GitHub release; publishing that draft updates the Homebrew formula (.github/workflows/homebrew.yml).
+-# packaging/README.md has it all.
+-#
+-# It tags origin/main's commit, never HEAD (ATM-705): the branch checked out and the working tree don't change what is
+-# tagged, so it runs from any of them (a release branch, with work in progress).
+-#
+-# Usage: packaging/release.sh <version> [--push]     run in the repository, after the release PR is merged
+-set -eu
+-
+-version=${1:?usage: release.sh <version> [--push]}
+-push=${2:-}
+-tag="v$version"
+-
+-fail() {
+-  echo "release.sh: $1" >&2
+-  exit 1
+-}
+-
+-case "$version" in
+-  [0-9]*.[0-9]*.[0-9]*) ;;
+-  *) fail "$version isn't a version (MAJOR.MINOR.PATCH)" ;;
+-esac
+-[ -z "$push" ] || [ "$push" = "--push" ] || fail "unknown option $push (only --push)"
+-
+-git fetch --quiet origin main
+-commit=$(git rev-parse origin/main)
+-
+-# atm's version on main: the workspace's, in the commit to tag
+-main_version=$(git show "$commit:Cargo.toml" | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)
+-[ "$main_version" = "$version" ] || fail "origin/main's Cargo.toml says $main_version, not $version: merge the release PR (or push main) first"
+-
+-if git rev-parse --quiet --verify "refs/tags/$tag" > /dev/null; then fail "$tag exists already"; fi
+-[ -z "$(git ls-remote --tags origin "refs/tags/$tag")" ] || fail "$tag exists already on origin"
+-
+-git tag -a "$tag" -m "atm $version" "$commit"
+-echo "Tagged $tag: origin/main, $(git log -1 --format='%h %s' "$commit")."
+-# On a local main with commits not pushed yet: they aren't in the release, and are left as they are
+-if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+-  ahead=$(git rev-list --count "$commit..HEAD")
+-  [ "$ahead" = "0" ] || echo "Not in it: main's $ahead commit(s) not pushed to origin yet."
+-fi
+-if [ "$push" = "--push" ]; then
+-  git push origin "$tag"
+-  echo "Pushed $tag: the Release workflow builds it and drafts the release."
+-else
+-  echo "Push it to build the release: git push origin $tag"
+-fi
+diff --git a/tests/scripts/packaging.test.mjs b/tests/scripts/packaging.test.mjs
+index 1cf0c57b..e6d2a689 100644
+--- a/tests/scripts/packaging.test.mjs
++++ b/tests/scripts/packaging.test.mjs
+@@ -1,6 +1,7 @@
+-// The release machinery's scripts (packaging/, T-452): the Homebrew formula from a release's checksums, and the
+-// checks release.sh makes before it tags. The workflows that run them (.github/workflows/release.yml, homebrew.yml)
+-// run on a tag; these check what can be checked without one.
++// The release machinery's scripts (packaging/, T-452): the Homebrew formula and cask from a release's checksums, the
++// update manifest and the skills export. The workflows that run them (.github/workflows/release.yml, homebrew.yml)
++// run on a tag; these check what can be checked without one. The tag itself is a plain `git tag`, which release.yml
++// checks (ATM-705; dashboard/tests/unit/ci-workflow.test.ts).
+ import assert from 'node:assert/strict';
+ import { spawnSync } from 'node:child_process';
+ import fs from 'node:fs';
+@@ -172,169 +173,4 @@ describe('packaging', () => {
+       removeDir(dir);
+     }
+   });
+-
+-  // release.sh tags origin/main's commit (ATM-705): what is checked out, and the working tree, change nothing
+-  describe('release.sh', () => {
+-    const repos = () => {
+-      const origin = tempDir('atm-origin-');
+-      const root = tempDir('atm-release-');
+-      git(['init', '-q', '--bare', '-b', 'main'], origin);
+-      git(['init', '-q', '-b', 'main'], root);
+-      git(['config', 'user.email', 't@example.com'], root);
+-      git(['config', 'user.name', 'T'], root);
+-      git(['remote', 'add', 'origin', origin], root);
+-      return { origin, root };
+-    };
+-    const commit = (root, version, message) => {
+-      fs.writeFileSync(path.join(root, 'Cargo.toml'), `[workspace.package]\nversion = "${version}"\n`);
+-      git(['add', 'Cargo.toml'], root);
+-      git(['commit', '-qm', message], root);
+-    };
+-    const cleanUp = ({ origin, root }) => {
+-      removeDir(origin);
+-      removeDir(root);
+-    };
+-
+-    test('refuses what isn’t a version, and an unknown option', () => {
+-      const r = repos();
+-      try {
+-        commit(r.root, '1.2.3', 'one');
+-        git(['push', '-q', 'origin', 'main'], r.root);
+-        assert.match(run('release.sh', ['latest'], r.root).stderr, /latest isn't a version/);
+-        assert.match(run('release.sh', ['1.2.3', '--force'], r.root).stderr, /unknown option --force/);
+-        assert.equal(git(['tag', '--list'], r.root), '');
+-      } finally {
+-        cleanUp(r);
+-      }
+-    });
+-
+-    test('tags origin/main’s commit from another branch, with changes in the working tree', () => {
+-      const r = repos();
+-      try {
+-        commit(r.root, '1.2.3', 'the release');
+-        git(['push', '-q', 'origin', 'main'], r.root);
+-        const main = git(['rev-parse', 'HEAD'], r.root);
+-        git(['switch', '-q', '-c', 'dev/1.3.0'], r.root);
+-        commit(r.root, '1.3.0', 'work on the next one');
+-        fs.writeFileSync(path.join(r.root, 'notes.txt'), 'untracked');
+-        fs.writeFileSync(path.join(r.root, 'Cargo.toml'), '[workspace.package]\nversion = "1.2.3"\n'); // uncommitted
+-
+-        const out = run('release.sh', ['1.2.3'], r.root);
+-        assert.equal(out.status, 0, out.stderr);
+-        assert.match(out.stdout, /Tagged v1\.2\.3: origin\/main, [0-9a-f]+ the release\./);
+-        assert.match(out.stdout, /Push it to build the release: git push origin v1\.2\.3/);
+-        assert.equal(git(['rev-parse', 'v1.2.3^{commit}'], r.root), main);
+-        assert.equal(git(['branch', '--show-current'], r.root), 'dev/1.3.0');
+-        assert.equal(fs.readFileSync(path.join(r.root, 'notes.txt'), 'utf8'), 'untracked');
+-        assert.match(run('release.sh', ['1.2.3'], r.root).stderr, /v1\.2\.3 exists already/);
+-      } finally {
+-        cleanUp(r);
+-      }
+-    });
+-
+-    test('tags origin/main even when the local main is behind it', () => {
+-      const r = repos();
+-      try {
+-        commit(r.root, '1.2.2', 'old');
+-        git(['push', '-q', 'origin', 'main'], r.root);
+-        git(['switch', '-q', '-c', 'dev/1.2.3'], r.root);
+-        commit(r.root, '1.2.3', 'the release');
+-        git(['push', '-q', 'origin', 'dev/1.2.3:main'], r.root); // merged on GitHub
+-        const merged = git(['rev-parse', 'HEAD'], r.root);
+-        git(['switch', '-q', 'main'], r.root);
+-        git(['update-ref', 'refs/remotes/origin/main', 'main'], r.root); // not fetched yet
+-
+-        const out = run('release.sh', ['1.2.3'], r.root);
+-        assert.equal(out.status, 0, out.stderr);
+-        assert.equal(git(['rev-parse', 'v1.2.3^{commit}'], r.root), merged);
+-      } finally {
+-        cleanUp(r);
+-      }
+-    });
+-
+-    test('refuses a version origin/main’s Cargo.toml doesn’t have, whatever the working tree says', () => {
+-      const r = repos();
+-      try {
+-        commit(r.root, '1.2.3', 'one');
+-        git(['push', '-q', 'origin', 'main'], r.root);
+-        fs.writeFileSync(path.join(r.root, 'Cargo.toml'), '[workspace.package]\nversion = "1.2.4"\n');
+-        git(['commit', '-qam', 'not pushed'], r.root);
+-
+-        const out = run('release.sh', ['1.2.4'], r.root);
+-        assert.equal(out.status, 1);
+-        assert.match(out.stderr, /origin\/main's Cargo\.toml says 1\.2\.3, not 1\.2\.4: merge the release PR \(or push main\) first/);
+-        assert.equal(git(['tag', '--list'], r.root), '');
+-      } finally {
+-        cleanUp(r);
+-      }
+-    });
+-
+-    test('on a main with commits not pushed, tags origin/main and says they aren’t in it', () => {
+-      const r = repos();
+-      try {
+-        commit(r.root, '1.2.3', 'the release');
+-        git(['push', '-q', 'origin', 'main'], r.root);
+-        const pushed = git(['rev-parse', 'HEAD'], r.root);
+-        fs.writeFileSync(path.join(r.root, 'notes.txt'), 'one');
+-        git(['add', 'notes.txt'], r.root);
+-        git(['commit', '-qm', 'not pushed'], r.root);
+-        const local = git(['rev-parse', 'HEAD'], r.root);
+-
+-        const out = run('release.sh', ['1.2.3'], r.root);
+-        assert.equal(out.status, 0, out.stderr);
+-        assert.equal(git(['rev-parse', 'v1.2.3^{commit}'], r.root), pushed);
+-        assert.match(out.stdout, /Not in it: main's 1 commit\(s\) not pushed to origin yet\./);
+-        assert.equal(git(['rev-parse', 'HEAD'], r.root), local);
+-      } finally {
+-        cleanUp(r);
+-      }
+-    });
+-
+-    test('on a main that is origin/main, says nothing about unpushed commits', () => {
+-      const r = repos();
+-      try {
+-        commit(r.root, '1.2.3', 'the release');
+-        git(['push', '-q', 'origin', 'main'], r.root);
+-
+-        const out = run('release.sh', ['1.2.3'], r.root);
+-        assert.equal(out.status, 0, out.stderr);
+-        assert.doesNotMatch(out.stdout, /Not in it/);
+-      } finally {
+-        cleanUp(r);
+-      }
+-    });
+-
+-    test('refuses a tag that exists only on origin', () => {
+-      const r = repos();
+-      try {
+-        commit(r.root, '1.2.3', 'one');
+-        git(['push', '-q', 'origin', 'main'], r.root);
+-        git(['tag', 'v1.2.3'], r.root);
+-        git(['push', '-q', 'origin', 'v1.2.3'], r.root);
+-        git(['tag', '-d', 'v1.2.3'], r.root);
+-
+-        const out = run('release.sh', ['1.2.3'], r.root);
+-        assert.equal(out.status, 1);
+-        assert.match(out.stderr, /v1\.2\.3 exists already on origin/);
+-        assert.equal(git(['tag', '--list'], r.root), '');
+-      } finally {
+-        cleanUp(r);
+-      }
+-    });
+-
+-    test('--push pushes the tag to origin', () => {
+-      const r = repos();
+-      try {
+-        commit(r.root, '1.2.3', 'one');
+-        git(['push', '-q', 'origin', 'main'], r.root);
+-
+-        const out = run('release.sh', ['1.2.3', '--push'], r.root);
+-        assert.equal(out.status, 0, out.stderr);
+-        assert.match(out.stdout, /Pushed v1\.2\.3/);
+-        assert.equal(git(['tag', '--list'], r.origin), 'v1.2.3');
+-      } finally {
+-        cleanUp(r);
+-      }
+-    });
+-  });
+ });

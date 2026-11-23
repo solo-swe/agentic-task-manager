@@ -1,0 +1,573 @@
+diff --git a/dashboard/src/lib/compmd.ts b/dashboard/src/lib/compmd.ts
+index 871b62a7..8bf6347c 100644
+--- a/dashboard/src/lib/compmd.ts
++++ b/dashboard/src/lib/compmd.ts
+@@ -60,6 +60,7 @@ export function compmdRequest(
+   task: Task | undefined,
+   now = new Date(),
+   timeZone = localTimeZone(),
++  origins = false,
+ ) {
+   return {
+     ...base,
+@@ -69,6 +70,9 @@ export function compmdRequest(
+     tz: timeZone,
+     allowedOrigins: [] as string[],
+     host: task ? { task: taskData(task) } : {},
++    // Where each line was drawn, for a caller that reads the view's lines() (a diff's wrapped run, ATM-616); the
++    // text's lines then count from the frontmatter's first (FRONTMATTER_LINES before the text's own)
++    ...(origins ? { origins: true } : {}),
+   };
+ }
+ 
+@@ -244,6 +248,9 @@ export interface CompmdModule {
+       scheme(): void;
+       /** Each line of the text that draws something, with its boxes, from the container's top left (CompMD 0.5.0) */
+       lines(from?: number): AsyncGenerator<DrawnLine>;
++      /** Each code line named at least that tall, by its line in the text, in CSS pixels, through later renders until the
++       * next call (CompMD 0.8.0): a diff's two sides kept level (ATM-616) */
++      lineHeights(heights: ReadonlyMap<number, number>): void;
+       /** A component shows its fallback, and why (`@compmd/sandbox`'s `ViewEvents.error`); `failed` and `missing`
+        * draw nothing at all */
+       on(
+@@ -271,8 +278,17 @@ export function packComponents<T>(components: readonly T[]): T[] {
+ }
+ 
+ /** A text processed: its expanded tree, safe to render (safeTree), and the packs' components it can name */
+-export function processText(compmd: CompmdModule, text: string, task?: Task, path?: string, links: ProjectLinks = {}) {
+-  const request = path ? documentRequest(compmd.request, path, text) : compmdRequest(compmd.request, text, task);
++export function processText(
++  compmd: CompmdModule,
++  text: string,
++  task?: Task,
++  path?: string,
++  links: ProjectLinks = {},
++  origins = false,
++) {
++  const request = path
++    ? documentRequest(compmd.request, path, text)
++    : compmdRequest(compmd.request, text, task, undefined, undefined, origins);
+   const document = new compmd.OpenDocument(request);
+   try {
+     return { tree: safeTree(document.expanded, links), components: packComponents(document.components) };
+diff --git a/dashboard/src/lib/documents/CompMd.svelte b/dashboard/src/lib/documents/CompMd.svelte
+index 61a7793d..af509c8c 100644
+--- a/dashboard/src/lib/documents/CompMd.svelte
++++ b/dashboard/src/lib/documents/CompMd.svelte
+@@ -44,6 +44,7 @@
+     only,
+     tasks,
+     onlines,
++    lineHeights = null,
+     onopen,
+   }: {
+     text: string;
+@@ -61,6 +62,9 @@
+      * task, which `open` opens (`newTab`: ⌘, Ctrl or a middle click); without it, keys stay text */
+     tasks?: TaskLinks;
+     onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
++    /** Code lines, by their line in the text, made at least that tall (CompMD 0.8.0's `lineHeights`): a wrapped line's
++     * counterpart on a diff's other side as tall as it (ATM-616) */
++    lineHeights?: ReadonlyMap<number, number> | null;
+     onopen?: (ref: DocumentRef) => void;
+   } = $props();
+ 
+@@ -98,6 +102,18 @@
+   /** Drawn, but for an earlier text: hidden, the new text as written shown in its place until its turn (ATM-625) */
+   let stale = $state(false);
+   let view: View | null = null;
++  /** The view is open: the lines' heights can be given to it */
++  let opened = $state(false);
++  /** Heights were given to the view: none asked for any more clears them */
++  let heightsGiven = false;
++  // The heights asked for, given to the view as they change; it keeps them through its later renders. A text no one
++  // sizes lines of (most: a task's, a document) never calls it
++  $effect(() => {
++    const heights = lineHeights;
++    if (!opened || !view || (!heights?.size && !heightsGiven)) return;
++    view.lineHeights(heights ?? new Map());
++    heightsGiven = !!heights?.size;
++  });
+   /** Stops this view following the dashboard's theme (the document's one observer, compmd-runtime) */
+   let unfollow: (() => void) | null = null;
+   /** Destroyed (ATM-620): nothing is drawn any more. A draw after it made a view nothing would destroy, whose listeners
+@@ -128,7 +144,9 @@
+       '\u0000' +
+       (path ?? '') +
+       '\u0000' +
+-      (only?.join('-') ?? ''),
++      (only?.join('-') ?? '') +
++      // Its lines read or not: a text processed without origins has no lines to give (a run wrapped, ATM-616)
++      (onlines ? '\u0000lines' : ''),
+   );
+   // A drawn text that changed waits for its turn as the new text, as written (ATM-625): the old drawing, kept until
+   // then, had the old lines, so a run cut in two by a comment stood as tall as before it was cut, and the comment box
+@@ -182,7 +200,15 @@
+         turnDone = null;
+         return;
+       }
+-      const processed = processText(compmd, text, task, path, { localImage, docLink, taskKnown: tasks?.known });
++      // Read for its lines (onlines): each node keeps where it came from, so the view can place every line
++      const processed = processText(
++        compmd,
++        text,
++        task,
++        path,
++        { localImage, docLink, taskKnown: tasks?.known },
++        !!onlines,
++      );
+       const tree = only ? blocksIn(processed.tree, only) : processed.tree;
+       const components = processed.components;
+       if (!view) {
+@@ -190,6 +216,7 @@
+         // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
+         // app, under the origin CompMD's plugin gives the page, ADR-006). The document's one sandbox (ATM-646)
+         view = sandboxOf(compmd).open(target, { components });
++        opened = true;
+         view.on('rendered', () => {
+           secureLinks(target);
+           drawn = true;
+diff --git a/dashboard/src/lib/reviews/DiffCode.svelte b/dashboard/src/lib/reviews/DiffCode.svelte
+index 423b02e0..2db627ee 100644
+--- a/dashboard/src/lib/reviews/DiffCode.svelte
++++ b/dashboard/src/lib/reviews/DiffCode.svelte
+@@ -10,6 +10,7 @@
+ </script>
+ 
+ <script lang="ts">
++  import { FRONTMATTER_LINES, type DrawnLine } from '../compmd';
+   import CompMd from '../documents/CompMd.svelte';
+   import LinePlus from '../ui/LinePlus.svelte';
+   import { fenced } from './diff';
+@@ -29,12 +30,19 @@
+     picked = null,
+     marked = null,
+     wrap = false,
++    heights = null,
++    onwrapped,
+     onpick,
+     onover,
+   }: {
+     /** Long lines wrap at the column's width (ATM-588): each line's row as tall as CompMD drew it, its number on its
+      * first visual line */
+     wrap?: boolean;
++    /** Wrapped in Split (ATM-616): each line at least this tall, by its index in `lines` (the taller of it and its
++     * counterpart on the other side), so the two sides stay level */
++    heights?: readonly number[] | null;
++    /** Wrapped: each line's own height as drawn (its visual lines), by index, each time it changes */
++    onwrapped?: (natural: number[]) => void;
+     /** The lines of the chain selected, by their index in `lines`: marked */
+     marked?: [number, number] | null;
+     lines: CodeLine[];
+@@ -90,7 +98,6 @@
+     const lineHeight = !wrap && lines.length && drawnHeight > 0 ? drawnHeight / lines.length : styled();
+     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
+     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
+-    if (wrap) measureWrapped(code);
+   }
+   // Wrapped or not: measured again (the code's lines take their new heights)
+   $effect(() => {
+@@ -116,51 +123,58 @@
+   });
+ 
+   /** Wrapped (ATM-588): each line's row in the run's pixels, from its first visual line to the next line's. Lines aren't
+-   * one height then, so the gutter follows the text. CompMD draws a code block's lines as text between newlines (and
+-   * says where only a Markdown document's lines are), so each line's top is read here, from a collapsed range at its
+-   * start: read only, nothing of CompMD's page is changed */
++   * one height then, so the gutter follows the text. Where each line is comes from CompMD's boxes of its lines
++   * (`lines()`, each line an element of its own since 0.8.0; ATM-616), one box per piece of text on each visual line it
++   * covers: read only, nothing of CompMD's page is changed */
+   let wrapped = $state.raw<{ top: number; height: number }[] | null>(null);
+-  function measureWrapped(code: HTMLElement) {
+-    if (!el) return;
+-    const origin = el.getBoundingClientRect().top;
+-    const starts: { node: Text; offset: number }[] = [];
+-    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+-    let atStart = true;
+-    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+-      const text = node.data;
+-      for (let at = 0; at <= text.length; at++) {
+-        if (atStart && at < text.length) {
+-          starts.push({ node, offset: at });
+-          atStart = false;
+-        }
+-        if (text[at] === '\n') atStart = true;
+-      }
+-    }
+-    const range = document.createRange();
+-    // Where nothing is laid out (a test's page), there is nothing to measure: the lines keep one height
+-    if (typeof range.getClientRects !== 'function') return;
++  /** Each line's own height as last reported: its visual lines, not the height another side gave it */
++  let natural: number[] = [];
++  /** A run's code line `i` is this many lines into the text CompMD processes: the dashboard's frontmatter, then the
++   * fence's line (diff.ts `fenced`), then the code */
++  const FIRST_LINE = FRONTMATTER_LINES + 2;
++  function wrappedFrom(drawn: readonly DrawnLine[], from: HTMLElement) {
++    if (!el || !wrap) return;
+     const lineHeight = layout?.lineHeight ?? FALLBACK_LINE;
+-    // A character's box is its glyphs' (the font's height), centred in its line's box: the line starts half a line
+-    // height above that centre (ATM-652: taking the character's top put every row half the leading low)
+-    const tops = starts.map(({ node, offset }) => {
+-      range.setStart(node, offset);
+-      range.collapse(true);
+-      const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
+-      return (rect.top + rect.bottom) / 2 - lineHeight / 2 - origin;
++    const shift = from.getBoundingClientRect().top - el.getBoundingClientRect().top;
++    const boxes = new Map(drawn.map((d) => [d.line, d.rects.filter((r) => r.height > 0)]));
++    // A line's visual lines: its boxes grouped by their middle (a line of tokens has a box per token). A box is its
++    // glyphs' (the font's height), centred in its visual line: that starts half a line height above the middle
++    // (ATM-652: taking the box's top put every row half the leading low)
++    const measured = lines.map((_, i) => {
++      const rects = boxes.get(i + FIRST_LINE) ?? [];
++      const middles = rects.map((r) => r.y + r.height / 2).sort((a, b) => a - b);
++      const rows = middles.filter((m, k) => k === 0 || m - middles[k - 1] > lineHeight / 2);
++      return rows.length ? { top: rows[0] - lineHeight / 2 + shift, count: rows.length } : null;
++    });
++    const own = measured.map((m) => (m ? m.count : 1) * lineHeight);
++    if (JSON.stringify(own) !== JSON.stringify(natural)) {
++      natural = own;
++      onwrapped?.(own);
++    }
++    // Each row from its line's top to the next line's (an empty line, with no box, right after the one before it)
++    const tops: number[] = [];
++    measured.forEach((m, i) => {
++      tops.push(m ? m.top : i === 0 ? (layout?.top ?? 0) : tops[i - 1] + Math.max(own[i - 1], heights?.[i - 1] ?? 0));
+     });
+-    const bottom = code.getBoundingClientRect().bottom - origin;
+-    // Empty lines at the end have no character to measure: one line height each, up from the code's end
+-    const missing = lines.length - tops.length;
+-    for (let k = missing; k > 0; k--) tops.push(bottom - k * lineHeight);
+     const rows = lines.map((_, i) => {
+-      const top = tops[i];
+-      const next = i + 1 < lines.length ? tops[i + 1] : bottom;
+-      return { top, height: Math.max(next - top, lineHeight) };
++      const height = Math.max(own[i], heights?.[i] ?? 0);
++      return { top: tops[i], height: i + 1 < lines.length ? Math.max(tops[i + 1] - tops[i], lineHeight) : height };
+     });
+     if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
+   }
+   $effect(() => {
+-    if (!wrap) wrapped = null;
++    if (!wrap) {
++      wrapped = null;
++      natural = [];
++    }
++  });
++  /** The heights given, as CompMD takes them: by line of the text, only those taller than one line */
++  const lineHeights = $derived.by(() => {
++    if (!wrap || !heights || !layout) return null;
++    const one = layout.lineHeight;
++    return new Map(
++      heights.flatMap((h, i) => (h > one + 0.5 ? [[i + FIRST_LINE, Math.round(h * 100) / 100] as const] : [])),
++    );
+   });
+   /** Each line's row: measured when wrapped, else the code's one line height */
+   const rowOf = (i: number) =>
+@@ -252,7 +266,7 @@
+     </div>
+   {:else}
+     <!-- Plain until its turn: the page's runs are highlighted one at a time, nearest the view first (ATM-587) -->
+-    <CompMd {text} plain={source} />
++    <CompMd {text} plain={source} onlines={wrap ? wrappedFrom : undefined} {lineHeights} />
+   {/if}
+ </div>
+ 
+diff --git a/dashboard/src/lib/reviews/DiffView.svelte b/dashboard/src/lib/reviews/DiffView.svelte
+index 2d390d8c..3bfa66a2 100644
+--- a/dashboard/src/lib/reviews/DiffView.svelte
++++ b/dashboard/src/lib/reviews/DiffView.svelte
+@@ -65,8 +65,8 @@
+     chains?: Chain[];
+     mode?: 'split' | 'unified';
+     view?: 'source' | 'rendered';
+-    /** Long lines wrap (ATM-588), in Unified: Split keeps its two sides' lines level, which a wrapped line can't do
+-     * until CompMD draws each line as an element of its own */
++    /** Long lines wrap (ATM-588); in Split each line as tall as the taller of its two sides, so they stay level
++     * (ATM-616, CompMD 0.8.0's line heights) */
+     wrap?: boolean;
+     viewed?: boolean;
+     /** Its own header (the path, the layout and view switches, Viewed); the review's page has its own */
+@@ -221,6 +221,21 @@
+   });
+   const drawnItems = $derived(items.out.filter((item) => item.start < limit));
+ 
++  // Wrapped in Split (ATM-616): each side of a run says how tall each of its lines is as drawn, and both sides make
++  // each line the taller of the two, so a long line wrapped on one side keeps the other side's next line level with it
++  let wrappedLines = $state<Record<string, number[]>>({});
++  function tallest(run: string): number[] | null {
++    const old = wrappedLines[`${run}-old`];
++    const now = wrappedLines[`${run}-new`];
++    if (!old && !now) return null;
++    return Array.from({ length: Math.max(old?.length ?? 0, now?.length ?? 0) }, (_, i) =>
++      Math.max(old?.[i] ?? 0, now?.[i] ?? 0),
++    );
++  }
++  $effect(() => {
++    if (!wrap) wrappedLines = {};
++  });
++
+   const splitSide = (rows: SplitRow[], s: Side): CodeLine[] =>
+     rows.map((r) => {
+       const text = (s === 'old' ? r.oldText : r.newText) ?? '';
+@@ -492,10 +507,14 @@
+         <div class="diff-run" data-keys={keys.join(' ')}>
+           {#if mode === 'split'}
+             {#each ['old', 'new'] as const as s (s)}
++              {@const run = `${b}-${segment.first}`}
+               <div class="diff-column diff-{s}">
+                 <DiffCode
+                   lines={splitSide(segment.rows as SplitRow[], s)}
+                   {language}
++                  {wrap}
++                  heights={wrap ? tallest(run) : null}
++                  onwrapped={(heights) => (wrappedLines = { ...wrappedLines, [`${run}-${s}`]: heights })}
+                   numbers={s}
+                   {keys}
+                   changes={s === 'new' ? changes : []}
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index a583d336..270c0f0b 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -177,10 +177,9 @@
+   let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
+   let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
+   let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
+-  /** Long lines wrap (ATM-588): in Unified, until Split can keep its sides level with a wrapped line */
++  /** Long lines wrap (ATM-588), in Split too, its two sides kept level (ATM-616) */
+   let wrap = $state(stored.wrap === true);
+   $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width, wrap }));
+-  const WRAP_IN_SPLIT = 'Wrap works in Unified for now: Split keeps its two sides level line by line';
+   const hasMarkdown = $derived(files.some((f) => /\.(md|markdown|mdx)$/i.test(f.path)));
+ 
+   // A file folds once viewed; its fold button opens or folds it again whatever its tick
+@@ -827,13 +826,12 @@
+             >
+           </div>
+           <div class="review-segmented" role="group" aria-label="Lines">
+-            <span class="review-wrap-hint" title={mode === 'split' ? WRAP_IN_SPLIT : undefined}>
++            <span class="review-wrap-hint">
+               <button
+                 id="review-wrap"
+-                aria-pressed={wrap && mode === 'unified'}
++                aria-pressed={wrap}
+                 aria-label="Wrap"
+-                title={mode === 'split' ? WRAP_IN_SPLIT : 'Wrap long lines'}
+-                disabled={mode === 'split'}
++                title="Wrap long lines"
+                 onclick={() => (wrap = !wrap)}><Icon name="wrap-text" size={15} /></button
+               >
+             </span>
+@@ -1099,7 +1097,7 @@
+             folded={folded(f)}
+             {mode}
+             view={rendered}
+-            wrap={wrap && mode === 'unified'}
++            {wrap}
+             {busy}
+             {docStyle}
+             root={list}
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 5ef8d4fd..7a627ca7 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -598,9 +598,9 @@ test.describe('a review’s page', () => {
+   });
+ 
+   // ATM-588: Wrap, in Unified: a long line wraps at the column's width, its row as tall as it, its number on its first
+-  // visual line, the next line's row right under it; no sideways scroll. In Split it waits, saying why
++  // visual line, the next line's row right under it; no sideways scroll
+   test(
+-    'Wrap: a long line wraps in Unified, the next line level with its text; in Split the button says why it waits',
++    'Wrap: a long line wraps in Unified, the next line level with its text',
+     WEBKIT_TOO,
+     async ({ page, tasksServer }) => {
+       const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
+@@ -625,10 +625,6 @@ test.describe('a review’s page', () => {
+       await page.goto(reviewPath(tasksServer, '/CR-2'));
+       await page.getByRole('tab', { name: /^Diffs/ }).click();
+       const wrap = page.getByRole('button', { name: 'Wrap' });
+-      // Split: Wrap waits, saying why
+-      await page.getByRole('button', { name: 'Split' }).click();
+-      await expect(wrap).toBeDisabled();
+-      await expect(wrap).toHaveAttribute('title', /Unified for now/);
+       // Unified, wrapped
+       await page.getByRole('button', { name: 'Unified' }).click();
+       await wrap.click();
+@@ -659,6 +655,94 @@ test.describe('a review’s page', () => {
+     },
+   );
+ 
++  // ATM-616 (Hakan): Wrap in Split too. A line wrapped on one side makes its counterpart on the other as tall (CompMD
++  // 0.8.0's line heights), so the lines after it stay level across the two sides, and each side's numbers stay on
++  // their lines' first visual lines
++  test(
++    'Wrap in Split: a line wrapped on one side keeps the two sides level after it',
++    WEBKIT_TOO,
++    async ({ page, tasksServer }) => {
++      const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
++      // Names of their own, each one token, so each side's text can be found where it is drawn
++      const oldText = 'fn alpha() {}\nfn short() {}\nfn beta() {}\nfn gamma() {}\n';
++      const newText = `fn alpha() {}\n${long}\nfn beta() {}\nfn gamma() {}\n`;
++      const patch =
++        'diff --git a/src/long.rs b/src/long.rs\n--- a/src/long.rs\n+++ b/src/long.rs\n@@ -1,4 +1,4 @@\n fn alpha() {}\n' +
++        `-fn short() {}\n+${long}\n fn beta() {}\n fn gamma() {}\n`;
++      const code = (text: string) =>
++        projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 });
++      tasksServer.setRevisionDocument('base1', code(oldText)).setRevisionDocument('head3', code(newText));
++      await openReviews(page, tasksServer);
++      tasksServer.setReview(
++        'CR-2',
++        reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch)] } }),
++      );
++      await page.goto(reviewPath(tasksServer, '/CR-2'));
++      await page.getByRole('tab', { name: /^Diffs/ }).click();
++      await page.getByRole('button', { name: 'Split' }).click();
++      const wrap = page.getByRole('button', { name: 'Wrap' });
++      await expect(wrap).toBeEnabled();
++      await wrap.click();
++      await expect(wrap).toHaveAttribute('aria-pressed', 'true');
++      const diff = diffOf(page, 'src/long.rs');
++      await expect(diff.locator('.diff-old .diff-code.wrap [data-compmd="ready"]').first()).toBeAttached();
++      await expect(diff.locator('.diff-new .diff-code.wrap [data-compmd="ready"]').first()).toBeAttached();
++      /** Where `needle`'s text is drawn on each side (its first character's middle), and each side's gutter rows */
++      const sides = () =>
++        diff.evaluate((root) => {
++          const at = (side: string, needle: string) => {
++            for (const pre of root.querySelectorAll(`.diff-${side} .compmd-page pre`)) {
++              const walker = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT);
++              for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
++                const i = n.data.indexOf(needle);
++                if (i < 0) continue;
++                const range = document.createRange();
++                range.setStart(n, i);
++                range.setEnd(n, i + 1);
++                const r = range.getBoundingClientRect();
++                return (r.top + r.bottom) / 2;
++              }
++            }
++            return null;
++          };
++          const rows = (side: string) =>
++            [...root.querySelectorAll<HTMLElement>(`.diff-${side} .diff-code .diff-line`)].map((l) => ({
++              top: l.getBoundingClientRect().top,
++              height: l.getBoundingClientRect().height,
++              number: l.querySelector('.diff-number')?.getBoundingClientRect(),
++            }));
++          return {
++            b: [at('old', 'beta'), at('new', 'beta')],
++            c: [at('old', 'gamma'), at('new', 'gamma')],
++            old: rows('old'),
++            now: rows('new'),
++          };
++        });
++      // The long line wraps on the new side, and the old side's short line is made as tall: the lines after it level
++      await expect
++        .poll(async () => {
++          const s = await sides();
++          return s.b[0] !== null && s.b[1] !== null ? Math.abs(s.b[0] - s.b[1]) : 999;
++        })
++        .toBeLessThan(2);
++      const s = await sides();
++      expect(Math.abs(s.c[0]! - s.c[1]!)).toBeLessThan(2);
++      // The changed line's rows: several lines tall on both sides, the same height
++      expect(s.now[1].height).toBeGreaterThan(s.now[0].height * 2);
++      expect(Math.abs(s.old[1].height - s.now[1].height)).toBeLessThan(2);
++      // Each side's rows meet its text: fn b's row starts where the changed line's ends, on both sides
++      for (const rows of [s.old, s.now]) expect(Math.abs(rows[2].top - (rows[1].top + rows[1].height))).toBeLessThan(2);
++      // Unwrapped again: one line height each, the two sides level as before
++      await wrap.click();
++      await expect
++        .poll(async () => {
++          const t = await sides();
++          return t.now[1]?.height ?? 0;
++        })
++        .toBeLessThan(30);
++    },
++  );
++
+   // ATM-652 (Hakan): the numbers weren't level with their lines, and Wrap moved them up or down. Each number's text is
+   // centred on its line's first visual line, within 1 px, wrapped or not, in Unified and Split
+   test(
+diff --git a/dashboard/tests/unit/CompMd.component.test.ts b/dashboard/tests/unit/CompMd.component.test.ts
+index d943107b..b414dcac 100644
+--- a/dashboard/tests/unit/CompMd.component.test.ts
++++ b/dashboard/tests/unit/CompMd.component.test.ts
+@@ -23,6 +23,7 @@ async function compmdWithView() {
+     scheme() {},
+     destroy() {},
+     async *lines() {},
++    lineHeights: vi.fn(),
+   };
+   const compmd = await realCompmd();
+   const createSandbox = vi.fn(() => ({ open: () => view }));
+@@ -30,6 +31,7 @@ async function compmdWithView() {
+   return {
+     raise: (event: string, data: Parameters<Listener>[0]) => listeners[event]?.forEach((l) => l(data)),
+     createSandbox,
++    lineHeights: view.lineHeights,
+   };
+ }
+ 
+@@ -39,6 +41,24 @@ afterEach(() => {
+ });
+ 
+ describe('CompMd', () => {
++  // ATM-616: a diff's two sides kept level, wrapped: the lines' heights given to CompMD's view as they change, and
++  // cleared once none are asked for; a text no one sizes lines of never calls it
++  it('gives the view the lines’ heights asked for, as they change; none asked for clears them, once', async () => {
++    const { lineHeights } = await compmdWithView();
++    const { rerender } = render(CompMd, { text: '```rust\nfn a() {}\n```\n', plain: 'fn a() {}' });
++    await vi.waitFor(() => expect(loadCompmd).toHaveBeenCalled());
++    await new Promise((r) => setTimeout(r, 0));
++    expect(lineHeights).not.toHaveBeenCalled();
++    const heights = new Map([[2, 60]]);
++    await rerender({ lineHeights: heights });
++    await vi.waitFor(() => expect(lineHeights).toHaveBeenLastCalledWith(heights));
++    await rerender({ lineHeights: null });
++    await vi.waitFor(() => expect(lineHeights).toHaveBeenLastCalledWith(new Map()));
++    const calls = lineHeights.mock.calls.length;
++    await rerender({ lineHeights: new Map() });
++    expect(lineHeights.mock.calls.length).toBe(calls);
++  });
++
+   // ATM-586: a code review's summary and comments are the project's text: given onopen, their relative links open the
+   // document viewer, as a task's do; without it (Help, What's new) they stay text
+   it('given onopen, a relative link opens its document; without, it stays text', async () => {
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 78770c39..b301d3f9 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -562,26 +562,24 @@ describe('ReviewPage: Diffs', () => {
+     expect(onfile).not.toHaveBeenCalled();
+   });
+ 
+-  // ATM-588: Wrap, in Unified; in Split it waits, saying why (its sides kept level line by line)
+-  it('Wrap: in Unified it wraps every file’s lines, kept for the next page; in Split it is disabled, saying why', async () => {
++  // ATM-588: Wrap, in Unified; ATM-616: in Split too, its two sides kept level (the measuring: e2e)
++  it('Wrap: in Unified and in Split it wraps every file’s lines, kept for the next page', async () => {
+     localStorage.removeItem('atm-review-layout');
+     const { container, unmount } = await diffs(data({}, { files: [file('src/a.rs')] }));
+     await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
+     const wrap = () => screen.getByRole('button', { name: 'Wrap' });
+-    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
+-    expect(wrap()).toBeDisabled();
+-    expect(wrap()).toHaveAttribute('title', expect.stringMatching(/Unified for now/));
+-    expect(wrap().closest('[title]')).toHaveAttribute('title', expect.stringMatching(/level line by line/));
+     await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
+     expect(wrap()).toBeEnabled();
+     expect(wrap()).toHaveAttribute('aria-pressed', 'false');
+     await fireEvent.click(wrap());
+     expect(wrap()).toHaveAttribute('aria-pressed', 'true');
+     await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).not.toBeNull());
+-    // Back to Split: not wrapped there, and pressed again only in Unified
++    // Split: still wrapped, both sides
+     await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
+-    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).toBeNull());
+-    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
++    expect(wrap()).toBeEnabled();
++    expect(wrap()).toHaveAttribute('aria-pressed', 'true');
++    await vi.waitFor(() => expect(container.querySelectorAll('.diff-old .diff-code.wrap').length).toBeGreaterThan(0));
++    expect(container.querySelectorAll('.diff-new .diff-code.wrap').length).toBeGreaterThan(0);
+     await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
+     unmount();
+     await diffs(data({}, { files: [file('src/a.rs')] }));

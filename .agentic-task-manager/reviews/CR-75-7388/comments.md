@@ -1,0 +1,15 @@
+## (the review) · round 1 · t1
+- [x] **Hakan Serce** · 2026-11-20T10:43:53Z · c1
+  Didn't fix it I can still see the lines.
+  - **claude:0f56a916** · 2026-11-20T10:45:18Z · c2
+    You are right, and my cause was wrong. I put the same rows back on fractional pixels and took close pictures at 2x in WebKit and Chromium: no lines either way, so the rounding is not what you see. The fix also reaches your app only once atm is built again, as the page is compiled into it. Could you tell me where you see them: which file (Markdown or code), Split or Unified, Wrap on or off, the theme and document style, and in the app or a browser? A screenshot would help most.
+    - **claude:0f56a916** · 2026-11-20T10:48:51Z · c3
+      Thanks for the screenshot: light mode, a pale line wherever two tinted rows meet. Your font puts each row at a fraction of a pixel (19.1875 px here). The headless WebKit the tests use draws those edges without a seam even unrounded, so I cannot reproduce it; the Mac WebKit your app runs does not. This round keeps each row on whole pixels, which removes those fractional edges. It shows in the app once atm is rebuilt (`pnpm run build`, then `cargo build`), as the page is compiled into atm. If you still see lines after that, I will draw each run of tinted lines as one box, so no two rows meet.
+  - **claude:0f56a916** · 2026-11-20T11:24:26Z · c4
+    Round 2. Rounding the rows was not enough, so each run of tinted lines is now drawn as one box, from its first line to its last, and the numbers column as one strip down the run. No two tinted boxes meet any more, so nothing can draw a line between them, whatever the font or the screen. It shows in the app once atm is rebuilt. Tests: a unit test (2 added lines are one box, 2 padding lines another) and an e2e test (40 added lines are one box, from the first line to the last), in Chromium and WebKit.
+
+## (the review) · round 2 · t2
+- [x] **Hakan Serce** · 2026-11-20T11:41:33Z · c5
+  still seeing lines, no change here.
+  - **claude:0f56a916** · 2026-11-20T11:45:23Z · c6
+    Found it, from your screenshot: the lines were not between every two lines but at the blank lines and new blocks (after 13, 16, 17, 24, 25, 27…), and they were darker, a doubled tint. With Wrap on, each row is placed where its line text begins, but was at least a line tall, so where the next line text began a little less than a line below (after a blank line, at a new block), two rows overlapped by about a pixel and their tints doubled. Rounding (round 1) could not fix that, and one box per run (round 2) did not either, as a run broke at each overlap: your 412-line file was 25 tints. Now each row ends exactly where the next begins, and a run is consecutive lines whatever their edges. A new e2e test (paragraphs, a list, a heading, blank lines, all added, wrapped and not) wants one tint and rows that meet exactly: it fails without the fix in WebKit (2 tints, 1 px overlap) and passes with it. Your `cargo tauri dev` watcher has rebuilt the page: reload the window (View, Reload) and look again.

@@ -1,0 +1,293 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 0f81a48d..7a55b318 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -7,6 +7,7 @@
+   import { formatWhen } from '../format';
+   import { readStored, writeStored } from '../prefs';
+   import Icon from '../ui/Icon.svelte';
++  import { park, unpark } from '../tab-parked';
+   import ChainBox from './ChainBox.svelte';
+   import ComposerActions from './ComposerActions.svelte';
+   import { setDraftActions, withDrafts, type DraftActions } from './drafts';
+@@ -74,6 +75,7 @@
+     ondrafts,
+     onedit,
+     ondocument,
++    appTab,
+   }: {
+     page: ReviewPageData;
+     /** The project's short name (its key), before the reference */
+@@ -127,6 +129,9 @@
+     /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
+      * manager opens its document viewer (ATM-586) */
+     ondocument?: (ref: DocumentRef) => void;
++    /** The app's tab it is shown on (ATM-700): its Submit review and Poke forms, left open, are kept for that tab
++     * across a switch and there again on return; none in the browser */
++    appTab?: string;
+   } = $props();
+ 
+   const review = $derived(page.review);
+@@ -585,6 +590,27 @@
+     onsubmit(decision, summary.trim());
+     submitting = false;
+   }
++  // A question left open belongs to its tab (ATM-700, lib/tab-parked.ts): a switch of tab takes the page away, so the
++  // forms are parked for the tab as they are, and taken back when it is shown again
++  interface Open {
++    submitting: boolean;
++    summary: string;
++    poking: boolean;
++    pokeText: string;
++  }
++  const parkedAs = untrack(() => `review-forms:${review.id}`);
++  const shownOn = untrack(() => appTab);
++  const kept = unpark<Open>(shownOn, parkedAs);
++  if (kept) {
++    submitting = kept.submitting;
++    summary = kept.summary;
++    poking = kept.poking;
++    pokeText = kept.pokeText;
++  }
++  onDestroy(() => {
++    if (submitting || poking || summary || pokeText) park(shownOn, parkedAs, { submitting, summary, poking, pokeText });
++  });
++
+   // A decision made (the review's `updated` moves): the summary box starts empty; a refresh that changed nothing else
+   // keeps what is being written
+   let updatedAt = untrack(() => review.updated);
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index d18df382..3844d2b4 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -48,6 +48,7 @@
+   import { reviewWindow } from '../reviews/window.svelte';
+   import { withTask } from '../routes';
+   import { tabActions } from '../tab-actions';
++  import { appTabs } from '../app-tabs.svelte';
+   import { withView } from '../tabs';
+   import { dashboard } from '../state.svelte';
+ 
+@@ -88,6 +89,8 @@
+   let unreadable = $state.raw<UnreadableReview[]>([]);
+   // The review shown
+   let shown = $state.raw<ReviewPageData | null>(null);
++  /** The app's tab it is shown on (ATM-700); none in the browser */
++  const tab = $derived(inApp ? appTabs.active : undefined);
+   let loading = $state(false);
+   let busy = $state(false);
+   let problem = $state<string | null>(null);
+@@ -275,10 +278,12 @@
+   {#if at.review}
+     {#if shown && project}
+       {@const page = shown}
+-      <!-- Another review is another page (ATM-675, audit D2): nothing typed on one, no file it was at, stays for the next -->
+-      {#key page.review.id}
++      <!-- Another review is another page (ATM-675, audit D2): nothing typed on one, no file it was at, stays for the next;
++           and in the app another tab is another page too, its questions left open kept for it (ATM-700) -->
++      {#key `${tab ?? ''}:${page.review.id}`}
+         <ReviewPage
+           {page}
++          appTab={tab}
+           project={shortName}
+           file={at.file}
+           section={shownSection}
+diff --git a/dashboard/src/lib/tab-actions.ts b/dashboard/src/lib/tab-actions.ts
+index 6069bf34..17f84c35 100644
+--- a/dashboard/src/lib/tab-actions.ts
++++ b/dashboard/src/lib/tab-actions.ts
+@@ -4,6 +4,7 @@
+ import { appTabs, type AppTabs } from './app-tabs.svelte';
+ import { closeWindow, openWindow } from './api/shell';
+ import { rememberScroll, showTab } from './navigation';
++import { forgetTab } from './tab-parked';
+ 
+ /** A click that asks for a new tab: ⌘-click, Ctrl-click or a middle click, as in a browser */
+ export function wantsNewTab(e: MouseEvent): boolean {
+@@ -56,7 +57,11 @@ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): T
+     open: (address = '/', background = false) =>
+       background ? void tabs.open(address, true) : go(leaving(() => tabs.open(address))),
+     select: (id) => go(id === tabs.active ? undefined : (leaving(() => tabs.select(id)) ?? undefined)),
+-    close: (id = tabs.active) => go(tabs.close(id)),
++    close: (id = tabs.active) => {
++      // Its questions left open go with it (ATM-700)
++      forgetTab(id);
++      go(tabs.close(id));
++    },
+     step: (step) => go(leaving(() => tabs.step(step)) ?? undefined),
+     move: (id, to) => tabs.move(id, to),
+     toWindow: () => {
+diff --git a/dashboard/src/lib/tab-parked.ts b/dashboard/src/lib/tab-parked.ts
+new file mode 100644
+index 00000000..40decc5b
+--- /dev/null
++++ b/dashboard/src/lib/tab-parked.ts
+@@ -0,0 +1,30 @@
++// A question left open on a tab (ATM-700, docs/tabs-and-navigation-design.md §4.2): the app shows one page for all its
++// tabs, so a switch of tab takes the page away and with it a form half filled (Submit review, a poke). It is parked
++// here, by tab, as it was, and the page takes it back when its tab is shown again, as a macOS sheet stays on its
++// window. The app's own pop-ups (Settings, Help, What's new, About) are the dashboard's, above every tab, and aren't
++// parked; a menu or a dropdown just closes. In the browser there are no tabs of atm's: nothing is parked.
++
++const parked = new Map<string, Map<string, unknown>>();
++
++/** Keep `value` for tab `tab` under `key`, until it is taken back; none kept without a tab */
++export function park(tab: string | undefined, key: string, value: unknown): void {
++  if (!tab) return;
++  const kept = parked.get(tab) ?? new Map<string, unknown>();
++  kept.set(key, value);
++  parked.set(tab, kept);
++}
++
++/** What tab `tab` kept under `key`, taken back (it is kept no longer); none when nothing was */
++export function unpark<T>(tab: string | undefined, key: string): T | undefined {
++  const kept = tab ? parked.get(tab) : undefined;
++  if (!kept?.has(key)) return undefined;
++  const value = kept.get(key) as T;
++  kept.delete(key);
++  if (kept.size === 0) parked.delete(tab!);
++  return value;
++}
++
++/** Tab `tab` closed: what it kept goes with it */
++export function forgetTab(tab: string): void {
++  parked.delete(tab);
++}
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 0384bf02..2cae872d 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -424,6 +424,68 @@ test.describe('the dashboard in the atm app', () => {
+     },
+   );
+ 
++  // ATM-700 (docs/tabs-and-navigation-design.md §4.2): a question stays on its tab; the app's own stay above every tab
++  test('a Submit review form left open is there again on its tab; Settings stays open across a switch', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.use('standard');
++    const header = {
++      id: 'r2',
++      reference: 'CR-2',
++      number: 2,
++      title: 'Trim the names',
++      status: 'waiting',
++      tasks: [],
++      author: 'claude:a',
++      reviewers: [],
++      created: '2026-11-17T10:00:00Z',
++      updated: '2026-11-17T10:00:00Z',
++    };
++    tasksServer
++      .setReviews({ reviews: [{ review: header, branch: null, chains: 0, open: 0, needs_you: true }], you: 'Ana' })
++      .setReview('CR-2', {
++        review: header,
++        summary: '',
++        branch: null,
++        rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
++        chains: [],
++        view: { round: 1, against: null, files: [] },
++        needs_you: true,
++        you: 'Ana',
++      });
++    tasksServer.link(`/projects/${tasksServer.projectId}/reviews/CR-2`);
++    await page.goto('/');
++    const tabs = page.locator('#app-titlebar [role="tab"]');
++    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++
++    // Half written, then another tab shown and back: the form as it was
++    await page.getByRole('button', { name: 'Other decisions' }).click();
++    await page.getByLabel('Summary').fill('Half written');
++    await page.locator('#app-tab-new').click();
++    await expect(tabs).toHaveCount(2);
++    await expect(page.locator('#review-page')).toHaveCount(0);
++    await tabs.nth(0).click();
++    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++    await expect(page.getByLabel('Summary')).toHaveValue('Half written');
++
++    // The same review in the other tab is its own page: no form open there
++    await tasksServer.pushLink(`/projects/${tasksServer.projectId}/reviews/CR-2`);
++    await expect(tabs).toHaveCount(3);
++    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
++    await expect(page.getByLabel('Summary')).toHaveCount(0);
++
++    // Settings is the app's: open across a switch of tab
++    await tasksServer.chooseMenu({ kind: 'settings' });
++    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
++    // The link's tab opened right of the first; the one before it is the first, with its form
++    await tasksServer.chooseMenu({ kind: 'previous_tab' });
++    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
++    await expect(page.getByLabel('Summary')).toHaveValue('Half written');
++  });
++
+   test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index c1ed899f..69c98e15 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -898,6 +898,29 @@ describe('ReviewPage: submit', () => {
+     expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(OPEN_WHY);
+   });
+ 
++  // ATM-700: a question left open belongs to its tab; a switch takes the page away and back
++  it('Submit review left open is there again on its tab, as it was; not on another, nor in the browser', async () => {
++    const first = show(open(), { appTab: 't1' });
++    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Half written' } });
++    first.unmount();
++    // Another tab's page of the same review: its own, closed
++    const other = show(open(), { appTab: 't2' });
++    expect(screen.queryByLabelText('Summary')).toBeNull();
++    other.unmount();
++    show(open(), { appTab: 't1' });
++    expect(screen.getByLabelText('Summary')).toHaveValue('Half written');
++  });
++
++  it('in the browser (no tab), a form left open isn’t kept', async () => {
++    const first = show(open());
++    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Gone' } });
++    first.unmount();
++    show(open());
++    expect(screen.queryByLabelText('Summary')).toBeNull();
++  });
++
+   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {
+     const { rerender } = show(open());
+     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+diff --git a/dashboard/tests/unit/tab-parked.test.ts b/dashboard/tests/unit/tab-parked.test.ts
+new file mode 100644
+index 00000000..99e56484
+--- /dev/null
++++ b/dashboard/tests/unit/tab-parked.test.ts
+@@ -0,0 +1,25 @@
++import { describe, expect, it } from 'vitest';
++import { forgetTab, park, unpark } from '../../src/lib/tab-parked';
++
++// What a tab keeps of its questions left open across a switch (ATM-700)
++describe('a tab’s parked questions', () => {
++  it('are taken back once, by the tab and key they were kept under', () => {
++    park('t1', 'form', { summary: 'Half' });
++    expect(unpark('t2', 'form')).toBeUndefined();
++    expect(unpark('t1', 'other')).toBeUndefined();
++    expect(unpark('t1', 'form')).toEqual({ summary: 'Half' });
++    expect(unpark('t1', 'form')).toBeUndefined();
++  });
++
++  it('none are kept without a tab (the browser)', () => {
++    park(undefined, 'form', 1);
++    expect(unpark(undefined, 'form')).toBeUndefined();
++  });
++
++  it('go with their tab when it closes', () => {
++    park('t3', 'a', 1);
++    park('t3', 'b', 2);
++    forgetTab('t3');
++    expect([unpark('t3', 'a'), unpark('t3', 'b')]).toEqual([undefined, undefined]);
++  });
++});

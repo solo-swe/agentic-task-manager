@@ -1,11 +1,14 @@
 // Who created, started and completed a task (docs/v4/data-model.md §4.1, dashboard D-4.5). An actor whose name starts
-// with "claude:" is an agent (a Claude Code session); anyone else is a person.
+// with an agent harness's prefix is an agent; anyone else is a person.
 import { taskNotes } from './notes';
 import type { Task } from './types';
 import { startedBy } from './work';
 
+/** The identities atm gives agents, one prefix per harness (ATM-660): atm-common's `AGENT_PREFIXES` */
+export const AGENT_PREFIXES = ['claude:', 'codex:', 'gemini:', 'opencode:', 'agent:'] as const;
+
 export function isAgent(actor: string): boolean {
-  return actor.startsWith('claude:');
+  return AGENT_PREFIXES.some((prefix) => actor.startsWith(prefix));
 }
 
 /** Who completed the task when that isn't who started it: a reviewer who approved it, or a person who finished it. */

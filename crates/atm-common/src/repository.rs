@@ -105,10 +105,36 @@ pub fn move_pr_links(tasks: &mut [Value], old: &str, new: &str) -> usize {
     moved
 }
 
+/// Whether `url` is a web address atm links to (docs/security-review.md F9; ATM-681: the one copy): `http://` or
+/// `https://` in any case, then something and no white space.
+#[must_use]
+pub fn web_address(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    let rest = lower
+        .strip_prefix("https://")
+        .or_else(|| lower.strip_prefix("http://"));
+    rest.is_some_and(|r| !r.is_empty() && !r.chars().any(char::is_whitespace))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn only_an_http_or_https_address_without_white_space_is_a_web_address() {
+        for (url, ok) in [
+            ("https://github.com/o/r/pull/1", true),
+            ("HTTP://x", true),
+            ("http://", false),
+            ("javascript:alert(1)", false),
+            ("https://a b", false),
+            ("ftp://x", false),
+            ("", false),
+        ] {
+            assert_eq!(web_address(url), ok, "{url:?}");
+        }
+    }
 
     #[test]
     fn remotes_become_web_addresses() {

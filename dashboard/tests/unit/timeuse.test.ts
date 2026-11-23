@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { mergeIntervals, timeUse, waitingIntervals } from '../../src/lib/timeuse';
 import type { Task } from '../../src/lib/types';
+import { viewed, withKinds } from './views';
 
 // Times in minutes from T0
 const T0 = Date.parse('2026-05-01T08:00:00Z');
 const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
 const t = (min: number) => T0 + min * 60_000;
 const minutes = (ms: number) => ms / 60_000;
+/** A task as atm serves it: with its kind */
 const task = (id: string, fields: Partial<Task>): Task =>
-  ({ id, name: id, phase: 0, type: 'feature', description: '', status: 'done', ...fields }) as Task;
+  withKinds([{ id, name: id, phase: 0, type: 'feature', description: '', status: 'done', ...fields } as Task])[0];
 const NOW = t(1000);
 
 // a: T1 0–60, T3 65–100, T4 200–260 (blocked on you 150–200 first), T5 300–305; b: T2 30–90 then in review until
@@ -108,9 +110,11 @@ describe('timeUse (T-245)', () => {
 
 describe('waitingIntervals', () => {
   it('a current review or block on you runs to now; a block on an agent is not waiting on you', () => {
-    expect(waitingIntervals(task('T1', { status: 'in_review', review_requested_at: at(10) }), NOW)).toEqual([
-      { start: t(10), end: NOW },
-    ]);
+    // In review, as atm says who it waits on (ATM-717): its reviewer, or, approved or sent back, its agent
+    const inReview = (on: 'reviewer' | 'agent') =>
+      viewed(task('T1', { status: 'in_review', review_requested_at: at(10) }), { waiting: { on } });
+    expect(waitingIntervals(inReview('reviewer'), NOW)).toEqual([{ start: t(10), end: NOW }]);
+    expect(waitingIntervals(inReview('agent'), NOW)).toEqual([]);
     expect(waitingIntervals(task('T1', { status: 'blocked', waiting_on: 'user', blocked_at: at(20) }), NOW)).toEqual([
       { start: t(20), end: NOW },
     ]);

@@ -1,0 +1,32 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "97bdb2d935f31d12aa08aafcdb036b9cec1a899f",
+    "head": "9527f05be274379a215a85aff877a4138c0b2475"
+  },
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/playwright.config.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/DiffCode.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T21:19:34Z"
+}

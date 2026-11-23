@@ -3,7 +3,7 @@
 import { ACTIVE, BACKLOG } from './filters';
 import { activeSprint, type Sprint, type SprintModel } from './sprints';
 import type { Task } from './types';
-import { kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 
 /** A set of tasks by kind of status; `total` leaves the skipped ones out, as every progress figure does (T-162) */
 export interface ScopeCounts {
@@ -16,10 +16,10 @@ export interface ScopeCounts {
   skipped: number;
 }
 
-export function countKinds(tasks: Task[], vocab: Vocabulary): ScopeCounts {
+export function countKinds(tasks: Task[]): ScopeCounts {
   const counts: ScopeCounts = { total: 0, done: 0, todo: 0, active: 0, review: 0, blocked: 0, skipped: 0 };
   for (const t of tasks) {
-    const kind = kindOf(vocab, t.status) ?? 'todo';
+    const kind = taskKind(t) ?? 'todo';
     counts[kind]++;
     if (kind !== 'skipped') counts.total++;
   }
@@ -70,20 +70,6 @@ export function scopeOf(model: SprintModel, selected: ReadonlySet<string>): Scop
       ...(selected.has(BACKLOG) ? ['Backlog'] : []),
     ],
   };
-}
-
-/**
- * Open tasks in closed sprints (T-323): closing carries every unfinished task on, but a task reopened afterwards (atm
- * reopen), or a merge of a branch that closed the sprint with one that reopened a task in it, leaves one behind. The
- * loop never takes them (it works on the active sprint), so they are shown until they are moved.
- */
-export function leftovers(tasks: Task[], model: SprintModel, vocab: Vocabulary): Task[] {
-  const closed = new Set(model.sprints.filter((s) => s.state === 'closed').map((s) => s.id));
-  return tasks.filter((t) => {
-    const sprint = model.sprintOf(t);
-    const kind = kindOf(vocab, t.status);
-    return sprint !== undefined && closed.has(sprint) && kind !== 'done' && kind !== 'skipped';
-  });
 }
 
 /** The scope's own tasks, before the other filters and the search */

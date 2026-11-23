@@ -1,0 +1,242 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index ab3f5a22..992860b9 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -4103,6 +4103,15 @@ svg.graph-minimap.hidden {
+   padding: var(--space-3);
+   gap: var(--space-1);
+ }
++/* A long list scrolls, the popup kept small (ATM-640): about eight rows, less on a short window */
++.needs-you-scroll {
++  max-height: min(320px, 60vh);
++}
++.needs-you-list {
++  display: flex;
++  flex-direction: column;
++  gap: var(--space-1);
++}
+ .needs-you-menu.align-right {
+   left: auto;
+   right: 0;
+diff --git a/dashboard/src/lib/shell/NeedsYouMenu.svelte b/dashboard/src/lib/shell/NeedsYouMenu.svelte
+index a2f5f6d6..a73866bc 100644
+--- a/dashboard/src/lib/shell/NeedsYouMenu.svelte
++++ b/dashboard/src/lib/shell/NeedsYouMenu.svelte
+@@ -9,6 +9,7 @@
+   import type { NeedsYouReview } from '$generated/types';
+   import type { NeedsYouItem } from '../waiting';
+   import { taskLabel } from '../keys';
++  import HintScroll from '../ui/HintScroll.svelte';
+   import TaskKey from '../ui/TaskKey.svelte';
+ 
+   let {
+@@ -105,28 +106,38 @@
+             id={menuId}
+             style:translate={shift ? `${shift}px 0` : undefined}
+           >
+-            {#each items as task (task.id)}
+-              <DropdownMenu.Item onSelect={() => onopen(task.id)}>
+-                {#snippet child({ props })}
+-                  <button {...props} class="needs-you-row" data-id={task.id}>
+-                    <span class="needs-you-id"><TaskKey {task} /></span>
+-                    <span class="needs-you-name">{task.name}</span>
+-                    <span class="needs-you-reason">{REASONS[task.reason]}</span>
+-                  </button>
+-                {/snippet}
+-              </DropdownMenu.Item>
+-            {/each}
+-            {#each listed as review (review.reference)}
+-              <DropdownMenu.Item onSelect={() => onreview?.(review.reference)}>
+-                {#snippet child({ props })}
+-                  <button {...props} class="needs-you-row" data-review={review.reference}>
+-                    <span class="needs-you-id">{review.reference}</span>
+-                    <span class="needs-you-name">{review.title}</span>
+-                    <span class="needs-you-reason">{REVIEW_REASONS[review.why]}</span>
+-                  </button>
+-                {/snippet}
+-              </DropdownMenu.Item>
+-            {/each}
++            <!-- A long list scrolls in the popup, without a scroll bar: "▲ N more" / "▼ N more" at the cut edges, as the
++                 dashboard's other lists (ATM-640); the arrows bring the row they move to into view -->
++            <HintScroll
++              tag="span"
++              item=".needs-you-row"
++              outer="needs-you-scroll"
++              body="needs-you-list"
++              tabbable={false}
++            >
++              {#each items as task (task.id)}
++                <DropdownMenu.Item onSelect={() => onopen(task.id)}>
++                  {#snippet child({ props })}
++                    <button {...props} class="needs-you-row" data-id={task.id}>
++                      <span class="needs-you-id"><TaskKey {task} /></span>
++                      <span class="needs-you-name">{task.name}</span>
++                      <span class="needs-you-reason">{REASONS[task.reason]}</span>
++                    </button>
++                  {/snippet}
++                </DropdownMenu.Item>
++              {/each}
++              {#each listed as review (review.reference)}
++                <DropdownMenu.Item onSelect={() => onreview?.(review.reference)}>
++                  {#snippet child({ props })}
++                    <button {...props} class="needs-you-row" data-review={review.reference}>
++                      <span class="needs-you-id">{review.reference}</span>
++                      <span class="needs-you-name">{review.title}</span>
++                      <span class="needs-you-reason">{REVIEW_REASONS[review.why]}</span>
++                    </button>
++                  {/snippet}
++                </DropdownMenu.Item>
++              {/each}
++            </HintScroll>
+           </span>
+         {/snippet}
+       </DropdownMenu.ContentStatic>
+diff --git a/dashboard/src/lib/ui/HintScroll.svelte b/dashboard/src/lib/ui/HintScroll.svelte
+index ee12923f..ce2c0b6c 100644
+--- a/dashboard/src/lib/ui/HintScroll.svelte
++++ b/dashboard/src/lib/ui/HintScroll.svelte
+@@ -4,13 +4,16 @@
+ 
+   // Content scrolling on its own without a scrollbar (T-262, T-282): "▲ N more" and "▼ N more" at the edges say how
+   // many items (`item`, a selector) are cut off above and below; the wheel and the trackpad scroll as usual, a hint
+-  // scrolls a page. `outer` and `body` add classes to the wrapper and the scroller.
++  // scrolls a page. `outer` and `body` add classes to the wrapper and the scroller; `tag` is their element (a span
++  // where only phrasing content may go, the "need you" list in a card's paragraph, ATM-640).
+   let {
+     children,
+     item,
+     outer = '',
+     body = '',
+     id,
++    tag = 'div',
++    tabbable = true,
+     onscrolled,
+   }: {
+     children: Snippet;
+@@ -18,6 +21,10 @@
+     outer?: string;
+     body?: string;
+     id?: string;
++    tag?: 'div' | 'span';
++    /** Whether Tab stops at the hints: not in a menu, whose arrows reach every row and which focuses its first tab
++     * stop on opening (ATM-640) */
++    tabbable?: boolean;
+     /** Told how far the content has scrolled, on every scroll (Help shrinks its title once it has) */
+     onscrolled?: (scrollTop: number) => void;
+   } = $props();
+@@ -46,12 +53,17 @@
+     el?.scrollBy({ top: direction * el.clientHeight * 0.85, behavior: scrollBehavior() });
+ </script>
+ 
+-<div class="hint-scroll {outer}">
++<svelte:element this={tag} class="hint-scroll {outer}">
+   {#if above}
+-    <button class="kanban-more top" aria-label="Scroll up: {above} more" onclick={() => page(-1)}>▲ {above} more</button
++    <button
++      class="kanban-more top"
++      aria-label="Scroll up: {above} more"
++      tabindex={tabbable ? undefined : -1}
++      onclick={() => page(-1)}>▲ {above} more</button
+     >
+   {/if}
+-  <div
++  <svelte:element
++    this={tag}
+     class="hint-scroll-body {body}"
+     {id}
+     bind:this={el}
+@@ -61,10 +73,13 @@
+     }}
+   >
+     {@render children()}
+-  </div>
++  </svelte:element>
+   {#if below}
+-    <button class="kanban-more bottom" aria-label="Scroll down: {below} more" onclick={() => page(1)}
+-      >▼ {below} more</button
++    <button
++      class="kanban-more bottom"
++      aria-label="Scroll down: {below} more"
++      tabindex={tabbable ? undefined : -1}
++      onclick={() => page(1)}>▼ {below} more</button
+     >
+   {/if}
+-</div>
++</svelte:element>
+diff --git a/dashboard/tests/e2e/needs-you.spec.ts b/dashboard/tests/e2e/needs-you.spec.ts
+index ba272b19..d7f83c29 100644
+--- a/dashboard/tests/e2e/needs-you.spec.ts
++++ b/dashboard/tests/e2e/needs-you.spec.ts
+@@ -69,4 +69,51 @@ test.describe('"need you" chip', () => {
+     await page.keyboard.press('Enter');
+     await expectDetail(page, 'T-005');
+   });
++
++  test('a long list scrolls in a small popup, without a scroll bar: "▼ N more", the arrows reach every row (ATM-640)', async ({
++    page,
++    tasksServer,
++  }) => {
++    const data = v4({ 'T-005': 'user', 'T-006': 'user' });
++    const inReview = data.tasks.find((t) => t.id === 'T-004')!;
++    for (let n = 100; n < 120; n++)
++      data.tasks.push({ ...inReview, id: `T-${n}`, name: `Review ${n}`, dependencies: [] });
++    await openDashboard(page, tasksServer, data, { tab: 'list' });
++    const chip = page.locator('#attention-count');
++    await expect(chip).toHaveText('23 need you');
++    await chip.click();
++    const menu = page.locator('#needs-you-menu');
++    const list = menu.locator('.needs-you-list');
++    const rows = menu.locator('.needs-you-row');
++    await expect(rows).toHaveCount(23);
++    // Small: well under the window, the list cut off, with no scroll bar of its own
++    const box = (await menu.boundingBox())!;
++    expect(box.height).toBeLessThan(400);
++    expect(box.y + box.height).toBeLessThan(page.viewportSize()!.height);
++    const scroller = await list.evaluate((el: HTMLElement) => ({
++      cut: el.scrollHeight > el.clientHeight,
++      bar: el.offsetWidth - el.clientWidth,
++      overflow: getComputedStyle(el).overflowY,
++    }));
++    expect(scroller).toEqual({ cut: true, bar: 0, overflow: 'auto' });
++    await expect(menu.locator('.kanban-more.bottom')).toHaveText(/^▼ \d+ more$/);
++    await expect(menu.locator('.kanban-more.top')).toHaveCount(0);
++
++    // The arrows go to the last row, scrolled into view; "▲ N more" then, and no "▼"
++    await expect(rows.first()).toBeFocused();
++    await page.keyboard.press('End');
++    await expect(rows.last()).toBeFocused();
++    await expect(rows.last()).toBeInViewport();
++    await expect(menu.locator('.kanban-more.top')).toHaveText(/^▲ \d+ more$/);
++    await expect(menu.locator('.kanban-more.bottom')).toHaveCount(0);
++    await page.keyboard.press('Enter');
++    await expectDetail(page, 'T-119');
++  });
++
++  test('a short list has no hints', async ({ page, tasksServer }) => {
++    await openDashboard(page, tasksServer, v4({ 'T-005': 'user', 'T-006': 'user' }), { tab: 'list' });
++    await page.locator('#attention-count').click();
++    await expect(page.locator('#needs-you-menu .needs-you-row')).toHaveCount(3);
++    await expect(page.locator('#needs-you-menu .kanban-more')).toHaveCount(0);
++  });
+ });
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index a395c79c..83e11ae1 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1279,10 +1279,13 @@ test.describe('the diff viewer on a review’s page', () => {
+     );
+     await page.goto(reviewPath(tasksServer, '/CR-2'));
+     const conversation = page.locator('.review-conversation');
+-    await expect(conversation.locator('[data-comment="c1"]').getByRole('button', { name: 'Edit comment' })).toHaveCount(
+-      0,
+-    );
++    // c1's own header: its replies are inside it, and your reply (c9) has Edit. Once c9 has it, the page knows you,
++    // so c1 having none is said, not just not yet drawn
+     const mine = conversation.locator('[data-comment="c9"]');
++    await expect(mine.getByRole('button', { name: 'Edit comment' })).toBeVisible();
++    await expect(
++      conversation.locator('[data-comment="c1"] > .chain-meta').getByRole('button', { name: 'Edit comment' }),
++    ).toHaveCount(0);
+     await mine.getByRole('button', { name: 'Edit comment' }).click();
+     await mine.getByLabel('Edit your comment').fill('Because of the style guide.');
+     await mine.getByRole('button', { name: 'Save' }).click();

@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
 use atm_common::py::strip;
 use atm_common::{Error, Result};
 
-use crate::GitVcs;
+use crate::{END_OF_OPTIONS, GitVcs, Rev};
 
 /// `path` without Windows' extended prefix (`\\?\C:\…` is `C:\…`, `\\?\UNC\host\…` is `\\host\…`): git can't make a
 /// file under a path in that form ("Invalid argument"), which canonicalize gives. Any other path as it is.
@@ -111,15 +111,12 @@ impl GitVcs {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
-    /// A revision as the commit's SHA: what reaches git as a diff's end, never a name it could read as an option
-    /// (`--output=…`), whoever wrote it (the browser's write routes, ATM-572).
+    /// A revision as the commit's SHA: what reaches git as a diff's end (a [`Rev`] is never a name git could read as
+    /// an option, whoever wrote it: the browser's write routes, ATM-572; a round's files, ATM-659).
     ///
     /// # Errors
-    /// `Invalid` for a revision that starts with `-` or holds a NUL; `NotFound` for one that names no commit.
-    fn commit_sha(&self, revision: &str) -> Result<String> {
-        if revision.is_empty() || revision.starts_with('-') || revision.contains('\0') {
-            return Err(Error::Invalid(format!("{revision}: not a revision")));
-        }
+    /// `NotFound` for one that names no commit.
+    fn commit_sha(&self, revision: &Rev) -> Result<String> {
         self.resolve(revision)
             .ok_or_else(|| Error::NotFound(format!("{revision}: no such commit")))
     }
@@ -163,18 +160,27 @@ impl GitVcs {
             all.extend_from_slice(args);
             self.git_with(&all, env, None)
         };
-        let binary: Vec<String> = with(&["--numstat", "--no-renames"])?
-            .lines()
-            .filter_map(|line| line.strip_prefix("-\t-\t").map(str::to_string))
+        // NUL-separated (`-z`, ATM-670, audit R14): a path is as it is, never C-quoted for a tab or a quote in it
+        let binary: Vec<String> = with(&["--numstat", "--no-renames", "-z"])?
+            .split('\0')
+            .filter_map(|record| record.strip_prefix("-\t-\t").map(str::to_string))
             .collect();
         let mut files = Vec::new();
-        for line in with(&["-M", "--name-status"])?.lines() {
-            let mut parts = line.split('\t');
-            let status = parts.next().and_then(|s| s.chars().next()).unwrap_or('M');
-            let (from, path) = match (parts.next(), parts.next()) {
-                (Some(from), Some(to)) => (Some(from.to_string()), to.to_string()),
-                (Some(path), None) => (None, path.to_string()),
-                _ => continue,
+        let listed = with(&["-M", "--name-status", "-z"])?;
+        let mut fields = listed.split('\0').filter(|f| !f.is_empty());
+        // Each change is its status, then its path; a rename or a copy, its old path and its new one
+        while let Some(code) = fields.next() {
+            let status = code.chars().next().unwrap_or('M');
+            let (from, path) = if matches!(status, 'R' | 'C') {
+                match (fields.next(), fields.next()) {
+                    (Some(from), Some(to)) => (Some(from.to_string()), to.to_string()),
+                    _ => break,
+                }
+            } else {
+                match fields.next() {
+                    Some(path) => (None, path.to_string()),
+                    None => break,
+                }
             };
             files.push(ChangedFile {
                 binary: binary.contains(&path),
@@ -216,14 +222,44 @@ impl GitVcs {
         })
     }
 
+    /// The diff from one tree (or commit) to another, with the files it changes (ATM-725: a review's views, each from
+    /// one round's result, or the review's base, to another's): only `only` when any are named, else everything but
+    /// the folders `leave_out` (atm's own task folder).
+    ///
+    /// # Errors
+    /// Either isn't a tree or a commit, a path outside a submodule's folder, or git fails.
+    pub fn diff_between(
+        &self,
+        from: &Rev,
+        to: &Rev,
+        only: &[String],
+        leave_out: &[&str],
+    ) -> Result<Diff> {
+        let spec = if only.is_empty() {
+            pathspec(leave_out)
+        } else {
+            let mut spec = vec!["--".to_string()];
+            for path in only {
+                spec.push(format!(":(literal){}", self.inside(path)?));
+            }
+            spec
+        };
+        let mut args = vec![END_OF_OPTIONS, from.as_str(), to.as_str()];
+        args.extend(spec.iter().map(String::as_str));
+        Ok(Diff {
+            patch: self.patch(&args, &[])?,
+            files: self.changed_files(&args, &[])?,
+        })
+    }
+
     /// The diff of a commit range, `base` to `head`, the folders `leave_out` left out (atm's own task folder).
     ///
     /// # Errors
     /// Either isn't a commit, or git fails.
-    pub fn diff_range(&self, base: &str, head: &str, leave_out: &[&str]) -> Result<Diff> {
+    pub fn diff_range(&self, base: &Rev, head: &Rev, leave_out: &[&str]) -> Result<Diff> {
         let spec = pathspec(leave_out);
         let (base, head) = (self.commit_sha(base)?, self.commit_sha(head)?);
-        let mut args = vec![base.as_str(), head.as_str()];
+        let mut args = vec![END_OF_OPTIONS, base.as_str(), head.as_str()];
         args.extend(spec.iter().map(String::as_str));
         Ok(Diff {
             patch: self.patch(&args, &[])?,
@@ -236,14 +272,14 @@ impl GitVcs {
     ///
     /// # Errors
     /// `base` isn't a commit, or git fails.
-    pub fn diff_working(&self, base: &str, leave_out: &[&str]) -> Result<Diff> {
+    pub fn diff_working(&self, base: &Rev, leave_out: &[&str]) -> Result<Diff> {
         let spec = pathspec(leave_out);
         let base = self.commit_sha(base)?;
         let base = base.as_str();
         self.with_temporary_index(|env| {
-            self.git_with(&["read-tree", base], env, None)?;
+            self.git_with(&["read-tree", END_OF_OPTIONS, base], env, None)?;
             self.git_with(&["add", "-A"], env, None)?;
-            let mut args = vec!["--cached", base];
+            let mut args = vec!["--cached", END_OF_OPTIONS, base];
             args.extend(spec.iter().map(String::as_str));
             Ok(Diff {
                 patch: self.patch(&args, env)?,
@@ -291,10 +327,12 @@ impl GitVcs {
     ///
     /// # Errors
     /// The patch doesn't apply to `base`, or git fails.
-    pub fn tree_after(&self, base: Option<&str>, patch: &str, skip: &[String]) -> Result<String> {
+    pub fn tree_after(&self, base: Option<&Rev>, patch: &str, skip: &[String]) -> Result<String> {
         self.with_temporary_index(|env| {
             match base {
-                Some(base) => self.git_with(&["read-tree", base], env, None)?,
+                Some(base) => {
+                    self.git_with(&["read-tree", END_OF_OPTIONS, base.as_str()], env, None)?
+                }
                 None => self.git_with(&["read-tree", "--empty"], env, None)?,
             };
             if !patch.trim().is_empty() {
@@ -320,7 +358,7 @@ impl GitVcs {
     ///
     /// # Errors
     /// Either isn't one, or git fails.
-    pub fn diff_trees(&self, from: &str, to: &str, paths: &[String]) -> Result<String> {
+    pub fn diff_trees(&self, from: &Rev, to: &Rev, paths: &[String]) -> Result<String> {
         let inside: Vec<&str> = paths
             .iter()
             .map(|p| self.inside(p))
@@ -330,35 +368,52 @@ impl GitVcs {
         all.extend(DIFF);
         all.push("-M");
         all.extend(prefixes.iter().map(String::as_str));
-        all.extend([from, to, "--"]);
+        all.extend([END_OF_OPTIONS, from.as_str(), to.as_str(), "--"]);
         all.extend(inside);
         self.git_with(&all, &[], None)
     }
 
     /// A file's text in a tree (or commit), none when it isn't there (or, in a submodule's, isn't under its folder).
     #[must_use]
-    pub fn file_in(&self, tree: &str, path: &str) -> Option<String> {
+    pub fn file_in(&self, tree: &Rev, path: &str) -> Option<String> {
         let path = self.inside_path(path)?;
-        self.git_with(&["show", &format!("{tree}:{path}")], &[], None)
-            .ok()
+        self.git_with(
+            &["show", END_OF_OPTIONS, &format!("{tree}:{path}")],
+            &[],
+            None,
+        )
+        .ok()
     }
 
     /// A commit's tree.
     ///
     /// # Errors
     /// Not a commit.
-    pub fn tree_of(&self, commit: &str) -> Result<String> {
-        Ok(
-            strip(&self.git_with(&["rev-parse", &format!("{commit}^{{tree}}")], &[], None)?)
-                .to_string(),
-        )
+    pub fn tree_of(&self, commit: &Rev) -> Result<String> {
+        // `--verify`: without it, rev-parse echoes `--end-of-options` back as one of its answers
+        Ok(strip(&self.git_with(
+            &[
+                "rev-parse",
+                "--verify",
+                END_OF_OPTIONS,
+                &format!("{commit}^{{tree}}"),
+            ],
+            &[],
+            None,
+        )?)
+        .to_string())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::ChangedFile;
-    use crate::GitVcs;
+    use crate::{GitVcs, Rev};
+
+    /// A revision, by a name the test gives.
+    fn rev(name: &str) -> Rev {
+        Rev::new(name).unwrap()
+    }
 
     struct Repo(std::path::PathBuf);
     impl Drop for Repo {
@@ -393,10 +448,13 @@ mod tests {
     fn write(vcs: &GitVcs, path: &str, text: &str) {
         std::fs::write(vcs.root.join(path), text).unwrap();
     }
-    fn commit(vcs: &GitVcs, message: &str) -> String {
+    fn commit(vcs: &GitVcs, message: &str) -> Rev {
         git(vcs, &["add", "-A"]);
         git(vcs, &["commit", "-q", "-m", message]);
-        git(vcs, &["rev-parse", "HEAD"]).trim().to_string()
+        head(vcs)
+    }
+    fn head(vcs: &GitVcs) -> Rev {
+        Rev::object_id(git(vcs, &["rev-parse", "HEAD"]).trim()).unwrap()
     }
 
     #[test]
@@ -508,21 +566,41 @@ mod tests {
         write(&vcs, "a.txt", "a\n");
         git(&vcs, &["add", "-A"]);
         git(&vcs, &["commit", "-q", "-m", "a"]);
+        // A revision that would be an option to git is no Rev, so none reaches a diff (ATM-659)
         for bad in ["--output=x", "-p", ""] {
-            assert!(
-                matches!(vcs.diff_range(bad, "HEAD", &[]), Err(Error::Invalid(_))),
-                "{bad}"
-            );
-            assert!(
-                matches!(vcs.diff_working(bad, &[]), Err(Error::Invalid(_))),
-                "{bad}"
-            );
+            assert!(matches!(Rev::new(bad), Err(Error::Invalid(_))), "{bad}");
         }
         assert!(!vcs.root.join("x").exists());
         assert!(matches!(
-            vcs.diff_range("no-such", "HEAD", &[]),
+            vcs.diff_range(&rev("no-such"), &Rev::head(), &[]),
             Err(Error::NotFound(_))
         ));
+    }
+
+    /// ATM-670 (audit R14): without -z, git C-quoted a path with a tab or a quote ("a\tb.md"), and that was the name
+    #[cfg(unix)]
+    #[test]
+    fn a_path_with_a_tab_a_quote_or_a_rename_is_listed_as_it_is() {
+        let (_repo, vcs) = repo();
+        write(&vcs, "plain.md", "one\ntwo\nthree\nfour\n");
+        let base = commit(&vcs, "base");
+        write(&vcs, "a\tb \"c\".md", "new\n");
+        git(&vcs, &["mv", "plain.md", "éé moved.md"]);
+        let head = commit(&vcs, "head");
+        let diff = vcs.diff_range(&base, &head, &[]).unwrap();
+        let mut files: Vec<(String, char, Option<String>)> = diff
+            .files
+            .into_iter()
+            .map(|f| (f.path, f.status, f.from))
+            .collect();
+        files.sort();
+        assert_eq!(
+            files,
+            [
+                ("a\tb \"c\".md".to_string(), 'A', None),
+                ("éé moved.md".to_string(), 'R', Some("plain.md".to_string())),
+            ]
+        );
     }
 
     #[test]
@@ -568,7 +646,7 @@ mod tests {
     #[test]
     fn a_range_that_moves_a_submodule_lists_it_and_rebuilds_its_tree() {
         let (_repo, vcs, _sub, lib) = with_submodule();
-        let base = git(&vcs, &["rev-parse", "HEAD"]).trim().to_string();
+        let base = head(&vcs);
         write(&lib, "b.txt", "one\ntwo\n");
         commit(&lib, "sub change");
         write(&vcs, "a.txt", "one\nchanged\n");
@@ -591,7 +669,7 @@ mod tests {
     #[test]
     fn uncommitted_changes_with_a_moved_and_dirty_submodule_rebuild_their_tree() {
         let (_repo, vcs, _sub, lib) = with_submodule();
-        let base = git(&vcs, &["rev-parse", "HEAD"]).trim().to_string();
+        let base = head(&vcs);
         write(&lib, "b.txt", "one\ntwo\n");
         commit(&lib, "sub change");
         write(&lib, "b.txt", "one\ntwo\nthree, not committed\n");
@@ -604,7 +682,7 @@ mod tests {
     #[test]
     fn a_submodules_repository_diffs_its_commits_with_the_projects_paths() {
         let (_repo, vcs, _sub, lib) = with_submodule();
-        let base = git(&lib, &["rev-parse", "HEAD"]).trim().to_string();
+        let base = head(&lib);
         write(&lib, "b.txt", "one\ntwo\n");
         write(&lib, "c.txt", "new\n");
         let head = commit(&lib, "sub change");
@@ -625,8 +703,8 @@ mod tests {
             ["lib/b.txt", "lib/c.txt"]
         );
         // Its round's files rebuild in its own repository, read and compared by the project's paths
-        let tree = sub.tree_after(Some(&base), &diff.patch, &[]).unwrap();
-        assert_eq!(tree, sub.tree_of(&head).unwrap());
+        let tree = rev(&sub.tree_after(Some(&base), &diff.patch, &[]).unwrap());
+        assert_eq!(tree.as_str(), sub.tree_of(&head).unwrap());
         assert_eq!(sub.file_in(&tree, "lib/b.txt").unwrap(), "one\ntwo\n");
         assert_eq!(
             sub.file_in(&tree, "b.txt"),
@@ -686,8 +764,8 @@ mod tests {
         write(&vcs, "a.txt", "one\nTWO\nthree\nfour\n");
         let round2 = vcs.diff_working(&base, &[]).unwrap();
 
-        let tree1 = vcs.tree_after(Some(&base), &round1.patch, &[]).unwrap();
-        let tree2 = vcs.tree_after(Some(&base), &round2.patch, &[]).unwrap();
+        let tree1 = rev(&vcs.tree_after(Some(&base), &round1.patch, &[]).unwrap());
+        let tree2 = rev(&vcs.tree_after(Some(&base), &round2.patch, &[]).unwrap());
         assert_eq!(vcs.file_in(&tree1, "a.txt").unwrap(), "one\nTWO\nthree\n");
         let between = vcs.diff_trees(&tree1, &tree2, &["a.txt".into()]).unwrap();
         assert!(

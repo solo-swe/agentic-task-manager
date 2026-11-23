@@ -114,10 +114,8 @@ fn read_entries(path: &str, cwd: &Path) -> Result<Vec<Task>> {
             "{path}: expected a JSON list of tasks (or {{\"tasks\": [...]}})"
         ))
     };
-    let value: Value = std::fs::read_to_string(cwd.join(path))
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .ok_or_else(refused)?;
+    let text = crate::option_file::read_option_file(cwd, "json-file", path)?;
+    let value: Value = serde_json::from_str(&text).map_err(|_| refused())?;
     let value = match value {
         Value::Object(mut map) => map.shift_remove("tasks").unwrap_or(Value::Null),
         other => other,
@@ -186,9 +184,11 @@ pub fn add(args: AddArgs, ctx: Context, cwd: &Path) -> Result<()> {
         read_entries(file, cwd)?
     } else {
         let description = match args.description_file.as_deref().filter(|f| !f.is_empty()) {
-            Some(file) => Some(std::fs::read_to_string(cwd.join(file)).map_err(|e| {
-                Error::failed(format!("can't read the description file {file}: {e}"))
-            })?),
+            Some(file) => Some(crate::option_file::read_option_file(
+                cwd,
+                "description-file",
+                file,
+            )?),
             None => args.description.clone(),
         };
         vec![entry(args, description)]
@@ -230,13 +230,12 @@ pub struct NoteArgs {
 /// # Errors
 /// An unknown task, a note too long, a store error.
 pub fn note(args: &NoteArgs, ctx: Context, cwd: &Path) -> Result<()> {
-    if ctx.dry_run {
-        println!("[dry-run] would add a note to {}", args.task_id);
-        return Ok(());
-    }
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    let stored = project.resolve_task(&args.task_id)?;
+    let stored = project.working_task(&args.task_id)?;
+    if ctx.dry(&format!("add a note to {}", args.task_id)) {
+        return Ok(());
+    }
     let task = add_task_note(&mut project, &stored, &args.text)?;
     let notes = task
         .get("notes")

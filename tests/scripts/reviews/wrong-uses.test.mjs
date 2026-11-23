@@ -46,13 +46,17 @@ describe('atm review: refusals', () => {
       const cases = [
         [['review', 'create', '--title', 'x'], 2, /say what to review/],
         [['review', 'create', '--title', 'x', '--range', 'HEAD'], 2, /--range takes BASE\.\.HEAD, not HEAD/],
-        [['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'], 1, /can't read gone\.md/],
+        [
+          ['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'],
+          2,
+          /--summary-file gone\.md: can't read it/,
+        ],
         [['review', 'create', '--title', 'x', '--range', 'HEAD~1..HEAD', '--uncommitted'], 2, /cannot be used with/],
         [['review', 'show', 'CR-9'], 1, /no review CR-9/],
         [['review', 'show', 'CR-1', '--against', '1'], 2, /--round/],
         [['review', 'comment', 'CR-1'], 2, /--body or --body-file/],
         [['review', 'comment', 'CR-1', '--body', '   '], 2, /the text is empty/],
-        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 1, /can't read gone\.md/],
+        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 2, /--body-file gone\.md: can't read it/],
         [['review', 'comment', 'CR-1', '--body', 'x', '--body-file', 'a.txt'], 2, /cannot be used with/],
         [['review', 'comment', 'CR-1', '--lines', '2', '--body', 'x'], 2, /--file/],
         [
@@ -117,6 +121,67 @@ describe('atm review: refusals', () => {
       for (const [args, env, stdout] of dry) assert.equal(ok(args, root, env).stdout, stdout, args.join(' '));
       assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).stdout, before);
       assert.equal(task(root, 'T-2').status, 'in_progress');
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  // ATM-659: rounds/N.json is committed and merged, anyone's to write, and its commits reach git: a revision that would
+  // be an option to git (`--index-output=x` writes a file) is refused when the round is read, before git sees it
+  test('a round whose commit is no full ID, an option to git say, is refused and writes nothing', () => {
+    const root = project();
+    try {
+      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+      ok(['review', 'create', '--title', 'x', '--uncommitted'], root, AGENT);
+      const reviews = path.join(root, '.agentic-task-manager/reviews');
+      const [folder] = fs.readdirSync(reviews);
+      const file = path.join(reviews, folder, 'rounds/1.json');
+      const round = JSON.parse(fs.readFileSync(file, 'utf8'));
+      assert.equal(round.kind.kind, 'working');
+      for (const base of ['--index-output=x', '-p', 'HEAD']) {
+        fs.writeFileSync(file, JSON.stringify({ ...round, kind: { ...round.kind, base } }));
+        for (const args of [
+          ['review', 'show', 'CR-1', '--json'],
+          ['review', 'show', 'CR-1', '--round', '1'],
+        ]) {
+          const r = atm(args, root, HAKAN);
+          assert.equal(r.code, 1, `${base}: atm ${args.join(' ')}: ${r.stdout}`);
+          assert.match(r.stderr, /rounds[/\\]1\.json: its base .* isn't a commit's full ID/, `${base}: ${r.stderr}`);
+        }
+        const doctor = atm(['doctor'], root, HAKAN);
+        assert.match(doctor.stdout + doctor.stderr, /its base .* isn't a commit's full ID/, base);
+      }
+      // git wrote no file of the option's, in the project or its git folder
+      assert.ok(!fs.existsSync(path.join(root, 'x')));
+      assert.ok(!fs.existsSync(path.join(root, '.git/x')));
+      // The round as atm wrote it reads again
+      fs.writeFileSync(file, JSON.stringify(round));
+      ok(['review', 'show', 'CR-1', '--json'], root, HAKAN);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  // ATM-670 (audit H1): the live review's look at the working copy cut three bytes off a rename's old path, and one
+  // starting with a multibyte character panicked
+  test('a staged rename of a file under éé/ while a live review is open: the review reads, and follows it', () => {
+    const root = project();
+    try {
+      fs.mkdirSync(path.join(root, 'éé'));
+      commitFile(root, 'éé/README.md', '# Read me\n', 'a file under éé/');
+      ok(['review', 'live'], root, HAKAN);
+      git(['mv', 'éé/README.md', 'éé/x.md'], root);
+      const shown = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
+      assert.equal(shown.header.status, 'live');
+      // A comment on it now checkpoints the working copy: the rename is in it, by both its paths
+      ok(['review', 'comment', 'CR-1', '--body', 'Why move it?'], root, HAKAN);
+      const round = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN)
+        .json()
+        .rounds.find((r) => r.number === 2);
+      assert.deepEqual(
+        round.files.map((f) => [f.path, f.status]),
+        [['éé/x.md', { renamed: { from: 'éé/README.md' } }]],
+      );
     } finally {
       removeDir(root);
     }

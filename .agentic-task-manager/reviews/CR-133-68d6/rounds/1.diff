@@ -1,0 +1,725 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 1e4499bb..cb866a7a 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -48,6 +48,10 @@ clicks and right-click menus as in a browser). Review watches idle while they wa
+   skipped task is skipped now, not done), the pace and each sprint's estimate in the loop's order, time use, the
+   project's numbers, the time per task, people and agents. `atm project status` prints the forecast. The summaries
+   carry the overview's Progress tab (`progress`), so it loads no project's tasks.
++- **Claims and worktrees decided by atm** (ATM-724): the claims route lists only the claims held now, by atm's
++  clock, and its ETag moves when a lease runs out; the worktrees route says which copy of each task the board shows
++  (`shown`, by the merge driver's ranking). A guard test fails when the dashboard reads a task's raw state fields
++  outside the files allowed to.
+ - **Every agent harness is an agent** (ATM-660): Codex (`codex:`), Gemini CLI (`gemini:`), OpenCode (`opencode:`)
+   and a harness naming itself in `AI_AGENT` (`agent:`) get identities of their own, as Claude Code's sessions do, so
+   a review mode holds for them too; inside any of them, `--agent` or `ATM_AGENT` naming a person is refused.
+diff --git a/crates/atm-api/src/routes/claims.rs b/crates/atm-api/src/routes/claims.rs
+index 56dcceb7..a714f2d6 100644
+--- a/crates/atm-api/src/routes/claims.rs
++++ b/crates/atm-api/src/routes/claims.rs
+@@ -9,11 +9,17 @@ use super::source::ProjectSource;
+ use super::{etag, stamped};
+ use crate::send_conditional;
+ 
+-/// `GET …/projects/<p>/claims` (`/p/<p>/claims.json`): the claims of all its worktrees, from the shared claims store.
+-/// The `ETag` changes with the claims store.
++/// `GET …/projects/<p>/claims` (`/p/<p>/claims.json`): the claims of all its worktrees held now, from the shared
++/// claims store (an expired lease left out by atm-lib, ATM-724). The `ETag` changes with the claims store and with
++/// which claims are held, so a lease running out is a new version though nothing was written.
+ pub(super) fn get_claims(project: &dyn ProjectSource, request: &HeaderMap) -> Response {
+-    let tag = etag(&json!(["claims", project.stamp()["claims"]]));
+-    let body = || to_json(&stamped(json!({"claims": project.claims()}))).into_bytes();
++    let claims = project.claims();
++    let held: Vec<_> = claims
++        .iter()
++        .map(|c| json!([c["task"], c["agent"]]))
++        .collect();
++    let tag = etag(&json!(["claims", project.stamp()["claims"], held]));
++    let body = || to_json(&stamped(json!({"claims": claims}))).into_bytes();
+     send_conditional(request, &tag, body, "application/json", &[])
+ }
+ 
+@@ -83,7 +89,8 @@ mod tests {
+         assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+         assert_eq!(again.tag(), tag);
+         assert_eq!(again.body, b"");
+-        assert_eq!(calls.taken(), [], "a 304 doesn't read the claims");
++        // The claims are read for the tag: which are held moves with the clock, not only with the store (ATM-724)
++        assert_eq!(calls.taken(), [Call::Claims]);
+         // Another version the client has: the claims again
+         assert_eq!(
+             answer(get_claims(project.as_ref(), &having("\"other\""))).status,
+@@ -107,6 +114,21 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn a_lease_running_out_is_a_new_version_though_the_store_is_unchanged() {
++        // Held, then atm-lib leaves it out (its lease ran out): the store's stamp is the same
++        let (held, _) = bound(fake(
++            vec![claim("T-1", "claude:a", "/main")],
++            json!([1, 1]),
++            json!([1]),
++        ));
++        let tag = answer(get_claims(held.as_ref(), &plain())).tag();
++        let (expired, _) = bound(fake(Vec::new(), json!([1, 1]), json!([1])));
++        let after = answer(get_claims(expired.as_ref(), &having(&tag)));
++        assert_eq!(after.status, StatusCode::OK);
++        assert_eq!(after.unstamped(), json!({"claims": []}));
++    }
++
+     #[test]
+     fn the_worktrees_are_atm_libs_and_a_304_until_the_copies_or_the_claims_change() {
+         let (project, calls) = bound(fake(Vec::new(), json!([1, 1]), json!([1])));
+diff --git a/crates/atm-db/src/jsongit/merge.rs b/crates/atm-db/src/jsongit/merge.rs
+index 1254f6a4..e7dfd77e 100644
+--- a/crates/atm-db/src/jsongit/merge.rs
++++ b/crates/atm-db/src/jsongit/merge.rs
+@@ -39,8 +39,10 @@ const PROGRESS_FIELDS: [&str; 18] = [
+     "blocked_at",
+ ];
+ 
+-/// How far along a status's kind is (DM-3.3); a status without a kind ranks like todo.
+-fn kind_rank(kind: Option<Kind>) -> u8 {
++/// How far along a status's kind is (DM-3.3); a status without a kind ranks like todo. The one ranking: the merge
++/// driver's, and which working copy's copy of a task the board shows (ATM-724, `atm_lib::worktrees`).
++#[must_use]
++pub fn kind_rank(kind: Option<Kind>) -> u8 {
+     match kind {
+         Some(Kind::Active | Kind::Blocked | Kind::Review) => 1,
+         Some(Kind::Done | Kind::Skipped) => 2,
+diff --git a/crates/atm-lib/src/query.rs b/crates/atm-lib/src/query.rs
+index 33fdfb6b..b8c7bfd5 100644
+--- a/crates/atm-lib/src/query.rs
++++ b/crates/atm-lib/src/query.rs
+@@ -531,6 +531,16 @@ pub fn search_tasks(project: &Project, query: &str, also: &str) -> Result<Vec<St
+         .collect())
+ }
+ 
++/// The claims held at `now` (s): [`list_claims`] without those whose lease has run out, by the loop's rule
++/// (ATM-724, `leases::holder`), so the dashboard shows who works on what as atm sees it, by atm's clock.
++#[must_use]
++pub fn held_claims(project: &Project, now: i64) -> Vec<Value> {
++    list_claims(project)
++        .into_iter()
++        .filter(|claim| crate::leases::holder(claim, now).is_some())
++        .collect()
++}
++
+ /// The project's claims, from every working copy, by task.
+ #[must_use]
+ pub fn list_claims(project: &Project) -> Vec<Value> {
+diff --git a/crates/atm-lib/src/query/tests.rs b/crates/atm-lib/src/query/tests.rs
+index 8cbb4cdc..fce60d6c 100644
+--- a/crates/atm-lib/src/query/tests.rs
++++ b/crates/atm-lib/src/query/tests.rs
+@@ -81,6 +81,36 @@ fn claims_are_listed_by_task_and_entries_without_a_task_are_left_out() {
+     assert_eq!(list_claims(&empty).len(), 0);
+ }
+ 
++/// ATM-724: the claims held at a moment, by the loop's rule: a lease running at it, its agent named
++#[test]
++fn held_claims_leave_out_a_lease_run_out_and_a_claim_without_an_agent() {
++    let store = json!({"claims": {
++        "a": {"task": "T-1", "agent": "claude:a", "lease_expires_at": "2026-11-01T12:00:00Z"},
++        "b": {"task": "T-2", "agent": "claude:b", "lease_expires_at": "2026-11-01T10:00:00Z"},
++        "c": {"task": "T-3", "lease_expires_at": "2026-11-01T12:00:00Z"},
++        "d": {"task": "T-4", "agent": "claude:d"}
++    }});
++    let p = Project::new(Box::new(
++        MemoryStore::new(Vec::new(), Vec::new(), &Map::new())
++            .unwrap()
++            .with_claims(store.as_object().unwrap().clone()),
++    ));
++    let at = |iso: &str| atm_common::time::parse_iso(iso).unwrap();
++    let held = |now: i64| -> Vec<Value> {
++        held_claims(&p, now)
++            .iter()
++            .map(|c| c["task"].clone())
++            .collect()
++    };
++    assert_eq!(
++        held(at("2026-11-01T09:00:00Z")),
++        [json!("T-1"), json!("T-2")]
++    );
++    assert_eq!(held(at("2026-11-01T11:00:00Z")), [json!("T-1")]);
++    // At its end the lease has run out
++    assert_eq!(held(at("2026-11-01T12:00:00Z")), Vec::<Value>::new());
++}
++
+ /// ATM-719: how a finished task ended, its own resolution or the default; none while open
+ #[test]
+ fn a_finished_tasks_resolution_is_its_own_or_the_default() {
+diff --git a/crates/atm-lib/src/workspaces.rs b/crates/atm-lib/src/workspaces.rs
+index 0938ae7e..096872a0 100644
+--- a/crates/atm-lib/src/workspaces.rs
++++ b/crates/atm-lib/src/workspaces.rs
+@@ -18,7 +18,7 @@ use crate::Project;
+ use crate::archive::{project_stamp, task_snapshot};
+ use crate::documents::{read_document, read_image};
+ use crate::foreign;
+-use crate::query::{Filters, list_claims};
++use crate::query::Filters;
+ use crate::settings::get_logo;
+ use crate::summary::project_summary;
+ use crate::worktrees::working_copies;
+@@ -381,10 +381,13 @@ impl Member {
+         Workspace::project_tolerant(&self.entry).map_or(Value::Null, |p| foreign::named_version(&p))
+     }
+ 
+-    /// The claims of all its worktrees, from the shared claims store.
++    /// The claims of all its worktrees held now, from the shared claims store: an expired lease is left out, by atm's
++    /// clock (ATM-724).
+     #[must_use]
+     pub fn claims(&self) -> Vec<Value> {
+-        self.project().map(|p| list_claims(&p)).unwrap_or_default()
++        self.project()
++            .map(|p| crate::query::held_claims(&p, atm_common::time::now()))
++            .unwrap_or_default()
+     }
+ 
+     /// Its working copies, main first, and the tasks that differ in the others.
+diff --git a/crates/atm-lib/src/worktrees.rs b/crates/atm-lib/src/worktrees.rs
+index 4f514e41..28816526 100644
+--- a/crates/atm-lib/src/worktrees.rs
++++ b/crates/atm-lib/src/worktrees.rs
+@@ -37,8 +37,62 @@ fn copy_views(project: &Project, folder: &str) -> HashMap<String, Value> {
+ /// there differs from the main one's (or that only it has), under `tasks`, as views worked out in that working copy.
+ /// A copy of a task decided in another working copy (the claims store's `resolved`) is left out: it is stale until
+ /// `atm loop next` runs there, and would otherwise outrank the decision.
++///
++/// Each other copy also says which of its tasks the board shows from it, under `shown` (ATM-724): a task's copy that
++/// got further than every other, by the merge driver's ranking (`kind_rank`), the first listed on a tie (main first);
++/// a task only linked copies have, from the first of them.
+ #[must_use]
+ pub fn worktree_copies(project: &Project) -> Vec<Value> {
++    let mut listed = copies(project);
++    let vocab = project.store().vocabulary().ok();
++    let rank = |task: &Value| {
++        let kind = vocab.and_then(|v| v.kind_of(task.get("status")));
++        atm_db::jsongit::merge::kind_rank(kind)
++    };
++    // The best copy of each task so far: its rank and the working copy it is from (none: main)
++    let mut best: HashMap<String, (u8, Option<usize>)> = HashMap::new();
++    for (at, tree) in listed.iter().enumerate() {
++        if tree["main"] == json!(true) {
++            for t in project
++                .store()
++                .copy_tasks(tree["path"].as_str().unwrap_or_default())
++            {
++                if let Some(id) = t["id"].as_str() {
++                    best.insert(id.to_string(), (rank(&t), None));
++                }
++            }
++            continue;
++        }
++        for view in tree["tasks"].as_array().into_iter().flatten() {
++            let Some(id) = view["task"]["id"].as_str() else {
++                continue;
++            };
++            let here = rank(&view["task"]);
++            match best.get(id) {
++                Some((there, _)) if here <= *there => {}
++                _ => {
++                    best.insert(id.to_string(), (here, Some(at)));
++                }
++            }
++        }
++    }
++    for (at, tree) in listed.iter_mut().enumerate() {
++        if tree["main"] == json!(true) {
++            continue;
++        }
++        let mut shown: Vec<&String> = best
++            .iter()
++            .filter(|(_, (_, from))| *from == Some(at))
++            .map(|(id, _)| id)
++            .collect();
++        shown.sort();
++        tree["shown"] = json!(shown);
++    }
++    listed
++}
++
++/// The working copies with the tasks that differ in each other one, as views.
++fn copies(project: &Project) -> Vec<Value> {
+     let store = project.store();
+     let claims = store.read_claims();
+     let stale: Vec<(Option<&Value>, &str)> = claims
+diff --git a/dashboard/src/lib/claims.ts b/dashboard/src/lib/claims.ts
+index 8dd0dd80..a866214c 100644
+--- a/dashboard/src/lib/claims.ts
++++ b/dashboard/src/lib/claims.ts
+@@ -22,12 +22,13 @@ const isClaim = (c: unknown): c is Claim =>
+   !Number.isNaN(Date.parse((c as Claim).claimed_at)) &&
+   !Number.isNaN(Date.parse((c as Claim).lease_expires_at));
+ 
+-/** Live claims by task ID. Malformed entries and expired leases are left out. */
+-export function parseClaims(data: unknown, now: number): Map<string, Claim> {
++/** The claims atm serves, by task ID: the ones held now, by atm's clock (ATM-724: an expired lease is atm's to leave
++ * out, not the dashboard's). Malformed entries are left out. */
++export function parseClaims(data: unknown): Map<string, Claim> {
+   const list = (data as { claims?: unknown })?.claims;
+   const claims = new Map<string, Claim>();
+   if (!Array.isArray(list)) return claims;
+-  for (const c of list) if (isClaim(c) && Date.parse(c.lease_expires_at) > now) claims.set(c.task, c);
++  for (const c of list) if (isClaim(c)) claims.set(c.task, c);
+   return claims;
+ }
+ 
+@@ -40,7 +41,7 @@ export async function loadClaims(
+   try {
+     const resp = await fetchFn(projectFileUrl(project, 'claims.json') + '?' + now());
+     if (!resp.ok) return new Map();
+-    return parseClaims(await resp.json(), now());
++    return parseClaims(await resp.json());
+   } catch {
+     return new Map();
+   }
+diff --git a/dashboard/src/lib/worktrees.ts b/dashboard/src/lib/worktrees.ts
+index ead67f61..72bd5817 100644
+--- a/dashboard/src/lib/worktrees.ts
++++ b/dashboard/src/lib/worktrees.ts
+@@ -1,12 +1,11 @@
+ // A project's git worktrees on one board (T-179). Each worktree has its branch's copy of tasks.json; atm serve's
+ // p/<id>/worktrees.json lists the worktrees and, for each linked one, the tasks whose copy there differs from the main
+ // worktree's, as views ({task, derived}) with atm's derived values worked out in that worktree (T-387): a copy is
+-// judged by atm, like every other task. A task is shown from the worktree where it got furthest, with that
+-// worktree's branch on its card.
++// judged by atm, like every other task. A task is shown from the worktree where it got furthest, as atm says
++// (ATM-724: each linked worktree's `shown`, by the merge driver's ranking), with that worktree's branch on its card.
+ import { browserFetch, fetchProjectFile, type Fetch, type Validators } from './api/http';
+ import { compareTasks } from './keys';
+ import type { Task } from './types';
+-import { taskKind, type StatusKind } from './vocab';
+ 
+ export interface Worktree {
+   path: string;
+@@ -15,6 +14,8 @@ export interface Worktree {
+   /** Linked worktrees only: the tasks that differ from the main worktree's copy, or that only this one has, each with
+    * atm's derived values from that worktree */
+   tasks?: Task[];
++  /** Linked worktrees only: the IDs of the tasks the board shows from this worktree, as atm decides it */
++  shown?: string[];
+ }
+ 
+ /** A worktree's views as tasks, each with its derived values beside its fields (as the v1 tasks route's, load.ts) */
+@@ -25,14 +26,6 @@ function viewedCopies(list: unknown[]): Task[] {
+     .map((v) => (v.derived ? { ...v.task, derived: v.derived } : v.task));
+ }
+ 
+-/** How far a task got, by its status's kind: a linked worktree's copy wins only when it got further */
+-const PROGRESS: Record<StatusKind, number> = { todo: 0, blocked: 1, active: 2, review: 3, done: 4, skipped: 4 };
+-
+-function progress(task: Task): number {
+-  const kind = taskKind(task);
+-  return kind ? PROGRESS[kind] : -1;
+-}
+-
+ export interface Merged {
+   tasks: Task[];
+   /** The branch each task is shown from, for tasks that come from a linked worktree */
+@@ -40,18 +33,17 @@ export interface Merged {
+ }
+ 
+ /**
+- * The main worktree's tasks, each replaced by a linked worktree's copy that got further (the furthest one; the first
+- * listed on a tie), plus the tasks only linked worktrees have, after the others in ID order.
++ * The main worktree's tasks, each replaced by the linked worktree's copy atm shows (its `shown`), plus the tasks only
++ * linked worktrees have, after the others in ID order. Which copy got further is atm's to say, never worked out here.
+  */
+ export function mergeWorktrees(tasks: Task[], worktrees: readonly Worktree[]): Merged {
+   const shown = new Map(tasks.map((t) => [t.id, t]));
+   const branches = new Map<string, string>();
+   for (const tree of worktrees) {
+     if (tree.main) continue;
++    const fromHere = new Set(tree.shown ?? []);
+     for (const task of tree.tasks ?? []) {
+-      if (!task || typeof task.id !== 'string') continue;
+-      const current = shown.get(task.id);
+-      if (current && progress(task) <= progress(current)) continue;
++      if (!task || typeof task.id !== 'string' || !fromHere.has(task.id)) continue;
+       shown.set(task.id, task);
+       branches.set(task.id, tree.branch ?? tree.path);
+     }
+@@ -83,6 +75,7 @@ export async function loadWorktrees(
+       branch: typeof w.branch === 'string' && w.branch ? w.branch : null,
+       main: w.main === true,
+       ...(Array.isArray(w.tasks) ? { tasks: viewedCopies(w.tasks) } : {}),
++      ...(Array.isArray(w.shown) ? { shown: w.shown.filter((id): id is string => typeof id === 'string') } : {}),
+     }));
+   return { unchanged: false, worktrees, validators: file.validators };
+ }
+diff --git a/dashboard/tests/e2e/claims.spec.ts b/dashboard/tests/e2e/claims.spec.ts
+index 28aeb806..06a8819b 100644
+--- a/dashboard/tests/e2e/claims.spec.ts
++++ b/dashboard/tests/e2e/claims.spec.ts
+@@ -33,8 +33,10 @@ test.describe('claims', () => {
+     await expect(page.locator('#detail-claim')).toContainText('/work/proj-2');
+   });
+ 
+-  test('expired claims, and claims on tasks that are not in progress, are not shown', async ({ page, tasksServer }) => {
+-    tasksServer.claims([claim('T-005', { lease_expires_at: minutesFromNow(-1) }), claim('T-006')]);
++  // An expired lease is atm's to leave out (ATM-724: the claims route serves the claims held by atm's clock, tested in
++  // atm-lib and the route); the fixture plays atm's answer, so it serves none here
++  test('a claim on a task that is not in progress is not shown', async ({ page, tasksServer }) => {
++    tasksServer.claims([claim('T-006')]);
+     // The List's cards (built only while it is shown, T-525)
+     await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
+     await expect(page.locator('.task-card')).toHaveCount(12);
+diff --git a/dashboard/tests/e2e/kanban.spec.ts b/dashboard/tests/e2e/kanban.spec.ts
+index 44c9c1d6..020cea6e 100644
+--- a/dashboard/tests/e2e/kanban.spec.ts
++++ b/dashboard/tests/e2e/kanban.spec.ts
+@@ -73,6 +73,8 @@ test.describe('Kanban board', () => {
+           copy('T-024', 'todo', { status: 'todo' }), // behind the main worktree: not shown
+           view(onlyHere, 'todo'),
+         ],
++        // Which copies the board shows from here, as atm ranks them (ATM-724): not T-024, behind main's
++        shown: ['T-027', 'T-029', 'T-099'],
+       },
+     ]);
+     await openKanban(page, tasksServer, 'kanban');
+diff --git a/dashboard/tests/unit/claims.test.ts b/dashboard/tests/unit/claims.test.ts
+index 2e31bc4f..e46ebd69 100644
+--- a/dashboard/tests/unit/claims.test.ts
++++ b/dashboard/tests/unit/claims.test.ts
+@@ -14,28 +14,23 @@ const claim = (task: string, overrides: Partial<Claim> = {}): Claim => ({
+ });
+ 
+ describe('parseClaims', () => {
+-  it('maps live claims by task', () => {
+-    const claims = parseClaims({ claims: [claim('T-1'), claim('T-2')] }, NOW);
++  it('maps the claims atm serves by task', () => {
++    const claims = parseClaims({ claims: [claim('T-1'), claim('T-2')] });
+     expect([...claims.keys()]).toEqual(['T-1', 'T-2']);
+     expect(claims.get('T-1')?.branch).toBe('agent-2');
+   });
+ 
+-  it('leaves out expired leases and malformed entries', () => {
+-    const data = {
+-      claims: [
+-        claim('T-1', { lease_expires_at: '2026-05-01T10:29:59Z' }),
+-        claim('T-2', { claimed_at: 'not a date' }),
+-        { task: 'T-3' },
+-        null,
+-        'T-4',
+-        claim('T-5'),
+-      ],
+-    };
+-    expect([...parseClaims(data, NOW).keys()]).toEqual(['T-5']);
++  it('keeps what atm serves, by atm’s clock: a lease the browser’s clock says ran out stays (ATM-724)', () => {
++    expect(parseClaims({ claims: [claim('T-1', { lease_expires_at: '2020-01-01T00:00:00Z' })] }).has('T-1')).toBe(true);
++  });
++
++  it('leaves out malformed entries', () => {
++    const data = { claims: [claim('T-2', { claimed_at: 'not a date' }), { task: 'T-3' }, null, 'T-4', claim('T-5')] };
++    expect([...parseClaims(data).keys()]).toEqual(['T-5']);
+   });
+ 
+   it('anything but a list of claims means no claims', () => {
+-    for (const data of [null, undefined, {}, { claims: {} }, [], 'x']) expect(parseClaims(data, NOW).size).toBe(0);
++    for (const data of [null, undefined, {}, { claims: {} }, [], 'x']) expect(parseClaims(data).size).toBe(0);
+   });
+ });
+ 
+diff --git a/dashboard/tests/unit/derived-rules.test.ts b/dashboard/tests/unit/derived-rules.test.ts
+new file mode 100644
+index 00000000..cd32d948
+--- /dev/null
++++ b/dashboard/tests/unit/derived-rules.test.ts
+@@ -0,0 +1,89 @@
++// @vitest-environment node
++// ATM-724 (docs/dashboard-derived-state.md §4.6): the dashboard decides nothing from a task's raw state fields. What a
++// task's state means (its kind, whether it is ready, who it waits on, its stage, its work time) is atm's, served as
++// `derived`; a status's kind from the vocabulary, the review state, the times a status set, and the sprints and
++// statuses in `meta` are atm's to read. A file that uses one is on the list below, with what it does with it: it only
++// shows it, or it is a rule still to move (its task named). A new file that reads one fails, so a rule can't come back
++// unnoticed.
++import { readdirSync, readFileSync } from 'node:fs';
++import path from 'node:path';
++import { describe, expect, it } from 'vitest';
++
++const src = path.resolve(import.meta.dirname, '../../src');
++const files = (dir: string): string[] =>
++  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
++    e.isDirectory() ? files(path.join(dir, e.name)) : [path.join(dir, e.name)],
++  );
++
++/** What reads a task's raw state, or the project's raw statuses and sprints */
++const RAW = [
++  /\bkindOf\(/,
++  /\.review_state\b/,
++  /\.started_at\b/,
++  /\.completed_at\b/,
++  /\.review_requested_at\b/,
++  /\.blocked_at\b/,
++  /\bmeta\.sprints\b/,
++  /\bmeta\.statuses\b/,
++];
++
++/** The files that may, and why: each only shows the field, or keeps a rule a later task moves to atm */
++const ALLOWED: Record<string, string> = {
++  'lib/vocab.ts': 'kindOf itself: a status’s kind in atm’s resolved vocabulary (ATM-718)',
++  'lib/work.ts': 'shows the times a task holds in its details',
++  'lib/cardfacts.ts': 'shows when a card’s status was set ("done 2 h ago")',
++  'lib/details/DetailPanel.svelte': 'shows a task’s times and review state',
++  'lib/kanban/KanbanCard.svelte': 'shows the review state’s label on the card',
++  'lib/overview/ProjectCard.svelte': 'shows when the last task was done',
++  'lib/overview/AllProjectsBoard.svelte': 'shows when a card was done',
++  'lib/allboard.ts': 'sorts the Omniboard’s done cards by when, as the summary serves them',
++  'lib/graph/DepGraph.svelte': 'colours a node by its status’s kind',
++  'lib/progress/ProgressWidget.svelte': 'colours the status split by kind',
++  'lib/kanban.ts': 'orders a column’s cards by when they entered it',
++  'lib/projectinfo.ts': 'counts the vocabulary’s statuses for the Project tab',
++  // Still the dashboard's, to move (ATM-722's review: the agents' lanes and the Activity timeline)
++  'lib/timeline.ts': 'the Activity timeline (to move)',
++  'lib/timeuse.ts': 'the Activity widget’s time use (to move)',
++  'lib/progress/ActivityWidget.svelte': 'the Activity widget (to move)',
++  'lib/burndown.ts': 'the burndown’s points from creation and completion times (to move)',
++  'lib/insights.ts': 'the Agents tab’s insights (to move)',
++  'lib/forecast.ts': 'keys atm’s forecast rows by the model’s sprints',
++};
++
++/** The raw fields a source reads, outside comments */
++function rawUses(text: string): string[] {
++  const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
++  return RAW.filter((pattern) => pattern.test(code)).map((pattern) => pattern.source);
++}
++
++describe('rules from atm, not the dashboard (ATM-724)', () => {
++  const sources = files(src).filter((f) => /\.(ts|svelte)$/.test(f));
++
++  it('only the listed files read a task’s raw state or the project’s raw statuses and sprints', () => {
++    const offenders = sources
++      .map((f) => [path.relative(src, f).split(path.sep).join('/'), rawUses(readFileSync(f, 'utf8'))] as const)
++      .filter(([file, uses]) => uses.length > 0 && !(file in ALLOWED))
++      .map(([file, uses]) => `${file}: ${uses.join(', ')}`);
++    expect(offenders).toEqual([]);
++  });
++
++  it('every listed file still reads one (an entry for a file that no longer does is dropped)', () => {
++    const stale = Object.keys(ALLOWED).filter((file) => {
++      const full = path.join(src, file);
++      try {
++        return rawUses(readFileSync(full, 'utf8')).length === 0;
++      } catch {
++        return true;
++      }
++    });
++    expect(stale).toEqual([]);
++  });
++
++  it('catches a rule that reads them, and not a comment that names them', () => {
++    expect(rawUses('const late = task.started_at && Date.parse(task.started_at) < now;')).toEqual(['\\.started_at\\b']);
++    expect(rawUses("if (kindOf(vocab, t.status) === 'done') count++;")).toEqual(['\\bkindOf\\(']);
++    expect(rawUses('const s = data.meta.sprints.find((x) => x.state === "active");')).toEqual(['\\bmeta\\.sprints\\b']);
++    expect(rawUses('// task.started_at is atm’s now\n/* meta.statuses too */ const x = 1;')).toEqual([]);
++    expect(rawUses('const a = task.derived?.work?.live;')).toEqual([]);
++  });
++});
+diff --git a/dashboard/tests/unit/worktrees.test.ts b/dashboard/tests/unit/worktrees.test.ts
+index 33806b1b..b0de60db 100644
+--- a/dashboard/tests/unit/worktrees.test.ts
++++ b/dashboard/tests/unit/worktrees.test.ts
+@@ -2,13 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
+ import type { Task } from '../../src/lib/types';
+ import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
+ import { loadWorktrees, mergeWorktrees, type Worktree } from '../../src/lib/worktrees';
+-import { vocabulary, withKinds } from './views';
++import { withKinds } from './views';
+ 
+ /** A task as atm serves it: with its kind in `vocab` */
+ const task = (id: string, status: string, extra: Partial<Task> = {}, vocab: Vocabulary = DEFAULT_VOCABULARY): Task =>
+   withKinds([{ id, name: id, phase: 1, type: 'feature', description: '', status, ...extra } as Task], vocab)[0];
+ const main: Worktree = { path: '/p', branch: 'main', main: true };
+-const linked = (branch: string, tasks: Task[]): Worktree => ({ path: `/p-${branch}`, branch, main: false, tasks });
++/** A linked worktree with its differing copies, and the IDs atm shows from it (ATM-724: atm ranks the copies) */
++const linked = (branch: string, tasks: Task[], shown?: string[]): Worktree => ({
++  path: `/p-${branch}`,
++  branch,
++  main: false,
++  tasks,
++  ...(shown ? { shown } : {}),
++});
+ 
+ describe('mergeWorktrees', () => {
+   it('without linked worktrees: the main tasks as they are, and no branches', () => {
+@@ -19,17 +26,17 @@ describe('mergeWorktrees', () => {
+     expect(mergeWorktrees(tasks, [main, linked('a', [])]).tasks).toBe(tasks);
+   });
+ 
+-  it("shows a task from the worktree where it got furthest, with that worktree's branch", () => {
++  it("shows a task from the worktree atm names, with that worktree's branch", () => {
+     const tasks = [task('T-1', 'todo'), task('T-2', 'todo'), task('T-3', 'done')];
+     const merged = mergeWorktrees(tasks, [
+       main,
+-      linked('agent-1', [task('T-1', 'in_progress'), task('T-3', 'todo')]),
+-      linked('agent-2', [task('T-1', 'done'), task('T-2', 'in_review')]),
++      linked('agent-1', [task('T-1', 'in_progress'), task('T-3', 'todo')], []),
++      linked('agent-2', [task('T-1', 'done'), task('T-2', 'in_review')], ['T-1', 'T-2']),
+     ]);
+     expect(merged.tasks.map((t) => [t.id, t.status])).toEqual([
+       ['T-1', 'done'],
+       ['T-2', 'in_review'],
+-      ['T-3', 'done'], // the main worktree's copy got further: it stays, without a branch
++      ['T-3', 'done'], // atm shows the main worktree's copy: it stays, without a branch
+     ]);
+     expect([...merged.branches]).toEqual([
+       ['T-1', 'agent-2'],
+@@ -37,44 +44,35 @@ describe('mergeWorktrees', () => {
+     ]);
+   });
+ 
+-  it("a tie keeps the main worktree's copy, or the first linked one's", () => {
+-    const merged = mergeWorktrees(
+-      [task('T-1', 'in_progress'), task('T-2', 'todo')],
+-      [
+-        main,
+-        linked('a', [task('T-1', 'in_progress', { name: 'renamed' }), task('T-2', 'in_progress')]),
+-        linked('b', [task('T-2', 'in_progress', { name: 'other' })]),
+-      ],
+-    );
+-    expect(merged.tasks.map((t) => t.name)).toEqual(['T-1', 'T-2']);
+-    expect([...merged.branches]).toEqual([['T-2', 'a']]);
++  it('a copy atm doesn’t name is never shown, whatever its status: the ranking is atm’s (ATM-724)', () => {
++    const tasks = [task('T-1', 'todo')];
++    // Done in the linked worktree, but atm shows main's: the dashboard never ranks the copies itself
++    expect(mergeWorktrees(tasks, [main, linked('a', [task('T-1', 'done')], [])]).tasks).toBe(tasks);
++    // A server before ATM-724 (no `shown`): main's copies, as nothing says otherwise
++    expect(mergeWorktrees(tasks, [main, linked('a', [task('T-1', 'done')])]).tasks).toBe(tasks);
++    // An ID atm names that the worktree's copies don't have is ignored
++    expect(mergeWorktrees(tasks, [main, linked('a', [], ['T-1'])]).tasks).toBe(tasks);
+   });
+ 
+   it('adds the tasks only a linked worktree has, in ID order, after the others', () => {
+     const merged = mergeWorktrees(
+       [task('T-1', 'todo')],
+-      [main, linked('a', [task('T-10', 'todo'), task('T-9', 'in_progress')])],
++      [main, linked('a', [task('T-10', 'todo'), task('T-9', 'in_progress')], ['T-10', 'T-9'])],
+     );
+     expect(merged.tasks.map((t) => t.id)).toEqual(['T-1', 'T-9', 'T-10']);
+     expect(merged.branches.get('T-10')).toBe('a');
+   });
+ 
+-  it("goes by the project's status kinds; a detached worktree is named by its folder", () => {
+-    const vocab = vocabulary({
+-      statuses: [
+-        { id: 'open', label: 'Open', kind: 'todo' },
+-        { id: 'doing', label: 'Doing', kind: 'active' },
+-        { id: 'shipped', label: 'Shipped', kind: 'done' },
+-      ],
+-    });
++  it('a detached worktree is named by its folder', () => {
+     const detached: Worktree = {
+       path: '/p-tmp',
+       branch: null,
+       main: false,
+-      tasks: [task('T-1', 'shipped', {}, vocab)],
++      tasks: [task('T-1', 'done')],
++      shown: ['T-1'],
+     };
+-    const merged = mergeWorktrees([task('T-1', 'doing', {}, vocab)], [main, detached]);
+-    expect(merged.tasks[0].status).toBe('shipped');
++    const merged = mergeWorktrees([task('T-1', 'in_progress')], [main, detached]);
++    expect(merged.tasks[0].status).toBe('done');
+     expect(merged.branches.get('T-1')).toBe('/p-tmp');
+   });
+ });
+@@ -84,13 +82,16 @@ describe('loadWorktrees', () => {
+     // A linked worktree's copies come as views, with atm's derived values from that worktree (T-387)
+     const derived = { kind: 'done', ready: false, waiting_for: [], priority: 'P2', archived: false, stage: 'done' };
+     const views = [{ task: task('T-1', 'done'), derived }, { derived }, null];
+-    const body = { worktrees: [main, { ...linked('a', []), tasks: views, extra: 1 }, { branch: 'x' }] };
++    const body = {
++      worktrees: [main, { ...linked('a', []), tasks: views, shown: ['T-1', 7], extra: 1 }, { branch: 'x' }],
++    };
+     const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { headers: { ETag: '"w1"' } }));
+     const result = await loadWorktrees('abcd1234', fetchFn);
+     expect(fetchFn).toHaveBeenCalledWith('/p/abcd1234/worktrees.json', { cache: 'no-store', headers: {} });
+     expect(result).toEqual({
+       unchanged: false,
+-      worktrees: [main, linked('a', [{ ...task('T-1', 'done'), derived }])],
++      // atm's `shown` kept (its IDs only)
++      worktrees: [main, linked('a', [{ ...task('T-1', 'done'), derived }], ['T-1'])],
+       validators: { etag: '"w1"' },
+     });
+     const again = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 268c1985..203f773e 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -68,8 +68,10 @@ The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/
+ 
+ The claims of all a clone's worktrees are in one store, in the git common directory (`.git/atm/claims.json`; outside
+ git, `claims-store.json` in the task folder). The server answers from it, as `{generated_at, claims: [...]}` sorted by
+-task, so an agent at work in a linked worktree shows on the project's board. Its ETag changes with the store. Before
+-the first claim there is no store yet, and the answer is an empty list.
++task, so an agent at work in a linked worktree shows on the project's board. Only the claims held now are listed: an
++expired lease is left out by atm's clock (ATM-724, the loop's rule), so the dashboard doesn't judge leases by the
++browser's. Its ETag changes with the store and with which claims are held, so a lease running out is a new version.
++Before the first claim there is no store yet, and the answer is an empty list.
+ 
+ ### 2.2 `worktrees.json`: the project's git worktrees
+ 
+@@ -104,9 +106,11 @@ the first claim there is no store yet, and the answer is an empty list.
+   merge; T-387). The dashboard takes them as they are and applies no rule of its own to a copy.
+ - The ETag changes when a worktree is added or removed, switches branch, its `tasks.json` changes, or the claims
+   store does.
+-- The dashboard shows all of them on one board: each task from the worktree where it got furthest (by status kind:
+-  todo, blocked, active, review, then done or skipped; the main worktree's copy on a tie), with that worktree's branch
+-  on its card.
++- Each linked worktree also says which tasks the board shows from it, `shown` (IDs, ATM-724): a task's copy that
++  got further than every other, by the merge driver's ranking (`kind_rank`: to do; then active, blocked or in review;
++  then done or skipped), the first listed on a tie, the main worktree's first; a task only linked worktrees have, from
++  the first of them. The dashboard shows all of them on one board as `shown` says, with that worktree's branch on its
++  card, and ranks nothing itself.
+ 
+ ### 2.3 `logo`: the project's logo
+ 
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index a451a5a2..0e67c9b8 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -1024,17 +1024,24 @@ describe('serve', () => {
+       headers: { 'If-None-Match': etag },
+     });
+     assert.equal(after.status, 200);
+-    const changed = (await after.json()).worktrees[1].tasks;
++    const afterTrees = (await after.json()).worktrees;
++    const changed = afterTrees[1].tasks;
+     assert.deepEqual(
+       changed.map((v) => [v.task.id, v.task.status, v.derived.kind]),
+       [['T-1', 'in_progress', 'active']],
+     );
++    // Which copy the board shows is atm's (ATM-724): the linked one's T-1 got further, by the merge driver's ranking
++    assert.deepEqual(afterTrees[1].shown, ['T-1']);
++    assert.equal(afterTrees[0].shown, undefined);
+     // A copy's derived values are worked out in its own worktree (§11.10 A, T-387): there T-2 now waits for T-1,
+     // which is in progress there
+     assert.equal(atm(['task', 'edit', 'T-2', '--add-dep', 'T-1'], linked).code, 0);
+-    const copies = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
++    const copiesTree = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1];
++    const copies = copiesTree.tasks;
+     const t2 = copies.find((v) => v.task.id === 'T-2');
+     assert.deepEqual([t2.derived.kind, t2.derived.ready, t2.derived.waiting_for], ['todo', false, ['T-1']]);
++    // T-2's copy differs but got no further than main's (to do in both): main's is shown
++    assert.deepEqual(copiesTree.shown, ['T-1']);
+     const claims = await (await fetch(`${base}/p/abcd1234/claims.json`)).json();
+     assert.deepEqual(
+       claims.claims.map((c) => [c.task, c.agent, c.branch]),
+@@ -1055,11 +1062,12 @@ describe('serve', () => {
+       ],
+     );
+     assert.equal(atm(['task', 'state', 'T-1', 'todo', '--answer', 'This one'], root).code, 0);
+-    const left = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
++    const leftTree = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1];
+     assert.deepEqual(
+-      left.map((v) => v.task.id),
++      leftTree.tasks.map((v) => v.task.id),
+       ['T-2'],
+     );
++    assert.deepEqual(leftTree.shown, []);
+     atm(['service', 'stop'], root);
+   });
+ 

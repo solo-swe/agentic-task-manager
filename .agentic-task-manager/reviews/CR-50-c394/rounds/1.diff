@@ -1,0 +1,164 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index fd1fb7fe..608f7c3e 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -19,6 +19,7 @@
+     fileTree,
+     filesIn,
+     filterChains,
++    isOpen,
+     isResolved,
+     lineCounts,
+     openedTo,
+@@ -495,7 +496,7 @@
+   let filter = $state<ChainFilter>('all');
+   const chainCounts = $derived({
+     all: allChains.length,
+-    open: allChains.filter((c) => !isResolved(c)).length,
++    open: allChains.filter(isOpen).length,
+     resolved: allChains.filter((c) => isResolved(c)).length,
+   });
+   /** Nothing left open: the decision at hand is to approve */
+diff --git a/dashboard/src/lib/reviews/page.ts b/dashboard/src/lib/reviews/page.ts
+index a6056498..253b8fc9 100644
+--- a/dashboard/src/lib/reviews/page.ts
++++ b/dashboard/src/lib/reviews/page.ts
+@@ -184,9 +184,15 @@ export function driftedOf(chains: PlacedChain[], file: ViewFile): PlacedChain[]
+   return chains.filter((c) => c.drifted && (c.anchor.path === file.path || c.anchor.path === file.old_path));
+ }
+ 
+-/** Whether a chain is resolved: each of its top-level comments is (a chain with none isn't) */
++/** Whether a chain is open, as atm's rules count it: one of its top-level comments has its box unticked. A poke has no
++ * box (`resolved` null, ATM-611), so a chain of pokes is never open, and never keeps the review from an approval */
++export function isOpen(chain: Chain): boolean {
++  return chain.comments.some((c) => c.resolved === false);
++}
++
++/** Whether a chain is resolved: a box ticked, and none left open (a chain of pokes is neither) */
+ export function isResolved(chain: Chain): boolean {
+-  return chain.comments.length > 0 && chain.comments.every((c) => c.resolved === true);
++  return chain.comments.some((c) => c.resolved === true) && !isOpen(chain);
+ }
+ 
+ /** Which chains the Comments tab lists */
+@@ -194,7 +200,7 @@ export type ChainFilter = 'all' | 'open' | 'resolved';
+ 
+ /** The chains a filter keeps, in their order */
+ export function filterChains<C extends Chain>(chains: C[], filter: ChainFilter): C[] {
+-  return filter === 'all' ? chains : chains.filter((c) => isResolved(c) === (filter === 'resolved'));
++  return filter === 'all' ? chains : chains.filter(filter === 'open' ? isOpen : isResolved);
+ }
+ 
+ /** A review's page's title, the window's and the tab's: the project's short name, the review's reference, its title */
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 83e11ae1..42c4b11f 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1585,6 +1585,51 @@ test.describe('the diff viewer on a review’s page', () => {
+     await expect(page.locator('.review-poke[data-review="CR-2"]')).toHaveText('Poked');
+   });
+ 
++  // ATM-643: a poke has no Resolve, and is never open: with only a poke (answered) and a resolved comment left, the
++  // review can be approved, as atm's rules let it
++  test('a poke never keeps the review from an approval, nor counts as open', async ({ page, tasksServer }) => {
++    await openReviews(page, tasksServer);
++    const poke = {
++      ...comment('c2', '', null),
++      author: 'Ana',
++      poke: true,
++      replies: [comment('c3', 'Nearly there.', null)],
++    };
++    tasksServer.setReview(
++      'CR-2',
++      reviewPage({
++        chains: [
++          {
++            id: 't1',
++            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
++            comments: [{ ...comment('c1', 'Why upper case?'), resolved: true }],
++            placed: null,
++            drifted: null,
++          },
++          {
++            id: 't2',
++            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
++            comments: [poke],
++            placed: null,
++            drifted: null,
++          },
++        ],
++      }),
++    );
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    await expect(page.locator('.review-conversation [data-comment="c3"]')).toBeVisible();
++    await expect(page.locator('[data-comment="c2"] .chain-resolve')).toHaveCount(0);
++    // Nothing open: Approve is the decision at hand, pressable
++    const approve = page.locator('#review-approve');
++    await expect(approve).toBeEnabled();
++    // The Comments tab counts none open (ATM-614): its total only
++    await expect(page.locator('#review-tab-comments .review-count-open')).toHaveCount(0);
++    await approve.click();
++    await expect
++      .poll(() => tasksServer.reviewChanges.at(-1))
++      .toMatchObject({ method: 'POST', path: '/CR-2/decisions', body: { decision: 'approve' } });
++  });
++
+   test('submit: a decision is sent; a refusal is shown, and nothing else changes', async ({ page, tasksServer }) => {
+     await openReviews(page, tasksServer, 'CR-2');
+     await page.getByRole('button', { name: 'Submit review' }).click();
+diff --git a/dashboard/tests/unit/page.test.ts b/dashboard/tests/unit/page.test.ts
+index 64575514..b7f27c06 100644
+--- a/dashboard/tests/unit/page.test.ts
++++ b/dashboard/tests/unit/page.test.ts
+@@ -9,6 +9,7 @@ import {
+   filterChains,
+   groupReviews,
+   hashOf,
++  isOpen,
+   isResolved,
+   lineCounts,
+   mergeProjectReviews,
+@@ -380,19 +381,33 @@ describe('the Comments tab’s filter', () => {
+   const withComments = (id: string, ...resolved: (boolean | null)[]) =>
+     chain(id, null, null, { comments: resolved.map(comment) });
+ 
+-  it('a chain is resolved when each of its top-level comments is; one with none is open', () => {
+-    expect(isResolved(withComments('a', true))).toBe(true);
+-    expect(isResolved(withComments('b', true, true))).toBe(true);
+-    expect(isResolved(withComments('c', true, false))).toBe(false);
+-    expect(isResolved(withComments('d', false))).toBe(false);
+-    expect(isResolved(withComments('e', null))).toBe(false);
+-    expect(isResolved(withComments('f'))).toBe(false);
++  // As atm's rules count them: open is a box unticked; a poke has none (null), so its chain is neither (ATM-643)
++  it('a chain is open with a box unticked, resolved with a box ticked and none open; a poke’s is neither', () => {
++    for (const [id, boxes, open, resolved] of [
++      ['a', [true], false, true],
++      ['b', [true, true], false, true],
++      ['c', [true, false], true, false],
++      ['d', [false], true, false],
++      ['poke', [null], false, false],
++      ['poke and open', [null, false], true, false],
++      ['poke and resolved', [null, true], false, true],
++      ['none', [], false, false],
++    ] as const) {
++      const c = withComments(id, ...boxes);
++      expect([isOpen(c), isResolved(c)], id).toEqual([open, resolved]);
++    }
+   });
+ 
+-  it('keeps all, the open or the resolved ones, in their order; nothing from nothing', () => {
+-    const chains = [withComments('a', true), withComments('b', false), withComments('c', true), withComments('d')];
++  it('keeps all, the open or the resolved ones, in their order; a poke’s chain in all only; nothing from nothing', () => {
++    const chains = [
++      withComments('a', true),
++      withComments('b', false),
++      withComments('poke', null),
++      withComments('c', true),
++      withComments('d', false),
++    ];
+     const ids = (filter: ChainFilter) => filterChains(chains, filter).map((c) => c.id);
+-    expect(ids('all')).toEqual(['a', 'b', 'c', 'd']);
++    expect(ids('all')).toEqual(['a', 'b', 'poke', 'c', 'd']);
+     expect(ids('open')).toEqual(['b', 'd']);
+     expect(ids('resolved')).toEqual(['a', 'c']);
+     for (const filter of ['all', 'open', 'resolved'] as const) expect(filterChains([], filter)).toEqual([]);

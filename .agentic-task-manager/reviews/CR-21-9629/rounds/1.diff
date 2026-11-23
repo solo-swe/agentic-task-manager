@@ -1,0 +1,81 @@
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index b137b7bf..843d8186 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -142,7 +142,12 @@
+     const seen = new IntersectionObserver(
+       (entries) => {
+         const entry = entries.find((e) => e.isIntersecting);
+-        if (!entry) return;
++        if (!entry) {
++          // Scrolled past before the page was idle (ATM-615): not made once it is, far from the view by then
++          later?.();
++          later = null;
++          return;
++        }
+         if (inView(entry) && !holding()) {
+           later?.();
+           near = true;
+@@ -170,7 +175,8 @@
+         if (entries.some((e) => e.isIntersecting)) return;
+         const writingHere = target.querySelector('textarea, [contenteditable="true"]') !== null;
+         if (writingHere || target.contains(document.activeElement)) return;
+-        measured = body?.offsetHeight ?? measured;
++        // Only a drawn diff's height (ATM-615): one still loading is a line high, and the card stood at that
++        if (body && !body.querySelector('.diff-loading')) measured = body.offsetHeight;
+         near = false;
+       },
+       { root, rootMargin: `${FAR}px 0px` },
+@@ -192,6 +198,7 @@
+   data-pending={!folded && !near && !file.binary && !moved ? '' : undefined}
+   data-comments={chains.length ? '' : undefined}
+   aria-label={file.path}
++  style:--card-estimate="{folded ? 0 : estimate}px"
+ >
+   <header class="review-file-head">
+     <button
+@@ -309,9 +316,17 @@
+     border-radius: var(--radius-md);
+     background: var(--bg);
+     scroll-margin-top: var(--space-4);
+-    /* Off screen, the browser skips its layout and painting (ATM-587), standing in at the size it last had */
++    /* Off screen, the browser skips its layout and painting (ATM-587), standing in at the size it last had, else at
++       its estimate and its header. Never shrunk (ATM-615): a skipped card's least height is 0, so the pane's column
++       squeezed every card off screen to its border, and the pane was a few screens long */
++    flex: none;
+     content-visibility: auto;
+-    contain-intrinsic-size: auto 400px;
++    contain-intrinsic-size: auto calc(var(--card-estimate, 400px) + 48px);
++  }
++  /* A diff still loading stands at its estimate (ATM-615): a card that leaves the view while loading is remembered at
++     the size it had, and at a line high the pane shrank under the reader */
++  .review-file-body:has(:global(.diff-loading)) {
++    min-height: var(--card-estimate);
+   }
+   .review-file-head {
+     position: sticky;
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 9b7bf7b3..bd28e504 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1425,6 +1425,13 @@ test.describe('performance', () => {
+           }).length;
+         })(),
+         nodes: document.querySelectorAll('*').length,
++        // Cards standing shorter than a header (ATM-615: the pane's column squeezed every skipped card to its border)
++        collapsed: (() => {
++          const head = (document.querySelector('.review-file-head') as HTMLElement).offsetHeight;
++          return [...document.querySelectorAll('.review-file-card')].filter(
++            (card) => card.getBoundingClientRect().height < head,
++          ).length;
++        })(),
+       };
+     });
+     console.log('long review (ms):', JSON.stringify({ ...opened, ...scrolled }));
+@@ -1438,5 +1445,6 @@ test.describe('performance', () => {
+     expect(scrolled.afterSettled).toBeLessThan(BUDGET_MS / 2);
+     // Rows bounded by where the view is, not by a count: a 600-line file in view is 1,200 rows in split
+     expect(scrolled.farRows).toBe(0);
++    expect(scrolled.collapsed).toBe(0);
+   });
+ });

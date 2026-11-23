@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use atm_common::Shown;
 
-use atm_common::home::{ensure_home, state_dir, write_text_atomic};
+use atm_common::home::{ensure_home, state_dir, write_private_atomic};
 use atm_common::py::to_json;
 use atm_common::sha1::sha1_hex;
 use atm_common::time::{format_iso, now, now_iso, parse_iso};
@@ -89,7 +89,7 @@ pub fn adopt_legacy_projects(legacy: &Path, home: &Path) -> Result<Vec<String>> 
     if !added.is_empty() {
         write_registry(&file, &registry)?;
     }
-    write_text_atomic(&seen, &stamp)
+    write_private_atomic(&seen, &stamp)
         .map_err(|e| Error::failed(format!("{}: {e}", seen.shown())))?;
     drop(held);
     Ok(added)
@@ -244,7 +244,7 @@ fn write_registry(path: &Path, registry: &Value) -> Result<()> {
     if let Some(folder) = path.parent() {
         ensure_home(folder).map_err(|e| Error::failed(format!("{}: {e}", folder.shown())))?;
     }
-    write_text_atomic(path, &(to_json(registry) + "\n"))
+    write_private_atomic(path, &(to_json(registry) + "\n"))
         .map_err(|e| Error::failed(format!("{}: {e}", path.shown())))
 }
 
@@ -389,10 +389,10 @@ fn resolve_project(target: Option<&str>, cwd: &Path) -> Result<(PathBuf, Map<Str
         None => cwd.to_path_buf(),
     };
     if !folder.is_dir() {
-        return Err(Error::Failed {
-            message: format!("{}: not a directory", target.unwrap_or_default()),
-            code: 2,
-        });
+        return Err(Error::Invalid(format!(
+            "{}: not a directory",
+            target.unwrap_or_default()
+        )));
     }
     let paths = find_paths(&folder)?;
     let path = main_worktree(&paths.root);
@@ -596,10 +596,9 @@ impl FileRegistry {
     /// No target, no such project, the registry's lock or file.
     pub fn remove_project(&self, target: &str, cwd: &Path) -> Result<Value> {
         if target.is_empty() {
-            return Err(Error::Failed {
-                message: "remove needs a project ID or path (see `atm workspace projects`)".into(),
-                code: 2,
-            });
+            return Err(Error::Invalid(
+                "remove needs a project ID or path (see `atm workspace projects`)".into(),
+            ));
         }
         let mut candidates = vec![
             target.to_string(),
@@ -783,7 +782,7 @@ pub fn write_recent(home: &Path, recent: &Map<String, Value>) -> Result<()> {
     ensure_home(home).map_err(|e| Error::failed(format!("{}: {e}", home.shown())))?;
     let held = lock(home, None)?;
     let file = home.join(RECENT_FILE);
-    let written = write_text_atomic(&file, &(to_json(&Value::Object(recent.clone())) + "\n"))
+    let written = write_private_atomic(&file, &(to_json(&Value::Object(recent.clone())) + "\n"))
         .map_err(|e| Error::failed(format!("{}: {e}", file.shown())));
     drop(held);
     written

@@ -1,0 +1,381 @@
+diff --git a/dashboard/src/lib/reviews/DiffCode.svelte b/dashboard/src/lib/reviews/DiffCode.svelte
+index 349ea966..b97bb44c 100644
+--- a/dashboard/src/lib/reviews/DiffCode.svelte
++++ b/dashboard/src/lib/reviews/DiffCode.svelte
+@@ -27,9 +27,13 @@
+     changes = [],
+     picked = null,
+     marked = null,
++    wrap = false,
+     onpick,
+     onover,
+   }: {
++    /** Long lines wrap at the column's width (ATM-588): each line's row as tall as CompMD drew it, its number on its
++     * first visual line */
++    wrap?: boolean;
+     /** The lines of the chain selected, by their index in `lines`: marked */
+     marked?: [number, number] | null;
+     lines: CodeLine[];
+@@ -71,7 +75,13 @@
+     const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6 || 20;
+     const top = code.getBoundingClientRect().top - el.getBoundingClientRect().top;
+     if (layout?.top !== top || layout.lineHeight !== lineHeight) layout = { top, lineHeight };
++    if (wrap) measureWrapped(code);
+   }
++  // Wrapped or not: measured again (the code's lines take their new heights)
++  $effect(() => {
++    void wrap;
++    requestAnimationFrame(() => measure());
++  });
+ 
+   $effect(() => {
+     const target = el;
+@@ -87,11 +97,66 @@
+     };
+   });
+ 
++  /** Wrapped (ATM-588): each line's row in the run's pixels, from its first visual line to the next line's. Lines aren't
++   * one height then, so the gutter follows the text. CompMD draws a code block's lines as text between newlines (and
++   * says where only a Markdown document's lines are), so each line's top is read here, from a collapsed range at its
++   * start: read only, nothing of CompMD's page is changed */
++  let wrapped = $state.raw<{ top: number; height: number }[] | null>(null);
++  function measureWrapped(code: HTMLElement) {
++    if (!el) return;
++    const origin = el.getBoundingClientRect().top;
++    const starts: { node: Text; offset: number }[] = [];
++    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
++    let atStart = true;
++    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
++      const text = node.data;
++      for (let at = 0; at <= text.length; at++) {
++        if (atStart && at < text.length) {
++          starts.push({ node, offset: at });
++          atStart = false;
++        }
++        if (text[at] === '\n') atStart = true;
++      }
++    }
++    const range = document.createRange();
++    // Where nothing is laid out (a test's page), there is nothing to measure: the lines keep one height
++    if (typeof range.getClientRects !== 'function') return;
++    const tops = starts.map(({ node, offset }) => {
++      range.setStart(node, offset);
++      range.collapse(true);
++      const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
++      return rect.top - origin;
++    });
++    const bottom = code.getBoundingClientRect().bottom - origin;
++    // Empty lines at the end have no character to measure: one line height each, up from the code's end
++    const lineHeight = layout?.lineHeight ?? FALLBACK_LINE;
++    const missing = lines.length - tops.length;
++    for (let k = missing; k > 0; k--) tops.push(bottom - k * lineHeight);
++    const rows = lines.map((_, i) => {
++      const top = tops[i];
++      const next = i + 1 < lines.length ? tops[i + 1] : bottom;
++      return { top, height: Math.max(next - top, layout?.lineHeight ?? FALLBACK_LINE) };
++    });
++    if (JSON.stringify(rows) !== JSON.stringify(wrapped)) wrapped = rows;
++  }
++  $effect(() => {
++    if (!wrap) wrapped = null;
++  });
++  /** Each line's row: measured when wrapped, else the code's one line height */
++  const rowOf = (i: number) =>
++    wrap && wrapped?.[i]
++      ? wrapped[i]
++      : layout
++        ? { top: layout.top + i * layout.lineHeight, height: layout.lineHeight }
++        : null;
++
+   /** The line at a pointer's height in the run, if there is one there */
+   function lineAt(e: MouseEvent): number | null {
+     if (!el || !layout) return null;
+-    const y = e.clientY - el.getBoundingClientRect().top - layout.top;
+-    const i = Math.floor(y / layout.lineHeight);
++    const y = e.clientY - el.getBoundingClientRect().top;
++    let i: number;
++    if (wrap && wrapped) i = wrapped.findIndex((r) => y >= r.top && y < r.top + r.height);
++    else i = Math.floor((y - layout.top) / layout.lineHeight);
+     return i >= 0 && i < lines.length && lines[i].kind !== 'pad' ? i : null;
+   }
+ 
+@@ -117,6 +182,7 @@
+ <!-- svelte-ignore a11y_no_static_element_interactions (the pointer over a line shows its +; the + is the button) -->
+ <div
+   class="diff-code"
++  class:wrap
+   class:both={numbers === 'both'}
+   class:pickable={!!onpick}
+   bind:this={el}
+@@ -126,14 +192,16 @@
+ >
+   {#if layout}
+     {#each lines as line, i (i)}
++      {@const row = rowOf(i)!}
+       <div
+         class="diff-line diff-{line.kind}"
+         class:picked={isPicked(i)}
+         class:commented={!!marked && i >= marked[0] && i <= marked[1]}
+         data-row={keys[i]}
+         data-change={starts.has(i) ? '' : undefined}
+-        style:top="{layout.top + i * layout.lineHeight}px"
+-        style:height="{layout.lineHeight}px"
++        style:top="{row.top}px"
++        style:height="{row.height}px"
++        style:--line-height="{layout.lineHeight}px"
+       >
+         {#if line.kind !== 'pad'}
+           <button
+@@ -179,6 +247,21 @@
+   .diff-code :global(.compmd-page pre > code) {
+     display: block;
+   }
++  /* Wrapped (ATM-588): long lines break at the column's width, anywhere if they must; no sideways scroll */
++  .diff-code.wrap :global(.compmd-page pre),
++  .diff-code.wrap :global(.compmd-plain) {
++    white-space: pre-wrap;
++    overflow-wrap: anywhere;
++    overflow-x: hidden;
++  }
++  /* A wrapped line's number stays on its first visual line, the gutter as tall as all of them */
++  .diff-code.wrap .diff-number {
++    align-items: flex-start;
++    line-height: var(--line-height);
++  }
++  .diff-code.wrap .diff-plus {
++    top: calc(var(--line-height) / 2);
++  }
+   .diff-line {
+     position: absolute;
+     left: 0;
+diff --git a/dashboard/src/lib/reviews/DiffView.svelte b/dashboard/src/lib/reviews/DiffView.svelte
+index 67876be6..9fe995a1 100644
+--- a/dashboard/src/lib/reviews/DiffView.svelte
++++ b/dashboard/src/lib/reviews/DiffView.svelte
+@@ -42,6 +42,7 @@
+     chains = [],
+     mode = $bindable('split'),
+     view = $bindable('source'),
++    wrap = false,
+     viewed = false,
+     header = true,
+     keyboard = true,
+@@ -62,6 +63,9 @@
+     chains?: Chain[];
+     mode?: 'split' | 'unified';
+     view?: 'source' | 'rendered';
++    /** Long lines wrap (ATM-588), in Unified: Split keeps its two sides' lines level, which a wrapped line can't do
++     * until CompMD draws each line as an element of its own */
++    wrap?: boolean;
+     viewed?: boolean;
+     /** Its own header (the path, the layout and view switches, Viewed); the review's page has its own */
+     header?: boolean;
+@@ -476,6 +480,7 @@
+               <DiffCode
+                 lines={unifiedLines(segment.rows as UnifiedRow[])}
+                 {language}
++                {wrap}
+                 numbers="both"
+                 {keys}
+                 {changes}
+diff --git a/dashboard/src/lib/reviews/ReviewFile.svelte b/dashboard/src/lib/reviews/ReviewFile.svelte
+index 73d4d1a2..b137b7bf 100644
+--- a/dashboard/src/lib/reviews/ReviewFile.svelte
++++ b/dashboard/src/lib/reviews/ReviewFile.svelte
+@@ -68,6 +68,7 @@
+     folded,
+     mode,
+     view,
++    wrap = false,
+     busy = false,
+     docStyle = null,
+     root = null,
+@@ -88,6 +89,8 @@
+     folded: boolean;
+     mode: 'split' | 'unified';
+     view: 'source' | 'rendered';
++    /** Long lines wrap, in Unified (ATM-588) */
++    wrap?: boolean;
+     busy?: boolean;
+     /** The document style picked in Settings, for a Markdown file's rendered view */
+     docStyle?: string | null;
+@@ -282,6 +285,7 @@
+           {chains}
+           {mode}
+           {view}
++          {wrap}
+           {viewed}
+           {busy}
+           header={false}
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 828354f1..db375c96 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -126,7 +126,10 @@
+   let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
+   let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
+   let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
+-  $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width }));
++  /** Long lines wrap (ATM-588): in Unified, until Split can keep its sides level with a wrapped line */
++  let wrap = $state(stored.wrap === true);
++  $effect(() => writeStored(LAYOUT_KEY, { mode, view: rendered, tree: width, wrap }));
++  const WRAP_IN_SPLIT = 'Wrap works in Unified for now: Split keeps its two sides level line by line';
+   const hasMarkdown = $derived(files.some((f) => /\.(md|markdown|mdx)$/i.test(f.path)));
+ 
+   // A file folds once viewed; its fold button opens or folds it again whatever its tick
+@@ -597,6 +600,18 @@
+               onclick={() => (mode = 'unified')}><Icon name="rows-2" size={15} /></button
+             >
+           </div>
++          <div class="review-segmented" role="group" aria-label="Lines">
++            <span class="review-wrap-hint" title={mode === 'split' ? WRAP_IN_SPLIT : undefined}>
++              <button
++                id="review-wrap"
++                aria-pressed={wrap && mode === 'unified'}
++                aria-label="Wrap"
++                title={mode === 'split' ? WRAP_IN_SPLIT : 'Wrap long lines'}
++                disabled={mode === 'split'}
++                onclick={() => (wrap = !wrap)}><Icon name="wrap-text" size={15} /></button
++              >
++            </span>
++          </div>
+           {#if hasMarkdown}
+             <div class="review-segmented" role="group" aria-label="View">
+               <button
+@@ -802,6 +817,7 @@
+             folded={folded(f)}
+             {mode}
+             view={rendered}
++            wrap={wrap && mode === 'unified'}
+             {busy}
+             {docStyle}
+             root={list}
+diff --git a/dashboard/src/lib/ui/Icon.svelte b/dashboard/src/lib/ui/Icon.svelte
+index 49282e0e..45399afb 100644
+--- a/dashboard/src/lib/ui/Icon.svelte
++++ b/dashboard/src/lib/ui/Icon.svelte
+@@ -52,6 +52,7 @@
+     Sun,
+     TrendingUp,
+     User,
++    WrapText,
+     X,
+     type IconNode,
+   } from 'lucide';
+@@ -104,6 +105,7 @@
+     sun: Sun,
+     'trending-up': TrendingUp,
+     user: User,
++    'wrap-text': WrapText,
+     x: X,
+   } satisfies Record<string, IconNode>;
+ 
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 48ad1937..88c66f95 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -374,6 +374,67 @@ test.describe('a review’s page', () => {
+     await expect(page.locator('#doc-title')).toHaveCount(0);
+   });
+ 
++  // ATM-588: Wrap, in Unified: a long line wraps at the column's width, its row as tall as it, its number on its first
++  // visual line, the next line's row right under it; no sideways scroll. In Split it waits, saying why
++  test('Wrap: a long line wraps in Unified, the next line level with its text; in Split the button says why it waits', async ({
++    page,
++    tasksServer,
++  }) => {
++    const long = `fn long() { let x = "${'word '.repeat(80)}"; }`;
++    const text = `fn a() {}\n${long}\nfn b() {}\n`;
++    const patch =
++      'diff --git a/src/long.rs b/src/long.rs\nnew file mode 100644\n--- /dev/null\n+++ b/src/long.rs\n@@ -0,0 +1,3 @@\n' +
++      text
++        .trimEnd()
++        .split('\n')
++        .map((l) => `+${l}`)
++        .join('\n') +
++      '\n';
++    tasksServer.setRevisionDocument(
++      'head3',
++      projectDocument('src/long.rs', text, { kind: 'code', language: 'rust', line_offset: 1 }),
++    );
++    await openReviews(page, tasksServer);
++    tasksServer.setReview(
++      'CR-2',
++      reviewPage({ view: { round: 3, against: null, files: [file('src/long.rs', patch, 'added', null)] } }),
++    );
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    await page.getByRole('tab', { name: /^Diffs/ }).click();
++    const wrap = page.getByRole('button', { name: 'Wrap' });
++    // Split: Wrap waits, saying why
++    await page.getByRole('button', { name: 'Split' }).click();
++    await expect(wrap).toBeDisabled();
++    await expect(wrap).toHaveAttribute('title', /Unified for now/);
++    // Unified, wrapped
++    await page.getByRole('button', { name: 'Unified' }).click();
++    await wrap.click();
++    await expect(wrap).toHaveAttribute('aria-pressed', 'true');
++    const diff = diffOf(page, 'src/long.rs');
++    await expect(diff.locator('.diff-code.wrap')).toBeVisible();
++    await expect(diff.locator('[data-compmd="ready"]').first()).toBeAttached();
++    const rows = () =>
++      diff.locator('.diff-code.wrap').evaluate((code) => {
++        const lines = [...code.querySelectorAll<HTMLElement>('.diff-line')].map((l) => ({
++          top: parseFloat(l.style.top),
++          height: parseFloat(l.style.height),
++        }));
++        const pre = code.querySelector('.compmd-page pre') as HTMLElement | null;
++        return { lines, sideways: pre ? pre.scrollWidth > pre.clientWidth + 1 : true };
++      });
++    await expect.poll(async () => (await rows()).lines[1]?.height ?? 0).toBeGreaterThan(40);
++    const { lines, sideways } = await rows();
++    expect(lines).toHaveLength(3);
++    // The long line is several of the others tall; the next line's row starts where it ends
++    expect(lines[1].height).toBeGreaterThan(lines[0].height * 2);
++    expect(Math.abs(lines[2].top - (lines[1].top + lines[1].height))).toBeLessThan(2);
++    expect(sideways).toBe(false);
++    // Kept for the next page
++    await page.reload();
++    await page.getByRole('tab', { name: /^Diffs/ }).click();
++    await expect(page.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
++  });
++
+   test('Overview: the summary, the facts, the tasks as links, the review’s own chains', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 494879c2..3ab7bb6d 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -469,6 +469,32 @@ describe('ReviewPage: Diffs', () => {
+     expect(onfile).not.toHaveBeenCalled();
+   });
+ 
++  // ATM-588: Wrap, in Unified; in Split it waits, saying why (its sides kept level line by line)
++  it('Wrap: in Unified it wraps every file’s lines, kept for the next page; in Split it is disabled, saying why', async () => {
++    localStorage.removeItem('atm-review-layout');
++    const { container, unmount } = await diffs(data({}, { files: [file('src/a.rs')] }));
++    await vi.waitFor(() => expect(container.querySelector('.diff-view')).not.toBeNull());
++    const wrap = () => screen.getByRole('button', { name: 'Wrap' });
++    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
++    expect(wrap()).toBeDisabled();
++    expect(wrap()).toHaveAttribute('title', expect.stringMatching(/Unified for now/));
++    expect(wrap().closest('[title]')).toHaveAttribute('title', expect.stringMatching(/level line by line/));
++    await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
++    expect(wrap()).toBeEnabled();
++    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
++    await fireEvent.click(wrap());
++    expect(wrap()).toHaveAttribute('aria-pressed', 'true');
++    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).not.toBeNull());
++    // Back to Split: not wrapped there, and pressed again only in Unified
++    await fireEvent.click(screen.getByRole('button', { name: 'Split' }));
++    await vi.waitFor(() => expect(container.querySelector('.diff-code.wrap')).toBeNull());
++    expect(wrap()).toHaveAttribute('aria-pressed', 'false');
++    await fireEvent.click(screen.getByRole('button', { name: 'Unified' }));
++    unmount();
++    await diffs(data({}, { files: [file('src/a.rs')] }));
++    expect(screen.getByRole('button', { name: 'Wrap' })).toHaveAttribute('aria-pressed', 'true');
++  });
++
+   it('Split or Unified for every file, kept for the next review page; Source or Rendered only with a Markdown file', async () => {
+     const { container, unmount } = await diffs(data({}, { files: [file('src/b.rs'), file('src/a.rs')] }));
+     await vi.waitFor(() => expect(container.querySelectorAll('.diff-view')).toHaveLength(2));

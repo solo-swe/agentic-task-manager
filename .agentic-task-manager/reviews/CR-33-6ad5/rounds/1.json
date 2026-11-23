@@ -1,0 +1,122 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "6a8c2be2cdf81114730e839b831b68ffeeb47921",
+    "head": "b4e422fa804709b83790edad5b4d2249aa7f487f"
+  },
+  "files": [
+    {
+      "path": "app/src-tauri/build.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/capabilities/main.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/source.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/test_support.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-db/src/subscription.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-fs/src/watch.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/workspaces.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-vcs/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/changes.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/review-data.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/ReviewsTab.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/changes.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/review-data.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T23:00:31Z"
+}

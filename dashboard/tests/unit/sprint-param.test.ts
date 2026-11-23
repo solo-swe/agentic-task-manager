@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVE, BACKLOG } from '../../src/lib/filters';
 import { sprintParamOf, sprintParamValues, withSprintParam } from '../../src/lib/sprint-param';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { sprintModel, withKinds } from './views';
 import sprintsFile from '../fixtures/sprints.json';
 
 const file = sprintsFile as TasksFile;
-const model = sprintModel(file.meta, file.tasks as Task[], resolveVocabulary(file.meta));
+const model = sprintModel(file.meta, withKinds(file.tasks as Task[]), DEFAULT_VOCABULARY);
 
 describe('the Sprint filter in the address (T-323)', () => {
   it('reads active, backlog, all and names (any case); unknown names are dropped; none without the parameter', () => {
@@ -23,7 +23,7 @@ describe('the Sprint filter in the address (T-323)', () => {
     const withComma = sprintModel(
       { ...file.meta, sprints: [{ id: 'Library, gallery and blog' }, { id: 'Library' }, { id: 'Next' }] },
       [],
-      resolveVocabulary(file.meta),
+      DEFAULT_VOCABULARY,
     );
     for (const selection of [
       ['Library, gallery and blog'],

@@ -1,0 +1,70 @@
+diff --git a/dashboard/src/lib/routes.ts b/dashboard/src/lib/routes.ts
+index 22a5965e..c8737659 100644
+--- a/dashboard/src/lib/routes.ts
++++ b/dashboard/src/lib/routes.ts
+@@ -43,8 +43,12 @@ export function withProject(address: string, id: string | null, overviewTab?: Ov
+   params.delete('project');
+   params.delete('overview');
+   if (view !== null && projectView !== (id !== null)) params.delete('view');
+-  // A task's details are its project's
+-  if (id !== projectOf(address)) params.delete('task');
++  // A task's details are its project's, and so is a review open on its page (ATM-581: from a review, another project
++  // opened its CR of the same number); that project opens at its Reviews list
++  if (id !== projectOf(address)) {
++    params.delete('task');
++    for (const key of ['review', 'round', 'against', 'file']) params.delete(key);
++  }
+   if (id === null) {
+     params.set('overview', '');
+     if (overviewTab) params.set('view', overviewTab);
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 1c6cd09d..215044e4 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -311,6 +311,7 @@ test.describe('the dashboard in the atm app', () => {
+         needs_you: false,
+         you: 'Ana',
+       });
++    tasksServer.addProject('second', 'minimal', 'Second Project');
+     tasksServer.link(`/projects/${tasksServer.projectId}/reviews`);
+     await page.goto('/');
+     const tabs = page.locator('#app-titlebar [role="tab"]');
+@@ -340,6 +341,20 @@ test.describe('the dashboard in the atm app', () => {
+     // And the review's tab keeps its name while another is shown
+     await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
+     expect(tasksServer.httpRequests).toEqual([]);
++
++    // ATM-581 (Hakan): from the review's tab, a project in the sidebar: the tab becomes that project's page, labelled
++    // by it; no new tab
++    await tabs.nth(1).click();
++    await expect(page.locator('#review-page')).toBeVisible();
++    await page.locator('#app-sidebar [data-id="second"]').click();
++    await expect(tabs).toHaveCount(2);
++    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
++    await expect(page.locator('#review-page')).toHaveCount(0);
++    await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second(\/[a-z]+)?(\?|$)/);
++    await expect(page.locator('#app-tab-t2-label')).toContainText('Minimal Project');
++    // The first tab is as it was
++    await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
+   });
+ 
+   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
+diff --git a/dashboard/tests/unit/routes.test.ts b/dashboard/tests/unit/routes.test.ts
+index a446a3d6..3ec1ba04 100644
+--- a/dashboard/tests/unit/routes.test.ts
++++ b/dashboard/tests/unit/routes.test.ts
+@@ -52,6 +52,13 @@ describe('the project in the address (T-429)', () => {
+     expect(withProject('/projects/abc?task=T-1', null)).toBe('/projects');
+     expect(withProject('/projects/abc?task=T-1', 'abc')).toBe('/projects/abc?task=T-1');
+   });
++
++  // ATM-581: from a review's page, another project opened its own review of the same number
++  it("a review open on its page is its project's: another project opens at its Reviews list, the same one stays", () => {
++    expect(withProject('/projects/abc/reviews/CR-2?round=3&against=1&file=a.rs', 'def')).toBe('/projects/def/reviews');
++    expect(withProject('/projects/abc/reviews/CR-2', null)).toBe('/projects');
++    expect(withProject('/projects/abc/reviews/CR-2?file=a.rs', 'abc')).toBe('/projects/abc/reviews/CR-2?file=a.rs');
++  });
+ });
+ 
+ describe('the task in the address (T-429)', () => {

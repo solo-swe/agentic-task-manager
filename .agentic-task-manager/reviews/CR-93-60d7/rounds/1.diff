@@ -1,0 +1,267 @@
+diff --git a/crates/atm-cli/src/commands/review.rs b/crates/atm-cli/src/commands/review.rs
+index 3eda66ca..0def1827 100644
+--- a/crates/atm-cli/src/commands/review.rs
++++ b/crates/atm-cli/src/commands/review.rs
+@@ -619,7 +619,8 @@ fn duration_of(text: &str) -> Result<std::time::Duration> {
+         "h" => 3600.0,
+         _ => 1.0,
+     };
+-    Ok(std::time::Duration::from_secs_f64(seconds))
++    // A number too large for a Duration (1e20) is refused, never a panic (ATM-666, audit C5)
++    std::time::Duration::try_from_secs_f64(seconds).map_err(|_| bad())
+ }
+ 
+ /// A comment heard, for people: where, who, and its text.
+@@ -1317,7 +1318,7 @@ mod tests {
+             );
+         }
+         for bad in [
+-            "", "0", "0s", "-5m", "soon", "5d", "m", "NaN", "inf", "1e400",
++            "", "0", "0s", "-5m", "soon", "5d", "m", "NaN", "inf", "1e400", "1e20", "1e20h",
+         ] {
+             let e = duration_of(bad).unwrap_err();
+             assert_eq!(e.code(), 2, "{bad}");
+diff --git a/crates/atm-common/src/keys.rs b/crates/atm-common/src/keys.rs
+index 0d9e3380..8ce31d84 100644
+--- a/crates/atm-common/src/keys.rs
++++ b/crates/atm-common/src/keys.rs
+@@ -98,8 +98,11 @@ pub fn task_order(a: &Task, b: &Task) -> Ordering {
+ 
+ /// The number the next new task gets: `meta.next_number`, but never at or below a number a task (working or archived)
+ /// already has, so no number is ever given twice (ADR-007 §1).
+-#[must_use]
+-pub fn next_task_number(document: &Value, archive: &[Task]) -> u64 {
++///
++/// # Errors
++/// `Invalid` when a task already has the largest number there is: the next would wrap round to one given already
++/// (ATM-666, audit C16).
++pub fn next_task_number(document: &Value, archive: &[Task]) -> Result<u64> {
+     let tasks = document["tasks"]
+         .as_array()
+         .into_iter()
+@@ -115,7 +118,12 @@ pub fn next_task_number(document: &Value, archive: &[Task]) -> u64 {
+         .and_then(|m| m.get("next_number"))
+         .and_then(Value::as_u64)
+         .unwrap_or(1);
+-    stored.max(highest + 1)
++    let after = highest.checked_add(1).ok_or_else(|| {
++        Error::Invalid(format!(
++            "a task has the number {highest}, the largest there is: no number is left for a new task"
++        ))
++    })?;
++    Ok(stored.max(after))
+ }
+ 
+ /// How a reference found its task.
+diff --git a/crates/atm-common/src/keys/tests.rs b/crates/atm-common/src/keys/tests.rs
+index b98b7254..fba89e96 100644
+--- a/crates/atm-common/src/keys/tests.rs
++++ b/crates/atm-common/src/keys/tests.rs
+@@ -171,12 +171,20 @@ fn keys_numbers_and_order() {
+         None,
+         "legacy: no keys"
+     );
+-    assert_eq!(next_task_number(&document, &archive), 542);
++    assert_eq!(next_task_number(&document, &archive), Ok(542));
+     // Never at or below a number given, whatever meta says
+     let mut behind = document.clone();
+     behind["meta"]["next_number"] = json!(3);
+-    assert_eq!(next_task_number(&behind, &archive), 542);
+-    assert_eq!(next_task_number(&json!({"meta": {}, "tasks": []}), &[]), 1);
++    assert_eq!(next_task_number(&behind, &archive), Ok(542));
++    assert_eq!(
++        next_task_number(&json!({"meta": {}, "tasks": []}), &[]),
++        Ok(1)
++    );
++    // The largest number taken: none is left, rather than one wrapped round to 0 (ATM-666)
++    let full = json!({"meta": {}, "tasks": [{"id": "x", "number": u64::MAX}]});
++    assert!(
++        matches!(next_task_number(&full, &[]), Err(crate::Error::Invalid(m)) if m.contains("no number is left"))
++    );
+     let two = task(json!({"id": "x", "number": 2}));
+     let ten = task(json!({"id": "a", "number": 10}));
+     assert_eq!(
+diff --git a/crates/atm-common/src/time.rs b/crates/atm-common/src/time.rs
+index 1ea0f0d5..8fd56d4d 100644
+--- a/crates/atm-common/src/time.rs
++++ b/crates/atm-common/src/time.rs
+@@ -1,15 +1,20 @@
+ //! Time as atm writes it (the Python atm's `common/core.py`): seconds since 1970 in UTC, written as ISO 8601 to the
+-//! second (`2026-05-01T08:00:00Z`). `ATM_NOW` replaces the current time, for tests.
++//! second (`2026-05-01T08:00:00Z`). `ATM_NOW` replaces the current time, for tests, in debug builds only.
+ 
+ use std::time::{SystemTime, UNIX_EPOCH};
+ 
+-/// The current time in seconds since 1970 (UTC); `ATM_NOW` (ISO 8601) overrides it.
++/// Whether `ATM_NOW` may replace the clock: in a debug build (the CLI suite's and the e2e suite's binaries) only,
++/// never in a release (ATM-665/666, audit C4: `ATM_NOW=2099-… atm loop next --claim` took every other agent's
++/// task, their leases run out by that clock). A second variable would be no barrier: whoever sets one sets both.
++pub const CLOCK_OVERRIDE: bool = cfg!(debug_assertions);
++
++/// The current time in seconds since 1970 (UTC); in a debug build, `ATM_NOW` (ISO 8601) overrides it.
+ #[must_use]
+ pub fn now() -> i64 {
+-    std::env::var("ATM_NOW")
+-        .ok()
+-        .and_then(|t| parse_iso(&t))
+-        .unwrap_or_else(real_now)
++    if CLOCK_OVERRIDE && let Some(at) = std::env::var("ATM_NOW").ok().and_then(|t| parse_iso(&t)) {
++        return at;
++    }
++    real_now()
+ }
+ 
+ /// The clock's time, whatever `ATM_NOW` says (how old a lock is).
+@@ -118,7 +123,8 @@ pub fn parse_iso(text: &str) -> Option<i64> {
+         && (1..=month_days[usize::try_from(month - 1).ok()?]).contains(&day)
+         && hour < 24
+         && minute < 60
+-        && second < 62;
++        // No leap second: 23:59:60 would be the next day's 00:00:00 written another way (ATM-666, audit C16)
++        && second < 60;
+     valid.then(|| days_from_civil(year, month, day) * 86_400 + hour * 3600 + minute * 60 + second)
+ }
+ 
+@@ -152,15 +158,23 @@ mod tests {
+         }
+     }
+ 
++    /// ATM-666 (audit C4): `ATM_NOW` moved the clock in every build, so `ATM_NOW=2099-… atm loop next --claim` took
++    /// every other agent's task; now only a debug build (the tests' binaries) heeds it
++    #[test]
++    fn atm_now_moves_the_clock_in_a_debug_build_only() {
++        assert_eq!(super::CLOCK_OVERRIDE, cfg!(debug_assertions));
++    }
++
+     #[test]
+     fn a_time_is_read_up_to_each_fields_limit_and_refused_past_it() {
+         for (text, read) in [
+             ("2026-01-01T23:59:59Z", true),
+             ("2026-01-01T24:00:00Z", false),
+             ("2026-01-01T00:60:00Z", false),
+-            // Python's strptime takes leap seconds up to 61
+-            ("2026-01-01T00:00:61Z", true),
+-            ("2026-01-01T00:00:62Z", false),
++            // No leap second (ATM-666): 23:59:60 would be the next day's midnight written another way
++            ("2026-01-01T00:00:59Z", true),
++            ("2026-01-01T23:59:60Z", false),
++            ("2026-01-01T00:00:61Z", false),
+             ("2026-01-00T00:00:00Z", false),
+             ("2026-04-30T00:00:00Z", true),
+             ("2026-04-31T00:00:00Z", false),
+diff --git a/crates/atm-lib/src/archive.rs b/crates/atm-lib/src/archive.rs
+index 4241fbb8..2a8d1065 100644
+--- a/crates/atm-lib/src/archive.rs
++++ b/crates/atm-lib/src/archive.rs
+@@ -257,7 +257,7 @@ pub fn archive_finished(project: &mut Project, request: &ArchiveRequest) -> Resu
+                     .filter_map(Value::as_object)
+                     .cloned()
+                     .collect();
+-                let next = next_task_number(&work.document, &archived);
++                let next = next_task_number(&work.document, &archived)?;
+                 work.document["meta"]["next_number"] = json!(next);
+             } else {
+                 let next = next_free_number(&work.document);
+diff --git a/crates/atm-lib/src/edit.rs b/crates/atm-lib/src/edit.rs
+index 0a88ac8f..37e8479e 100644
+--- a/crates/atm-lib/src/edit.rs
++++ b/crates/atm-lib/src/edit.rs
+@@ -454,7 +454,11 @@ fn add_keyed_tasks(
+         .filter_map(Value::as_object)
+         .cloned()
+         .collect();
+-    let first = next_task_number(&work.document, &archive);
++    let first = next_task_number(&work.document, &archive)?;
++    // The last of the new numbers fits too (ATM-666): never one wrapped round to a number given already
++    first
++        .checked_add(tasks.len() as u64)
++        .ok_or_else(|| Error::Invalid("no task numbers are left for these tasks".into()))?;
+     let uuids: Vec<String> = tasks.iter().map(|_| new_task_uuid()).collect();
+     let prefix = project_key(&work.document).unwrap_or_default().to_string();
+     let label = |n: usize| task_key(&prefix, first + n as u64);
+diff --git a/crates/atm-lib/src/leases.rs b/crates/atm-lib/src/leases.rs
+index 1738cb65..abfd776b 100644
+--- a/crates/atm-lib/src/leases.rs
++++ b/crates/atm-lib/src/leases.rs
+@@ -14,9 +14,10 @@ use crate::loop_rules::lease_minutes;
+ /// When a lease taken now runs out.
+ #[must_use]
+ pub fn lease_until(document: &Value) -> String {
+-    #[allow(clippy::cast_possible_truncation)] // reason: a lease's seconds fit an i64
++    #[allow(clippy::cast_possible_truncation)]
++    // reason: a lease's seconds fit an i64 (at most a year's)
+     let seconds = (lease_minutes(document) * 60.0) as i64;
+-    format_iso(now() + seconds)
++    format_iso(now().saturating_add(seconds))
+ }
+ 
+ /// `{:g}` of a number of minutes, as the Python atm prints it in messages: `120`, `0.5`.
+diff --git a/crates/atm-lib/src/loop_rules.rs b/crates/atm-lib/src/loop_rules.rs
+index a337cb12..1d0b3278 100644
+--- a/crates/atm-lib/src/loop_rules.rs
++++ b/crates/atm-lib/src/loop_rules.rs
+@@ -30,11 +30,15 @@ pub fn lease_minutes(document: &Value) -> f64 {
+         Some(Value::Bool(b)) => Some(f64::from(u8::from(*b))),
+         Some(_) => None,
+     };
++    // At most a year (ATM-666, audit L9): `inf` or 1e300 made a lease's seconds overflow, and no claim ever ran out
+     minutes
+-        .filter(|m| *m > 0.0)
+-        .unwrap_or(DEFAULT_LEASE_MINUTES)
++        .filter(|m| m.is_finite() && *m > 0.0)
++        .map_or(DEFAULT_LEASE_MINUTES, |m| m.min(MAX_LEASE_MINUTES))
+ }
+ 
++/// The longest lease: a year.
++pub const MAX_LEASE_MINUTES: f64 = 365.0 * 24.0 * 60.0;
++
+ /// What the loop works on (SR-3.2): the active sprint (the default, in a project with sprints), named sprints, a list
+ /// of tasks, all tasks, or the backlog; `task_type` narrows it.
+ #[derive(Debug, Clone, Default)]
+@@ -228,7 +232,7 @@ fn offered_to(document: &Value, task: &Task, agent: Option<&str>) -> bool {
+     };
+     #[allow(clippy::cast_possible_truncation)] // reason: minutes of a lease in seconds fit an i64
+     let lease = (lease_minutes(document) * 60.0) as i64;
+-    now() >= reviewed + lease
++    now() >= reviewed.saturating_add(lease)
+ }
+ 
+ /// What the loop sees for a selection: the tasks it could take now in its order, the selection's tasks, the
+diff --git a/crates/atm-lib/src/loop_rules/tests.rs b/crates/atm-lib/src/loop_rules/tests.rs
+index 006cad69..15c91fa3 100644
+--- a/crates/atm-lib/src/loop_rules/tests.rs
++++ b/crates/atm-lib/src/loop_rules/tests.rs
+@@ -681,4 +681,21 @@ fn the_lease_is_the_projects_when_it_is_a_positive_number() {
+     assert!((lease_minutes(&json!({"meta": {"lease_minutes": 30}})) - 30.0).abs() < f64::EPSILON);
+     assert!((lease_minutes(&json!({"meta": {"lease_minutes": "15"}})) - 15.0).abs() < f64::EPSILON);
+     assert!((lease_minutes(&json!({"meta": {"lease_minutes": -1}})) - 120.0).abs() < f64::EPSILON);
++    // At most a year (ATM-666): a huge one is a year, one that isn't a number at all the default
++    for huge in [json!(1e300), json!("1e300"), json!(MAX_LEASE_MINUTES * 2.0)] {
++        assert!(
++            (lease_minutes(&json!({"meta": {"lease_minutes": huge}})) - MAX_LEASE_MINUTES).abs()
++                < f64::EPSILON
++        );
++    }
++    for not_finite in ["inf", "NaN", "-inf"] {
++        assert!(
++            (lease_minutes(&json!({"meta": {"lease_minutes": not_finite}})) - 120.0).abs()
++                < f64::EPSILON
++        );
++    }
++    // A lease taken now still runs out, a year on at most, never overflowing
++    let until = crate::leases::lease_until(&json!({"meta": {"lease_minutes": 1e300}}));
++    let at = atm_common::time::parse_iso(&until).expect("a time");
++    assert!(at - atm_common::time::now() <= 366 * 24 * 3600, "{until}");
+ }
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index a8bbdbc2..9d841a83 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -75,6 +75,7 @@ with the task that adds it.
+ | I31 | **A comment's text can't forge another comment** (ATM-658): in `comments.md`, a comment's body line that has the shape of a comment's first line (`- **author** · at · cN`, at any indent, with or without its box) is written with a `\` mark after its indent and read back without it, so it stays the body's and never reads as a reply, a comment or a resolved box by whoever it names (the review watch tells agents such lines as a person's word). Body lines are always indented, so none is a heading. A comment's path, which the chain's heading carries, has no control character and is one of its round's files (a renamed file's old path too), in `rules::comment`, for the CLI, the REST routes and the app alike | atm-review's `a_body_with_comment_and_heading_shaped_lines_round_trips_as_one_comments_body`, `an_older_files_body_lines_with_marks_read_as_they_were` and `a_comment_is_on_one_of_its_rounds_files_whose_path_has_no_control_character` |
+ | I32 | **No revision reaches git as an option** (ATM-659): every atm-vcs method that hands git a revision takes a `Rev`, which is a full object ID or a name that doesn't start with `-` and has no control character or space; the commands put `--end-of-options` before it too. A review's round (`rounds/N.json`, committed and merged, so anyone who can push writes it) is read only when its commits are full object IDs (`RoundKind::check`); a round that isn't is refused, its review named as unreadable with the reason (`atm review show`, `atm doctor`), before git sees it | atm-vcs's `rev.rs` tests; atm-review's `a_rounds_commits_are_full_object_ids_or_it_is_refused`; `tests/scripts/reviews/wrong-uses.test.mjs` "a round whose commit is no full ID…" |
+ | I33 | **A `--*-file` option reads no secret** (ATM-662; `--description-file`, `--json-file`, `--body-file`, `--summary-file`, `--meta-file`, all through `atm-cli`'s `option_file`): from any folder (agents write scratch files outside the project, as the skills say: Hakan chose this over a project-or-temp rule), but never a key or environment file (atm-common's `secrets`, the document viewer's rule too), a file in a credentials folder (`.ssh`, `.gnupg`, `.aws`), judged where a symbolic link points; never anything but a regular file (`/dev/zero`, a FIFO) or over 1 MiB. Each refused as a usage error (exit code 2), before anything is written, so a pre-approved command can't put a key into the task files `atm vcs commit` commits | `tests/scripts/option-files.test.mjs`; atm-cli's `option_file` tests; atm-common's `secrets` tests |
++| I34 | **No variable moves a release's clock** (ATM-666): `ATM_NOW` replaces the time in a debug build only (the tests' binaries), so no one can run a release with a clock that makes other agents' leases run out and take their tasks; a project's `lease_minutes` is at most a year, and a lease's end never overflows | atm-common's `atm_now_moves_the_clock_in_a_debug_build_only`; atm-lib's `the_lease_is_the_projects_when_it_is_a_positive_number` |
+ 
+ ### Dashboard server (B3, B5)
+ 

@@ -75,6 +75,11 @@
       "items": { "$ref": "#/$defs/ReviewRound" },
       "description": "Past reviews, oldest first"
     },
+    "attempts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Attempt" },
+      "description": "Past attempts at it, oldest first: each from its start until it went back to to do (ATM-721), so their work still counts"
+    },
     "code_reviews": {
       "type": "array",
       "items": { "$ref": "#/$defs/CodeReviewLink" },
@@ -160,6 +165,16 @@
         "from": { "type": "string", "description": "ISO 8601 UTC" },
         "to": { "type": "string", "description": "ISO 8601 UTC" },
         "outcome": { "type": "string" }
+      }
+    },
+    "Attempt": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "description": "ISO 8601 UTC: when it started" },
+        "to": { "type": "string", "description": "ISO 8601 UTC: when it ended (a lapse: when it was last touched)" },
+        "by": { "type": "string", "description": "Who started it" },
+        "outcome": { "type": "string", "description": "How it ended, when atm knows: lapsed" }
       }
     },
     "SprintHistoryEntry": {

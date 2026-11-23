@@ -89,6 +89,25 @@ test.describe('view tabs', () => {
     await expectSelected(page, 'progress');
   });
 
+  // ATM-696: closing a task's details goes Back to the page under them, so Back after it goes to the page before
+  test('Back after closing a task’s details goes to the page before, not the same page again', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
+    await tab(page, 'kanban').click();
+    await expectSelected(page, 'kanban');
+    const depth = await page.evaluate(() => history.length);
+    await page.locator('.kanban-card[data-id="T-004"]').click({ position: { x: 10, y: 10 } });
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+    await expect.poll(() => new URL(page.url()).searchParams.get('task')).toBeNull();
+    await page.goBack();
+    await expectSelected(page, 'list');
+    expect(await page.evaluate(() => history.length)).toBe(depth + 1);
+  });
+
   test('the graph keeps its zoom across a tab round trip', async ({ page, tasksServer }) => {
     // Without auto-fit (T-341), the graph opens at 60%
     await openDashboard(page, tasksServer, 'large-90', { tab: 'graph', graphAutoFit: false });

@@ -1,0 +1,62 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "4622c760104e651739baa25c58d130b4a9371793",
+    "head": "f75eda1babf89d3b2f26dba43d1dabd170c4309f"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/app-tabs.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/menu-actions.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/navigation.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/tab-actions.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/routes/+layout.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/app-tabs.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/documents.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/navigation.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T23:15:04Z"
+}

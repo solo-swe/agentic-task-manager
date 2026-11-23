@@ -1,0 +1,87 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "5689639b1650092fc1aa1900ad5ca0c4ac7759b3",
+    "head": "4768a6eda9b94f36c4ac989274bafccf3623505c"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/claim.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/db.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/maintenance.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/task.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/vcs.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/main.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/output.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/src/py.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/claims.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/git.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/output.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/query.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/serve.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-22T17:51:06Z"
+}

@@ -5,7 +5,7 @@
 use atm_common::edits::{set_sprint, touch};
 use atm_common::py::{py_repr, py_str, repr_str, truthy};
 use atm_common::sprint_names::generate_sprint_name;
-use atm_common::time::now_iso;
+use atm_common::time::{now, now_iso};
 use atm_common::vocabulary::{MAX_SPRINT_NAME, is_date};
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
 use atm_db::working::Working;
@@ -14,6 +14,10 @@ use serde_json::{Map, Value, json};
 use crate::edit::open_sprint;
 use crate::project::Project;
 
+mod views;
+pub use views::{TaskSprint, sprint_views, task_sprints};
+pub(crate) use views::{due_fields, planned_vocabulary};
+
 /// A refusal of what was asked (exit code 2).
 fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
@@ -21,10 +25,7 @@ fn invalid(message: impl Into<String>) -> Error {
 
 /// No such sprint (exit code 2, as the Python atm's `NotFound(…, 2)`).
 fn not_found(message: impl Into<String>) -> Error {
-    Error::Failed {
-        message: message.into(),
-        code: 2,
-    }
+    Error::Invalid(message.into())
 }
 
 fn id_of(value: &Value) -> Option<&str> {
@@ -66,7 +67,7 @@ fn sprint_overview(vocab: &Vocabulary, tasks: &[&Task], include_closed: bool) ->
             let mut counts = [0usize; 6];
             let mut pending = 0;
             for task in tasks {
-                let Some(found) = vocab.find_sprint(task.get("sprint")) else {
+                let Some(found) = vocab.sprint_of(task) else {
                     continue;
                 };
                 if sprint_id(found) != id {
@@ -270,12 +271,30 @@ fn checked_name(
             py_repr(&json!(sprint_id(existing)))
         )));
     }
+    usable_name(&name)?;
+    Ok(name)
+}
+
+/// A new name for a sprint, checked (ATM-665): at most [`MAX_SPRINT_NAME`] characters, shell-safe, and none of the
+/// words the loop and `sprint move --to` take (`backlog`, `new`, `active`, `next`), which the sprint could never be
+/// named by.
+fn usable_name(name: &str) -> Result<()> {
     if name.chars().count() > MAX_SPRINT_NAME {
         return Err(invalid(format!(
             "a sprint name is at most {MAX_SPRINT_NAME} characters"
         )));
     }
-    Ok(name)
+    if let Some(problem) = atm_common::vocabulary::sprint_name_problem(name) {
+        return Err(invalid(problem));
+    }
+    if atm_common::vocabulary::reserved_sprint_name(name) {
+        return Err(invalid(format!(
+            "{} is a word atm takes for itself ({}): name the sprint otherwise",
+            repr_str(name),
+            atm_common::vocabulary::RESERVED_SPRINT_NAMES.join(", ")
+        )));
+    }
+    Ok(())
 }
 
 /// `atm sprint add`: a planned sprint, named `name` (generated without one), after the sprint `after` (default: last),
@@ -291,8 +310,7 @@ pub fn add_sprint(
     due: Option<&str>,
     after: Option<&str>,
 ) -> Result<Value> {
-    let mut added = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archived = work.archive()?["tasks"]
             .as_array()
@@ -320,10 +338,8 @@ pub fn add_sprint(
         }
         sprints.insert(position, Value::Object(sprint.clone()));
         Vocabulary::of_document(&work.document)?;
-        added = Value::Object(sprint);
-        Ok(())
-    })?;
-    Ok(added)
+        Ok(Value::Object(sprint))
+    })
 }
 
 /// `atm sprint edit`: a sprint's goal, release or due date (`None` leaves one, an empty value removes it). Returns the
@@ -338,8 +354,7 @@ pub fn edit_sprint(
     release: Option<&str>,
     due: Option<&str>,
 ) -> Result<(Value, Vec<String>)> {
-    let mut outcome = (Value::Null, Vec::new());
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_sprint(&work.document, &vocab, name)?;
         let mut sprint = sprint_at(&mut work.document, at).clone();
@@ -348,10 +363,8 @@ pub fn edit_sprint(
             sprint_at(&mut work.document, at).clone_from(&sprint);
             Vocabulary::of_document(&work.document)?;
         }
-        outcome = (Value::Object(sprint), changed);
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok((Value::Object(sprint), changed))
+    })
 }
 
 /// What a sprint's rename changed: its names, and how many tasks and sprint reports follow it.
@@ -401,8 +414,7 @@ fn rename_in_task(task: &mut Value, from: &str, to: &str) -> bool {
 /// # Errors
 /// An unknown sprint; an empty or too long name, or one another sprint has or had (a task's history names it).
 pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Renamed> {
-    let mut outcome: Option<Renamed> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_sprint(&work.document, &vocab, name)?;
         let from = sprint_id(sprint_at(&mut work.document, at));
@@ -410,11 +422,7 @@ pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Ren
         if to.is_empty() {
             return Err(invalid("a sprint needs a name"));
         }
-        if to.chars().count() > MAX_SPRINT_NAME {
-            return Err(invalid(format!(
-                "a sprint name is at most {MAX_SPRINT_NAME} characters"
-            )));
-        }
+        usable_name(&to)?;
         if to == from {
             return Err(invalid(format!(
                 "the sprint is already called {}",
@@ -471,16 +479,14 @@ pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Ren
             None => 0,
         };
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(Renamed {
+        Ok(Renamed {
             from: from.clone(),
             to: to.clone(),
             tasks,
             archived,
             reports,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| not_found(format!("no sprint {}", repr_str(name))))
+        })
+    })
 }
 
 /// `atm sprint start`: make a planned sprint the active one (one at a time). Returns the sprint.
@@ -488,8 +494,7 @@ pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Ren
 /// # Errors
 /// An unknown sprint, a closed or active one, another sprint active.
 pub fn start_sprint(project: &mut Project, name: &str) -> Result<Value> {
-    let mut started = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_sprint(&work.document, &vocab, name)?;
         let sprint = sprint_at(&mut work.document, at);
@@ -513,11 +518,7 @@ pub fn start_sprint(project: &mut Project, name: &str) -> Result<Value> {
             }
             _ => {}
         }
-        if let Some(active) = vocab
-            .sprints
-            .iter()
-            .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
-        {
+        if let Some(active) = vocab.active_sprint() {
             return Err(invalid(format!(
                 "the sprint {} is active; close it first (one active sprint at a time)",
                 py_repr(&json!(sprint_id(active)))
@@ -525,10 +526,8 @@ pub fn start_sprint(project: &mut Project, name: &str) -> Result<Value> {
         }
         sprint.insert("state".into(), json!("active"));
         sprint.insert("start".into(), json!(now_iso()));
-        started = Value::Object(sprint.clone());
-        Ok(())
-    })?;
-    Ok(started)
+        Ok(Value::Object(sprint.clone()))
+    })
 }
 
 /// Whether the task is in the sprint (names compare case-insensitively).
@@ -640,8 +639,7 @@ pub fn close_sprint(
     reviewed: bool,
 ) -> Result<Closed> {
     let actor = project.actor().map(String::from);
-    let mut outcome: Option<Closed> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archived = work.archive()?["tasks"].as_array().cloned().unwrap_or_default();
         let at = stored_sprint(&work.document, &vocab, name)?;
@@ -655,7 +653,12 @@ pub fn close_sprint(
         let own = indices_in_sprint(document, &id);
         let own_archived: Vec<&Value> = archived.iter().filter(|t| in_sprint(t, &id)).collect();
         let task = |i: &usize| &document["tasks"][*i];
-        let claimed: Vec<usize> = own.iter().copied().filter(|i| kind(task(i)) == Some(Kind::Active)).collect();
+        let when = now();
+        let claimed: Vec<usize> = own
+            .iter()
+            .copied()
+            .filter(|i| worked_on(task(i), kind(task(i)), &work.claims_store, when))
+            .collect();
         if !claimed.is_empty() {
             let n = claimed.len();
             return Err(invalid(format!(
@@ -757,10 +760,8 @@ pub fn close_sprint(
         stored.insert("report".into(), Value::Object(report));
         let closed = Value::Object(stored.clone());
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(Closed { sprint: closed, created, target, was_active });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| not_found(format!("no sprint {}", repr_str(name))))
+        Ok(Closed { sprint: closed, created, target, was_active })
+    })
 }
 
 /// What a sprint's deletion did: the sprint, its state, the tasks moved and where (`None`: the backlog).
@@ -790,8 +791,7 @@ pub fn delete_sprint(
     force: bool,
 ) -> Result<Deleted> {
     let actor = project.actor().map(String::from);
-    let mut outcome: Option<Deleted> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archived = work.archive()?["tasks"].as_array().cloned().unwrap_or_default();
         let at = stored_sprint(&work.document, &vocab, name)?;
@@ -802,7 +802,12 @@ pub fn delete_sprint(
         let kind = |t: &Value| vocab.kind_of(t.get("status"));
         let task = |i: &usize| &document["tasks"][*i];
         let own = indices_in_sprint(document, &id);
-        let claimed: Vec<usize> = own.iter().copied().filter(|i| kind(task(i)) == Some(Kind::Active)).collect();
+        let when = now();
+        let claimed: Vec<usize> = own
+            .iter()
+            .copied()
+            .filter(|i| worked_on(task(i), kind(task(i)), &work.claims_store, when))
+            .collect();
         if !claimed.is_empty() {
             let n = claimed.len();
             return Err(invalid(format!(
@@ -854,10 +859,8 @@ pub fn delete_sprint(
         }
         sprints_mut(&mut work.document).remove(at);
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(Deleted { sprint: Value::Object(sprint), state, moved, target });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| not_found(format!("no sprint {}", repr_str(name))))
+        Ok(Deleted { sprint: Value::Object(sprint), state, moved, target })
+    })
 }
 
 /// The sprint (`None`, the backlog) `atm sprint move --to` means for the task.
@@ -865,15 +868,13 @@ fn move_target(vocab: &Vocabulary, task: &Task, to: &str) -> Result<Option<Strin
     match to {
         "backlog" => Ok(None),
         "active" => vocab
-            .sprints
-            .iter()
-            .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
+            .active_sprint()
             .map(|s| Some(sprint_id(s)))
             .ok_or_else(|| invalid("no sprint is active (atm sprint start <name>)")),
         "next" => {
             // The first planned sprint after the task's own (for a task in the backlog or a closed sprint: the first
             // planned sprint)
-            let current = vocab.find_sprint(task.get("sprint"));
+            let current = vocab.sprint_of(task);
             let start = current
                 .and_then(|c| {
                     vocab
@@ -898,6 +899,20 @@ fn move_target(vocab: &Vocabulary, task: &Task, to: &str) -> Result<Option<Strin
     }
 }
 
+/// Whether `task` is being worked on: in progress in this copy, or with a live claim in the claims store, which every
+/// worktree of the clone shares (ATM-668, audit L8: a task claimed in another worktree is still to do here).
+fn worked_on(
+    task: &Value,
+    kind: Option<Kind>,
+    claims_store: &Map<String, Value>,
+    now: i64,
+) -> bool {
+    kind == Some(Kind::Active)
+        || id_of(task)
+            .and_then(|id| claims_store.get("claims")?.get(id))
+            .is_some_and(|claim| crate::leases::holder(claim, now).is_some())
+}
+
 /// `atm sprint move`: to-do, blocked or in-review tasks into a sprint, the next planned one, the active one, or the
 /// backlog (claimed and finished tasks stay where they are), all or none. Returns `[{id, from, to}]`.
 ///
@@ -905,47 +920,36 @@ fn move_target(vocab: &Vocabulary, task: &Task, to: &str) -> Result<Option<Strin
 /// An unknown task, one in progress or finished, a target that can't take it.
 pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec<Value>> {
     let actor = project.actor().map(String::from);
-    let mut moved = Vec::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let mut plans: Vec<(usize, Option<String>)> = Vec::new();
         for task_id in ids {
-            let at = work.document["tasks"]
-                .as_array()
-                .and_then(|list| list.iter().position(|t| id_of(t) == Some(task_id.as_str())));
-            let Some(at) = at else {
-                let archived = work.archive()?["tasks"]
-                    .as_array()
-                    .is_some_and(|list| list.iter().any(|t| id_of(t) == Some(task_id.as_str())));
-                let hint = if archived {
-                    " (it is archived: atm db unarchive brings it back)"
-                } else {
-                    ""
-                };
-                return Err(Error::failed(format!("no task {task_id}{hint}")));
-            };
+            let at = crate::lookup::task_at(work, task_id)?;
             let task = work.document["tasks"][at]
                 .as_object()
                 .cloned()
                 .unwrap_or_default();
-            match vocab.kind_of(task.get("status")) {
-                Some(Kind::Active) => {
-                    return Err(invalid(format!(
-                        "{task_id} is in progress (claimed): it stays where the work is happening"
-                    )));
-                }
-                Some(Kind::Done | Kind::Skipped) => {
-                    return Err(invalid(format!(
-                        "{task_id} is {}: finished work stays in the sprint it was done in",
-                        atm_common::py::py_str_opt(task.get("status"))
-                    )));
-                }
-                _ => {}
+            let kind = vocab.kind_of(task.get("status"));
+            if worked_on(
+                &Value::Object(task.clone()),
+                kind,
+                &work.claims_store,
+                now(),
+            ) {
+                return Err(invalid(format!(
+                    "{task_id} is in progress (claimed): it stays where the work is happening"
+                )));
+            }
+            if let Some(Kind::Done | Kind::Skipped) = kind {
+                return Err(invalid(format!(
+                    "{task_id} is {}: finished work stays in the sprint it was done in",
+                    atm_common::py::py_str_opt(task.get("status"))
+                )));
             }
             plans.push((at, move_target(&vocab, &task, to)?));
         }
         let stamp = now_iso();
-        moved = plans
+        Ok(plans
             .into_iter()
             .map(|(at, target)| {
                 let before = work.document["tasks"][at]
@@ -966,10 +970,8 @@ pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec
                     .unwrap_or(Value::Null);
                 json!({"id": id, "from": before, "to": target})
             })
-            .collect();
-        Ok(())
-    })?;
-    Ok(moved)
+            .collect())
+    })
 }
 
 #[cfg(test)]

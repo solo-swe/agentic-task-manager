@@ -1,0 +1,602 @@
+diff --git a/dashboard/src/lib/compmd.ts b/dashboard/src/lib/compmd.ts
+index e78cd2de..84b53164 100644
+--- a/dashboard/src/lib/compmd.ts
++++ b/dashboard/src/lib/compmd.ts
+@@ -307,6 +307,25 @@ export function resetCompmd() {
+ export interface ProjectLinks {
+   localImage?: (url: string) => string | null;
+   docLink?: (url: string) => string | null;
++  /** A task key written in the text (ATM-593: `ATM-12`, `LFB-5`): whether it names a task the page knows, which then
++   * links to it (`#task=<key>`); a key naming nothing stays text */
++  taskKnown?: (key: string) => boolean;
++}
++
++/** What task keys in a text link to (ATM-593): which ones name a task, and what opening one does */
++export interface TaskLinks {
++  known: (key: string) => boolean;
++  open: (key: string, newTab: boolean) => void;
++}
++
++/** A task key as people write one: a project's key, a dash, a number (`ATM-12`, `~ATM-12` a provisional one; `T-7`,
++ * an ID from before task keys); whether it names a task is `taskKnown`'s to say */
++const TASK_KEY = /~?\b[A-Z][A-Z0-9]{0,9}-\d+\b/g;
++
++/** The link a task key in a text is made (ATM-593), and the key back from one */
++export const taskHref = (key: string) => `#task=${encodeURIComponent(key)}`;
++export function taskOfHref(href: string): string | null {
++  return href.startsWith('#task=') ? decodeURIComponent(href.slice('#task='.length)) || null : null;
+ }
+ 
+ /** A node of CompMD's expanded tree, as far as safeTree reads it (mdast's fields) */
+@@ -372,7 +391,7 @@ const RAW_IMAGE = /<\s*img\b/i;
+  * (the files route), so it loads from there (V5); `docLink` gives a relative link's viewer link (`#doc=…`), which opens the
+  * document viewer (V1a–V1c), so the browser never follows a relative URL itself. Null from either: as without it.
+  */
+-export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {}): T {
++export function safeTree<T>(tree: T, { localImage, docLink, taskKnown }: ProjectLinks = {}): T {
+   const root = tree as TreeNode;
+   const definitions = new Map<string, string>();
+   const collect = (node: TreeNode) => {
+@@ -381,8 +400,29 @@ export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {})
+   };
+   collect(root);
+   const asText = (value: unknown): TreeNode[] => (value ? [{ type: 'text', value: String(value) }] : []);
+-  const visit = (node: TreeNode): TreeNode[] => {
++  /** A text's task keys that name a task the page knows, as links to it; the rest as it was (ATM-593) */
++  const withKeys = (node: TreeNode): TreeNode[] => {
++    const text = String(node.value ?? '');
++    if (!taskKnown || !TASK_KEY.test(text)) return [node];
++    TASK_KEY.lastIndex = 0;
++    const parts: TreeNode[] = [];
++    let at = 0;
++    for (const match of text.matchAll(TASK_KEY)) {
++      const key = match[0];
++      if (!taskKnown(key)) continue;
++      if (match.index > at) parts.push({ type: 'text', value: text.slice(at, match.index) });
++      parts.push({ type: 'link', url: taskHref(key), children: [{ type: 'text', value: key }] });
++      at = match.index + key.length;
++    }
++    if (!parts.length) return [node];
++    if (at < text.length) parts.push({ type: 'text', value: text.slice(at) });
++    return parts;
++  };
++  /** `inLink`: inside a link already, where a key stays text */
++  const visit = (node: TreeNode, inLink = false): TreeNode[] => {
+     switch (node.type) {
++      case 'text':
++        return inLink ? [node] : withKeys(node);
+       case 'image': {
+         if (DATA_IMAGE.test(node.url ?? '')) return [node];
+         const local = localImage?.(node.url ?? '');
+@@ -394,20 +434,22 @@ export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {})
+         const local = localImage?.(url);
+         return local ? [{ type: 'image', url: local, alt: node.alt }] : asText(node.alt);
+       }
+-      case 'link':
++      case 'link': {
++        const inside = (node.children ?? []).flatMap((c) => visit(c, true));
+         if (!safeHref(node.url ?? '')) {
+           const viewer = docLink?.(node.url ?? '');
+-          if (viewer) return [{ ...node, url: viewer, children: (node.children ?? []).flatMap(visit) }];
+-          return (node.children ?? []).flatMap(visit);
++          if (viewer) return [{ ...node, url: viewer, children: inside }];
++          return (node.children ?? []).flatMap((c) => visit(c, inLink));
+         }
+-        break;
++        return [{ ...node, children: inside }];
++      }
+       case 'html':
+         if (RAW_IMAGE.test(String(node.value))) return asText(node.value);
+         break;
+     }
+-    return node.children ? [{ ...node, children: node.children.flatMap(visit) }] : [node];
++    return node.children ? [{ ...node, children: node.children.flatMap((c) => visit(c, inLink)) }] : [node];
+   };
+-  return { ...root, children: (root.children ?? []).flatMap(visit) } as T;
++  return { ...root, children: (root.children ?? []).flatMap((c) => visit(c)) } as T;
+ }
+ 
+ /** The address of a web link to this dashboard itself (one of its pages on this server, T-429, or an old `#…` link to
+diff --git a/dashboard/src/lib/documents/CompMd.svelte b/dashboard/src/lib/documents/CompMd.svelte
+index 56e951f4..ce08879e 100644
+--- a/dashboard/src/lib/documents/CompMd.svelte
++++ b/dashboard/src/lib/documents/CompMd.svelte
+@@ -10,7 +10,9 @@
+     secureLinks,
+     slug,
+     taskData,
++    taskOfHref,
+     type CompmdModule,
++    type TaskLinks,
+     type DrawnLine,
+   } from '../compmd';
+   import { docOf, referenceTo, viewerLink, type DocumentRef } from '../documents';
+@@ -40,6 +42,7 @@
+     inline = false,
+     plain,
+     only,
++    tasks,
+     onlines,
+     onopen,
+   }: {
+@@ -54,6 +57,9 @@
+     /** A document's top-level blocks reaching into these source lines only, the whole text processed (ATM-591: a
+      * rendered diff's part, its references and data the document's) */
+     only?: readonly [number, number];
++    /** Task keys written in the text (ATM-593: a review's description and comments): those `known` link to their
++     * task, which `open` opens (`newTab`: ⌘, Ctrl or a middle click); without it, keys stay text */
++    tasks?: TaskLinks;
+     onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
+     onopen?: (ref: DocumentRef) => void;
+   } = $props();
+@@ -146,7 +152,7 @@
+     }
+ 
+     function draw(compmd: CompmdModule, target: HTMLElement) {
+-      const processed = processText(compmd, text, task, path, { localImage, docLink });
++      const processed = processText(compmd, text, task, path, { localImage, docLink, taskKnown: tasks?.known });
+       const tree = only ? blocksIn(processed.tree, only) : processed.tree;
+       const components = processed.components;
+       if (!view) {
+@@ -208,6 +214,13 @@
+     }
+     if (href.startsWith('#')) {
+       e.preventDefault();
++      // A task named in the text (ATM-593): the page showing it says where it opens; ⌘-click, Ctrl-click or a middle
++      // click asks for a tab of its own
++      const key = taskOfHref(href);
++      if (key) {
++        tasks?.open(key, e.metaKey || e.ctrlKey || e.button === 1);
++        return;
++      }
+       // A document of the project (a relative link, made a viewer link by safeTree): the viewer opens it
+       const doc = docOf(href);
+       if (doc) {
+@@ -239,6 +252,11 @@
+   class:compmd-inline={inline}
+   data-compmd={failed ? 'failed' : drawn ? 'ready' : 'loading'}
+   onclick={follow}
++  onauxclick={(e) => {
++    // A middle click on a task's key: its tab of its own (other links: the browser's own)
++    const a = (e.target as Element | null)?.closest('a[href^="#task="]');
++    if (a && e.button === 1) follow(e);
++  }}
+ >
+   {#if failed}
+     <p class="compmd-note" role="note">Shown as written: the formatting couldn’t load ({loadError}).</p>
+diff --git a/dashboard/src/lib/reviews/ChainBox.svelte b/dashboard/src/lib/reviews/ChainBox.svelte
+index 6a5106a8..2533f24c 100644
+--- a/dashboard/src/lib/reviews/ChainBox.svelte
++++ b/dashboard/src/lib/reviews/ChainBox.svelte
+@@ -3,7 +3,7 @@
+   import { formatWhen } from '../format';
+   import Icon from '../ui/Icon.svelte';
+   import { focusOnShow } from './focus';
+-  import { documentLinks } from './links';
++  import { documentLinks, taskLinks } from './links';
+   import type { Chain, ReviewComment } from './types';
+ 
+   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
+@@ -34,6 +34,8 @@
+ 
+   /** A link in a comment to a document of the project: what the review's page does with it (ATM-586) */
+   const openLink = documentLinks();
++  /** A task's key in a comment: a link to it, for a task the page knows (ATM-593) */
++  const tasks = taskLinks();
+ 
+   let replyingTo = $state<string | null>(null);
+   let draft = $state('');
+@@ -102,7 +104,7 @@
+       <strong class="chain-author">{c.author}</strong>
+       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
+     </div>
+-    <div class="chain-body"><CompMd text={c.body} onopen={openLink} /></div>
++    <div class="chain-body"><CompMd text={c.body} onopen={openLink} {tasks} /></div>
+     {#if onreply}
+       {#if replyingTo === c.id}
+         <form
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index 90a580bf..404924ae 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -1,4 +1,5 @@
+ <script lang="ts">
++  import type { TaskLinks } from '../compmd';
+   import Icon from '../ui/Icon.svelte';
+   import {
+     NO_QUERY,
+@@ -23,6 +24,8 @@
+     onquery,
+     onopen,
+     onlive,
++    taskHref,
++    taskLinks,
+   }: {
+     entries: ReviewEntry[];
+     query: Query;
+@@ -34,8 +37,19 @@
+     onopen: (reference: string, newTab: boolean) => void;
+     /** A live review opened (ATM-576): why it was refused, or null once it is open */
+     onlive?: (live: { title: string; base: string; task: string }) => Promise<string | null>;
++    /** A row's tasks (ATM-593): each key that names a task a link (`taskHref` its address, `taskLinks.open` what a
++     * click does: its details here, or with ⌘, Ctrl or a middle click a tab of its own); without them, keys as text */
++    taskHref?: (key: string) => string;
++    taskLinks?: TaskLinks;
+   } = $props();
+ 
++  function openTask(e: MouseEvent, key: string) {
++    if (!taskLinks) return;
++    e.preventDefault();
++    e.stopPropagation();
++    taskLinks.open(key, e.metaKey || e.ctrlKey || e.button === 1);
++  }
++
+   // New live review: a title, the task it is about, the commit it is against (HEAD when none)
+   let starting = $state(false);
+   let live = $state({ title: 'Live review', base: '', task: '' });
+@@ -223,7 +237,16 @@
+               title="Someone wrote in it after you last did">New reply</span
+             >{/if}
+           <span class="review-meta">
+-            {#if r.tasks.length}<span class="review-tasks"><Icon name="list-todo" size={12} />{r.tasks.join(', ')}</span
++            {#if r.tasks.length}<span class="review-tasks"
++                ><Icon name="list-todo" size={12} />{#each r.tasks as key, i (key)}{i
++                    ? ', '
++                    : ''}{#if taskHref && taskLinks?.known(key)}<a
++                      class="review-task-link"
++                      href={taskHref(key)}
++                      data-task={key}
++                      onclick={(e) => openTask(e, key)}
++                      onauxclick={(e) => e.button === 1 && openTask(e, key)}>{key}</a
++                    >{:else}{key}{/if}{/each}</span
+               >{/if}
+             {#if entry.branch}<span class="review-branch"><Icon name="git-branch" size={12} />{entry.branch}</span>{/if}
+             <span><Icon name="user" size={12} />{r.author ?? 'no author yet'}</span>
+@@ -447,6 +470,13 @@
+     border-color: color-mix(in srgb, var(--purple) 50%, transparent);
+     background: color-mix(in srgb, var(--purple) 10%, transparent);
+   }
++  .review-task-link {
++    color: var(--accent);
++    text-decoration: none;
++  }
++  .review-task-link:hover {
++    text-decoration: underline;
++  }
+   .review-meta {
+     display: flex;
+     flex-wrap: wrap;
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index db375c96..5a6d45d7 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -8,7 +8,8 @@
+   import Icon from '../ui/Icon.svelte';
+   import ChainBox from './ChainBox.svelte';
+   import { focusOnShow } from './focus';
+-  import { setDocumentLinks } from './links';
++  import { setDocumentLinks, setTaskLinks } from './links';
++  import type { TaskLinks } from '../compmd';
+   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
+   import {
+     chainsOf,
+@@ -40,6 +41,7 @@
+     side,
+     isViewed,
+     taskHref,
++    tasks,
+     backHref,
+     busy = false,
+     problem = null,
+@@ -65,6 +67,9 @@
+     isViewed: (file: ViewFile) => boolean;
+     /** A task's address, for its link */
+     taskHref?: (key: string) => string;
++    /** What a task named in the review opens (ATM-593): the Tasks fact's keys, and the keys written in the description
++     * and the comments that name a task (`known`); `open`, its details over the review, or `newTab` a tab of its own */
++    tasks?: TaskLinks;
+     /** The reviews page's address, for the link back */
+     backHref?: string;
+     busy?: boolean;
+@@ -184,6 +189,18 @@
+     else ondocument?.(ref);
+   }
+   setDocumentLinks(openLink);
++  // The keys in its texts: links to their tasks (ATM-593). Read when a text is drawn, so the latest handlers apply
++  setTaskLinks({
++    known: (key) => tasks?.known(key) ?? false,
++    open: (key, newTab) => tasks?.open(key, newTab),
++  });
++  /** A task's key clicked (the Tasks fact): its details over the review, or with ⌘, Ctrl or a middle click a tab of
++   * its own; without `tasks`, the link's own address */
++  function openTask(e: MouseEvent, key: string) {
++    if (!tasks) return;
++    e.preventDefault();
++    tasks.open(key, e.metaKey || e.ctrlKey || e.button === 1);
++  }
+ 
+   /** The file just gone to: its card is made at once, the others after it */
+   let wanted = $state<string | null>(null);
+@@ -657,9 +674,13 @@
+             <dt><Icon name="list-todo" size={13} /> Tasks</dt>
+             <dd>
+               {#each review.tasks as task (task)}
+-                {#if taskHref}<a class="review-task" href={taskHref(task)}>{task}</a>{:else}<span class="review-task"
+-                    >{task}</span
+-                  >{/if}
++                {#if taskHref}<a
++                    class="review-task"
++                    href={taskHref(task)}
++                    data-task={task}
++                    onclick={(e) => openTask(e, task)}
++                    onauxclick={(e) => e.button === 1 && openTask(e, task)}>{task}</a
++                  >{:else}<span class="review-task">{task}</span>{/if}
+               {/each}
+             </dd>
+           </div>
+@@ -683,7 +704,9 @@
+         <div class="review-main">
+           <section class="review-card review-summary" aria-label="Description">
+             <h2 class="review-card-title">Description</h2>
+-            {#if page.summary.trim()}<CompMd text={page.summary} onopen={openLink} />{:else}<p class="review-empty">
++            {#if page.summary.trim()}<CompMd text={page.summary} onopen={openLink} {tasks} />{:else}<p
++                class="review-empty"
++              >
+                 No description.
+               </p>{/if}
+           </section>
+diff --git a/dashboard/src/lib/reviews/links.ts b/dashboard/src/lib/reviews/links.ts
+index 3a90803f..acb26587 100644
+--- a/dashboard/src/lib/reviews/links.ts
++++ b/dashboard/src/lib/reviews/links.ts
+@@ -1,11 +1,13 @@
+ import { getContext, setContext } from 'svelte';
++import type { TaskLinks } from '../compmd';
+ import type { DocumentRef } from '../documents';
+ 
+-// What a link to one of the project's documents does in a review's texts (ATM-586): its summary and every comment, in
+-// whatever part of the page draws them (the Overview, the Comments tab, a chain in a diff). The review's page decides
+-// and gives it to them through the component tree.
++// What a link does in a review's texts: its summary and every comment, in whatever part of the page draws them (the
++// Overview, the Comments tab, a chain in a diff). The review's page decides and gives it to them through the
++// component tree: a link to one of the project's documents (ATM-586), and a task's key (ATM-593).
+ 
+ const KEY = Symbol('review-document-links');
++const TASKS = Symbol('review-task-links');
+ 
+ /** The review's page: what a link to a document of the project does in the texts under it */
+ export function setDocumentLinks(open: (ref: DocumentRef) => void): void {
+@@ -16,3 +18,13 @@ export function setDocumentLinks(open: (ref: DocumentRef) => void): void {
+ export function documentLinks(): ((ref: DocumentRef) => void) | undefined {
+   return getContext<((ref: DocumentRef) => void) | undefined>(KEY);
+ }
++
++/** The review's page: which task keys in its texts are tasks, and what opening one does */
++export function setTaskLinks(tasks: TaskLinks | undefined): void {
++  setContext(TASKS, tasks);
++}
++
++/** The task keys of the texts here; none outside a review's page (keys then stay text) */
++export function taskLinks(): TaskLinks | undefined {
++  return getContext<TaskLinks | undefined>(TASKS);
++}
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 6d7789a8..c6ad2e18 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -24,6 +24,7 @@
+     viewedKeys,
+   } from '../review-data';
+   import { keepFilter, keptFilter } from '../review-filter';
++  import type { TaskLinks } from '../compmd';
+   import { learnReviews } from '../reviews/known.svelte';
+   import ReviewList from '../reviews/ReviewList.svelte';
+   import ReviewPage from '../reviews/ReviewPage.svelte';
+@@ -199,6 +200,28 @@
+ 
+   const review = $derived(shown?.review.reference ?? at.review ?? '');
+   const listAddress = $derived(withReview(currentAddress(), { review: null }));
++
++  // A task named in a review (ATM-593): this project's opens its details over the review (the review's own address,
++  // with `?task=`), closed back to the review as it was; another project's opens at its project's page. ⌘, Ctrl or a
++  // middle click: a tab of its own, at its project's page with its details. A key naming no task the page knows
++  // isn't a link
++  const foreign = (key: string) => (dashboard.findTask(key) ? null : (dashboard.refOf(key).address ?? null));
++  /** A task's own page: its project's list with its details, for a link's address and a tab of its own */
++  function taskPage(key: string): string {
++    return foreign(key) ?? withTask(withView(listAddress, 'list'), key);
++  }
++  const taskLinks: TaskLinks = {
++    known: (key) => !!dashboard.findTask(key) || !!foreign(key),
++    open(key, newTab) {
++      const elsewhere = foreign(key);
++      if (newTab || (elsewhere && inApp)) {
++        const address = taskPage(key);
++        if (inApp) tabActions().open(address);
++        else window.open(address, '_blank', 'noopener');
++      } else if (elsewhere) go(elsewhere);
++      else go(withTask(currentAddress(), key));
++    },
++  };
+ </script>
+ 
+ <svelte:window onfocus={() => void load()} />
+@@ -213,7 +236,8 @@
+         file={at.file}
+         side={(revision) => revisionDocuments(project, revision)}
+         isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
+-        taskHref={(key) => withTask(withView(listAddress, 'list'), key)}
++        taskHref={taskPage}
++        tasks={taskLinks}
+         backHref={listAddress}
+         onback={() => go(listAddress)}
+         {busy}
+@@ -271,6 +295,8 @@
+       onquery={chooseQuery}
+       onopen={(reference, newTab) => open(reference, newTab)}
+       onlive={startLive}
++      taskHref={taskPage}
++      {taskLinks}
+     />
+   {/if}
+ </div>
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index e905df8c..9b7bf7b3 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -331,6 +331,75 @@ test.describe('a review’s page', () => {
+     await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
+   });
+ 
++  // ATM-593: a task named in a review opens its details over the review, closed back to the review as it was
++  test('a task named in a review opens its details over it; closed, the review as it was; ⌘-click a tab of its own', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    const own = reviewPage();
++    tasksServer.setReview(
++      'CR-2',
++      reviewPage({
++        chains: [
++          ...own.chains,
++          {
++            id: 't4',
++            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
++            comments: [comment('c4', 'Like T-002, not ZZZ-9.')],
++            placed: null,
++            drifted: null,
++          },
++        ],
++      }),
++    );
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    const overlay = page.locator('#detail-overlay');
++    // The Overview's Tasks fact: T-001's details over the review, its address the review's with ?task=
++    await page.locator('.review-task[data-task="T-001"]').click();
++    await expect(overlay).toHaveClass(/open/);
++    await expect(page.locator('#detail-panel h3')).toContainText('T-001');
++    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2?task=T-001'));
++    await expect(page.locator('#review-page')).toBeVisible();
++    // Closed: the review as it was
++    await page.keyboard.press('Escape');
++    await expect(overlay).not.toHaveClass(/open/);
++    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2'));
++    await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
++    // A key written in a comment: a link only for a task there is
++    const chain = page.locator('.review-conversation [data-chain="t4"]');
++    await expect(chain.getByRole('link', { name: 'T-002' })).toBeVisible();
++    await expect(chain.getByRole('link', { name: 'ZZZ-9' })).toHaveCount(0);
++    await expect(chain).toContainText('ZZZ-9');
++    await chain.getByRole('link', { name: 'T-002' }).click();
++    await expect(page.locator('#detail-panel h3')).toContainText('T-002');
++    await page.keyboard.press('Escape');
++    // ⌘-click (Ctrl elsewhere): a browser tab of its own, at the task's project page with its details
++    const [tab] = await Promise.all([
++      page.context().waitForEvent('page'),
++      page
++        .locator('.review-task[data-task="T-001"]')
++        .click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] }),
++    ]);
++    await expect.poll(() => new URL(tab.url()).searchParams.get('task')).toBe('T-001');
++    expect(new URL(tab.url()).pathname).toMatch(/\/list$/);
++    await tab.close();
++    await expect(overlay).not.toHaveClass(/open/);
++  });
++
++  test('the reviews list: a row’s tasks are links to their details, the row’s own link the review', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    const row = page.locator('.review-row[data-review="CR-2"]');
++    await row.locator('.review-task-link[data-task="T-001"]').click();
++    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++    await expect(page.locator('#detail-panel h3')).toContainText('T-001');
++    // Still the list under it
++    await expect(page.locator('.review-row')).toHaveCount(2);
++  });
++
+   // ATM-586: links in a review's texts to the project's documents: a file of the round opens its diff, anything else
+   // the document viewer
+   test('a link in the summary or a comment: a file the round changed opens its diff, another document the viewer', async ({
+diff --git a/dashboard/tests/unit/ReviewList.component.test.ts b/dashboard/tests/unit/ReviewList.component.test.ts
+index 0be77162..c1b1d541 100644
+--- a/dashboard/tests/unit/ReviewList.component.test.ts
++++ b/dashboard/tests/unit/ReviewList.component.test.ts
+@@ -68,6 +68,30 @@ describe('ReviewList', () => {
+     expect(within(rows[1] as HTMLElement).getByText('Approved')).toBeTruthy();
+   });
+ 
++  // ATM-593: a row's task keys are links to their tasks, those that are tasks; a click opens the task, not the review
++  it('a row’s tasks: a known key a link that opens its task (⌘ a tab of its own), an unknown one text', async () => {
++    const open = vi.fn();
++    const { onopen, container } = show(
++      [entry(2, 'waiting', { tasks: ['ATM-1', 'ATM-2'] })],
++      { ...NO_QUERY },
++      {
++        taskHref: (key: string) => `/projects/p1/list?task=${key}`,
++        taskLinks: { known: (k: string) => k === 'ATM-1', open },
++      },
++    );
++    const link = screen.getByRole('link', { name: 'ATM-1' });
++    expect(link).toHaveAttribute('href', '/projects/p1/list?task=ATM-1');
++    expect(screen.queryByRole('link', { name: 'ATM-2' })).toBeNull();
++    expect(container.querySelector('.review-tasks')).toHaveTextContent('ATM-1, ATM-2');
++    await fireEvent.click(link);
++    await fireEvent.click(link, { metaKey: true });
++    expect(open.mock.calls).toEqual([
++      ['ATM-1', false],
++      ['ATM-1', true],
++    ]);
++    expect(onopen).not.toHaveBeenCalled();
++  });
++
+   it('marks those that need you, and offers the first of them next', async () => {
+     const { container, onopen } = show([
+       entry(3, 'waiting'),
+diff --git a/dashboard/tests/unit/compmd-processor.test.ts b/dashboard/tests/unit/compmd-processor.test.ts
+index 440a1d44..56423ddd 100644
+--- a/dashboard/tests/unit/compmd-processor.test.ts
++++ b/dashboard/tests/unit/compmd-processor.test.ts
+@@ -12,6 +12,7 @@ import {
+   FRONTMATTER_LINES,
+   packComponents,
+   safeTree,
++  taskOfHref,
+   topBlocks,
+ } from '../../src/lib/compmd';
+ import type { Task } from '../../src/lib/types';
+@@ -66,6 +67,32 @@ describe('a document’s source lines (T-406: CompMD places each line from its o
+     expect(firstLines(run('# Title\n\nText.').expanded)).toEqual([undefined, undefined]);
+   });
+ 
++  // ATM-593: task keys in a project's text link to their tasks, only those that are tasks
++  it('a task key links to its task when it names one; another, inside a link or in code stays as written', () => {
++    const tree = run('See ATM-12 and ZZZ-9, `ATM-12` in code, [ATM-12 here](https://x.example) and ~ATM-13.').expanded;
++    const known = (key: string) => key === 'ATM-12' || key === '~ATM-13';
++    const links: { url: string; text: string }[] = [];
++    const walk = (node: unknown) => {
++      const n = node as { type?: string; url?: string; children?: unknown[] };
++      if (n.type === 'link') links.push({ url: n.url ?? '', text: textOf(n) });
++      n.children?.forEach(walk);
++    };
++    walk(safeTree(tree, { taskKnown: known }));
++    expect(links).toEqual([
++      { url: '#task=ATM-12', text: 'ATM-12' },
++      { url: 'https://x.example', text: 'ATM-12 here' },
++      { url: '#task=~ATM-13', text: '~ATM-13' },
++    ]);
++    // The text reads the same
++    expect(textOf(safeTree(tree, { taskKnown: known }))).toBe(textOf(tree));
++    // Without taskKnown, no key is a link
++    links.length = 0;
++    walk(safeTree(tree));
++    expect(links.map((l) => l.url)).toEqual(['https://x.example']);
++    expect(taskOfHref('#task=ATM-12')).toBe('ATM-12');
++    expect(taskOfHref('#doc=docs/x.md')).toBeNull();
++  });
++
+   // ATM-591: the rendered diff folds whole blocks: each one's lines, and a tree of only those reaching into a range
+   it('its top-level blocks are their lines; a range keeps the blocks reaching into it, and every definition', () => {
+     const text =

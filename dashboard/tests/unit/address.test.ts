@@ -9,19 +9,50 @@ import {
   isPagePath,
   legacyParams,
   OVERVIEW_TABS,
+  REVIEW_SECTIONS,
+  reviewListOf,
   reviewOf,
   withReview,
+  withReviewList,
   withWorkspace,
   workspaceOf,
 } from '../../src/lib/address';
 import { VIEWS } from '../../src/lib/tabs';
-import { OVERVIEW_PATHS, PROJECT_TABS } from '../../src/params';
+import { OVERVIEW_PATHS, PROJECT_TABS, REVIEW_SECTION_PATHS } from '../../src/params';
 
 const params = (address: string) => [...addressParams(address)];
 const at = (href: string) => {
   const url = new URL(href, 'http://localhost:7000');
   return { pathname: url.pathname, search: url.search, hash: url.hash };
 };
+
+describe('. and .. are no IDs (ATM-676, audit D7)', () => {
+  it('a path with a . or .. segment, written or escaped, names no page', () => {
+    for (const path of [
+      '/projects/../reviews',
+      '/projects/%2E%2E',
+      '/projects/%2e/list',
+      '/projects/p1/reviews/..',
+      '/projects/p1/reviews/%2E%2E',
+      '/w/../projects/p1',
+      '/w/%2E%2E/projects/p1',
+    ]) {
+      const params = addressParams(path);
+      expect(
+        ['workspace', 'project', 'review'].map((k) => params.get(k)),
+        path,
+      ).toEqual([null, null, null]);
+    }
+    // A dot inside an ID is an ID
+    expect(addressParams('/projects/a..b/reviews/CR-1.2').get('review')).toBe('CR-1.2');
+  });
+
+  it('an old link naming project . or .. names none', () => {
+    expect(legacyParams('#project=..&view=list')?.get('project')).toBeNull();
+    expect(legacyParams('#project=.&view=list')?.get('project')).toBeNull();
+    expect(legacyParams('#project=p1')?.get('project')).toBe('p1');
+  });
+});
 
 describe('the address (T-429)', () => {
   it('reads the page from the path and the rest from the query', () => {
@@ -218,7 +249,9 @@ describe('a review in the address (ATM-574)', () => {
       ['view', 'reviews'],
     ]);
     expect(params('/projects/abc/list/CR-7')).toEqual([]);
-    expect(params('/projects/abc/reviews/CR-7/comments')).toEqual([]);
+    expect(params('/projects/abc/reviews/CR-7/files')).toEqual([]);
+    expect(params('/projects/abc/reviews/CR-7/overview')).toEqual([]);
+    expect(params('/projects/abc/reviews/CR-7/diffs/x')).toEqual([]);
     // The review is the path's: the query can't name one
     expect(params('/projects/abc/reviews?review=CR-1')).toEqual([
       ['project', 'abc'],
@@ -254,10 +287,14 @@ describe('a review in the address (ATM-574)', () => {
       '/projects/abc/reviews/CR-7',
       '/projects/abc/reviews/CR-8.2/',
       '/w/work/projects/abc/reviews/0193c0de-77aa',
+      '/projects/abc/reviews/CR-7/diffs',
+      '/w/work/projects/abc/reviews/CR-7/comments/',
     ])
       expect(isPagePath(path), path).toBe(true);
     for (const path of [
       '/projects/abc/reviews/CR-7/x',
+      '/projects/abc/reviews/CR-7/overview',
+      '/projects/abc/reviews/CR-7/diffs/x',
       '/projects/abc/reviews/CR_7',
       '/projects/abc/reviews/CR%207',
       `/projects/abc/reviews/${'x'.repeat(65)}`,
@@ -269,20 +306,31 @@ describe('a review in the address (ATM-574)', () => {
   it('reads the review, round, round against and file a page shows', () => {
     expect(reviewOf('/projects/abc/reviews/CR-7?round=3&against=1&file=a.md')).toEqual({
       review: 'CR-7',
+      section: 'overview',
       round: 3,
       against: 1,
       file: 'a.md',
+      comment: null,
     });
-    expect(reviewOf('/projects/abc/reviews/CR-7')).toEqual({ review: 'CR-7', round: null, against: null, file: null });
+    expect(reviewOf('/projects/abc/reviews/CR-7')).toEqual({
+      review: 'CR-7',
+      section: 'overview',
+      round: null,
+      against: null,
+      file: null,
+      comment: null,
+    });
     // A round that isn't a round's number is none
     for (const round of ['0', '-1', 'x', '1.5', ''])
       expect(reviewOf(`/projects/abc/reviews/CR-7?round=${round}`).round, round).toBeNull();
     // No review: nothing of one, whatever the query says
-    expect(reviewOf('/projects/abc/reviews?round=3&file=a.md')).toEqual({
+    expect(reviewOf('/projects/abc/reviews?round=3&file=a.md&comment=c1')).toEqual({
       review: null,
+      section: 'overview',
       round: null,
       against: null,
       file: null,
+      comment: null,
     });
     expect(reviewOf('/projects/abc/list').review).toBeNull();
   });
@@ -300,5 +348,67 @@ describe('a review in the address (ATM-574)', () => {
     expect(withReview('/w/work/projects/abc/reviews/CR-7?round=2&against=1&file=a.md', { review: null })).toBe(
       '/w/work/projects/abc/reviews',
     );
+  });
+});
+
+describe('a review’s sub-tab, a comment in view, the Reviews list’s filter (ATM-697)', () => {
+  it('reads and writes the sub-tab in the path, the Overview at the review’s own', () => {
+    expect(params('/projects/abc/reviews/CR-7/diffs?file=a.md')).toEqual([
+      ['project', 'abc'],
+      ['view', 'reviews'],
+      ['review', 'CR-7'],
+      ['section', 'diffs'],
+      ['file', 'a.md'],
+    ]);
+    expect(reviewOf('/w/work/projects/abc/reviews/CR-7/comments').section).toBe('comments');
+    // The path's alone: a query naming one names none
+    expect(reviewOf('/projects/abc/reviews/CR-7?section=diffs').section).toBe('overview');
+    for (const address of ['/projects/abc/reviews/CR-7/diffs?file=a.md', '/w/w/projects/abc/reviews/CR-7/comments'])
+      expect(formatAddress(addressParams(address))).toBe(address);
+    expect(withReview('/projects/abc/reviews/CR-7', { review: 'CR-7', section: 'diffs', file: 'a.md' })).toBe(
+      '/projects/abc/reviews/CR-7/diffs?file=a.md',
+    );
+    expect(withReview('/projects/abc/reviews/CR-7/diffs', { review: 'CR-7', section: 'overview' })).toBe(
+      '/projects/abc/reviews/CR-7',
+    );
+  });
+
+  it('reads and writes the comment in view in the query, never as an anchor', () => {
+    const address = '/projects/abc/reviews/CR-7/diffs?file=docs/x.md&comment=c12';
+    expect(reviewOf(address)).toMatchObject({ section: 'diffs', file: 'docs/x.md', comment: 'c12' });
+    expect(withReview(address, { review: 'CR-7', section: 'diffs', file: 'docs/x.md', comment: 'c12' })).toBe(address);
+    expect(reviewOf('/projects/abc/reviews/CR-7?comment=').comment).toBeNull();
+    // Another review, or the list: the comment goes
+    expect(withReview(address, { review: 'CR-8' })).toBe('/projects/abc/reviews/CR-8');
+    expect(withReview(address, { review: null })).toBe('/projects/abc/reviews');
+  });
+
+  it('reads and writes the list’s filter and search, each field it names', () => {
+    const query = {
+      q: 'tabs nav',
+      status: ['waiting', 'live'],
+      author: 'ana',
+      reviewer: '',
+      task: 'ATM-7',
+      branch: '',
+    };
+    const address = withReviewList('/projects/abc/reviews', query);
+    expect(address).toBe('/projects/abc/reviews?q=tabs%20nav&status=waiting,live&author=ana&tasks=ATM-7');
+    expect(reviewListOf(address)).toEqual(query);
+    // Naming none: none (the list's kept one applies); a review's page or another tab: none
+    expect(reviewListOf('/projects/abc/reviews')).toBeNull();
+    expect(reviewListOf('/projects/abc/reviews?sprint=s1')).toBeNull();
+    expect(reviewListOf('/projects/abc/reviews/CR-7?q=x')).toBeNull();
+    expect(reviewListOf('/projects/abc/list?q=x')).toBeNull();
+    // An empty filter clears it; the rest of the address stays
+    expect(withReviewList(`${address}&sprint=s1`, { ...query, q: '', status: [], author: '', task: '' })).toBe(
+      '/projects/abc/reviews?sprint=s1',
+    );
+    // Opening a review leaves the list's filter behind; the list's own task details stay
+    expect(withReview(`${address}&task=T-1`, { review: 'CR-7' })).toBe('/projects/abc/reviews/CR-7?task=T-1');
+  });
+
+  it('the sub-tab route’s values are the address’s', () => {
+    expect(REVIEW_SECTION_PATHS).toEqual(REVIEW_SECTIONS.filter((s) => s !== 'overview'));
   });
 });

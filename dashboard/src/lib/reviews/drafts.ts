@@ -66,13 +66,11 @@ export function withDrafts(
             comments: [asComment(d, you)],
             placed: d.placed ?? null,
             drifted: d.drifted ?? null,
+            // A draft on what a live review is now is on the round shown
+            in_view: d.in_view ?? true,
           },
         ]
       : [],
   );
   return [...withReplies, ...own];
 }
-
-/** How many of the user's drafts would be open comments once sent: what an approval can't be made with */
-export const draftedComments = (drafts: PlacedDraft[] | undefined) =>
-  (drafts ?? []).filter((d) => d.kind === 'comment').length;

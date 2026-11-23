@@ -2,12 +2,12 @@
 id = "01a1ecb3-5906-70c6-83f9-bbfc387f1a31"
 number = 4
 title = "A submodule only moved shows as the submodule, at its commit"
-status = "open"
+status = "approved"
 tasks = ["ATM-599"]
 author = "claude:0f56a916"
 reviewers = []
 created = 2026-11-18T03:28:59Z
-updated = 2026-11-18T05:45:09Z
+updated = 2026-11-18T05:58:46Z
 +++
 
 A review hid a submodule's change (reported by Hakan, 2026-11-18, on CompMD's CR-4): the file tree listed `crates/markdown-rs`, but its diff said it wasn't a file of the commit.

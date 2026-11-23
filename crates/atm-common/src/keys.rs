@@ -3,6 +3,7 @@
 //! number, and [`resolve`], the one way a reference people or agents type (a key, a key with an earlier prefix, an
 //! alias, a UUID) becomes a task. A file from before task keys (format 1) has only IDs, matched exactly, as before.
 
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 
 use serde_json::Value;
@@ -98,8 +99,11 @@ pub fn task_order(a: &Task, b: &Task) -> Ordering {
 
 /// The number the next new task gets: `meta.next_number`, but never at or below a number a task (working or archived)
 /// already has, so no number is ever given twice (ADR-007 §1).
-#[must_use]
-pub fn next_task_number(document: &Value, archive: &[Task]) -> u64 {
+///
+/// # Errors
+/// `Invalid` when a task already has the largest number there is: the next would wrap round to one given already
+/// (ATM-666, audit C16).
+pub fn next_task_number(document: &Value, archive: &[Task]) -> Result<u64> {
     let tasks = document["tasks"]
         .as_array()
         .into_iter()
@@ -115,7 +119,12 @@ pub fn next_task_number(document: &Value, archive: &[Task]) -> u64 {
         .and_then(|m| m.get("next_number"))
         .and_then(Value::as_u64)
         .unwrap_or(1);
-    stored.max(highest + 1)
+    let after = highest.checked_add(1).ok_or_else(|| {
+        Error::Invalid(format!(
+            "a task has the number {highest}, the largest there is: no number is left for a new task"
+        ))
+    })?;
+    Ok(stored.max(after))
 }
 
 /// How a reference found its task.
@@ -163,9 +172,9 @@ fn tasks_of(document: &Value) -> impl Iterator<Item = &Task> {
 
 /// The tasks matching `test`: the working ones, then the archived ones not also working (a task is in one or the
 /// other; a later archive entry wins, as a dict of them by ID has it).
-fn matching<'a>(
+fn matching<'a, A: Borrow<Task>>(
     document: &'a Value,
-    archive: &'a [Task],
+    archive: &'a [A],
     test: &dyn Fn(&Task) -> bool,
 ) -> Vec<(&'a Task, bool)> {
     let mut found: Vec<(&Task, bool)> = tasks_of(document)
@@ -173,7 +182,7 @@ fn matching<'a>(
         .map(|t| (t, false))
         .collect();
     if found.is_empty()
-        && let Some(t) = archive.iter().rev().find(|t| test(t))
+        && let Some(t) = archive.iter().map(Borrow::borrow).rev().find(|t| test(t))
     {
         found.push((t, true));
     }
@@ -203,9 +212,9 @@ fn one<'a>(found: &[(&'a Task, bool)], reference: &str, via: Via) -> Result<Opti
 /// The tasks that have `reference` among their aliases (any case, a leading `~` ignored), working and archived: the
 /// tasks a merge moved off a number (ADR-009) that another task may hold now (ATM-630).
 #[must_use]
-pub fn alias_holders<'a>(
+pub fn alias_holders<'a, A: Borrow<Task>>(
     document: &'a Value,
-    archive: &'a [Task],
+    archive: &'a [A],
     reference: &str,
 ) -> Vec<&'a Task> {
     let reference = without_draft_mark(reference);
@@ -218,7 +227,7 @@ pub fn alias_holders<'a>(
     };
     tasks_of(document)
         .filter(has)
-        .chain(archive.iter().filter(has))
+        .chain(archive.iter().map(Borrow::borrow).filter(has))
         .collect()
 }
 
@@ -231,7 +240,14 @@ pub fn alias_holders<'a>(
 /// # Errors
 /// [`Error::NotFound`] when nothing matches, saying why (another project's key, no such number); a failure when the
 /// reference names more than one task (a file to repair).
-pub fn resolve<'a>(document: &'a Value, archive: &'a [Task], reference: &str) -> Result<Found<'a>> {
+///
+/// The archive as the store lists it (`&[&Task]`) or owned: never copied to be read (ATM-708: a copy a call, on
+/// every key of every review, made a review watch's look take seconds).
+pub fn resolve<'a, A: Borrow<Task>>(
+    document: &'a Value,
+    archive: &'a [A],
+    reference: &str,
+) -> Result<Found<'a>> {
     // `~ATM-5`, as atm printed a provisional key before ADR-009, is `ATM-5`
     let reference = without_draft_mark(reference);
     let id_is = |t: &Task| t.get("id").and_then(Value::as_str) == Some(reference);

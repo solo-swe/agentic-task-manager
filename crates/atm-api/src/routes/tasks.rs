@@ -2,14 +2,13 @@
 
 use atm_lib::query::Filters;
 use atm_lib::workspaces::too_large;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::HeaderMap;
 use axum::response::Response;
 use serde_json::json;
 
 use super::query::parse_query;
 use super::source::ProjectSource;
 use super::{error_response, etag, not_modified, ok_json, stamped, unchanged};
-use crate::send_error;
 
 /// atm-lib's filters from the route's query string (docs/layered-architecture.md §6.2): the list filters repeatable,
 /// the flags `true` or `1`, other parameters ignored.
@@ -67,15 +66,8 @@ pub(super) fn get_tasks(project: &dyn ProjectSource, query: &str, request: &Head
     }
     match project.tasks(&task_filters(query)) {
         Ok(snapshot) => ok_json(&stamped(snapshot), Some(&tag)),
-        // A filter naming no such sprint or release (400), an unreadable task file (500)
-        Err(e) => {
-            let status = if e.code() == 2 {
-                StatusCode::BAD_REQUEST
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            };
-            send_error(status, &e.to_string())
-        }
+        // As every route maps them (ATM-664): a filter naming no such sprint or release 400, an unreadable task file 500
+        Err(e) => error_response(&e),
     }
 }
 
@@ -83,6 +75,7 @@ pub(super) fn get_tasks(project: &dyn ProjectSource, query: &str, request: &Head
 mod tests {
     use atm_common::Error;
     use atm_lib::workspaces::MAX_SERVED_BYTES;
+    use axum::http::StatusCode;
     use serde_json::Value;
 
     use super::super::test_support::{Call, FakeProject, answer, bound, having, plain};
@@ -245,26 +238,17 @@ mod tests {
         }
     }
 
-    /// atm-lib's refusals: a filter naming no such sprint or release is the request's fault (400), anything else
-    /// atm's (500)
+    /// atm-lib's refusals, mapped as every route maps them (ATM-664): a filter naming no such sprint or release is
+    /// the request's fault (400), anything else by its kind, an unreadable task file atm's (500)
     #[test]
-    fn a_refused_read_is_400_for_a_bad_filter_and_500_otherwise() {
+    fn a_refused_read_is_400_for_a_bad_filter_and_by_its_kind_otherwise() {
         for (error, status) in [
             (
                 Error::Invalid("no sprint Nope".into()),
                 StatusCode::BAD_REQUEST,
             ),
-            (
-                Error::Failed {
-                    message: "usage".into(),
-                    code: 2,
-                },
-                StatusCode::BAD_REQUEST,
-            ),
-            (
-                Error::NotFound("no such".into()),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            ),
+            (Error::NotFound("no such".into()), StatusCode::NOT_FOUND),
+            (Error::Conflict("claimed".into()), StatusCode::CONFLICT),
             (
                 Error::failed("unreadable"),
                 StatusCode::INTERNAL_SERVER_ERROR,

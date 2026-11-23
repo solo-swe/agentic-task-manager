@@ -1,0 +1,694 @@
+diff --git a/crates/atm-lib/src/lifecycle.rs b/crates/atm-lib/src/lifecycle.rs
+index 2818c910..aa904cf0 100644
+--- a/crates/atm-lib/src/lifecycle.rs
++++ b/crates/atm-lib/src/lifecycle.rs
+@@ -229,19 +229,22 @@ pub fn check(project: &Project, review: &Review, event: &Event, by: &Actor) -> R
+         Event::Close { reject: true } => Some(Command::Reject),
+         Event::Close { reject: false } | Event::Round => None,
+     };
+-    // A round puts its tasks in progress back in review, and first takes back the author's own task its lapse sent to
+-    // to do (the design's hole 1): each move tried before the round is kept, so it never waits on a task in to do
++    // A round puts its tasks in progress, or sent back, in review again, and first takes back the author's own task its
++    // lapse sent to to do (the design's hole 1): each move tried before the round is kept, so it never waits on a task
++    // in to do. A draft's round leaves its tasks as they are (ATM-713): it waits on no one yet
+     let mut take_back = Vec::new();
+-    if let Event::Round = event {
++    if matches!(event, Event::Round) && review.header.status != Status::Draft {
+         let mut moves = Vec::new();
+         for id in &ids {
+             let Some(task) = project.store().get_task(id)? else {
+                 continue;
+             };
+             let own = is_agent(Some(&by.0)) && lapsed_for(task, &by.0);
+-            match reviews::kind_of(project, id)?.map(|(kind, _)| kind) {
+-                Some(Kind::Active) => moves.push((id.clone(), vec![Command::Review])),
+-                Some(Kind::Todo) if own => {
++            match reviews::kind_of(project, id)? {
++                Some((kind, state)) if reviews::asked_into_review(kind, state.as_deref()) => {
++                    moves.push((id.clone(), vec![Command::Review]));
++                }
++                Some((Kind::Todo, _)) if own => {
+                     take_back.push(id.clone());
+                     moves.push((id.clone(), into_review(project, id, true)?));
+                 }
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 6c644a71..40162e15 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -48,7 +48,7 @@ mod repo;
+ 
+ pub use commands::*;
+ pub use doctor::*;
+-pub(crate) use linking::{Opening, kind_of, named, openings};
++pub(crate) use linking::{Opening, asked_into_review, kind_of, named, openings};
+ use linking::{actor_of, agent_at_work, agent_of_tasks, ask_review, id_of, link, resolve};
+ pub use live::*;
+ pub use naming::*;
+diff --git a/crates/atm-lib/src/reviews/commands.rs b/crates/atm-lib/src/reviews/commands.rs
+index c0ca00a5..39af5fbf 100644
+--- a/crates/atm-lib/src/reviews/commands.rs
++++ b/crates/atm-lib/src/reviews/commands.rs
+@@ -74,6 +74,10 @@ pub fn add_round(project: &mut Project, reference: &ReviewRef, round: NewRound)
+     let outcome = crate::lifecycle::check(project, &before, &Event::Round, &round.by)?;
+     let number = Reviews::new(&mut reviews).add_round(reference, round)?;
+     let header = reviews.get_review(reference)?.header;
++    // A draft waits on no one yet: its tasks stay as they are (ATM-713)
++    if header.status == Status::Draft {
++        return Ok(number);
++    }
+     // The author's own task its lapse sent back to to do, started again first (the design's hole 1); its review note
+     // says so, as opening a review does
+     for id in &outcome.take_back {
+diff --git a/crates/atm-lib/src/reviews/linking.rs b/crates/atm-lib/src/reviews/linking.rs
+index 288cb92d..dec29c40 100644
+--- a/crates/atm-lib/src/reviews/linking.rs
++++ b/crates/atm-lib/src/reviews/linking.rs
+@@ -107,7 +107,13 @@ pub(crate) fn named(
+         .collect()
+ }
+ 
+-/// Put the in-progress tasks among `ids` in review, with the review's link in their note (§3.8).
++/// Whether a task in `kind` with `review_state` goes in review when a review asks for it: in progress, or in review
++/// sent back (its review asked again, ATM-713: never a review waiting beside a task still marked sent back).
++pub(crate) fn asked_into_review(kind: Kind, review_state: Option<&str>) -> bool {
++    kind == Kind::Active || (kind == Kind::Review && review_state == Some("changes_requested"))
++}
++
++/// Put the tasks among `ids` that [`asked_into_review`] in review, with the review's link in their note (§3.8).
+ pub(super) fn ask_review(
+     project: &mut Project,
+     ids: &[String],
+@@ -115,7 +121,9 @@ pub(super) fn ask_review(
+     what: &str,
+ ) -> Result<()> {
+     for id in ids {
+-        if kind_of(project, id)?.is_some_and(|(kind, _)| kind == Kind::Active) {
++        if kind_of(project, id)?
++            .is_some_and(|(kind, state)| asked_into_review(kind, state.as_deref()))
++        {
+             let options = Options {
+                 note: Some(format!("{}: {what}", header.reference)),
+                 ..Options::default()
+diff --git a/crates/atm-lib/src/state.rs b/crates/atm-lib/src/state.rs
+index 7beea19e..9475765f 100644
+--- a/crates/atm-lib/src/state.rs
++++ b/crates/atm-lib/src/state.rs
+@@ -87,8 +87,10 @@ impl Command {
+     pub fn sources(self) -> &'static [Kind] {
+         match self {
+             Command::Start => &[Kind::Todo, Kind::Review],
+-            Command::Review | Command::Fail | Command::Release => &[Kind::Active],
+-            Command::Done => &[Kind::Active, Kind::Review],
++            // Review from review: in review again once changes were requested, a round (ATM-713,
++            // docs/task-review-state-machine.md §3.2)
++            Command::Review | Command::Done => &[Kind::Active, Kind::Review],
++            Command::Fail | Command::Release => &[Kind::Active],
+             Command::Approve | Command::RequestChanges | Command::Reject | Command::Drop => {
+                 &[Kind::Review]
+             }
+@@ -278,6 +280,18 @@ fn check_guards(
+                 )));
+             }
+         }
++        // From review, only a review sent back asks for it again (its round); waiting, or decided otherwise, it is
++        // the review's to decide
++        Command::Review if kind == Kind::Review && !state_is("changes_requested") => {
++            return Err(fail(format!(
++                "can't ask for {id}'s review again: it is in review, {} (a round asks again only once changes are \
++                 requested)",
++                review_state
++                    .as_deref()
++                    .unwrap_or("waiting")
++                    .replace('_', " ")
++            )));
++        }
+         Command::Drop | Command::Skip if kind == Kind::Review && !state_is("rejected") => {
+             let way = if command == Command::Drop {
+                 "send back to to do"
+@@ -382,7 +396,7 @@ fn apply(
+         let (from, on) = (task["blocked_at"].clone(), task.get("waiting_on").cloned());
+         add_interval(task, "blocks", &from, &now, on.as_ref(), None);
+     } else if old == Kind::Review
+-        && new != Kind::Review
++        && (new != Kind::Review || command == Command::Review)
+         && task.get("review_requested_at").is_some_and(truthy)
+     {
+         // The round ends when the reviewer decided, with its outcome (SR-3.9)
+@@ -395,7 +409,8 @@ fn apply(
+             .unwrap_or_else(|| now.clone());
+         add_interval(task, "reviews", &from, &to, None, decided.as_deref());
+     }
+-    if new != Kind::Review {
++    // A new round of review (from changes requested too) starts without the last one's decision
++    if new != Kind::Review || command == Command::Review {
+         task.shift_remove("review_state");
+         task.shift_remove("reviewed_at");
+     }
+diff --git a/crates/atm-lib/src/state/tests.rs b/crates/atm-lib/src/state/tests.rs
+index a82168cb..33a1ca59 100644
+--- a/crates/atm-lib/src/state/tests.rs
++++ b/crates/atm-lib/src/state/tests.rs
+@@ -50,10 +50,12 @@ fn full_options() -> Options {
+ }
+ 
+ /// docs/task-states.md's transitions: (command, from, to). Every other pair is refused.
+-const TABLE: [(Command, Kind, Kind); 19] = [
++const TABLE: [(Command, Kind, Kind); 20] = [
+     (Command::Start, Kind::Todo, Kind::Active),
+     (Command::Start, Kind::Review, Kind::Active),
+     (Command::Review, Kind::Active, Kind::Review),
++    // A round on a review sent back (ATM-713)
++    (Command::Review, Kind::Review, Kind::Review),
+     (Command::Done, Kind::Active, Kind::Done),
+     (Command::Done, Kind::Review, Kind::Done),
+     (Command::Fail, Kind::Active, Kind::Todo),
+@@ -80,6 +82,7 @@ fn every_kind_and_command_follows_the_table() {
+             // for, drop and skip a rejection): give it the one that opens this command's way
+             let review_state = match command {
+                 Command::Drop | Command::Skip => "rejected",
++                Command::Review => "changes_requested",
+                 _ => "approved",
+             };
+             let mut t =
+@@ -116,6 +119,39 @@ fn every_kind_and_command_follows_the_table() {
+     }
+ }
+ 
++/// ATM-713 (docs/task-review-state-machine.md §3.2: changes requested → waiting, a round): a review sent back asks for
++/// review again, its last round kept with its outcome; waiting or decided otherwise, it is the review's to decide
++#[test]
++fn a_review_sent_back_is_asked_for_again_and_only_then() {
++    let mut sent_back = task(json!({
++        "id": "T-1", "status": "in_review", "review_state": "changes_requested",
++        "review_requested_at": "2026-11-01T10:00:00Z", "reviewed_at": "2026-11-01T11:00:00Z",
++    }));
++    let options = Options {
++        note: Some("CR-1: round 2".into()),
++        ..Options::default()
++    };
++    run(&mut sent_back, Command::Review, &options, Some("claude:1")).unwrap();
++    assert_eq!(sent_back["status"], "in_review");
++    assert_eq!(sent_back["review_state"], "waiting");
++    assert!(sent_back.get("reviewed_at").is_none());
++    assert_eq!(
++        sent_back["reviews"],
++        json!([{ "from": "2026-11-01T10:00:00Z", "to": "2026-11-01T11:00:00Z", "outcome": "changes_requested" }])
++    );
++    for state in ["waiting", "approved", "rejected"] {
++        let mut t = task(json!({"id": "T-1", "status": "in_review", "review_state": state}));
++        let error = run(&mut t, Command::Review, &options, Some("claude:1")).unwrap_err();
++        assert!(
++            error
++                .to_string()
++                .starts_with("can't ask for T-1's review again: it is in review"),
++            "{state}: {error}"
++        );
++        assert_eq!(t["review_state"], state, "{state}: unchanged");
++    }
++}
++
+ #[test]
+ fn the_destinations_agree_with_the_table() {
+     for (command, _, to) in TABLE {
+diff --git a/crates/atm-lib/tests/reviews/fixtures.rs b/crates/atm-lib/tests/reviews/fixtures.rs
+index 90d909a9..9873e0b0 100644
+--- a/crates/atm-lib/tests/reviews/fixtures.rs
++++ b/crates/atm-lib/tests/reviews/fixtures.rs
+@@ -110,6 +110,23 @@ pub fn lapse(project: &mut Project, id: &str) {
+     atm_lib::claims::expire_claims(project).unwrap();
+ }
+ 
++/// Task `id`'s number moved to `to` at a merge (ADR-009): its old key kept as an alias, as the merge driver leaves it.
++pub fn renumber(project: &mut Project, id: &str, to: u64) {
++    let key = project.task_key(project.store().get_task(id).unwrap().unwrap());
++    project
++        .store_mut()
++        .change(&mut |work| {
++            for task in work.tasks() {
++                if task.get("id").and_then(Value::as_str) == Some(id) {
++                    task["number"] = to.into();
++                    task["aliases"] = json!([key]);
++                }
++            }
++            Ok(())
++        })
++        .unwrap();
++}
++
+ /// Task `id` gone from the project's task file, as another branch's merge or a hand edit can leave it.
+ pub fn drop_task(project: &mut Project, id: &str) {
+     project
+diff --git a/crates/atm-lib/tests/reviews/main.rs b/crates/atm-lib/tests/reviews/main.rs
+index 66449f89..c7ce042a 100644
+--- a/crates/atm-lib/tests/reviews/main.rs
++++ b/crates/atm-lib/tests/reviews/main.rs
+@@ -10,3 +10,4 @@ mod listing;
+ mod live;
+ mod opening;
+ mod submodules;
++mod table;
+diff --git a/crates/atm-lib/tests/reviews/table.rs b/crates/atm-lib/tests/reviews/table.rs
+new file mode 100644
+index 00000000..e2029c41
+--- /dev/null
++++ b/crates/atm-lib/tests/reviews/table.rs
+@@ -0,0 +1,426 @@
++//! The composed table (ATM-713, docs/task-review-state-machine.md §4, §7 step 2): a review and its task in each state
++//! they can be in together, each built by the events that lead there, and every review event on each. A row says what
++//! `lifecycle::check` answers, and the task's state once the command has run: the review's next status, or the
++//! refusal's words. A scene and event without a row fails the test, so a new state or event can't go untested. The
++//! three bugs the machine was built for are rows too (`BUGS`).
++
++use atm_lib::lifecycle::{Event, check};
++use atm_lib::reviews::{ReviewRef, ReviewStore, Status, Verdict};
++use atm_lib::state::{Command, Options};
++
++use crate::fixtures::{dir, keyed, lapse, open_review, project, renumber, reopen, round, task};
++
++/// A review of the agent's task T-1, and where the two stand, each reached by what leads there
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++enum Scene {
++    /// A draft: its task as it was, in progress
++    Draft,
++    /// Waiting on Hakan, its task in review, waiting
++    Waiting,
++    /// Sent back by Hakan, its task in review, changes requested
++    SentBack,
++    /// Sent back, and the agent took its task back to fix it
++    TakenBack,
++    /// Taken back, then the agent's claim lapsed: the task back in to do
++    Lapsed,
++    /// Approved by Hakan, its task in review, approved
++    Approved,
++    /// Closed by Hakan, its task as it was
++    Closed,
++}
++
++const SCENES: [Scene; 7] = [
++    Scene::Draft,
++    Scene::Waiting,
++    Scene::SentBack,
++    Scene::TakenBack,
++    Scene::Lapsed,
++    Scene::Approved,
++    Scene::Closed,
++];
++
++/// What happens to the review: its author's round, or Hakan's decision, comment or close
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++enum Happens {
++    Round,
++    Approve,
++    RequestChanges,
++    Comment,
++    Close,
++    CloseRejecting,
++}
++
++const EVENTS: [Happens; 6] = [
++    Happens::Round,
++    Happens::Approve,
++    Happens::RequestChanges,
++    Happens::Comment,
++    Happens::Close,
++    Happens::CloseRejecting,
++];
++
++/// What a row expects: the review's next status (none: it stays) and the task's state after it, as `status` or
++/// `status/review_state`; or the refusal, by words of it, with nothing written
++#[derive(Debug, Clone, Copy)]
++enum Expect {
++    Moves(Option<Status>, &'static str),
++    Refused(&'static str),
++}
++
++use Expect::{Moves, Refused};
++use Happens::{Approve, Close, CloseRejecting, Comment, RequestChanges, Round};
++use Scene::{Approved, Closed, Draft, Lapsed, SentBack, TakenBack, Waiting};
++
++/// The table: one row per scene and event
++const ROWS: &[(Scene, Happens, Expect)] = &[
++    // A draft leaves its task as it was, whatever is done to it
++    (Draft, Round, Moves(None, "in_progress")),
++    (Draft, Approve, Refused("it can't be approved")),
++    (Draft, RequestChanges, Refused("it can't be sent back")),
++    (Draft, Comment, Moves(None, "in_progress")),
++    (Draft, Close, Moves(Some(Status::Closed), "in_progress")),
++    (
++        Draft,
++        CloseRejecting,
++        Moves(Some(Status::Closed), "in_progress"),
++    ),
++    // Waiting: the decisions are its task's
++    (Waiting, Round, Moves(None, "in_review/waiting")),
++    (
++        Waiting,
++        Approve,
++        Moves(Some(Status::Approved), "in_review/approved"),
++    ),
++    (
++        Waiting,
++        RequestChanges,
++        Moves(
++            Some(Status::ChangesRequested),
++            "in_review/changes_requested",
++        ),
++    ),
++    (Waiting, Comment, Moves(None, "in_review/waiting")),
++    (
++        Waiting,
++        Close,
++        Moves(Some(Status::Closed), "in_review/waiting"),
++    ),
++    (
++        Waiting,
++        CloseRejecting,
++        Moves(Some(Status::Closed), "in_review/rejected"),
++    ),
++    // Sent back, its task not taken back yet: a round asks for review again
++    (
++        SentBack,
++        Round,
++        Moves(Some(Status::Waiting), "in_review/waiting"),
++    ),
++    (
++        SentBack,
++        Approve,
++        Moves(Some(Status::Approved), "in_review/approved"),
++    ),
++    (SentBack, RequestChanges, Refused("it can't be sent back")),
++    (
++        SentBack,
++        Comment,
++        Moves(None, "in_review/changes_requested"),
++    ),
++    (
++        SentBack,
++        Close,
++        Moves(Some(Status::Closed), "in_review/changes_requested"),
++    ),
++    (
++        SentBack,
++        CloseRejecting,
++        Moves(Some(Status::Closed), "in_review/rejected"),
++    ),
++    // Taken back to fix: a round puts it in review again; a decision meanwhile waits for the round
++    (
++        TakenBack,
++        Round,
++        Moves(Some(Status::Waiting), "in_review/waiting"),
++    ),
++    (
++        TakenBack,
++        Approve,
++        Moves(Some(Status::Approved), "in_progress"),
++    ),
++    (TakenBack, RequestChanges, Refused("it can't be sent back")),
++    (TakenBack, Comment, Moves(None, "in_progress")),
++    (TakenBack, Close, Moves(Some(Status::Closed), "in_progress")),
++    (
++        TakenBack,
++        CloseRejecting,
++        Moves(Some(Status::Closed), "in_progress"),
++    ),
++    // ATM-632's class (the design's hole 1): lapsed back to to do, a round takes it back before it goes in review
++    (
++        Lapsed,
++        Round,
++        Moves(Some(Status::Waiting), "in_review/waiting"),
++    ),
++    (Lapsed, Approve, Moves(Some(Status::Approved), "todo")),
++    (Lapsed, RequestChanges, Refused("it can't be sent back")),
++    (Lapsed, Comment, Moves(None, "todo")),
++    (Lapsed, Close, Moves(Some(Status::Closed), "todo")),
++    (Lapsed, CloseRejecting, Moves(Some(Status::Closed), "todo")),
++    // Ended: nothing more
++    (Approved, Round, Refused("it can't get another round")),
++    (Approved, Approve, Refused("it can't be submitted on")),
++    (
++        Approved,
++        RequestChanges,
++        Refused("it can't be submitted on"),
++    ),
++    (Approved, Comment, Refused("it can't be submitted on")),
++    (Approved, Close, Refused("it can't be closed")),
++    (Approved, CloseRejecting, Refused("it can't be closed")),
++    (Closed, Round, Refused("it can't get another round")),
++    (Closed, Approve, Refused("it can't be submitted on")),
++    (Closed, RequestChanges, Refused("it can't be submitted on")),
++    (Closed, Comment, Refused("it can't be submitted on")),
++    (Closed, Close, Refused("it can't be closed")),
++    (Closed, CloseRejecting, Refused("it can't be closed")),
++];
++
++/// The scene, in a project of its own: the review's reference
++fn build(scene: Scene, root: &std::path::Path) -> ReviewRef {
++    let mut agent = project(root, "claude:1");
++    if scene == Draft {
++        let header = atm_lib::reviews::create(
++            &mut agent,
++            atm_lib::reviews::NewReview {
++                title: "The change".into(),
++                summary: String::new(),
++                tasks: vec!["T-1".into()],
++                author: Some("claude:1".into()),
++                reviewers: vec!["Hakan".into()],
++                status: Status::Draft,
++                first: round(),
++            },
++        )
++        .unwrap();
++        return header.reference;
++    }
++    let reference = open_review(&mut agent, &["T-1"]).reference;
++    let mut hakan = reopen(root, "Hakan");
++    // Without words: a decision's words are an open comment, which a later approval would have to see resolved
++    let decide = |hakan: &mut atm_lib::Project, verdict| {
++        atm_lib::reviews::submit(hakan, &reference, verdict, None, None).unwrap();
++    };
++    match scene {
++        Draft | Waiting => {}
++        SentBack | TakenBack | Lapsed => decide(&mut hakan, Verdict::RequestChanges),
++        Approved => decide(&mut hakan, Verdict::Approve),
++        Closed => atm_lib::reviews::close(&mut hakan, &reference, "Not now.", false).unwrap(),
++    }
++    if matches!(scene, TakenBack | Lapsed) {
++        let mut agent = reopen(root, "claude:1");
++        atm_lib::changes::change_task_status(
++            &mut agent,
++            Command::Start,
++            "T-1",
++            &Options::default(),
++        )
++        .unwrap();
++        if scene == Lapsed {
++            lapse(&mut agent, "T-1");
++        }
++    }
++    reference
++}
++
++/// Who makes it happen: the author's round, Hakan's decisions
++fn by(happens: Happens) -> &'static str {
++    if happens == Round {
++        "claude:1"
++    } else {
++        "Hakan"
++    }
++}
++
++/// The event as `lifecycle::check` takes it
++fn event(happens: Happens) -> Event<'static> {
++    let submit = |verdict| Event::Submit {
++        verdict,
++        overriding: None,
++        also_open: &[],
++    };
++    match happens {
++        Round => Event::Round,
++        Approve => submit(Verdict::Approve),
++        RequestChanges => submit(Verdict::RequestChanges),
++        Comment => submit(Verdict::Comment),
++        Close => Event::Close { reject: false },
++        CloseRejecting => Event::Close { reject: true },
++    }
++}
++
++/// The command that makes it happen, as the CLI and the page run it
++fn apply(
++    happens: Happens,
++    root: &std::path::Path,
++    reference: &ReviewRef,
++) -> atm_common::Result<()> {
++    let mut project = reopen(root, by(happens));
++    let submit = |project: &mut atm_lib::Project, verdict| {
++        atm_lib::reviews::submit(project, reference, verdict, Some("Words."), None)
++    };
++    match happens {
++        Round => atm_lib::reviews::add_round(&mut project, reference, round()).map(|_| ()),
++        Approve => submit(&mut project, Verdict::Approve),
++        RequestChanges => submit(&mut project, Verdict::RequestChanges),
++        Comment => submit(&mut project, Verdict::Comment),
++        Close => atm_lib::reviews::close(&mut project, reference, "Done.", false),
++        CloseRejecting => atm_lib::reviews::close(&mut project, reference, "Done.", true),
++    }
++}
++
++/// Where T-1 stands: its status, and its review's state when it is in review
++fn standing(root: &std::path::Path) -> String {
++    let t = task(&reopen(root, "claude:1"), "T-1");
++    let status = t["status"].as_str().unwrap_or_default();
++    match t["review_state"].as_str() {
++        Some(state) if status == "in_review" => format!("{status}/{state}"),
++        _ => status.to_string(),
++    }
++}
++
++fn status_of(root: &std::path::Path, reference: &ReviewRef) -> Status {
++    let project = reopen(root, "Hakan");
++    atm_lib::reviews::store(&project)
++        .unwrap()
++        .get_review(reference)
++        .unwrap()
++        .header
++        .status
++}
++
++#[test]
++fn every_scene_and_event_has_its_row_once() {
++    for scene in SCENES {
++        for happens in EVENTS {
++            let rows = ROWS
++                .iter()
++                .filter(|(s, h, _)| *s == scene && *h == happens)
++                .count();
++            assert_eq!(rows, 1, "{scene:?} × {happens:?}: {rows} rows");
++        }
++    }
++    assert_eq!(ROWS.len(), SCENES.len() * EVENTS.len());
++}
++
++/// What `row` gives, against what it expects: each difference, in words
++fn differences(scene: Scene, happens: Happens, expect: Expect) -> Vec<String> {
++    let dir = dir();
++    let reference = build(scene, &dir.0);
++    let before = (status_of(&dir.0, &reference), standing(&dir.0));
++    let asked = reopen(&dir.0, by(happens));
++    let review = atm_lib::reviews::store(&asked)
++        .unwrap()
++        .get_review(&reference)
++        .unwrap();
++    let checked = check(&asked, &review, &event(happens), &by(happens).into());
++    let applied = apply(happens, &dir.0, &reference);
++    let after = (status_of(&dir.0, &reference), standing(&dir.0));
++    let mut found = Vec::new();
++    match expect {
++        Moves(next, task_after) => {
++            match &checked {
++                Ok(outcome) if outcome.review != next => {
++                    found.push(format!("check says {:?}, not {next:?}", outcome.review));
++                }
++                Err(e) => found.push(format!("check refused: {e}")),
++                Ok(_) => {}
++            }
++            if let Err(e) = &applied {
++                found.push(format!("the command refused: {e}"));
++            }
++            let wanted = (next.unwrap_or(before.0), task_after.to_string());
++            if after != wanted {
++                found.push(format!("left {after:?}, not {wanted:?}"));
++            }
++        }
++        Refused(words) => {
++            match &checked {
++                Ok(_) => found.push("check allowed it".into()),
++                Err(e) if !e.to_string().contains(words) => {
++                    found.push(format!("check refused: {e}"));
++                }
++                Err(_) => {}
++            }
++            match &applied {
++                Ok(()) => found.push("the command ran".into()),
++                Err(e) if !e.to_string().contains(words) => {
++                    found.push(format!("the command refused: {e}"));
++                }
++                Err(_) => {}
++            }
++            if after != before {
++                found.push(format!("written though refused: {before:?} → {after:?}"));
++            }
++        }
++    }
++    found
++}
++
++#[test]
++fn each_row_is_what_check_answers_and_what_the_command_leaves() {
++    let wrong: Vec<String> = ROWS
++        .iter()
++        .flat_map(|&(scene, happens, expect)| {
++            differences(scene, happens, expect)
++                .into_iter()
++                .map(move |d| format!("{scene:?} × {happens:?}: {d}"))
++        })
++        .collect();
++    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
++}
++
++/// The two other bugs the machine was built for, each a row of its own (ATM-632's is `(Lapsed, Round)` above)
++#[test]
++fn the_bugs_are_rows_too() {
++    // ATM-630: a review names its task by the key it was written with; a merge moved the task's number since (its old
++    // key an alias): the approval still reaches it
++    let dir = dir();
++    let mut agent = keyed(&dir.0, "claude:1");
++    let reference = open_review(&mut agent, &["ATM-11"]).reference;
++    let final_task = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8011";
++    renumber(&mut agent, final_task, 14);
++    let mut hakan = reopen(&dir.0, "Hakan");
++    atm_lib::reviews::submit(&mut hakan, &reference, Verdict::Approve, None, None).unwrap();
++    assert_eq!(
++        task(&hakan, final_task)["review_state"],
++        "approved",
++        "ATM-630"
++    );
++    assert_eq!(task(&hakan, final_task)["number"], 14, "ATM-630");
++
++    // ATM-631: the author's task lapsed back to to do before its review was opened: taken back and in review with it,
++    // never a review waiting beside a task in to do
++    let dir = crate::fixtures::dir();
++    let mut agent = project(&dir.0, "claude:1");
++    lapse_now(&mut agent);
++    open_review(&mut agent, &["T-1"]);
++    assert_eq!(standing(&dir.0), "in_review/waiting", "ATM-631");
++}
++
++/// T-1, in progress with the agent's claim, lapses: back in to do
++fn lapse_now(agent: &mut atm_lib::Project) {
++    atm_lib::changes::change_task_status(
++        agent,
++        Command::Fail,
++        "T-1",
++        &Options {
++            reason: Some("to start it with a claim".into()),
++            ..Options::default()
++        },
++    )
++    .unwrap();
++    atm_lib::changes::change_task_status(agent, Command::Start, "T-1", &Options::default())
++        .unwrap();
++    lapse(agent, "T-1");
++}
+diff --git a/docs/task-states.md b/docs/task-states.md
+index 82da1902..7531ad6e 100644
+--- a/docs/task-states.md
++++ b/docs/task-states.md
+@@ -76,7 +76,7 @@ stateDiagram-v2
+ Notes on the diagram:
+ 
+ - `start` is the only command that moves a task *into* `active` (`in_progress`). From `todo` it requires all dependencies done. From `review` it is allowed only when the review was decided for rework (`review_state` is `changes_requested`, or `approved` with something left to do).
+-- **A review's decisions** (`approve`, `request-changes`, `reject`; T-438) keep the task in `review`: they set `review_state` (`approved` / `changes_requested` / `rejected`) and `reviewed_at`, and add a note (the approval, or the reason). Each opens one way out, and atm refuses the others, for an agent and a person alike: approved, `done` (or `start` for what is left); changes requested, `start` (`atm loop next` offers it to its agent first); rejected, `drop` (back to to do, the work dropped) or `skip`.
++- **A review's decisions** (`approve`, `request-changes`, `reject`; T-438) keep the task in `review`: they set `review_state` (`approved` / `changes_requested` / `rejected`) and `reviewed_at`, and add a note (the approval, or the reason). Each opens one way out, and atm refuses the others, for an agent and a person alike: approved, `done` (or `start` for what is left); changes requested, `start` (`atm loop next` offers it to its agent first), or a round of its code review, which asks for review again (`review` from `review`, only when changes were requested: the last round kept in `reviews` with its outcome, `review_state` back to `waiting`; ATM-713); rejected, `drop` (back to to do, the work dropped) or `skip`.
+ - `done` from `review` means the review passed (it was approved). `done` from `active` means the work is finished (subject to review mode — see §4). A done task is done: one that ends without its work done is skipped, with its resolution.
+ - `fail`, `release`, `drop`, `reopen`, and `unblock` all return a task to `todo`; `skip` sends it to `skipped` from any open state; `reopen` undoes `done` or `skipped`.
+ 

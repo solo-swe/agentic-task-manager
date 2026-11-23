@@ -1,0 +1,32 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "4bc1cbcd448c43bcc977ca77e22ee444616979a6",
+    "head": "4b89971a24bb0575b846a18c4e95d371eaefacdd"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/shell/AppTitleBar.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/ui/TitleBarTabs.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/TitleBarTabs.component.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T07:38:20Z"
+}

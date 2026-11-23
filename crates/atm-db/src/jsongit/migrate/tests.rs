@@ -62,7 +62,52 @@ fn finish_times_and_with_user_are_filled_in_once() {
         json!("2026-01-01T00:00:00Z")
     );
     assert_eq!(document["tasks"][1]["with"], json!("user"));
-    assert_eq!(document["meta"]["migrations"], json!(["interactive-label"]));
+    // The label moved to `with: user` (ATM-721): gone from the task
+    assert!(document["tasks"][1].get("labels").is_none());
+    assert_eq!(
+        document["meta"]["migrations"],
+        json!(["interactive-label", "interactive-label-moved"])
+    );
+}
+
+/// ATM-721 (decision 1): `with: user` alone says a task was done with the user, so the label `interactive` moves to it
+/// on every task, finished and archived ones too, once; a `with` a task has stays
+#[test]
+fn the_interactive_label_moves_to_with_user_everywhere_once() {
+    let (_dir, paths) = project(
+        r#"{"meta": {"migrations": ["interactive-label"]}, "tasks": [
+            {"id": "T-1", "status": "done", "completed_at": "2026-01-01T00:00:00Z", "labels": ["ux", "interactive"]},
+            {"id": "T-2", "status": "todo", "with": "agent", "labels": ["interactive"]},
+            {"id": "T-3", "status": "todo", "labels": ["ux"]}
+        ]}"#,
+    );
+    std::fs::write(
+        paths.archive(),
+        r#"{"tasks": [{"id": "T-0", "status": "done", "completed_at": "2026-01-01T00:00:00Z", "labels": ["interactive"]}]}"#,
+    )
+    .unwrap();
+    let result = migrate(&paths).unwrap();
+    assert_eq!(result["interactive_label_moved"], json!(3));
+    assert!(describe_migration(&result, &paths).contains(
+        &"Moved the label interactive to `with: user` on 3 tasks, finished ones too: `with: user` alone says the work was done with you."
+            .to_string()
+    ));
+    let document = read_json(&paths.tasks).unwrap();
+    assert_eq!(document["tasks"][0]["labels"], json!(["ux"]));
+    assert_eq!(document["tasks"][0]["with"], json!("user"));
+    assert_eq!(document["tasks"][1]["with"], json!("agent"));
+    assert!(document["tasks"][1].get("labels").is_none());
+    assert_eq!(document["tasks"][2]["labels"], json!(["ux"]));
+    let archived = read_json(&paths.archive()).unwrap();
+    assert_eq!(archived["tasks"][0]["with"], json!("user"));
+    // Once: a label put back later stays
+    let mut again = document.clone();
+    again["tasks"][2]["labels"] = json!(["interactive"]);
+    std::fs::write(&paths.tasks, serde_json::to_string(&again).unwrap()).unwrap();
+    assert_eq!(
+        migrate(&paths).unwrap()["interactive_label_moved"],
+        json!(0)
+    );
 }
 
 /// ADR-009 (ATM-635): `key_final`, true or false, leaves the task file and the archive once, and says so; after it

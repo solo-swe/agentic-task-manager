@@ -1,0 +1,442 @@
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 47ba8cd2..ed893203 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -641,6 +641,28 @@ pub fn submit(
+     // A live review is approved as the working copy is now (ATM-576): that is the checkpoint its task's change is
+     // compared with when it is done (unless the approval would be refused anyway, with comments open)
+     let before = reviews.get_review(reference)?;
++    let command = match verdict {
++        Verdict::Approve => Some(Command::Approve),
++        Verdict::RequestChanges => Some(Command::RequestChanges),
++        Verdict::Comment => None,
++    };
++    let options_for = |review: &Review| {
++        let round = review.rounds.last().map_or(1, |r| r.number);
++        let open = review.open_comments().count();
++        Options {
++            note: Some(format!("in {} (round {round})", review.header.reference)),
++            reason: Some(format!(
++                "{} round {round}: {open} open comment{}",
++                review.header.reference,
++                if open == 1 { "" } else { "s" }
++            )),
++            ..Options::default()
++        }
++    };
++    // Every task the decision changes checked before the review records it (ATM-670): all or none
++    if let Some(command) = command {
++        check_decision(project, &tasks, command, &options_for(&before))?;
++    }
+     if verdict == Verdict::Approve
+         && before.header.status == Status::Live
+         && before.open_comments().next().is_none()
+@@ -648,23 +670,10 @@ pub fn submit(
+         checkpoint_now(project, reference)?;
+     }
+     Reviews::new(&mut reviews).submit(reference, verdict, body, overriding, &by)?;
+-    let review = reviews.get_review(reference)?;
+-    let command = match verdict {
+-        Verdict::Approve => Command::Approve,
+-        Verdict::RequestChanges => Command::RequestChanges,
+-        Verdict::Comment => return Ok(()),
+-    };
+-    let round = review.rounds.last().map_or(1, |r| r.number);
+-    let open = review.open_comments().count();
+-    let options = Options {
+-        note: Some(format!("in {} (round {round})", review.header.reference)),
+-        reason: Some(format!(
+-            "{} round {round}: {open} open comment{}",
+-            review.header.reference,
+-            if open == 1 { "" } else { "s" }
+-        )),
+-        ..Options::default()
++    let Some(command) = command else {
++        return Ok(());
+     };
++    let options = options_for(&reviews.get_review(reference)?);
+     for id in tasks {
+         if kind_of(project, &id)?.is_some_and(|(kind, _)| kind == Kind::Review) {
+             change_task_status(project, command, &id, &options)?;
+@@ -673,6 +682,49 @@ pub fn submit(
+     Ok(())
+ }
+ 
++/// Whether `command` may change each of `ids` in review, checked through the state machine on a copy before anything
++/// is written (ATM-670, audit R7): a decision was recorded on the review, then the second task's change failed, and
++/// the two were left split. A task not in review is left as it is, as [`submit`] does.
++///
++/// # Errors
++/// The first task the state machine refuses, naming it.
++fn check_decision(
++    project: &Project,
++    ids: &[String],
++    command: Command,
++    options: &Options,
++) -> Result<()> {
++    let vocab: &Vocabulary = project.store().vocabulary()?;
++    let tasks = project.store().list_tasks()?;
++    let stamp = atm_common::time::now_iso();
++    for id in ids {
++        let Some(task) = project.store().get_task(id)? else {
++            return Err(Error::NotFound(format!("no task {id}")));
++        };
++        if vocab.kind_of(task.get("status")) != Some(Kind::Review) {
++            continue;
++        }
++        let mut copy = task.clone();
++        crate::state::change_status(
++            &mut copy,
++            command,
++            options,
++            vocab,
++            &tasks,
++            project.actor(),
++            &stamp,
++            &|_| Ok(false),
++        )
++        .map_err(|e| {
++            Error::failed(format!(
++                "the decision can't reach {}, so it isn't recorded: {e}",
++                project.task_key(task)
++            ))
++        })?;
++    }
++    Ok(())
++}
++
+ /// End a review without approval; with `reject`, its tasks in review are rejected too (only when the user says so,
+ /// §3.8).
+ ///
+@@ -942,6 +994,45 @@ mod tests {
+     fn reopen(root: &Path, actor: &str) -> Project {
+         Project::open(root).unwrap().with_actor(Some(actor.into()))
+     }
++
++    /// ATM-670 (audit R7): a decision is checked against every task it changes before the review records it
++    #[test]
++    fn a_decision_is_checked_on_every_task_before_anything_is_written() {
++        use crate::state::{Command, Options};
++        let dir = dir();
++        project(&dir.0, "Hakan");
++        let file = dir.0.join(".agentic-task-manager/tasks.json");
++        let mut tasks: Value =
++            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
++        tasks["tasks"][1]["status"] = json!("in_review");
++        tasks["tasks"][1]["review_state"] = json!("waiting");
++        std::fs::write(&file, tasks.to_string()).unwrap();
++        let before = std::fs::read_to_string(&file).unwrap();
++        let p = reopen(&dir.0, "Hakan");
++        let ids = ["T-1".to_string(), "T-2".to_string()];
++        // A request for changes without its reason: refused, naming the task in review it can't reach
++        let refused = super::check_decision(&p, &ids, Command::RequestChanges, &Options::default())
++            .unwrap_err();
++        assert!(
++            refused
++                .to_string()
++                .starts_with("the decision can't reach T-2, so it isn't recorded"),
++            "{refused}"
++        );
++        // With it, fine; T-1, in progress, is left as it is
++        let options = Options {
++            reason: Some("CR-1 round 1: 1 open comment".into()),
++            ..Options::default()
++        };
++        super::check_decision(&p, &ids, Command::RequestChanges, &options).unwrap();
++        super::check_decision(&p, &ids, Command::Approve, &options).unwrap();
++        // Checking writes nothing
++        assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
++        // An unknown task is named
++        let missing = super::check_decision(&p, &["T-9".to_string()], Command::Approve, &options)
++            .unwrap_err();
++        assert_eq!(missing.to_string(), "no task T-9");
++    }
+     fn round() -> NewRound {
+         NewRound {
+             // Commits as atm records them, full IDs (ATM-659)
+diff --git a/crates/atm-review/src/files.rs b/crates/atm-review/src/files.rs
+index 44e3779d..7da44c77 100644
+--- a/crates/atm-review/src/files.rs
++++ b/crates/atm-review/src/files.rs
+@@ -316,8 +316,18 @@ pub mod comments_md {
+         } else {
+             let lines = what.rsplit_once(':').and_then(|(path, range)| {
+                 let (first, last) = range.split_once('-').unwrap_or((range, range));
+-                Some((path.to_string(), (first.parse().ok()?, last.parse().ok()?)))
++                Some((
++                    path.to_string(),
++                    (first.parse::<u32>().ok()?, last.parse::<u32>().ok()?),
++                ))
+             });
++            // Lines run forwards from line 1 (ATM-670): a heading with 5-3 or 0 is not one atm wrote, kept unread
++            if lines
++                .as_ref()
++                .is_some_and(|(_, (first, last))| *first == 0 || last < first)
++            {
++                return None;
++            }
+             match lines {
+                 Some((path, lines)) => (Some(path), Some(lines)),
+                 None => (Some(what), None),
+@@ -850,6 +860,9 @@ written at the margin by hand
+             "## :3 · round 1 · t1",
+             "## t1",
+             "## ",
++            // Lines that don't run forwards from line 1 (ATM-670)
++            "## a.rs:5-3 · round 1 · t1",
++            "## a.rs:0 · round 1 · t1",
+         ] {
+             let text =
+                 format!("{heading}\n- [ ] **Hakan Serce** · 2026-11-17T03:31:00Z · c1\n  Why?\n");
+diff --git a/crates/atm-review/src/rounds.rs b/crates/atm-review/src/rounds.rs
+index 29235963..a0384a19 100644
+--- a/crates/atm-review/src/rounds.rs
++++ b/crates/atm-review/src/rounds.rs
+@@ -389,9 +389,15 @@ pub fn follow(
+     new_text: Option<&str>,
+     made_on: u32,
+ ) -> Placement {
+-    let (first, last) = lines;
++    // A reversed range is never written (ATM-670): read as its two ends in order, never an empty list to index
++    let (first, last) = (lines.0.min(lines.1), lines.0.max(lines.1));
+     let mapped: Vec<Mapped> = (first..=last).map(|line| map_line(hunks, line)).collect();
+-    let (start, end) = (mapped[0].line(), mapped[mapped.len() - 1].line());
++    let (Some(start), Some(end)) = (
++        mapped.first().map(|m| m.line()),
++        mapped.last().map(|m| m.line()),
++    ) else {
++        return Placement::At((first, last));
++    };
+     let moved = (start, end.max(start));
+     let Some(new_text) = new_text else {
+         return Placement::Drifted {
+@@ -688,6 +694,19 @@ mod tests {
+         );
+     }
+ 
++    /// ATM-670 (audit R4): a reversed range (a hand-edited comments.md, or one from before the rule) panicked the page
++    #[test]
++    fn a_reversed_range_is_followed_as_its_ends_in_order_never_a_panic() {
++        assert_eq!(
++            follow((12, 10), None, &[hunk(1, 3, 1, 0)], Some(""), 1),
++            follow((10, 12), None, &[hunk(1, 3, 1, 0)], Some(""), 1)
++        );
++        assert_eq!(
++            follow((5, 3), None, &[], Some(""), 1),
++            Placement::At((3, 5))
++        );
++    }
++
+     #[test]
+     fn an_anchor_whose_lines_were_removed_drifts_unless_its_quote_is_found_again() {
+         // Lines 3 and 4 removed
+diff --git a/crates/atm-review/src/rules.rs b/crates/atm-review/src/rules.rs
+index a91b75f1..0068e9c8 100644
+--- a/crates/atm-review/src/rules.rs
++++ b/crates/atm-review/src/rules.rs
+@@ -190,6 +190,14 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+                 review.header.reference, anchor.round
+             )));
+         };
++        // Lines run forwards from line 1 (ATM-670, audit R4: (5, 3) panicked the page that placed the comment)
++        if let Some((first, last)) = anchor.lines
++            && (first == 0 || last < first)
++        {
++            return Err(Error::Invalid(format!(
++                "a comment's lines run from the first to the last, from line 1: not {first}-{last}"
++            )));
++        }
+         // A path is one of the round's files, and has no control character: comments.md's heading carries it, so a
+         // newline in it could add a heading or a comment of its own (ATM-658, I31)
+         if let Some(path) = &anchor.path {
+@@ -1272,6 +1280,21 @@ mod tests {
+             }
+         }
+         assert_eq!(reviews.store().get_review(&cr(1)).unwrap().chains.len(), 4);
++        // ATM-670: lines run forwards from line 1; one line, or a range, is fine
++        for (lines, ok) in [
++            ((5, 3), false),
++            ((0, 2), false),
++            ((0, 0), false),
++            ((3, 3), true),
++            ((3, 5), true),
++        ] {
++            let anchor = Anchor {
++                lines: Some(lines),
++                ..on("a.rs", 1)
++            };
++            let result = reviews.comment(&cr(1), anchor, "Lines.", &hakan());
++            assert_eq!(result.is_ok(), ok, "{lines:?}: {result:?}");
++        }
+     }
+ 
+     #[test]
+diff --git a/crates/atm-vcs/src/diff.rs b/crates/atm-vcs/src/diff.rs
+index 9a3254d3..13882877 100644
+--- a/crates/atm-vcs/src/diff.rs
++++ b/crates/atm-vcs/src/diff.rs
+@@ -160,18 +160,27 @@ impl GitVcs {
+             all.extend_from_slice(args);
+             self.git_with(&all, env, None)
+         };
+-        let binary: Vec<String> = with(&["--numstat", "--no-renames"])?
+-            .lines()
+-            .filter_map(|line| line.strip_prefix("-\t-\t").map(str::to_string))
++        // NUL-separated (`-z`, ATM-670, audit R14): a path is as it is, never C-quoted for a tab or a quote in it
++        let binary: Vec<String> = with(&["--numstat", "--no-renames", "-z"])?
++            .split('\0')
++            .filter_map(|record| record.strip_prefix("-\t-\t").map(str::to_string))
+             .collect();
+         let mut files = Vec::new();
+-        for line in with(&["-M", "--name-status"])?.lines() {
+-            let mut parts = line.split('\t');
+-            let status = parts.next().and_then(|s| s.chars().next()).unwrap_or('M');
+-            let (from, path) = match (parts.next(), parts.next()) {
+-                (Some(from), Some(to)) => (Some(from.to_string()), to.to_string()),
+-                (Some(path), None) => (None, path.to_string()),
+-                _ => continue,
++        let listed = with(&["-M", "--name-status", "-z"])?;
++        let mut fields = listed.split('\0').filter(|f| !f.is_empty());
++        // Each change is its status, then its path; a rename or a copy, its old path and its new one
++        while let Some(code) = fields.next() {
++            let status = code.chars().next().unwrap_or('M');
++            let (from, path) = if matches!(status, 'R' | 'C') {
++                match (fields.next(), fields.next()) {
++                    (Some(from), Some(to)) => (Some(from.to_string()), to.to_string()),
++                    _ => break,
++                }
++            } else {
++                match fields.next() {
++                    Some(path) => (None, path.to_string()),
++                    None => break,
++                }
+             };
+             files.push(ChangedFile {
+                 binary: binary.contains(&path),
+@@ -538,6 +547,32 @@ mod tests {
+         ));
+     }
+ 
++    /// ATM-670 (audit R14): without -z, git C-quoted a path with a tab or a quote ("a\tb.md"), and that was the name
++    #[cfg(unix)]
++    #[test]
++    fn a_path_with_a_tab_a_quote_or_a_rename_is_listed_as_it_is() {
++        let (_repo, vcs) = repo();
++        write(&vcs, "plain.md", "one\ntwo\nthree\nfour\n");
++        let base = commit(&vcs, "base");
++        write(&vcs, "a\tb \"c\".md", "new\n");
++        git(&vcs, &["mv", "plain.md", "éé moved.md"]);
++        let head = commit(&vcs, "head");
++        let diff = vcs.diff_range(&base, &head, &[]).unwrap();
++        let mut files: Vec<(String, char, Option<String>)> = diff
++            .files
++            .into_iter()
++            .map(|f| (f.path, f.status, f.from))
++            .collect();
++        files.sort();
++        assert_eq!(
++            files,
++            [
++                ("a\tb \"c\".md".to_string(), 'A', None),
++                ("éé moved.md".to_string(), 'R', Some("plain.md".to_string())),
++            ]
++        );
++    }
++
+     #[test]
+     fn files_as_they_are_are_a_diff_from_nothing() {
+         let (_repo, vcs) = repo();
+diff --git a/crates/atm-vcs/src/lib.rs b/crates/atm-vcs/src/lib.rs
+index 5ca42225..745c1f5d 100644
+--- a/crates/atm-vcs/src/lib.rs
++++ b/crates/atm-vcs/src/lib.rs
+@@ -661,11 +661,26 @@ impl GitVcs {
+         let status = String::from_utf8_lossy(&status.stdout).into_owned();
+         let task_folder = format!("{}/", atm_common::TASK_DIR);
+         let mut state = vec![head];
+-        for entry in status.split('\0').filter(|e| e.len() >= 4) {
+-            let path = &entry[3..];
+-            if path.starts_with(&task_folder) {
++        let mut records = status.split('\0');
++        while let Some(entry) = records.next() {
++            // `XY path`; a rename or a copy (R or C in either column) has its old path as the next field, with no
++            // status before it (ATM-670, audit H1: three bytes were cut off it too, `README.md` read as `DME.md`, and a
++            // multibyte first character panicked)
++            let (Some(status), Some(path)) = (entry.get(..2), entry.get(3..)) else {
++                continue;
++            };
++            let from = if status.contains(['R', 'C']) {
++                records.next()
++            } else {
++                None
++            };
++            if path.is_empty() || path.starts_with(&task_folder) {
+                 continue;
+             }
++            let entry = match from {
++                Some(from) => format!("{entry}\0{from}"),
++                None => entry.to_string(),
++            };
+             let version = std::fs::metadata(self.root.join(path)).ok().map(|m| {
+                 let modified = m
+                     .modified()
+@@ -1223,6 +1238,24 @@ mod tests {
+         assert_eq!(GitVcs::new(&dir.0.join("not-a-repo")).working_state(), None);
+     }
+ 
++    /// ATM-670 (audit H1): a rename's old path, the record after it, lost three bytes (`README.md` read as `DME.md`),
++    /// and one starting with a multibyte character panicked
++    #[test]
++    fn a_staged_rename_is_read_with_both_its_paths_whole() {
++        let dir = scratch();
++        let vcs = init(&dir.0);
++        write(&vcs, "éé/README.md", "# Read me\n");
++        git(&dir.0, &["add", "."]);
++        git(&dir.0, &["commit", "-q", "-m", "first"]);
++        git(&dir.0, &["mv", "éé/README.md", "éé/x.md"]);
++        let state = vcs.working_state().unwrap();
++        // The new path after its status, the old one whole after it
++        assert!(state.contains("R  éé/x.md\0éé/README.md\t"), "{state:?}");
++        // The old path moved too: a different state
++        git(&dir.0, &["mv", "éé/x.md", "éé/y.md"]);
++        assert_ne!(vcs.working_state().unwrap(), state);
++    }
++
+     #[test]
+     fn a_burst_counts_when_any_of_its_files_isnt_ignored() {
+         let dir = scratch();
+diff --git a/tests/scripts/reviews/wrong-uses.test.mjs b/tests/scripts/reviews/wrong-uses.test.mjs
+index ffb6dbe5..7ca69432 100644
+--- a/tests/scripts/reviews/wrong-uses.test.mjs
++++ b/tests/scripts/reviews/wrong-uses.test.mjs
+@@ -162,5 +162,30 @@ describe('atm review: refusals', () => {
+     }
+   });
+ 
++  // ATM-670 (audit H1): the live review's look at the working copy cut three bytes off a rename's old path, and one
++  // starting with a multibyte character panicked
++  test('a staged rename of a file under éé/ while a live review is open: the review reads, and follows it', () => {
++    const root = project();
++    try {
++      fs.mkdirSync(path.join(root, 'éé'));
++      commitFile(root, 'éé/README.md', '# Read me\n', 'a file under éé/');
++      ok(['review', 'live'], root, HAKAN);
++      git(['mv', 'éé/README.md', 'éé/x.md'], root);
++      const shown = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
++      assert.equal(shown.header.status, 'live');
++      // A comment on it now checkpoints the working copy: the rename is in it, by both its paths
++      ok(['review', 'comment', 'CR-1', '--body', 'Why move it?'], root, HAKAN);
++      const round = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN)
++        .json()
++        .rounds.find((r) => r.number === 2);
++      assert.deepEqual(
++        round.files.map((f) => [f.path, f.status]),
++        [['éé/x.md', { renamed: { from: 'éé/README.md' } }]],
++      );
++    } finally {
++      removeDir(root);
++    }
++  });
++
+   // ATM-622 (Hakan): a later round naming only the file that changed showed every other file as deleted since round 1
+ });

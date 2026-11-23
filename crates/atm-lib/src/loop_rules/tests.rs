@@ -9,6 +9,9 @@ fn task(value: Value) -> Task {
     }
 }
 
+/// The worktree the loop runs in, in these tests.
+const HERE: Option<&str> = Some("/work/here");
+
 struct Fixture {
     document: Value,
     tasks: Vec<Task>,
@@ -48,10 +51,11 @@ impl Fixture {
             &self.document,
             &tasks,
             &store,
+            HERE,
             sel,
             None,
             false,
-            &|_| Ok(false),
+            &|_| Ok(None),
         )
         .unwrap();
         order
@@ -70,10 +74,11 @@ impl Fixture {
             &self.document,
             &tasks,
             &store,
+            HERE,
             sel,
             None,
             false,
-            &|_| Ok(false),
+            &|_| Ok(None),
         )
         .unwrap_err()
     }
@@ -91,12 +96,13 @@ impl Fixture {
             Value::Object(map) => map,
             other => panic!("not a store: {other}"),
         };
-        let archived = |_: &str| Ok(false);
+        let archived = |_: &str| Ok(None);
         let (t, reason) = next_task(
             &vocab,
             &self.document,
             &tasks,
             &store,
+            HERE,
             sel,
             agent,
             with_user,
@@ -284,6 +290,66 @@ fn work_elsewhere_is_not_ready_and_the_reason_names_where_it_is() {
 }
 
 #[test]
+fn a_wait_recorded_in_this_worktree_doesnt_hold_a_task_back_one_in_another_does() {
+    // T-1 and T-2 back from review here (a decision records a wait, ATM-657), T-3 to do here but in review elsewhere
+    let f = Fixture::new(
+        json!({}),
+        json!([
+            {"id": "T-1", "status": "in_review", "review_state": "changes_requested"},
+            {"id": "T-2", "status": "in_review", "review_state": "approved"},
+            {"id": "T-3", "status": "todo"},
+            {"id": "T-4", "status": "todo"}
+        ]),
+    );
+    let store = json!({"waiting": {
+        "T-1": {"task": "T-1", "worktree": "/work/here", "status": "in_review"},
+        "T-2": {"task": "T-2", "worktree": "/work/here", "status": "in_review"},
+        "T-3": {"task": "T-3", "worktree": "/work/other", "status": "in_review"},
+        "T-4": {"task": "T-4", "status": "blocked"}
+    }});
+    let vocab = Vocabulary::of_document(&f.document).unwrap();
+    let tasks: Vec<&Task> = f.tasks.iter().collect();
+    let Value::Object(store) = store else {
+        unreachable!()
+    };
+    let ready = |here: Option<&str>| -> Vec<String> {
+        loop_order(
+            &vocab,
+            &f.document,
+            &tasks,
+            &store,
+            here,
+            &Selection::default(),
+            None,
+            false,
+            &|_| Ok(None),
+        )
+        .unwrap()
+        .ready
+        .iter()
+        .map(|t| t["id"].as_str().unwrap().to_string())
+        .collect()
+    };
+    // Here: its own waits don't count; a record without a worktree (made outside git) is from somewhere else
+    assert_eq!(ready(HERE), ["T-1", "T-2"]);
+    // Outside git: only the record without a worktree is its own
+    assert_eq!(ready(None), ["T-4"]);
+    // Nothing ready elsewhere names only the tasks waiting in another worktree
+    let others = Fixture::new(
+        json!({}),
+        json!([{"id": "T-3", "status": "todo"}, {"id": "T-5", "status": "todo"}]),
+    );
+    let mine = json!({"waiting": {
+        "T-3": {"task": "T-3", "worktree": "/work/other", "status": "in_review"},
+        "T-5": {"task": "T-5", "worktree": "/work/here", "status": "blocked"}
+    }});
+    assert_eq!(
+        others.next(&Selection::default(), mine, false).0.as_deref(),
+        Some("T-5")
+    );
+}
+
+#[test]
 fn only_a_decided_review_sends_a_task_back_to_the_loop() {
     for (state, ready) in [
         ("waiting", false),
@@ -378,10 +444,11 @@ fn an_archived_dependency_is_done() {
         &f.document,
         &tasks,
         &store,
+        HERE,
         &Selection::default(),
         None,
         false,
-        &|id| Ok(id == "T-0"),
+        &|id| Ok((id == "T-0").then(|| task(json!({"id": "T-0", "status": "done"})))),
     )
     .unwrap();
     assert!(task.is_some());
@@ -401,6 +468,7 @@ fn an_archive_that_cant_be_read_is_an_error() {
         &f.document,
         &tasks,
         &store,
+        HERE,
         &Selection::default(),
         None,
         false,
@@ -594,10 +662,11 @@ fn listed_tasks_go_in_their_order_and_unknown_ones_are_refused() {
         &f.document,
         &tasks,
         &store,
+        HERE,
         &bad,
         None,
         false,
-        &|_| Ok(false),
+        &|_| Ok(None),
     )
     .unwrap_err();
     assert_eq!(
@@ -612,4 +681,21 @@ fn the_lease_is_the_projects_when_it_is_a_positive_number() {
     assert!((lease_minutes(&json!({"meta": {"lease_minutes": 30}})) - 30.0).abs() < f64::EPSILON);
     assert!((lease_minutes(&json!({"meta": {"lease_minutes": "15"}})) - 15.0).abs() < f64::EPSILON);
     assert!((lease_minutes(&json!({"meta": {"lease_minutes": -1}})) - 120.0).abs() < f64::EPSILON);
+    // At most a year (ATM-666): a huge one is a year, one that isn't a number at all the default
+    for huge in [json!(1e300), json!("1e300"), json!(MAX_LEASE_MINUTES * 2.0)] {
+        assert!(
+            (lease_minutes(&json!({"meta": {"lease_minutes": huge}})) - MAX_LEASE_MINUTES).abs()
+                < f64::EPSILON
+        );
+    }
+    for not_finite in ["inf", "NaN", "-inf"] {
+        assert!(
+            (lease_minutes(&json!({"meta": {"lease_minutes": not_finite}})) - 120.0).abs()
+                < f64::EPSILON
+        );
+    }
+    // A lease taken now still runs out, a year on at most, never overflowing
+    let until = crate::leases::lease_until(&json!({"meta": {"lease_minutes": 1e300}}));
+    let at = atm_common::time::parse_iso(&until).expect("a time");
+    assert!(at - atm_common::time::now() <= 366 * 24 * 3600, "{until}");
 }

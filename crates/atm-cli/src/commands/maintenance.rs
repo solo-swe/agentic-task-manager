@@ -11,12 +11,12 @@ use std::time::{Duration, Instant};
 
 use atm_lib::Project;
 
-use crate::process::{pid_alive, pid_exists, signal_process};
+use crate::process::{Running, is_atm_server, pid_exists};
 use atm_common::dashboard::{
     PAGE, SCAN_PORTS, SERVER_LOG, SERVER_RECORD, home_id, page_tags, parse_version, whoami,
 };
 use atm_common::home::{ensure_home, legacy_folder_of, state_dir};
-use atm_common::py::{py_str_opt, to_json};
+use atm_common::py::py_str_opt;
 use atm_common::time::{parse_iso, real_now};
 use atm_common::{Error, Result};
 use atm_lib::check::check_project;
@@ -255,45 +255,41 @@ fn live_server(home: &Path) -> Option<Map<String, Value>> {
     None
 }
 
-/// Only one `atm service` at a time looks for a running server and starts one: a folder, which `mkdir` creates for
-/// exactly one process. A lock whose holder is gone (its pid isn't running) or that outlived the wait is broken.
-struct ServerLock(PathBuf);
+/// Only one `atm service` at a time looks for a running server and starts one: the OS's lock on a file of the state
+/// folder (ATM-673, audit C7). The OS lets it go when its holder ends, however it ends, so there is never a stale lock
+/// to break, nor two runs breaking one and both starting a server (as the folder lock let them).
+struct ServerLock(#[allow(dead_code)] std::fs::File); // reason: held for its lock, let go when dropped
 
 impl ServerLock {
     fn take(home: &Path) -> Result<Self> {
         ensure_home(home).map_err(|e| Error::failed(format!("{}: {e}", home.shown())))?;
-        let lock = home.join(SERVER_LOCK);
+        let path = home.join(SERVER_LOCK);
+        let failed = |e: &dyn std::fmt::Display| Error::failed(format!("{}: {e}", path.shown()));
+        // A folder an older atm's lock left there: no one holds it now that this lock is a file
+        if path.is_dir() {
+            let _ = std::fs::remove_dir_all(&path);
+        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .map_err(|e| failed(&e))?;
         let deadline = Instant::now() + SERVER_LOCK_WAIT;
         loop {
-            match std::fs::create_dir(&lock) {
-                Ok(()) => break,
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    let holder = std::fs::read_to_string(lock.join("pid.json"))
-                        .ok()
-                        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-                        .and_then(|h| h.get("pid").and_then(Value::as_u64))
-                        .and_then(|p| u32::try_from(p).ok());
-                    let gone = holder.is_some_and(|pid| !pid_alive(pid));
-                    if gone || Instant::now() >= deadline {
-                        let _ = std::fs::remove_dir_all(&lock);
-                        continue;
-                    }
+            match file.try_lock() {
+                Ok(()) => return Ok(Self(file)),
+                Err(std::fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
                     std::thread::sleep(POLL);
                 }
-                Err(e) => return Err(Error::failed(format!("{}: {e}", lock.shown()))),
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    return Err(failed(
+                        &"another `atm service` has been starting the server for too long; try again",
+                    ));
+                }
+                Err(std::fs::TryLockError::Error(e)) => return Err(failed(&e)),
             }
         }
-        let _ = std::fs::write(
-            lock.join("pid.json"),
-            to_json(&json!({"pid": std::process::id()})),
-        );
-        Ok(Self(lock))
-    }
-}
-
-impl Drop for ServerLock {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -350,14 +346,38 @@ fn ensure_server(home: &Path, port: u64) -> Result<(Map<String, Value>, bool)> {
     Ok((start_server(home, port)?, true))
 }
 
-/// Start (or reuse) the server; the URL to show: the project's (at or above `cwd`), or the overview's.
-fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
+/// What a service command did (ATM-679, audit C11): its lines for people, and the same as one JSON object for
+/// `--json`.
+struct Said {
+    lines: Vec<String>,
+    json: Map<String, Value>,
+}
+
+impl Said {
+    fn print(&self, json: bool) {
+        if json {
+            print_json(&Value::Object(self.json.clone()));
+        } else {
+            for line in &self.lines {
+                println!("{line}");
+            }
+        }
+    }
+}
+
+/// Start (or reuse) the server; the URL to show: the project's (at or above `cwd`), or the overview's. `--json`:
+/// `{url, started, listed, migrated}`.
+fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<(String, Said)> {
     let mut project = None;
+    let mut lines = Vec::new();
+    let mut migrated = Vec::new();
+    let mut listed = Value::Null;
     if !overview {
         let migration = super::db::maintenance(cwd)?.migrate(false)?;
         for line in &migration.lines {
             if line != "Nothing to migrate." {
-                println!("{line}");
+                lines.push(line.clone());
+                migrated.push(line.clone());
             }
         }
         if !migration.tasks_exists {
@@ -366,11 +386,13 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
             ));
         }
         let (id, shown) = Project::open(cwd)?.join_default_workspace()?;
+        listed = Value::Bool(shown);
         if shown {
             project = Some(id);
         } else {
-            println!(
+            lines.push(
                 "This project isn't listed on the dashboard (meta.dashboard.listed is false)."
+                    .into(),
             );
         }
     }
@@ -380,15 +402,17 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
         record.get("port").unwrap_or(&Value::Null),
         project.as_deref(),
     );
-    println!(
+    lines.push(format!(
         "Dashboard server {}: {url}",
         if started {
             "started"
         } else {
             "already running"
         }
-    );
-    Ok(url)
+    ));
+    let json = json!({ "url": url, "started": started, "listed": listed, "migrated": migrated });
+    let json = json.as_object().cloned().unwrap_or_default();
+    Ok((url, Said { lines, json }))
 }
 
 /// How many checks in a row must miss a process before it counts as gone: a busy machine can make one look miss it.
@@ -397,17 +421,19 @@ const GONE_CHECKS: u32 = 3;
 /// Whether process `pid` ends within `wait`, sending it `signal` again (SIGKILL) each time it is still seen. One that
 /// ended is given a moment more to be reaped by its parent, so that whoever started it sees it gone too; one nobody
 /// reaps (a container without an init) counts as gone then.
-fn wait_gone(pid: u32, wait: Duration, kill: bool) -> bool {
+fn wait_gone(server: Running, wait: Duration, kill: bool) -> bool {
     let deadline = Instant::now() + wait;
     let mut missed = 0;
     while missed < GONE_CHECKS {
-        if pid_alive(pid) {
+        // The process found, by its start time too (ATM-673, audit C14): a later process given its pid isn't it, and is
+        // never sent a SIGKILL
+        if server.alive() {
             missed = 0;
             if Instant::now() >= deadline {
                 return false;
             }
             if kill {
-                let _ = signal_process(pid, true);
+                let _ = server.signal(true);
             }
         } else {
             missed += 1;
@@ -415,20 +441,67 @@ fn wait_gone(pid: u32, wait: Duration, kill: bool) -> bool {
         std::thread::sleep(POLL);
     }
     let reaped = Instant::now() + REAP_WAIT;
-    while Instant::now() < reaped && pid_exists(pid) {
+    while Instant::now() < reaped
+        && pid_exists(server.pid)
+        && !Running::find(server.pid).is_some_and(|now| now != server)
+    {
         std::thread::sleep(POLL);
     }
     true
 }
 
-/// Stop a server of the user's (whose pid whoami confirmed): SIGTERM, then SIGKILL if it outlives the wait. Its record
-/// goes only once it is gone, and only if it is that server's: a server still running is never forgotten.
-fn stop_server(home: &Path, pid: u32) -> Result<()> {
+/// How long before a server's record says it started its process may have started: the server writes the record once
+/// it listens, a few seconds at most after its start on a busy machine.
+const RECORD_SLACK: i64 = 30;
+
+/// Whether `server` is the process `record` names: the record's server, started when it says (ATM-673, audit C14: its
+/// pid alone may be a later process's)
+fn started_as_recorded(server: Running, record: &Map<String, Value>) -> bool {
+    // To the second: a record written elsewhere may carry fractions of one (`…:05.123Z`)
+    let at = record
+        .get("started_at")
+        .and_then(Value::as_str)
+        .and_then(|text| text.get(..19))
+        .and_then(|seconds| parse_iso(&format!("{seconds}Z")));
+    let Some(at) = at else {
+        return false;
+    };
+    let started = i64::try_from(server.started()).unwrap_or(i64::MAX);
+    (at - RECORD_SLACK..=at + RECORD_SLACK).contains(&started)
+}
+
+/// Stop a server of the user's (whose pid whoami confirmed): SIGTERM, then SIGKILL if it outlives the wait. Only a
+/// process known to be the server (ATM-673): the one its `record` names, started when the record says (atm wrote it,
+/// in a folder only its owner reads); or, found by asking the ports (no record), an atm server, `atm _serve` (audit
+/// C6: anyone may answer whoami on a local port, naming any pid). Its record goes only once it is gone, and only if it
+/// is that server's: a server still running is never forgotten.
+fn stop_server(home: &Path, pid: u32, record: Option<&Map<String, Value>>) -> Result<()> {
+    let Some(server) = Running::find(pid) else {
+        // Gone already
+        if read_record(home).is_some_and(|r| pid_of(&r) == Some(pid)) {
+            let _ = std::fs::remove_file(record_path(home));
+        }
+        return Ok(());
+    };
+    let known = match record {
+        Some(record) => started_as_recorded(server, record),
+        None => is_atm_server(pid),
+    };
+    if !known {
+        let why = if record.is_some() {
+            "isn't the server its record names (it started at another time)"
+        } else {
+            "answered as a dashboard server but isn't one (not `atm _serve`)"
+        };
+        return Err(Error::failed(format!(
+            "pid {pid} {why}: it is left running"
+        )));
+    }
     // Where there is no SIGTERM to send (Windows), straight to ending it, rather than waiting out STOP_WAIT for nothing
-    let asked = signal_process(pid, false);
-    if !asked || !wait_gone(pid, STOP_WAIT, false) {
-        let _ = signal_process(pid, true);
-        if !wait_gone(pid, KILL_WAIT, true) {
+    let asked = server.signal(false);
+    if !asked || !wait_gone(server, STOP_WAIT, false) {
+        let _ = server.signal(true);
+        if !wait_gone(server, KILL_WAIT, true) {
             return Err(Error::failed(format!(
                 "the dashboard server (pid {pid}) didn't stop; its record is kept"
             )));
@@ -483,47 +556,75 @@ fn older_atms_servers(home: &Path, servers: &[Map<String, Value>]) -> Vec<Map<St
         .collect()
 }
 
-fn serve_stop(home: &Path, port: u16) -> Result<()> {
+/// Stop the server, and any atm server the record doesn't name. `--json`: `{stopped: [{pid, port, recorded}],
+/// stale_record}` (the pid of a record whose server was gone, removed).
+fn serve_stop(home: &Path, port: u16) -> Result<Said> {
     let record = read_record(home);
     let live = record
         .as_ref()
         .is_some_and(|r| ask(port_of(r)).is_some_and(|i| answers_for(&i, r, home)));
     let recorded = record.as_ref().filter(|_| live).and_then(|r| r.get("pid"));
     let strays = unrecorded_servers(home, &servers_on(port), recorded);
-    let Some(record) = record else {
-        if strays.is_empty() {
-            println!("Dashboard server is not running.");
-            return Ok(());
-        }
-        return stop_strays(home, &strays);
+    let mut said = Said {
+        lines: Vec::new(),
+        json: Map::new(),
     };
-    if !live {
-        let _ = std::fs::remove_file(record_path(home));
-        if strays.is_empty() {
-            println!(
-                "Dashboard server is not running (removed a stale record for pid {}).",
-                py_str_opt(record.get("pid"))
-            );
-            return Ok(());
+    let mut stopped = Vec::new();
+    let mut stale = Value::Null;
+    match &record {
+        None if strays.is_empty() => said.lines.push("Dashboard server is not running.".into()),
+        None => {}
+        Some(record) if !live => {
+            let _ = std::fs::remove_file(record_path(home));
+            stale = record.get("pid").cloned().unwrap_or(Value::Null);
+            if strays.is_empty() {
+                said.lines.push(format!(
+                    "Dashboard server is not running (removed a stale record for pid {}).",
+                    py_str_opt(record.get("pid"))
+                ));
+            }
         }
-    } else if let Some(pid) = pid_of(&record) {
-        stop_server(home, pid)?;
-        println!("Dashboard server stopped (pid {pid}).");
+        Some(record) => {
+            if let Some(pid) = pid_of(record) {
+                stop_server(home, pid, Some(record))?;
+                said.lines
+                    .push(format!("Dashboard server stopped (pid {pid})."));
+                stopped.push(json!({ "pid": pid, "port": record.get("port"), "recorded": true }));
+            }
+        }
     }
-    stop_strays(home, &strays)
+    let failed = stop_strays(home, &strays, &mut said.lines, &mut stopped);
+    said.json.insert("stopped".into(), Value::Array(stopped));
+    said.json.insert("stale_record".into(), stale);
+    failed.map_or(Ok(said), Err)
 }
 
-fn stop_strays(home: &Path, strays: &[Map<String, Value>]) -> Result<()> {
+/// Stop the servers the record doesn't name: each one that is an atm server; any other answering as one is only
+/// reported (ATM-673, audit C6), and the others are still stopped. The last refusal, if any.
+fn stop_strays(
+    home: &Path,
+    strays: &[Map<String, Value>],
+    lines: &mut Vec<String>,
+    stopped: &mut Vec<Value>,
+) -> Option<Error> {
+    let mut failed = None;
     for info in strays {
-        if let Some(pid) = pid_of(info) {
-            stop_server(home, pid)?;
-            println!(
-                "Stopped a dashboard server the record didn't name (pid {pid}, port {}).",
-                py_str_opt(info.get("port"))
-            );
+        let Some(pid) = pid_of(info) else { continue };
+        match stop_server(home, pid, None) {
+            Ok(()) => {
+                lines.push(format!(
+                    "Stopped a dashboard server the record didn't name (pid {pid}, port {}).",
+                    py_str_opt(info.get("port"))
+                ));
+                stopped.push(json!({ "pid": pid, "port": info.get("port"), "recorded": false }));
+            }
+            Err(e) => {
+                eprintln!("atm: port {}: {e}", py_str_opt(info.get("port")));
+                failed = Some(e);
+            }
         }
     }
-    Ok(())
+    failed
 }
 
 fn real_path(path: &str) -> PathBuf {
@@ -578,7 +679,7 @@ pub fn refresh_server(home: &Path) -> Result<Option<Map<String, Value>>> {
         return Ok(None);
     };
     if let Some(pid) = pid_of(&live) {
-        stop_server(home, pid)?;
+        stop_server(home, pid, Some(&live))?;
     }
     start_server(home, port_of(&live)).map(Some)
 }
@@ -649,10 +750,13 @@ fn serve_status(home: &Path, as_json: bool, port: u16) {
     }
 }
 
-/// Open `url` in the user's browser (`open` on macOS, `xdg-open` elsewhere): atm's own command, with the URL it made.
+/// Open `url` in the user's browser (`open` on macOS, `explorer.exe` on Windows, `xdg-open` elsewhere; ATM-673, audit
+/// C15: Windows has no `xdg-open`): atm's own command, with the URL it made, never through a shell.
 fn open_browser(url: &str) {
     let opener = if cfg!(target_os = "macos") {
         "open"
+    } else if cfg!(windows) {
+        "explorer.exe"
     } else {
         "xdg-open"
     };
@@ -676,10 +780,7 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
         Some(dir) => {
             let folder = atm_common::home::absolute(&cwd.join(dir));
             if !folder.is_dir() {
-                return Err(Error::Failed {
-                    message: format!("--dir {dir}: not a directory"),
-                    code: 2,
-                });
+                return Err(Error::Invalid(format!("--dir {dir}: not a directory")));
             }
             folder
         }
@@ -689,11 +790,21 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
     if args.refresh {
         if ctx.dry_run {
             println!("[dry-run] would refresh the dashboard server if outdated");
-        } else if let Some(record) = refresh_server(&home)? {
+            return Ok(());
+        }
+        let restarted = refresh_server(&home)?;
+        let url = restarted
+            .as_ref()
+            .map(|r| server_url(r.get("port").unwrap_or(&Value::Null), None));
+        if ctx.json {
+            let version = restarted.as_ref().and_then(|r| r.get("version"));
+            print_json(
+                &json!({ "restarted": restarted.is_some(), "version": version, "url": url }),
+            );
+        } else if let (Some(record), Some(url)) = (&restarted, &url) {
             println!(
-                "Dashboard server restarted with dashboard {}: {}",
-                py_str_opt(record.get("version")),
-                server_url(record.get("port").unwrap_or(&Value::Null), None)
+                "Dashboard server restarted with dashboard {}: {url}",
+                py_str_opt(record.get("version"))
             );
         }
         return Ok(());
@@ -705,7 +816,8 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             refresh_server(&home)?;
-            let url = serve_start(&cwd, args.port, args.all)?;
+            let (url, said) = serve_start(&cwd, args.port, args.all)?;
+            said.print(ctx.json);
             if args.open {
                 open_browser(&url);
             }
@@ -715,7 +827,7 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
                 println!("[dry-run] would stop the dashboard server");
                 return Ok(());
             }
-            serve_stop(&home, args.port)?;
+            serve_stop(&home, args.port)?.print(ctx.json);
         }
         _ => serve_status(&home, ctx.json, args.port),
     }
@@ -730,5 +842,57 @@ pub fn serve(home: &Path, port: u16) -> u8 {
             eprintln!("atm: {message}");
             1
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod stop_tests {
+    use super::*;
+
+    /// Not a test: what [`stubborn`] runs, this test binary sleeping. Run only by it (`--ignored`, by name)
+    #[test]
+    #[ignore = "run by `stubborn`, as its process"]
+    fn sleeper() {
+        std::thread::sleep(Duration::from_secs(60));
+    }
+
+    /// A process to stop: this test binary, sleeping. No shell (I5): atm starts only git and itself (I24). (A server
+    /// that ignores SIGTERM, ended with SIGKILL, is `serve.test.mjs`'s, T-390: no signal can be ignored from here
+    /// without a library for it.)
+    fn sleeping() -> std::process::Child {
+        let own_binary = std::env::current_exe().expect("the test binary");
+        std::process::Command::new(own_binary)
+            .args([
+                "--ignored",
+                "--exact",
+                "commands::maintenance::stop_tests::sleeper",
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("the test binary")
+    }
+
+    /// The process found is ended by its SIGTERM, and counts as gone once it is
+    #[test]
+    fn a_process_asked_to_stop_is_gone() {
+        let mut child = sleeping();
+        let found = Running::find(child.id()).expect("it runs");
+        assert!(found.signal(false));
+        assert!(wait_gone(found, STOP_WAIT, false));
+        let _ = child.wait();
+        assert!(!found.alive());
+    }
+
+    /// A process found earlier and gone since: a later process given its pid isn't it, so it counts as gone and gets no
+    /// signal
+    #[test]
+    fn a_process_gone_counts_as_gone_without_any_signal() {
+        let mut child = sleeping();
+        let found = Running::find(child.id()).expect("it runs");
+        child.kill().unwrap();
+        let _ = child.wait();
+        assert!(wait_gone(found, Duration::from_millis(500), true));
+        assert!(!found.signal(true));
     }
 }

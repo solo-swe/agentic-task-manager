@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "0310218059e7e1a89a324763573f991ef4934208",
+    "head": "2035c0d9f67b99a9b7034e79c7ff8b6616528e32"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/ui/TitleBarTabs.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T09:18:04Z"
+}

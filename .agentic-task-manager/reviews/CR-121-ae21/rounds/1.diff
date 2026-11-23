@@ -1,0 +1,179 @@
+diff --git a/crates/atm-lib/src/review_pages/list.rs b/crates/atm-lib/src/review_pages/list.rs
+index 105a20a5..18a797a8 100644
+--- a/crates/atm-lib/src/review_pages/list.rs
++++ b/crates/atm-lib/src/review_pages/list.rs
+@@ -123,6 +123,8 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
+             "waiting": waiting_for(&review, &me),
+             // When it began waiting on its reviewers: its latest round (ATM-610, the list's "waited 3 days")
+             "waiting_since": review.rounds.last().map(|r| r.at.clone()),
++            // Decided, approved or closed (ATM-714): atm's rule, the list's groups read it instead of their own copy
++            "ended": review.header.status.ended(),
+         });
+         listed.push((review.header.updated.clone(), entry));
+     }
+diff --git a/crates/atm-lib/tests/reviews/listing.rs b/crates/atm-lib/tests/reviews/listing.rs
+index 3e41e432..d8e13eb2 100644
+--- a/crates/atm-lib/tests/reviews/listing.rs
++++ b/crates/atm-lib/tests/reviews/listing.rs
+@@ -70,6 +70,23 @@ fn a_projects_summary_counts_the_reviews_waiting_on_the_user_once() {
+     assert_eq!(summary(&hakan)["needs_you_reviews"][0]["why"], "answered");
+ }
+ 
++/// ATM-714: the list says whether each review is decided (approved or closed), atm's rule the dashboard groups by
++#[test]
++fn the_list_says_whether_each_review_has_ended() {
++    let dir = dir();
++    let mut project = project(&dir.0, "claude:1");
++    waiting(&mut project, &["T-1"]).unwrap();
++    let ended = |project: &atm_lib::Project| {
++        atm_lib::review_pages::list_reviews(project, &atm_lib::review_pages::ReviewQuery::default())
++            .unwrap()["reviews"][0]["ended"]
++            .clone()
++    };
++    assert_eq!(ended(&project), json!(false));
++    let mut hakan = reopen(&dir.0, "Hakan");
++    atm_lib::reviews::close(&mut hakan, &ReviewRef("CR-1".into()), "Not this.", false).unwrap();
++    assert_eq!(ended(&hakan), json!(true));
++}
++
+ /// ATM-610: the list says since when each review waits on its reviewers, its latest round's time
+ #[test]
+ fn the_list_says_since_when_each_review_waits() {
+diff --git a/dashboard/src/lib/reviews/page.ts b/dashboard/src/lib/reviews/page.ts
+index e0969bd8..69bed877 100644
+--- a/dashboard/src/lib/reviews/page.ts
++++ b/dashboard/src/lib/reviews/page.ts
+@@ -39,7 +39,8 @@ export function groupReviews(entries: ReviewEntry[], now: number): ReviewGroup[]
+   const into = (id: ReviewGroup['id'], entry: ReviewEntry) => groups.find((g) => g.id === id)!.entries.push(entry);
+   for (const entry of entries) {
+     const status = entry.review.status;
+-    const decided = status === 'approved' || status === 'closed';
++    // Decided, as atm says it (ATM-714)
++    const decided = entry.ended;
+     if (entry.needs_you && (status === 'waiting' || status === 'live')) into('waiting', entry);
+     else if (entry.open > 0) into('commented', entry);
+     else if (status === 'changes_requested') into('sent-back', entry);
+diff --git a/dashboard/src/lib/reviews/types.ts b/dashboard/src/lib/reviews/types.ts
+index eb87e4b6..34b3b57a 100644
+--- a/dashboard/src/lib/reviews/types.ts
++++ b/dashboard/src/lib/reviews/types.ts
+@@ -48,9 +48,6 @@ export type ReviewStatus = 'draft' | 'waiting' | 'live' | 'changes_requested' |
+ /** A status filter: one status, or `open`, every review not decided yet (draft, waiting, live, sent back) */
+ export type StatusFilter = ReviewStatus | 'open';
+ 
+-/** The statuses of an open review, one not decided yet (as atm-review's `Status::OPEN`) */
+-export const OPEN_STATUSES: readonly ReviewStatus[] = ['draft', 'waiting', 'live', 'changes_requested'];
+-
+ /** A review's header (`review.md`'s): what lists and searches need */
+ export interface ReviewHeader {
+   id: string;
+@@ -77,6 +74,8 @@ export interface ReviewEntry {
+   waiting?: 'review' | 'answered' | null;
+   /** When it began waiting on its reviewers, its latest round's time (ATM-610). Optional, for an older atm's lists */
+   waiting_since?: string | null;
++  /** Decided: approved or closed, as atm says it (ATM-714) */
++  ended: boolean;
+   /** The project it is in, on a list of several projects' reviews (ATM-575, the overview's Reviews); the page's own */
+   project?: { id: string; name: string };
+ }
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index b12f14d4..cb0045a3 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -281,6 +281,17 @@ function withAtmAnswers(reference: string, page: ReviewPageFake): ReviewPageFake
+   };
+ }
+ 
++/** A reviews list with atm's `ended` on each entry (ATM-714), as the fixture plays atm: approved or closed, unless the
++ * entry gives its own */
++function withEnded(list: unknown): unknown {
++  const reviews = (list as { reviews?: { review: { status: string }; ended?: boolean }[] } | null)?.reviews;
++  if (!Array.isArray(reviews)) return list;
++  return {
++    ...(list as object),
++    reviews: reviews.map((e) => ({ ended: ['approved', 'closed'].includes(e.review.status), ...e })),
++  };
++}
++
+ /** A channel's ID in an app command's arguments: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its
+  * `id`) as Playwright passes it */
+ function channelId(channel: unknown): number {
+@@ -365,14 +376,14 @@ export class TasksServer {
+ 
+   /** Serve the reviews list (`GET …/reviews`) */
+   setReviews(list: unknown) {
+-    this.reviewList = list;
++    this.reviewList = withEnded(list);
+     return this;
+   }
+ 
+   /** Another project's reviews list (ATM-575, the overview's Reviews over every project); one without is a 404 */
+   private projectReviewLists = new Map<string, unknown>();
+   setProjectReviews(project: string, list: unknown) {
+-    this.projectReviewLists.set(project, list);
++    this.projectReviewLists.set(project, withEnded(list));
+     return this;
+   }
+ 
+diff --git a/dashboard/tests/unit/ReviewList.component.test.ts b/dashboard/tests/unit/ReviewList.component.test.ts
+index 0f7903e9..f0c76574 100644
+--- a/dashboard/tests/unit/ReviewList.component.test.ts
++++ b/dashboard/tests/unit/ReviewList.component.test.ts
+@@ -29,6 +29,8 @@ const entry = (
+   chains: 2,
+   open: 1,
+   needs_you: false,
++  // atm's word (ATM-714), as its list gives it
++  ended: status === 'approved' || status === 'closed',
+   ...extra,
+ });
+ 
+diff --git a/dashboard/tests/unit/page.test.ts b/dashboard/tests/unit/page.test.ts
+index 76abd9e4..7ee4e654 100644
+--- a/dashboard/tests/unit/page.test.ts
++++ b/dashboard/tests/unit/page.test.ts
+@@ -34,8 +34,10 @@ describe('the reviews list in groups', () => {
+   const entry = (
+     ref: string,
+     status: ReviewStatus,
+-    more: { needs_you?: boolean; open?: number; updated?: string; since?: string | null } = {},
++    more: { needs_you?: boolean; open?: number; updated?: string; since?: string | null; ended?: boolean } = {},
+   ): ReviewEntry => ({
++    // atm's word (ATM-714), as its list gives it for the status unless a test says otherwise
++    ended: more.ended ?? (status === 'approved' || status === 'closed'),
+     review: {
+       id: ref,
+       reference: ref,
+@@ -116,6 +118,14 @@ describe('the reviews list in groups', () => {
+     ]);
+   });
+ 
++  // ATM-714: decided is atm's word, not the page's reading of the status
++  it('decided as atm says it: a status atm calls ended is decided, one it doesn’t is waiting on others', () => {
++    expect(shape([entry('CR-1', 'approved', { ended: false }), entry('CR-2', 'waiting', { ended: true })])).toEqual([
++      ['others', ['CR-1']],
++      ['recent', ['CR-2']],
++    ]);
++  });
++
+   // ATM-575: the overview's list of every project's reviews
+   it('several projects’ reviews as one list: each with its project, the latest activity first', () => {
+     const a = { id: 'p1', name: 'atm' };
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 2fefde72..94968d61 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -322,9 +322,10 @@ old parameters from its hash and moves to the new address.
+ - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
+   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
+   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
+-  needs_you, waiting, waiting_since}], unreadable: [{folder, reference, problem}], you}`. `waiting_since` (ATM-610) is
+-  its latest round's time, when it began waiting on its reviewers: the unfiltered list groups the reviews (what waits
+-  for the user first, the longest waiting on top, saying for how long). `unreadable` (ATM-617) lists the project's
++  needs_you, waiting, waiting_since, ended}], unreadable: [{folder, reference, problem}], you}`. `waiting_since`
++  (ATM-610) is its latest round's time, when it began waiting on its reviewers: the unfiltered list groups the reviews
++  (what waits for the user first, the longest waiting on top, saying for how long). `ended` (ATM-714) is whether it is
++  decided, approved or closed: the groups go by it, not by a list of statuses of the dashboard's own. `unreadable` (ATM-617) lists the project's
+   review folders atm can't read (a status a newer atm wrote, a broken header), whatever the query: the Reviews tab
+   shows each as a row saying why. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
+   the status waiting on the reviewers (`open` before 0.41.0). A review needs the user when it is waiting or live with

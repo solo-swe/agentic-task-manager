@@ -11,6 +11,19 @@ set -eu
 
 version=${1:?usage: homebrew-cask.sh <version> <SHA256SUMS file>}
 sums=${2:?usage: homebrew-cask.sh <version> <SHA256SUMS file>}
+
+# Both go into Ruby as they are (ATM-678, audit A12): a version is three numbers, a checksum 64 hex digits, nothing else
+fail() {
+  echo "homebrew-cask.sh: $1" >&2
+  exit 1
+}
+dots=${version#*.}
+case $version in
+  *[!0123456789.]* | *..* | .* | *.) fail "the version $version isn't MAJOR.MINOR.PATCH" ;;
+  [0-9]*.[0-9]*.[0-9]*) ;;
+  *) fail "the version $version isn't MAJOR.MINOR.PATCH" ;;
+esac
+case ${dots#*.} in *.*) fail "the version $version isn't MAJOR.MINOR.PATCH" ;; esac
 file="atm-app-$version-universal.dmg"
 
 sha=""
@@ -18,9 +31,11 @@ while read -r sum name; do
   if [ "$name" = "$file" ]; then sha=$sum; fi
 done < "$sums"
 if [ -z "$sha" ]; then
-  echo "homebrew-cask.sh: $file isn't in $sums" >&2
-  exit 1
+  fail "$file isn't in $sums"
 fi
+# The characters listed: a range like a-f follows the locale's collation, which can take in A-F
+case $sha in *[!0123456789abcdef]*) fail "$file's checksum in $sums isn't a SHA-256" ;; esac
+if [ ${#sha} -ne 64 ]; then fail "$file's checksum in $sums isn't a SHA-256"; fi
 
 cat <<EOF
 # Written by agentic-task-manager's release (packaging/homebrew-cask.sh): don't edit it by hand.

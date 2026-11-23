@@ -5,16 +5,21 @@ import {
   combinedTimeline,
   loadProjectSources,
   mergedTasks,
+  overviewBurndown,
+  progressRows,
   projectOfWorker,
-  projectProgress,
   projectTasks,
-  velocityByPeriod,
+  velocityOf,
   withArchive,
   type ProjectSource,
 } from '../../src/lib/overview-data';
+import type { OverviewProgress, ProjectSummary } from '$generated/types';
+import { summary } from './summary.helpers';
 import type { Task } from '../../src/lib/types';
-import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
 import { asTaskViews, v1Tasks } from './api.helpers';
+import { NO_SPRINTS } from '../../src/lib/sprints';
+import { vocabulary, withKinds } from './views';
 
 const NOW = Date.parse('2026-01-02T12:00:00Z');
 const project = (id: string, missing = false): ProjectEntry => ({
@@ -34,12 +39,13 @@ const task = (id: string, by: string, start: string, end: string | null, status 
     started_at: start,
     completed_at: end ?? undefined,
   }) as Task;
-const source = (p: ProjectEntry, tasks: Task[], claims = new Map<string, Claim>()): ProjectSource => ({
-  project: p,
-  tasks,
-  claims,
-  vocab: DEFAULT_VOCABULARY,
-});
+/** A project's source as atm serves it: its tasks with their kinds in its vocabulary */
+const source = (
+  p: ProjectEntry,
+  tasks: Task[],
+  claims = new Map<string, Claim>(),
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
+): ProjectSource => ({ project: p, tasks: withKinds(tasks, vocab), claims, vocab, sprints: NO_SPRINTS, releases: [] });
 
 describe('combinedTimeline', () => {
   it('one lane per agent across projects; bars name their project and are keyed by it', () => {
@@ -81,15 +87,15 @@ describe('combinedTimeline', () => {
 });
 
 describe('mergedTasks (T-328)', () => {
-  it('every project’s tasks as one project’s: keyed by project, statuses by kind, claims re-keyed', () => {
+  it('every project’s tasks as one project’s: keyed by project, each with its status and atm’s kind, claims re-keyed', () => {
     // A project naming its own statuses: "shipped" is done
-    const vocab = resolveVocabulary({
+    const vocab = vocabulary({
       statuses: [
         { id: 'open', label: 'Open', kind: 'todo' },
         { id: 'doing', label: 'Doing', kind: 'active' },
         { id: 'shipped', label: 'Shipped', kind: 'done' },
       ],
-    } as never);
+    });
     const claim: Claim = {
       task: 'T-2',
       agent: 'claude:x',
@@ -99,22 +105,21 @@ describe('mergedTasks (T-328)', () => {
     };
     const merged = mergedTasks([
       source(project('a'), [task('T-1', 'Ada', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z')]),
-      {
-        ...source(
-          project('b'),
-          [
-            { ...task('T-1', 'Bo', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'), status: 'shipped' },
-            { ...task('T-2', 'claude:x', '2026-01-02T11:00:00Z', null), status: 'doing' },
-          ],
-          new Map([['T-2', claim]]),
-        ),
+      source(
+        project('b'),
+        [
+          { ...task('T-1', 'Bo', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'), status: 'shipped' },
+          { ...task('T-2', 'claude:x', '2026-01-02T11:00:00Z', null), status: 'doing' },
+        ],
+        new Map([['T-2', claim]]),
         vocab,
-      },
+      ),
     ]);
-    expect(merged.tasks.map((t) => [t.id, t.status])).toEqual([
-      ['A: T-1', 'done'],
-      ['B: T-1', 'done'],
-      ['B: T-2', 'in_progress'],
+    // The charts go by kind: the statuses stay each project's own
+    expect(merged.tasks.map((t) => [t.id, t.status, t.derived?.kind])).toEqual([
+      ['A: T-1', 'done', 'done'],
+      ['B: T-1', 'shipped', 'done'],
+      ['B: T-2', 'doing', 'active'],
     ]);
     expect([...merged.claims.keys()]).toEqual(['B: T-2']);
     expect(merged.claims.get('B: T-2')?.task).toBe('B: T-2');
@@ -136,62 +141,105 @@ describe('mergedTasks (T-328)', () => {
   });
 });
 
-describe('projectProgress and weeklyVelocity (T-329)', () => {
-  it('a project’s done of total (skipped left out), its active sprint and its open releases', () => {
-    const meta = {
-      sprints: [
-        { id: 'One', state: 'closed' },
-        { id: 'Two', state: 'active', goal: 'Ship it', due: '2026-01-05', release: '1.0' },
-      ],
-      releases: [
-        { id: '0.9', state: 'released' },
-        { id: '1.0', state: 'planned', name: 'First' },
-      ],
-    } as never;
-    const tasks = [
-      { ...task('T-1', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z'), sprint: 'One' },
-      { ...task('T-2', 'Ada', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'), sprint: 'Two' },
-      { ...task('T-3', 'Ada', '2026-01-02T10:00:00Z', null), sprint: 'Two' },
-      { id: 'T-4', name: 'Dropped', type: 'feature', status: 'skipped', sprint: 'Two' } as Task,
-    ];
-    const row = projectProgress({ ...source(project('a'), tasks), meta }, NOW);
-    expect([row.done, row.total]).toEqual([2, 3]);
-    expect(row.sprint && [row.sprint.sprint.id, row.sprint.done, row.sprint.total, row.sprint.dueIn]).toEqual([
-      'Two',
-      1,
-      2,
-      3,
-    ]);
-    expect(row.releases).toEqual([{ id: '1.0', name: 'First', done: 1, total: 2 }]);
-    // Without sprints or releases
-    const plain = projectProgress(source(project('b'), tasks.slice(0, 1)), NOW);
-    expect([plain.sprint, plain.releases]).toEqual([undefined, []]);
+// The overview's Progress tab from the projects' summaries (ATM-722): atm's figures (atm-lib's stats::overview, tested
+// there), added up and laid out here
+describe('the overview’s Progress from summaries (T-329, ATM-722)', () => {
+  const DAY = 86_400_000;
+  const today = Math.floor(NOW / DAY);
+  const withProgress = (id: string, progress: Partial<OverviewProgress>, fields: Partial<ProjectSummary> = {}) => ({
+    ...project(id),
+    summary: summary({
+      ...fields,
+      progress: { done: 0, total: 0, open_releases: [], done_days: [], burndown: [], forecast: null, ...progress },
+    }),
   });
 
-  it('velocityByPeriod: done per day, week or month, split by project, the last bar ending now (T-329 review)', () => {
-    const day = (d: number) => new Date(NOW - d * 86_400_000 + 60_000).toISOString();
-    const sources = [
-      source(project('a'), [task('T-1', 'Ada', day(1), day(1)), task('T-2', 'Ada', day(9), day(9))]),
-      source(project('b'), [
-        task('T-1', 'Bo', day(1), day(1)),
-        task('T-2', 'Bo', day(1), day(1)),
-        task('T-3', 'Bo', day(40), day(40)),
-        task('T-4', 'Bo', day(1), null),
-      ]),
+  it('a row per project with a summary: its done of total, its active sprint and open releases, as atm counts them', () => {
+    const active = {
+      id: 'Two',
+      state: 'active' as const,
+      due: null,
+      release: null,
+      done: 1,
+      total: 2,
+      percent: 50,
+      goal: 'Ship it',
+      days_left: 3,
+    };
+    const rows = progressRows([
+      withProgress(
+        'a',
+        { done: 2, total: 3, open_releases: [{ id: '1.0', name: 'First', done: 1, total: 2 }] },
+        { active_sprint: active },
+      ),
+      withProgress('b', { done: 1, total: 1 }),
+      project('c'),
+    ]);
+    expect(rows.map((r) => [r.project.id, r.done, r.total])).toEqual([
+      ['a', 2, 3],
+      ['b', 1, 1],
+    ]);
+    expect(rows[0].sprint && [rows[0].sprint.id, rows[0].sprint.days_left]).toEqual(['Two', 3]);
+    expect(rows[0].releases).toEqual([{ id: '1.0', name: 'First', done: 1, total: 2 }]);
+    expect([rows[1].sprint, rows[1].releases]).toEqual([undefined, []]);
+  });
+
+  it('velocity: done per day, week or month, split by project, from atm’s days with completions', () => {
+    const projects = [
+      withProgress('a', {
+        done_days: [
+          [today - 1, 1],
+          [today - 9, 1],
+        ],
+      }),
+      withProgress('b', {
+        done_days: [
+          [today - 1, 2],
+          [today - 40, 1],
+        ],
+      }),
     ];
-    const week = velocityByPeriod(sources, NOW, 'week');
+    const week = velocityOf(projects, NOW, 'week');
     expect(week.bars).toHaveLength(10);
     expect(week.bars.slice(-2).map((b) => b.byProject)).toEqual([
       [1, 0],
       [1, 2],
     ]);
-    expect(week.bars[9]).toMatchObject({ start: NOW - 7 * 86_400_000, total: 3 });
-    // 5 done in the 10 weeks (the one 40 days ago too)
+    expect(week.bars[9]).toMatchObject({ start: NOW - 7 * DAY, total: 3 });
     expect(week.average).toBe(0.5);
-    const days = velocityByPeriod(sources, NOW, 'day');
-    expect([days.bars.length, days.bars[13].total]).toEqual([14, 3]);
-    const months = velocityByPeriod(sources, NOW, 'month');
+    const months = velocityOf(projects, NOW, 'month');
     expect(months.bars.map((b) => b.total)).toEqual([0, 0, 0, 0, 1, 4]);
+  });
+
+  it('one burndown: each day’s scope and remaining added up, and the work left in all of them, one after another', () => {
+    const projects = [
+      withProgress('a', {
+        burndown: [
+          [today - 1, 4, 3],
+          [today, 4, 2],
+        ],
+        forecast: { minutes: { likely: 30, low: 20, high: 40 }, waiting: 1 },
+      }),
+      withProgress('b', {
+        burndown: [[today, 2, 2]],
+        forecast: { minutes: { likely: 10, low: 10, high: 10 }, waiting: 0 },
+      }),
+    ];
+    const b = overviewBurndown(projects, NOW);
+    expect(b.points.map((p) => [p.scope, p.remaining])).toEqual([
+      [4, 3],
+      [6, 4],
+    ]);
+    expect(b.points.at(-1)!.t).toBe(NOW);
+    expect(b.forecast).toEqual({
+      from: { t: NOW, remaining: 4 },
+      to: { t: NOW + 40 * 60_000, remaining: 1 },
+      range: { low: NOW + 30 * 60_000, high: NOW + 50 * 60_000 },
+    });
+    // A range: only what comes after its start
+    expect(overviewBurndown(projects, NOW, NOW - 1).points).toHaveLength(1);
+    // Nothing timed anywhere: nothing to draw
+    expect(overviewBurndown([withProgress('c', {})], NOW)).toEqual({ points: [], untimed: true });
   });
 });
 

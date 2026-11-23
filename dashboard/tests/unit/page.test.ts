@@ -4,6 +4,7 @@ import {
   TREE_WIDTH,
   chainsOf,
   driftedOf,
+  elsewhereOf,
   fileTree,
   filesIn,
   filterChains,
@@ -33,8 +34,10 @@ describe('the reviews list in groups', () => {
   const entry = (
     ref: string,
     status: ReviewStatus,
-    more: { needs_you?: boolean; open?: number; updated?: string; since?: string | null } = {},
+    more: { needs_you?: boolean; open?: number; updated?: string; since?: string | null; ended?: boolean } = {},
   ): ReviewEntry => ({
+    // atm's word (ATM-714), as its list gives it for the status unless a test says otherwise
+    ended: more.ended ?? (status === 'approved' || status === 'closed'),
     review: {
       id: ref,
       reference: ref,
@@ -115,6 +118,14 @@ describe('the reviews list in groups', () => {
     ]);
   });
 
+  // ATM-714: decided is atm's word, not the page's reading of the status
+  it('decided as atm says it: a status atm calls ended is decided, one it doesn’t is waiting on others', () => {
+    expect(shape([entry('CR-1', 'approved', { ended: false }), entry('CR-2', 'waiting', { ended: true })])).toEqual([
+      ['others', ['CR-1']],
+      ['recent', ['CR-2']],
+    ]);
+  });
+
   // ATM-575: the overview's list of every project's reviews
   it('several projects’ reviews as one list: each with its project, the latest activity first', () => {
     const a = { id: 'p1', name: 'atm' };
@@ -163,6 +174,7 @@ const chain = (id: string, path: string | null, placed: [number, number] | null,
     comments: [],
     placed,
     drifted: null,
+    in_view: true,
     ...more,
   }) as PlacedChain;
 
@@ -346,6 +358,20 @@ describe('a file’s chains', () => {
   it('drifted: only those whose text is gone, of this file', () => {
     expect(driftedOf(chains, file('a.md')).map((c) => c.id)).toEqual(['t4']);
     expect(driftedOf(chains, file('b.md'))).toEqual([]);
+  });
+
+  // ATM-725: atm's `in_view`, whether the view holds the round a comment was made on
+  it('on a round the view doesn’t hold: not placed, not drifted, listed as elsewhere; the others not elsewhere', () => {
+    const other = [
+      chain('k1', 'a.md', [3, 4], { in_view: false }),
+      chain('k2', 'a.md', [9, 9], { in_view: false, drifted: { round: 1, lines: [7, 7] } }),
+      chain('k3', 'a.md', [1, 1]),
+      chain('k4', 'b.md', [1, 1], { in_view: false }),
+    ];
+    expect(chainsOf(other, file('a.md')).map((c) => c.id)).toEqual(['k3']);
+    expect(driftedOf(other, file('a.md'))).toEqual([]);
+    expect(elsewhereOf(other, file('a.md')).map((c) => c.id)).toEqual(['k1', 'k2']);
+    expect(elsewhereOf(chains, file('a.md'))).toEqual([]);
   });
 
   it('the review’s own are on no file', () => {

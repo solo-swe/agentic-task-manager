@@ -1,0 +1,186 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index d9e7cb5c..848f036f 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -328,6 +328,7 @@
+   let submitting = $state(false);
+   let summary = $state('');
+   function submit(decision: 'approve' | 'request_changes' | 'comment') {
++    if (decision === 'approve' && approveBlocked) return;
+     onsubmit(decision, summary.trim());
+     submitting = false;
+   }
+@@ -349,6 +350,13 @@
+   });
+   /** Nothing left open: the decision at hand is to approve */
+   const settled = $derived(chainCounts.open === 0);
++  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can */
++  const approveBlocked = $derived.by(() => {
++    if (review.status === 'changes_requested') return 'Sent back: it is approved after its author’s next round';
++    const open = chainCounts.open;
++    if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
++    return null;
++  });
+   const listed = $derived(filterChains(page.chains, filter));
+   /** A chain as the Comments tab shows it: where it was made (a drifted one at its own lines) */
+   const asMade = (c: PlacedChain) => ({
+@@ -398,7 +406,7 @@
+         >{/if}
+       {#if !ended}
+         <div class="review-submit-anchor">
+-          {#if settled}
++          {#if settled && !approveBlocked}
+             <div class="review-split-button">
+               <button
+                 class="review-button primary approve"
+@@ -460,13 +468,24 @@
+                     onclick={() => submit('request_changes')}>Request changes</button
+                   >
+                 {/if}
+-                <button
+-                  class="review-button primary"
+-                  data-decision="approve"
+-                  disabled={busy}
+-                  onclick={() => submit('approve')}><Icon name="check" size={14} /> Approve</button
+-                >
++                <!-- Disabled, saying why, while the rules would refuse it (ATM-601): the reason on the wrapper, as a
++                     disabled button shows no tooltip in every engine, and as its description for screen readers -->
++                <span class="review-approve-wrap" title={approveBlocked ?? undefined}>
++                  <button
++                    class="review-button primary"
++                    data-decision="approve"
++                    disabled={busy || !!approveBlocked}
++                    aria-describedby={approveBlocked ? 'review-approve-why' : undefined}
++                    onclick={() => submit('approve')}><Icon name="check" size={14} /> Approve</button
++                  >
++                </span>
+               </div>
++              {#if approveBlocked}
++                <p class="review-approve-why" id="review-approve-why">
++                  <Icon name="info" size={13} />
++                  {approveBlocked}
++                </p>
++              {/if}
+             </section>
+           {/if}
+         </div>
+@@ -1446,6 +1465,21 @@
+     justify-content: flex-end;
+     gap: var(--space-4);
+   }
++  .review-approve-wrap {
++    display: inline-flex;
++  }
++  .review-approve-wrap:has(button:disabled) {
++    cursor: not-allowed;
++  }
++  .review-approve-why {
++    display: flex;
++    align-items: center;
++    justify-content: flex-end;
++    gap: var(--space-2);
++    margin: var(--space-3) 0 0;
++    font-size: var(--text-xs);
++    color: var(--text-muted);
++  }
+   .review-empty {
+     margin: 0;
+     color: var(--text-muted);
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 1f7688bc..c34fdc7a 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -760,9 +760,14 @@ test.describe('the diff viewer on a review’s page', () => {
+       });
+     tasksServer.answerReviewChanges(403, { error: "the review's author can't decide it" });
+     await page.getByRole('button', { name: 'Submit review' }).click();
+-    await page.getByRole('button', { name: 'Approve' }).click();
++    // Its comments open, Approve can't be pressed, and says why (ATM-601)
++    const approve = page.getByRole('button', { name: 'Approve' });
++    await expect(approve).toBeDisabled();
++    await expect(approve).toHaveAccessibleDescription(/still open: resolve them first/);
++    await page.getByLabel('Summary').fill('One more.');
++    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+     await expect(page.getByRole('alert')).toHaveText("the review's author can't decide it");
+-    expect(tasksServer.reviewChanges.at(-1)).toMatchObject({ body: { decision: 'approve' } });
++    expect(tasksServer.reviewChanges.at(-1)).toMatchObject({ body: { decision: 'comment' } });
+   });
+ });
+ 
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index df02dec7..0afebe58 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -572,16 +572,16 @@ describe('ReviewPage: submit', () => {
+   /** A review with a comment still open: the decision is Submit review's */
+   const open = (more: Partial<ReviewPageData> = {}) => data({ chains: [chain('t1', 'src/a.rs')], ...more });
+ 
+-  it('Submit review opens the decision: approve or request changes, with or without a summary; comment only with one', async () => {
++  it('Submit review opens the decision: request changes, with or without a summary; comment only with one', async () => {
+     const { onsubmit } = show(open());
+     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+     const toggle = screen.getByRole('button', { name: 'Submit review' });
+     await fireEvent.click(toggle);
+     expect(toggle).toHaveAttribute('aria-expanded', 'true');
+     expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
+-    await fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
++    await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
+     // A decision made closes it
+-    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
++    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
+     await fireEvent.click(toggle);
+     await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: ' Two things. ' } });
+     await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
+@@ -589,12 +589,51 @@ describe('ReviewPage: submit', () => {
+     await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: ' Two things. ' } });
+     await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+     expect(onsubmit.mock.calls).toEqual([
+-      ['approve', ''],
++      ['request_changes', ''],
+       ['request_changes', 'Two things.'],
+       ['comment', 'Two things.'],
+     ]);
+   });
+ 
++  // ATM-601: pressed, it failed with atm's refusal
++  it.each([
++    ['a comment is open', (p: ReviewPageData) => p, '1 comment is still open: resolve them first'],
++    [
++      'two are open',
++      (p: ReviewPageData) => ({ ...p, chains: [...p.chains, { ...p.chains[0], id: 't2' }] }),
++      '2 comments are still open: resolve them first',
++    ],
++    [
++      'it is sent back, everything resolved',
++      (p: ReviewPageData) => ({
++        ...p,
++        chains: [chain('t1', 'src/a.rs', {}, true)],
++        review: { ...p.review, status: 'changes_requested' as const },
++      }),
++      'Sent back: it is approved after its author’s next round',
++    ],
++  ])('while %s, Approve is disabled and says why', async (_, made, why) => {
++    const { onsubmit } = show(made(open()));
++    // No one-click Approve either
++    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    const approve = screen.getByRole('button', { name: 'Approve' });
++    expect(approve).toBeDisabled();
++    expect(approve).toHaveAccessibleDescription(why);
++    expect(approve.closest('[title]')).toHaveAttribute('title', why);
++    expect(screen.getByText(why)).toBeTruthy();
++    await fireEvent.click(approve);
++    expect(onsubmit).not.toHaveBeenCalled();
++  });
++
++  it('nothing standing in the way, Approve in the panel is enabled, with no reason shown', async () => {
++    show(data({ chains: [chain('t1', 'src/a.rs', {}, true)] }));
++    await fireEvent.click(screen.getByRole('button', { name: 'Other decisions' }));
++    const approve = screen.getAllByRole('button', { name: 'Approve' }).at(-1)!;
++    expect(approve).toBeEnabled();
++    expect(approve).not.toHaveAttribute('aria-describedby');
++    expect(screen.queryByText(/still open|Sent back/)).toBeNull();
++  });
++
+   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {
+     const { rerender } = show(open());
+     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));

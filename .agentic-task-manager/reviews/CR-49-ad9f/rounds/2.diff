@@ -1,0 +1,443 @@
+diff --git a/crates/atm-common/schema/api.schema.json b/crates/atm-common/schema/api.schema.json
+index 13e33d95..9adbf4ed 100644
+--- a/crates/atm-common/schema/api.schema.json
++++ b/crates/atm-common/schema/api.schema.json
+@@ -294,8 +294,12 @@
+     "NeedsYouReview": {
+       "type": "object",
+       "description": "A code review waiting on the user, and why (ATM-606)",
+-      "required": ["reference", "title", "why"],
++      "required": ["id", "reference", "title", "why"],
+       "properties": {
++        "id": {
++          "type": "string",
++          "description": "The review's UUID, as a task's code_reviews link it: a task waited on through it isn't listed again (ATM-640)"
++        },
+         "reference": { "type": "string", "description": "CR-7" },
+         "title": { "type": "string" },
+         "why": { "enum": ["review", "answered"] }
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index dcc1348a..b17829a4 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -898,9 +898,11 @@ mod tests {
+         // T-1 is in review, through CR-1: not counted again
+         assert_eq!(task(&project, "T-1")["status"], "in_review");
+         assert_eq!(s["needs_you"]["review"], 0);
++        // With its ID, as T-1's code_reviews link it: the dashboard drops T-1 from its own list by it (ATM-640)
++        let link = task(&project, "T-1")["code_reviews"][0]["id"].clone();
+         assert_eq!(
+             s["needs_you_reviews"],
+-            json!([{ "reference": "CR-1", "title": "One", "why": "review" }])
++            json!([{ "id": link, "reference": "CR-1", "title": "One", "why": "review" }])
+         );
+         // Sent back by the user: off their list until the agent answers
+         let mut hakan = reopen(&dir.0, "Hakan");
+diff --git a/crates/atm-lib/src/summary.rs b/crates/atm-lib/src/summary.rs
+index a03ac265..f63410a6 100644
+--- a/crates/atm-lib/src/summary.rs
++++ b/crates/atm-lib/src/summary.rs
+@@ -826,7 +826,9 @@ pub fn project_summary(project: &Project) -> Result<Value> {
+         "needs_you_tasks": needs_you_tasks,
+         "needs_you_reviews": waiting_reviews
+             .iter()
+-            .map(|(h, why)| json!({"reference": h.reference, "title": capped(Some(&json!(h.title))), "why": why}))
++            .map(|(h, why)| {
++                json!({"id": h.id.0, "reference": h.reference, "title": capped(Some(&json!(h.title))), "why": why})
++            })
+             .collect::<Vec<_>>(),
+         "git": git_summary(project, &tasks),
+         "description": description(document.get("meta")),
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index ab3f5a22..992860b9 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -4103,6 +4103,15 @@ svg.graph-minimap.hidden {
+   padding: var(--space-3);
+   gap: var(--space-1);
+ }
++/* A long list scrolls, the popup kept small (ATM-640): about eight rows, less on a short window */
++.needs-you-scroll {
++  max-height: min(320px, 60vh);
++}
++.needs-you-list {
++  display: flex;
++  flex-direction: column;
++  gap: var(--space-1);
++}
+ .needs-you-menu.align-right {
+   left: auto;
+   right: 0;
+diff --git a/dashboard/src/lib/shell/Header.svelte b/dashboard/src/lib/shell/Header.svelte
+index f24e799b..cac78e29 100644
+--- a/dashboard/src/lib/shell/Header.svelte
++++ b/dashboard/src/lib/shell/Header.svelte
+@@ -40,11 +40,14 @@
+   );
+   // Tasks that need the user: in review, or blocked on a question for the user (D-3.3)
+   // With you: only the active sprint's, ready to start (T-347), as atm's summary counts them
+-  const needYou = $derived(needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints }));
+-  // And the project's reviews waiting on the user (ATM-575), from its summary: in the same chip, after the tasks
++  // And the project's reviews waiting on the user (ATM-575), from its summary: in the same chip, after the tasks; a
++  // task in review through one of them is listed once, as its review (ATM-640)
+   const reviewsNeedingYou = $derived(
+     dashboard.projects.find((p) => p.id === dashboard.projectId)?.summary?.needs_you_reviews ?? [],
+   );
++  const needYou = $derived(
++    needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints }, reviewsNeedingYou),
++  );
+   const present = $derived(dashboard.projects.filter((p) => !p.missing));
+ </script>
+ 
+diff --git a/dashboard/src/lib/shell/NeedsYouMenu.svelte b/dashboard/src/lib/shell/NeedsYouMenu.svelte
+index a2f5f6d6..a73866bc 100644
+--- a/dashboard/src/lib/shell/NeedsYouMenu.svelte
++++ b/dashboard/src/lib/shell/NeedsYouMenu.svelte
+@@ -9,6 +9,7 @@
+   import type { NeedsYouReview } from '$generated/types';
+   import type { NeedsYouItem } from '../waiting';
+   import { taskLabel } from '../keys';
++  import HintScroll from '../ui/HintScroll.svelte';
+   import TaskKey from '../ui/TaskKey.svelte';
+ 
+   let {
+@@ -105,28 +106,38 @@
+             id={menuId}
+             style:translate={shift ? `${shift}px 0` : undefined}
+           >
+-            {#each items as task (task.id)}
+-              <DropdownMenu.Item onSelect={() => onopen(task.id)}>
+-                {#snippet child({ props })}
+-                  <button {...props} class="needs-you-row" data-id={task.id}>
+-                    <span class="needs-you-id"><TaskKey {task} /></span>
+-                    <span class="needs-you-name">{task.name}</span>
+-                    <span class="needs-you-reason">{REASONS[task.reason]}</span>
+-                  </button>
+-                {/snippet}
+-              </DropdownMenu.Item>
+-            {/each}
+-            {#each listed as review (review.reference)}
+-              <DropdownMenu.Item onSelect={() => onreview?.(review.reference)}>
+-                {#snippet child({ props })}
+-                  <button {...props} class="needs-you-row" data-review={review.reference}>
+-                    <span class="needs-you-id">{review.reference}</span>
+-                    <span class="needs-you-name">{review.title}</span>
+-                    <span class="needs-you-reason">{REVIEW_REASONS[review.why]}</span>
+-                  </button>
+-                {/snippet}
+-              </DropdownMenu.Item>
+-            {/each}
++            <!-- A long list scrolls in the popup, without a scroll bar: "▲ N more" / "▼ N more" at the cut edges, as the
++                 dashboard's other lists (ATM-640); the arrows bring the row they move to into view -->
++            <HintScroll
++              tag="span"
++              item=".needs-you-row"
++              outer="needs-you-scroll"
++              body="needs-you-list"
++              tabbable={false}
++            >
++              {#each items as task (task.id)}
++                <DropdownMenu.Item onSelect={() => onopen(task.id)}>
++                  {#snippet child({ props })}
++                    <button {...props} class="needs-you-row" data-id={task.id}>
++                      <span class="needs-you-id"><TaskKey {task} /></span>
++                      <span class="needs-you-name">{task.name}</span>
++                      <span class="needs-you-reason">{REASONS[task.reason]}</span>
++                    </button>
++                  {/snippet}
++                </DropdownMenu.Item>
++              {/each}
++              {#each listed as review (review.reference)}
++                <DropdownMenu.Item onSelect={() => onreview?.(review.reference)}>
++                  {#snippet child({ props })}
++                    <button {...props} class="needs-you-row" data-review={review.reference}>
++                      <span class="needs-you-id">{review.reference}</span>
++                      <span class="needs-you-name">{review.title}</span>
++                      <span class="needs-you-reason">{REVIEW_REASONS[review.why]}</span>
++                    </button>
++                  {/snippet}
++                </DropdownMenu.Item>
++              {/each}
++            </HintScroll>
+           </span>
+         {/snippet}
+       </DropdownMenu.ContentStatic>
+diff --git a/dashboard/src/lib/ui/HintScroll.svelte b/dashboard/src/lib/ui/HintScroll.svelte
+index ee12923f..ce2c0b6c 100644
+--- a/dashboard/src/lib/ui/HintScroll.svelte
++++ b/dashboard/src/lib/ui/HintScroll.svelte
+@@ -4,13 +4,16 @@
+ 
+   // Content scrolling on its own without a scrollbar (T-262, T-282): "▲ N more" and "▼ N more" at the edges say how
+   // many items (`item`, a selector) are cut off above and below; the wheel and the trackpad scroll as usual, a hint
+-  // scrolls a page. `outer` and `body` add classes to the wrapper and the scroller.
++  // scrolls a page. `outer` and `body` add classes to the wrapper and the scroller; `tag` is their element (a span
++  // where only phrasing content may go, the "need you" list in a card's paragraph, ATM-640).
+   let {
+     children,
+     item,
+     outer = '',
+     body = '',
+     id,
++    tag = 'div',
++    tabbable = true,
+     onscrolled,
+   }: {
+     children: Snippet;
+@@ -18,6 +21,10 @@
+     outer?: string;
+     body?: string;
+     id?: string;
++    tag?: 'div' | 'span';
++    /** Whether Tab stops at the hints: not in a menu, whose arrows reach every row and which focuses its first tab
++     * stop on opening (ATM-640) */
++    tabbable?: boolean;
+     /** Told how far the content has scrolled, on every scroll (Help shrinks its title once it has) */
+     onscrolled?: (scrollTop: number) => void;
+   } = $props();
+@@ -46,12 +53,17 @@
+     el?.scrollBy({ top: direction * el.clientHeight * 0.85, behavior: scrollBehavior() });
+ </script>
+ 
+-<div class="hint-scroll {outer}">
++<svelte:element this={tag} class="hint-scroll {outer}">
+   {#if above}
+-    <button class="kanban-more top" aria-label="Scroll up: {above} more" onclick={() => page(-1)}>▲ {above} more</button
++    <button
++      class="kanban-more top"
++      aria-label="Scroll up: {above} more"
++      tabindex={tabbable ? undefined : -1}
++      onclick={() => page(-1)}>▲ {above} more</button
+     >
+   {/if}
+-  <div
++  <svelte:element
++    this={tag}
+     class="hint-scroll-body {body}"
+     {id}
+     bind:this={el}
+@@ -61,10 +73,13 @@
+     }}
+   >
+     {@render children()}
+-  </div>
++  </svelte:element>
+   {#if below}
+-    <button class="kanban-more bottom" aria-label="Scroll down: {below} more" onclick={() => page(1)}
+-      >▼ {below} more</button
++    <button
++      class="kanban-more bottom"
++      aria-label="Scroll down: {below} more"
++      tabindex={tabbable ? undefined : -1}
++      onclick={() => page(1)}>▼ {below} more</button
+     >
+   {/if}
+-</div>
++</svelte:element>
+diff --git a/dashboard/src/lib/waiting.ts b/dashboard/src/lib/waiting.ts
+index 53f795fe..dc600120 100644
+--- a/dashboard/src/lib/waiting.ts
++++ b/dashboard/src/lib/waiting.ts
+@@ -112,15 +112,19 @@ export function needingUser(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULAR
+  * and a summary's (the overview's cards, T-549) do */
+ export type NeedsYouItem = NeedsYouEntry & Partial<Pick<Task, 'key'>>;
+ 
+-/** needingUser as the chips list it */
++/** needingUser as the chips list it. A task in review whose code review is one of `reviews` (those waiting on the user,
++ * listed in the same chip) is waited on through it, so it isn't listed again, as atm's summary counts it (ATM-640) */
+ export function needsYouItems(
+   tasks: Task[],
+   vocab: Vocabulary = DEFAULT_VOCABULARY,
+   scope?: NeedsYouScope,
++  reviews: readonly { id: string }[] = [],
+ ): NeedsYouItem[] {
++  const waiting = new Set(reviews.map((r) => r.id));
+   return tasks.flatMap((t) => {
+     const reason = needsYouReason(t, vocab, scope);
+     if (!reason) return [];
++    if (reason === 'review' && (t.code_reviews ?? []).some((l) => waiting.has(l.id))) return [];
+     return [t.key ? { id: t.id, key: t.key, name: t.name, reason } : { id: t.id, name: t.name, reason }];
+   });
+ }
+diff --git a/dashboard/tests/e2e/needs-you.spec.ts b/dashboard/tests/e2e/needs-you.spec.ts
+index ba272b19..d7f83c29 100644
+--- a/dashboard/tests/e2e/needs-you.spec.ts
++++ b/dashboard/tests/e2e/needs-you.spec.ts
+@@ -69,4 +69,51 @@ test.describe('"need you" chip', () => {
+     await page.keyboard.press('Enter');
+     await expectDetail(page, 'T-005');
+   });
++
++  test('a long list scrolls in a small popup, without a scroll bar: "▼ N more", the arrows reach every row (ATM-640)', async ({
++    page,
++    tasksServer,
++  }) => {
++    const data = v4({ 'T-005': 'user', 'T-006': 'user' });
++    const inReview = data.tasks.find((t) => t.id === 'T-004')!;
++    for (let n = 100; n < 120; n++)
++      data.tasks.push({ ...inReview, id: `T-${n}`, name: `Review ${n}`, dependencies: [] });
++    await openDashboard(page, tasksServer, data, { tab: 'list' });
++    const chip = page.locator('#attention-count');
++    await expect(chip).toHaveText('23 need you');
++    await chip.click();
++    const menu = page.locator('#needs-you-menu');
++    const list = menu.locator('.needs-you-list');
++    const rows = menu.locator('.needs-you-row');
++    await expect(rows).toHaveCount(23);
++    // Small: well under the window, the list cut off, with no scroll bar of its own
++    const box = (await menu.boundingBox())!;
++    expect(box.height).toBeLessThan(400);
++    expect(box.y + box.height).toBeLessThan(page.viewportSize()!.height);
++    const scroller = await list.evaluate((el: HTMLElement) => ({
++      cut: el.scrollHeight > el.clientHeight,
++      bar: el.offsetWidth - el.clientWidth,
++      overflow: getComputedStyle(el).overflowY,
++    }));
++    expect(scroller).toEqual({ cut: true, bar: 0, overflow: 'auto' });
++    await expect(menu.locator('.kanban-more.bottom')).toHaveText(/^▼ \d+ more$/);
++    await expect(menu.locator('.kanban-more.top')).toHaveCount(0);
++
++    // The arrows go to the last row, scrolled into view; "▲ N more" then, and no "▼"
++    await expect(rows.first()).toBeFocused();
++    await page.keyboard.press('End');
++    await expect(rows.last()).toBeFocused();
++    await expect(rows.last()).toBeInViewport();
++    await expect(menu.locator('.kanban-more.top')).toHaveText(/^▲ \d+ more$/);
++    await expect(menu.locator('.kanban-more.bottom')).toHaveCount(0);
++    await page.keyboard.press('Enter');
++    await expectDetail(page, 'T-119');
++  });
++
++  test('a short list has no hints', async ({ page, tasksServer }) => {
++    await openDashboard(page, tasksServer, v4({ 'T-005': 'user', 'T-006': 'user' }), { tab: 'list' });
++    await page.locator('#attention-count').click();
++    await expect(page.locator('#needs-you-menu .needs-you-row')).toHaveCount(3);
++    await expect(page.locator('#needs-you-menu .kanban-more')).toHaveCount(0);
++  });
+ });
+diff --git a/dashboard/tests/e2e/overview-reviews.spec.ts b/dashboard/tests/e2e/overview-reviews.spec.ts
+index 24ba14d2..4fae4d1e 100644
+--- a/dashboard/tests/e2e/overview-reviews.spec.ts
++++ b/dashboard/tests/e2e/overview-reviews.spec.ts
+@@ -1,4 +1,4 @@
+-import { expect, summary, test } from './helpers';
++import { expect, loadFixture, openDashboard, summary, test } from './helpers';
+ 
+ // ATM-575: every project's reviews on the overview's Reviews tab (Hakan: a fourth tab on the overview), with a project
+ // picker; and the reviews waiting on the user in the needs-you chip
+@@ -53,7 +53,7 @@ test.describe('Projects Overview: the Reviews tab', () => {
+     tasksServer.withOwnSummary(
+       summary({
+         needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 1 },
+-        needs_you_reviews: [{ reference: 'CR-7', title: 'The editor', why: 'review' }],
++        needs_you_reviews: [{ id: 'r7', reference: 'CR-7', title: 'The editor', why: 'review' }],
+       }),
+     );
+     await page.goto('/projects');
+@@ -65,6 +65,33 @@ test.describe('Projects Overview: the Reviews tab', () => {
+     await expect(page).toHaveURL(/\/projects\/[^/]+\/reviews\/CR-7/);
+   });
+ 
++  test('on a project, a task in review through a review waiting on you is listed once, as the review (ATM-640)', async ({
++    page,
++    tasksServer,
++  }) => {
++    // T-004 is in review through CR-7, which waits on you; T-005 is blocked on you
++    const data = loadFixture('v4');
++    data.tasks = data.tasks.map((t) =>
++      t.id === 'T-004'
++        ? { ...t, code_reviews: [{ id: 'r7', ref: 'CR-7' }] }
++        : t.id === 'T-006'
++          ? { ...t, waiting_on: 'agent' }
++          : t,
++    );
++    tasksServer.withOwnSummary(
++      summary({
++        needs_you: { review: 0, blocked_on_user: 1, together: 0, code_reviews: 1 },
++        needs_you_reviews: [{ id: 'r7', reference: 'CR-7', title: 'The editor', why: 'review' }],
++      }),
++    );
++    await openDashboard(page, tasksServer, data, { tab: 'list' });
++    const chip = page.locator('#attention-count');
++    await expect(chip).toHaveText('2 need you');
++    await chip.click();
++    const rows = page.locator('#needs-you-menu .needs-you-row');
++    await expect(rows.locator('.needs-you-id')).toHaveText(['T-005', 'CR-7']);
++  });
++
+   test('a project whose reviews can’t be read is named; the others are listed', async ({ page, tasksServer }) => {
+     tasksServer.addProject('second', 'standard', 'Second Project');
+     tasksServer.setReviews({ reviews: [entry(1, 'Ours')], you: 'Ana' });
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index a395c79c..83e11ae1 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1279,10 +1279,13 @@ test.describe('the diff viewer on a review’s page', () => {
+     );
+     await page.goto(reviewPath(tasksServer, '/CR-2'));
+     const conversation = page.locator('.review-conversation');
+-    await expect(conversation.locator('[data-comment="c1"]').getByRole('button', { name: 'Edit comment' })).toHaveCount(
+-      0,
+-    );
++    // c1's own header: its replies are inside it, and your reply (c9) has Edit. Once c9 has it, the page knows you,
++    // so c1 having none is said, not just not yet drawn
+     const mine = conversation.locator('[data-comment="c9"]');
++    await expect(mine.getByRole('button', { name: 'Edit comment' })).toBeVisible();
++    await expect(
++      conversation.locator('[data-comment="c1"] > .chain-meta').getByRole('button', { name: 'Edit comment' }),
++    ).toHaveCount(0);
+     await mine.getByRole('button', { name: 'Edit comment' }).click();
+     await mine.getByLabel('Edit your comment').fill('Because of the style guide.');
+     await mine.getByRole('button', { name: 'Save' }).click();
+diff --git a/dashboard/tests/unit/NeedsYouMenu.component.test.ts b/dashboard/tests/unit/NeedsYouMenu.component.test.ts
+index ecb26c22..470cec95 100644
+--- a/dashboard/tests/unit/NeedsYouMenu.component.test.ts
++++ b/dashboard/tests/unit/NeedsYouMenu.component.test.ts
+@@ -97,8 +97,8 @@ describe('NeedsYouMenu', () => {
+   // ATM-575: the reviews waiting on the user, counted in the same chip, listed after the tasks
+   describe('with reviews', () => {
+     const REVIEWS = [
+-      { reference: 'CR-7', title: 'The editor', why: 'review' as const },
+-      { reference: 'CR-9', title: 'Search', why: 'answered' as const },
++      { id: 'r7', reference: 'CR-7', title: 'The editor', why: 'review' as const },
++      { id: 'r9', reference: 'CR-9', title: 'Search', why: 'answered' as const },
+     ];
+ 
+     it('counted with the tasks and listed after them, with why; a row opens that review', async () => {
+diff --git a/dashboard/tests/unit/waiting.test.ts b/dashboard/tests/unit/waiting.test.ts
+index 831555e9..52b86498 100644
+--- a/dashboard/tests/unit/waiting.test.ts
++++ b/dashboard/tests/unit/waiting.test.ts
+@@ -107,6 +107,19 @@ describe('needingUser', () => {
+     ]);
+   });
+ 
++  // ATM-640: listed once, as its review, in the same chip; matched by the review's ID (its number can change)
++  it('a task in review through a review waiting on you is left out; through another, or blocked, it stays', () => {
++    const cr = (id: string) => ({ id, ref: 'CR-1' });
++    const tasks = [
++      task('in_review', { id: 'A', name: 'Alpha', code_reviews: [cr('r-old'), cr('r1')] }),
++      task('in_review', { id: 'C', name: 'Gamma', code_reviews: [cr('r2')] }),
++      task('in_review', { id: 'D', name: 'Delta' }),
++      task('blocked', { id: 'B', name: 'Beta', waiting_on: 'user', code_reviews: [cr('r1')] }),
++    ];
++    expect(needsYouItems(tasks, undefined, undefined, [{ id: 'r1' }]).map((t) => t.id)).toEqual(['C', 'D', 'B']);
++    expect(needsYouItems(tasks, undefined, undefined, []).map((t) => t.id)).toEqual(['A', 'C', 'D', 'B']);
++  });
++
+   const derived = (ready: boolean) => ({ kind: 'todo', ready, waiting_for: [], priority: 'P2', archived: false });
+ 
+   it('with you: only the active sprint’s, ready as atm says it (T-347, T-366)', () => {
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 7c5fe659..ca12dcff 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -408,7 +408,7 @@ and `key_final` too, as the task views give them; a project before task keys has
+ | `git.pr` | the latest PR recorded on the tasks (`atm vcs pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm vcs pushed`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
+ | `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent), and those waiting through a code review counted in `code_reviews` (ATM-606: counted once) |
+ | `needs_you.code_reviews` | the project's code reviews (its own folder's, not its other working copies') waiting on the user at the machine (their git name, whatever environment the server runs in): their decision or round is the user's (the list's `needs_you`), or, in one they take part in and not decided or a draft, someone else wrote after the user last did (`answered`, by the comments' order; nothing is stored of what they have read). The summary's stamp includes the reviews' files, so its cache and `ETag` move with a comment |
+-| `needs_you_reviews` | those reviews, the longest waiting first: `{ reference, title, why }`, `why` being `"review"` or `"answered"`. The Reviews tab counts them |
++| `needs_you_reviews` | those reviews, the longest waiting first: `{ id, reference, title, why }`, `why` being `"review"` or `"answered"`, `id` the review's UUID as a task's `code_reviews` link it (the title bar's chip lists a task in review through one of them once, as the review: ATM-640). The Reviews tab counts them |
+ | `needs_you.blocked_on_user` | blocked-kind tasks with `waiting_on: "user"` |
+ | `needs_you.together` | to-do tasks with `with: "user"` the user can take up now (T-347): in the active sprint (in any sprint or the backlog without an active sprint), their dependencies done (an archived one counts as done) |
+ | `needs_you_tasks` | those same tasks, in file order: `{ id, name, reason }`, `reason` being `"review"`, `"blocked"` (on a question for the user) or `"together"`. The card's "needs you" chip opens them |

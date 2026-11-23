@@ -12,6 +12,8 @@
    document's text in every style; the theme's own page (Auto) from the size it has ---- */
 :root {
   --doc-scale: 1;
+  /* Every style's page is GitHub's width (ATM-706): one value, so the styles can't drift apart again */
+  --doc-page-width: 980px;
 }
 :root[data-doc-size='tiny'] {
   --doc-scale: 0.8;
@@ -46,7 +48,7 @@
   --doc-page-ink: #1f2328;
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='github'] .doc-page {
-  max-width: 980px;
+  max-width: var(--doc-page-width);
   --text: #e6edf3;
   --text-muted: #9198a1;
   --border: #3d444d;
@@ -172,9 +174,9 @@
   --surface2: #f1f3f6;
   --accent: #2357c5;
 }
-/* The column is the measure (44rem of text), the page around it */
+/* GitHub's width, as every style's page (ATM-706: its own narrower measure read as too small a page) */
 :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] {
-  max-width: calc(44rem + 112px);
+  max-width: var(--doc-page-width);
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd {
   font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
@@ -268,7 +270,7 @@
   --accent: #c8102e;
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] {
-  max-width: 760px;
+  max-width: var(--doc-page-width);
 }
 :is(.doc-viewer, .doc-sheet)[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd {
   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;

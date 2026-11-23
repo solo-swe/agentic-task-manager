@@ -1,0 +1,1078 @@
+diff --git a/app/src-tauri/src/badge.rs b/app/src-tauri/src/badge.rs
+index c3d7bac2..1b7cb60a 100644
+--- a/app/src-tauri/src/badge.rs
++++ b/app/src-tauri/src/badge.rs
+@@ -29,8 +29,9 @@ pub struct Waiting {
+     pub count: u32,
+ }
+ 
+-/// How many tasks need the user in each project of a listing (`list_projects`'s): in review, blocked on the user, and
+-/// work done together, as the dashboard counts them (`needsYou`); a missing project has none.
++/// How many things need the user in each project of a listing (`list_projects`'s): tasks in review, blocked on the
++/// user, and work done together, and code reviews waiting on them (ATM-606: a task in review through one of those is
++/// counted once, by atm-lib), as the dashboard counts them (`needsYou`); a missing project has none.
+ #[must_use]
+ pub fn waiting_of(projects: &[Value]) -> Vec<Waiting> {
+     let count = |n: &Value, key: &str| n.get(key).and_then(Value::as_u64).unwrap_or(0);
+@@ -38,7 +39,10 @@ pub fn waiting_of(projects: &[Value]) -> Vec<Waiting> {
+         .iter()
+         .filter_map(|p| {
+             let n = p.get("summary")?.get("needs_you")?;
+-            let total = count(n, "review") + count(n, "blocked_on_user") + count(n, "together");
++            let total = count(n, "review")
++                + count(n, "blocked_on_user")
++                + count(n, "together")
++                + count(n, "code_reviews");
+             Some(Waiting {
+                 id: p.get("id")?.as_str()?.to_owned(),
+                 name: p
+@@ -60,10 +64,11 @@ pub fn notice(name: &str, count: u32) -> String {
+         .filter(|c| !c.is_control())
+         .take(MAX_NAME)
+         .collect();
++    // Tasks and code reviews alike (ATM-606)
+     if count == 1 {
+-        format!("{name}: 1 task needs you")
++        format!("{name}: 1 thing needs you")
+     } else {
+-        format!("{name}: {count} tasks need you")
++        format!("{name}: {count} things need you")
+     }
+ }
+ 
+@@ -228,7 +233,10 @@ mod tests {
+             listed(
+                 "a",
+                 "Alpha",
+-                Some(serde_json::json!({"review": 2, "blocked_on_user": 1, "together": 1})),
++                // Code reviews waiting on the user count too (ATM-606)
++                Some(
++                    serde_json::json!({"review": 2, "blocked_on_user": 1, "together": 1, "code_reviews": 2}),
++                ),
+             ),
+             listed(
+                 "b",
+@@ -244,7 +252,7 @@ mod tests {
+                 Waiting {
+                     id: "a".into(),
+                     name: "Alpha".into(),
+-                    count: 4
++                    count: 6
+                 },
+                 Waiting {
+                     id: "b".into(),
+@@ -305,7 +313,7 @@ mod tests {
+         );
+         assert_eq!(
+             seen.update("default", &[waiting("a", 3), waiting("b", 1)]),
+-            ["A: 3 tasks need you", "B: 1 task needs you"]
++            ["A: 3 things need you", "B: 1 thing needs you"]
+         );
+         assert_eq!(
+             seen.update("default", &[waiting("a", 1)]),
+@@ -331,7 +339,7 @@ mod tests {
+         );
+         assert_eq!(
+             seen.update("default", &[waiting("a", 2), waiting("b", 0)]),
+-            ["A: 2 tasks need you"]
++            ["A: 2 things need you"]
+         );
+     }
+ 
+@@ -341,13 +349,13 @@ mod tests {
+         let at_limit = "é".repeat(MAX_NAME);
+         assert_eq!(
+             notice(&at_limit, 1),
+-            format!("{at_limit}: 1 task needs you")
++            format!("{at_limit}: 1 thing needs you")
+         );
+-        assert_eq!(notice("", 3), ": 3 tasks need you");
+-        assert_eq!(notice("App\n\u{7}", 2), "App: 2 tasks need you");
++        assert_eq!(notice("", 3), ": 3 things need you");
++        assert_eq!(notice("App\n\u{7}", 2), "App: 2 things need you");
+         assert_eq!(
+             notice(&"x".repeat(200), 1).chars().count(),
+-            MAX_NAME + ": 1 task needs you".len()
++            MAX_NAME + ": 1 thing needs you".len()
+         );
+     }
+ 
+diff --git a/app/src-tauri/src/lib.rs b/app/src-tauri/src/lib.rs
+index 910e9731..fb8ffaa7 100644
+--- a/app/src-tauri/src/lib.rs
++++ b/app/src-tauri/src/lib.rs
+@@ -1308,7 +1308,7 @@ mod integration_tests {
+         }];
+         assert_eq!(
+             app.state::<AppState>().needs_you().update("work", &more),
+-            ["App: 1 task needs you"]
++            ["App: 1 thing needs you"]
+         );
+         std::fs::remove_dir_all(&home).expect("clean up");
+     }
+diff --git a/crates/atm-common/schema/api.schema.json b/crates/atm-common/schema/api.schema.json
+index 10674183..7ac48a2b 100644
+--- a/crates/atm-common/schema/api.schema.json
++++ b/crates/atm-common/schema/api.schema.json
+@@ -8,7 +8,10 @@
+   "properties": {
+     "generated_at": { "type": "string", "description": "ISO 8601 UTC" },
+     "meta": { "$ref": "meta.schema.json" },
+-    "bytes": { "type": "integer", "description": "How big the project's working task data is (tasks.json), for the archive notice" },
++    "bytes": {
++      "type": "integer",
++      "description": "How big the project's working task data is (tasks.json), for the archive notice"
++    },
+     "tasks": { "type": "array", "items": { "$ref": "#/$defs/TaskView" } },
+     "problems": {
+       "type": "array",
+@@ -48,7 +51,10 @@
+           "type": "string",
+           "description": "The status's kind: todo, active, review, blocked, done or skipped (absent for an unknown status)"
+         },
+-        "ready": { "type": "boolean", "description": "To do, and every dependency done (an archived one counts as done)" },
++        "ready": {
++          "type": "boolean",
++          "description": "To do, and every dependency done (an archived one counts as done)"
++        },
+         "waiting_for": {
+           "type": "array",
+           "items": { "type": "string" },
+@@ -56,7 +62,10 @@
+         },
+         "waiting_on": { "type": "string", "description": "Who a blocked task waits on: user or agent" },
+         "priority": { "type": "string", "description": "Its priority, or the project's default" },
+-        "effective_review": { "type": "string", "description": "Its review mode: its own, else its component's, else the project's" },
++        "effective_review": {
++          "type": "string",
++          "description": "Its review mode: its own, else its component's, else the project's"
++        },
+         "effective_release": { "type": "string", "description": "Its release: its own, else its sprint's" },
+         "stage": { "type": "string", "description": "A done task's stage: done, in_pr or merged (DM-4.3)" },
+         "archived": { "type": "boolean", "description": "From the archive" },
+@@ -92,7 +101,10 @@
+           "enum": ["unregistered", "missing"],
+           "description": "Not found: no registered project has that ID (or its folder is gone), or the project has no such task"
+         },
+-        "project_name": { "type": ["string", "null"], "description": "The project's name (meta.project), when it is registered" },
++        "project_name": {
++          "type": ["string", "null"],
++          "description": "The project's name (meta.project), when it is registered"
++        },
+         "places": {
+           "type": "array",
+           "items": { "$ref": "#/$defs/ForeignPlace" },
+@@ -115,7 +127,10 @@
+       "required": ["id", "status", "name"],
+       "properties": {
+         "id": { "type": "string" },
+-        "status": { "type": "string", "description": "Its status (\", archived\" added for an archived task), or missing" },
++        "status": {
++          "type": "string",
++          "description": "Its status (\", archived\" added for an archived task), or missing"
++        },
+         "name": { "type": "string" }
+       }
+     },
+@@ -265,12 +280,29 @@
+     },
+     "NeedsYou": {
+       "type": "object",
+-      "description": "How many tasks need the user, by why",
+-      "required": ["review", "blocked_on_user", "together"],
++      "description": "How many tasks and code reviews need the user, by why",
++      "required": ["review", "blocked_on_user", "together", "code_reviews"],
+       "properties": {
+-        "review": { "type": "integer", "description": "In review, waiting for the reviewer" },
++        "review": {
++          "type": "integer",
++          "description": "In review, waiting for the reviewer (not one waiting through a code review counted in code_reviews)"
++        },
+         "blocked_on_user": { "type": "integer" },
+-        "together": { "type": "integer", "description": "To do with the user now (SR-6.6)" }
++        "together": { "type": "integer", "description": "To do with the user now (SR-6.6)" },
++        "code_reviews": {
++          "type": "integer",
++          "description": "Code reviews waiting on the user: their decision or round, or answered since they last wrote (ATM-606)"
++        }
++      }
++    },
++    "NeedsYouReview": {
++      "type": "object",
++      "description": "A code review waiting on the user, and why (ATM-606)",
++      "required": ["reference", "title", "why"],
++      "properties": {
++        "reference": { "type": "string", "description": "CR-7" },
++        "title": { "type": "string" },
++        "why": { "enum": ["review", "answered"] }
+       }
+     },
+     "NeedsYouItem": {
+@@ -382,6 +414,7 @@
+         "last_done",
+         "needs_you",
+         "needs_you_tasks",
++        "needs_you_reviews",
+         "git",
+         "description",
+         "last_activity",
+@@ -418,6 +451,11 @@
+         "last_done": { "anyOf": [{ "$ref": "#/$defs/LastDone" }, { "type": "null" }] },
+         "needs_you": { "$ref": "#/$defs/NeedsYou" },
+         "needs_you_tasks": { "type": "array", "items": { "$ref": "#/$defs/NeedsYouItem" } },
++        "needs_you_reviews": {
++          "type": "array",
++          "items": { "$ref": "#/$defs/NeedsYouReview" },
++          "description": "The code reviews waiting on the user, the longest waiting first (ATM-606)"
++        },
+         "git": { "$ref": "#/$defs/GitSummary" },
+         "description": { "type": ["string", "null"], "description": "meta.description, capped at 200 characters" },
+         "last_activity": { "type": ["string", "null"] },
+diff --git a/crates/atm-lib/src/review_pages.rs b/crates/atm-lib/src/review_pages.rs
+index 15597691..4ac19303 100644
+--- a/crates/atm-lib/src/review_pages.rs
++++ b/crates/atm-lib/src/review_pages.rs
+@@ -65,6 +65,75 @@ pub fn needs(header: &ReviewHeader, me: &Actor) -> bool {
+     }
+ }
+ 
++/// What a review waits on `me` for (ATM-606), if anything: `"review"`, its decision or round is theirs ([`needs`]);
++/// `"answered"`, someone else wrote in it after `me` last did, in a review `me` takes part in (its author, a reviewer
++/// it names, or one who wrote in it) that isn't decided yet. Nothing is stored of what `me` has seen: a GET writes
++/// nothing (security I11), and an answer is cleared by answering, or by the review being decided.
++#[must_use]
++pub fn waiting_for(review: &Review, me: &Actor) -> Option<&'static str> {
++    let header = &review.header;
++    if needs(header, me) {
++        return Some("review");
++    }
++    // Decided, or a draft its author is still putting together (§3.1: waiting on no one)
++    if matches!(
++        header.status,
++        Status::Approved | Status::Closed | Status::Draft
++    ) {
++        return None;
++    }
++    // Which came last, by the comments' numbers (c1, c2, … in the order they were written; two in one second have the
++    // same time)
++    let number = |id: &str| id.trim_start_matches('c').parse::<u64>().unwrap_or(0);
++    let (mut mine, mut others): (Option<u64>, Option<u64>) = (None, None);
++    for comment in review.comments() {
++        let latest = if &comment.author == me {
++            &mut mine
++        } else {
++            &mut others
++        };
++        *latest = (*latest).max(Some(number(&comment.id.0)));
++    }
++    let takes_part =
++        mine.is_some() || header.author.as_ref() == Some(me) || header.reviewers.contains(me);
++    match (others, mine) {
++        (Some(_), None) if takes_part => Some("answered"),
++        (Some(theirs), Some(own)) if theirs > own => Some("answered"),
++        _ => None,
++    }
++}
++
++/// The reviews of the project's own store that wait on `me` (ATM-606), as [`waiting_for`] says: `(header, why)`.
++/// Its working copies' reviews aren't read: this is for every project's summary, on each refresh. A store that can't
++/// be read has none.
++#[must_use]
++pub fn waiting_reviews(project: &Project) -> Vec<(ReviewHeader, &'static str)> {
++    let (Some(root), Ok(store)) = (project.root(), reviews::store(project)) else {
++        return Vec::new();
++    };
++    // The user at the machine, whatever environment the summary is made in (an agent's shell started the server, say)
++    let me = Actor(crate::actor::user_identity(root));
++    let mut waiting: Vec<(ReviewHeader, &'static str)> = store
++        .reviews()
++        .unwrap_or_default()
++        .into_iter()
++        .filter_map(|r| waiting_for(&r, &me).map(|why| (r.header, why)))
++        .collect();
++    // The longest waiting first
++    waiting.sort_by(|a, b| a.0.updated.cmp(&b.0.updated));
++    waiting
++}
++
++/// What changes when any of the project's reviews does ([`FileStore::stamp`]), for a summary's cache: `null` without
++/// a review folder.
++#[must_use]
++pub fn reviews_stamp(project: &Project) -> Value {
++    reviews::store(project).map_or(Value::Null, |s| {
++        let (files, latest) = s.stamp();
++        json!([files, latest.to_string()])
++    })
++}
++
+ /// Whether a review found on `branch` fits the query's author, reviewer and branch (the store has done its statuses
+ /// and task).
+ fn fits(header: &ReviewHeader, branch: Option<&str>, query: &ReviewQuery) -> bool {
+@@ -109,7 +178,7 @@ fn me(project: &Project) -> Actor {
+ }
+ 
+ /// The reviews of every working copy the query keeps, the latest activity first: `{reviews: [{review, branch, chains,
+-/// open, needs_you}], you}`.
++/// open, needs_you, waiting}], you}` (`waiting`: [`waiting_for`]'s why, or `null`).
+ ///
+ /// # Errors
+ /// A status that isn't one; the project has no folder; a review that can't be read.
+@@ -147,6 +216,7 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
+             "chains": review.chains.len(),
+             "open": review.open_comments().count(),
+             "needs_you": needs(&review.header, &me),
++            "waiting": waiting_for(&review, &me),
+         });
+         listed.push((review.header.updated.clone(), entry));
+     }
+@@ -564,6 +634,120 @@ mod tests {
+         }
+     }
+ 
++    /// A review of `header` with one chain: a top-level comment by `top` at minute 0, and replies by `replies` at the
++    /// minutes after
++    fn talked(header: ReviewHeader, top: &str, replies: &[&str]) -> Review {
++        let comment = |id: usize, by: &str| atm_review::model::Comment {
++            id: atm_review::model::CommentId(format!("c{id}")),
++            author: Actor::from(by),
++            at: format!("2026-11-18T10:{id:02}:00Z"),
++            body: "x".into(),
++            resolved: None,
++            replies: Vec::new(),
++        };
++        let mut first = comment(0, top);
++        first.resolved = Some(false);
++        first.replies = replies
++            .iter()
++            .enumerate()
++            .map(|(i, by)| comment(i + 1, by))
++            .collect();
++        Review {
++            header,
++            summary: String::new(),
++            chains: vec![Chain {
++                id: atm_review::model::ChainId("t1".into()),
++                anchor: atm_review::model::Anchor::default(),
++                comments: vec![first],
++            }],
++            rounds: Vec::new(),
++        }
++    }
++
++    /// ATM-606: what a review waits on the user for: its decision or round, or an answer they haven't answered yet
++    #[test]
++    fn a_review_waits_on_you_for_its_decision_or_for_an_answer_since_you_last_wrote() {
++        let ana = Actor::from("Ana");
++        let agent = Some("claude:a");
++        for (case, review, expected) in [
++            // Its decision is yours: whatever was written
++            (
++                "open, you its reviewer",
++                talked(header(Status::Open, agent, &["Ana"]), "Ana", &[]),
++                Some("review"),
++            ),
++            // Sent back, the agent answered you after your comment
++            (
++                "sent back, answered",
++                talked(
++                    header(Status::ChangesRequested, agent, &["Ana"]),
++                    "Ana",
++                    &["claude:a"],
++                ),
++                Some("answered"),
++            ),
++            // ...and you answered back: nothing new
++            (
++                "sent back, you wrote last",
++                talked(
++                    header(Status::ChangesRequested, agent, &["Ana"]),
++                    "Ana",
++                    &["claude:a", "Ana"],
++                ),
++                None,
++            ),
++            // Someone else's review: you never wrote in it and aren't named
++            (
++                "not yours",
++                talked(
++                    header(Status::ChangesRequested, agent, &["Bo"]),
++                    "Bo",
++                    &["claude:a"],
++                ),
++                None,
++            ),
++            // A draft waits on no one, even one naming you
++            (
++                "a draft naming you",
++                talked(header(Status::Draft, agent, &["Ana"]), "claude:a", &[]),
++                None,
++            ),
++            // A live review you wrote in, answered by its agent: its decision is yours anyway
++            (
++                "live, answered",
++                talked(header(Status::Live, agent, &["Ana"]), "Ana", &["claude:a"]),
++                Some("review"),
++            ),
++            // Your own review: the comments of others on it
++            (
++                "your own, commented on",
++                talked(header(Status::Open, Some("Ana"), &["Bo"]), "Bo", &[]),
++                Some("answered"),
++            ),
++            // Decided: nothing waits, answered or not
++            (
++                "approved",
++                talked(
++                    header(Status::Approved, agent, &["Ana"]),
++                    "Ana",
++                    &["claude:a"],
++                ),
++                None,
++            ),
++            (
++                "closed",
++                talked(
++                    header(Status::Closed, agent, &["Ana"]),
++                    "Ana",
++                    &["claude:a"],
++                ),
++                None,
++            ),
++        ] {
++            assert_eq!(waiting_for(&review, &ana), expected, "{case}");
++        }
++    }
++
+     #[test]
+     fn a_review_needs_its_reviewers_while_open_and_its_author_once_sent_back() {
+         let ana = Actor::from("Ana");
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index f4f867c7..ec3cc620 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -687,6 +687,68 @@ mod tests {
+         Value::Object(project.store().get_task(id).unwrap().unwrap().clone())
+     }
+ 
++    /// ATM-606: a project's summary counts the reviews waiting on the user at the machine (their git name), and a task
++    /// in review isn't counted again through them; the summary's stamp moves with a comment
++    #[test]
++    fn a_projects_summary_counts_the_reviews_waiting_on_the_user_once() {
++        let dir = dir();
++        git(&["init", "-q"], &dir.0);
++        git(&["config", "user.name", "Hakan"], &dir.0);
++        let mut project = project(&dir.0, "claude:1");
++        let summary = |p: &Project| crate::summary::project_summary(p).unwrap();
++        assert_eq!(summary(&project)["needs_you"]["code_reviews"], 0);
++        let stamp = crate::review_pages::reviews_stamp(&project);
++        let cr = super::create(
++            &mut project,
++            NewReview {
++                title: "One".into(),
++                summary: String::new(),
++                tasks: vec!["T-1".into()],
++                author: Some("claude:1".into()),
++                reviewers: vec!["Hakan".into()],
++                status: Status::Open,
++                first: round(),
++            },
++        )
++        .unwrap()
++        .reference;
++        assert_ne!(crate::review_pages::reviews_stamp(&project), stamp);
++        // Made by the agent, read as anyone: the user at the machine is the one it waits on
++        let s = summary(&reopen(&dir.0, "claude:1"));
++        assert_eq!(s["needs_you"]["code_reviews"], 1);
++        // T-1 is in review, through CR-1: not counted again
++        assert_eq!(task(&project, "T-1")["status"], "in_review");
++        assert_eq!(s["needs_you"]["review"], 0);
++        assert_eq!(
++            s["needs_you_reviews"],
++            json!([{ "reference": "CR-1", "title": "One", "why": "review" }])
++        );
++        // Sent back by the user: off their list until the agent answers
++        let mut hakan = reopen(&dir.0, "Hakan");
++        let mut reviews = super::store(&hakan).unwrap();
++        let anchor = super::Anchor {
++            round: 1,
++            ..super::Anchor::default()
++        };
++        super::Reviews::new(&mut reviews)
++            .comment(&cr, anchor, "Fix it.", &"Hakan".into())
++            .unwrap();
++        super::submit(&mut hakan, &cr, Verdict::RequestChanges, None, None).unwrap();
++        assert_eq!(summary(&hakan)["needs_you"]["code_reviews"], 0);
++        let open = reviews
++            .get_review(&cr)
++            .unwrap()
++            .open_comments()
++            .next()
++            .unwrap()
++            .id
++            .clone();
++        super::Reviews::new(&mut reviews)
++            .reply(&cr, &open, "Fixing.", &"claude:1".into())
++            .unwrap();
++        assert_eq!(summary(&hakan)["needs_you_reviews"][0]["why"], "answered");
++    }
++
+     #[test]
+     fn a_review_of_two_tasks_puts_both_in_review_and_its_decisions_are_theirs() {
+         let dir = dir();
+diff --git a/crates/atm-lib/src/summary.rs b/crates/atm-lib/src/summary.rs
+index b7a11f82..776b651c 100644
+--- a/crates/atm-lib/src/summary.rs
++++ b/crates/atm-lib/src/summary.rs
+@@ -748,10 +748,26 @@ pub fn project_summary(project: &Project) -> Result<Value> {
+     // The tasks that need the user, as the dashboard's needsYouReason decides it: in review and waiting for the
+     // reviewer, blocked on the user, or to do together with the user now: in the active sprint (any, without one) and
+     // ready, its dependencies done (T-347)
++    // The code reviews waiting on the user (ATM-606): a task in review whose review is one of them is waited on through
++    // it, so it isn't counted again
++    let waiting_reviews = crate::review_pages::waiting_reviews(project);
++    let waiting_ids: std::collections::HashSet<&str> = waiting_reviews
++        .iter()
++        .map(|(h, _)| h.id.0.as_str())
++        .collect();
++    let through_review = |t: &Task| {
++        t.get("code_reviews")
++            .and_then(Value::as_array)
++            .into_iter()
++            .flatten()
++            .filter_map(|l| l.get("id").and_then(Value::as_str))
++            .any(|id| waiting_ids.contains(id))
++    };
+     let active = active_sprint(vocab);
+     let mut needs_you_tasks = Vec::new();
+     for (t, k) in tasks.iter().zip(&kinds) {
+         let reason = match k {
++            Some(Kind::Review) if through_review(t) => None,
+             Some(Kind::Review) => {
+                 let state = t.get("review_state").and_then(Value::as_str);
+                 (!state.is_some_and(|s| REWORK_STATES.contains(&s))).then_some("review")
+@@ -806,8 +822,13 @@ pub fn project_summary(project: &Project) -> Result<Value> {
+             "review": reasons("review"),
+             "blocked_on_user": reasons("blocked"),
+             "together": reasons("together"),
++            "code_reviews": waiting_reviews.len(),
+         },
+         "needs_you_tasks": needs_you_tasks,
++        "needs_you_reviews": waiting_reviews
++            .iter()
++            .map(|(h, why)| json!({"reference": h.reference, "title": capped(Some(&json!(h.title))), "why": why}))
++            .collect::<Vec<_>>(),
+         "git": git_summary(project, &tasks),
+         "description": description(document.get("meta")),
+         "last_activity": last.map(format_iso),
+diff --git a/crates/atm-lib/src/summary/tests.rs b/crates/atm-lib/src/summary/tests.rs
+index 622f751b..5f23e8a6 100644
+--- a/crates/atm-lib/src/summary/tests.rs
++++ b/crates/atm-lib/src/summary/tests.rs
+@@ -341,7 +341,8 @@ fn what_needs_the_user_is_a_review_waiting_a_block_on_them_or_ready_work_togethe
+     );
+     assert_eq!(
+         s["needs_you"],
+-        json!({"review": 2, "blocked_on_user": 1, "together": 1})
++        // No code reviews in a project without a folder (ATM-606: reviews.rs's tests count them)
++        json!({"review": 2, "blocked_on_user": 1, "together": 1, "code_reviews": 0})
+     );
+ }
+ 
+diff --git a/crates/atm-lib/src/workspaces.rs b/crates/atm-lib/src/workspaces.rs
+index b5621862..e69b0f13 100644
+--- a/crates/atm-lib/src/workspaces.rs
++++ b/crates/atm-lib/src/workspaces.rs
+@@ -429,7 +429,8 @@ fn summary_stamp(stamp: &Value) -> Value {
+         stamp["tasks"],
+         stamp["claims"],
+         &format_iso(now())[..10],
+-        stamp["head"]
++        stamp["head"],
++        stamp["reviews"]
+     ])
+ }
+ 
+@@ -516,12 +517,22 @@ impl Workspace {
+         Project::open_tolerant(&folder(entry))
+     }
+ 
+-    /// The project's store stamp (`{tasks, archive, claims, head, copies}`), or none when it is missing or refused.
++    /// The project's store stamp (`{tasks, archive, claims, head, copies}`) and its reviews' (`reviews`, ATM-606: what
++    /// waits on the user is in its summary), or none when it is missing or refused.
+     #[must_use]
+     pub fn data_stamp(entry: &Value) -> Option<Value> {
+         let project = Self::project(entry).ok()?;
+-        let stamp = project_stamp(&project);
+-        (!stamp["tasks"].is_null()).then_some(stamp)
++        let mut stamp = project_stamp(&project);
++        if stamp["tasks"].is_null() {
++            return None;
++        }
++        if let Some(map) = stamp.as_object_mut() {
++            map.insert(
++                "reviews".into(),
++                crate::review_pages::reviews_stamp(&project),
++            );
++        }
++        Some(stamp)
+     }
+ 
+     /// The file and content type of a project's logo (`meta.logo`, or one found), if it has one.
+@@ -556,6 +567,15 @@ impl Workspace {
+         for entry in self.entries() {
+             if let Ok(project) = Self::project(&entry) {
+                 parts.push(project.store().subscribe(Arc::clone(&on_change))?);
++                // Its reviews too, when it has some (ATM-606: what waits on the user is in its summary); a project
++                // without a reviews folder isn't given one
++                let has_reviews = project
++                    .root()
++                    .is_some_and(|r| r.join(atm_common::TASK_DIR).join("reviews").is_dir());
++                if has_reviews && let Ok(store) = crate::reviews::store(&project) {
++                    use crate::reviews::ReviewStore as _;
++                    parts.push(store.subscribe(Arc::clone(&on_change))?);
++                }
+             }
+         }
+         parts.push(self.registry.subscribe(on_change)?);
+diff --git a/crates/atm-review/src/folder.rs b/crates/atm-review/src/folder.rs
+index 3eab17d4..7568e9e0 100644
+--- a/crates/atm-review/src/folder.rs
++++ b/crates/atm-review/src/folder.rs
+@@ -248,6 +248,47 @@ impl FileStore {
+         Ok(self.read_all()?.1)
+     }
+ 
++    /// Every review the folder can read, whole, with its comments (ATM-606: what waits on the user, in one read
++    /// rather than a read per review).
++    ///
++    /// # Errors
++    /// The reviews' folder can't be read.
++    pub fn reviews(&self) -> Result<Vec<Review>> {
++        Ok(self.read_all()?.0.into_iter().map(|h| h.review).collect())
++    }
++
++    /// What changes when any review does, without reading one (ATM-606, for a summary's cache and its `ETag`): how
++    /// many files the reviews' folders hold, and the latest modification among them in nanoseconds. Every change to a
++    /// review writes one of its files (`review.md`, `comments.md`, a round's), so a change moves one or the other.
++    #[must_use]
++    pub fn stamp(&self) -> (u64, u128) {
++        let (mut files, mut latest) = (0u64, 0u128);
++        let mut look = |dir: &Path| {
++            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
++                let Ok(meta) = entry.metadata() else { continue };
++                files += 1;
++                let at = meta
++                    .modified()
++                    .ok()
++                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
++                    .map_or(0, |d| d.as_nanos());
++                latest = latest.max(at);
++            }
++        };
++        for entry in std::fs::read_dir(&self.reviews_dir)
++            .into_iter()
++            .flatten()
++            .flatten()
++        {
++            let path = entry.path();
++            if path.is_dir() {
++                look(&path);
++                look(&path.join("rounds"));
++            }
++        }
++        (files, latest)
++    }
++
+     /// The review a reference names, as the folder holds it.
+     fn find(&self, reference: &ReviewRef) -> Result<Held> {
+         let (held, _) = self.read_all()?;
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index 679e4804..3496db3e 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -3116,6 +3116,18 @@ a.detail-dep-item {
+ .view-tab .icon {
+   opacity: 0.8;
+ }
++/* The Reviews tab's count of reviews waiting on the user (ATM-606), as the project switcher's */
++.view-tab-badge {
++  min-width: 16px;
++  padding: 0 var(--space-2);
++  border-radius: var(--radius-pill);
++  background: var(--yellow);
++  color: var(--bg);
++  font-size: var(--text-2xs);
++  font-weight: 700;
++  line-height: 16px;
++  text-align: center;
++}
+ .view-tab:hover {
+   color: var(--text);
+   background: color-mix(in srgb, var(--surface) 60%, transparent);
+diff --git a/dashboard/src/lib/projects.ts b/dashboard/src/lib/projects.ts
+index d09ac1af..a8a0d252 100644
+--- a/dashboard/src/lib/projects.ts
++++ b/dashboard/src/lib/projects.ts
+@@ -7,10 +7,16 @@ import type { ProjectEntry, ProjectSummary } from './load';
+ export const ACTIVE_DAYS = 14;
+ const DAY_MS = 24 * 3_600_000;
+ 
+-/** Tasks that need the user: in review, or blocked on a question for the user */
++/** What needs the user: tasks in review, blocked on a question for them or to do together, and code reviews waiting
++ * on them (ATM-606; a task in review through one of those is counted once, by the server) */
+ export function needsYou(p: ProjectEntry): number {
+   const n = p.summary?.needs_you;
+-  return n ? n.review + n.blocked_on_user + (n.together ?? 0) : 0;
++  return n ? n.review + n.blocked_on_user + (n.together ?? 0) + (n.code_reviews ?? 0) : 0;
++}
++
++/** Code reviews waiting on the user in a project (ATM-606): their decision or round, or answered since they wrote */
++export function reviewsWaiting(p: ProjectEntry | undefined): number {
++  return p?.summary?.needs_you.code_reviews ?? 0;
+ }
+ 
+ /** Tasks still to do: neither done nor skipped */
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index 3eb8f0a7..a0ebb3f4 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -55,7 +55,8 @@
+   const tasks = $derived(choices((e) => e.review.tasks, query.task));
+   const branches = $derived(choices((e) => [e.branch], query.branch));
+ 
+-  const waiting = $derived(entries.filter((e) => e.needs_you));
++  // Its decision or round, or an answer since you last wrote (ATM-606): *Next review needing you* takes both
++  const waiting = $derived(entries.filter((e) => e.needs_you || e.waiting === 'answered'));
+ 
+   // What is typed, until the query takes it (a moment later), then the query's
+   let search = $derived(query.q);
+@@ -196,13 +197,21 @@
+     <ul class="review-rows" aria-busy={loading}>
+       {#each entries as entry (entry.review.id)}
+         {@const r = entry.review}
+-        <li class="review-row" class:needs-you={entry.needs_you} data-review={r.reference}>
++        <li
++          class="review-row"
++          class:needs-you={entry.needs_you || entry.waiting === 'answered'}
++          data-review={r.reference}
++        >
+           <a class="review-link" href={href(r.reference)} onclick={(e) => open(e, r.reference)}>
+             <span class="review-ref">{r.reference}</span>
+             <span class="review-title">{r.title}</span>
+           </a>
+           <span class="review-status status-{r.status}">{STATUS_LABELS[r.status]}</span>
+-          {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>{/if}
++          {#if entry.needs_you}<span class="review-needs" title="Needs you">Needs you</span>
++          {:else if entry.waiting === 'answered'}<span
++              class="review-needs answered"
++              title="Someone wrote in it after you last did">New reply</span
++            >{/if}
+           <span class="review-meta">
+             {#if r.tasks.length}<span class="review-tasks"><Icon name="list-todo" size={12} />{r.tasks.join(', ')}</span
+               >{/if}
+diff --git a/dashboard/src/lib/reviews/types.ts b/dashboard/src/lib/reviews/types.ts
+index 847a42fd..620caa91 100644
+--- a/dashboard/src/lib/reviews/types.ts
++++ b/dashboard/src/lib/reviews/types.ts
+@@ -58,6 +58,9 @@ export interface ReviewEntry {
+   chains: number;
+   open: number;
+   needs_you: boolean;
++  /** What it waits on you for (ATM-606): its decision or round, or an answer since you last wrote; none, `null`.
++   * Optional, for an older atm's lists */
++  waiting?: 'review' | 'answered' | null;
+ }
+ 
+ export interface ReviewList {
+diff --git a/dashboard/src/lib/shell/ProjectSelector.svelte b/dashboard/src/lib/shell/ProjectSelector.svelte
+index 7b977812..9de3ef8b 100644
+--- a/dashboard/src/lib/shell/ProjectSelector.svelte
++++ b/dashboard/src/lib/shell/ProjectSelector.svelte
+@@ -4,7 +4,7 @@
+   // WAI-ARIA combobox pattern): typing filters, the arrows, Home and End move, Enter opens. It opens in Bits UI's
+   // popover (T-431): focus moves to the field, Escape or a click outside closes it, and focus goes back to the button.
+   import { Popover } from 'bits-ui';
+-  import type { ProjectEntry } from '../load';
++  import { needsYou } from '../projects';
+   import { dashboard } from '../state.svelte';
+   import Icon from '../ui/Icon.svelte';
+   import ProjectLogo from '../ui/ProjectLogo.svelte';
+@@ -20,9 +20,7 @@
+   let active = $state(OVERVIEW);
+ 
+   const current = $derived(dashboard.route.page === 'project' ? dashboard.route.id : OVERVIEW);
+-  const needsYou = (p: ProjectEntry) =>
+-    p.summary ? p.summary.needs_you.review + p.summary.needs_you.blocked_on_user : 0;
+-  /** What needs the user in the other projects: the badge on the button */
++  /** What needs the user in the other projects: the badge on the button (tasks and code reviews, ATM-606) */
+   const othersNeed = $derived(
+     badge ? dashboard.projects.filter((p) => p.id !== current && !p.missing).reduce((n, p) => n + needsYou(p), 0) : 0,
+   );
+diff --git a/dashboard/src/lib/shell/ViewPanel.svelte b/dashboard/src/lib/shell/ViewPanel.svelte
+index 85edb384..ef63daf7 100644
+--- a/dashboard/src/lib/shell/ViewPanel.svelte
++++ b/dashboard/src/lib/shell/ViewPanel.svelte
+@@ -1,5 +1,6 @@
+ <script lang="ts">
+   import { adjacentView, GROUP_END, VIEW_ICONS, VIEW_LABELS, VIEWS, type ViewId } from '../tabs';
++  import { reviewsWaiting } from '../projects';
+   import { dashboard } from '../state.svelte';
+   import AgentsTab from '../agents/AgentsTab.svelte';
+   import DepGraph from '../graph/DepGraph.svelte';
+@@ -12,6 +13,8 @@
+   import TaskGrid from '../tasks/TaskGrid.svelte';
+ 
+   const view = $derived(dashboard.tab);
++  /** The project's code reviews waiting on the user (ATM-606), from its summary: the Reviews tab's badge */
++  const reviewsForYou = $derived(reviewsWaiting(dashboard.projects.find((p) => p.id === dashboard.projectId)));
+   // The tab buttons, for moving the focus with the arrow keys. `$state`, as `bind:this` into an object's property
+   // needs (Svelte's binding_property_non_reactive); elements aren't proxied, only the object holding them
+   const tabs: Partial<Record<ViewId, HTMLButtonElement>> = $state({});
+@@ -44,7 +47,15 @@
+           aria-controls="panel-{id}"
+           tabindex={view === id ? 0 : -1}
+           onclick={() => select(id)}
+-          onkeydown={onTabKeydown}><Icon name={VIEW_ICONS[id]} size={15} />{VIEW_LABELS[id]}</button
++          aria-label={id === 'reviews' && reviewsForYou
++            ? `${VIEW_LABELS[id]}, ${reviewsForYou} waiting for you`
++            : undefined}
++          onkeydown={onTabKeydown}
++          ><Icon name={VIEW_ICONS[id]} size={15} />{VIEW_LABELS[id]}{#if id === 'reviews' && reviewsForYou}<span
++              class="view-tab-badge"
++              id="reviews-waiting"
++              title="{reviewsForYou} waiting for you: a decision, a round, or an answer to read">{reviewsForYou}</span
++            >{/if}</button
+         >
+         {#if id === GROUP_END}<span class="view-tab-divider" aria-hidden="true"></span>{/if}
+       {/each}
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index edc82a38..f76fc318 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -334,6 +334,13 @@ export class TasksServer {
+     return typeof this.meta.id === 'string' && this.meta.id ? this.meta.id : FIXTURE_PROJECT;
+   }
+ 
++  /** A summary of the default project chosen by the test (summary() makes one), over atm's own or none */
++  private ownSummary: Record<string, unknown> | null = null;
++  withOwnSummary(summary: Record<string, unknown>) {
++    this.ownSummary = summary;
++    return this;
++  }
++
+   /** The project list api/projects answers with (summaries are null until a test needs them) */
+   projectList() {
+     if (!this.listed) return [];
+@@ -345,7 +352,8 @@ export class TasksServer {
+       summary,
+       logo: this.logos.has(id) ? `p/${id}/logo` : null,
+     });
+-    const own = this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null;
++    const own =
++      this.ownSummary ?? (this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null);
+     return [
+       project(this.projectId, typeof this.meta.project === 'string' ? this.meta.project : this.projectId, own),
+       ...[...this.others].map(([id, p]) => project(id, p.name, p.summary)),
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index cc86dfc1..852f3f6e 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -1,5 +1,5 @@
+ import type { Page } from '@playwright/test';
+-import { addressOf, expect, openDashboard, projectDocument, test, type TasksServer } from './helpers';
++import { addressOf, expect, openDashboard, projectDocument, summary, test, type TasksServer } from './helpers';
+ import { E2E_SESSION } from './session.mjs';
+ 
+ // The reviews tab and a review's page (docs/code-review-design.md §3.11, ATM-574), and the diff viewer in it (§3.7,
+@@ -177,6 +177,38 @@ test.describe('the reviews tab', () => {
+     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
+   });
+ 
++  test('what waits for you (ATM-606): a count on the Reviews tab, and a review answered since you wrote marked', async ({
++    page,
++    tasksServer,
++  }) => {
++    tasksServer.withOwnSummary(
++      summary({ needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 2 }, needs_you_reviews: [] }),
++    );
++    await openReviews(page, tasksServer);
++    const tab = page.locator('#tab-reviews');
++    await expect(page.locator('#reviews-waiting')).toHaveText('2');
++    await expect(tab).toHaveAccessibleName('Reviews, 2 waiting for you');
++    // CR-1, decided by nobody yet: answered since you last wrote
++    tasksServer.setReviews({
++      reviews: [
++        { review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true, waiting: 'review' },
++        { review: header(3, 'changes_requested'), branch: null, chains: 1, open: 1, needs_you: false, waiting: 'answered' },
++      ],
++      you: 'Ana',
++    });
++    await page.reload();
++    const answered = page.locator('.review-row[data-review="CR-3"]');
++    await expect(answered).toHaveClass(/needs-you/);
++    await expect(answered.locator('.review-needs')).toHaveText('New reply');
++    await expect(page.locator('.review-row[data-review="CR-2"] .review-needs')).toHaveText('Needs you');
++    // Nothing waiting: no count
++    tasksServer.withOwnSummary(summary({ needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 0 } }));
++    await page.reload();
++    await expect(page.locator('.review-row')).toHaveCount(2);
++    await expect(page.locator('#reviews-waiting')).toHaveCount(0);
++    await expect(tab).toHaveAccessibleName('Reviews');
++  });
++
+   test('opens with the last filter chosen, kept in the browser (not the search words); Clear forgets it', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/ProjectSelector.component.test.ts b/dashboard/tests/unit/ProjectSelector.component.test.ts
+index f4205466..759f9ace 100644
+--- a/dashboard/tests/unit/ProjectSelector.component.test.ts
++++ b/dashboard/tests/unit/ProjectSelector.component.test.ts
+@@ -6,7 +6,12 @@ import { dashboard } from '../../src/lib/state.svelte';
+ import { summary as fullSummary } from './summary.helpers';
+ 
+ const summary = (percent: number, review = 0, blocked = 0): ProjectSummary =>
+-  fullSummary({ total: 10, done: percent / 10, percent, needs_you: { review, blocked_on_user: blocked, together: 0 } });
++  fullSummary({
++    total: 10,
++    done: percent / 10,
++    percent,
++    needs_you: { review, blocked_on_user: blocked, together: 0, code_reviews: 0 },
++  });
+ const project = (id: string, name: string, s: ProjectSummary | null, missing = false): ProjectEntry => ({
+   id,
+   name,
+diff --git a/dashboard/tests/unit/Sidebar.component.test.ts b/dashboard/tests/unit/Sidebar.component.test.ts
+index e98aa365..63f3a96d 100644
+--- a/dashboard/tests/unit/Sidebar.component.test.ts
++++ b/dashboard/tests/unit/Sidebar.component.test.ts
+@@ -7,7 +7,12 @@ import { dashboard } from '../../src/lib/state.svelte';
+ import { summary as fullSummary } from './summary.helpers';
+ 
+ const summary = (percent: number, review = 0, blocked = 0): ProjectSummary =>
+-  fullSummary({ total: 10, done: percent / 10, percent, needs_you: { review, blocked_on_user: blocked, together: 0 } });
++  fullSummary({
++    total: 10,
++    done: percent / 10,
++    percent,
++    needs_you: { review, blocked_on_user: blocked, together: 0, code_reviews: 0 },
++  });
+ const project = (id: string, name: string, s: ProjectSummary | null, missing = false): ProjectEntry => ({
+   id,
+   name,
+diff --git a/dashboard/tests/unit/projects.test.ts b/dashboard/tests/unit/projects.test.ts
+index bcc786db..5d1729bc 100644
+--- a/dashboard/tests/unit/projects.test.ts
++++ b/dashboard/tests/unit/projects.test.ts
+@@ -1,6 +1,15 @@
+ import { describe, expect, it } from 'vitest';
+ import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
+-import { idHash, isActive, monogram, needsYou, openTasks, orderProjects, statsLine } from '../../src/lib/projects';
++import {
++  idHash,
++  isActive,
++  monogram,
++  needsYou,
++  openTasks,
++  orderProjects,
++  reviewsWaiting,
++  statsLine,
++} from '../../src/lib/projects';
+ import { summary } from './summary.helpers';
+ 
+ describe('statsLine (T-255)', () => {
+@@ -56,11 +65,19 @@ function project(id: string, fields: Partial<ProjectSummary> | null = {}, missin
+ 
+ describe('needsYou and openTasks', () => {
+   it('count reviews and questions for the user; open work is neither done nor skipped', () => {
+-    const needs_you = { review: 2, blocked_on_user: 1, together: 0 };
++    const needs_you = { review: 2, blocked_on_user: 1, together: 0, code_reviews: 0 };
+     const p = project('a', { total: 10, done: 4, skipped: 3, needs_you });
+     expect([needsYou(p), openTasks(p)]).toEqual([3, 3]);
+     expect([needsYou(project('b', null)), openTasks(project('b', null))]).toEqual([0, 0]);
+   });
++
++  // ATM-606: code reviews waiting on the user count with the tasks (the server counts a task through its review once)
++  it('count the code reviews waiting on the user too, and reviewsWaiting those alone', () => {
++    const p = project('a', { needs_you: { review: 1, blocked_on_user: 0, together: 2, code_reviews: 3 } });
++    expect([needsYou(p), reviewsWaiting(p)]).toEqual([6, 3]);
++    expect(reviewsWaiting(project('b', null))).toBe(0);
++    expect(reviewsWaiting(undefined)).toBe(0);
++  });
+ });
+ 
+ describe('isActive', () => {
+diff --git a/dashboard/tests/unit/summary.helpers.ts b/dashboard/tests/unit/summary.helpers.ts
+index e5b8846b..5a5d9dd0 100644
+--- a/dashboard/tests/unit/summary.helpers.ts
++++ b/dashboard/tests/unit/summary.helpers.ts
+@@ -24,8 +24,9 @@ export function summary(fields: Partial<ProjectSummary> = {}): ProjectSummary {
+     working: [],
+     next: [],
+     last_done: null,
+-    needs_you: { review: 0, blocked_on_user: 0, together: 0 },
++    needs_you: { review: 0, blocked_on_user: 0, together: 0, code_reviews: 0 },
+     needs_you_tasks: [],
++    needs_you_reviews: [],
+     git: { branch: null, pr: null },
+     description: null,
+     last_activity: null,
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 59790380..1ac957c6 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -254,8 +254,10 @@ old parameters from its hash and moves to the new address.
+ - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
+   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
+   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
+-  needs_you}], you}`. A review needs the user when it is open or live with them a reviewer (anyone but its author when
+-  it names none), or sent back with them its author. A status that isn't one is `400`.
++  needs_you, waiting}], you}`. A review needs the user when it is open or live with them a reviewer (anyone but its
++  author when it names none), or sent back with them its author. `waiting` (ATM-606): `"review"` when it needs them,
++  `"answered"` when someone else wrote in it after they last did (as the summary's `code_reviews`), else `null`. A
++  status that isn't one is `400`.
+ - `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
+   when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
+   against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you}`. Each file's `patch` is
+@@ -386,7 +388,9 @@ and `key_final` too, as the task views give them; a project before task keys has
+ | `description` | `meta.description` (an optional line about the project), trimmed and capped at 200 characters; `null` without one. The card shows it only as the name's tooltip |
+ | `git.branch` | the main worktree's checked-out branch (from `.git/HEAD`; a detached HEAD's short SHA), or `null` outside git |
+ | `git.pr` | the latest PR recorded on the tasks (`atm vcs pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm vcs pushed`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
+-| `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent) |
++| `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent), and those waiting through a code review counted in `code_reviews` (ATM-606: counted once) |
++| `needs_you.code_reviews` | the project's code reviews (its own folder's, not its other working copies') waiting on the user at the machine (their git name, whatever environment the server runs in): their decision or round is the user's (the list's `needs_you`), or, in one they take part in and not decided or a draft, someone else wrote after the user last did (`answered`, by the comments' order; nothing is stored of what they have read). The summary's stamp includes the reviews' files, so its cache and `ETag` move with a comment |
++| `needs_you_reviews` | those reviews, the longest waiting first: `{ reference, title, why }`, `why` being `"review"` or `"answered"`. The Reviews tab counts them |
+ | `needs_you.blocked_on_user` | blocked-kind tasks with `waiting_on: "user"` |
+ | `needs_you.together` | to-do tasks with `with: "user"` the user can take up now (T-347): in the active sprint (in any sprint or the backlog without an active sprint), their dependencies done (an archived one counts as done) |
+ | `needs_you_tasks` | those same tasks, in file order: `{ id, name, reason }`, `reason` being `"review"`, `"blocked"` (on a question for the user) or `"together"`. The card's "needs you" chip opens them |
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index 766345f5..7b8bc16e 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -259,11 +259,13 @@ describe('serve', () => {
+         name: 'T-1',
+         completed_at: '2026-03-15T10:00:00Z',
+       },
+-      needs_you: { review: 1, blocked_on_user: 1, together: 0 },
++      // No code reviews in this project (ATM-606: reviews.rs's tests count them)
++      needs_you: { review: 1, blocked_on_user: 1, together: 0, code_reviews: 0 },
+       needs_you_tasks: [
+         { id: 'T-5', name: 'T-5', reason: 'review' },
+         { id: 'T-6', name: 'T-6', reason: 'blocked' },
+       ],
++      needs_you_reviews: [],
+       git: { branch: 'main', pr: null },
+       description: null,
+       last_activity: '2026-03-15T11:00:00Z',
+diff --git a/tests/scripts/summary.test.mjs b/tests/scripts/summary.test.mjs
+index 79cafb1f..b32e61e6 100644
+--- a/tests/scripts/summary.test.mjs
++++ b/tests/scripts/summary.test.mjs
+@@ -139,7 +139,7 @@ test('needs you: with-you tasks only in the active sprint and ready; reviews and
+     (root) => {
+       const s = summary(root);
+       assert.deepEqual(ids(s), ['W-1:together', 'W-5:together', 'R-1:review', 'B-1:blocked']);
+-      assert.deepEqual(s.needs_you, { review: 1, blocked_on_user: 1, together: 2 });
++      assert.deepEqual(s.needs_you, { review: 1, blocked_on_user: 1, together: 2, code_reviews: 0 });
+     },
+   );
+   // No active sprint: any sprint's, still only when ready

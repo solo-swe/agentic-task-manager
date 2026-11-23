@@ -1,7 +1,8 @@
 # The agent sandbox (docs/security-architecture.md §3.1, level 2): Claude Code with this checkout's atm and its skills,
 # a throwaway project seeded with red-team tasks, made-up credentials as canaries, and no network except the model API
 # (through the proxy in compose.yaml). Built and run by tests/sandbox/run.mjs; nothing here touches real credentials.
-FROM node:24-bookworm-slim
+# Pinned by digest (ATM-678, audit A11), bumped by hand (`docker buildx imagetools inspect node:24-bookworm-slim`)
+FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
 
 ARG CLAUDE_CODE_VERSION=latest
 RUN apt-get update \

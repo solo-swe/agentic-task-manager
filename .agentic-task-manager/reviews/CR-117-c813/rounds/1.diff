@@ -1,0 +1,509 @@
+diff --git a/dashboard/src/lib/context-menus.ts b/dashboard/src/lib/context-menus.ts
+new file mode 100644
+index 00000000..d86d97fb
+--- /dev/null
++++ b/dashboard/src/lib/context-menus.ts
+@@ -0,0 +1,114 @@
++// atm's own right-click menus in the app (ATM-699, docs/tabs-and-navigation-design.md §4.5): on a link, card or row,
++// on a title-bar tab, and elsewhere. WebKit's own menu is turned off in the app (its Reload would load the page's
++// route, not the app's page, ATM-584), except over text, where the system's Cut, Copy and Paste stay. The browser keeps
++// its own menus. This module says what a right-click is on and which items its menu has; ui/AppContextMenu.svelte
++// shows them.
++import type { AppTab } from './app-tabs.svelte';
++import { pageLink } from './menu-actions';
++import { newTabAddress } from './new-tab-clicks';
++
++/** What a right-click is on */
++export type MenuTarget =
++  /** Text that can be edited or is selected: the system's menu (Cut, Copy, Paste), not atm's */
++  | { kind: 'text' }
++  /** A link, card or row to one of the dashboard's pages, by the address it opens */
++  | { kind: 'link'; address: string }
++  /** A title-bar tab, by its ID */
++  | { kind: 'tab'; id: string }
++  /** Anywhere else */
++  | { kind: 'page' };
++
++/** The prefix of a title-bar tab's element ID (AppTitleBar's `idPrefix`) */
++export const TAB_ID_PREFIX = 'app-tab-';
++
++/** What a right-click on `target` is on, from the page at `address`; `selected`, the text selected now */
++export function menuTargetAt(target: Element | null, address: string, selected = ''): MenuTarget {
++  if (target?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
++    return { kind: 'text' };
++  if (selected.trim()) return { kind: 'text' };
++  const tab = target?.closest<HTMLElement>(`[role="tab"][id^="${TAB_ID_PREFIX}"]`);
++  if (tab) return { kind: 'tab', id: tab.id.slice(TAB_ID_PREFIX.length) };
++  const link = newTabAddress(target, address);
++  if (link) return { kind: 'link', address: link };
++  return { kind: 'page' };
++}
++
++/** One item of a menu: what it says, and what it does; a disabled one does nothing */
++export interface MenuItem {
++  id: string;
++  label: string;
++  disabled?: boolean;
++  /** A line before it, between the menu's groups */
++  separated?: boolean;
++  run(): void;
++}
++
++/** What the menus act on: the window's tabs and the page (in tests, stand-ins) */
++export interface MenuDeps {
++  /** The window's tabs, in order */
++  tabs(): readonly AppTab[];
++  /** Open `address` here, in the tab shown */
++  go(address: string): void;
++  /** A new tab at `address` (the overview's by default); in the `background`, right of this one */
++  openTab(address?: string, background?: boolean): void;
++  closeTab(id: string): void;
++  /** A new window at `address`; whether it opened */
++  openWindow(address: string): Promise<boolean>;
++  copy(text: string): Promise<void>;
++  canGo(delta: -1 | 1): boolean;
++  back(): void;
++  forward(): void;
++  reload(): void;
++}
++
++const copyLink = (deps: MenuDeps, address: string) => () =>
++  void deps.copy(pageLink(address)).catch((e: unknown) => console.error('Copying the link failed:', e));
++
++/** The items of the menu for `target`; none for text (the system's menu shows) */
++export function menuItems(target: MenuTarget, deps: MenuDeps): MenuItem[] {
++  switch (target.kind) {
++    case 'text':
++      return [];
++    case 'link': {
++      const { address } = target;
++      return [
++        { id: 'open', label: 'Open', run: () => deps.go(address) },
++        { id: 'open-tab', label: 'Open in New Tab', run: () => deps.openTab(address, true) },
++        { id: 'open-window', label: 'Open in New Window', run: () => void deps.openWindow(address) },
++        { id: 'copy-link', label: 'Copy Link', separated: true, run: copyLink(deps, address) },
++      ];
++    }
++    case 'tab': {
++      const tabs = deps.tabs();
++      const tab = tabs.find((t) => t.id === target.id);
++      if (!tab) return [];
++      const others = tabs.filter((t) => t.id !== tab.id);
++      return [
++        { id: 'new-tab', label: 'New Tab', run: () => deps.openTab() },
++        { id: 'duplicate', label: 'Duplicate', run: () => deps.openTab(tab.address) },
++        {
++          id: 'to-window',
++          label: 'Move to New Window',
++          run: () =>
++            void deps.openWindow(tab.address).then((opened) => {
++              if (opened) deps.closeTab(tab.id);
++            }),
++        },
++        { id: 'copy-link', label: 'Copy Link', separated: true, run: copyLink(deps, tab.address) },
++        { id: 'close', label: 'Close', separated: true, run: () => deps.closeTab(tab.id) },
++        {
++          id: 'close-others',
++          label: 'Close Other Tabs',
++          disabled: others.length === 0,
++          run: () => others.forEach((t) => deps.closeTab(t.id)),
++        },
++      ];
++    }
++    case 'page':
++      return [
++        { id: 'back', label: 'Back', disabled: !deps.canGo(-1), run: deps.back },
++        { id: 'forward', label: 'Forward', disabled: !deps.canGo(1), run: deps.forward },
++        { id: 'reload', label: 'Reload', run: deps.reload },
++      ];
++  }
++}
+diff --git a/dashboard/src/lib/ui/AppContextMenu.svelte b/dashboard/src/lib/ui/AppContextMenu.svelte
+new file mode 100644
+index 00000000..6bd2da68
+--- /dev/null
++++ b/dashboard/src/lib/ui/AppContextMenu.svelte
+@@ -0,0 +1,106 @@
++<script lang="ts">
++  // atm's right-click menus in the app (ATM-699, docs/tabs-and-navigation-design.md §4.5; the rules in
++  // lib/context-menus.ts): one menu for the window, opened where it was right-clicked. WebKit's own menu is turned off,
++  // except over text (the system's Cut, Copy and Paste) and where something already answered the click (the Back and
++  // Forward arrows' history lists). Bits UI's menu (T-431): the arrows move, Enter chooses, Escape or a click outside
++  // closes. The app only: the routes' layout mounts it there.
++  import { DropdownMenu } from 'bits-ui';
++  import { appTabs } from '../app-tabs.svelte';
++  import { openWindow } from '../api/shell';
++  import { menuItems, menuTargetAt, type MenuDeps, type MenuItem } from '../context-menus';
++  import { pageActions } from '../menu-actions';
++  import { currentAddress, navigate } from '../navigation';
++  import { tabActions } from '../tab-actions';
++
++  const tabs = tabActions();
++  const deps: MenuDeps = {
++    tabs: () => appTabs.tabs,
++    go: (address) => navigate(address),
++    openTab: (address, background) => tabs.open(address, background),
++    closeTab: (id) => tabs.close(id),
++    openWindow,
++    copy: pageActions.copy,
++    canGo: (delta) => appTabs.canGo(delta),
++    back: pageActions.back,
++    forward: pageActions.forward,
++    reload: pageActions.reload,
++  };
++
++  let open = $state(false);
++  let items = $state<MenuItem[]>([]);
++  /** Where it was right-clicked: the menu's anchor, a point */
++  let at = $state({ x: 0, y: 0 });
++  const anchor = {
++    getBoundingClientRect: () => DOMRect.fromRect({ x: at.x, y: at.y, width: 0, height: 0 }),
++  };
++
++  function oncontextmenu(e: MouseEvent) {
++    // Something answered it already (a menu of its own): it stays theirs
++    if (e.defaultPrevented) return;
++    const target = menuTargetAt(e.target as Element | null, currentAddress(), getSelection()?.toString() ?? '');
++    const listed = menuItems(target, deps);
++    // Over text: the system's menu, with its text items
++    if (listed.length === 0) return;
++    e.preventDefault();
++    at = { x: e.clientX, y: e.clientY };
++    items = listed;
++    open = true;
++  }
++</script>
++
++<svelte:window {oncontextmenu} />
++
++<DropdownMenu.Root bind:open>
++  <DropdownMenu.Portal>
++    <DropdownMenu.Content customAnchor={anchor} side="bottom" align="start" preventScroll={false} aria-label="Menu">
++      {#snippet child({ props, wrapperProps })}
++        <div {...wrapperProps}>
++          <div {...props} class="app-context-menu" id="app-context-menu">
++            {#each items as item (item.id)}
++              {#if item.separated}<div class="app-context-separator" role="separator"></div>{/if}
++              <DropdownMenu.Item disabled={item.disabled} onSelect={item.run}>
++                {#snippet child({ props: entry })}
++                  <div {...entry} class="app-context-item" data-item={item.id}>{item.label}</div>
++                {/snippet}
++              </DropdownMenu.Item>
++            {/each}
++          </div>
++        </div>
++      {/snippet}
++    </DropdownMenu.Content>
++  </DropdownMenu.Portal>
++</DropdownMenu.Root>
++
++<style>
++  /* As the history arrows' lists (HistoryArrows.svelte) */
++  .app-context-menu {
++    background: var(--surface);
++    border: 1px solid var(--border);
++    border-radius: var(--radius-lg);
++    box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
++    display: flex;
++    flex-direction: column;
++    min-width: 200px;
++    padding: var(--space-2);
++    z-index: 60;
++  }
++  .app-context-item {
++    border-radius: var(--radius-sm);
++    color: var(--text);
++    cursor: default;
++    font-size: var(--text-sm);
++    padding: var(--space-2) var(--space-4);
++    white-space: nowrap;
++  }
++  .app-context-item[data-highlighted] {
++    background: var(--surface2);
++  }
++  .app-context-item[data-disabled] {
++    color: var(--text-muted);
++    opacity: 0.6;
++  }
++  .app-context-separator {
++    border-top: 1px solid var(--border);
++    margin: var(--space-2) 0;
++  }
++</style>
+diff --git a/dashboard/src/routes/+layout.svelte b/dashboard/src/routes/+layout.svelte
+index 86c609a5..71a0fe51 100644
+--- a/dashboard/src/routes/+layout.svelte
++++ b/dashboard/src/routes/+layout.svelte
+@@ -44,6 +44,7 @@
+     type EntryState,
+   } from '../lib/navigation';
+   import { newTabAddress } from '../lib/new-tab-clicks';
++  import AppContextMenu from '../lib/ui/AppContextMenu.svelte';
+   import { inBackground, tabActions, wantsNewTab } from '../lib/tab-actions';
+ 
+   const tabs = tabActions();
+@@ -174,4 +175,6 @@
+ />
+ 
+ <App />
++<!-- atm's right-click menus, the app only (ATM-699): the browser keeps its own -->
++{#if inApp}<AppContextMenu />{/if}
+ {@render children()}
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 9d745438..0384bf02 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -600,6 +600,77 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(tabs).toHaveCount(4);
+   });
+ 
++  // ATM-699 (docs/tabs-and-navigation-design.md §4.5): atm's own right-click menus, WebKit's turned off
++  test('right-click menus: on a card, on a tab, elsewhere; each item does what it says; text keeps the system’s', async ({
++    page,
++    context,
++    tasksServer,
++  }) => {
++    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
++    await tasksServer.asApp();
++    tasksServer.use('standard');
++    tasksServer.link(`/projects/${tasksServer.projectId}/kanban`);
++    await page.goto('/');
++    const tabs = page.locator('#app-titlebar [role="tab"]');
++    const menu = page.locator('#app-context-menu');
++    const items = menu.locator('.app-context-item');
++    const item = (id: string) => menu.locator(`[data-item="${id}"]`);
++    await expect(page.locator('#panel-kanban')).toBeVisible();
++    const card = page.locator('.kanban-card[data-id="T-004"]');
++
++    // A card: Open, Open in New Tab, Open in New Window, Copy Link
++    await card.click({ button: 'right' });
++    await expect(items).toHaveText(['Open', 'Open in New Tab', 'Open in New Window', 'Copy Link']);
++    await item('copy-link').click();
++    await expect(menu).toBeHidden();
++    await expect
++      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
++      .toBe(`atm://projects/${tasksServer.projectId}/kanban?task=T-004`);
++    await card.click({ button: 'right' });
++    await item('open-tab').click();
++    await expect(tabs).toHaveCount(2);
++    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
++    await card.click({ button: 'right' });
++    await item('open-window').click();
++    await expect.poll(() => tasksServer.openedWindows.length).toBe(1);
++    expect(tasksServer.openedWindows[0]).toContain('task=T-004');
++    await card.click({ button: 'right' });
++    await item('open').click();
++    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++    await page.keyboard.press('Escape');
++
++    // A tab: its six items; Close Other Tabs leaves it alone
++    await tabs.nth(1).click({ button: 'right' });
++    await expect(items).toHaveText([
++      'New Tab',
++      'Duplicate',
++      'Move to New Window',
++      'Copy Link',
++      'Close',
++      'Close Other Tabs',
++    ]);
++    await item('duplicate').click();
++    await expect(tabs).toHaveCount(3);
++    // The tab duplicated was the card's, its details over its page: the copy shows them too
++    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++    await page.keyboard.press('Escape');
++    await tabs.nth(0).click({ button: 'right' });
++    await item('close-others').click();
++    await expect(tabs).toHaveCount(1);
++
++    // Elsewhere: Back, Forward, Reload; Back is there after a step
++    await page.locator('#tab-list').click();
++    await page.locator('#app-titlebar-end').click({ button: 'right' });
++    await expect(items).toHaveText(['Back', 'Forward', 'Reload']);
++    await expect(item('forward')).toHaveAttribute('data-disabled', '');
++    await item('back').click();
++    await expect(page.locator('#panel-kanban')).toBeVisible();
++
++    // Over text that can be edited: none of atm's (the system's shows)
++    await page.locator('#task-search').click({ button: 'right' });
++    await expect(menu).toBeHidden();
++  });
++
+   // ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): each tab its own history; a switch adds nothing
+   test('Back and Forward walk the active tab’s own history; a switch of tab adds to neither; the page’s own stays put', async ({
+     page,
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index 6c3db0e9..b12f14d4 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -768,6 +768,8 @@ export class TasksServer {
+   windowShell = { system_menu_bar: true, system_window_buttons: true };
+   /** The window commands the page called (T-513), in order */
+   windowCalls: string[] = [];
++  /** The addresses the page opened a new window at (`open_window`), in order */
++  openedWindows: string[] = [];
+   /** How many times the page asked the app for a project's tasks (`project_tasks`) */
+   projectTaskRequests = 0;
+   /** The tabs the window comes back with as the app starts (`restored_tabs`, T-518), answered once */
+@@ -1053,6 +1055,10 @@ export class TasksServer {
+       case 'open_url':
+         this.openedUrls.push(String(args.url));
+         return { ok: null };
++      // A new window at an address (T-514, ATM-699's menus): recorded, as the app would open it
++      case 'open_window':
++        this.openedWindows.push(String(args.address));
++        return { ok: null };
+       // The menu (T-512)
+       case 'subscribe_menu':
+         this.menuChannel = channelId(args.channel);
+diff --git a/dashboard/tests/unit/context-menus.test.ts b/dashboard/tests/unit/context-menus.test.ts
+new file mode 100644
+index 00000000..bdc57773
+--- /dev/null
++++ b/dashboard/tests/unit/context-menus.test.ts
+@@ -0,0 +1,146 @@
++import { describe, expect, it, vi } from 'vitest';
++import type { AppTab } from '../../src/lib/app-tabs.svelte';
++import { menuItems, menuTargetAt, TAB_ID_PREFIX, type MenuDeps, type MenuTarget } from '../../src/lib/context-menus';
++
++// The app's right-click menus (ATM-699, docs/tabs-and-navigation-design.md §4.5): what a right-click is on, and the
++// items each menu has and what they do, on stand-ins for the tabs and the page
++
++/** A page with `html` in its body; the element `selector` finds */
++function on(html: string, selector: string): Element {
++  document.body.innerHTML = html;
++  return document.querySelector(selector)!;
++}
++
++const tab = (id: string, address: string): AppTab => ({ id, address, history: { entries: [], at: 0 } }) as AppTab;
++
++function deps(
++  tabs: AppTab[] = [tab('t1', '/projects/a/kanban'), tab('t2', '/')],
++  history = { back: true, forward: false },
++) {
++  const done: string[] = [];
++  const said =
++    (what: string) =>
++    (...args: unknown[]) =>
++      void done.push([what, ...args.map(String)].join(' '));
++  const fake: MenuDeps = {
++    tabs: () => tabs,
++    go: said('go'),
++    openTab: (address?: string, background?: boolean) =>
++      done.push(`open-tab ${address ?? '(overview)'} ${!!background}`),
++    closeTab: said('close'),
++    openWindow: vi.fn(async (address: string) => (done.push(`window ${address}`), true)),
++    copy: vi.fn(async (text: string) => void done.push(`copy ${text}`)),
++    canGo: (delta) => (delta < 0 ? history.back : history.forward),
++    back: said('back'),
++    forward: said('forward'),
++    reload: said('reload'),
++  };
++  return { fake, done };
++}
++
++const run = async (target: MenuTarget, id: string, d = deps()) => {
++  const item = menuItems(target, d.fake).find((i) => i.id === id)!;
++  item.run();
++  await Promise.resolve();
++  await Promise.resolve();
++  return d.done;
++};
++
++describe('what a right-click is on', () => {
++  it.each([
++    ['an input', '<input id="x">', '#x'],
++    ['a text area', '<textarea id="x"></textarea>', '#x'],
++    ['something editable', '<div contenteditable="true"><span id="x">t</span></div>', '#x'],
++  ])('%s is text: the system’s menu', (_, html, selector) => {
++    expect(menuTargetAt(on(html, selector), '/')).toEqual({ kind: 'text' });
++  });
++
++  it('selected text is text, wherever it is', () => {
++    expect(menuTargetAt(on('<p id="x">hello</p>', '#x'), '/', 'hello')).toEqual({ kind: 'text' });
++    expect(menuTargetAt(on('<p id="x">hello</p>', '#x'), '/', '  ')).toEqual({ kind: 'page' });
++  });
++
++  it('a title-bar tab, from anywhere inside it, by its ID', () => {
++    const inside = on(`<div role="tab" id="${TAB_ID_PREFIX}t7"><span id="x">Name</span></div>`, '#x');
++    expect(menuTargetAt(inside, '/')).toEqual({ kind: 'tab', id: 't7' });
++    // Another strip's tab is not the window's
++    expect(menuTargetAt(on('<div role="tab" id="review-tab-diffs"><b id="x">D</b></div>', '#x'), '/').kind).toBe(
++      'page',
++    );
++  });
++
++  it('a link, card or row to one of the dashboard’s pages, by the address it opens', () => {
++    const card = on('<div class="kanban-card" data-id="ATM-1"><span id="x">t</span></div>', '#x');
++    expect(menuTargetAt(card, '/projects/a/kanban')).toEqual({
++      kind: 'link',
++      address: '/projects/a/kanban?task=ATM-1',
++    });
++    const link = on('<a id="x" href="/projects/a/reviews/CR-7">CR-7</a>', '#x');
++    expect(menuTargetAt(link, '/projects/a/list')).toEqual({ kind: 'link', address: '/projects/a/reviews/CR-7' });
++  });
++
++  it('anything else is the page; nothing at all too', () => {
++    expect(menuTargetAt(on('<p id="x">hi</p>', '#x'), '/')).toEqual({ kind: 'page' });
++    expect(menuTargetAt(null, '/')).toEqual({ kind: 'page' });
++  });
++});
++
++describe('the menus', () => {
++  const link: MenuTarget = { kind: 'link', address: '/projects/a/list?task=ATM-1' };
++
++  it('text has none: the system’s shows', () => {
++    expect(menuItems({ kind: 'text' }, deps().fake)).toEqual([]);
++  });
++
++  it('a link: Open, Open in New Tab, Open in New Window, Copy Link (atm://), each doing that', async () => {
++    expect(menuItems(link, deps().fake).map((i) => i.label)).toEqual([
++      'Open',
++      'Open in New Tab',
++      'Open in New Window',
++      'Copy Link',
++    ]);
++    expect(await run(link, 'open')).toEqual(['go /projects/a/list?task=ATM-1']);
++    expect(await run(link, 'open-tab')).toEqual(['open-tab /projects/a/list?task=ATM-1 true']);
++    expect(await run(link, 'open-window')).toEqual(['window /projects/a/list?task=ATM-1']);
++    expect(await run(link, 'copy-link')).toEqual(['copy atm://projects/a/list?task=ATM-1']);
++  });
++
++  it('a tab: New Tab, Duplicate, Move to New Window, Copy Link, Close, Close Other Tabs', async () => {
++    const t1: MenuTarget = { kind: 'tab', id: 't1' };
++    expect(menuItems(t1, deps().fake).map((i) => i.label)).toEqual([
++      'New Tab',
++      'Duplicate',
++      'Move to New Window',
++      'Copy Link',
++      'Close',
++      'Close Other Tabs',
++    ]);
++    expect(await run(t1, 'new-tab')).toEqual(['open-tab (overview) false']);
++    expect(await run(t1, 'duplicate')).toEqual(['open-tab /projects/a/kanban false']);
++    // Moved: opened in its own window, then closed here
++    expect(await run(t1, 'to-window')).toEqual(['window /projects/a/kanban', 'close t1']);
++    expect(await run(t1, 'copy-link')).toEqual(['copy atm://projects/a/kanban']);
++    expect(await run(t1, 'close')).toEqual(['close t1']);
++    expect(await run(t1, 'close-others')).toEqual(['close t2']);
++  });
++
++  it('a tab that won’t open in a window stays; the only tab has no others to close; a gone tab has no menu', async () => {
++    const d = deps();
++    d.fake.openWindow = async () => false;
++    expect(await run({ kind: 'tab', id: 't1' }, 'to-window', d)).toEqual([]);
++    const alone = deps([tab('t1', '/')]);
++    expect(menuItems({ kind: 'tab', id: 't1' }, alone.fake).find((i) => i.id === 'close-others')?.disabled).toBe(true);
++    expect(menuItems({ kind: 'tab', id: 'gone' }, deps().fake)).toEqual([]);
++  });
++
++  it('elsewhere: Back, Forward, Reload, each disabled at its history’s end', async () => {
++    const items = menuItems({ kind: 'page' }, deps().fake);
++    expect(items.map((i) => [i.label, !!i.disabled])).toEqual([
++      ['Back', false],
++      ['Forward', true],
++      ['Reload', false],
++    ]);
++    expect(await run({ kind: 'page' }, 'back')).toEqual(['back']);
++    expect(await run({ kind: 'page' }, 'reload')).toEqual(['reload']);
++  });
++});

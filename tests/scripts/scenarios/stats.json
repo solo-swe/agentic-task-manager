@@ -1,0 +1,92 @@
+[
+  {
+    "name": "project status: the forecast for the sprint the loop works on, at the agents' pace (ATM-722)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "project": "Pace", "sprints": [{ "id": "S1", "state": "active" }] },
+          "tasks": [
+            {
+              "id": "T-1",
+              "name": "One",
+              "type": "feature",
+              "status": "done",
+              "started_by": "claude:a",
+              "started_at": "2026-11-01T00:00:00Z",
+              "completed_at": "2026-11-01T00:10:00Z"
+            },
+            {
+              "id": "T-2",
+              "name": "Two",
+              "type": "feature",
+              "status": "done",
+              "started_by": "claude:a",
+              "started_at": "2026-11-01T01:00:00Z",
+              "completed_at": "2026-11-01T01:20:00Z"
+            },
+            {
+              "id": "T-3",
+              "name": "Three",
+              "type": "feature",
+              "status": "done",
+              "started_by": "claude:a",
+              "started_at": "2026-11-01T02:00:00Z",
+              "completed_at": "2026-11-01T02:30:00Z"
+            },
+            { "id": "T-4", "name": "Four", "type": "feature", "status": "todo", "sprint": "S1" },
+            { "id": "T-5", "name": "Five", "type": "feature", "status": "todo", "sprint": "S1" }
+          ]
+        }
+      }
+    },
+    "args": ["project", "status"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": [
+        "Forecast: the sprint S1 done in about 40 m of agent work (30 m to 50 m), at 20 m a task (the last 3)."
+      ]
+    }
+  },
+  {
+    "name": "project status: no forecast with fewer than three timed tasks",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "project": "New" },
+          "tasks": [{ "id": "T-1", "name": "One", "type": "feature", "status": "todo" }]
+        }
+      }
+    },
+    "args": ["project", "status", "--json"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": ["\"forecast\": {", "\"pace\": null"]
+    }
+  },
+  {
+    "name": "project stats: a slice's progress and forecast, the project's own numbers (ATM-722)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "project": "Slice" },
+          "tasks": [
+            { "id": "T-1", "name": "One", "type": "bugfix", "status": "todo" },
+            {
+              "id": "T-2",
+              "name": "Two",
+              "type": "feature",
+              "status": "done",
+              "started_at": "2026-11-01T00:00:00Z",
+              "completed_at": "2026-11-01T00:10:00Z"
+            }
+          ]
+        }
+      }
+    },
+    "args": ["project", "stats", "--task", "T-1"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": ["\"overall\": {", "\"total\": 1,", "\"forecast\": {", "\"histogram\": {", "\"actors\": {"]
+    }
+  }
+]

@@ -14,9 +14,9 @@ import {
   toggleFilter,
   type Filters,
 } from '../../src/lib/filters';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { sprintModel, vocabulary, withKinds, withLinks } from './views';
 import standardFile from '../fixtures/standard.json';
 import edgeFile from '../fixtures/edge-cases.json';
 import sprintsFile from '../fixtures/sprints.json';
@@ -48,9 +48,9 @@ describe('shownSprintOptions (SR-7.1)', () => {
   });
 });
 
-const standard = standardFile.tasks as Task[];
+const standard = withKinds(standardFile.tasks as Task[]);
 // standard.json has phases 0-2 and no sprints: read as the sprints Phase 0 (all done: closed), Phase 1, Phase 2
-const model = sprintModel(standardFile.meta, standard, resolveVocabulary(standardFile.meta));
+const model = sprintModel(standardFile.meta, standard, DEFAULT_VOCABULARY);
 const ids = (tasks: Task[]) => tasks.map((t) => t.id);
 const filters = (f: Partial<Record<keyof Filters, string[]>>): Filters => ({
   sprint: new Set(f.sprint),
@@ -93,17 +93,16 @@ describe('filterOptions', () => {
   });
 
   it("uses a project's vocabulary: its order and labels, phase names; values it doesn't list come last", () => {
-    const meta = {
+    const vocab = vocabulary({
       statuses: [
         { id: 'doing', label: 'Doing', kind: 'active' },
         { id: 'todo', label: 'Backlog', kind: 'todo' },
         { id: 'done', label: 'Shipped', kind: 'done' },
       ],
       types: [{ id: 'test', label: 'Tests' }],
-      phases: [{ id: 1, name: 'Core' }],
-    };
-    const vocab = resolveVocabulary(meta);
-    const o = filterOptions(standard, vocab, sprintModel(meta, standard, vocab));
+      phaseNames: new Map([[1, 'Core']]),
+    });
+    const o = filterOptions(standard, vocab, sprintModel({}, standard, vocab));
     // Doing has no task but is the project's: listed. Statuses it doesn't list but tasks use come last
     expect(o.status.map((x) => x.label)).toEqual(['Doing', 'Backlog', 'Shipped', 'Blocked', 'In Progress', 'Skipped']);
     expect(o.type.slice(0, 3).map((x) => x.label)).toEqual(['Tests', 'Bugfix', 'Docs']);
@@ -114,7 +113,7 @@ describe('filterOptions', () => {
   it('lists sprints in their order (phases numerically, not as strings)', () => {
     const t = { name: 'x', type: 'feature', description: '', status: 'todo' };
     const tasks = [10, 2, 1].map((phase, i) => ({ ...t, id: `T-${i}`, phase })) as Task[];
-    const m = sprintModel({}, tasks, resolveVocabulary({}));
+    const m = sprintModel({}, tasks, DEFAULT_VOCABULARY);
     expect(filterOptions(tasks, undefined, m).sprint.map((x) => x.value)).toEqual(['Phase 1', 'Phase 2', 'Phase 10']);
   });
 
@@ -164,8 +163,9 @@ describe('filterOptions', () => {
 
 describe('sprints, releases and components (SR-7.1)', () => {
   const file = sprintsFile as TasksFile;
-  const tasks = file.tasks as Task[];
-  const m = sprintModel(file.meta, tasks, resolveVocabulary(file.meta));
+  // With atm's releases on them (its own, else its sprint's: the fake's, views.ts)
+  const tasks = withLinks(withKinds(file.tasks as Task[]), file.meta);
+  const m = sprintModel(file.meta, tasks, DEFAULT_VOCABULARY);
   const withComponents = tasks.map((t, i) => (i < 2 ? { ...t, components: ['api', 'ui'] } : t));
 
   it('the Sprint group: the active sprint, the planned ones, the backlog, then the closed ones', () => {
@@ -183,7 +183,7 @@ describe('sprints, releases and components (SR-7.1)', () => {
     const none = sprintModel(
       { ...file.meta, sprints: (file.meta!.sprints as object[]).map((s) => ({ ...s, state: 'closed' })) },
       tasks,
-      resolveVocabulary(file.meta),
+      DEFAULT_VOCABULARY,
     );
     expect(sprintSelection(new Set([ACTIVE, BACKLOG]), none)).toEqual(new Set([BACKLOG]));
     expect(filterTasks(tasks, filters({ sprint: [ACTIVE] }), undefined, none)).toHaveLength(tasks.length);
@@ -226,7 +226,12 @@ describe('labels', () => {
       { value: 'spike-2', label: 'spike-2' },
       { value: 'ux', label: 'ux' },
     ]);
-    const vocab = resolveVocabulary({ labels: [{ id: 'ux', label: 'UX' }, { id: 'nope' }] });
+    const vocab = vocabulary({
+      labels: [
+        { id: 'ux', label: 'UX' },
+        { id: 'nope', label: 'nope' },
+      ],
+    });
     expect(filterOptions(withLabels, vocab).label.map((o) => o.label)).toEqual(['UX', 'api', 'spike-2']);
   });
 
@@ -252,13 +257,14 @@ describe('labels', () => {
 
 describe('the stage group', () => {
   it('offers the stages done tasks have, in order; filters by them; tasks not done have none', () => {
-    const done = standard.filter((t) => t.status === 'done');
-    const tasks = [
+    const done = standardFile.tasks.filter((t) => t.status === 'done') as Task[];
+    // Each with the stage atm gives it (the fake's, views.ts)
+    const tasks = withKinds([
       { ...done[0], merged_at: '2026-04-01T00:00:00Z', pr: { number: 2 } },
       { ...done[1], pr: { number: 3, url: 'u' } },
       done[2],
-      { ...standard.find((t) => t.status === 'todo')!, pr: { number: 3 } },
-    ];
+      { ...(standardFile.tasks.find((t) => t.status === 'todo') as Task), pr: { number: 3 } },
+    ]);
     expect(filterOptions(tasks).stage).toEqual([
       { value: 'done', label: 'Done' },
       { value: 'in_pr', label: 'In PR' },
@@ -305,7 +311,13 @@ describe('sortTasks', () => {
   });
 
   it("uses the project's priorities", () => {
-    const vocab = resolveVocabulary({ priorities: [{ id: 'P1' }, { id: 'P0' }], default_priority: 'P0' });
+    const vocab = vocabulary({
+      priorities: [
+        { id: 'P1', label: 'P1' },
+        { id: 'P0', label: 'P0' },
+      ],
+      defaultPriority: 'P0',
+    });
     expect(ids(sortTasks(tasks, 'priority', vocab))).toEqual(['T-1', 'T-10', 'T-3', 'T-4', 'T-2']);
   });
 });

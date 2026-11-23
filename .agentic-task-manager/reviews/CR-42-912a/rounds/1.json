@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "19f9c056a4996443ea93bb7db6831504fe6acdf6",
+    "head": "22a6a551fdb460b25a2a8d9e4e04ef695bed550f"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/graph/DepGraph.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/performance.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T00:58:45Z"
+}

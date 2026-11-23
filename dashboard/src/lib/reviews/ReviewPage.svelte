@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
+  import type { ReviewSection } from '../address';
   import CompMd from '../documents/CompMd.svelte';
   import type { DocumentRef } from '../documents';
   import type { DocumentSource } from '../documents/source';
   import { formatWhen } from '../format';
   import { readStored, writeStored } from '../prefs';
   import Icon from '../ui/Icon.svelte';
+  import { park, unpark } from '../tab-parked';
   import ChainBox from './ChainBox.svelte';
   import ComposerActions from './ComposerActions.svelte';
-  import { draftedComments, setDraftActions, withDrafts, type DraftActions } from './drafts';
+  import { setDraftActions, withDrafts, type DraftActions } from './drafts';
   import { focusOnShow } from './focus';
   import { setCommentEdits, setDocumentLinks, setTaskLinks } from './links';
   import type { TaskLinks } from '../compmd';
@@ -16,6 +18,7 @@
   import {
     chainsOf,
     driftedOf,
+    elsewhereOf,
     fileTree,
     filesIn,
     filterChains,
@@ -46,6 +49,9 @@
     page,
     project = null,
     file = null,
+    section,
+    comment = null,
+    onsection,
     side,
     imageAt,
     isViewed,
@@ -69,12 +75,19 @@
     ondrafts,
     onedit,
     ondocument,
+    appTab,
   }: {
     page: ReviewPageData;
     /** The project's short name (its key), before the reference */
     project?: string | null;
     /** The file in view (its path): the Diffs tab opens at it */
     file?: string | null;
+    /** The sub-tab shown, the address's (ATM-697); none: Diffs with a file, else Overview */
+    section?: ReviewSection;
+    /** A comment in view (the address's `?comment=`, ATM-697): brought into view on the tab shown, and marked */
+    comment?: string | null;
+    /** Another sub-tab chosen: a step in the tab's history; without it, the page keeps its sub-tab itself */
+    onsection?: (section: ReviewSection) => void;
     /** A side's files: the commit or tree a round's side is read from */
     side: (revision: string) => DocumentSource;
     /** An image's address at a revision (ATM-689): a review's image file shows its sides; without it, listed only */
@@ -94,7 +107,8 @@
     /** The document style picked in Settings, for a Markdown file's rendered view */
     docStyle?: string | null;
     onback?: () => void;
-    onfile: (path: string) => void;
+    /** The file gone to, and the comment in it gone to (from the Comments tab), for the address */
+    onfile: (path: string, comment?: string | null) => void;
     /** `round` null: the latest (a live review's working copy now) */
     onround: (round: number | null, against: number | null) => void;
     onviewed: (file: ViewFile) => void;
@@ -115,6 +129,9 @@
     /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
      * manager opens its document viewer (ATM-586) */
     ondocument?: (ref: DocumentRef) => void;
+    /** The app's tab it is shown on (ATM-700): its Submit review and Poke forms, left open, are kept for that tab
+     * across a switch and there again on return; none in the browser */
+    appTab?: string;
   } = $props();
 
   const review = $derived(page.review);
@@ -123,12 +140,9 @@
   // be an open comment once sent, which an approval can't be made with)
   const allChains = $derived(withDrafts(page.chains, page.drafts, page.you, view.round));
   const pendingDrafts = $derived(page.drafts?.length ?? 0);
-  // Editing one's own comments (ATM-638): none on an ended review, which takes no change (no one is "you" there)
+  // Editing one's own comments (ATM-638): each comment says whether it may be (atm's `editable`, ATM-723)
   if (untrack(() => onedit))
     setCommentEdits({
-      get you() {
-        return ended ? '' : page.you;
-      },
       edit: (comment, body) => onedit?.(comment, body) ?? Promise.resolve('Comments can’t be changed here.'),
     });
   // Set once, for the boxes under the page: each calls the handlers as they are then (a round shown since, say)
@@ -146,10 +160,11 @@
   // In the tree's order (ATM-596): the diffs, moving between files, the round's select and the Viewed count follow it
   const files = $derived(treeOrder(view.files));
   const tree = $derived(fileTree(files));
-  const ended = $derived(review.status === 'approved' || review.status === 'closed');
-  /** A live review: its working copy followed as it is made (ATM-576) */
+  /** Something this reader may do on it (atm's `can`, ATM-723): the decisions' menu and the poke show only then */
+  const actionable = $derived(Object.values(page.can).some((answer) => answer.ok));
+  /** A live review: its working copy followed as it is made (ATM-576); how it is shown, not what may be done */
   const live = $derived(review.status === 'live');
-  /** Sent back to its author: more words are *Publish comments*, never a second send-back (ATM-597, CR-2) */
+  /** Sent back to its author: more words are *Publish comments* (ATM-597, CR-2), the button's name only */
   const sentBack = $derived(review.status === 'changes_requested');
   const rounds = $derived(page.rounds.map((r) => r.number));
   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
@@ -168,11 +183,44 @@
     return Number.isNaN(ts) ? at : formatWhen(ts, Date.now());
   };
 
-  // The tab: Diffs when the address names a file, else Overview
-  let tab = $state<'overview' | 'diffs' | 'comments'>('overview');
-  onMount(() => {
-    if (file) tab = 'diffs';
+  // The sub-tab: the address's (ATM-697), followed when it changes (Back, Forward); without one, Diffs when the address
+  // names a file, else Overview. Another chosen is the address's to show, through `onsection`
+  const sectionOf = (named: ReviewSection | undefined) => named ?? (file ? 'diffs' : 'overview');
+  let tab = $state<ReviewSection>(untrack(() => sectionOf(section)));
+  $effect.pre(() => {
+    const next = sectionOf(section);
+    untrack(() => (tab = next));
   });
+  function chooseTab(next: ReviewSection) {
+    if (next === tab) return;
+    tab = next;
+    onsection?.(next);
+  }
+
+  // The comment in view (ATM-697): once its tab has drawn it, scrolled to the middle and marked; each comment once
+  let commentShown: string | null = null;
+  $effect(() => {
+    const id = comment;
+    void tab;
+    void allChains;
+    if (!id || id === commentShown) return;
+    untrack(() => void showComment(id));
+  });
+  async function showComment(id: string) {
+    for (let i = 0; i < 120; i++) {
+      const el = document.querySelector<HTMLElement>(`#review-page [data-comment="${CSS.escape(id)}"]`);
+      if (el) {
+        commentShown = id;
+        if (pinned) release();
+        for (const old of document.querySelectorAll('.review-comment-in-view'))
+          old.classList.remove('review-comment-in-view');
+        el.classList.add('review-comment-in-view');
+        el.scrollIntoView({ block: 'center' });
+        return;
+      }
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+  }
 
   // The layout and view of every diff, and the tree's width: kept in this browser
   const LAYOUT_KEY = 'atm-review-layout';
@@ -340,7 +388,9 @@
     const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top;
     if (Math.abs(off) >= 1) el.scrollTop += off;
   }
-  async function showFile(path: string, address = true) {
+  /** Go to file `path` on the Diffs tab; with `address`, the address follows (the sub-tab and file, and the comment gone
+   * to from the Comments tab) */
+  async function showFile(path: string, address = true, comment: string | null = null) {
     tab = 'diffs';
     holdNearCards();
     wanted = path;
@@ -349,7 +399,7 @@
     atFile = chosen = pinned = path;
     // The address follows once the page is idle: the file is drawn first (a navigation re-renders the layout)
     writing?.();
-    if (address) writing = whenIdle(() => onfile(path));
+    if (address) writing = whenIdle(() => (comment ? onfile(path, comment) : onfile(path)));
   }
 
   // The file gone to stays at the top while the cards around it are made (each as tall as its diff, not its
@@ -428,7 +478,7 @@
     return [];
   }
   async function jump(back: boolean, kind: keyof typeof TARGETS = 'change') {
-    tab = 'diffs';
+    chooseTab('diffs');
     holdNearCards();
     if (pinned) release();
     await tick();
@@ -540,6 +590,27 @@
     onsubmit(decision, summary.trim());
     submitting = false;
   }
+  // A question left open belongs to its tab (ATM-700, lib/tab-parked.ts): a switch of tab takes the page away, so the
+  // forms are parked for the tab as they are, and taken back when it is shown again
+  interface Open {
+    submitting: boolean;
+    summary: string;
+    poking: boolean;
+    pokeText: string;
+  }
+  const parkedAs = untrack(() => `review-forms:${review.id}`);
+  const shownOn = untrack(() => appTab);
+  const kept = unpark<Open>(shownOn, parkedAs);
+  if (kept) {
+    submitting = kept.submitting;
+    summary = kept.summary;
+    poking = kept.poking;
+    pokeText = kept.pokeText;
+  }
+  onDestroy(() => {
+    if (submitting || poking || summary || pokeText) park(shownOn, parkedAs, { submitting, summary, poking, pokeText });
+  });
+
   // A decision made (the review's `updated` moves): the summary box starts empty; a refresh that changed nothing else
   // keeps what is being written
   let updatedAt = untrack(() => review.updated);
@@ -556,18 +627,8 @@
     open: allChains.filter(isOpen).length,
     resolved: allChains.filter((c) => isResolved(c)).length,
   });
-  /** Nothing left open: the decision at hand is to approve */
-  const settled = $derived(chainCounts.open === 0);
-  /** Why Approve can't be pressed now, as the review's rules would refuse it (ATM-601); null when it can. A review
-   * sent back can be approved too (ATM-609) */
-  const approveBlocked = $derived.by(() => {
-    const drafted = draftedComments(page.drafts);
-    const open = chainCounts.open - drafted;
-    if (open > 0) return `${open} ${open === 1 ? 'comment is' : 'comments are'} still open: resolve them first`;
-    if (drafted > 0)
-      return `Your ${drafted === 1 ? 'draft comment' : `${drafted} draft comments`} would be open once sent: send ${drafted === 1 ? 'it' : 'them'} with Comment or Request changes, or remove ${drafted === 1 ? 'it' : 'them'}`;
-    return null;
-  });
+  /** Why Approve can't be pressed now, in the review's rules' own words (ATM-601, ATM-633); null when it can */
+  const approveBlocked = $derived(page.can.approve.ok ? null : (page.can.approve.why ?? 'not allowed now'));
   /** What a decision sends with it (ATM-612): the user's drafts */
   const pendingLabel = $derived(
     pendingDrafts ? `${pendingDrafts} ${pendingDrafts === 1 ? 'draft' : 'drafts'} will be sent with it` : null,
@@ -620,7 +681,7 @@
           title="The change as it is being made; a comment keeps what you saw as a checkpoint"
           >Following the working copy</span
         >{/if}
-      {#if !ended && onpoke}
+      {#if actionable && onpoke}
         <!-- A poke (ATM-611): a nudge its agent hears and answers, saying where the review stands -->
         <div class="review-submit-anchor">
           <button
@@ -655,9 +716,9 @@
           {/if}
         </div>
       {/if}
-      {#if !ended}
+      {#if actionable}
         <div class="review-submit-anchor">
-          {#if settled && !approveBlocked}
+          {#if !approveBlocked}
             <div class="review-split-button">
               <button
                 class="review-button primary approve"
@@ -703,33 +764,34 @@
                 aria-label="Summary"
                 {@attach focusOnShow}></textarea>
               <div class="review-actions">
-                <button
-                  class="review-button"
-                  data-decision="comment"
-                  disabled={busy || (!summary.trim() && !pendingDrafts)}
-                  onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
-                >
-                {#if live}
-                  <!-- A live review isn't sent back: its author ends it with a round; a reviewer approves or closes it -->
-                  {#if onclose}
-                    <button
-                      class="review-button danger"
-                      data-decision="close"
-                      disabled={busy || !summary.trim()}
-                      title="End it without approval; the summary says why"
-                      onclick={() => {
-                        onclose(summary.trim());
-                        submitting = false;
-                      }}>Close review</button
-                    >
-                  {/if}
-                {:else if !sentBack}
-                  <!-- Sent back already, it isn't sent back again (CR-2): more words are published as comments -->
+                <!-- Each decision as atm's rules allow it (ATM-723): a live review isn't sent back, nor one sent back
+                     already (CR-2: more words are published as comments) -->
+                {#if page.can.comment.ok}
+                  <button
+                    class="review-button"
+                    data-decision="comment"
+                    disabled={busy || (!summary.trim() && !pendingDrafts)}
+                    onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
+                  >
+                {/if}
+                {#if page.can.request_changes.ok}
                   <button
                     class="review-button danger"
                     data-decision="request_changes"
                     disabled={busy}
                     onclick={() => submit('request_changes')}>Request changes</button
+                  >
+                {:else if live && page.can.close.ok && onclose}
+                  <!-- A live review's reviewer ends it unapproved by closing it; its author ends it with a round -->
+                  <button
+                    class="review-button danger"
+                    data-decision="close"
+                    disabled={busy || !summary.trim()}
+                    title="End it without approval; the summary says why"
+                    onclick={() => {
+                      onclose(summary.trim());
+                      submitting = false;
+                    }}>Close review</button
                   >
                 {/if}
                 <!-- Disabled, saying why, while the rules would refuse it (ATM-601): the reason on the wrapper, as a
@@ -762,7 +824,7 @@
             role="tab"
             id="review-tab-{t.id}"
             aria-selected={tab === t.id}
-            onclick={() => (tab = t.id)}
+            onclick={() => chooseTab(t.id)}
             aria-label={t.open ? `${t.label}: ${t.count}, ${t.open} open` : undefined}
             ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
                 class="review-count">{t.count}</span
@@ -793,8 +855,12 @@
             value={view.against ?? ''}
             onchange={(e) => onround(view.round, e.currentTarget.value ? Number(e.currentTarget.value) : null)}
           >
-            <option value="">Whole change</option>
-            {#each rounds.filter((n) => n < view.round) as n (n)}<option value={n}>Since round {n}</option>{/each}
+            <!-- ATM-725: a round's whole change (from the review's base), what changed since an earlier round, or the
+                 round's own increment (since the round before) -->
+            <option value="">Round {view.round} (whole)</option>
+            {#each rounds.filter((n) => n < view.round) as n (n)}<option value={n}
+                >{n === view.round - 1 ? `Round ${view.round} only` : `Since round ${n}`}</option
+              >{/each}
           </select>
           <span class="review-progress" title="{viewedCount} of {files.length} files viewed">
             <span class="review-meter"
@@ -1116,6 +1182,7 @@
             {imageAt}
             chains={chainsOf(allChains, f)}
             drifted={driftedOf(allChains, f)}
+            elsewhere={elsewhereOf(allChains, f)}
             before={sideOf(f.before)}
             after={sideOf(f.after)}
             viewed={isViewed(f)}
@@ -1158,7 +1225,9 @@
           detailed
           {onreply}
           {onresolve}
-          onwhere={chain.anchor.path ? () => showFile(chain.anchor.path!) : () => (tab = 'overview')}
+          onwhere={chain.anchor.path
+            ? () => showFile(chain.anchor.path!, true, chain.comments[0]?.id ?? null)
+            : () => chooseTab('overview')}
         />
       {/each}
     </div>
@@ -1826,7 +1895,8 @@
     padding: var(--space-7) var(--space-8) 50vh;
     background: var(--bg);
   }
-  .review-diffs :global(.review-current-change) {
+  .review-diffs :global(.review-current-change),
+  .review-page :global(.review-comment-in-view) {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }

@@ -11,16 +11,19 @@
     type AllBoardColumn,
     type BoardMatch,
   } from '../allboard';
-  import { formatAgo, shortAgent } from '../claims';
+  import { shortAgent } from '../claims';
+  import { formatAgo } from '../format';
   import { searchProjects, type ProjectEntry } from '../load';
   import { dashboard } from '../state.svelte';
   import { kindStyle, priorityStyle, typeStyle } from '../theme';
   import { DEFAULT_VOCABULARY, priorityRank } from '../vocab';
-  import { blockSummary, reviewSummary } from '../waiting';
+  import { waitText } from '../waiting';
   import KanbanScroll from '../kanban/KanbanScroll.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
   import TaskKey from '../ui/TaskKey.svelte';
   import { shortId } from '../keys';
+  import { followInPlace } from '../new-tab-clicks';
+  import { withTask } from '../routes';
 
   let { projects }: { projects: ProjectEntry[] } = $props();
 
@@ -65,20 +68,16 @@
   const KINDS = { todo: 'todo', active: 'active', review: 'review', blocked: 'blocked', done: 'done' } as const;
   const LABELS_SHOWN = 2;
 
-  const minutesSince = (iso: string | null | undefined) => {
-    const t = Date.parse(iso ?? '');
-    return Number.isNaN(t) ? null : Math.max(0, (dashboard.loadedAt - t) / 60_000);
-  };
-
   /** The card's last line, by column: who works on it, how long it waits, or when it was finished */
   function status({ card }: AllBoardCard, column: string): string | null {
     if (column === 'active' && card.by)
       return [shortAgent(card.by), card.since && formatAgo(card.since, dashboard.loadedAt)].filter(Boolean).join(' · ');
-    if (column === 'review') return reviewSummary({ since: 0, minutes: minutesSince(card.since) ?? 0 });
+    if (column === 'review')
+      return waitText({ on: 'reviewer', since: card.since ?? undefined }, 'review', dashboard.loadedAt);
     if (column === 'blocked') {
-      const on = card.waiting_on === 'user' || card.waiting_on === 'agent' ? card.waiting_on : null;
+      const on = card.waiting_on === 'user' || card.waiting_on === 'agent' ? card.waiting_on : 'unknown';
       const questions = Array.from({ length: card.questions ?? 0 }, () => '');
-      return blockSummary({ on, minutes: minutesSince(card.since), questions });
+      return waitText({ on, since: card.since ?? undefined, questions }, 'blocked', dashboard.loadedAt);
     }
     if (column === 'done' && card.completed_at) return `Done ${formatAgo(card.completed_at, dashboard.loadedAt)}`;
     // To do, but not for the loop now (T-349): waiting on dependencies, or done with you
@@ -92,13 +91,6 @@
   /** The task's details over the board, which stays (T-411); the chip opens the project */
   function open(item: AllBoardCard) {
     void dashboard.openOnBoard(item.project.id, item.card.id);
-  }
-
-  function onKeydown(e: KeyboardEvent, item: AllBoardCard) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      open(item);
-    }
   }
 </script>
 
@@ -117,15 +109,7 @@
           {@const card = item.card}
           {@const ts = typeStyle(card.type ?? '')}
           {@const line = status(item, column.id)}
-          <div
-            class="kanban-card board-card"
-            data-id={card.id}
-            data-project={item.project.id}
-            role="button"
-            tabindex="0"
-            onclick={() => open(item)}
-            onkeydown={(e) => onKeydown(e, item)}
-          >
+          <div class="kanban-card board-card" data-id={card.id} data-project={item.project.id}>
             <div class="kanban-card-top">
               {#if !lane}
                 <button
@@ -164,7 +148,12 @@
                 >
               {/if}
             </div>
-            <div class="kanban-card-name">{card.name}</div>
+            <!-- A real link (ATM-698): the task on its project's page; a plain click opens its details over the board -->
+            <a
+              class="kanban-card-name card-link"
+              href={withTask(dashboard.projectAddress(item.project.id), card.key ?? card.id)}
+              onclick={(e) => followInPlace(e, () => open(item))}>{card.name}</a
+            >
             {#if line}
               <div
                 class="kanban-waiting board-card-status"

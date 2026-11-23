@@ -1,0 +1,32 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "d82c14369c540447e4e3e57a16d17622977cd58e",
+    "head": "bd75d5a173e5d0d7dbf0e3b87f93b6e9159b4426"
+  },
+  "files": [
+    {
+      "path": "docs/images/rendered-document/review-auto-dark.png",
+      "status": "added",
+      "binary": true
+    },
+    {
+      "path": "docs/images/rendered-document/review-auto-light.png",
+      "status": "added",
+      "binary": true
+    },
+    {
+      "path": "docs/images/rendered-document/review-docs-dark.png",
+      "status": "added",
+      "binary": true
+    },
+    {
+      "path": "docs/rendered-document-research.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T18:14:28Z"
+}

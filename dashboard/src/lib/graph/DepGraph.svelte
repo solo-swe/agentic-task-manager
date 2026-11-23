@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { dependencyChain, layoutGraph, NODE_H, NODE_W } from './layout';
+  import { dependencyChain, graphFocus, layoutGraph, NODE_H, NODE_W } from './layout';
   import {
     anyNodeVisible,
     autoFitView,
@@ -17,7 +17,7 @@
   } from './view';
   import { dashboard } from '../state.svelte';
   import { graphNodeBg, KIND_EMOJI, TYPE_EMOJI, typeStyle } from '../theme';
-  import { kindOf } from '../vocab';
+  import { kindOf, taskKind } from '../vocab';
   import { taskLabel } from '../keys';
   import GraphControls from './GraphControls.svelte';
   import Minimap from './Minimap.svelte';
@@ -40,10 +40,7 @@
   const dimmed = $derived(
     new Set(
       layout.nodes
-        .filter(
-          ({ task }) =>
-            !matching.has(task.id) || (dashboard.graphDimDone && kindOf(dashboard.vocab, task.status) === 'done'),
-        )
+        .filter(({ task }) => !matching.has(task.id) || (dashboard.graphDimDone && taskKind(task) === 'done'))
         .map(({ task }) => task.id),
     ),
   );
@@ -58,11 +55,8 @@
     const kind = kindOf(dashboard.vocab, status);
     return kind ? KIND_EMOJI[kind] : '';
   };
-  // When the graph overflows, the initial view centers on the task in progress, else the next one to do
-  const focus = $derived(
-    layout.nodes.find((n) => matching.has(n.task.id) && n.task.status === 'in_progress') ??
-      layout.nodes.find((n) => matching.has(n.task.id) && n.task.status === 'todo'),
-  );
+  // When the graph overflows, the initial view centers on the task in progress, else the next one to do (by kind)
+  const focus = $derived(graphFocus(layout.nodes, matching));
 
   let svg: SVGSVGElement;
   let vw = $state(0);
@@ -171,13 +165,15 @@
     shownKey = key;
   });
 
-  /** The user moved the view: auto-fit goes off. Animated for the zoom buttons and keys, not for dragging. */
-  function setView(v: View, animate = false) {
+  /** The user moved the view: auto-fit goes off. Animated for the zoom buttons and keys, not for dragging. Saved with
+   * the project's view, except while a drag moves it: then once, when it ends (ATM-680, audit D13: every pointer move
+   * wrote the whole view to the browser's storage) */
+  function setView(v: View, animate = false, save = true) {
     animateNext = animate;
     view = clampView(v, content, viewport);
     untouched = false;
     dashboard.graphAutoFit = false;
-    dashboard.graphView = view; // saved with the project's view
+    if (save) dashboard.graphView = view;
   }
 
   const zoomBy = (factor: number) => setView(zoomAt(view, view.k * factor, vw / 2, vh / 2), true);
@@ -212,11 +208,12 @@
       svg.setPointerCapture(e.pointerId);
       panning = true;
     }
-    setView({ k: view.k, x: drag.x + dx, y: drag.y + dy });
+    setView({ k: view.k, x: drag.x + dx, y: drag.y + dy }, false, false);
   }
 
   function endDrag() {
     if (drag?.moved) {
+      dashboard.graphView = view;
       suppressClick = true;
       setTimeout(() => (suppressClick = false), 0);
     }

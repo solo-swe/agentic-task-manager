@@ -1,0 +1,17 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "bc2b174654eae72531be0e4052b87983dfbc6bc6",
+    "head": "4d4e658d4b433384d6abff45ea9ab8e08fa468ed"
+  },
+  "files": [
+    {
+      "path": "docs/tabs-and-navigation-design.md",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T18:36:44Z"
+}

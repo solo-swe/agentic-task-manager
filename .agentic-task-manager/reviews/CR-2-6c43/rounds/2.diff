@@ -1,0 +1,130 @@
+diff --git a/crates/atm-review/src/rules.rs b/crates/atm-review/src/rules.rs
+index 0f06d82d..9b3460fb 100644
+--- a/crates/atm-review/src/rules.rs
++++ b/crates/atm-review/src/rules.rs
+@@ -327,9 +327,8 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+                 }
+                 Some(Status::Approved)
+             }
+-            // Asked again while it is back with its author (ATM-597): the reviewer's words are kept, and it stays
+-            // where it is
+-            Verdict::RequestChanges if status == Status::ChangesRequested => None,
++            // Sent back already, it isn't sent back again (CR-2): a reviewer's further words are a comment, which
++            // the page calls *Publish comments*
+             Verdict::RequestChanges => {
+                 if status != Status::Open {
+                     return Err(not_now(&review, "be sent back"));
+@@ -1297,12 +1296,8 @@ mod tests {
+                 Some(Status::ChangesRequested),
+             ),
+             (Status::Live, Verdict::RequestChanges, None),
+-            // Asked again while it is back with its author (ATM-597): kept, and it stays
+-            (
+-                Status::ChangesRequested,
+-                Verdict::RequestChanges,
+-                Some(Status::ChangesRequested),
+-            ),
++            // Sent back already: not again (CR-2); further words are a comment, below
++            (Status::ChangesRequested, Verdict::RequestChanges, None),
+             (Status::Draft, Verdict::Comment, Some(Status::Draft)),
+             (Status::Open, Verdict::Comment, Some(Status::Open)),
+             (Status::Live, Verdict::Comment, Some(Status::Live)),
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index c8246152..ee099312 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -89,6 +89,8 @@
+   const ended = $derived(review.status === 'approved' || review.status === 'closed');
+   /** A live review: its working copy followed as it is made (ATM-576) */
+   const live = $derived(review.status === 'live');
++  /** Sent back to its author: more words are *Publish comments*, never a second send-back (ATM-597, CR-2) */
++  const sentBack = $derived(review.status === 'changes_requested');
+   const rounds = $derived(page.rounds.map((r) => r.number));
+   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
+   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
+@@ -444,7 +446,7 @@
+                   class="review-button"
+                   data-decision="comment"
+                   disabled={busy || !summary.trim()}
+-                  onclick={() => submit('comment')}>Comment</button
++                  onclick={() => submit('comment')}>{sentBack ? 'Publish comments' : 'Comment'}</button
+                 >
+                 {#if live}
+                   <!-- A live review isn't sent back: its author ends it with a round; a reviewer approves or closes it -->
+@@ -460,7 +462,8 @@
+                       }}>Close review</button
+                     >
+                   {/if}
+-                {:else}
++                {:else if !sentBack}
++                  <!-- Sent back already, it isn't sent back again (CR-2): more words are published as comments -->
+                   <button
+                     class="review-button danger"
+                     data-decision="request_changes"
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index d1ff3e93..2fdbd34e 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -658,21 +658,19 @@ describe('ReviewPage: submit', () => {
+     expect(screen.getByLabelText('Summary')).toHaveValue('');
+   });
+ 
+-  it('a review sent back still takes the reviewer’s words: a comment, and changes asked for again (ATM-597)', async () => {
++  it('a review sent back still takes the reviewer’s words, as Publish comments; it isn’t sent back again (ATM-597, CR-2)', async () => {
+     const page = open();
+     page.review = { ...page.review, status: 'changes_requested' };
+     const { onsubmit } = show(page);
+     expect(screen.getByRole('button', { name: 'Comment on the review' })).toBeEnabled();
+     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
++    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull();
++    const publish = screen.getByRole('button', { name: 'Publish comments' });
++    expect(publish).toBeDisabled();
+     await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Still the title.' } });
+-    await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
+-    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+-    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'A note.' } });
+-    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+-    expect(onsubmit.mock.calls).toEqual([
+-      ['request_changes', 'Still the title.'],
+-      ['comment', 'A note.'],
+-    ]);
++    await fireEvent.click(publish);
++    expect(onsubmit.mock.calls).toEqual([['comment', 'Still the title.']]);
+   });
+ 
+   it('a live review (ATM-576): approved, commented on or closed with why, never sent back', async () => {
+diff --git a/docs/code-review-design.md b/docs/code-review-design.md
+index 610db069..5d23db1b 100644
+--- a/docs/code-review-design.md
++++ b/docs/code-review-design.md
+@@ -163,7 +163,7 @@ stateDiagram-v2
+ | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
+ | `open` | waiting on the reviewers | the author, with a round |
+ | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
+-| `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words (changes asked for again keeps it here, with what they wrote; ATM-597); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
++| `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words, as a comment (the page's *Publish comments*; ATM-597): it isn't sent back again (CR-2); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
+ | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
+ | `closed` | ended without approval (abandoned, replaced) | the author, or a reviewer |
+ 
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index b55e5132..aa2ba502 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -87,10 +87,13 @@ describe('atm review', () => {
+       assert.equal(task(root, 'T-1').review_state, 'changes_requested');
+       assert.match(JSON.stringify(task(root, 'T-1').notes), /CR-1 round 1: 1 open comment/);
+ 
+-      // Sent back, the review still takes the reviewer's words (ATM-597): a comment, and changes asked for again with
+-      // a message, which is kept; it stays sent back and the task isn't changed again
++      // Sent back, the review still takes the reviewer's words (ATM-597): a comment, and a decision's comment with a
++      // message, which is kept; sent back already, it isn't sent back again (CR-2), and the task isn't changed again
+       ok(['review', 'comment', 'CR-1', '--body', 'And the title too.'], root, HAKAN);
+-      ok(['review', 'submit', 'CR-1', '--request-changes', '--body', 'Both, please.'], root, HAKAN);
++      const again = atm(['review', 'submit', 'CR-1', '--request-changes', '--body', 'Both, please.'], root, HAKAN);
++      assert.equal(again.code, 1);
++      assert.match(again.stderr, /sent back/);
++      ok(['review', 'submit', 'CR-1', '--comment', '--body', 'Both, please.'], root, HAKAN);
+       const sentBack = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
+       assert.equal(sentBack.header.status, 'changes_requested');
+       assert.deepEqual(

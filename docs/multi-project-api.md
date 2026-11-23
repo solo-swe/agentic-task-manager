@@ -68,8 +68,10 @@ The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/
 
 The claims of all a clone's worktrees are in one store, in the git common directory (`.git/atm/claims.json`; outside
 git, `claims-store.json` in the task folder). The server answers from it, as `{generated_at, claims: [...]}` sorted by
-task, so an agent at work in a linked worktree shows on the project's board. Its ETag changes with the store. Before
-the first claim there is no store yet, and the answer is an empty list.
+task, so an agent at work in a linked worktree shows on the project's board. Only the claims held now are listed: an
+expired lease is left out by atm's clock (ATM-724, the loop's rule), so the dashboard doesn't judge leases by the
+browser's. Its ETag changes with the store and with which claims are held, so a lease running out is a new version.
+Before the first claim there is no store yet, and the answer is an empty list.
 
 ### 2.2 `worktrees.json`: the project's git worktrees
 
@@ -104,9 +106,11 @@ the first claim there is no store yet, and the answer is an empty list.
   merge; T-387). The dashboard takes them as they are and applies no rule of its own to a copy.
 - The ETag changes when a worktree is added or removed, switches branch, its `tasks.json` changes, or the claims
   store does.
-- The dashboard shows all of them on one board: each task from the worktree where it got furthest (by status kind:
-  todo, blocked, active, review, then done or skipped; the main worktree's copy on a tie), with that worktree's branch
-  on its card.
+- Each linked worktree also says which tasks the board shows from it, `shown` (IDs, ATM-724): a task's copy that
+  got further than every other, by the merge driver's ranking (`kind_rank`: to do; then active, blocked or in review;
+  then done or skipped), the first listed on a tie, the main worktree's first; a task only linked worktrees have, from
+  the first of them. The dashboard shows all of them on one board as `shown` says, with that worktree's branch on its
+  card, and ranks nothing itself.
 
 ### 2.3 `logo`: the project's logo
 
@@ -143,11 +147,73 @@ typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/ge
 task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
 `in_pr`, `merged`) and `archived`; what doesn't apply is left out.
 
+- **Its links and how it ended** (ATM-719): `resolution` (a finished task's, the default filled in: `done`, or
+  `wont_do` for a skipped one), `required_by`, `related_by` and `duplicated_by` (the working tasks pointing at it, for
+  an archived task too; `related_by` leaves out those in its own `related`), and `in_closed_sprint` (an unfinished
+  task left in a closed sprint, which the loop never takes). Every task the dashboard has comes with them, archived
+  ones and a worktree's copies too, so it works none of them out.
+
 - **Its code reviews' statuses** (ATM-621): a task with code reviews (`code_reviews`) has `derived.review_statuses`,
   by review ID: each review's status (`draft`, `waiting`, `live`, `changes_requested`, `approved`, `closed`), or
   `unreadable` for one atm can't read (ATM-617). They're read from the project's reviews once for all the views. A
   review this working copy doesn't have is left out. The tasks' `ETag` already moves with the reviews' files
   (ATM-606), so a decision shows on the next refresh. The task cards' and the details' review badges show them.
+
+- **Who it waits on** (ATM-717, atm-lib's `waiting`, one rule for every front end and the summary's needs-you count;
+  docs/dashboard-derived-state.md):
+  - `derived.waiting` `{ on, since?, questions? }`: `on` is
+    - `reviewer` while its review waits (since the request);
+    - `agent` once approved or sent back (since the decision), or blocked on an agent;
+    - `user` when blocked on them, rejected, or to do together;
+    - `dependencies` when to do and not ready;
+    - `unknown` when blocked by hand.
+
+    Absent when it waits on nobody.
+  - `derived.needs_you`: `review`, `blocked` or `together`, or absent.
+  - `derived.agent_work`: whether agent work is left on it. An approved or sent-back task's is.
+  - `derived.review` `{ id, ref, status? }`: the code review it waits on. That is the latest one still open, else the
+    latest, never simply the latest link. A review this working copy doesn't have (another branch's) comes without
+    its `status`.
+
+  The cards' waiting line, the needs-you chips, the forecast, the burndown, the component table and the "waiting on
+  you" time read these, and work none of it out.
+
+- **The vocabulary** (ATM-718, atm-lib's `vocabulary`): the response's `vocabulary` (`ProjectVocabulary`) is the
+  project's vocabulary as atm resolved it:
+  - `statuses` `{ id, label, kind }`, `types` and `priorities` `{ id, label }` (most urgent first), `default_priority`;
+  - `labels` (`meta.labels`, each with its text);
+  - `components` `{ id, label, paths, review? }`;
+  - `workflow` (with its defaults filled in, or null);
+  - `review` (the project's review mode);
+  - `phases` (a project from before sprints: the named ones).
+
+  The dashboard reads it, and each task's `derived.kind`, instead of parsing `meta`. A list a tolerant read can't use
+  is its default here (below).
+
+- **The sprints and releases** (ATM-720; atm-lib's `sprints::sprint_views` and `releases::release_views`):
+  - The response's `sprints` is `{ sprints, backlog, from_phases }`: every sprint in the project's order, closed ones
+    too, with its stored fields and its figures over the working tasks and the archive:
+    - `done`, `total` and `percent`: the summary's one rule, done of the tasks but the skipped, 100 with none;
+    - `added`, `carried` and `review_pending`;
+    - `days_left` and `due_end`: the days to its due date by the project's day (today, local, by atm's clock) and when
+      it has passed, while it is open.
+
+    `backlog` is the unfinished tasks in no sprint, as `atm sprint list` counts them. An unmigrated project's phases
+    are served as the sprints `atm db migrate` would make (the migration's rule, on a copy), with `from_phases`.
+  - The response's `releases` lists every release, archived ones too, with its `sprints`, its tasks by stage (`total`,
+    `done`, `in_pr`, `merged`) and its `notes` (`{ groups, open }`, as `atm release notes` drafts them, with task keys).
+  - Each task's `derived.sprint` is the sprint it is in, and `derived.carried` how many sprints it was carried through
+    before it.
+  - The summary's sprints (`recent_sprints`, `active_sprint`) carry `days_left` and `due_end` by the same rule.
+
+  The scope bar, the overview's card and Progress tab, the burndown, the velocity, the Project tab's counts and the
+  release view read these, and count none of it.
+
+- **Its work** (ATM-721; atm-lib's `work`): `derived.work` `{ minutes, live, spans: [{ from, to, by? }] }`. That is every
+  attempt (`attempts`) and its current one, less its review rounds and blocks, by one rule; `live` while an agent is at
+  it. The summary's agent time is made of the same spans. The cards' "took", the details' duration, the Agents tab's
+  bars, the time per task, the cycle times, the forecast's pace and the time-use split read it. "Done with you" is
+  `with: user` alone; `atm db migrate` moved the old `interactive` label to it, once.
 
 - **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
   `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,
@@ -180,6 +246,22 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
   here, and still gets a `304` for a change in a project it doesn't name. Which projects it names is worked out once
   per stamp of its own data. A `tasks.json` over the size limit gets `413`, as the raw file does; an unknown project
   `404`.
+
+### 2.5a `api/v1/projects/<id>/stats`: stats, progress and the forecast
+
+atm-lib's `stats::project_stats` (ATM-722, docs/dashboard-derived-state.md group F): what the Progress tab, the Progress
+widget and the Project tab show, by atm's rules, so the dashboard draws them and works none of them out. The query:
+`tasks` a slice (IDs or keys, comma-separated or repeated; none, the whole project) and `from`, `to` a period (ms since
+1970; a `to` before `from` is `400`). The answer (`Stats` in `api.schema.json`), times in ms:
+
+- of the slice: `progress` (`overall`, `archived`, `by_status`, `by_type`, `by_sprint`, archived tasks counted as what
+  they are), `forecast` (`pace`, `sprints` in the loop's order with their counts and estimates, the whole project's
+  estimates on a slice's rows, and `next`, the row the loop works on next) and `time_use` (working, waiting on you,
+  idle, agent time, over the period);
+- of the whole project: `stats` (its numbers), `histogram` (the time per done task) and `actors` (people and agents).
+
+Never cached (no `ETag`): the figures run to now. The app's command is `project_stats`; the CLI's `atm project stats`,
+and `atm project status` prints the forecast.
 
 ### 2.6 `documents` and `files`: a project's files for the document viewer
 
@@ -225,14 +307,16 @@ text the page reads, never a file it looks up.
 |---|---|
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
 | `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` and `/reviews` (every project's reviews, with a project picker; ATM-575) its other tabs |
-| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`) |
-| `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64), with `?round=&against=&file=` the view and the file gone to: a window of its own, without the dashboard's title bar and tabs, titled by the project's key, the reference and the title; the Reviews tab opens it in place (with ⌘ or Ctrl, in a browser tab) |
+| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`, `reviews`). The Reviews list's filter and search in the query (ATM-697): `?q=&status=waiting,live&author=&reviewer=&tasks=&branch=` |
+| `/projects/<id>/reviews/<CR>` | a review's page (ATM-574; its reference letters, digits, `-` and `.`, at most 64) on its Overview, `…/<CR>/diffs` and `…/<CR>/comments` its other sub-tabs (ATM-697), with `?round=&against=&file=` the view and the file gone to and `?comment=c12` a comment in view (never a `#` anchor: the app's `atm://` links carry none), titled by the project's key, the reference and the title. A click opens it in place; ⌘ or Ctrl, or a middle click, in a new tab (ATM-698). In the browser it is a page of its own, without the dashboard's title bar and view tabs; in the app it is in a tab, under the window's title bar and its tabs (ATM-574) |
 | `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
 
 What is open over a page is in the query: `?task=T-1` a task's details, `?doc=docs/x.md:L40` (or `#heading`, encoded) a
-document in the viewer, `?sprint=active` the Sprint filter, `?about` and `?help` the dialogs. The server ignores the
-query. The paths are atm-api's `pages.rs` (and `PAGE_PATH` in `dashboard/src/lib/address.ts`): a tab is lowercase
-letters, nothing deeper than a tab but a review under `reviews`; any other path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
+document in the viewer, `?sprint=active` the Sprint filter. Settings, Help, What's new and About are the app's own,
+above every tab, in no address (ATM-697); an older address's `?about` or `?help` opens its dialog and leaves the
+address. The server ignores the query. The paths are atm-api's `pages.rs` (and `PAGE_PATH` in
+`dashboard/src/lib/address.ts`): a tab is lowercase letters, nothing deeper than a tab but a review under `reviews`
+and its `diffs` or `comments`; any other path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
 old parameters from its hash and moves to the new address.
 
 ### 2.8 `api/v2/workspaces`: the workspaces (ADR-003, T-456)
@@ -264,9 +348,10 @@ old parameters from its hash and moves to the new address.
 - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
-  needs_you, waiting, waiting_since}], unreadable: [{folder, reference, problem}], you}`. `waiting_since` (ATM-610) is
-  its latest round's time, when it began waiting on its reviewers: the unfiltered list groups the reviews (what waits
-  for the user first, the longest waiting on top, saying for how long). `unreadable` (ATM-617) lists the project's
+  needs_you, waiting, waiting_since, ended}], unreadable: [{folder, reference, problem}], you}`. `waiting_since`
+  (ATM-610) is its latest round's time, when it began waiting on its reviewers: the unfiltered list groups the reviews
+  (what waits for the user first, the longest waiting on top, saying for how long). `ended` (ATM-714) is whether it is
+  decided, approved or closed: the groups go by it, not by a list of statuses of the dashboard's own. `unreadable` (ATM-617) lists the project's
   review folders atm can't read (a status a newer atm wrote, a broken header), whatever the query: the Reviews tab
   shows each as a row saying why. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
   the status waiting on the reviewers (`open` before 0.41.0). A review needs the user when it is waiting or live with
@@ -275,12 +360,18 @@ old parameters from its hash and moves to the new address.
   `"answered"` when someone else wrote in it after they last did (as the summary's `code_reviews`), else `null`. A
   status that isn't one is `400`.
 - `GET …/reviews/<CR>?round=&against=`: a review's page for one view, the whole change of round `round` (the latest
-  when none), or what changed in it since round `against`: `{review, summary, branch, rounds, chains, view: {round,
-  against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you}`. Each file's `patch` is
+  when none) from the review's base, or what changed in it since round `against` (ATM-725: the rounds' increments
+  between them added up, however each round was opened; docs/code-review-design.md §3.6): `{review, summary, branch, rounds, chains, view: {round,
+  against, files: [{path, old_path, status, binary, patch, before, after}]}, needs_you, you, can}`. `can` is what its
+  reader may do, each of `approve`, `request_changes`, `comment`, `round` and `close` as `{ok, why?}` (the review's
+  rules answering, ATM-633), and each comment and reply carries `editable`, whether they may change its text (their
+  own, not a poke, the review not ended; ATM-723): the page offers what these allow and has no rule of its own. Each
+  file's `patch` is
   its part of the diff, `before` and `after` the revisions its two sides are read from (`documents?path=&at=`, §2.6;
   `null` for a side the file doesn't have). Each chain has `placed`, its lines in the round shown (followed there from
-  the round it was made on), and `drifted`, the round and lines it was made on when its text is gone from the round
-  shown. A round that isn't a whole number from 1 is `400`, one the review doesn't have `404`, a round against itself
+  the round it was made on), `drifted`, the round and lines it was made on when its text is gone from the round
+  shown, and `in_view`, whether the view holds the increment of the round it was made on (ATM-725; else the page lists
+  it as on that round). A round that isn't a whole number from 1 is `400`, one the review doesn't have `404`, a round against itself
   `400`; a reference two reviews share (`CR-8`, two clones took the number) is `400` naming both (`CR-8.1`, `CR-8.2`).
   A live review with no `round` asked for is shown as its working copy is now (ATM-576): `view.now: true`, its
   `round` the one after its checkpoints (`rounds` lists only those) when the copy changed since the last checkpoint,
@@ -425,6 +516,7 @@ and `key_final` too, as the task views give them; a project before task keys has
 | `completions_14d` | 14 integers, oldest first, ending with today: done-kind tasks by the UTC day of `completed_at` (tasks without `completed_at` aren't counted) |
 | `board` | the cards for the All projects board (§3.3) |
 | `board_active_sprint` | the same columns, of the active sprint's tasks only, with their own counts: the board's default view (T-340, §3.3); `null` without an active sprint. Absent before 0.26, when the dashboard shows `board` |
+| `progress` | the overview's Progress tab (ATM-722, atm-lib's `stats::overview`), so the overview loads no project's tasks for it: `done` and `total` (all but the skipped, the archive too), `open_releases` (`[{ id, name, done, total }]`, the planned ones), `done_days` (`[[day, count]]`, days since 1970 in UTC, for the velocity chart), `burndown` (`[[day, scope, remaining]]` at the end of each day from the first task's to today) and `forecast` (`{ minutes: { likely, low, high }, waiting }`, the agent work left at the agents' pace and the open tasks waiting on someone; `null` without a pace) |
 | `stats` | the overview card's line (T-255), archived tasks included (a task in both files counted once, from `tasks.json`; an unreadable archive left out): `started`, the earliest `created_at` (else `meta.created`, else `null`); `tasks`, how many; `agent_minutes`, the agent time as the Project tab counts it: the work (`started_at` until the review request or completion, until now while active) of tasks an agent (`claude:…`) or nobody recorded started, each agent's spans merged, added up. Computed when the summary is (a change to `tasks.json` or the claims), so a running task's time grows between changes only then |
 
 ### 3.3 The board

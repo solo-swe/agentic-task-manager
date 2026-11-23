@@ -193,6 +193,7 @@
               ],
               "updated_at": "2026-05-01T10:00:00Z",
               "updated_by": "Hakan",
+              "attempts": [{ "from": "2026-05-01T09:00:00Z", "to": "2026-05-01T09:30:00Z", "by": "alice" }],
               "reviews": [
                 {
                   "from": "2026-05-01T09:30:00Z",
@@ -397,5 +398,18 @@
         }
       }
     }
+  },
+  {
+    "name": "a review decision with --dry-run on an unknown task refuses it, as the real run does (audit C17)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "in_review" }]
+        }
+      }
+    },
+    "args": ["task", "review", "approve", "T-9", "--dry-run"],
+    "env": { "ATM_AGENT": "Hakan" },
+    "expect": { "exit": 1, "stderrIncludes": ["no task T-9"] }
   }
 ]

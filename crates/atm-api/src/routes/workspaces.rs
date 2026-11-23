@@ -29,7 +29,11 @@ pub(super) fn get_projects(workspace: &dyn WorkspaceSource, request: &HeaderMap)
 /// word of the query appears, case-insensitively, as the dashboard's own search finds them; the project's name counts
 /// as part of every task's text. `{}` for an empty query.
 pub(super) fn get_search(workspace: &dyn WorkspaceSource, query: &str) -> Response {
-    ok_json(&json!(workspace.search(&parameter(query, "q"))), None)
+    // Stamped as every JSON answer is (ATM-672, audit H13); a reader takes the project entries, lists, beside it
+    ok_json(
+        &stamped(json!(workspace.search(&parameter(query, "q")))),
+        None,
+    )
 }
 
 #[cfg(test)]
@@ -133,7 +137,9 @@ mod tests {
             let work = projects.source.workspace("work").expect("work");
             let answer = answer(get_search(work.as_ref(), query));
             assert_eq!(answer.status, StatusCode::OK, "{query}");
-            assert_eq!(answer.json(), json!(found), "{query}");
+            // Stamped as every JSON answer is (ATM-672)
+            assert!(answer.json()["generated_at"].is_string(), "{query}");
+            assert_eq!(answer.unstamped(), json!(found), "{query}");
             assert_eq!(answer.tag(), "", "{query}: a search isn't cached");
             assert_eq!(
                 calls.taken(),
@@ -147,6 +153,9 @@ mod tests {
     fn a_search_that_finds_nothing_is_an_empty_object() {
         let (projects, _) = fake(Value::Null, Vec::new(), Map::new()).projects();
         let work = projects.source.workspace("work").expect("work");
-        assert_eq!(answer(get_search(work.as_ref(), "q=x")).json(), json!({}));
+        assert_eq!(
+            answer(get_search(work.as_ref(), "q=x")).unstamped(),
+            json!({})
+        );
     }
 }

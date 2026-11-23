@@ -1,0 +1,604 @@
+diff --git a/crates/atm-cli/src/commands/db.rs b/crates/atm-cli/src/commands/db.rs
+index d3767582..38b2c726 100644
+--- a/crates/atm-cli/src/commands/db.rs
++++ b/crates/atm-cli/src/commands/db.rs
+@@ -188,9 +188,8 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
+     }
+     let mut project = Project::open(cwd)?;
+     if let Some(meta_file) = meta_file.filter(|m| !m.is_empty()) {
+-        let new = std::fs::read_to_string(cwd.join(meta_file))
+-            .ok()
+-            .and_then(|text| serde_json::from_str::<Value>(&text).ok());
++        let text = crate::option_file::read_option_file(cwd, "meta-file", meta_file)?;
++        let new = serde_json::from_str::<Value>(&text).ok();
+         let Some(Value::Object(new)) = new else {
+             return Err(Error::Invalid(format!(
+                 "{meta_file} must hold a JSON object: the meta keys to set"
+diff --git a/crates/atm-cli/src/commands/review.rs b/crates/atm-cli/src/commands/review.rs
+index dc63075f..5aa12a2d 100644
+--- a/crates/atm-cli/src/commands/review.rs
++++ b/crates/atm-cli/src/commands/review.rs
+@@ -314,8 +314,7 @@ fn actor(project: &Project) -> Actor {
+ fn text_of(body: Body, cwd: &Path) -> Result<String> {
+     let text = match (body.body, body.body_file) {
+         (Some(text), _) => text,
+-        (None, Some(file)) => std::fs::read_to_string(cwd.join(&file))
+-            .map_err(|e| Error::failed(format!("can't read {file}: {e}")))?,
++        (None, Some(file)) => crate::option_file::read_option_file(cwd, "body-file", &file)?,
+         (None, None) => {
+             return Err(Error::Invalid(
+                 "give the text with --body or --body-file".into(),
+@@ -749,8 +748,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+         } => {
+             let mut project = opened(cwd, agent.as_deref())?;
+             let summary = match summary_file {
+-                Some(file) => std::fs::read_to_string(cwd.join(&file))
+-                    .map_err(|e| Error::failed(format!("can't read {file}: {e}")))?,
++                Some(file) => crate::option_file::read_option_file(cwd, "summary-file", &file)?,
+                 None => String::new(),
+             };
+             let first = new_round(&project, change, cwd, None, &[])?;
+@@ -837,10 +835,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+                 .unwrap_or_default();
+             // The new summary read before anything is written
+             let summary = summary_file
+-                .map(|file| {
+-                    std::fs::read_to_string(cwd.join(&file))
+-                        .map_err(|e| Error::failed(format!("can't read {file}: {e}")))
+-                })
++                .map(|file| crate::option_file::read_option_file(cwd, "summary-file", &file))
+                 .transpose()?;
+             let round = new_round(&project, change, cwd, last, &files)?;
+             if ctx.dry_run {
+@@ -1375,7 +1370,8 @@ mod tests {
+             (body(Some(""), None), 2, "the text is empty"),
+             (body(Some("  \n"), None), 2, "the text is empty"),
+             (body(None, Some("blank.md")), 2, "the text is empty"),
+-            (body(None, Some("gone.md")), 1, "can't read gone.md"),
++            // A file that can't be used is a usage error, as every --*-file option says it (ATM-662)
++            (body(None, Some("gone.md")), 2, "--body-file gone.md: can't read it"),
+         ] {
+             let e = text_of(given, &dir).unwrap_err();
+             assert_eq!(e.code(), code, "{says}");
+diff --git a/crates/atm-cli/src/commands/task/add.rs b/crates/atm-cli/src/commands/task/add.rs
+index 269268eb..bdd4fa53 100644
+--- a/crates/atm-cli/src/commands/task/add.rs
++++ b/crates/atm-cli/src/commands/task/add.rs
+@@ -114,10 +114,8 @@ fn read_entries(path: &str, cwd: &Path) -> Result<Vec<Task>> {
+             "{path}: expected a JSON list of tasks (or {{\"tasks\": [...]}})"
+         ))
+     };
+-    let value: Value = std::fs::read_to_string(cwd.join(path))
+-        .ok()
+-        .and_then(|text| serde_json::from_str(&text).ok())
+-        .ok_or_else(refused)?;
++    let text = crate::option_file::read_option_file(cwd, "json-file", path)?;
++    let value: Value = serde_json::from_str(&text).map_err(|_| refused())?;
+     let value = match value {
+         Value::Object(mut map) => map.shift_remove("tasks").unwrap_or(Value::Null),
+         other => other,
+@@ -186,9 +184,11 @@ pub fn add(args: AddArgs, ctx: Context, cwd: &Path) -> Result<()> {
+         read_entries(file, cwd)?
+     } else {
+         let description = match args.description_file.as_deref().filter(|f| !f.is_empty()) {
+-            Some(file) => Some(std::fs::read_to_string(cwd.join(file)).map_err(|e| {
+-                Error::failed(format!("can't read the description file {file}: {e}"))
+-            })?),
++            Some(file) => Some(crate::option_file::read_option_file(
++                cwd,
++                "description-file",
++                file,
++            )?),
+             None => args.description.clone(),
+         };
+         vec![entry(args, description)]
+diff --git a/crates/atm-cli/src/commands/task/edit.rs b/crates/atm-cli/src/commands/task/edit.rs
+index 7efe0ce5..7e77cb99 100644
+--- a/crates/atm-cli/src/commands/task/edit.rs
++++ b/crates/atm-cli/src/commands/task/edit.rs
+@@ -94,13 +94,14 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
+         println!("[dry-run] would edit task {}", args.task_id);
+         return Ok(());
+     }
+-    let description =
+-        match &file {
+-            Some(file) => Some(std::fs::read_to_string(cwd.join(file)).map_err(|e| {
+-                Error::failed(format!("can't read the description file {file}: {e}"))
+-            })?),
+-            None => args.description,
+-        };
++    let description = match &file {
++        Some(file) => Some(crate::option_file::read_option_file(
++            cwd,
++            "description-file",
++            file,
++        )?),
++        None => args.description,
++    };
+     let added_files = !args.add_file.is_empty();
+     let mut change = TaskEdit {
+         name: args.name,
+diff --git a/crates/atm-cli/src/main.rs b/crates/atm-cli/src/main.rs
+index 22990c79..5ea2d706 100644
+--- a/crates/atm-cli/src/main.rs
++++ b/crates/atm-cli/src/main.rs
+@@ -28,6 +28,7 @@ macro_rules! eprint {
+ }
+ 
+ mod commands;
++mod option_file;
+ mod output;
+ mod process;
+ 
+diff --git a/crates/atm-cli/src/option_file.rs b/crates/atm-cli/src/option_file.rs
+new file mode 100644
+index 00000000..208ecaad
+--- /dev/null
++++ b/crates/atm-cli/src/option_file.rs
+@@ -0,0 +1,169 @@
++//! The files `--*-file` options name (`--description-file`, `--json-file`, `--body-file`, `--summary-file`,
++//! `--meta-file`; ATM-662): read through one door. Agents pass them, often from a scratch folder outside the project
++//! (the skills say so), so any folder is fine; but a key or environment file, a file in a credentials folder, anything
++//! but a regular file (`/dev/zero`, a FIFO) and anything over 1 MiB are refused, so a pre-approved command can't put a
++//! key into the task files that `atm vcs commit` then commits.
++
++use std::io::Read as _;
++use std::path::{Component, Path};
++
++use atm_common::secrets::{SECRET_FOLDERS, env_file, key_file};
++use atm_common::{Error, Result};
++
++/// The largest file an option reads.
++pub const MAX_OPTION_FILE: u64 = 1024 * 1024;
++
++/// `--<option> <file>`'s text, `file` relative to `cwd` or absolute.
++///
++/// # Errors
++/// `Invalid` (exit code 2), one wording for every file that can't be used: missing or unreadable, a key or
++/// environment file, one in a credentials folder (also through a symbolic link), not a regular file, over 1 MiB, not
++/// UTF-8.
++pub fn read_option_file(cwd: &Path, option: &str, file: &str) -> Result<String> {
++    let refused = |why: String| Error::Invalid(format!("--{option} {file}: {why}"));
++    // Where it really is: a symbolic link is judged by what it points to
++    let path = std::fs::canonicalize(cwd.join(file))
++        .map_err(|e| refused(format!("can't read it ({e})")))?;
++    let name = path
++        .file_name()
++        .map(|n| n.to_string_lossy().into_owned())
++        .unwrap_or_default();
++    if key_file(&name) || env_file(&name) {
++        return Err(refused("atm doesn't read key or environment files".into()));
++    }
++    let in_secret_folder = path.components().any(|c| match c {
++        Component::Normal(part) => SECRET_FOLDERS.contains(&part.to_string_lossy().as_ref()),
++        _ => false,
++    });
++    if in_secret_folder {
++        return Err(refused(format!(
++            "atm doesn't read files in a credentials folder ({})",
++            SECRET_FOLDERS.join(", ")
++        )));
++    }
++    let meta = std::fs::metadata(&path).map_err(|e| refused(format!("can't read it ({e})")))?;
++    if !meta.is_file() {
++        return Err(refused("not a regular file".into()));
++    }
++    if meta.len() > MAX_OPTION_FILE {
++        return Err(refused("larger than 1 MiB".into()));
++    }
++    // Read no more than the limit, should it grow meanwhile
++    let mut bytes = Vec::new();
++    std::fs::File::open(&path)
++        .and_then(|f| f.take(MAX_OPTION_FILE + 1).read_to_end(&mut bytes))
++        .map_err(|e| refused(format!("can't read it ({e})")))?;
++    if bytes.len() as u64 > MAX_OPTION_FILE {
++        return Err(refused("larger than 1 MiB".into()));
++    }
++    String::from_utf8(bytes).map_err(|_| refused("not UTF-8 text".into()))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{MAX_OPTION_FILE, read_option_file};
++    use atm_common::Error;
++
++    struct Dir(std::path::PathBuf);
++    impl Drop for Dir {
++        fn drop(&mut self) {
++            let _ = std::fs::remove_dir_all(&self.0);
++        }
++    }
++    fn dir(name: &str) -> Dir {
++        let path =
++            std::env::temp_dir().join(format!("atm-option-file-{name}-{}", std::process::id()));
++        let _ = std::fs::remove_dir_all(&path);
++        std::fs::create_dir_all(&path).unwrap();
++        Dir(path)
++    }
++    fn refusal(result: atm_common::Result<String>) -> String {
++        match result {
++            Err(Error::Invalid(message)) => message,
++            other => panic!("not refused as a usage error: {other:?}"),
++        }
++    }
++
++    #[test]
++    fn a_text_file_anywhere_is_read_relative_or_absolute() {
++        let d = dir("ok");
++        std::fs::write(d.0.join("summary.md"), "Why and what.\n").unwrap();
++        assert_eq!(
++            read_option_file(&d.0, "summary-file", "summary.md").unwrap(),
++            "Why and what.\n"
++        );
++        let absolute = d.0.join("summary.md").to_string_lossy().into_owned();
++        assert_eq!(
++            read_option_file(Path::new("/"), "summary-file", &absolute).unwrap(),
++            "Why and what.\n"
++        );
++    }
++    use std::path::Path;
++
++    #[test]
++    fn key_and_environment_files_and_credentials_folders_are_refused() {
++        let d = dir("keys");
++        for name in ["id_ed25519", "server.pem", ".env", ".env.local"] {
++            std::fs::write(d.0.join(name), "secret").unwrap();
++            assert!(
++                refusal(read_option_file(&d.0, "description-file", name))
++                    .contains("key or environment"),
++                "{name}"
++            );
++        }
++        std::fs::create_dir_all(d.0.join(".ssh")).unwrap();
++        std::fs::write(d.0.join(".ssh/config"), "Host x").unwrap();
++        assert!(
++            refusal(read_option_file(&d.0, "description-file", ".ssh/config"))
++                .contains("credentials folder")
++        );
++        // An example environment file is shared on purpose
++        std::fs::write(d.0.join(".env.example"), "KEY=").unwrap();
++        assert_eq!(
++            read_option_file(&d.0, "description-file", ".env.example").unwrap(),
++            "KEY="
++        );
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn a_symbolic_link_is_judged_by_what_it_points_to() {
++        let d = dir("link");
++        std::fs::create_dir_all(d.0.join(".ssh")).unwrap();
++        std::fs::write(d.0.join(".ssh/id_rsa"), "secret").unwrap();
++        std::os::unix::fs::symlink(d.0.join(".ssh/id_rsa"), d.0.join("notes.md")).unwrap();
++        assert!(
++            refusal(read_option_file(&d.0, "body-file", "notes.md")).contains("key or environment")
++        );
++    }
++
++    #[test]
++    fn a_missing_file_a_folder_a_device_too_large_or_not_utf8_is_refused() {
++        let d = dir("bad");
++        assert!(
++            refusal(read_option_file(&d.0, "body-file", "gone.md"))
++                .starts_with("--body-file gone.md: can't read it")
++        );
++        std::fs::create_dir_all(d.0.join("folder")).unwrap();
++        assert!(
++            refusal(read_option_file(&d.0, "body-file", "folder")).contains("not a regular file")
++        );
++        #[cfg(unix)]
++        assert!(
++            refusal(read_option_file(&d.0, "body-file", "/dev/zero"))
++                .contains("not a regular file")
++        );
++        let big = usize::try_from(MAX_OPTION_FILE).unwrap() + 1;
++        std::fs::write(d.0.join("big.md"), vec![b'x'; big]).unwrap();
++        assert!(
++            refusal(read_option_file(&d.0, "body-file", "big.md")).contains("larger than 1 MiB")
++        );
++        std::fs::write(d.0.join("max.md"), vec![b'x'; big - 1]).unwrap();
++        assert!(
++            read_option_file(&d.0, "body-file", "max.md").is_ok(),
++            "1 MiB exactly is read"
++        );
++        std::fs::write(d.0.join("latin1.md"), [0xff, 0xfe]).unwrap();
++        assert!(refusal(read_option_file(&d.0, "body-file", "latin1.md")).contains("not UTF-8"));
++    }
++}
+diff --git a/crates/atm-common/src/lib.rs b/crates/atm-common/src/lib.rs
+index 31c8948c..f6ef5846 100644
+--- a/crates/atm-common/src/lib.rs
++++ b/crates/atm-common/src/lib.rs
+@@ -15,6 +15,7 @@ pub mod pathtext;
+ pub mod py;
+ pub mod repository;
+ pub mod rules;
++pub mod secrets;
+ pub mod sha1;
+ pub mod sha256;
+ pub mod skills;
+diff --git a/crates/atm-common/src/secrets.rs b/crates/atm-common/src/secrets.rs
+new file mode 100644
+index 00000000..2c22e887
+--- /dev/null
++++ b/crates/atm-common/src/secrets.rs
+@@ -0,0 +1,73 @@
++//! Files that hold secrets, by their names: what atm never shows (the document viewer, atm-docs) nor reads into the
++//! task files (`--*-file` options, ATM-662), whatever git or the path says.
++
++/// Whether a file name is one that holds keys: `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.keystore`, `*.jks`, and SSH's
++/// `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519` (with any extension), in any case.
++#[must_use]
++pub fn key_file(name: &str) -> bool {
++    let lower = name.to_ascii_lowercase();
++    let by_extension = ["pem", "key", "p12", "pfx", "keystore", "jks"]
++        .iter()
++        .any(|e| lower.ends_with(&format!(".{e}")));
++    let ssh = ["rsa", "dsa", "ecdsa", "ed25519"].iter().any(|k| {
++        let base = format!("id_{k}");
++        lower == base || lower.starts_with(&format!("{base}."))
++    });
++    by_extension || ssh
++}
++
++/// Whether a file name is an environment file: `.env`, `.env.local`, … but not `.env.example`, `.env.sample` or
++/// `.env.template` (shared on purpose, without values).
++#[must_use]
++pub fn env_file(name: &str) -> bool {
++    let lower = name.to_ascii_lowercase();
++    let example = [".example", ".sample", ".template"]
++        .iter()
++        .any(|e| lower.ends_with(e));
++    (lower == ".env" || lower.starts_with(".env.")) && !example
++}
++
++/// The folders whose every file holds credentials: SSH's (`.ssh`), `GnuPG`'s (`.gnupg`), the AWS CLI's (`.aws`).
++pub const SECRET_FOLDERS: [&str; 3] = [".ssh", ".gnupg", ".aws"];
++
++#[cfg(test)]
++mod tests {
++    use super::{env_file, key_file};
++
++    #[test]
++    fn key_files_are_known_by_their_extension_or_ssh_name_in_any_case() {
++        for name in [
++            "a.pem",
++            "SERVER.KEY",
++            "c.p12",
++            "d.pfx",
++            "e.keystore",
++            "f.jks",
++            "id_rsa",
++            "id_ed25519.pub",
++            "ID_ECDSA",
++        ] {
++            assert!(key_file(name), "{name}");
++        }
++        for name in ["key.txt", "monkey", "id_rsa_notes.md", "keys.md", "pem"] {
++            assert!(!key_file(name), "{name}");
++        }
++    }
++
++    #[test]
++    fn environment_files_but_not_their_examples() {
++        for name in [".env", ".env.local", ".ENV.production"] {
++            assert!(env_file(name), "{name}");
++        }
++        for name in [
++            ".env.example",
++            ".env.sample",
++            ".env.template",
++            "env",
++            "a.env",
++            ".environment",
++        ] {
++            assert!(!env_file(name), "{name}");
++        }
++    }
++}
+diff --git a/crates/atm-docs/src/lib.rs b/crates/atm-docs/src/lib.rs
+index 3b6cfa36..0bd17a21 100644
+--- a/crates/atm-docs/src/lib.rs
++++ b/crates/atm-docs/src/lib.rs
+@@ -109,17 +109,10 @@ const DOC_LANGUAGES: &[(&str, &str)] = &[
+     ("Makefile", "makefile"),
+ ];
+ 
+-/// Whether a file name is one that holds keys, refused whatever git says (§4b).
++/// Whether a file name is one that holds keys, refused whatever git says (§4b): atm-common's rule, which the
++/// `--*-file` options keep too (ATM-662).
+ fn key_file(name: &str) -> bool {
+-    let lower = name.to_ascii_lowercase();
+-    let by_extension = ["pem", "key", "p12", "pfx", "keystore", "jks"]
+-        .iter()
+-        .any(|e| lower.ends_with(&format!(".{e}")));
+-    let ssh = ["rsa", "dsa", "ecdsa", "ed25519"].iter().any(|k| {
+-        let base = format!("id_{k}");
+-        lower == base || lower.starts_with(&format!("{base}."))
+-    });
+-    by_extension || ssh
++    atm_common::secrets::key_file(name)
+ }
+ 
+ /// The path a request names, checked (§4b), in the working copy and at a revision alike: relative to the project's
+@@ -142,11 +135,7 @@ pub fn document_path(path: &str) -> Result<&str> {
+         return refused("git's and atm's own folders");
+     }
+     let name = segments.last().copied().unwrap_or_default();
+-    let lower = name.to_ascii_lowercase();
+-    let example = [".example", ".sample", ".template"]
+-        .iter()
+-        .any(|e| lower.ends_with(e));
+-    if (lower == ".env" || lower.starts_with(".env.")) && !example {
++    if atm_common::secrets::env_file(name) {
+         return refused("environment files");
+     }
+     Ok(path)
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index b8a2f876..9b18b554 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -74,6 +74,7 @@ with the task that adds it.
+ | I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::for_people` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's; it also shows tasks named by UUID by their key, ATM-557), whose `output::clean` drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal"                                                             |
+ | I31 | **A comment's text can't forge another comment** (ATM-658): in `comments.md`, a comment's body line that has the shape of a comment's first line (`- **author** · at · cN`, at any indent, with or without its box) is written with a `\` mark after its indent and read back without it, so it stays the body's and never reads as a reply, a comment or a resolved box by whoever it names (the review watch tells agents such lines as a person's word). Body lines are always indented, so none is a heading. A comment's path, which the chain's heading carries, has no control character and is one of its round's files (a renamed file's old path too), in `rules::comment`, for the CLI, the REST routes and the app alike | atm-review's `a_body_with_comment_and_heading_shaped_lines_round_trips_as_one_comments_body`, `an_older_files_body_lines_with_marks_read_as_they_were` and `a_comment_is_on_one_of_its_rounds_files_whose_path_has_no_control_character` |
+ | I32 | **No revision reaches git as an option** (ATM-659): every atm-vcs method that hands git a revision takes a `Rev`, which is a full object ID or a name that doesn't start with `-` and has no control character or space; the commands put `--end-of-options` before it too. A review's round (`rounds/N.json`, committed and merged, so anyone who can push writes it) is read only when its commits are full object IDs (`RoundKind::check`); a round that isn't is refused, its review named as unreadable with the reason (`atm review show`, `atm doctor`), before git sees it | atm-vcs's `rev.rs` tests; atm-review's `a_rounds_commits_are_full_object_ids_or_it_is_refused`; `tests/scripts/reviews/wrong-uses.test.mjs` "a round whose commit is no full ID…" |
++| I33 | **A `--*-file` option reads no secret** (ATM-662; `--description-file`, `--json-file`, `--body-file`, `--summary-file`, `--meta-file`, all through `atm-cli`'s `option_file`): from any folder (agents write scratch files outside the project, as the skills say: Hakan chose this over a project-or-temp rule), but never a key or environment file (atm-common's `secrets`, the document viewer's rule too), a file in a credentials folder (`.ssh`, `.gnupg`, `.aws`), judged where a symbolic link points; never anything but a regular file (`/dev/zero`, a FIFO) or over 1 MiB. Each refused as a usage error (exit code 2), before anything is written, so a pre-approved command can't put a key into the task files `atm vcs commit` commits | `tests/scripts/option-files.test.mjs`; atm-cli's `option_file` tests; atm-common's `secrets` tests |
+ 
+ ### Dashboard server (B3, B5)
+ 
+diff --git a/tests/scripts/option-files.test.mjs b/tests/scripts/option-files.test.mjs
+new file mode 100644
+index 00000000..3d8b5258
+--- /dev/null
++++ b/tests/scripts/option-files.test.mjs
+@@ -0,0 +1,85 @@
++// The files `--*-file` options name (ATM-662): read from anywhere, a scratch folder outside the project too (the skills
++// put them there), but never a key or environment file, one in a credentials folder (also through a symbolic link),
++// anything but a regular file, or anything over 1 MiB; each refused as a usage error, exit code 2, with nothing written.
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import { describe, test } from 'node:test';
++import { makeProject, removeDir, runAtm, tempDir } from './helpers.mjs';
++
++const TASKS = '.agentic-task-manager/tasks.json';
++
++describe('--*-file options (ATM-662)', () => {
++  const setup = () =>
++    makeProject({
++      git: true,
++      commit: true,
++      files: { [TASKS]: { tasks: [{ id: 'T-1', name: 'One', type: 'feature', status: 'todo', description: 'old' }] } },
++    });
++  const description = (root) => JSON.parse(fs.readFileSync(path.join(root, TASKS), 'utf8')).tasks[0].description;
++
++  test('a file in the project or in a scratch folder outside it is read', () => {
++    const root = setup();
++    const scratch = tempDir('atm-scratch-');
++    try {
++      fs.writeFileSync(path.join(root, 'desc.md'), 'From the project.\n');
++      assert.equal(runAtm(['task', 'edit', 'T-1', '--description-file', 'desc.md'], root).code, 0);
++      assert.equal(description(root), 'From the project.\n');
++      const outside = path.join(scratch, 'desc.md');
++      fs.writeFileSync(outside, 'From a scratch folder.\n');
++      const r = runAtm(['task', 'edit', 'T-1', '--description-file', outside], root);
++      assert.equal(r.code, 0, r.stderr);
++      assert.equal(description(root), 'From a scratch folder.\n');
++    } finally {
++      removeDir(scratch);
++      removeDir(root);
++    }
++  });
++
++  test('a key file, a credentials folder, a link to one, a device, a folder or over 1 MiB: refused, exit 2, nothing written', () => {
++    const root = setup();
++    const home = tempDir('atm-home-');
++    try {
++      fs.mkdirSync(path.join(home, '.ssh'));
++      fs.writeFileSync(path.join(home, '.ssh/id_ed25519'), '-----BEGIN OPENSSH PRIVATE KEY-----\n');
++      fs.writeFileSync(path.join(home, '.ssh/config'), 'Host x\n');
++      fs.writeFileSync(path.join(root, 'server.pem'), 'key\n');
++      fs.writeFileSync(path.join(root, '.env'), 'TOKEN=x\n');
++      fs.writeFileSync(path.join(root, 'big.md'), 'x'.repeat(2 * 1024 * 1024));
++      fs.mkdirSync(path.join(root, 'folder'));
++      const cases = [
++        [path.join(home, '.ssh/id_ed25519'), /key or environment/],
++        [path.join(home, '.ssh/config'), /credentials folder/],
++        ['server.pem', /key or environment/],
++        ['.env', /key or environment/],
++        ['big.md', /larger than 1 MiB/],
++        ['folder', /not a regular file/],
++        ['gone.md', /can't read it/],
++      ];
++      if (process.platform !== 'win32') {
++        fs.symlinkSync(path.join(home, '.ssh/id_ed25519'), path.join(root, 'notes.md'));
++        cases.push(['notes.md', /key or environment/], ['/dev/zero', /not a regular file/]);
++      }
++      for (const [file, says] of cases) {
++        const r = runAtm(['task', 'edit', 'T-1', '--description-file', file], root);
++        assert.equal(r.code, 2, `${file}: ${r.stderr}`);
++        assert.match(r.stderr, says, file);
++        assert.match(r.stderr, /--description-file /, file);
++      }
++      assert.equal(description(root), 'old', 'nothing written');
++      // Every option reads through the same door
++      for (const args of [
++        ['task', 'add', '--json-file', 'server.pem'],
++        ['task', 'add', '--name', 'x', '--type', 'feature', '--description-file', 'server.pem'],
++        ['db', 'init', '--meta-file', 'server.pem'],
++      ]) {
++        const r = runAtm(args, root);
++        assert.equal(r.code, 2, `${args.join(' ')}: ${r.stderr}`);
++        assert.match(r.stderr, /key or environment/, args.join(' '));
++      }
++    } finally {
++      removeDir(home);
++      removeDir(root);
++    }
++  });
++});
+diff --git a/tests/scripts/refusals.test.mjs b/tests/scripts/refusals.test.mjs
+index d5e56d5e..8ac6620c 100644
+--- a/tests/scripts/refusals.test.mjs
++++ b/tests/scripts/refusals.test.mjs
+@@ -29,9 +29,10 @@ const CASES = [
+     "atm: --description and --description-file can't both be given",
+   ],
+   [
++    // A file that can't be used is a usage error, as every --*-file option says it (ATM-662)
+     ['task', 'add', '--name', 'x', '--type', 'feature', '--description-file', 'gone.md'],
+-    1,
+-    "atm: can't read the description file gone.md",
++    2,
++    "atm: --description-file gone.md: can't read it",
+   ],
+   [
+     ['task', 'edit', 'T-1', '--description', 'd', '--description-file', 'd.md'],
+@@ -39,7 +40,7 @@ const CASES = [
+     "atm: --description and --description-file can't both be given",
+   ],
+   [['task', 'edit', 'T-1', '--sprint', 'S1', '--backlog'], 2, "atm: --sprint and --backlog can't both be given"],
+-  [['task', 'edit', 'T-1', '--description-file', 'gone.md'], 1, "atm: can't read the description file gone.md"],
++  [['task', 'edit', 'T-1', '--description-file', 'gone.md'], 2, "atm: --description-file gone.md: can't read it"],
+   [
+     ['task', 'add', '--name', 'x', '--type', 'feature', '--components', 'all'],
+     2,
+diff --git a/tests/scripts/reviews/lifecycle.test.mjs b/tests/scripts/reviews/lifecycle.test.mjs
+index 0d75f0d7..c3f70ab8 100644
+--- a/tests/scripts/reviews/lifecycle.test.mjs
++++ b/tests/scripts/reviews/lifecycle.test.mjs
+@@ -336,8 +336,8 @@ describe('atm review', () => {
+       ok(['review', 'round', 'CR-1', '--summary-file', 'next.md'], root, AGENT);
+       assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().summary, '1. Check the fourth line.');
+       const missing = atm(['review', 'round', 'CR-1', '--summary-file', 'none.md'], root, AGENT);
+-      assert.equal(missing.code, 1);
+-      assert.match(missing.stderr, /can't read none\.md/);
++      assert.equal(missing.code, 2);
++      assert.match(missing.stderr, /--summary-file none\.md: can't read it/);
+       assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 3 ·/);
+       assert.doesNotMatch(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 4 ·/);
+     } finally {
+diff --git a/tests/scripts/reviews/wrong-uses.test.mjs b/tests/scripts/reviews/wrong-uses.test.mjs
+index 601b02c2..ffb6dbe5 100644
+--- a/tests/scripts/reviews/wrong-uses.test.mjs
++++ b/tests/scripts/reviews/wrong-uses.test.mjs
+@@ -46,13 +46,17 @@ describe('atm review: refusals', () => {
+       const cases = [
+         [['review', 'create', '--title', 'x'], 2, /say what to review/],
+         [['review', 'create', '--title', 'x', '--range', 'HEAD'], 2, /--range takes BASE\.\.HEAD, not HEAD/],
+-        [['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'], 1, /can't read gone\.md/],
++        [
++          ['review', 'create', '--title', 'x', '--uncommitted', '--summary-file', 'gone.md'],
++          2,
++          /--summary-file gone\.md: can't read it/,
++        ],
+         [['review', 'create', '--title', 'x', '--range', 'HEAD~1..HEAD', '--uncommitted'], 2, /cannot be used with/],
+         [['review', 'show', 'CR-9'], 1, /no review CR-9/],
+         [['review', 'show', 'CR-1', '--against', '1'], 2, /--round/],
+         [['review', 'comment', 'CR-1'], 2, /--body or --body-file/],
+         [['review', 'comment', 'CR-1', '--body', '   '], 2, /the text is empty/],
+-        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 1, /can't read gone\.md/],
++        [['review', 'comment', 'CR-1', '--body-file', 'gone.md'], 2, /--body-file gone\.md: can't read it/],
+         [['review', 'comment', 'CR-1', '--body', 'x', '--body-file', 'a.txt'], 2, /cannot be used with/],
+         [['review', 'comment', 'CR-1', '--lines', '2', '--body', 'x'], 2, /--file/],
+         [

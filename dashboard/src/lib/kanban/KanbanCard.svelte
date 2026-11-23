@@ -1,13 +1,13 @@
 <script lang="ts">
   import { claimSummary } from '../claims';
+  import { followInPlace } from '../new-tab-clicks';
   import ReviewLink from '../details/ReviewLink.svelte';
   import type { KanbanCard } from '../kanban';
   import { dashboard } from '../state.svelte';
-  import { phaseColor, typeStyle } from '../theme';
+  import { taskCardState } from '../card-state';
   import { markdownPlainText } from '../plain-text';
   import { REVIEW_STATE_LABELS } from '../review';
-  import { kindOf, priorityOf } from '../vocab';
-  import { blockSummary, blockWait, reviewSummary, reviewWait } from '../waiting';
+  import { priorityOf } from '../vocab';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
   import LabelChips from '../ui/LabelChips.svelte';
@@ -19,35 +19,17 @@
   // `showSprint`: the board shows tasks of more than one sprint, so the card names its own (SR-7.3)
   let { card, showSprint = false }: { card: KanbanCard; showSprint?: boolean } = $props();
   const task = $derived(card.task);
-  const sprint = $derived(dashboard.sprints.sprintOf(task));
-  // A sprint keeps its colour: by its place in the project's sprints; the backlog is muted
-  const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
-  const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
-  const ts = $derived(typeStyle(task.type));
-  // Open in a closed sprint (reopened after it closed, T-323): the badge says so
-  const stranded = $derived(dashboard.leftovers.includes(task));
-  const kind = $derived(kindOf(dashboard.vocab, task.status));
-  const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
-  const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
-  const block = $derived(blockWait(task, dashboard.loadedAt, dashboard.vocab));
+  // Its sprint and colour, type, kind, claim, wait and review: the same as the Task List card's (ATM-683); a link on
+  // the card for its code review opens the review, not the task
+  const state = $derived(taskCardState(task, dashboard));
+  const { sprint, sprintColor: pc, typeStyle: ts, stranded, kind, claim, wait, codeReview } = $derived(state);
   // The tasks it waits for, by their keys (ADR-007)
   const waitingOn = $derived(
     card.readiness && !card.readiness.ready
       ? card.readiness.waitingOn.map((id) => dashboard.refOf(id).label).join(', ')
       : '',
   );
-
-  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
-  const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
-
-  function onKeydown(e: KeyboardEvent) {
-    // A key on a link inside it (its review's) is the link's
-    if (e.target !== e.currentTarget) return;
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      dashboard.showDetail(task.id);
-    }
-  }
+  const href = $derived(dashboard.taskAddress(task));
 </script>
 
 <div
@@ -56,10 +38,6 @@
   data-id={task.id}
   data-type={task.type}
   data-priority={priorityOf(dashboard.vocab, task)}
-  role="button"
-  tabindex="0"
-  onclick={() => dashboard.showDetail(task.id)}
-  onkeydown={onKeydown}
 >
   <div class="kanban-card-top">
     <span class="kanban-card-id"><TaskKey {task} /></span>
@@ -87,32 +65,26 @@
     <LabelChips {task} compact />
     {#if card.nextUp}<span class="kanban-next-up">Next up</span>{/if}
   </div>
-  <div class="kanban-card-name">{task.name}</div>
+  <!-- A real link to its details (ATM-698): Copy Link, ⌘-click and a middle click work as on any link; a plain
+       click opens them here. It covers the card (`.card-link`), under the card's own links -->
+  <a class="kanban-card-name card-link" {href} onclick={(e) => followInPlace(e, () => dashboard.showDetail(task.id))}
+    >{task.name}</a
+  >
   {#if claim}
     <div class="kanban-claim" title="Claimed by {claim.agent}">{claimSummary(claim, dashboard.loadedAt)}</div>
   {/if}
-  {#if review}
-    <div class="kanban-waiting review-wait" title={review.note && markdownPlainText(review.note.text)}>
-      {reviewSummary(review)}
+  {#if wait}
+    <div
+      class="kanban-waiting {wait.kind}-wait"
+      class:on-user={wait.onUser}
+      title={wait.note ? markdownPlainText(wait.note.text) : wait.questions.map(markdownPlainText).join('\n')}
+    >
+      {wait.text}
     </div>
   {/if}
   {#if codeReview && dashboard.projectId}
     <div class="card-review">
-      <ReviewLink
-        project={dashboard.projectId}
-        reference={codeReview.ref}
-        status={task.derived?.review_statuses?.[codeReview.id]}
-        prominent
-      />
-    </div>
-  {/if}
-  {#if block}
-    <div
-      class="kanban-waiting block-wait"
-      class:on-user={block.on === 'user'}
-      title={block.questions.map(markdownPlainText).join('\n')}
-    >
-      {blockSummary(block)}
+      <ReviewLink project={dashboard.projectId} reference={codeReview.ref} status={codeReview.status} prominent />
     </div>
   {/if}
   {#if card.readiness}

@@ -1,8 +1,7 @@
 // The Project tab's Information (docs/project-stats-proposal.md §3, T-252): who worked on the project, how it pushes,
 // and its vocabularies with how many tasks use each entry. From the history (archived tasks too), whatever the filters.
-import { isAgent } from './actors';
+import type { Stats } from '$generated/types';
 import { NO_SPRINTS, type SprintModel, type SprintState } from './sprints';
-import { timeUse } from './timeuse';
 import type { Task } from './types';
 import {
   DEFAULT_VOCABULARY,
@@ -16,7 +15,6 @@ import {
   type StatusKind,
   type Vocabulary,
 } from './vocab';
-import { isDone, startedBy } from './work';
 
 export interface Person {
   name: string;
@@ -36,77 +34,29 @@ export interface AgentsSummary {
 
 const count = <K>(map: Map<K, number>, key: K) => map.set(key, (map.get(key) ?? 0) + 1);
 
-/**
- * The people (anyone who isn't a Claude Code session) with the tasks they created, started and completed, most
- * active first; and the agents in one summary. Tasks from before atm recorded who started them (`agent`, or nobody)
- * count as agent work, as on the Agents tab.
- */
-export function actors(
-  tasks: Task[],
-  now: number,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
-): { people: Person[]; agents: AgentsSummary } {
-  const people = new Map<string, Person>();
-  const person = (name: string) => {
-    if (!people.has(name)) people.set(name, { name, created: 0, started: 0, completed: 0 });
-    return people.get(name)!;
-  };
-  const sessions = new Set<string>();
-  const agents = { sessions: 0, started: 0, completed: 0, agentMs: 0 };
-  const agentWork: Task[] = [];
-  for (const t of tasks) {
-    const starter = startedBy(t);
-    if (t.created_by && !isAgent(t.created_by)) person(t.created_by).created++;
-    if (starter && !isAgent(starter)) person(starter).started++;
-    else if (t.started_at || starter) {
-      agents.started++;
-      if (starter) sessions.add(starter);
-      agentWork.push(t);
-    }
-    // Before v4 nobody recorded who completed a task: a finished task an agent started counts as the agent's
-    if (t.completed_by && !isAgent(t.completed_by)) person(t.completed_by).completed++;
-    else if (t.completed_by) {
-      agents.completed++;
-      sessions.add(t.completed_by);
-    } else if (isDone(t, vocab) && agentWork.at(-1) === t) agents.completed++;
-    if (t.created_by && isAgent(t.created_by)) sessions.add(t.created_by);
-  }
-  agents.sessions = sessions.size;
-  agents.agentMs = timeUse(agentWork, null, now, vocab)?.agentMs ?? 0;
-  const total = (p: Person) => p.created + p.started + p.completed;
+/** The people and the agents, as atm counts them (ATM-722: the stats route's `actors`): the people with the tasks they
+ * created, started and completed, most active first; the agents in one summary. None before atm has answered */
+export function actorsOf(stats: Stats | null | undefined): { people: Person[]; agents: AgentsSummary } {
+  const served = stats?.actors as
+    | { people?: Person[]; agents?: { sessions: number; started: number; completed: number; agent_ms: number } }
+    | undefined;
+  const agents = served?.agents;
   return {
-    people: [...people.values()].sort((a, b) => total(b) - total(a) || a.name.localeCompare(b.name)),
-    agents,
-  };
-}
-
-export interface Workflow {
-  type: string;
-  base?: string;
-  verify: boolean;
-  commitTemplate?: string;
-  /** Trailer lines every commit must carry */
-  trailers: string[];
-}
-
-/** meta.workflow, or null when the project has none yet */
-export function workflowOf(meta: { workflow?: unknown } | undefined): Workflow | null {
-  const w = meta?.workflow as Record<string, unknown> | undefined;
-  if (!w || typeof w !== 'object' || typeof w.type !== 'string') return null;
-  const trailers = (w.trailers as { require?: unknown } | undefined)?.require;
-  return {
-    type: w.type,
-    base: typeof w.base === 'string' ? w.base : undefined,
-    verify: w.verify !== false,
-    commitTemplate: typeof w.commit_template === 'string' ? w.commit_template : undefined,
-    trailers: Array.isArray(trailers) ? trailers.filter((l): l is string => typeof l === 'string') : [],
+    people: served?.people ?? [],
+    agents: {
+      sessions: agents?.sessions ?? 0,
+      started: agents?.started ?? 0,
+      completed: agents?.completed ?? 0,
+      agentMs: agents?.agent_ms ?? 0,
+    },
   };
 }
 
 export interface VocabCounts {
-  /** The sprints in the planning order (active, planned, closed most recent first) with their task counts (T-323) */
+  /** The sprints in the planning order (active, planned, closed most recent first) with their task counts (T-323):
+   * atm's (ATM-720), its tasks but the skipped ones */
   sprints: { id: string; state: SprintState; count: number }[];
-  /** Tasks in no sprint */
+  /** Unfinished tasks in no sprint, as `atm sprint list` counts them */
   backlog: number;
   /** meta.labels first, in its order (also unused ones), then labels only the tasks use */
   labels: { id: string; text: string; count: number; listed: boolean }[];
@@ -121,18 +71,12 @@ export function vocabCounts(
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   model: SprintModel = NO_SPRINTS,
 ): VocabCounts {
-  const sprintUse = new Map<string, number>();
-  let backlog = 0;
-  for (const t of tasks) {
-    const sprint = model.sprintOf(t);
-    if (sprint === undefined) backlog++;
-    else count(sprintUse, sprint);
-  }
+  const backlog = model.backlog;
   const inState = (state: SprintState) => model.sprints.filter((s) => s.state === state);
   const sprints = [...inState('active'), ...inState('planned'), ...inState('closed').reverse()].map((s) => ({
     id: s.id,
     state: s.state,
-    count: sprintUse.get(s.id) ?? 0,
+    count: s.total,
   }));
 
   const labelUse = new Map<string, number>();

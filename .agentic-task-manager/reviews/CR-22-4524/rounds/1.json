@@ -1,0 +1,92 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "b526868d64b4555aeeedcd5a707fde861fd45418",
+    "head": "d002bfad699f4fa503adc95468b768c9fd991e83"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/review.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/files.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/folder.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/details/ReviewLink.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/ReviewList.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/known.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/types.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/ReviewsTab.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/DetailPanel.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ReviewList.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/reviews.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/serve.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T19:34:23Z"
+}

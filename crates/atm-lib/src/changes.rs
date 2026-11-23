@@ -8,11 +8,11 @@ use atm_common::py::{repr_str, truthy};
 use atm_common::rules::unfinished_dependencies;
 use atm_common::time::now_iso;
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
-use atm_db::working::Working;
+use atm_db::working::{Here, Working};
 use serde_json::{Map, Value, json};
 
 use crate::leases::{
-    check_holder, claim_record, completion_record, drop_expired_claims, own_lease_expired,
+    check_holder, claim_record, completion_record, expire, own_lease_expired, section,
     waiting_entry,
 };
 use crate::loop_rules::{Selection, next_task};
@@ -82,19 +82,7 @@ pub struct StatusChange {
     pub view: Option<TaskView>,
 }
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
-
-fn section<'a>(store: &'a mut Map<String, Value>, key: &str) -> &'a mut Map<String, Value> {
-    let entry = store.entry(key).or_insert_with(|| json!({}));
-    if !entry.is_object() {
-        *entry = json!({});
-    }
-    entry
-        .as_object_mut()
-        .expect("the section was made an object just above")
-}
+use atm_common::task_id as id_of;
 
 /// The tasks as a list to read, and the index of the one with this ID (the first, as `find_task` takes it).
 fn snapshot(document: &Value, task_id: &str) -> (Vec<Task>, Option<usize>) {
@@ -128,7 +116,7 @@ fn archived_tasks(work: &mut Working) -> Result<Vec<Task>> {
 fn apply_resolutions(
     work: &mut Working,
     vocab: &Vocabulary,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) {
     let here = work.here().worktree.clone();
     let resolved = section(&mut work.claims_store, "resolved").clone();
@@ -216,12 +204,28 @@ fn adopt_waiting(
     Some(record.get("worktree").cloned().unwrap_or(Value::Null))
 }
 
+/// A task started (`task state <id> in_progress` or `loop next --claim`): its claim, and it is no longer done or
+/// waiting anywhere (ATM-657: the loop's claim left both records behind). Returns the claim.
+fn record_start(
+    store: &mut Map<String, Value>,
+    here: &Here,
+    document: &Value,
+    task_id: &str,
+    agent: Option<&str>,
+) -> Value {
+    let record = claim_record(here, document, task_id, agent);
+    section(store, "claims").insert(task_id.into(), record.clone());
+    section(store, "completed").shift_remove(task_id); // starting a task again on purpose
+    section(store, "waiting").shift_remove(task_id);
+    record
+}
+
 /// The to-do tasks waiting on `task_id` whose dependencies are now all done.
 fn newly_ready(
     vocab: &Vocabulary,
     tasks: &[&Task],
     task_id: &str,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<Vec<String>> {
     let mut ready = Vec::new();
     for t in tasks {
@@ -251,27 +255,28 @@ pub fn change_task_status(
 ) -> Result<StatusChange> {
     let agent = project.actor().map(String::from);
     let agent = agent.as_deref();
-    let mut outcome: Option<StatusChange> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    // None where the change deferred its error: the store returns that error instead
+    let outcome = project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archive = archived_tasks(work)?;
-        let in_archive = |id: &str| -> Result<bool> { Ok(archive.iter().any(|t| id_of(t) == Some(id) && !t.is_empty())) };
-        let mut claims = section(&mut work.claims_store, "claims").clone();
-        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
-        *section(&mut work.claims_store, "claims") = claims;
-        apply_resolutions(work, &vocab, &in_archive);
+        // The archived task with an ID, for the dependency rules (ATM-667); whether there is one, for the messages
+        let archived_of = |id: &str| -> Result<Option<Task>> {
+            Ok(archive.iter().rev().find(|t| id_of(t) == Some(id) && !t.is_empty()).cloned())
+        };
+        let in_archive = |id: &str| -> Result<bool> { Ok(archived_of(id)?.is_some()) };
+        let expired = expire(work, &vocab);
+        apply_resolutions(work, &vocab, &archived_of);
         let here = work.here().clone();
         let (tasks, at) = snapshot(&work.document, task_id);
         let Some(at) = at else {
-            let hint = if in_archive(task_id)? { " (it is archived: atm db unarchive brings it back)" } else { "" };
-            return Err(Error::failed(format!("no task {task_id}{hint}")));
+            return Err(crate::lookup::no_task(task_id, in_archive(task_id)?));
         };
         if OWN_LEASE_COMMANDS.contains(&command) {
             let then = format!("atm task state {task_id} {}", command_state(command));
             if let Some(own) = own_lease_expired(&expired, &work.document, &vocab, task_id, agent, Some(&then)) {
                 // The expiry is written first, so `atm task details` agrees with the error
                 work.defer(own);
-                return Ok(());
+                return Ok(None);
             }
         }
         check_holder(section(&mut work.claims_store, "claims"), task_id, agent, command.name())?;
@@ -284,22 +289,20 @@ pub fn change_task_status(
         let mut task = tasks[at].clone();
         let waits_in = adopt_waiting(&mut task, &vocab, &work.claims_store, here.worktree.as_deref(), command);
         let others: Vec<&Task> = tasks.iter().collect();
-        let previous = change_status(&mut task, command, options, &vocab, &others, agent, &now_iso(), &in_archive)?;
+        let previous = change_status(&mut task, command, options, &vocab, &others, agent, &now_iso(), &archived_of)?;
         work.tasks()[at] = Value::Object(task.clone());
 
         let document = work.document.clone();
-        let claims = section(&mut work.claims_store, "claims");
         match command {
             Command::Start => {
-                claims.insert(task_id.into(), claim_record(&here, &document, task_id, agent));
-                section(&mut work.claims_store, "completed").shift_remove(task_id); // starting a task again on purpose
+                record_start(&mut work.claims_store, &here, &document, task_id, agent);
             }
             Command::Reopen => {
-                claims.shift_remove(task_id);
+                section(&mut work.claims_store, "claims").shift_remove(task_id);
                 section(&mut work.claims_store, "completed").shift_remove(task_id); // not done any more, anywhere
             }
             _ => {
-                claims.shift_remove(task_id);
+                section(&mut work.claims_store, "claims").shift_remove(task_id);
             }
         }
         if command == Command::Done {
@@ -329,7 +332,7 @@ pub fn change_task_status(
         }
         let (all, _) = snapshot(&work.document, task_id);
         let all_refs: Vec<&Task> = all.iter().collect();
-        let unblocked = if command == Command::Done { newly_ready(&vocab, &all_refs, task_id, &in_archive)? } else { Vec::new() };
+        let unblocked = if command == Command::Done { newly_ready(&vocab, &all_refs, task_id, &archived_of)? } else { Vec::new() };
         // The archive hint after done, at most once a day per clone (CLI-5.2), so a loop doesn't repeat it
         let today: String = now_iso().chars().take(10).collect();
         let mut hint = if command == Command::Done { archive_hint(&work.document, &vocab, work.size()) } else { None };
@@ -341,7 +344,7 @@ pub fn change_task_status(
         }
         // Reopened in a closed sprint, the task is open where the loop's default selection never looks (T-330)
         let stranded = if command == Command::Reopen {
-            vocab.find_sprint(task.get("sprint")).filter(|s| s.get("state").and_then(Value::as_str) == Some("closed")).map(|s| {
+            vocab.sprint_of(&task).filter(|s| s.get("state").and_then(Value::as_str) == Some("closed")).map(|s| {
                 let name = s.get("id").and_then(Value::as_str).unwrap_or_default();
                 format!(
                     "{task_id} is now open in the closed sprint {}, where the loop won't take it: atm sprint move {task_id} --to backlog (or --to active)",
@@ -356,8 +359,7 @@ pub fn change_task_status(
         let claim = section(&mut work.claims_store, "claims").get(task_id).cloned().unwrap_or(Value::Null);
         // The task as it is shown: its key with it (ATM-557), never stored
         let task = atm_common::keys::with_key(&work.document, &task);
-        outcome = Some(StatusChange { task, previous, claim, unblocked, hint, stranded, expired, view: Some(view) });
-        Ok(())
+        Ok(Some(StatusChange { task, previous, claim, unblocked, hint, stranded, expired, view: Some(view) }))
     })?;
     outcome.ok_or_else(|| Error::failed(format!("no change to {task_id}")))
 }
@@ -384,7 +386,10 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
         Some(Kind::Done) // otherwise it is archived: finished
     };
     if kind == Some(Kind::Todo) {
-        let store = project.store().read_claims();
+        // Live claims only, and the project's own statuses (ATM-667, audit L10): an expired claim held nothing, and a
+        // project's status IDs aren't the default ones
+        let store =
+            crate::leases::live_claims(&project.store().read_claims(), atm_common::time::now());
         let in_claims = store
             .get("claims")
             .and_then(Value::as_object)
@@ -399,8 +404,7 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
         } else if let Some(record) =
             record.filter(|r| r.get("worktree").and_then(Value::as_str) != here.as_deref())
         {
-            // The project's settings, without its lists: the default statuses' kinds
-            kind = Vocabulary::of_meta(&Map::new())?.kind_of(record.get("status"));
+            kind = project.store().vocabulary()?.kind_of(record.get("status"));
         }
     }
     match kind {
@@ -447,26 +451,27 @@ pub fn next_task_for(
 ) -> Result<NextTask> {
     let agent = project.actor().map(String::from);
     let agent = agent.as_deref();
-    let mut outcome = NextTask::default();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let archive = archived_tasks(work)?;
-        let in_archive = |id: &str| -> Result<bool> {
+        let in_archive = |id: &str| -> Result<Option<Task>> {
             Ok(archive
                 .iter()
-                .any(|t| id_of(t) == Some(id) && !t.is_empty()))
+                .rev()
+                .find(|t| id_of(t) == Some(id) && !t.is_empty())
+                .cloned())
         };
-        let mut claims = section(&mut work.claims_store, "claims").clone();
-        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
-        *section(&mut work.claims_store, "claims") = claims;
+        let expired = expire(work, &vocab);
         apply_resolutions(work, &vocab, &in_archive);
         let (tasks, _) = snapshot(&work.document, "");
         let refs: Vec<&Task> = tasks.iter().collect();
+        let here = work.here().clone();
         let (found, reason) = next_task(
             &vocab,
             &work.document,
             &refs,
             &work.claims_store,
+            here.worktree.as_deref(),
             sel,
             agent,
             with_user,
@@ -496,21 +501,23 @@ pub fn next_task_for(
             }) {
                 work.tasks()[at] = Value::Object(t.clone());
             }
-            let here = work.here().clone();
-            let record = claim_record(&here, &work.document, &task_id, agent);
-            section(&mut work.claims_store, "claims").insert(task_id, record.clone());
-            new = Some(record);
+            let document = work.document.clone();
+            new = Some(record_start(
+                &mut work.claims_store,
+                &here,
+                &document,
+                &task_id,
+                agent,
+            ));
         }
-        outcome = NextTask {
+        Ok(NextTask {
             // As it is shown: its key with it (ATM-557), never stored
             task: task.map(|t| atm_common::keys::with_key(&work.document, &t)),
             claim: new,
             reason,
             expired,
-        };
-        Ok(())
-    })?;
-    Ok(outcome)
+        })
+    })
 }
 
 /// `atm task note`: a note on a task, whatever its status (DM-4), at most 500 characters, as the project's actor.
@@ -520,29 +527,21 @@ pub fn next_task_for(
 /// An unknown task (it says when the task is archived), a note too long, a store error.
 pub fn add_task_note(project: &mut Project, task_id: &str, text: &str) -> Result<Task> {
     let actor = project.actor().map(String::from);
-    let mut noted: Option<Task> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let (tasks, at) = snapshot(&work.document, task_id);
         let Some(at) = at else {
             let archived = archived_tasks(work)?
                 .iter()
                 .any(|t| id_of(t) == Some(task_id));
-            let hint = if archived {
-                " (it is archived: atm db unarchive brings it back)"
-            } else {
-                ""
-            };
-            return Err(Error::failed(format!("no task {task_id}{hint}")));
+            return Err(crate::lookup::no_task(task_id, archived));
         };
         let mut task = tasks[at].clone();
         let stamp = now_iso();
         atm_common::edits::add_note(&mut task, "note", text, actor.as_deref(), &stamp, true)?;
         atm_common::edits::touch(&mut task, actor.as_deref(), &stamp);
         work.tasks()[at] = Value::Object(task.clone());
-        noted = Some(task);
-        Ok(())
-    })?;
-    noted.ok_or_else(|| Error::failed(format!("no note on {task_id}")))
+        Ok(task)
+    })
 }
 
 #[cfg(test)]

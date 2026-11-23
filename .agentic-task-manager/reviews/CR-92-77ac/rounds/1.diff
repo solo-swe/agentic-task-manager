@@ -1,0 +1,347 @@
+diff --git a/crates/atm-cli/src/commands/review.rs b/crates/atm-cli/src/commands/review.rs
+index 5aa12a2d..3eda66ca 100644
+--- a/crates/atm-cli/src/commands/review.rs
++++ b/crates/atm-cli/src/commands/review.rs
+@@ -1371,7 +1371,11 @@ mod tests {
+             (body(Some("  \n"), None), 2, "the text is empty"),
+             (body(None, Some("blank.md")), 2, "the text is empty"),
+             // A file that can't be used is a usage error, as every --*-file option says it (ATM-662)
+-            (body(None, Some("gone.md")), 2, "--body-file gone.md: can't read it"),
++            (
++                body(None, Some("gone.md")),
++                2,
++                "--body-file gone.md: can't read it",
++            ),
+         ] {
+             let e = text_of(given, &dir).unwrap_err();
+             assert_eq!(e.code(), code, "{says}");
+diff --git a/crates/atm-common/src/vocabulary.rs b/crates/atm-common/src/vocabulary.rs
+index 1d83055c..8171de1e 100644
+--- a/crates/atm-common/src/vocabulary.rs
++++ b/crates/atm-common/src/vocabulary.rs
+@@ -168,6 +168,54 @@ fn fail(message: impl Into<String>) -> Error {
+     Error::failed(message)
+ }
+ 
++/// The punctuation a sprint name may have besides letters, digits and spaces (ATM-665): what names have (`Task&review
++/// state machine`, `Code reviews: records and CLI`, `The atm app, continued`, a generated `Nov 20-3:05pm`), and
++/// nothing a shell reads specially: no `$`, backtick, `;`, `|`, quotes, `!`, `<`, `>`, `\`, `*`, `?` or newline.
++const SPRINT_NAME_PUNCTUATION: &str = "._-&,:()/+#";
++
++/// What the loop and `sprint move --to` take as words, never a sprint's name: a sprint so named couldn't be meant.
++pub const RESERVED_SPRINT_NAMES: [&str; 4] = ["backlog", "new", "active", "next"];
++
++/// Why `name` isn't a sprint's name, or none: at most [`MAX_SPRINT_NAME`] characters, no space at either end, and
++/// letters, digits, spaces and [`SPRINT_NAME_PUNCTUATION`] only (agents paste it into `--sprint '<name>'`, ATM-665).
++/// The reserved words are refused where a sprint is named, not on load ([`reserved_sprint_name`]).
++#[must_use]
++pub fn sprint_name_problem(name: &str) -> Option<String> {
++    let shown = repr_str(name);
++    if name.trim().is_empty() || name != strip(name) || name.chars().count() > MAX_SPRINT_NAME {
++        return Some(format!(
++            "{shown} is not a sprint name (at most {MAX_SPRINT_NAME} characters, no space at either end)"
++        ));
++    }
++    let bad: Vec<char> = name
++        .chars()
++        .filter(|c| !(c.is_alphanumeric() || *c == ' ' || SPRINT_NAME_PUNCTUATION.contains(*c)))
++        .collect();
++    if bad.is_empty() {
++        return None;
++    }
++    // Each as Rust writes a char ('$', '`', '\'', '\n'): readable whatever it is
++    let mut listed: Vec<String> = Vec::new();
++    for c in bad {
++        let shown = format!("{c:?}");
++        if !listed.contains(&shown) {
++            listed.push(shown);
++        }
++    }
++    Some(format!(
++        "{shown} is not a sprint name: {} not allowed (letters, digits, spaces and {SPRINT_NAME_PUNCTUATION})",
++        listed.join(", ")
++    ))
++}
++
++/// Whether `name` is one of [`RESERVED_SPRINT_NAMES`], in any case.
++#[must_use]
++pub fn reserved_sprint_name(name: &str) -> bool {
++    RESERVED_SPRINT_NAMES
++        .iter()
++        .any(|r| r.eq_ignore_ascii_case(name.trim()))
++}
++
+ fn one_of(value: &Value, choices: &[&str]) -> bool {
+     value.as_str().is_some_and(|s| choices.contains(&s))
+ }
+@@ -221,6 +269,14 @@ fn terms(meta: &Map<String, Value>, key: &str, need_kind: bool) -> Result<Option
+         if seen.contains(&id) {
+             return Err(fail(format!("meta.{key}: \"{id}\" is listed twice")));
+         }
++        // Agents paste these into commands (`atm task state <id> <status>`): shell-safe, as releases' and components'
++        // IDs are (ATM-665)
++        if !crate::ids::valid_short_id(id) {
++            return Err(fail(format!(
++                "meta.{key}: {} is not an ID atm takes: letters, digits, `.`, `_` and `-`, starting with a letter or digit, at most 64",
++                repr_str(id)
++            )));
++        }
+         seen.push(id);
+         let label = item
+             .get("label")
+@@ -382,11 +438,8 @@ fn check_sprints(meta: &Map<String, Value>) -> Result<Vec<Map<String, Value>>> {
+             .ok_or_else(|| {
+                 fail("meta.sprints: every sprint needs an \"id\", its name (a non-empty string)")
+             })?;
+-        if name != strip(name) || name.chars().count() > MAX_SPRINT_NAME {
+-            return Err(fail(format!(
+-                "meta.sprints: {} is not a sprint name (at most {MAX_SPRINT_NAME} characters, no space at either end)",
+-                repr_str(name)
+-            )));
++        if let Some(problem) = sprint_name_problem(name) {
++            return Err(fail(format!("meta.sprints: {problem}")));
+         }
+         let folded = name.to_lowercase();
+         if seen.contains(&folded) {
+diff --git a/crates/atm-lib/src/sprints.rs b/crates/atm-lib/src/sprints.rs
+index dc251f6e..4384733f 100644
+--- a/crates/atm-lib/src/sprints.rs
++++ b/crates/atm-lib/src/sprints.rs
+@@ -267,12 +267,30 @@ fn checked_name(
+             py_repr(&json!(sprint_id(existing)))
+         )));
+     }
++    usable_name(&name)?;
++    Ok(name)
++}
++
++/// A new name for a sprint, checked (ATM-665): at most [`MAX_SPRINT_NAME`] characters, shell-safe, and none of the
++/// words the loop and `sprint move --to` take (`backlog`, `new`, `active`, `next`), which the sprint could never be
++/// named by.
++fn usable_name(name: &str) -> Result<()> {
+     if name.chars().count() > MAX_SPRINT_NAME {
+         return Err(invalid(format!(
+             "a sprint name is at most {MAX_SPRINT_NAME} characters"
+         )));
+     }
+-    Ok(name)
++    if let Some(problem) = atm_common::vocabulary::sprint_name_problem(name) {
++        return Err(invalid(problem));
++    }
++    if atm_common::vocabulary::reserved_sprint_name(name) {
++        return Err(invalid(format!(
++            "{} is a word atm takes for itself ({}): name the sprint otherwise",
++            repr_str(name),
++            atm_common::vocabulary::RESERVED_SPRINT_NAMES.join(", ")
++        )));
++    }
++    Ok(())
+ }
+ 
+ /// `atm sprint add`: a planned sprint, named `name` (generated without one), after the sprint `after` (default: last),
+@@ -407,11 +425,7 @@ pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Ren
+         if to.is_empty() {
+             return Err(invalid("a sprint needs a name"));
+         }
+-        if to.chars().count() > MAX_SPRINT_NAME {
+-            return Err(invalid(format!(
+-                "a sprint name is at most {MAX_SPRINT_NAME} characters"
+-            )));
+-        }
++        usable_name(&to)?;
+         if to == from {
+             return Err(invalid(format!(
+                 "the sprint is already called {}",
+diff --git a/crates/atm-lib/src/sprints/tests.rs b/crates/atm-lib/src/sprints/tests.rs
+index 66fb75df..a246ee55 100644
+--- a/crates/atm-lib/src/sprints/tests.rs
++++ b/crates/atm-lib/src/sprints/tests.rs
+@@ -183,29 +183,32 @@ fn renaming_a_sprint_renames_it_everywhere_it_is_named() {
+             {"id": "Old"}, {"id": "B"}
+         ]}),
+     );
+-    let renamed = rename_sprint(&mut p, "old", " New ").unwrap();
++    let renamed = rename_sprint(&mut p, "old", " Renamed ").unwrap();
+     assert_eq!(
+         renamed,
+         Renamed {
+             from: "Old".into(),
+-            to: "New".into(),
++            to: "Renamed".into(),
+             tasks: 2,
+             archived: 1,
+             reports: 1
+         }
+     );
+     let doc = document(&p);
+-    assert_eq!(doc["tasks"][0]["sprint"], json!("New"));
++    assert_eq!(doc["tasks"][0]["sprint"], json!("Renamed"));
+     assert_eq!(
+         doc["tasks"][0]["updated_at"],
+         json!("U"),
+         "the task isn't touched"
+     );
+-    assert_eq!(doc["tasks"][1]["sprint_history"][0]["sprint"], json!("New"));
+-    assert_eq!(doc["meta"]["sprints"][0]["report"]["to"], json!("New"));
++    assert_eq!(
++        doc["tasks"][1]["sprint_history"][0]["sprint"],
++        json!("Renamed")
++    );
++    assert_eq!(doc["meta"]["sprints"][0]["report"]["to"], json!("Renamed"));
+     assert_eq!(
+         p.store().list_archived().unwrap()[0]["sprint"],
+-        json!("New")
++        json!("Renamed")
+     );
+ }
+ 
+@@ -230,11 +233,39 @@ fn a_rename_needs_a_new_free_name_that_fits() {
+             "gone",
+             "there is already a sprint 'Gone' (or tasks' history names one)".to_string(),
+         ),
++        // Shell-safe, and none of the words atm takes for itself (ATM-665)
++        (
++            "s1;x",
++            "'s1;x' is not a sprint name: ';' not allowed (letters, digits, spaces and ._-&,:()/+#)".to_string(),
++        ),
++        (
++            "a $(rm) `b`",
++            "'a $(rm) `b`' is not a sprint name: '$', '`' not allowed (letters, digits, spaces and ._-&,:()/+#)"
++                .to_string(),
++        ),
++        (
++            "BACKLOG",
++            "'BACKLOG' is a word atm takes for itself (backlog, new, active, next): name the sprint otherwise".to_string(),
++        ),
++        (
++            "next",
++            "'next' is a word atm takes for itself (backlog, new, active, next): name the sprint otherwise".to_string(),
++        ),
+     ] {
+         assert_eq!(refused(&mut p, |p| rename_sprint(p, "A", new)), message);
+     }
+-    // its own name in another case is its own
++    // its own name in another case is its own; what names have is fine
+     assert_eq!(rename_sprint(&mut p, "A", "a").unwrap().to, "a");
++    for fine in [
++        "Task&review state machine",
++        "Code reviews: records and CLI",
++        "The app, continued",
++        "Nov 20-3:05pm",
++        "Café (v2) / #3+",
++    ] {
++        assert_eq!(rename_sprint(&mut p, "B", fine).unwrap().to, fine);
++        rename_sprint(&mut p, fine, "B").unwrap();
++    }
+ }
+ 
+ #[test]
+@@ -616,16 +647,16 @@ fn closing_carries_the_unfinished_tasks_and_records_the_report() {
+     );
+     let err = close_sprint(&mut p, "S", None, None, false).unwrap_err();
+     assert!(err.to_string().starts_with("T-2 isn't finished"), "{err}");
+-    let closed = close_sprint(&mut p, "S", Some("new"), Some("Next"), false).unwrap();
++    let closed = close_sprint(&mut p, "S", Some("new"), Some("Later"), false).unwrap();
+     assert_eq!(
+         closed.sprint["report"],
+-        json!({"done": ["T-1"], "carried": ["T-2"], "added": [], "to": "Next"})
++        json!({"done": ["T-1"], "carried": ["T-2"], "added": [], "to": "Later"})
+     );
+     assert!(closed.was_active);
+-    assert_eq!(closed.created.unwrap()["id"], json!("Next"));
++    assert_eq!(closed.created.unwrap()["id"], json!("Later"));
+     let doc = p.store().document().unwrap();
+-    assert_eq!(doc["tasks"][1]["sprint"], json!("Next"));
+-    assert_eq!(doc["meta"]["sprints"][1]["id"], json!("Next"));
++    assert_eq!(doc["tasks"][1]["sprint"], json!("Later"));
++    assert_eq!(doc["meta"]["sprints"][1]["id"], json!("Later"));
+ }
+ 
+ #[test]
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 9b18b554..a8bbdbc2 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -69,7 +69,7 @@ with the task that adds it.
+ | I5  | **atm never runs a shell**: processes get argument lists (`Command::new` with a program, never `sh`, `bash`, `cmd` or PowerShell); Rust evaluates no code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `dashboard/tests/unit/security-invariants.test.ts` (a static check)                                                              |
+ | I6  | **atm never reads or writes through a symlink** in the task folder, nor a task folder outside the project; its code reviews too (`reviews/`, a review's folder and files: ATM-563)                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `tests/scripts/symlinks.test.mjs`; atm-review's `folder.rs` tests                                                                |
+ | I7  | **A `--file` names one file**: git runs with literal pathspecs; whole-tree pathspecs are refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `tests/scripts/git.test.mjs`                                                                                                     |
+-| I8  | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `tests/scripts/scenarios/security.json`                                                                                          |
++| I8  | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load; so are status, type and priority IDs (letters, digits, `.`, `_`, `-`) and sprint names (letters, digits, spaces and `._-&,:()/+#`, never `$`, a backtick, `;`, `\|`, quotes or a newline), which agents paste into commands; a sprint can't be named `backlog`, `new`, `active` or `next` (ATM-665)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `tests/scripts/scenarios/security.json`                                                                                          |
+ | I9  | **The merge driver's command comes from the clone's own git config**, never from the repository; the path git gives it (`%P`, 0.40.0) only picks the merge by its file name (`tasks.json`, a review's `comments.md` or `review.md`) and is never opened                                                                                                                                                                                                                                                                                                                                                                                                     | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`, `crates/atm-lib/src/maintenance.rs`, `crates/atm-review/src/merge.rs`) |
+ | I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::for_people` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's; it also shows tasks named by UUID by their key, ATM-557), whose `output::clean` drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal"                                                             |
+ | I31 | **A comment's text can't forge another comment** (ATM-658): in `comments.md`, a comment's body line that has the shape of a comment's first line (`- **author** · at · cN`, at any indent, with or without its box) is written with a `\` mark after its indent and read back without it, so it stays the body's and never reads as a reply, a comment or a resolved box by whoever it names (the review watch tells agents such lines as a person's word). Body lines are always indented, so none is a heading. A comment's path, which the chain's heading carries, has no control character and is one of its round's files (a renamed file's old path too), in `rules::comment`, for the CLI, the REST routes and the app alike | atm-review's `a_body_with_comment_and_heading_shaped_lines_round_trips_as_one_comments_body`, `an_older_files_body_lines_with_marks_read_as_they_were` and `a_comment_is_on_one_of_its_rounds_files_whose_path_has_no_control_character` |
+diff --git a/tests/scripts/keys.test.mjs b/tests/scripts/keys.test.mjs
+index 4d363d14..85a5fe79 100644
+--- a/tests/scripts/keys.test.mjs
++++ b/tests/scripts/keys.test.mjs
+@@ -212,9 +212,10 @@ test('every line for people names tasks by key, never by UUID; --json has the ke
+     // Doctor's grouped warning: its tasks' keys
+     assert.match(ok(['doctor']), /its files match no component.*\n {2}ATM-1 ATM-2/);
+     // Moving into a sprint says which task moved, by key
+-    ok(['sprint', 'add', 'Next']);
+-    assert.match(ok(['sprint', 'move', 'ATM-2', '--to', 'Next']), /^ATM-2: backlog -> Next$/m);
+-    ok(['sprint', 'start', 'Next']);
++    // Not "Next": a word atm takes for itself (ATM-665)
++    ok(['sprint', 'add', 'Later']);
++    assert.match(ok(['sprint', 'move', 'ATM-2', '--to', 'Later']), /^ATM-2: backlog -> Later$/m);
++    ok(['sprint', 'start', 'Later']);
+     for (const args of [
+       ['sprint', 'list'],
+       ['project', 'status'],
+diff --git a/tests/scripts/scenarios/security.json b/tests/scripts/scenarios/security.json
+index 8629b4da..29b2c3a3 100644
+--- a/tests/scripts/scenarios/security.json
++++ b/tests/scripts/scenarios/security.json
+@@ -1,4 +1,51 @@
+ [
++  {
++    "name": "a status ID with shell characters is refused on load (ATM-665)",
++    "setup": {
++      "files": {
++        ".agentic-task-manager/tasks.json": {
++          "meta": {
++            "statuses": [
++              { "id": "todo", "label": "To Do", "kind": "todo" },
++              { "id": "in_progress", "label": "In Progress", "kind": "active" },
++              { "id": "done$(x)", "label": "Done", "kind": "done" }
++            ]
++          },
++          "tasks": []
++        }
++      }
++    },
++    "args": ["task", "list"],
++    "expect": { "exit": 1, "stderrIncludes": ["meta.statuses: 'done$(x)' is not an ID atm takes"] }
++  },
++  {
++    "name": "a sprint name with shell characters is refused on load (ATM-665)",
++    "setup": {
++      "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "s1;x" }] }, "tasks": [] } }
++    },
++    "args": ["sprint", "list"],
++    "expect": { "exit": 1, "stderrIncludes": ["meta.sprints: 's1;x' is not a sprint name: ';' not allowed"] }
++  },
++  {
++    "name": "sprint add refuses a name with shell characters, and writes nothing (ATM-665)",
++    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
++    "args": ["sprint", "add", "s1;x"],
++    "expect": {
++      "exit": 2,
++      "stderrIncludes": ["'s1;x' is not a sprint name: ';' not allowed"],
++      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
++    }
++  },
++  {
++    "name": "sprint add refuses a word atm takes for itself, in any case (ATM-665)",
++    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
++    "args": ["sprint", "add", "Backlog"],
++    "expect": {
++      "exit": 2,
++      "stderrIncludes": ["'Backlog' is a word atm takes for itself (backlog, new, active, next)"],
++      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
++    }
++  },
+   {
+     "name": "workflow set refuses a base branch with shell characters (T-222, F5)",
+     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },

@@ -27,6 +27,7 @@
               "status": "todo",
               "updated_at": "2026-05-01T10:00:00Z",
               "updated_by": "alice",
+              "attempts": [{ "from": "2026-05-01T09:00:00Z", "to": "2026-05-01T10:00:00Z", "by": "alice" }],
               "notes": [
                 {
                   "at": "2026-05-01T10:00:00Z",
@@ -310,6 +311,32 @@
         }
       }
     }
+  },
+  {
+    "name": "atm task note --dry-run refuses an unknown task, as the real run does (audit C17)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo" }]
+        }
+      }
+    },
+    "args": ["task", "note", "T-9", "hello", "-n"],
+    "env": { "ATM_AGENT": "carol" },
+    "expect": { "exit": 1, "stderrIncludes": ["no task T-9"] }
+  },
+  {
+    "name": "atm task edit --dry-run refuses an unknown task, as the real run does (audit C17)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo" }]
+        }
+      }
+    },
+    "args": ["task", "edit", "T-9", "--name", "x", "-n"],
+    "env": { "ATM_AGENT": "carol" },
+    "expect": { "exit": 1, "stderrIncludes": ["no task T-9"] }
   },
   {
     "name": "atm task note needs its text",

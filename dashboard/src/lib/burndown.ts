@@ -1,11 +1,11 @@
 // Burndown series (FR-4.1): remaining tasks and total scope over time, plus a forecast from now to the estimated
 // finish. Skipped-kind tasks are not part of the scope; blocked and in-review tasks stay "remaining" (they are not
 // done), and the forecast doesn't cover them (they wait on someone, not on agent work).
-import { nextInLoop, sprintKey, type Forecast } from './forecast';
+import { sprintKey, type Forecast } from './forecast';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import { completedAt } from './timeline';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
+import { taskKind } from './vocab';
 
 export interface BurndownPoint {
   t: number;
@@ -52,9 +52,10 @@ export type BurndownRange = 'sprint' | '14d' | 'all';
 export const BURNDOWN_RANGES: BurndownRange[] = ['sprint', '14d', 'all'];
 const DAY = 24 * 60 * 60_000;
 
-/** The sprint (its key) the "sprint" range and the chart's markers are about: the focused one, else the loop's next */
+/** The sprint (its key) the "sprint" range and the chart's markers are about: the focused one, else the loop's next,
+ * as atm says it (ATM-722) */
 export function rangeSprint(forecast: Forecast, focus?: string): string | undefined {
-  return focus ?? nextInLoop(forecast)?.key;
+  return focus ?? forecast.next;
 }
 
 /** Where the range starts, or undefined for all time (also when the sprint has no times to start from): the sprint's
@@ -79,29 +80,23 @@ export function rangeStart(
   return from !== undefined && from < now ? from : undefined;
 }
 
-/** The end of a YYYY-MM-DD day, UTC */
-const endOfDay = (date: string | undefined) => {
-  const t = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? Date.parse(`${date}T23:59:59Z`) : NaN;
-  return Number.isNaN(t) ? undefined : t;
-};
-
 export function burndown(
   allTasks: Task[],
   forecast: Forecast,
   now: number,
   focus?: string,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
   from?: number,
   model: SprintModel = NO_SPRINTS,
 ): Burndown {
-  const kind = (t: Task) => kindOf(vocab, t.status);
+  const kind = taskKind;
   const tasks = allTasks.filter((t) => kind(t) !== 'skipped' && (focus === undefined || sprintKey(model, t) === focus));
   if (tasks.length === 0) return { points: [] };
   // A focused closed sprint is drawn from its start to its end; an open one gets its due date marked
   const sprint = forecast.sprints.find((s) => s.key === rangeSprint(forecast, focus))?.sprint;
   const closedAt = focus !== undefined && sprint?.state === 'closed' ? time(sprint.end) : undefined;
   const end = closedAt !== undefined && closedAt < now ? closedAt : undefined;
-  const due = sprint && sprint.state !== 'closed' ? endOfDay(sprint.due) : undefined;
+  // When its due date has passed, by atm's one rule (ATM-720: the end of that day, the project's day)
+  const due = time(sprint?.due_end);
   const until = end ?? now;
   const untimed = !allTasks.some((t) =>
     [t.created_at, t.started_at, t.completed_at].some((x) => time(x) !== undefined),
@@ -130,8 +125,9 @@ export function burndown(
     undefined,
   );
   const current = points[points.length - 1];
-  // What the estimate doesn't cover: tasks waiting on someone rather than on agent work
-  const waiting = tasks.filter((t) => kind(t) === 'blocked' || kind(t) === 'review').length;
+  // What the estimate doesn't cover: open tasks waiting on someone rather than on agent work, as atm says (ATM-717:
+  // `derived.agent_work`; an approved or sent-back task is agent work)
+  const waiting = tasks.filter((t) => kind(t) !== 'done' && t.derived?.agent_work === false).length;
   return {
     points,
     ...(untimed ? { untimed } : {}),

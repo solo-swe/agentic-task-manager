@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { KanbanColumn } from '../kanban';
-  import { doneSections, workflowType } from '../stages';
+  import { doneSections } from '../stages';
   import { dashboard } from '../state.svelte';
   import { kindStyle } from '../theme';
   import KanbanCard from './KanbanCard.svelte';
@@ -26,7 +26,7 @@
 
   const columnColor = (column: KanbanColumn) => (column.kind ? kindStyle(column.kind).color : 'var(--text-muted)');
   // In a pull-request project the Done column is split by stage: In PR (per PR), Done, Merged (D-4.2)
-  const sectioned = $derived(workflowType(dashboard.meta) === 'pull-request');
+  const sectioned = $derived(dashboard.vocab.workflow?.type === 'pull-request');
   // The board takes the panel's height and each column scrolls inside it (T-262, app.css), so the page itself never
   // scrolls on the Kanban
 </script>
@@ -49,7 +49,7 @@
       </header>
       {#if !folded}<KanbanScroll>
           {#if isDone && sectioned && column.cards.length}
-            {#each doneSections(column.cards, dashboard.vocab) as section (section.id)}
+            {#each doneSections(column.cards) as section (section.id)}
               {@const cut = section.stage === 'merged' && !showAllDone && section.cards.length > DONE_LIMIT}
               <div class="kanban-section" data-section={section.id}>
                 <div class="kanban-section-header">

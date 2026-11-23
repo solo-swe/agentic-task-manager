@@ -1,0 +1,177 @@
+diff --git a/crates/atm-review/src/rules.rs b/crates/atm-review/src/rules.rs
+index b39ce007..8234b2c5 100644
+--- a/crates/atm-review/src/rules.rs
++++ b/crates/atm-review/src/rules.rs
+@@ -323,6 +323,9 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+                 }
+                 Some(Status::Approved)
+             }
++            // Asked again while it is back with its author (ATM-597): the reviewer's words are kept, and it stays
++            // where it is
++            Verdict::RequestChanges if status == Status::ChangesRequested => None,
+             Verdict::RequestChanges => {
+                 if status != Status::Open {
+                     return Err(not_now(&review, "be sent back"));
+@@ -1241,24 +1244,76 @@ mod tests {
+         }
+     }
+ 
++    /// A comment and a reply in every status a review is still open in, a review sent back too (ATM-597): talking
++    /// about the changes goes on until the next round. An ended one refuses them (`an_ended_review_takes_nothing_…`)
++    #[test]
++    fn a_review_not_ended_takes_comments_and_replies_whatever_its_status() {
++        for status in [
++            Status::Draft,
++            Status::Open,
++            Status::Live,
++            Status::ChangesRequested,
++        ] {
++            let mut store = MemoryStore::new();
++            let reference = at(&mut store, status);
++            let mut reviews = Reviews::new(&mut store);
++            let anchor = Anchor {
++                round: 1,
++                ..Anchor::default()
++            };
++            let id = reviews
++                .comment(&reference, anchor, "Why this?", &hakan())
++                .unwrap_or_else(|e| panic!("{status:?}: {e}"));
++            reviews
++                .reply(&reference, &id, "Because.", &agent())
++                .unwrap_or_else(|e| panic!("{status:?}: {e}"));
++            let review = store.get_review(&reference).unwrap();
++            assert_eq!(review.header.status, status);
++            assert_eq!(review.chains[0].comments[0].replies.len(), 1, "{status:?}");
++        }
++    }
++
++    /// Each status and decision: allowed or refused, the status it leaves, and whether the reviewer's words are kept
+     #[test]
+     fn an_approval_is_for_an_open_or_live_review_and_a_send_back_for_an_open_one() {
+-        for (status, verdict, allowed) in [
+-            (Status::Draft, Verdict::Approve, false),
+-            (Status::Open, Verdict::Approve, true),
+-            (Status::Live, Verdict::Approve, true),
+-            (Status::ChangesRequested, Verdict::Approve, false),
+-            (Status::Draft, Verdict::RequestChanges, false),
+-            (Status::Open, Verdict::RequestChanges, true),
+-            (Status::Live, Verdict::RequestChanges, false),
+-            (Status::ChangesRequested, Verdict::RequestChanges, false),
++        for (status, verdict, after) in [
++            (Status::Draft, Verdict::Approve, None),
++            (Status::Open, Verdict::Approve, Some(Status::Approved)),
++            (Status::Live, Verdict::Approve, Some(Status::Approved)),
++            (Status::ChangesRequested, Verdict::Approve, None),
++            (Status::Draft, Verdict::RequestChanges, None),
++            (
++                Status::Open,
++                Verdict::RequestChanges,
++                Some(Status::ChangesRequested),
++            ),
++            (Status::Live, Verdict::RequestChanges, None),
++            // Asked again while it is back with its author (ATM-597): kept, and it stays
++            (
++                Status::ChangesRequested,
++                Verdict::RequestChanges,
++                Some(Status::ChangesRequested),
++            ),
++            (Status::Draft, Verdict::Comment, Some(Status::Draft)),
++            (Status::Open, Verdict::Comment, Some(Status::Open)),
++            (Status::Live, Verdict::Comment, Some(Status::Live)),
++            (
++                Status::ChangesRequested,
++                Verdict::Comment,
++                Some(Status::ChangesRequested),
++            ),
+         ] {
+             let mut store = MemoryStore::new();
+             let reference = at(&mut store, status);
+             let result =
+                 Reviews::new(&mut store).submit(&reference, verdict, Some("x"), None, &hakan());
+-            assert_eq!(result.is_ok(), allowed, "{status:?} {verdict:?}");
+-            if !allowed {
++            assert_eq!(result.is_ok(), after.is_some(), "{status:?} {verdict:?}");
++            if let Some(after) = after {
++                let review = store.get_review(&reference).unwrap();
++                assert_eq!(review.header.status, after, "{status:?} {verdict:?}");
++                assert_eq!(review.chains.len(), 1, "{status:?} {verdict:?}");
++                assert_eq!(review.chains[0].comments[0].body, "x");
++            } else {
+                 assert!(is_not_now(&result), "{status:?} {verdict:?}");
+                 // Refused before anything is written
+                 assert_eq!(
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 7e9db129..36e0699e 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -580,6 +580,23 @@ describe('ReviewPage: submit', () => {
+     expect(screen.getByLabelText('Summary')).toHaveValue('');
+   });
+ 
++  it('a review sent back still takes the reviewer’s words: a comment, and changes asked for again (ATM-597)', async () => {
++    const page = open();
++    page.review = { ...page.review, status: 'changes_requested' };
++    const { onsubmit } = show(page);
++    expect(screen.getByRole('button', { name: 'Comment on the review' })).toBeEnabled();
++    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Still the title.' } });
++    await fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
++    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
++    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'A note.' } });
++    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
++    expect(onsubmit.mock.calls).toEqual([
++      ['request_changes', 'Still the title.'],
++      ['comment', 'A note.'],
++    ]);
++  });
++
+   it('an ended review takes no decision; a busy page none until it is done', async () => {
+     for (const page of [open(), data()]) {
+       for (const status of ['approved', 'closed'] as const) {
+diff --git a/docs/code-review-design.md b/docs/code-review-design.md
+index 0d6b63bd..76d64704 100644
+--- a/docs/code-review-design.md
++++ b/docs/code-review-design.md
+@@ -162,7 +162,7 @@ stateDiagram-v2
+ | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
+ | `open` | waiting on the reviewers | the author, with a round |
+ | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
+-| `changes_requested` | sent back for fixes | a reviewer, when submitting |
++| `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words (changes asked for again keeps it here, with what they wrote; ATM-597) | a reviewer, when submitting |
+ | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
+ | `closed` | ended without approval (abandoned, replaced) | the author, or a reviewer |
+ 
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index 31f8e687..5a471d76 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -87,6 +87,20 @@ describe('atm review', () => {
+       assert.equal(task(root, 'T-1').review_state, 'changes_requested');
+       assert.match(JSON.stringify(task(root, 'T-1').notes), /CR-1 round 1: 1 open comment/);
+ 
++      // Sent back, the review still takes the reviewer's words (ATM-597): a comment, and changes asked for again with
++      // a message, which is kept; it stays sent back and the task isn't changed again
++      ok(['review', 'comment', 'CR-1', '--body', 'And the title too.'], root, HAKAN);
++      ok(['review', 'submit', 'CR-1', '--request-changes', '--body', 'Both, please.'], root, HAKAN);
++      const sentBack = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
++      assert.equal(sentBack.header.status, 'changes_requested');
++      assert.deepEqual(
++        sentBack.chains.map((c) => c.comments[0].body),
++        ['Lower case.', 'And the title too.', 'Both, please.'],
++      );
++      ok(['review', 'resolve', 'CR-1', 'c2'], root, HAKAN);
++      ok(['review', 'resolve', 'CR-1', 'c3'], root, HAKAN);
++      assert.equal(task(root, 'T-1').review_state, 'changes_requested');
++
+       // The agent replies, takes the task back, fixes it and adds a round: in review again
+       ok(['review', 'reply', 'CR-1', 'c1', '--body', 'Done in round 2.'], root, AGENT);
+       ok(['task', 'state', 'T-1', 'in_progress'], root, AGENT);
+@@ -115,7 +129,7 @@ describe('atm review', () => {
+         comments,
+         /^## a\.txt:2 · round 1 · t1\n> TWO\n\n- \[x\] \*\*Hakan Serce\*\* · .* · c1\n  Lower case\./,
+       );
+-      assert.match(comments, /\n  - \*\*claude:0f56a916\*\* · .* · c2\n    Done in round 2\./);
++      assert.match(comments, /\n  - \*\*claude:0f56a916\*\* · .* · c4\n    Done in round 2\./);
+       const folders = fs.readdirSync(path.join(root, '.agentic-task-manager/reviews'));
+       assert.ok(
+         folders.some((f) => /^CR-1-[0-9a-f]{4}$/.test(f)),

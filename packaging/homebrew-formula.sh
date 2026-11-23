@@ -8,9 +8,23 @@ set -eu
 
 version=${1:?usage: homebrew-formula.sh <version> <SHA256SUMS file>}
 sums=${2:?usage: homebrew-formula.sh <version> <SHA256SUMS file>}
+
+# Both go into Ruby as they are (ATM-678, audit A12): a version is three numbers, a checksum 64 hex digits, nothing else
+fail() {
+  echo "homebrew-formula.sh: $1" >&2
+  exit 1
+}
+dots=${version#*.}
+case $version in
+  *[!0123456789.]* | *..* | .* | *.) fail "the version $version isn't MAJOR.MINOR.PATCH" ;;
+  [0-9]*.[0-9]*.[0-9]*) ;;
+  *) fail "the version $version isn't MAJOR.MINOR.PATCH" ;;
+esac
+case ${dots#*.} in *.*) fail "the version $version isn't MAJOR.MINOR.PATCH" ;; esac
 base="https://github.com/solo-swe/agentic-task-manager/releases/download/v$version"
 
-# The checksum of a target's archive, from SHA256SUMS ("<sha256>  <file>" lines); fails when it isn't listed
+# The checksum of a target's archive, from SHA256SUMS ("<sha256>  <file>" lines); fails when it isn't listed, or isn't
+# a SHA-256
 sha() {
   file="atm-$version-$1.tar.gz"
   found=""
@@ -18,9 +32,11 @@ sha() {
     if [ "$name" = "$file" ]; then found=$sum; fi
   done < "$sums"
   if [ -z "$found" ]; then
-    echo "homebrew-formula.sh: $file isn't in $sums" >&2
-    exit 1
+    fail "$file isn't in $sums"
   fi
+  # The characters listed: a range like a-f follows the locale's collation, which can take in A-F
+  case $found in *[!0123456789abcdef]*) fail "$file's checksum in $sums isn't a SHA-256" ;; esac
+  if [ ${#found} -ne 64 ]; then fail "$file's checksum in $sums isn't a SHA-256"; fi
   printf '%s' "$found"
 }
 

@@ -1,15 +1,16 @@
 <script lang="ts">
   import { claimSummary } from '../claims';
+  import { followInPlace } from '../new-tab-clicks';
   import ReviewLink from '../details/ReviewLink.svelte';
   import { scrollToTask } from '../scroll';
   import { dashboard } from '../state.svelte';
-  import { kindStyle, phaseColor, typeStyle } from '../theme';
+  import { kindStyle } from '../theme';
   import type { Task } from '../types';
+  import { taskCardState } from '../card-state';
   import { cardFacts, cardNote } from '../cardfacts';
   import { markdownPlainText } from '../plain-text';
   import { noteKindLabel } from '../notes';
-  import { kindOf, statusLabel, typeLabel } from '../vocab';
-  import { blockSummary, blockWait, reviewSummary, reviewWait } from '../waiting';
+  import { statusLabel, typeLabel } from '../vocab';
   import BranchChip from '../ui/BranchChip.svelte';
   import ComponentChips from '../ui/ComponentChips.svelte';
   import LabelChips from '../ui/LabelChips.svelte';
@@ -21,32 +22,28 @@
   // `showSprint`: the list shows tasks of more than one sprint and doesn't group by them, so the card names its own
   let { task, showSprint = false }: { task: Task; showSprint?: boolean } = $props();
 
-  const sprint = $derived(dashboard.sprints.sprintOf(task));
-  // A sprint keeps its colour: by its place in the project's sprints; the backlog is muted (as on the Kanban)
-  const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
-  const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
-  const ts = $derived(typeStyle(task.type));
-  // Open in a closed sprint (reopened after it closed, T-323): the badge says so
-  const stranded = $derived(dashboard.leftovers.includes(task));
-  const kind = $derived(kindOf(dashboard.vocab, task.status));
+  // Its sprint and colour, type, kind, claim, wait and review: the same as the Kanban card's (ATM-683)
+  const card = $derived(taskCardState(task, dashboard));
+  const { sprint, sprintColor: pc, typeStyle: ts, stranded, kind, claim, wait, codeReview } = $derived(card);
   const ss = $derived(kindStyle(kind));
   const deps = $derived(task.dependencies ?? []);
-  const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
-  const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
-  // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
-  const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
-  const block = $derived(blockWait(task, dashboard.loadedAt, dashboard.vocab));
   // The row's width (T-338): the description's start and the latest note on the left, who and when on the right
   const excerpt = $derived(task.description ? markdownPlainText(task.description) : '');
   const note = $derived(cardNote(task));
-  const facts = $derived(cardFacts(task, dashboard.loadedAt, dashboard.vocab));
+  const facts = $derived(cardFacts(task, dashboard.loadedAt));
   const ROLE = { created: 'Created by', worked: 'Worked on by', finished: 'Finished by' } as const;
 </script>
 
 <div class="task-card status-{task.status} kind-{kind ?? 'none'}" id="task-{task.id}" data-id={task.id}>
   <div class="task-id"><TaskKey {task} /></div>
   <div class="task-body">
-    <button type="button" class="task-name" onclick={() => dashboard.showDetail(task.id)}>{task.name}</button>
+    <!-- A real link to its details (ATM-698): a plain click opens them here, any other click is the browser's or the
+         app's new tab -->
+    <a
+      class="task-name"
+      href={dashboard.taskAddress(task)}
+      onclick={(e) => followInPlace(e, () => dashboard.showDetail(task.id))}>{task.name}</a
+    >
     {#if excerpt}<div class="task-excerpt">{excerpt}</div>{/if}
     <div class="task-meta">
       {#if showSprint}
@@ -85,28 +82,18 @@
     {#if claim}
       <div class="task-claim" title="Claimed by {claim.agent}">{claimSummary(claim, dashboard.loadedAt)}</div>
     {/if}
-    {#if review}
-      <div class="task-waiting review-wait" title={review.note && markdownPlainText(review.note.text)}>
-        {reviewSummary(review)}
+    {#if wait}
+      <div
+        class="task-waiting {wait.kind}-wait"
+        class:on-user={wait.onUser}
+        title={wait.note ? markdownPlainText(wait.note.text) : wait.questions.map(markdownPlainText).join('\n')}
+      >
+        {wait.text}
       </div>
     {/if}
     {#if codeReview && dashboard.projectId}
       <div class="card-review">
-        <ReviewLink
-          project={dashboard.projectId}
-          reference={codeReview.ref}
-          status={task.derived?.review_statuses?.[codeReview.id]}
-          prominent
-        />
-      </div>
-    {/if}
-    {#if block}
-      <div
-        class="task-waiting block-wait"
-        class:on-user={block.on === 'user'}
-        title={block.questions.map(markdownPlainText).join('\n')}
-      >
-        {blockSummary(block)}
+        <ReviewLink project={dashboard.projectId} reference={codeReview.ref} status={codeReview.status} prominent />
       </div>
     {/if}
     {#if note}

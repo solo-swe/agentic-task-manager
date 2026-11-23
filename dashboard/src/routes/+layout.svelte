@@ -32,9 +32,20 @@
   import { appTabs } from '../lib/app-tabs.svelte';
   import { sendExternalLink } from '../lib/external-links';
   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
-  import { arrived, currentAddress, navigate, originOf, useRouter, type EntryState } from '../lib/navigation';
+  import {
+    arrived,
+    back as goBackInTab,
+    currentAddress,
+    forward as goForwardInTab,
+    navigate,
+    originOf,
+    useRouter,
+    useTabHistory,
+    type EntryState,
+  } from '../lib/navigation';
   import { newTabAddress } from '../lib/new-tab-clicks';
-  import { tabActions, wantsNewTab } from '../lib/tab-actions';
+  import AppContextMenu from '../lib/ui/AppContextMenu.svelte';
+  import { inBackground, tabActions, wantsNewTab } from '../lib/tab-actions';
 
   const tabs = tabActions();
 
@@ -47,7 +58,8 @@
     if (!address) return;
     e.preventDefault();
     e.stopPropagation();
-    tabs.open(address);
+    // In the background, right of this tab; ⇧⌘ brings it forward (ATM-698)
+    tabs.open(address, inBackground(e));
   }
   import { dashboard } from '../lib/state.svelte';
 
@@ -61,6 +73,16 @@
     state: () => page.state as EntryState,
     back: (steps) => history.go(-steps),
   });
+  // In the app each title-bar tab has its own history (ATM-694): navigate, Back and Forward go through it
+  if (inApp) useTabHistory(appTabs);
+
+  /** In the app, the mouse's back and forward buttons walk the active tab's history (the page's own is one entry) */
+  function mouseBackForward(e: MouseEvent) {
+    if (!inApp || (e.button !== 3 && e.button !== 4)) return;
+    e.preventDefault();
+    if (e.button === 3) goBackInTab();
+    else goForwardInTab();
+  }
 
   /** An old link (#project=…&view=…), or an address written another way, becomes the page's own address */
   function settle() {
@@ -79,7 +101,8 @@
         const back = appTabs.start(addressOf(location), restored);
         if (back) navigate(back, { replace: true });
         void listenForLinks(
-          (address) => (back ? tabs.open(address) : navigate(address)),
+          // The link the app was started with is where its first tab starts (ATM-694: no Back to the app's root)
+          (address) => (back ? tabs.open(address) : navigate(address, { replace: true })),
           (address) => tabs.open(address),
         ).catch((e) => console.error('Deep links:', e));
       });
@@ -119,7 +142,14 @@
   // A link the router followed itself (an anchor's plain click) pushed an entry: it remembers the address it was
   // reached from, as navigate's entries do (ATM-686)
   let leaving: { address: string; state: EntryState } | null = null;
-  beforeNavigate(({ type }) => {
+  beforeNavigate(({ type, to, cancel }) => {
+    // In the app, a link the router would follow itself is a step in the tab's history instead (ATM-694): the page's
+    // own history stays one entry deep
+    if (inApp && type === 'link' && to?.url && to.url.origin === location.origin) {
+      cancel();
+      navigate(addressOf(to.url));
+      return;
+    }
     leaving = type === 'link' ? { address: currentAddress(), state: page.state as EntryState } : null;
   });
 
@@ -141,7 +171,10 @@
   onfocus={() => dashboard.live && void dashboard.reload()}
   onclickcapture={openInNewTab}
   onauxclickcapture={openInNewTab}
+  onmouseup={mouseBackForward}
 />
 
 <App />
+<!-- atm's right-click menus, the app only (ATM-699): the browser keeps its own -->
+{#if inApp}<AppContextMenu />{/if}
 {@render children()}

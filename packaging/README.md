@@ -28,7 +28,6 @@ server with its own `atm service stop`.
 
 | File | What it does |
 |---|---|
-| `release.sh <version> [--push]` | Checks the version is `Cargo.toml`'s and that `main` is clean and pushed, then tags `v<version>` (and pushes the tag with `--push`) |
 | `keychain-macos.sh` | Imports the Developer ID certificate into a keychain of the release job's own; the macOS jobs run it first |
 | `sign-macos.sh <binary>` | Signs a macOS build with the Developer ID (hardened runtime) and notarizes it; the release workflow runs it |
 | `notarize-dmg.sh <dmg>` | Signs the app's DMG, notarizes it and staples the ticket to it (Tauri's bundler has signed and notarized the app inside) |
@@ -47,7 +46,17 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
 
 1. The release PR is merged to `main`; the version is in `Cargo.toml`, with its `CHANGELOG.md` and `WHATS-NEW.md` entries
    (`check-versions.mjs`).
-2. `packaging/release.sh 0.33.0 --push` tags `v0.33.0` and pushes the tag.
+2. Tag the merged `main` as it is on GitHub, from any branch and working tree, and push the tag:
+
+   ```sh
+   git fetch origin main
+   git tag -a v0.33.0 origin/main -m 'atm 0.33.0'
+   git push origin v0.33.0
+   ```
+
+   A plain tag (ATM-705): the Release workflow's first job checks it, and builds nothing for a tag whose version isn't
+   the tagged commit's `Cargo.toml`, or whose commit isn't on `main`. A wrong tag is deleted with
+   `git push origin :refs/tags/v0.33.0` and `git tag -d v0.33.0`, and made again.
 3. `.github/workflows/release.yml` builds atm for macOS (arm64, x86_64), Linux (x86_64, arm64, on Ubuntu 22.04 for an
    older glibc) and Windows (x86_64), signs and notarizes the macOS builds; builds the app as one universal DMG
    (arm64 and x86_64, its CLI a universal binary made with `lipo`), signed and notarized, its ticket stapled; and
@@ -65,7 +74,13 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
 
 ## Secrets and keys
 
-Set in this repository's settings (Secrets and variables → Actions), the same as agentic-status-bar's:
+Set as the secrets of the repository's **`release` environment** (Settings → Environments → `release`; ATM-661,
+audit A5), not as repository secrets, so only a job that names the environment can read them. The environment's
+deployment rule allows only tags matching `v*`, and a tag ruleset for `v*` (only an admin may create, move or delete a
+release tag) goes with it: `.github/rulesets/release-tags.json`, applied as `main.json` is. Both were set up on
+2026-11-23 (ATM-741). A secret goes into the environment with `gh secret set <NAME> --env release`; a job in the
+environment also reads the repository's secrets, so remove a repository secret once its environment copy is set. The Homebrew and Skills workflows run on a published release (its
+tag); run by hand, they name the tag as their ref: `gh workflow run Homebrew --ref v0.43.0 -f tag=v0.43.0`.
 
 | Secret | What it is |
 |---|---|
@@ -79,7 +94,10 @@ Set in this repository's settings (Secrets and variables → Actions), the same 
 | `TAURI_SIGNING_PRIVATE_KEY` | The app updater's private key (T-483; `tauri signer generate`), as Tauri writes it: it signs the app's update archive. Not the Developer ID |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password |
 
-The release workflow reads the signing secrets only in the macOS jobs (the CLI's and the app's); only its last job,
+The release workflow reads the signing secrets only in the macOS jobs (the CLI's and the app's), and only once
+everything is compiled (ATM-661, audit A1): the CLI by `cargo build`, the app by `tauri build --no-bundle`, both with
+no secret in their environment, so no build script, proc macro or npm package sees one; the signing step then only
+bundles, signs and notarizes. `dashboard/tests/unit/ci-workflow.test.ts` checks the order. Only its last job,
 which builds nothing, can write to the repository (its releases). The Homebrew workflow reads only the tap's deploy
 key, the Skills workflow only the skills repo's. The app is signed and notarized with the CLI's secrets; its update
 archive is signed with the updater key as well.

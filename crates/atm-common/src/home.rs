@@ -51,6 +51,19 @@ pub fn state_dir() -> PathBuf {
     state
 }
 
+/// A file's name for `key` (a folder, a session and a folder, …): the first 16 hex digits of its SHA-256, then `ext`,
+/// so a key of any length or character makes a short, safe name (ATM-681: the one rule).
+#[must_use]
+pub fn keyed_file_name(key: &str, ext: &str) -> String {
+    format!("{}{ext}", &crate::sha256::sha256_hex(key.as_bytes())[..16])
+}
+
+/// The file for `key` in the state folder's `kind` folder (`watches`, …), named by [`keyed_file_name`].
+#[must_use]
+pub fn keyed_state_file(kind: &str, key: &str, ext: &str) -> PathBuf {
+    state_dir().join(kind).join(keyed_file_name(key, ext))
+}
+
 /// The legacy folder an older atm may still write to, when `home` is the state folder its content moved to (T-501):
 /// `~/.agentic-task-manager` once it holds the move's note, and only for the platform's state folder, never one set
 /// with `ATM_STATE_DIR` or `ATM_HOME` (a test's or another setup's must never take in the user's projects).
@@ -108,10 +121,11 @@ pub fn absolute(path: &Path) -> PathBuf {
 }
 
 /// Create atm's folder, readable by its owner only: it lists the user's projects and the server's pid and port
-/// (docs/security-review.md F18). A folder that exists already keeps its permissions.
+/// (docs/security-review.md F18). One that exists already, or was moved here, is made its owner's only too (ATM-673,
+/// audit C10: it kept whatever it had).
 ///
 /// # Errors
-/// When the folder can't be created.
+/// When the folder can't be created, or its permissions set.
 pub fn ensure_home(home: &Path) -> std::io::Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
@@ -120,7 +134,15 @@ pub fn ensure_home(home: &Path) -> std::io::Result<()> {
         use std::os::unix::fs::DirBuilderExt;
         builder.mode(0o700);
     }
-    builder.create(home)
+    builder.create(home)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if fs::metadata(home)?.permissions().mode() & 0o777 != 0o700 {
+            fs::set_permissions(home, fs::Permissions::from_mode(0o700))?;
+        }
+    }
+    Ok(())
 }
 
 /// Replace a file so readers only ever see the complete old or the complete new content.
@@ -128,6 +150,19 @@ pub fn ensure_home(home: &Path) -> std::io::Result<()> {
 /// # Errors
 /// When the file can't be written or moved into place (the partial file is removed).
 pub fn write_text_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    write_atomic(path, text, false)
+}
+
+/// [`write_text_atomic`], the file readable by its owner only (0600 on Unix): what atm keeps in its state folder (the
+/// workspaces, the server's record, a person's drafts, a watch's cursor; ATM-673, audit C10).
+///
+/// # Errors
+/// As [`write_text_atomic`].
+pub fn write_private_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    write_atomic(path, text, true)
+}
+
+fn write_atomic(path: &Path, text: &str, private: bool) -> std::io::Result<()> {
     let name = path
         .file_name()
         .map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned());
@@ -136,7 +171,16 @@ pub fn write_text_atomic(path: &Path, text: &str) -> std::io::Result<()> {
         .map_or(0, |d| d.subsec_nanos());
     let partial = path.with_file_name(format!("{name}.{}.{nanos:08x}.tmp", std::process::id()));
     let written = (|| {
-        let mut file = fs::File::create(&partial)?;
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        if private {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        #[cfg(not(unix))]
+        let _ = private;
+        let mut file = options.open(&partial)?;
         file.write_all(text.as_bytes())?;
         file.sync_all()?;
         fs::rename(&partial, path)
@@ -152,6 +196,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_keyed_file_is_named_by_its_keys_hash_whatever_the_key() {
+        // SHA-256("") starts e3b0c44298fc1c14
+        assert_eq!(keyed_file_name("", ".json"), "e3b0c44298fc1c14.json");
+        let odd = keyed_file_name("/a/b\u{0}claude:1/../x", ".commits.json");
+        assert_eq!(odd.len(), 16 + ".commits.json".len());
+        assert!(odd[..16].chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(keyed_file_name("a", ".json"), keyed_file_name("b", ".json"));
+    }
+
+    #[test]
     fn a_file_is_replaced_whole() {
         let dir = std::env::temp_dir().join(format!("atm-common-home-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
@@ -164,6 +218,34 @@ mod tests {
             1,
             "no partial file is left"
         );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// ATM-673, audit C10: the state folder is its owner's only however it got there, and so are its private files,
+    /// a new one and one replaced over a file another user could read
+    #[cfg(unix)]
+    #[test]
+    fn the_state_folder_and_its_private_files_are_the_owners_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let dir = scratch("private");
+        let home = dir.join("home");
+        ensure_home(&home).unwrap();
+        assert_eq!(mode(&home), 0o700, "a new folder");
+        fs::set_permissions(&home, fs::Permissions::from_mode(0o755)).unwrap();
+        ensure_home(&home).unwrap();
+        assert_eq!(
+            mode(&home),
+            0o700,
+            "an existing one another user could read"
+        );
+        let file = home.join("x.json");
+        write_private_atomic(&file, "one").unwrap();
+        assert_eq!(mode(&file), 0o600, "a new file");
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        write_private_atomic(&file, "two").unwrap();
+        assert_eq!(mode(&file), 0o600, "one replaced");
+        assert_eq!(fs::read_to_string(&file).unwrap(), "two");
         fs::remove_dir_all(&dir).unwrap();
     }
 

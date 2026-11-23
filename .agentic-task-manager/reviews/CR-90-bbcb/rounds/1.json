@@ -1,0 +1,27 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "a5be6bf79a0a6853c06cb6a5dc505ecb5eccefa8",
+    "head": "fc548701ffc709a16bd3702fcb63ec9c6577b87f"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/kanban.spec.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T18:22:06Z"
+}

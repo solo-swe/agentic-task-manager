@@ -1,0 +1,1202 @@
+diff --git a/crates/atm-cli/src/commands/db.rs b/crates/atm-cli/src/commands/db.rs
+index ca6b029f..d3767582 100644
+--- a/crates/atm-cli/src/commands/db.rs
++++ b/crates/atm-cli/src/commands/db.rs
+@@ -266,25 +266,7 @@ pub fn run(command: DbCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+                 );
+                 return Ok(0);
+             }
+-            let mut migration = maintenance(cwd)?.migrate(true)?;
+-            // Keys of tasks now on the base branch are final (ADR-007 §3); nothing without task keys
+-            let finalized = match Project::open(cwd) {
+-                Ok(mut project) => {
+-                    let vcs = project.vcs();
+-                    atm_lib::code::finalize_keys(&mut project, vcs.as_ref()).unwrap_or_default()
+-                }
+-                Err(_) => Vec::new(),
+-            };
+-            if !finalized.is_empty() {
+-                migration
+-                    .result
+-                    .insert("keys_final".into(), json!(finalized));
+-                migration.lines.retain(|l| l != "Nothing to migrate.");
+-                migration.lines.push(format!(
+-                    "Final now (on the base branch): {}",
+-                    finalized.join(", ")
+-                ));
+-            }
++            let migration = maintenance(cwd)?.migrate(true)?;
+             if ctx.json {
+                 print_json(&Value::Object(migration.result));
+             } else {
+diff --git a/crates/atm-cli/src/commands/task.rs b/crates/atm-cli/src/commands/task.rs
+index a366d8df..b8a19220 100644
+--- a/crates/atm-cli/src/commands/task.rs
++++ b/crates/atm-cli/src/commands/task.rs
+@@ -241,13 +241,9 @@ pub fn view_row(view: &Value) -> Value {
+         row["pr"] = pr.clone();
+         row["merged_at"] = task.get("merged_at").cloned().unwrap_or(Value::Null);
+     }
+-    // With task keys (ADR-007 §1): the key and whether it is final; before them, the ID is all there is
++    // With task keys (ADR-007 §1): the key, plain (ADR-009); before them, the ID is all there is
+     if let (Some(key), Some(map)) = (task.get("key"), row.as_object_mut()) {
+         map.insert("key".into(), key.clone());
+-        map.insert(
+-            "key_final".into(),
+-            task.get("key_final").cloned().unwrap_or(Value::Bool(false)),
+-        );
+     }
+     if let Some(map) = row.as_object_mut()
+         && !map.contains_key("key")
+diff --git a/crates/atm-cli/src/commands/vcs.rs b/crates/atm-cli/src/commands/vcs.rs
+index ad1ec313..1cee3181 100644
+--- a/crates/atm-cli/src/commands/vcs.rs
++++ b/crates/atm-cli/src/commands/vcs.rs
+@@ -227,29 +227,23 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
+             at,
+             agent,
+         } => {
+-            // A direct push (ADR-007 §3, ATM-623): nothing to record on the tasks, but the keys of those now on the
+-            // base branch are final. Without it a project working on its base branch kept provisional keys
++            // A direct push: nothing to record on the tasks. It made keys final before ADR-009 (ATM-623); keys are
++            // plain from creation now, so it changes nothing, and stays for skills installed before
++            let _ = agent;
+             if at.is_some() {
+                 return Err(Error::Invalid(
+                     "--at is when a PR was merged: give --pr too".into(),
+                 ));
+             }
+             if ctx.dry_run {
+-                let mut parts = vec!["atm vcs pushed".to_string()];
+-                flags(&mut parts, "agent", &agent.iter().collect::<Vec<_>>());
+-                dry_run(&parts);
++                dry_run(&["atm vcs pushed".to_string()]);
+                 return Ok(());
+             }
+-            let mut project =
+-                Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+-            let vcs = project.vcs();
+-            let finalized = atm_lib::code::finalize_keys(&mut project, vcs.as_ref())?;
++            Project::open(cwd)?;
+             if ctx.json {
+-                print_json(&json!({ "keys_final": finalized }));
+-            } else if finalized.is_empty() {
+-                println!("No provisional key is on the base branch yet.");
++                print_json(&json!({ "tasks": [] }));
+             } else {
+-                println!("Final now (on the base branch): {}", finalized.join(", "));
++                println!("Nothing to record without --pr: a direct push changes no task.");
+             }
+         }
+         VcsCommand::Pushed {
+@@ -266,20 +260,11 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
+             }
+             let mut project =
+                 Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+-            let mut result = record_merge(&mut project, pr, at.as_deref())?;
+-            // Keys of tasks now on the base branch are final (ADR-007 §3)
+-            let vcs = project.vcs();
+-            let finalized = atm_lib::code::finalize_keys(&mut project, vcs.as_ref())?;
+-            if !finalized.is_empty() {
+-                result["keys_final"] = json!(finalized);
+-            }
++            let result = record_merge(&mut project, pr, at.as_deref())?;
+             if ctx.json {
+                 print_json(&result);
+                 return Ok(());
+             }
+-            if !finalized.is_empty() {
+-                println!("Final now (on the base branch): {}", finalized.join(", "));
+-            }
+             let ids: Vec<String> = result["tasks"]
+                 .as_array()
+                 .into_iter()
+diff --git a/crates/atm-common/schema/api.schema.json b/crates/atm-common/schema/api.schema.json
+index 7ac48a2b..13e33d95 100644
+--- a/crates/atm-common/schema/api.schema.json
++++ b/crates/atm-common/schema/api.schema.json
+@@ -115,7 +115,6 @@
+         "kind": { "type": "string", "description": "Its status's kind there (done when archived)" },
+         "archived": { "type": "boolean" },
+         "key": { "type": "string", "description": "Its key there, with task keys" },
+-        "key_final": { "type": "boolean", "description": "Whether that key is final (ADR-007 §3)" },
+         "ambiguous": {
+           "type": "boolean",
+           "description": "Another registered project uses the same key: show the UUID's first 8 characters instead (ADR-007 §8)"
+@@ -251,8 +250,7 @@
+         "name": { "type": "string", "description": "The task's name, capped at 80 characters" },
+         "agent": { "type": ["string", "null"] },
+         "branch": { "type": ["string", "null"] },
+-        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" },
+-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
++        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" }
+       }
+     },
+     "TaskName": {
+@@ -262,8 +260,7 @@
+       "properties": {
+         "id": { "type": "string" },
+         "name": { "type": "string" },
+-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
+-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
++        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
+       }
+     },
+     "LastDone": {
+@@ -274,8 +271,7 @@
+         "id": { "type": "string" },
+         "name": { "type": "string" },
+         "completed_at": { "type": "string" },
+-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
+-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
++        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
+       }
+     },
+     "NeedsYou": {
+@@ -313,8 +309,7 @@
+         "id": { "type": "string" },
+         "name": { "type": "string" },
+         "reason": { "enum": ["review", "blocked", "together"] },
+-        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" },
+-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
++        "key": { "type": "string", "description": "Its key, with task keys (ADR-007 §1)" }
+       }
+     },
+     "GitPr": {
+@@ -363,8 +358,7 @@
+           "items": { "type": "string" },
+           "description": "With task keys: the same dependencies as people read them (a key, ~ before a provisional one; another project's by its key there)"
+         },
+-        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" },
+-        "key_final": { "type": "boolean", "description": "Whether its key is final (ADR-007 §3)" }
++        "key": { "type": "string", "description": "The task's key, with task keys (ADR-007 §1)" }
+       }
+     },
+     "BoardColumn": {
+diff --git a/crates/atm-common/schema/task.schema.json b/crates/atm-common/schema/task.schema.json
+index 80fa18f1..ff0638e2 100644
+--- a/crates/atm-common/schema/task.schema.json
++++ b/crates/atm-common/schema/task.schema.json
+@@ -13,16 +13,12 @@
+     "number": {
+       "type": "integer",
+       "minimum": 1,
+-      "description": "Its number in the project: its key is meta.key, '-' and this (ATM-527, ADR-007 §1). Final once key_final"
+-    },
+-    "key_final": {
+-      "type": "boolean",
+-      "description": "Whether its number is final: true once the task is on the base branch, never changed after (ADR-007 §3); false or absent, provisional"
++      "description": "Its number in the project: its key is meta.key, '-' and this (ATM-527, ADR-007 §1), plain from creation (ADR-009)"
+     },
+     "aliases": {
+       "type": "array",
+       "items": { "type": "string" },
+-      "description": "Keys it had before (a provisional number that moved in a merge, an ID from before task keys), which still find it (ADR-007 §4, §6)"
++      "description": "Keys it had before (a number that moved when two branches gave the same one, ADR-009; an ID from before task keys), which still find it"
+     },
+     "name": { "type": "string" },
+     "type": { "type": "string", "description": "A type ID from the vocabulary (meta.types)" },
+diff --git a/crates/atm-common/src/keys.rs b/crates/atm-common/src/keys.rs
+index 541f6a47..7eee1a1a 100644
+--- a/crates/atm-common/src/keys.rs
++++ b/crates/atm-common/src/keys.rs
+@@ -62,23 +62,25 @@ pub fn with_key(document: &Value, task: &Task) -> Task {
+     out
+ }
+ 
+-/// How a task reads to people: its key, `~` before a provisional one (`~ATM-538`), or its `id` when it has no key (a
+-/// task as [`with_key`] gives it, or as stored before task keys).
++/// How a task reads to people: its key, plain from the start (ADR-009: no provisional keys, no `~`), or its `id` when
++/// it has no key (a task as [`with_key`] gives it, or as stored before task keys).
+ #[must_use]
+ pub fn label_of(task: &Value) -> String {
+     match task.get("key").and_then(Value::as_str) {
+-        Some(key) if task.get("key_final").and_then(Value::as_bool) == Some(true) => {
+-            key.to_string()
+-        }
+-        Some(key) => format!("~{key}"),
++        Some(key) => key.to_string(),
+         None => crate::py::py_str_opt(task.get("id")),
+     }
+ }
+ 
+-/// Whether a task's number is final (ADR-007 §3): it never changes once it is.
++/// A reference as people or agents typed it, without the `~` atm once printed before a provisional key (ADR-007,
++/// gone with ADR-009): old notes, commits and review files still have it, and still find their task.
+ #[must_use]
+-pub fn key_final(task: &Task) -> bool {
+-    task.get("key_final").and_then(Value::as_bool) == Some(true)
++pub fn without_draft_mark(reference: &str) -> &str {
++    let trimmed = reference.trim();
++    match trimmed.strip_prefix('~') {
++        Some(rest) if !rest.is_empty() => rest,
++        _ => trimmed,
++    }
+ }
+ 
+ /// The order tasks are listed and taken in: by number when both have one (`ATM-2` before `ATM-10`), else by ID as
+@@ -208,7 +210,8 @@ fn one<'a>(found: &[(&'a Task, bool)], reference: &str, via: Via) -> Result<Opti
+ /// [`Error::NotFound`] when nothing matches, saying why (another project's key, no such number); a failure when the
+ /// reference names more than one task (a file to repair).
+ pub fn resolve<'a>(document: &'a Value, archive: &'a [Task], reference: &str) -> Result<Found<'a>> {
+-    let reference = reference.trim();
++    // `~ATM-5`, as atm printed a provisional key before ADR-009, is `ATM-5`
++    let reference = without_draft_mark(reference);
+     let id_is = |t: &Task| t.get("id").and_then(Value::as_str) == Some(reference);
+     if !keys_format(document) {
+         return one(&matching(document, archive, &id_is), reference, Via::Id)?
+diff --git a/crates/atm-common/src/keys/tests.rs b/crates/atm-common/src/keys/tests.rs
+index ed661378..74cb8a2e 100644
+--- a/crates/atm-common/src/keys/tests.rs
++++ b/crates/atm-common/src/keys/tests.rs
+@@ -19,12 +19,12 @@ fn project() -> (Value, Vec<Task>) {
+     let document = json!({
+         "meta": {"format": 2, "key": "ATM", "key_history": ["T"], "next_number": 542},
+         "tasks": [
+-            {"id": A, "number": 527, "key_final": true, "aliases": ["T-P1-03"]},
++            {"id": A, "number": 527, "aliases": ["T-P1-03"]},
+             {"id": B, "number": 538},
+             {"id": C, "number": 541, "aliases": ["ATM-538"]}
+         ]
+     });
+-    let archive = vec![task(json!({"id": OLD, "number": 12, "key_final": true}))];
++    let archive = vec![task(json!({"id": OLD, "number": 12}))];
+     (document, archive)
+ }
+ 
+@@ -55,6 +55,25 @@ fn a_key_any_case_an_earlier_prefix_an_alias_or_the_uuid_finds_its_task() {
+     assert_eq!(found(A), (A.into(), false, Via::Uuid));
+ }
+ 
++/// ADR-009: keys read plain, whatever a file still says of `key_final`; a `~` written before (old notes, commits,
++/// reviews) still finds its task; a `~` alone is no key
++#[test]
++fn keys_read_plain_and_an_old_draft_mark_still_finds_its_task() {
++    for task in [
++        json!({"id": A, "key": "ATM-527"}),
++        json!({"id": A, "key": "ATM-527", "key_final": false}),
++        json!({"id": A, "key": "ATM-527", "key_final": true}),
++    ] {
++        assert_eq!(label_of(&task), "ATM-527", "{task}");
++    }
++    assert_eq!(label_of(&json!({"id": "T-1"})), "T-1");
++    assert_eq!(found("~ATM-527"), (A.into(), false, Via::Key));
++    assert_eq!(found(" ~atm-527 "), (A.into(), false, Via::Key));
++    assert_eq!(found("~T-527"), (A.into(), false, Via::EarlierPrefix));
++    assert_eq!(without_draft_mark("~"), "~");
++    assert!(not_found("~").starts_with("no task '~'"));
++}
++
+ #[test]
+ fn the_archive_too() {
+     assert_eq!(found("ATM-12"), (OLD.into(), true, Via::Key));
+@@ -125,7 +144,6 @@ fn keys_numbers_and_order() {
+     let (document, archive) = project();
+     let tasks: Vec<&Task> = tasks_of(&document).collect();
+     assert_eq!(key_of(&document, tasks[0]).as_deref(), Some("ATM-527"));
+-    assert!(key_final(tasks[0]) && !key_final(tasks[1]));
+     assert_eq!(
+         key_of(&json!({"tasks": []}), tasks[0]),
+         None,
+diff --git a/crates/atm-db/src/jsongit/files.rs b/crates/atm-db/src/jsongit/files.rs
+index dbc5cde6..e4f7de11 100644
+--- a/crates/atm-db/src/jsongit/files.rs
++++ b/crates/atm-db/src/jsongit/files.rs
+@@ -81,7 +81,8 @@ pub fn checked_format(document: &Value, file: &str) -> Result<u64> {
+ }
+ 
+ /// What a task of a keys-format file (ADR-007 §1) must hold beyond a legacy one's: a UUID `id`, a `number` of at least
+-/// 1, and, when present, a boolean `key_final` and `aliases` that are a list of keys. None when it holds them.
++/// 1, and, when present, `aliases` that are a list of keys. None when it holds them. (An old `key_final` is ignored,
++/// whatever it holds: ADR-009, and `atm db migrate` drops it.)
+ fn keys_problem(task: &Value) -> Option<&'static str> {
+     let id = task.get("id").and_then(Value::as_str).unwrap_or_default();
+     if !valid_task_uuid(id) {
+@@ -94,9 +95,6 @@ fn keys_problem(task: &Value) -> Option<&'static str> {
+     {
+         return Some("it has no number (a whole number of at least 1)");
+     }
+-    if task.get("key_final").is_some_and(|v| !v.is_boolean()) {
+-        return Some("its key_final isn't true or false");
+-    }
+     if task
+         .get("aliases")
+         .is_some_and(|a| !a.as_array().is_some_and(|a| a.iter().all(Value::is_string)))
+@@ -402,6 +400,12 @@ mod tests {
+         let (_dir, paths) = project(&good);
+         let loaded = load_tasks(&paths).unwrap();
+         assert_eq!(loaded.tasks().next().unwrap()["number"], json!(527));
++        // An old key_final, whatever it holds, is ignored (ADR-009)
++        let old = format!(
++            r#"{{"meta": {{"format": 2, "key": "ATM"}}, "tasks": [{{"id": "{uuid}", "number": 1, "key_final": "yes"}}]}}"#
++        );
++        let (_old_dir, old_paths) = project(&old);
++        assert!(load_tasks(&old_paths).is_ok());
+ 
+         assert!(
+             error(r#"{"meta": {"format": 2, "key": "ATM"}, "tasks": [{"id": "T-1", "number": 1}]}"#)
+@@ -416,10 +420,6 @@ mod tests {
+                 format!(r#"{{"id": "{uuid}", "number": 0}}"#),
+                 "it has no number (a whole number of at least 1)",
+             ),
+-            (
+-                format!(r#"{{"id": "{uuid}", "number": 1, "key_final": "yes"}}"#),
+-                "its key_final isn't true or false",
+-            ),
+             (
+                 format!(r#"{{"id": "{uuid}", "number": 1, "aliases": "T-1"}}"#),
+                 "its aliases aren't a list of keys",
+diff --git a/crates/atm-db/src/jsongit/migrate.rs b/crates/atm-db/src/jsongit/migrate.rs
+index bf98755e..9dca46aa 100644
+--- a/crates/atm-db/src/jsongit/migrate.rs
++++ b/crates/atm-db/src/jsongit/migrate.rs
+@@ -345,6 +345,56 @@ fn migrate_phases(paths: &Paths) -> Result<Option<Vec<Value>>> {
+     Ok(Some(written.1))
+ }
+ 
++/// How many tasks of the list carry `key_final` (ADR-007's provisional keys, gone with ADR-009).
++fn with_key_final(tasks: &[Value]) -> usize {
++    tasks
++        .iter()
++        .filter(|t| t.get("key_final").is_some())
++        .count()
++}
++
++/// ADR-009: keys are plain from creation, so `key_final` leaves every task of `tasks.json` and the archive, once (a file
++/// without it is left as it is). How many tasks it was dropped from.
++fn drop_key_final(paths: &Paths) -> Result<usize> {
++    let count = |document: &Value| {
++        with_key_final(document["tasks"].as_array().map_or(&[][..], Vec::as_slice))
++    };
++    let precheck = || -> Result<usize> {
++        Ok(count(&load_tasks(paths)?.document) + count(&archive_document(paths)?))
++    };
++    if precheck().unwrap_or(0) == 0 {
++        return Ok(0);
++    }
++    let archive = paths.archive();
++    let (written, dropped) = {
++        let _lock = lock(&paths.dir, None)?;
++        let mut document = load_tasks(paths)?.document;
++        let mut archived = archive_document(paths)?;
++        let dropped = count(&document) + count(&archived);
++        let strip = |tasks: &mut [Value]| {
++            for task in tasks.iter_mut().filter_map(Value::as_object_mut) {
++                task.shift_remove("key_final");
++            }
++        };
++        if let Some(tasks) = document["tasks"].as_array_mut() {
++            strip(tasks);
++        }
++        strip(tasks_mut(&mut archived));
++        write_json(&paths.tasks, &document)?;
++        let mut written = vec![paths.tasks.clone()];
++        if archive.is_file() {
++            write_json(&archive, &archived)?;
++            written.push(archive.clone());
++        }
++        (written, dropped)
++    };
++    if in_git(&paths.root) {
++        let files: Vec<&Path> = written.iter().map(std::path::PathBuf::as_path).collect();
++        stage(&paths.root, &files);
++    }
++    Ok(dropped)
++}
++
+ /// The unfinished tasks labelled `interactive` without a `with`, unless the migration ran already.
+ fn interactive_tasks(document: &Value, vocab: &Vocabulary) -> Vec<usize> {
+     let done = document
+@@ -440,7 +490,8 @@ fn ensure_gitignore(task_dir: &Path) -> Result<bool> {
+ 
+ /// Move a legacy `tasks.json` into the task folder (staged with `git mv` when git tracks it), set the folder up, and
+ /// bring the task data up to date. What it did: `{moved, removed_dashboard, warning, gitignore_updated,
+-/// merge_driver_updated, cleaned_up, finish_times_filled, sprints_from_phases, with_user_from_label[, suggest]}`.
++/// merge_driver_updated, cleaned_up, finish_times_filled, sprints_from_phases, with_user_from_label,
++/// key_final_dropped[, suggest]}`.
+ ///
+ /// # Errors
+ /// When a file can't be moved, read or written.
+@@ -456,6 +507,7 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
+         "finish_times_filled": 0,
+         "sprints_from_phases": null,
+         "with_user_from_label": 0,
++        "key_final_dropped": 0,
+     })
+     .as_object()
+     .cloned()
+@@ -527,6 +579,7 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
+         "with_user_from_label".into(),
+         json!(migrate_interactive(paths)?),
+     );
++    result.insert("key_final_dropped".into(), json!(drop_key_final(paths)?));
+     // An unreadable file: the command the skill runs next reports the problem
+     if let Ok(loaded) = load_tasks(paths) {
+         let size = std::fs::metadata(&paths.tasks).map_or(0, |m| m.len());
+@@ -598,6 +651,17 @@ pub fn describe_migration(r: &Map<String, Value>, paths: &Paths) -> Vec<String>
+             "Gave {tasks} labelled interactive `with: user` (done together with you; unattended loops skip them)."
+         ));
+     }
++    let plain = count("key_final_dropped");
++    if plain > 0 {
++        let tasks = if plain == 1 {
++            "1 task".to_string()
++        } else {
++            format!("{plain} tasks")
++        };
++        lines.push(format!(
++            "Task keys are plain now (ADR-009): dropped key_final from {tasks} (staged, not committed)."
++        ));
++    }
+     if lines.is_empty() {
+         lines.push("Nothing to migrate.".into());
+     }
+diff --git a/crates/atm-db/src/jsongit/migrate/keys.rs b/crates/atm-db/src/jsongit/migrate/keys.rs
+index d8a26545..966301fa 100644
+--- a/crates/atm-db/src/jsongit/migrate/keys.rs
++++ b/crates/atm-db/src/jsongit/migrate/keys.rs
+@@ -127,7 +127,8 @@ fn rewrite_list(value: &mut Value, map: &HashMap<String, String>) {
+     }
+ }
+ 
+-/// The task with its new fields first (`id`, `number`, `key_final`, `aliases`), then the rest as it was.
++/// The task with its new fields first (`id`, `number`, `aliases`), then the rest as it was; no `key_final` (ADR-009:
++/// keys are plain from creation).
+ fn rekeyed(
+     task: &Map<String, Value>,
+     uuid: &str,
+@@ -137,7 +138,6 @@ fn rekeyed(
+     let mut out = Map::new();
+     out.insert("id".into(), json!(uuid));
+     out.insert("number".into(), json!(number));
+-    out.insert("key_final".into(), json!(true));
+     let mut aliases: Vec<Value> = task
+         .get("aliases")
+         .and_then(Value::as_array)
+diff --git a/crates/atm-db/src/jsongit/migrate/keys/tests.rs b/crates/atm-db/src/jsongit/migrate/keys/tests.rs
+index e8683859..58684fd4 100644
+--- a/crates/atm-db/src/jsongit/migrate/keys/tests.rs
++++ b/crates/atm-db/src/jsongit/migrate/keys/tests.rs
+@@ -61,9 +61,10 @@ fn every_task_gets_a_uuid_its_number_and_is_final() {
+         "8",
+         "version 8, from the project and old ID"
+     );
++    // A number, and no key_final (ADR-009: keys are plain from creation)
+     assert_eq!(
+-        (t[0]["number"].clone(), t[0]["key_final"].clone()),
+-        (json!(12), json!(true))
++        (t[0]["number"].clone(), t[0].get("key_final")),
++        (json!(12), None)
+     );
+     assert_eq!(
+         t[0].get("aliases"),
+@@ -78,12 +79,8 @@ fn every_task_gets_a_uuid_its_number_and_is_final() {
+     assert_eq!(t[1]["aliases"], json!(["T-P1-03"]));
+     assert_eq!(archive["tasks"][0]["number"], json!(1));
+     assert_eq!(archive["meta"]["format"], json!(2));
+-    let keys: Vec<&String> = t[0].as_object().unwrap().keys().take(4).collect();
+-    assert_eq!(
+-        keys,
+-        ["id", "number", "key_final", "name"],
+-        "the new fields first"
+-    );
++    let keys: Vec<&String> = t[0].as_object().unwrap().keys().take(3).collect();
++    assert_eq!(keys, ["id", "number", "name"], "the new fields first");
+ }
+ 
+ #[test]
+diff --git a/crates/atm-db/src/jsongit/migrate/tests.rs b/crates/atm-db/src/jsongit/migrate/tests.rs
+index 985ec4af..2c75dea0 100644
+--- a/crates/atm-db/src/jsongit/migrate/tests.rs
++++ b/crates/atm-db/src/jsongit/migrate/tests.rs
+@@ -65,6 +65,51 @@ fn finish_times_and_with_user_are_filled_in_once() {
+     assert_eq!(document["meta"]["migrations"], json!(["interactive-label"]));
+ }
+ 
++/// ADR-009 (ATM-635): `key_final`, true or false, leaves the task file and the archive once, and says so; after it
++/// the files are left alone
++#[test]
++fn key_final_is_dropped_from_the_tasks_and_the_archive_once() {
++    let (_dir, paths) = project(
++        r#"{"meta": {"format": 2, "key": "ATM"}, "tasks": [
++            {"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8001", "number": 1, "key_final": true, "status": "todo"},
++            {"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8002", "number": 2, "key_final": false, "status": "todo"},
++            {"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8003", "number": 3, "status": "todo"}
++        ]}"#,
++    );
++    std::fs::write(
++        paths.archive(),
++        r#"{"tasks": [{"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8000", "number": 9, "key_final": true, "status": "done"}]}"#,
++    )
++    .unwrap();
++    let result = migrate(&paths).unwrap();
++    assert_eq!(result["key_final_dropped"], json!(3));
++    assert!(
++        describe_migration(&result, &paths)
++            .contains(&"Task keys are plain now (ADR-009): dropped key_final from 3 tasks (staged, not committed).".to_string())
++    );
++    for file in [paths.tasks.clone(), paths.archive()] {
++        let document = read_json(&file).unwrap();
++        assert!(
++            document["tasks"]
++                .as_array()
++                .unwrap()
++                .iter()
++                .all(|t| t.get("key_final").is_none()),
++            "{}",
++            file.display()
++        );
++    }
++    let document = read_json(&paths.tasks).unwrap();
++    assert_eq!(
++        document["tasks"][1]["number"],
++        json!(2),
++        "nothing else changed"
++    );
++    let again = migrate(&paths).unwrap();
++    assert_eq!(again["key_final_dropped"], json!(0));
++    assert_eq!(describe_migration(&again, &paths), ["Nothing to migrate."]);
++}
++
+ #[test]
+ fn phases_become_sprints_named_after_them() {
+     let mut document = json!({
+diff --git a/crates/atm-lib/src/code.rs b/crates/atm-lib/src/code.rs
+index c92ab356..45e9c5c6 100644
+--- a/crates/atm-lib/src/code.rs
++++ b/crates/atm-lib/src/code.rs
+@@ -488,76 +488,6 @@ pub fn record_merge(project: &mut Project, pr: i64, at: Option<&str>) -> Result<
+     Ok(outcome)
+ }
+ 
+-/// Task keys become final (ADR-007 §3): each provisional task whose UUID, with the same number, is in the task file
+-/// (or its archive) on `origin/<base>` (`meta.workflow.base`, else the remote's default branch) gets `key_final: true`,
+-/// read from git, never from what an agent says. Nothing sets it back. The keys made final; none without git, a remote
+-/// branch to read, or task keys.
+-///
+-/// # Errors
+-/// The task file can't be read or written.
+-pub fn finalize_keys(project: &mut Project, vcs: Option<&GitVcs>) -> Result<Vec<String>> {
+-    let Some(vcs) = vcs else {
+-        return Ok(Vec::new());
+-    };
+-    let document = project.store().document()?;
+-    if !atm_common::keys::keys_format(document) {
+-        return Ok(Vec::new());
+-    }
+-    let base = document
+-        .get("meta")
+-        .and_then(Value::as_object)
+-        .and_then(|m| workflow_of(m).ok().flatten())
+-        .and_then(|w| w.get("base").and_then(Value::as_str).map(String::from))
+-        .unwrap_or_else(|| vcs.default_base());
+-    let mut on_base: Vec<(String, u64)> = Vec::new();
+-    for file in [TASKS_FILE, "tasks-archive.json"] {
+-        let Some(text) = vcs.file_on_remote_branch(&base, &format!("{TASK_DIR}/{file}")) else {
+-            continue;
+-        };
+-        let Ok(doc) = serde_json::from_str::<Value>(&text) else {
+-            continue;
+-        };
+-        on_base.extend(
+-            doc["tasks"]
+-                .as_array()
+-                .into_iter()
+-                .flatten()
+-                .filter_map(|t| {
+-                    Some((
+-                        t.get("id")?.as_str()?.to_string(),
+-                        t.get("number")?.as_u64()?,
+-                    ))
+-                }),
+-        );
+-    }
+-    if on_base.is_empty() {
+-        return Ok(Vec::new());
+-    }
+-    let mut finalized = Vec::new();
+-    project.store_mut().change(&mut |work: &mut Working| {
+-        let key = atm_common::keys::project_key(&work.document)
+-            .unwrap_or_default()
+-            .to_string();
+-        for task in work.tasks().iter_mut().filter_map(Value::as_object_mut) {
+-            if atm_common::keys::key_final(task) {
+-                continue;
+-            }
+-            let (Some(id), Some(n)) = (
+-                task.get("id").and_then(Value::as_str),
+-                atm_common::keys::number_of(task),
+-            ) else {
+-                continue;
+-            };
+-            if on_base.iter().any(|(i, m)| i == id && *m == n) {
+-                task.insert("key_final".into(), json!(true));
+-                finalized.push(atm_common::ids::task_key(&key, n));
+-            }
+-        }
+-        Ok(())
+-    })?;
+-    Ok(finalized)
+-}
+-
+ /// `atm vcs repository`: `meta.repository`, if set.
+ ///
+ /// # Errors
+diff --git a/crates/atm-lib/src/edit.rs b/crates/atm-lib/src/edit.rs
+index 6131c0a3..9bb22aa1 100644
+--- a/crates/atm-lib/src/edit.rs
++++ b/crates/atm-lib/src/edit.rs
+@@ -439,8 +439,8 @@ fn add_tasks(work: &mut Working, entries: &[Task], actor: Option<&str>) -> Resul
+     Ok(tasks)
+ }
+ 
+-/// [`add_tasks`] in a keys-format file (ADR-007 §1): each new task gets a UUID and the next number, provisional
+-/// (`key_final: false`), and `meta.next_number` moves on. A dependency or related task is a placeholder of this batch,
++/// [`add_tasks`] in a keys-format file (ADR-007 §1): each new task gets a UUID and the next number, its key plain from
++/// the start (ADR-009), and `meta.next_number` moves on. A dependency or related task is a placeholder of this batch,
+ /// or a reference [`resolve`] finds (a key, an earlier prefix, an alias, a UUID; archived ones too), stored as its UUID.
+ fn add_keyed_tasks(
+     work: &mut Working,
+@@ -476,7 +476,6 @@ fn add_keyed_tasks(
+     for (n, task) in tasks.iter_mut().enumerate() {
+         task.insert("id".into(), json!(uuids[n]));
+         task.insert("number".into(), json!(first + n as u64));
+-        task.insert("key_final".into(), json!(false));
+         let mut deps = Vec::new();
+         let mut missing = Vec::new();
+         for d in task["dependencies"].as_array().into_iter().flatten() {
+diff --git a/crates/atm-lib/src/edit/tests.rs b/crates/atm-lib/src/edit/tests.rs
+index 3bbab5a0..628a042e 100644
+--- a/crates/atm-lib/src/edit/tests.rs
++++ b/crates/atm-lib/src/edit/tests.rs
+@@ -595,7 +595,7 @@ fn in_a_keys_file_new_tasks_get_a_uuid_the_next_number_and_references_by_key() {
+     let existing = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8091";
+     let meta = json!({"format": 2, "key": "ATM", "key_history": ["T"], "next_number": 5});
+     let mut p = project(
+-        json!([{"id": existing, "number": 4, "key_final": true, "status": "done"}]),
++        json!([{"id": existing, "number": 4, "status": "done"}]),
+         meta.clone(),
+     );
+     let entries = [
+@@ -609,7 +609,11 @@ fn in_a_keys_file_new_tasks_get_a_uuid_the_next_number_and_references_by_key() {
+     assert!(uuids.iter().all(|u| atm_common::ids::valid_task_uuid(u)));
+     assert_eq!(added.tasks[0]["number"], json!(5));
+     assert_eq!(added.tasks[1]["number"], json!(6));
+-    assert_eq!(added.tasks[0]["key_final"], json!(false), "provisional");
++    assert_eq!(
++        added.tasks[0].get("key_final"),
++        None,
++        "a key plain from creation (ADR-009)"
++    );
+     assert_eq!(added.tasks[0]["dependencies"], json!([existing]));
+     assert_eq!(added.tasks[1]["dependencies"], json!([uuids[0], existing]));
+     assert_eq!(added.tasks[1]["related"], json!([existing]));
+diff --git a/crates/atm-lib/src/foreign.rs b/crates/atm-lib/src/foreign.rs
+index 775da5b0..ea32f9d3 100644
+--- a/crates/atm-lib/src/foreign.rs
++++ b/crates/atm-lib/src/foreign.rs
+@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
+ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
+ use std::time::{Duration, Instant};
+ 
+-use atm_common::keys::{key_final, key_of, keys_format, project_key, resolve};
++use atm_common::keys::{key_of, keys_format, project_key, resolve};
+ use atm_common::{Error, Kind, Result, Task, Vocabulary};
+ use serde_json::{Value, json};
+ 
+@@ -342,11 +342,7 @@ pub fn label(reference: &str) -> Option<String> {
+         let uuid = task.get("id").and_then(Value::as_str).unwrap_or_default();
+         return Some(uuid.chars().take(8).collect());
+     }
+-    Some(if key_final(task) {
+-        key
+-    } else {
+-        format!("~{key}")
+-    })
++    Some(key)
+ }
+ 
+ /// The project IDs the working tasks of `project` depend on (`<project id>:<UUID>` in `dependencies`), each once: what
+@@ -455,7 +451,7 @@ pub struct Lookup {
+ 
+ impl Lookup {
+     /// What the dashboard shows of the task `<project id>:<UUID>` names: `{project, found}`; found, the project's name
+-    /// and where it is registered (`places`), and the task's `key` and `key_final` (in a project with task keys),
++    /// and where it is registered (`places`), and the task's `key` (in a project with task keys),
+     /// `ambiguous` (another registered project has the same key, ADR-007 §8), `name`, `status`, `kind` and `archived`;
+     /// not found, `reason`: `unregistered` (no registered project has that ID, or its folder is gone) or `missing`
+     /// (the project has no such task), with the project's name and places when it is there. Only those fields are
+@@ -518,7 +514,6 @@ fn look_up(projects: &[Other], reference: &str) -> Value {
+     }
+     if let Some(key) = key_of(document, task) {
+         view["key"] = json!(key);
+-        view["key_final"] = json!(key_final(task));
+         let prefix = snapshot.key().unwrap_or_default();
+         let sharing = projects
+             .iter()
+diff --git a/crates/atm-lib/src/project.rs b/crates/atm-lib/src/project.rs
+index 0e69b11a..35b642d0 100644
+--- a/crates/atm-lib/src/project.rs
++++ b/crates/atm-lib/src/project.rs
+@@ -97,11 +97,8 @@ impl Project {
+     /// # Errors
+     /// In a keys-format file, a reference that names no task (saying why), or several; task data that can't be read.
+     pub fn resolve_task(&self, reference: &str) -> Result<String> {
+-        // A provisional key as people read it (`~ATM-538`, as atm prints it) is the key (ATM-594)
+-        let reference = reference
+-            .strip_prefix('~')
+-            .filter(|rest| !rest.is_empty())
+-            .unwrap_or(reference);
++        // `~ATM-538`, as atm printed a provisional key before ADR-009, is the key (ATM-594)
++        let reference = atm_common::keys::without_draft_mark(reference);
+         let document = self.store.document()?;
+         if !atm_common::keys::keys_format(document) {
+             return Ok(reference.to_string());
+@@ -171,8 +168,8 @@ impl Project {
+         references.iter().map(|r| self.resolve_task(r)).collect()
+     }
+ 
+-    /// How a task is named where atm keeps or hands on a reference to it (a review's tasks, `--json`, ATM-594): its key,
+-    /// provisional or final, without the `~` people read; its ID before task keys.
++    /// How a task is named where atm keeps or hands on a reference to it (a review's tasks, `--json`, ATM-594): its key;
++    /// its ID before task keys.
+     #[must_use]
+     pub fn task_key(&self, task: &atm_common::Task) -> String {
+         let id = || {
+@@ -188,24 +185,11 @@ impl Project {
+             .unwrap_or_else(id)
+     }
+ 
+-    /// How a task is shown to people (ADR-007 §1, §3): its key, `~` before a provisional one (`~ATM-538`), in a
+-    /// keys-format file; its ID before task keys.
++    /// How a task is shown to people: its key, plain from creation (ADR-009), in a keys-format file; its ID before task
++    /// keys. The same as [`Project::task_key`] now that no key is provisional.
+     #[must_use]
+     pub fn task_label(&self, task: &atm_common::Task) -> String {
+-        let id = || {
+-            task.get("id")
+-                .and_then(serde_json::Value::as_str)
+-                .unwrap_or_default()
+-                .to_string()
+-        };
+-        let Ok(document) = self.store.document() else {
+-            return id();
+-        };
+-        match atm_common::keys::key_of(document, task) {
+-            Some(key) if atm_common::keys::key_final(task) => key,
+-            Some(key) => format!("~{key}"),
+-            None => id(),
+-        }
++        self.task_key(task)
+     }
+ 
+     /// Its root folder, when it was opened from one.
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 803f141d..dcc1348a 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -291,7 +291,7 @@ fn named(project: &Project, header: &ReviewHeader) -> Result<Vec<String>> {
+ #[must_use]
+ pub fn task_reference(project: &Project, reference: &str) -> String {
+     project.resolve_task(reference).map_or_else(
+-        |_| reference.strip_prefix('~').unwrap_or(reference).to_string(),
++        |_| atm_common::keys::without_draft_mark(reference).to_string(),
+         |id| key_of_id(project, &id),
+     )
+ }
+diff --git a/crates/atm-lib/src/summary.rs b/crates/atm-lib/src/summary.rs
+index 776b651c..a03ac265 100644
+--- a/crates/atm-lib/src/summary.rs
++++ b/crates/atm-lib/src/summary.rs
+@@ -5,7 +5,7 @@
+ 
+ use std::collections::HashMap;
+ 
+-use atm_common::keys::{key_final, key_of, keys_format, label_of, number_of, with_key};
++use atm_common::keys::{key_of, keys_format, label_of, number_of, with_key};
+ use atm_common::py::{py_str, py_str_opt, strip, truthy};
+ use atm_common::rules::{natural_cmp, unfinished_dependencies};
+ use atm_common::time::{format_iso, now, parse_iso};
+@@ -241,15 +241,14 @@ fn git_summary(project: &Project, tasks: &[&Task]) -> Value {
+     json!({"branch": project.store().branch(), "pr": latest})
+ }
+ 
+-/// `entry` with its task's key and whether the key is final (ADR-007 §1, §3), as the task views give them, in a
+-/// keys-format project; as it is before task keys, or for no task.
++/// `entry` with its task's key (ADR-007 §1), as the task views give it, in a keys-format project; as it is before task
++/// keys, or for no task.
+ fn keyed(document: &Value, task: Option<&Task>, mut entry: Value) -> Value {
+     if let Some(task) = task
+         && let Some(key) = key_of(document, task)
+         && let Some(map) = entry.as_object_mut()
+     {
+         map.insert("key".into(), json!(key));
+-        map.insert("key_final".into(), json!(key_final(task)));
+     }
+     entry
+ }
+@@ -258,7 +257,7 @@ fn keyed(document: &Value, task: Option<&Task>, mut entry: Value) -> Value {
+ struct Shown<'a> {
+     vocab: &'a Vocabulary,
+     document: &'a Value,
+-    /// A task (a dependency) by its label: its key (`~` while provisional), another project's by its key there, else
++    /// A task (a dependency) by its label: its key, another project's by its key there, else
+     /// its ID.
+     label: &'a dyn Fn(&str) -> String,
+ }
+diff --git a/crates/atm-lib/src/summary/tests.rs b/crates/atm-lib/src/summary/tests.rs
+index 5f23e8a6..7f9c260e 100644
+--- a/crates/atm-lib/src/summary/tests.rs
++++ b/crates/atm-lib/src/summary/tests.rs
+@@ -55,13 +55,11 @@ fn a_keys_format_project_gives_its_tasks_keys_and_a_legacy_one_does_not() {
+         &json!({"format": 2, "key": "ATM", "next_number": 14}),
+     );
+     let s = project_summary(&keyed).unwrap();
+-    let key_of = |v: &Value| (v["key"].clone(), v["key_final"].clone());
+-    assert_eq!(key_of(&s["last_done"]), (json!("ATM-2"), json!(true)));
+-    assert_eq!(key_of(&s["next"][0]), (json!("ATM-10"), json!(true)));
+-    assert_eq!(
+-        key_of(&s["needs_you_tasks"][0]),
+-        (json!("ATM-13"), json!(true))
+-    );
++    // Keys plain (ADR-009): no key_final carried, whatever the file still says
++    let key_of = |v: &Value| (v["key"].clone(), v.get("key_final").cloned());
++    assert_eq!(key_of(&s["last_done"]), (json!("ATM-2"), None));
++    assert_eq!(key_of(&s["next"][0]), (json!("ATM-10"), None));
++    assert_eq!(key_of(&s["needs_you_tasks"][0]), (json!("ATM-13"), None));
+     let todo = &s["board"]["todo"]["cards"];
+     let draft = todo
+         .as_array()
+@@ -69,17 +67,12 @@ fn a_keys_format_project_gives_its_tasks_keys_and_a_legacy_one_does_not() {
+         .iter()
+         .find(|c| c["id"] == DRAFT)
+         .unwrap();
+-    assert_eq!(
+-        key_of(draft),
+-        (json!("ATM-11"), json!(false)),
+-        "provisional"
+-    );
++    assert_eq!(key_of(draft), (json!("ATM-11"), None));
+     assert_eq!(draft["waiting_for"], json!([LOGIN]));
+     assert_eq!(draft["waiting_for_labels"], json!(["ATM-10"]));
+     assert_eq!(
+         key_of(&s["board"]["active"]["cards"][0]),
+-        (json!("ATM-12"), json!(false)),
+-        "no key_final: provisional"
++        (json!("ATM-12"), None)
+     );
+ 
+     let legacy = project(
+diff --git a/docs/agent/commands.md b/docs/agent/commands.md
+index 40d26a10..b3fdffa7 100644
+--- a/docs/agent/commands.md
++++ b/docs/agent/commands.md
+@@ -6,9 +6,9 @@ to do (`loop next`), 4 the task is claimed by another agent. Output to a pipe (a
+ cut; `--color auto|always|never` only styles it for a terminal.
+ 
+ `<id>` is a task's key (`ATM-527`, any case) in a project with task keys, or its old ID (`T-527`), an alias or its UUID;
+-in a project without keys, its ID (`atm docs tasks`). A key shown with a `~` (`~ATM-538`) is provisional: use it freely
+-(in commit messages too), it may move to another number before it is merged, and its old key keeps finding it. The `~`
+-is only how it reads: commands take the key with or without it, and `--json` gives it without.
++in a project without keys, its ID (`atm docs tasks`). Keys are plain from the moment a task is made: use them anywhere
++(commit messages too). If two branches gave the same number, the merge moves one task to the next free number and its
++old key keeps finding it. (A `~` before a key, as older atm printed it, is still taken and ignored.)
+ 
+ ## Reading
+ 
+@@ -36,9 +36,7 @@ is only how it reads: commands take the key with or without it, and `--json` giv
+ ## Pushing
+ 
+ - `atm vcs pr <id>… --number N --url U`: record the pull request that contains the tasks
+-- `atm vcs pushed --pr N [--at TIME]`: record that it merged
+-- `atm vcs pushed`: after a direct push to the base branch; the keys of the tasks now on it become final (either form
+-  makes keys final, read from git)
++- `atm vcs pushed --pr N [--at TIME]`: record that it merged (a direct push has nothing to record)
+ 
+ ## Defining work
+ 
+diff --git a/docs/agent/tasks.md b/docs/agent/tasks.md
+index 3323e115..c36cfc5b 100644
+--- a/docs/agent/tasks.md
++++ b/docs/agent/tasks.md
+@@ -3,9 +3,10 @@
+ For reading `atm task details --json` and the other commands' JSON, not for editing the file.
+ 
+ - **Keys** (a project with task keys, `meta.format` 2): `id` is the task's UUID, never shown; `key` is how people and
+-  you name it (`ATM-527`: `meta.key` and its `number`); `key_final` false means provisional (shown `~ATM-538`, final
+-  once merged into the base branch); `aliases` are keys it had (they still find it). Before task keys, `id` is the ID
+-  (`T-527`) and there is no `key`. Name tasks by their key in commands, notes and commit messages.
++  you name it (`ATM-527`: `meta.key` and its `number`), plain from the moment the task is made; `aliases` are keys it
++  had (a number that moved when two branches gave the same one, an ID from before task keys), and they still find it.
++  Before task keys, `id` is the ID (`T-527`) and there is no `key`. Name tasks by their key in commands, notes and
++  commit messages.
+ - **Definition:** `id`, `name`, `type` (`feature`, `bugfix`, `test`, `infra`, `docs`, `refactor`, `polish` by default),
+   `description` (Markdown), `dependencies` (the tasks' UUIDs, or IDs before task keys; `<project id>:<UUID>` is another
+   project's task), `priority` (`P0`–`P3` by default; none counts as `P2`), `labels`,
+diff --git a/skills/atm-push/SKILL.md b/skills/atm-push/SKILL.md
+index 2e1403a7..9fd6be36 100644
+--- a/skills/atm-push/SKILL.md
++++ b/skills/atm-push/SKILL.md
+@@ -70,10 +70,6 @@ and no PR was opened.
+ 
+ `git push` (with `-u origin <branch>` when the branch has no upstream yet). Never force-push.
+ 
+-**direct**, once pushed to the base branch: `atm vcs pushed` (no `--pr`). The tasks the push put on the base branch get
+-final keys (`~KEY-12` becomes `KEY-12`); atm reads that from git. If it says some keys are final now, commit that on
+-its own (`git commit -m 'chore: task keys final' -- .agentic-task-manager/tasks.json`): it goes with the next push.
+-
+ ## Step 4: The pull request (pull-request only)
+ 
+ `gh pr view --json number,url,state` says whether the branch has one.
+diff --git a/tests/scripts/keys.test.mjs b/tests/scripts/keys.test.mjs
+index 97e0861e..4d363d14 100644
+--- a/tests/scripts/keys.test.mjs
++++ b/tests/scripts/keys.test.mjs
+@@ -53,7 +53,7 @@ test('migrate --keys: UUIDs, numbers, references and claims; the same in every c
+     const one = archived.tasks[0];
+     for (const t of [seven, odd, one]) {
+       assert.match(t.id, UUID);
+-      assert.equal(t.key_final, true);
++      assert.equal(t.key_final, undefined, 'plain keys (ADR-009)');
+     }
+     assert.deepEqual([seven.number, odd.number, one.number], [7, 9, 1]);
+     assert.deepEqual(odd.aliases, ['T-P1-03']);
+@@ -89,7 +89,7 @@ test('migrate --keys: UUIDs, numbers, references and claims; the same in every c
+   }
+ });
+ 
+-test('commands take a key, an earlier prefix or a UUID, and show keys, provisional ones with a ~', () => {
++test('commands take a key (with an old ~ too), an earlier prefix or a UUID, and show keys plain (ADR-009)', () => {
+   const root = makeProject({
+     files: {
+       [FILE]: {
+@@ -111,33 +111,36 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
+   try {
+     ok(['project', 'key', 'set', 'ATM']);
+     const two = read(root, FILE).tasks[1];
+-    // A new task: a UUID, the next number, provisional
++    // A new task: a UUID, the next number, its key plain from the start
+     const dir = path.join(root, '..', `${path.basename(root)}-new`);
+     fs.mkdirSync(dir);
+     fs.writeFileSync(
+       path.join(dir, 'new.json'),
+       JSON.stringify([{ name: 'three', type: 'feature', dependencies: ['ATM-2'] }]),
+     );
+-    assert.match(ok(['task', 'add', '--json-file', path.join(dir, 'new.json')]), /^Added ~ATM-3 three$/m);
++    assert.match(ok(['task', 'add', '--json-file', path.join(dir, 'new.json')]), /^Added ATM-3 three$/m);
+     removeDir(dir);
+     const three = read(root, FILE).tasks[2];
+     assert.equal(three.number, 3);
+-    assert.equal(three.key_final, false);
++    assert.equal(three.key_final, undefined);
+     assert.deepEqual(three.dependencies, [two.id], 'stored by UUID');
+ 
+-    // The list shows keys, the provisional one marked
++    // The list shows keys, all plain
+     const list = ok(['task', 'list']);
+     assert.match(list, /^ATM-1 +done/m);
+-    assert.match(list, /^~ATM-3 +todo/m);
++    assert.match(list, /^ATM-3 +todo/m);
++    assert.doesNotMatch(list, /~/);
+     const rows = JSON.parse(ok(['task', 'list', '--json']));
+     assert.deepEqual(
+       rows.map((r) => [r.key, r.key_final, r.label]),
+       [
+-        ['ATM-1', true, 'ATM-1'],
+-        ['ATM-2', true, 'ATM-2'],
+-        ['ATM-3', false, '~ATM-3'],
++        ['ATM-1', undefined, 'ATM-1'],
++        ['ATM-2', undefined, 'ATM-2'],
++        ['ATM-3', undefined, 'ATM-3'],
+       ],
+     );
++    // A key written with the old ~ still finds its task
++    assert.match(ok(['task', 'details', '~ATM-3']), /^ATM-3  three$/m);
+     assert.equal(rows[1].id, two.id, 'the UUID too');
+ 
+     // Details by key, by the old prefix, by UUID: the same task, its dependency by key
+@@ -150,11 +153,11 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
+ 
+     // A refusal names tasks by key: ATM-3 waits for ATM-2
+     const waiting = runAtm(['task', 'state', 'ATM-3', 'in_progress'], root);
+-    assert.match(waiting.stderr, /can't start ~ATM-3: waiting on ATM-2 \(todo\)/);
++    assert.match(waiting.stderr, /can't start ATM-3: waiting on ATM-2 \(todo\)/);
+     // A state change and an edit by key
+     assert.match(ok(['task', 'state', 'ATM-2', 'in_progress']), /^ATM-2: todo -> in_progress$/m);
+     assert.match(ok(['task', 'note', 'ATM-2', 'a note']), /^ATM-2: note added \(1 in all\)$/m);
+-    assert.match(ok(['task', 'deps', 'ATM-3']), /^~ATM-3 waits for: ATM-2 \(in_progress\)$/m);
++    assert.match(ok(['task', 'deps', 'ATM-3']), /^ATM-3 waits for: ATM-2 \(in_progress\)$/m);
+     assert.equal(read(root, FILE).tasks[1].status, 'in_progress');
+     ok(['task', 'edit', 'T-002', '--add-related', 'ATM-1']);
+     assert.deepEqual(read(root, FILE).tasks[1].related, [read(root, FILE).tasks[0].id]);
+@@ -234,8 +237,9 @@ test('every line for people names tasks by key, never by UUID; --json has the ke
+   }
+ });
+ 
+-test('a key becomes final once its task is on origin’s base branch, read from git (T-542)', () => {
+-  const remote = tempDir('atm-remote-');
++// ADR-009 (ATM-635): a key is plain from creation, on a branch as on main; an old file's key_final is dropped once by
++// migrate; a direct push records nothing (`atm vcs pushed` without --pr stays, for skills installed before)
++test('a key is plain from creation; migrate drops an old key_final once; a direct push changes no task', () => {
+   const root = makeProject({
+     files: { [FILE]: { meta: { id: '3f2a9c1e', project: 'Fig' }, tasks: [] } },
+     git: true,
+@@ -250,79 +254,29 @@ test('a key becomes final once its task is on origin’s base branch, read from
+       removeDir(dir);
+     }
+   };
+-  const task = (name) => read(root, FILE).tasks.find((t) => t.name === name);
+   try {
+-    git(['init', '-q', '--bare', remote], root);
+-    git(['branch', '-M', 'main'], root);
+-    git(['remote', 'add', 'origin', remote], root);
+     assert.equal(runAtm(['project', 'key', 'set', 'FIG'], root).code, 0);
+-    git(['commit', '-q', '-am', 'keys'], root);
+-    git(['push', '-q', '-u', 'origin', 'main'], root);
+-    // Added on a branch: provisional, and migrate leaves it so (it isn't on origin/main)
+     git(['switch', '-q', '-c', 'work'], root);
+     add('on a branch');
+-    git(['commit', '-q', '-am', 'work'], root);
+-    runAtm(['db', 'migrate'], root);
+-    assert.equal(task('on a branch').key_final, false);
+-    // Merged and pushed: final on the next migrate, never from what anyone says
+-    git(['switch', '-q', 'main'], root);
+-    git(['merge', '-q', '--no-edit', 'work'], root);
+-    git(['push', '-q', 'origin', 'main'], root);
++    assert.match(runAtm(['task', 'list'], root).stdout, /^FIG-1 /m, 'plain on a branch');
++    // A file an earlier atm wrote, with key_final on its tasks: dropped once, and said
++    const doc = read(root, FILE);
++    doc.tasks[0].key_final = false;
++    fs.writeFileSync(path.join(root, FILE), JSON.stringify(doc, null, 2));
+     const r = runAtm(['db', 'migrate', '--json'], root);
+     assert.equal(r.code, 0, r.stderr);
+-    assert.deepEqual(JSON.parse(r.stdout).keys_final, ['FIG-1']);
+-    assert.equal(task('on a branch').key_final, true);
+-    assert.match(runAtm(['task', 'list'], root).stdout, /^FIG-1 /m, 'no ~ any more');
+-  } finally {
+-    removeDir(root);
+-    removeDir(remote);
+-  }
+-});
+-
+-// ATM-623 (Hakan): a project working on its base branch, pushing straight to it, kept provisional keys: nothing made
+-// them final after a push but the next `atm db migrate`
+-test('a direct push makes the keys of the tasks it pushed final: atm vcs pushed without --pr', () => {
+-  const remote = tempDir('atm-remote-');
+-  const root = makeProject({
+-    files: { [FILE]: { meta: { id: '3f2a9c1e', project: 'Fig' }, tasks: [] } },
+-    git: true,
+-    commit: true,
+-  });
+-  const add = (name) => {
+-    const dir = tempDir();
+-    try {
+-      fs.writeFileSync(path.join(dir, 'new.json'), JSON.stringify([{ name, type: 'feature' }]));
+-      assert.equal(runAtm(['task', 'add', '--json-file', path.join(dir, 'new.json')], root).code, 0);
+-    } finally {
+-      removeDir(dir);
+-    }
+-  };
+-  const task = (name) => read(root, FILE).tasks.find((t) => t.name === name);
+-  try {
+-    git(['init', '-q', '--bare', remote], root);
+-    git(['branch', '-M', 'main'], root);
+-    git(['remote', 'add', 'origin', remote], root);
+-    assert.equal(runAtm(['project', 'key', 'set', 'FIG'], root).code, 0);
+-    git(['commit', '-q', '-am', 'keys'], root);
+-    git(['push', '-q', '-u', 'origin', 'main'], root);
+-    // Not pushed yet: nothing to make final
+-    add('pushed');
+-    git(['commit', '-q', '-am', 'one'], root);
+-    assert.equal(runAtm(['vcs', 'pushed'], root).stdout, 'No provisional key is on the base branch yet.\n');
+-    assert.equal(task('pushed').key_final, false);
+-    // Pushed on main: final; a task added since, not pushed, stays provisional
+-    git(['push', '-q', 'origin', 'main'], root);
+-    add('not pushed');
+-    const r = runAtm(['vcs', 'pushed', '--json'], root);
+-    assert.equal(r.code, 0, r.stderr);
+-    assert.deepEqual(JSON.parse(r.stdout), { keys_final: ['FIG-1'] });
+-    assert.equal(task('pushed').key_final, true);
+-    assert.equal(task('not pushed').key_final, false);
+-    // Again: nothing more
+-    assert.deepEqual(JSON.parse(runAtm(['vcs', 'pushed', '--json'], root).stdout), { keys_final: [] });
++    assert.equal(JSON.parse(r.stdout).key_final_dropped, 1);
++    assert.equal(read(root, FILE).tasks[0].key_final, undefined);
++    assert.match(runAtm(['db', 'migrate'], root).stdout, /^Nothing to migrate\.$/m);
++    // A direct push records nothing
++    const before = fs.readFileSync(path.join(root, FILE), 'utf8');
++    const pushed = runAtm(['vcs', 'pushed'], root);
++    assert.equal(pushed.code, 0, pushed.stderr);
++    assert.equal(pushed.stdout, 'Nothing to record without --pr: a direct push changes no task.\n');
++    assert.deepEqual(JSON.parse(runAtm(['vcs', 'pushed', '--json'], root).stdout), { tasks: [] });
++    assert.equal(fs.readFileSync(path.join(root, FILE), 'utf8'), before);
+   } finally {
+     removeDir(root);
+-    removeDir(remote);
+   }
+ });
+ 
+@@ -408,7 +362,6 @@ test('the task views and the summary show another project’s task by its key, s
+       archived: false,
+       kind: 'todo',
+       key: 'ATM-1',
+-      key_final: true,
+       ambiguous: false,
+     });
+     assert.equal(foreign[gone].found, false);
+@@ -418,7 +371,7 @@ test('the task views and the summary show another project’s task by its key, s
+     // The summary's board names what LFB-1 waits for by its key there, and gives LFB-1's own
+     const card = JSON.parse(run(blog, ['project', 'summary']).stdout).board.todo.cards[0];
+     assert.equal(card.key, 'LFB-1');
+-    assert.equal(card.key_final, true);
++    assert.equal(card.key_final, undefined);
+     assert.deepEqual(card.waiting_for, [ref]);
+     assert.deepEqual(card.waiting_for_labels, ['ATM-1']);
+     // Done there: done here too
+@@ -539,7 +492,7 @@ test('migrate --keys on a copy of this repository’s own task files loses nothi
+     after.forEach((t, i) => {
+       const old = before[i];
+       assert.match(t.id, UUID, old.id);
+-      assert.equal(t.key_final, true);
++      assert.equal(t.key_final, undefined);
+       assert.ok(!numbers.has(t.number), `${old.id}: number ${t.number} given once`);
+       numbers.add(t.number);
+       // T-527 keeps 527 (the file's prefix is T-)
+diff --git a/tests/scripts/scenarios/migrate-phases.json b/tests/scripts/scenarios/migrate-phases.json
+index 501fd326..c1ea3bd2 100644
+--- a/tests/scripts/scenarios/migrate-phases.json
++++ b/tests/scripts/scenarios/migrate-phases.json
+@@ -190,7 +190,8 @@
+         "cleaned_up": null,
+         "finish_times_filled": 0,
+         "sprints_from_phases": [{ "id": "Phase 1.5", "state": "planned" }],
+-        "with_user_from_label": 0
++        "with_user_from_label": 0,
++        "key_final_dropped": 0
+       }
+     }
+   },
+diff --git a/tests/scripts/scenarios/migrate.json b/tests/scripts/scenarios/migrate.json
+index ce1d4d02..6aa6d37b 100644
+--- a/tests/scripts/scenarios/migrate.json
++++ b/tests/scripts/scenarios/migrate.json
+@@ -68,7 +68,8 @@
+         "cleaned_up": null,
+         "finish_times_filled": 0,
+         "sprints_from_phases": null,
+-        "with_user_from_label": 0
++        "with_user_from_label": 0,
++        "key_final_dropped": 0
+       }
+     }
+   },
+@@ -233,7 +234,8 @@
+         "cleaned_up": { "dashboard": false, "server": null },
+         "finish_times_filled": 0,
+         "sprints_from_phases": null,
+-        "with_user_from_label": 0
++        "with_user_from_label": 0,
++        "key_final_dropped": 0
+       },
+       "files": {
+         ".agentic-task-manager/.server.json": false,

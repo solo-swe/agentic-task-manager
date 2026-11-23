@@ -1,0 +1,860 @@
+diff --git a/app/src-tauri/src/commands.rs b/app/src-tauri/src/commands.rs
+index 8d52073c..181ffedc 100644
+--- a/app/src-tauri/src/commands.rs
++++ b/app/src-tauri/src/commands.rs
+@@ -206,6 +206,8 @@ pub enum AppError {
+     Refused(String),
+     /// Larger than atm hands out.
+     TooLarge(String),
++    /// Another holds it: a task claimed by another agent (ATM-664).
++    Conflict(String),
+     /// Anything else atm refuses or can't do.
+     Failed(String),
+ }
+@@ -218,6 +220,7 @@ impl From<atm_common::Error> for AppError {
+             E::Invalid(m) => Self::Invalid(m),
+             E::Refused(m) => Self::Refused(m),
+             E::TooLarge(m) => Self::TooLarge(m),
++            E::Conflict(m) => Self::Conflict(m),
+             E::Failed { message, .. } => Self::Failed(message),
+         }
+     }
+@@ -1363,6 +1366,11 @@ mod tests {
+                 AppError::TooLarge("big".into()),
+                 "too_large",
+             ),
++            (
++                E::Conflict("claimed".into()),
++                AppError::Conflict("claimed".into()),
++                "conflict",
++            ),
+             (E::failed("off"), AppError::Failed("off".into()), "failed"),
+         ] {
+             let message = match &app {
+@@ -1370,6 +1378,7 @@ mod tests {
+                 | AppError::Invalid(m)
+                 | AppError::Refused(m)
+                 | AppError::TooLarge(m)
++                | AppError::Conflict(m)
+                 | AppError::Failed(m) => m.clone(),
+             };
+             assert_eq!(AppError::from(error), app);
+diff --git a/crates/atm-api/src/routes.rs b/crates/atm-api/src/routes.rs
+index 23addb45..dcab9e9c 100644
+--- a/crates/atm-api/src/routes.rs
++++ b/crates/atm-api/src/routes.rs
+@@ -112,16 +112,22 @@ fn not_modified(tag: &str, headers: &[(&str, &str)]) -> Response {
+     )
+ }
+ 
+-/// atm-lib's refusals as HTTP statuses: a malformed request, no such thing, one too large, one atm doesn't show.
+-fn error_response(error: &atm_common::Error) -> Response {
+-    let status = match error {
++/// atm-lib's errors as HTTP statuses, the one mapping every route uses (ATM-664): a malformed request, no such
++/// thing, one too large, one atm doesn't show, one another holds; anything else is the server's.
++fn status_of(error: &atm_common::Error) -> StatusCode {
++    match error {
+         atm_common::Error::Invalid(_) => StatusCode::BAD_REQUEST,
+         atm_common::Error::NotFound(_) => StatusCode::NOT_FOUND,
+         atm_common::Error::TooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+         atm_common::Error::Refused(_) => StatusCode::FORBIDDEN,
++        atm_common::Error::Conflict(_) => StatusCode::CONFLICT,
+         atm_common::Error::Failed { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+-    };
+-    send_error(status, &error.to_string())
++    }
++}
++
++/// An error's answer: its status ([`status_of`]) and its message.
++fn error_response(error: &atm_common::Error) -> Response {
++    send_error(status_of(error), &error.to_string())
+ }
+ 
+ /// A read about one project.
+@@ -367,6 +373,26 @@ mod tests {
+         }
+     }
+ 
++    /// ATM-664: what the audit found reaching the dashboard as 500, as atm builds it: a note too long is the
++    /// request's fault (400), an unknown task none (404), a task another agent holds a conflict (409), each with the
++    /// CLI's exit code beside it
++    #[test]
++    fn a_usage_error_is_400_an_unknown_task_404_and_a_claim_held_by_another_409() {
++        let too_long = atm_common::edits::check_note(&"x".repeat(501)).unwrap_err();
++        let document = json!({"meta": {}, "tasks": [{"id": "T-1"}]});
++        let unknown = atm_common::keys::resolve(&document, &[], "T-9").unwrap_err();
++        let held =
++            atm_common::Error::Conflict("can't done T-1: it is claimed by claude:B until …".into());
++        for (error, status, code) in [
++            (too_long, StatusCode::BAD_REQUEST, 2),
++            (unknown, StatusCode::NOT_FOUND, 1),
++            (held, StatusCode::CONFLICT, 4),
++        ] {
++            assert_eq!(answer(error_response(&error)).status, status, "{error}");
++            assert_eq!(error.code(), code, "{error}");
++        }
++    }
++
+     /// A fake whose project `p1` has a logo, so every read gets as far as its own call
+     fn fake() -> Fake {
+         Fake::with(FakeProject {
+diff --git a/crates/atm-api/src/routes/tasks.rs b/crates/atm-api/src/routes/tasks.rs
+index 6f9a3689..6522297c 100644
+--- a/crates/atm-api/src/routes/tasks.rs
++++ b/crates/atm-api/src/routes/tasks.rs
+@@ -2,14 +2,13 @@
+ 
+ use atm_lib::query::Filters;
+ use atm_lib::workspaces::too_large;
+-use axum::http::{HeaderMap, StatusCode};
++use axum::http::HeaderMap;
+ use axum::response::Response;
+ use serde_json::json;
+ 
+ use super::query::parse_query;
+ use super::source::ProjectSource;
+ use super::{error_response, etag, not_modified, ok_json, stamped, unchanged};
+-use crate::send_error;
+ 
+ /// atm-lib's filters from the route's query string (docs/layered-architecture.md §6.2): the list filters repeatable,
+ /// the flags `true` or `1`, other parameters ignored.
+@@ -67,15 +66,8 @@ pub(super) fn get_tasks(project: &dyn ProjectSource, query: &str, request: &Head
+     }
+     match project.tasks(&task_filters(query)) {
+         Ok(snapshot) => ok_json(&stamped(snapshot), Some(&tag)),
+-        // A filter naming no such sprint or release (400), an unreadable task file (500)
+-        Err(e) => {
+-            let status = if e.code() == 2 {
+-                StatusCode::BAD_REQUEST
+-            } else {
+-                StatusCode::INTERNAL_SERVER_ERROR
+-            };
+-            send_error(status, &e.to_string())
+-        }
++        // As every route maps them (ATM-664): a filter naming no such sprint or release 400, an unreadable task file 500
++        Err(e) => error_response(&e),
+     }
+ }
+ 
+@@ -83,6 +75,7 @@ pub(super) fn get_tasks(project: &dyn ProjectSource, query: &str, request: &Head
+ mod tests {
+     use atm_common::Error;
+     use atm_lib::workspaces::MAX_SERVED_BYTES;
++    use axum::http::StatusCode;
+     use serde_json::Value;
+ 
+     use super::super::test_support::{Call, FakeProject, answer, bound, having, plain};
+@@ -245,26 +238,17 @@ mod tests {
+         }
+     }
+ 
+-    /// atm-lib's refusals: a filter naming no such sprint or release is the request's fault (400), anything else
+-    /// atm's (500)
++    /// atm-lib's refusals, mapped as every route maps them (ATM-664): a filter naming no such sprint or release is
++    /// the request's fault (400), anything else by its kind, an unreadable task file atm's (500)
+     #[test]
+-    fn a_refused_read_is_400_for_a_bad_filter_and_500_otherwise() {
++    fn a_refused_read_is_400_for_a_bad_filter_and_by_its_kind_otherwise() {
+         for (error, status) in [
+             (
+                 Error::Invalid("no sprint Nope".into()),
+                 StatusCode::BAD_REQUEST,
+             ),
+-            (
+-                Error::Failed {
+-                    message: "usage".into(),
+-                    code: 2,
+-                },
+-                StatusCode::BAD_REQUEST,
+-            ),
+-            (
+-                Error::NotFound("no such".into()),
+-                StatusCode::INTERNAL_SERVER_ERROR,
+-            ),
++            (Error::NotFound("no such".into()), StatusCode::NOT_FOUND),
++            (Error::Conflict("claimed".into()), StatusCode::CONFLICT),
+             (
+                 Error::failed("unreadable"),
+                 StatusCode::INTERNAL_SERVER_ERROR,
+diff --git a/crates/atm-api/src/routes/test_support.rs b/crates/atm-api/src/routes/test_support.rs
+index 946f4750..b66187bf 100644
+--- a/crates/atm-api/src/routes/test_support.rs
++++ b/crates/atm-api/src/routes/test_support.rs
+@@ -525,7 +525,7 @@ pub(super) fn draft() -> Draft {
+ }
+ 
+ /// Each of atm-lib's refusals, with the status a route answers it with.
+-pub(super) fn refusals() -> [(Error, StatusCode); 5] {
++pub(super) fn refusals() -> [(Error, StatusCode); 6] {
+     [
+         (Error::Invalid("malformed".into()), StatusCode::BAD_REQUEST),
+         (Error::NotFound("no such".into()), StatusCode::NOT_FOUND),
+@@ -534,6 +534,7 @@ pub(super) fn refusals() -> [(Error, StatusCode); 5] {
+             StatusCode::PAYLOAD_TOO_LARGE,
+         ),
+         (Error::Refused("not shown".into()), StatusCode::FORBIDDEN),
++        (Error::Conflict("claimed".into()), StatusCode::CONFLICT),
+         (Error::failed("broken"), StatusCode::INTERNAL_SERVER_ERROR),
+     ]
+ }
+diff --git a/crates/atm-cli/src/commands/maintenance.rs b/crates/atm-cli/src/commands/maintenance.rs
+index f32313f2..abb36467 100644
+--- a/crates/atm-cli/src/commands/maintenance.rs
++++ b/crates/atm-cli/src/commands/maintenance.rs
+@@ -676,10 +676,7 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
+         Some(dir) => {
+             let folder = atm_common::home::absolute(&cwd.join(dir));
+             if !folder.is_dir() {
+-                return Err(Error::Failed {
+-                    message: format!("--dir {dir}: not a directory"),
+-                    code: 2,
+-                });
++                return Err(Error::Invalid(format!("--dir {dir}: not a directory")));
+             }
+             folder
+         }
+diff --git a/crates/atm-common/src/edits.rs b/crates/atm-common/src/edits.rs
+index b67aceeb..34db34c0 100644
+--- a/crates/atm-common/src/edits.rs
++++ b/crates/atm-common/src/edits.rs
+@@ -18,12 +18,9 @@ pub const MAX_NOTE: usize = 500;
+ pub fn check_note(text: &str) -> Result<&str> {
+     let n = text.chars().count();
+     if n > MAX_NOTE {
+-        return Err(Error::Failed {
+-            message: format!(
+-                "a note is at most {MAX_NOTE} characters (this one has {n}); put longer text in a file in the repository and mention it in the note"
+-            ),
+-            code: 2,
+-        });
++        return Err(Error::Invalid(format!(
++            "a note is at most {MAX_NOTE} characters (this one has {n}); put longer text in a file in the repository and mention it in the note"
++        )));
+     }
+     Ok(text)
+ }
+@@ -98,14 +95,11 @@ pub fn status_for(vocab: &Vocabulary, kind: Kind, chosen: Option<&str>) -> Resul
+         Some(known) => format!("its kind is {}", known.as_str()),
+         None => "the project has no such status".into(),
+     };
+-    Err(Error::Failed {
+-        message: format!(
+-            "--status {chosen} is not one of the {} statuses ({what}); use {}",
+-            kind.as_str(),
+-            options.join(" or ")
+-        ),
+-        code: 2,
+-    })
++    Err(Error::Invalid(format!(
++        "--status {chosen} is not one of the {} statuses ({what}); use {}",
++        kind.as_str(),
++        options.join(" or ")
++    )))
+ }
+ 
+ /// The fields an attempt at a task leaves, which going back to to do clears (DM-4.4).
+diff --git a/crates/atm-common/src/error.rs b/crates/atm-common/src/error.rs
+index 53b549c5..79b9ec5b 100644
+--- a/crates/atm-common/src/error.rs
++++ b/crates/atm-common/src/error.rs
+@@ -1,23 +1,47 @@
+ //! atm's errors (docs/layered-architecture.md §4.2, §5), as the Python atm's `common/errors.py` has them: by what went
+-//! wrong, each with the message for the person or agent who asked and the CLI's exit code.
++//! wrong, each with the message for the person or agent who asked and the CLI's exit code ([`exit`]).
+ 
+-/// Something atm can't do. Each front end says it its own way: the CLI as `atm: <message>` and [`Error::code`].
++/// The CLI's exit codes, the one table (ATM-664): agents act on them (`atm docs commands`). Each error kind maps to
++/// one in [`Error::code`]; the REST API maps the same kinds to HTTP statuses.
++pub mod exit {
++    /// Done.
++    pub const OK: u8 = 0;
++    /// Something atm can't do: no such thing, a refusal, a store error.
++    pub const ERROR: u8 = 1;
++    /// The request itself is wrong: a usage error, an unknown value, a malformed ID ([`super::Error::Invalid`]).
++    pub const USAGE: u8 = 2;
++    /// Nothing to hand out: `atm loop next` with nothing ready.
++    pub const NOTHING: u8 = 3;
++    /// A wait whose time was up first (`atm review wait`, `atm review watch --once`). The same value as
++    /// [`NOTHING`], as agents know it (docs/agent/reviews.md).
++    pub const TIME_UP: u8 = 3;
++    /// Another holds it: a task claimed by another agent, a lease run out ([`super::Error::Conflict`]).
++    pub const CONFLICT: u8 = 4;
++}
++
++/// Something atm can't do. Each front end says it its own way: the CLI as `atm: <message>` and [`Error::code`], the
++/// REST API as an HTTP status.
+ #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+ pub enum Error {
+-    /// No such task, sprint, release, component or project (exit code 1).
++    /// No such task, sprint, release, component or project (exit code 1, HTTP 404).
+     #[error("{0}")]
+     NotFound(String),
+-    /// The request itself is wrong: an unknown option value, a malformed ID (exit code 2, like a usage error).
++    /// The request itself is wrong: an unknown option value, a malformed ID, a note too long (exit code 2, like a
++    /// usage error; HTTP 400).
+     #[error("{0}")]
+     Invalid(String),
+     /// The thing exists but atm won't hand it out: a project file it doesn't show (hidden, ignored, a key file)
+-    /// (exit code 1).
++    /// (exit code 1, HTTP 403).
+     #[error("{0}")]
+     Refused(String),
+-    /// Larger than atm hands out (exit code 1).
++    /// Larger than atm hands out (exit code 1, HTTP 413).
+     #[error("{0}")]
+     TooLarge(String),
+-    /// Anything else atm refuses or can't do, with its exit code (1 unless said otherwise).
++    /// Another holds it: a task claimed by another agent, or one's own lease run out (exit code 4, HTTP 409;
++    /// ATM-664).
++    #[error("{0}")]
++    Conflict(String),
++    /// Anything else atm refuses or can't do, with its exit code (1 unless said otherwise; HTTP 500).
+     #[error("{message}")]
+     Failed {
+         /// What went wrong, in words.
+@@ -32,7 +56,7 @@ impl Error {
+     pub fn failed(message: impl Into<String>) -> Self {
+         Self::Failed {
+             message: message.into(),
+-            code: 1,
++            code: exit::ERROR,
+         }
+     }
+ 
+@@ -40,8 +64,9 @@ impl Error {
+     #[must_use]
+     pub fn code(&self) -> u8 {
+         match self {
+-            Self::NotFound(_) | Self::Refused(_) | Self::TooLarge(_) => 1,
+-            Self::Invalid(_) => 2,
++            Self::NotFound(_) | Self::Refused(_) | Self::TooLarge(_) => exit::ERROR,
++            Self::Invalid(_) => exit::USAGE,
++            Self::Conflict(_) => exit::CONFLICT,
+             Self::Failed { code, .. } => *code,
+         }
+     }
+@@ -52,21 +77,35 @@ pub type Result<T> = std::result::Result<T, Error>;
+ 
+ #[cfg(test)]
+ mod tests {
+-    use super::Error;
++    use super::{Error, exit};
+ 
+     #[test]
+     fn each_kind_has_its_exit_code() {
+-        assert_eq!(Error::NotFound("no task T-1".into()).code(), 1);
+-        assert_eq!(Error::Invalid("bad".into()).code(), 2);
+-        assert_eq!(Error::failed("x").code(), 1);
++        assert_eq!(Error::NotFound("no task T-1".into()).code(), exit::ERROR);
++        assert_eq!(Error::Refused("x".into()).code(), exit::ERROR);
++        assert_eq!(Error::TooLarge("x".into()).code(), exit::ERROR);
++        assert_eq!(Error::Invalid("bad".into()).code(), exit::USAGE);
++        assert_eq!(Error::Conflict("claimed".into()).code(), exit::CONFLICT);
++        assert_eq!(Error::failed("x").code(), exit::ERROR);
+         assert_eq!(
+             Error::Failed {
+                 message: "x".into(),
+-                code: 4
++                code: 5
+             }
+             .code(),
+-            4
++            5
++        );
++        assert_eq!(
++            (
++                exit::OK,
++                exit::ERROR,
++                exit::USAGE,
++                exit::NOTHING,
++                exit::CONFLICT
++            ),
++            (0, 1, 2, 3, 4)
+         );
++        assert_eq!(exit::TIME_UP, 3, "as agents know it");
+     }
+ 
+     #[test]
+@@ -75,5 +114,6 @@ mod tests {
+             Error::NotFound("no task T-1".into()).to_string(),
+             "no task T-1"
+         );
++        assert_eq!(Error::Conflict("claimed".into()).to_string(), "claimed");
+     }
+ }
+diff --git a/crates/atm-common/src/rules.rs b/crates/atm-common/src/rules.rs
+index 26ee8a88..b96c284d 100644
+--- a/crates/atm-common/src/rules.rs
++++ b/crates/atm-common/src/rules.rs
+@@ -55,10 +55,10 @@ impl Vocabulary {
+         } else {
+             ids.join(", ")
+         };
+-        Err(Error::Failed {
+-            message: format!("no release {}; the releases: {known}", repr_str(release)),
+-            code: 2,
+-        })
++        Err(Error::Invalid(format!(
++            "no release {}; the releases: {known}",
++            repr_str(release)
++        )))
+     }
+ 
+     /// A task's release: its own, else its sprint's (SR-2.6), if any.
+diff --git a/crates/atm-db/src/jsongit/logo.rs b/crates/atm-db/src/jsongit/logo.rs
+index e13c0894..6efdae96 100644
+--- a/crates/atm-db/src/jsongit/logo.rs
++++ b/crates/atm-db/src/jsongit/logo.rs
+@@ -28,7 +28,7 @@ fn candidates() -> Vec<String> {
+ }
+ 
+ fn refused(message: String) -> Error {
+-    Error::Failed { message, code: 2 }
++    Error::Invalid(message)
+ }
+ 
+ /// A logo the project has: its path in the project, the file, its content type, and whether `meta.logo` set it.
+diff --git a/crates/atm-db/src/registry.rs b/crates/atm-db/src/registry.rs
+index 55d26ec9..d66d698a 100644
+--- a/crates/atm-db/src/registry.rs
++++ b/crates/atm-db/src/registry.rs
+@@ -389,10 +389,10 @@ fn resolve_project(target: Option<&str>, cwd: &Path) -> Result<(PathBuf, Map<Str
+         None => cwd.to_path_buf(),
+     };
+     if !folder.is_dir() {
+-        return Err(Error::Failed {
+-            message: format!("{}: not a directory", target.unwrap_or_default()),
+-            code: 2,
+-        });
++        return Err(Error::Invalid(format!(
++            "{}: not a directory",
++            target.unwrap_or_default()
++        )));
+     }
+     let paths = find_paths(&folder)?;
+     let path = main_worktree(&paths.root);
+@@ -596,10 +596,9 @@ impl FileRegistry {
+     /// No target, no such project, the registry's lock or file.
+     pub fn remove_project(&self, target: &str, cwd: &Path) -> Result<Value> {
+         if target.is_empty() {
+-            return Err(Error::Failed {
+-                message: "remove needs a project ID or path (see `atm workspace projects`)".into(),
+-                code: 2,
+-            });
++            return Err(Error::Invalid(
++                "remove needs a project ID or path (see `atm workspace projects`)".into(),
++            ));
+         }
+         let mut candidates = vec![
+             target.to_string(),
+diff --git a/crates/atm-lib/src/archive.rs b/crates/atm-lib/src/archive.rs
+index 8cc5ef53..4241fbb8 100644
+--- a/crates/atm-lib/src/archive.rs
++++ b/crates/atm-lib/src/archive.rs
+@@ -180,10 +180,10 @@ fn plan_archive(
+         let mut chosen = HashSet::new();
+         for name in &request.sprints {
+             let Some(sprint) = vocab.find_sprint(Some(&json!(name))) else {
+-                return Err(Error::Failed {
+-                    message: format!("no sprint {}", atm_common::py::repr_str(name)),
+-                    code: 2,
+-                });
++                return Err(Error::Invalid(format!(
++                    "no sprint {}",
++                    atm_common::py::repr_str(name)
++                )));
+             };
+             chosen.insert(sprint.get("id").map(py_str).unwrap_or_default());
+         }
+diff --git a/crates/atm-lib/src/changes.rs b/crates/atm-lib/src/changes.rs
+index c9d869c4..b218489a 100644
+--- a/crates/atm-lib/src/changes.rs
++++ b/crates/atm-lib/src/changes.rs
+@@ -280,7 +280,7 @@ pub fn change_task_status(
+         let (tasks, at) = snapshot(&work.document, task_id);
+         let Some(at) = at else {
+             let hint = if in_archive(task_id)? { " (it is archived: atm db unarchive brings it back)" } else { "" };
+-            return Err(Error::failed(format!("no task {task_id}{hint}")));
++            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
+         };
+         if OWN_LEASE_COMMANDS.contains(&command) {
+             let then = format!("atm task state {task_id} {}", command_state(command));
+@@ -552,7 +552,7 @@ pub fn add_task_note(project: &mut Project, task_id: &str, text: &str) -> Result
+             } else {
+                 ""
+             };
+-            return Err(Error::failed(format!("no task {task_id}{hint}")));
++            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
+         };
+         let mut task = tasks[at].clone();
+         let stamp = now_iso();
+diff --git a/crates/atm-lib/src/claims.rs b/crates/atm-lib/src/claims.rs
+index a2db9af2..e6e48e43 100644
+--- a/crates/atm-lib/src/claims.rs
++++ b/crates/atm-lib/src/claims.rs
+@@ -38,10 +38,7 @@ fn claims_of(store: &mut Map<String, Value>) -> &mut Map<String, Value> {
+ 
+ fn no_live_claim(task_id: &str, gone: bool) -> Error {
+     let why = if gone { " (its lease expired)" } else { "" };
+-    Error::Failed {
+-        message: format!("{task_id} has no live claim{why}"),
+-        code: 4,
+-    }
++    Error::Conflict(format!("{task_id} has no live claim{why}"))
+ }
+ 
+ fn renew(claim: &mut Value, document: &Value) {
+diff --git a/crates/atm-lib/src/code.rs b/crates/atm-lib/src/code.rs
+index 62aa3e53..2073dea4 100644
+--- a/crates/atm-lib/src/code.rs
++++ b/crates/atm-lib/src/code.rs
+@@ -38,7 +38,7 @@ fn task_at(work: &mut Working, task_id: &str) -> Result<usize> {
+     } else {
+         ""
+     };
+-    Err(Error::failed(format!("no task {task_id}{hint}")))
++    Err(Error::NotFound(format!("no task {task_id}{hint}")))
+ }
+ 
+ /// Apply the workflow's trailer rule: `forbid` removes Co-Authored-By lines, `{require}` adds the missing lines.
+@@ -180,7 +180,7 @@ pub fn commit_task(
+         } else {
+             ""
+         };
+-        return Err(Error::failed(format!("no task {task_id}{hint}")));
++        return Err(Error::NotFound(format!("no task {task_id}{hint}")));
+     };
+     let meta = store
+         .document()?
+diff --git a/crates/atm-lib/src/components.rs b/crates/atm-lib/src/components.rs
+index 23a180f5..61fea329 100644
+--- a/crates/atm-lib/src/components.rs
++++ b/crates/atm-lib/src/components.rs
+@@ -327,10 +327,10 @@ pub fn edit_component(
+             } else {
+                 known.join(", ")
+             };
+-            return Err(Error::Failed {
+-                message: format!("no component {}; the components: {listed}", repr_str(id)),
+-                code: 2,
+-            });
++            return Err(Error::Invalid(format!(
++                "no component {}; the components: {listed}",
++                repr_str(id)
++            )));
+         }
+         let at = work.document["meta"]["components"]
+             .as_array()
+@@ -467,10 +467,10 @@ pub fn rename_component(project: &mut Project, id: &str, new: &str) -> Result<Re
+             } else {
+                 ids.join(", ")
+             };
+-            return Err(Error::Failed {
+-                message: format!("no component {}; the components: {listed}", repr_str(id)),
+-                code: 2,
+-            });
++            return Err(Error::Invalid(format!(
++                "no component {}; the components: {listed}",
++                repr_str(id)
++            )));
+         };
+         if new == id {
+             return Err(invalid(format!(
+diff --git a/crates/atm-lib/src/edit.rs b/crates/atm-lib/src/edit.rs
+index 9bb22aa1..0a88ac8f 100644
+--- a/crates/atm-lib/src/edit.rs
++++ b/crates/atm-lib/src/edit.rs
+@@ -864,7 +864,7 @@ pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit)
+             } else {
+                 ""
+             };
+-            return Err(Error::failed(format!("no task {task_id}{hint}")));
++            return Err(Error::NotFound(format!("no task {task_id}{hint}")));
+         };
+         let mut task = work.document["tasks"][at]
+             .as_object()
+@@ -961,10 +961,10 @@ pub fn relabel(project: &mut Project, from: &str, to: &str) -> Result<RelabeledT
+             to,
+         );
+         if tasks + archived == 0 {
+-            return Err(Error::Failed {
+-                message: format!("no task has the label {}", repr_str(from)),
+-                code: 2,
+-            });
++            return Err(Error::Invalid(format!(
++                "no task has the label {}",
++                repr_str(from)
++            )));
+         }
+         if let Some(entries) = work
+             .document
+diff --git a/crates/atm-lib/src/leases.rs b/crates/atm-lib/src/leases.rs
+index 25614b6b..1738cb65 100644
+--- a/crates/atm-lib/src/leases.rs
++++ b/crates/atm-lib/src/leases.rs
+@@ -88,14 +88,11 @@ pub fn check_holder(
+     if let Some(claim) = claims.get(task_id).filter(|c| atm_common::py::truthy(c))
+         && claim.get("agent").and_then(Value::as_str) != agent
+     {
+-        return Err(Error::Failed {
+-            message: format!(
+-                "can't {command} {task_id}: it is claimed by {} until {}",
+-                py_str_opt(claim.get("agent")),
+-                py_str_opt(claim.get("lease_expires_at"))
+-            ),
+-            code: 4,
+-        });
++        return Err(Error::Conflict(format!(
++            "can't {command} {task_id}: it is claimed by {} until {}",
++            py_str_opt(claim.get("agent")),
++            py_str_opt(claim.get("lease_expires_at"))
++        )));
+     }
+     Ok(())
+ }
+@@ -141,12 +138,9 @@ pub fn own_lease_expired(
+         Some(then) => format!("Run `atm task state {task_id} in_progress`, then `{then}` again."),
+         None => format!("Run `atm task state {task_id} in_progress` to claim it again."),
+     };
+-    Some(Error::Failed {
+-        message: format!(
+-            "{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next}"
+-        ),
+-        code: 4,
+-    })
++    Some(Error::Conflict(format!(
++        "{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next}"
++    )))
+ }
+ 
+ /// A new claim on the task, from this working copy (its worktree and branch, T-202).
+diff --git a/crates/atm-lib/src/loop_rules.rs b/crates/atm-lib/src/loop_rules.rs
+index f9dfde3f..a337cb12 100644
+--- a/crates/atm-lib/src/loop_rules.rs
++++ b/crates/atm-lib/src/loop_rules.rs
+@@ -92,10 +92,10 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
+             .filter(|i| !tasks.iter().any(|t| id_of(t) == Some(i)))
+             .collect();
+         if !missing.is_empty() {
+-            return Err(Error::Failed {
+-                message: format!("--tasks: no task {}", missing.join(", ")),
+-                code: 2,
+-            });
++            return Err(Error::Invalid(format!(
++                "--tasks: no task {}",
++                missing.join(", ")
++            )));
+         }
+         scope = "the listed tasks".into();
+         let order: Vec<String> = sel.tasks.clone();
+@@ -138,16 +138,16 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
+                     } else {
+                         ids.join(", ")
+                     };
+-                    Error::Failed {
+-                        message: format!("no sprint {}; the sprints: {known}", repr_str(name)),
+-                        code: 2,
+-                    }
++                    Error::Invalid(format!(
++                        "no sprint {}; the sprints: {known}",
++                        repr_str(name)
++                    ))
+                 })?;
+             if sprint.get("state").and_then(Value::as_str) == Some("closed") {
+-                return Err(Error::Failed {
+-                    message: format!("the sprint {} is closed", repr_str(&names_of(sprint))),
+-                    code: 2,
+-                });
++                return Err(Error::Invalid(format!(
++                    "the sprint {} is closed",
++                    repr_str(&names_of(sprint))
++                )));
+             }
+             named.push(names_of(sprint));
+         }
+diff --git a/crates/atm-lib/src/query.rs b/crates/atm-lib/src/query.rs
+index b8d71d6f..70553378 100644
+--- a/crates/atm-lib/src/query.rs
++++ b/crates/atm-lib/src/query.rs
+@@ -99,10 +99,10 @@ fn sprint_names(vocab: &Vocabulary, given: &[String]) -> Result<Vec<String>> {
+                     } else {
+                         ids.join(", ")
+                     };
+-                    Error::Failed {
+-                        message: format!("no sprint {}; the sprints: {known}", repr_str(name)),
+-                        code: 2,
+-                    }
++                    Error::Invalid(format!(
++                        "no sprint {}; the sprints: {known}",
++                        repr_str(name)
++                    ))
+                 })
+         })
+         .collect()
+diff --git a/crates/atm-lib/src/releases.rs b/crates/atm-lib/src/releases.rs
+index 62dcba7b..ab8458de 100644
+--- a/crates/atm-lib/src/releases.rs
++++ b/crates/atm-lib/src/releases.rs
+@@ -50,10 +50,10 @@ fn unknown_release(vocab: &Vocabulary, id: &str) -> Error {
+     } else {
+         ids.join(", ")
+     };
+-    Error::Failed {
+-        message: format!("no release {}; the releases: {known}", repr_str(id)),
+-        code: 2,
+-    }
++    Error::Invalid(format!(
++        "no release {}; the releases: {known}",
++        repr_str(id)
++    ))
+ }
+ 
+ /// The releases in order, each with its tasks (by effective release, both files) by kind and by stage.
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index 755bd677..47ba8cd2 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -468,7 +468,7 @@ fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>> {
+     let mut planned = Vec::with_capacity(ids.len());
+     for id in ids {
+         let Some(task) = project.store().get_task(id)? else {
+-            return Err(Error::failed(format!("no task {id}")));
++            return Err(Error::NotFound(format!("no task {id}")));
+         };
+         let key = project.task_key(task);
+         let claim = claims
+@@ -476,12 +476,9 @@ fn openings(project: &Project, ids: &[String]) -> Result<Vec<Opening>> {
+             .find(|c| c.get("task").and_then(Value::as_str) == Some(id.as_str()));
+         let held_by = claim.and_then(|c| holder(c, now));
+         if let Some(other) = held_by.filter(|agent| Some(*agent) != me.as_deref()) {
+-            return Err(Error::Failed {
+-                message: format!(
+-                    "can't open a review of {key}: it is claimed by {other}, who opens its review"
+-                ),
+-                code: 4,
+-            });
++            return Err(Error::Conflict(format!(
++                "can't open a review of {key}: it is claimed by {other}, who opens its review"
++            )));
+         }
+         // The author's own claim, run out but not yet dropped: the task is about to go back to to do
+         let own_lapsed = claim.is_some_and(|c| {
+diff --git a/crates/atm-lib/src/settings.rs b/crates/atm-lib/src/settings.rs
+index 18e4f5f4..12468df3 100644
+--- a/crates/atm-lib/src/settings.rs
++++ b/crates/atm-lib/src/settings.rs
+@@ -481,15 +481,12 @@ pub fn rename_term(
+             .filter_map(|e| e.get("id").and_then(Value::as_str))
+             .collect();
+         let Some(at) = ids.iter().position(|id| *id == from) else {
+-            return Err(Error::Failed {
+-                message: format!(
+-                    "no {} {from}; the {}: {}",
+-                    list.task_field(),
+-                    list.meta_key(),
+-                    ids.join(", ")
+-                ),
+-                code: 2,
+-            });
++            return Err(Error::Invalid(format!(
++                "no {} {from}; the {}: {}",
++                list.task_field(),
++                list.meta_key(),
++                ids.join(", ")
++            )));
+         };
+         if to != from && ids.contains(&to.as_str()) {
+             return Err(Error::Invalid(format!(
+diff --git a/crates/atm-lib/src/sprints.rs b/crates/atm-lib/src/sprints.rs
+index 514b95e0..dc251f6e 100644
+--- a/crates/atm-lib/src/sprints.rs
++++ b/crates/atm-lib/src/sprints.rs
+@@ -21,10 +21,7 @@ fn invalid(message: impl Into<String>) -> Error {
+ 
+ /// No such sprint (exit code 2, as the Python atm's `NotFound(…, 2)`).
+ fn not_found(message: impl Into<String>) -> Error {
+-    Error::Failed {
+-        message: message.into(),
+-        code: 2,
+-    }
++    Error::Invalid(message.into())
+ }
+ 
+ fn id_of(value: &Value) -> Option<&str> {
+@@ -922,7 +919,7 @@ pub fn move_tasks(project: &mut Project, ids: &[String], to: &str) -> Result<Vec
+                 } else {
+                     ""
+                 };
+-                return Err(Error::failed(format!("no task {task_id}{hint}")));
++                return Err(Error::NotFound(format!("no task {task_id}{hint}")));
+             };
+             let task = work.document["tasks"][at]
+                 .as_object()
+diff --git a/crates/atm-lib/src/state.rs b/crates/atm-lib/src/state.rs
+index d2ffb502..dd3336d0 100644
+--- a/crates/atm-lib/src/state.rs
++++ b/crates/atm-lib/src/state.rs
+@@ -164,10 +164,7 @@ fn fail(message: impl Into<String>) -> Error {
+ }
+ 
+ fn usage(message: impl Into<String>) -> Error {
+-    Error::Failed {
+-        message: message.into(),
+-        code: 2,
+-    }
++    Error::Invalid(message.into())
+ }
+ 
+ fn text(task: &Task, key: &str) -> Option<String> {
+diff --git a/dashboard/src/lib/api/ipc.ts b/dashboard/src/lib/api/ipc.ts
+index 79b1d030..ea84dcb1 100644
+--- a/dashboard/src/lib/api/ipc.ts
++++ b/dashboard/src/lib/api/ipc.ts
+@@ -8,7 +8,7 @@ import { DEFAULT_WORKSPACE } from './workspace';
+ 
+ /** A command's error, as the app sends it (`AppError`) */
+ interface AppError {
+-  kind: 'not_found' | 'invalid' | 'refused' | 'too_large' | 'failed';
++  kind: 'not_found' | 'invalid' | 'refused' | 'too_large' | 'conflict' | 'failed';
+   message: string;
+ }
+ 
+@@ -23,6 +23,8 @@ const STATUS: Record<AppError['kind'], number> = {
+   invalid: 400,
+   refused: 403,
+   too_large: 413,
++  // Another holds it (ATM-664), as the server answers it
++  conflict: 409,
+   failed: 500,
+ };
+ 
+diff --git a/dashboard/tests/unit/ipc.test.ts b/dashboard/tests/unit/ipc.test.ts
+index 8e91b0b6..295bad75 100644
+--- a/dashboard/tests/unit/ipc.test.ts
++++ b/dashboard/tests/unit/ipc.test.ts
+@@ -184,6 +184,7 @@ describe('the IPC transport (T-457)', () => {
+     ['invalid', 400],
+     ['refused', 403],
+     ['too_large', 413],
++    ['conflict', 409],
+     ['failed', 500],
+     ['something new', 500],
+   ])('a command’s %s error is HTTP %i with its message', async (kind, status) => {
+diff --git a/docs/agent/commands.md b/docs/agent/commands.md
+index f0dccee8..99baeb62 100644
+--- a/docs/agent/commands.md
++++ b/docs/agent/commands.md
+@@ -1,9 +1,10 @@
+ # Commands: atm's commands, by what you are doing
+ 
+ Every command takes `--json` and `--dry-run` (`-n`), anywhere on the line; `atm help` lists them all and
+-`atm <command> --help` describes one. Exit codes: 0 ok, 1 an error (the message says what), 2 a usage error, 3 nothing
+-to do (`loop next`), 4 the task is claimed by another agent. Output to a pipe (as agents get it) is plain text, never
+-cut; `--color auto|always|never` only styles it for a terminal.
++`atm <command> --help` describes one. Exit codes: 0 ok, 1 an error (the message says what: no such task, a refusal),
++2 a usage error (a value atm doesn't know, a note too long), 3 nothing to do (`loop next`) or a wait whose time was up
++(`review wait`, `review watch --once`), 4 a conflict: the task is claimed by another agent, or your own lease ran out.
++Output to a pipe (as agents get it) is plain text, never cut; `--color auto|always|never` only styles it for a terminal.
+ 
+ `<id>` is a task's key (`ATM-527`, any case) in a project with task keys, or its old ID (`T-527`), an alias or its UUID;
+ in a project without keys, its ID (`atm docs tasks`). Keys are plain from the moment a task is made: use them anywhere

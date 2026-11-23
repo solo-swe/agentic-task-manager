@@ -284,7 +284,14 @@ fn hold(args: &HoldArgs, ctx: Context, cwd: &Path) -> Result<()> {
     let shell = crate::process::shell_pid();
     #[allow(clippy::cast_precision_loss)] // reason: seconds since 1970 fit an f64 exactly
     let deadline = real_now() as f64 + args.max_minutes * 60.0;
-    let started = process_started(shell).unwrap_or(0);
+    // Without the shell's start time the watcher can't tell it from a later process given its pid, and quits at once:
+    // refused, not said to hold (ATM-679, audit C12). The lease renewed above stays, as any command's would
+    let started = process_started(shell).ok_or_else(|| {
+        Error::failed(format!(
+            "can't read when this shell (pid {shell}) started, so the claim on {} can't be held while it runs: renew it with `atm claim heartbeat {}` during long commands instead",
+            args.task_id, args.task_id
+        ))
+    })?;
     let watcher = detach(
         &[
             "_claim-watch".into(),

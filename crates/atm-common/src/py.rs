@@ -141,15 +141,30 @@ pub fn repr_str(text: &str) -> String {
     out
 }
 
+/// The invisible format characters text can carry (I30, ATM-679): the soft hyphen, zero-width spaces and joiners, the
+/// left-to-right and right-to-left marks, the bidirectional embeddings, overrides and isolates (which can make a line
+/// read in another order than it runs), the word joiner and invisible operators, and the byte-order mark. The one list
+/// for what atm quotes and what it never prints.
+#[must_use]
+pub fn invisible_format(c: char) -> bool {
+    matches!(
+        c,
+        '\u{ad}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{feff}'
+    )
+}
+
 /// Python's `str.isprintable()` for one character, as far as atm's data needs it: control and format characters and
 /// separators other than the space are not.
 fn printable(c: char) -> bool {
     if c == ' ' {
         return true;
     }
-    !(c.is_control()
-        || c.is_whitespace()
-        || matches!(c, '\u{ad}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{2064}' | '\u{feff}'))
+    !(c.is_control() || c.is_whitespace() || invisible_format(c))
 }
 
 /// `repr(float)`: the shortest digits that read back as the same number, in fixed notation from 1e-4 up to 1e16
@@ -297,6 +312,11 @@ mod tests {
         assert_eq!(py_repr(&json!([1, "a", null])), "[1, 'a', None]");
         assert_eq!(py_repr(&json!({"k": 2})), "{'k': 2}");
         assert_eq!(py_repr(&json!("é\u{a0}\u{2028}")), "'é\\xa0\\u2028'");
+        // Invisible format characters are escaped, as Python's isprintable() refuses them: the isolates too (ATM-679)
+        assert_eq!(
+            py_repr(&json!("a\u{202e}b\u{2066}c\u{2069}\u{feff}")),
+            "'a\\u202eb\\u2066c\\u2069\\ufeff'"
+        );
     }
 
     #[test]

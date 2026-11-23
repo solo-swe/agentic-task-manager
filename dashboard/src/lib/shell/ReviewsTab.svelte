@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page as router } from '$app/state';
   import { onDestroy, untrack } from 'svelte';
-  import { addressOf, reviewOf, withReview } from '../address';
+  import { addressOf, reviewListOf, reviewOf, withReview, withReviewList } from '../address';
   import { watchWorkingCopy } from '../api/changes';
   import { inApp, v1FileUrl } from '../api/http';
   import { setWindowTitle } from '../api/shell';
@@ -19,6 +19,7 @@
     updateDraft,
     type ChangeResult,
   } from '../api/review-changes';
+  import { latest } from '../latest';
   import { backEntry, currentAddress, goBack, navigate } from '../navigation';
   import { placeName } from '../places';
   import {
@@ -30,7 +31,7 @@
     toggleViewed,
     viewedKeys,
   } from '../review-data';
-  import { keepFilter, keptFilter } from '../review-filter';
+  import { isEmptyQuery, keepFilter, keptFilter, queryFrom } from '../review-filter';
   import type { TaskLinks } from '../compmd';
   import { learnReviews, learnUnreadable } from '../reviews/known.svelte';
   import ReviewList from '../reviews/ReviewList.svelte';
@@ -47,6 +48,7 @@
   import { reviewWindow } from '../reviews/window.svelte';
   import { withTask } from '../routes';
   import { tabActions } from '../tab-actions';
+  import { appTabs } from '../app-tabs.svelte';
   import { withView } from '../tabs';
   import { dashboard } from '../state.svelte';
 
@@ -58,27 +60,37 @@
   const project = $derived(dashboard.projectId);
   const at = $derived(reviewOf(addressOf(router.url)));
 
-  // The list
+  // The list, by the filter and search its address names (ATM-697: Back, Forward, a reload and a link bring it back);
+  // an address naming none opens it with the project's last filter, kept in this browser (ATM-604), written into the
+  // address in place
   let query = $state<ListQuery>({ ...NO_QUERY });
-  // Opened with the project's last filter, kept in this browser (ATM-604), and again on going to another project
-  let queryOf: string | null = null;
+  const listNamed = $derived(at.review ? null : reviewListOf(addressOf(router.url)));
   $effect.pre(() => {
     const id = project;
+    const named = listNamed;
+    const reviewing = !!at.review;
     untrack(() => {
-      if (!id || id === queryOf) return;
-      queryOf = id;
-      query = keptFilter(id);
+      if (!id || reviewing) return;
+      const next = named ? queryFrom(named) : keptFilter(id);
+      if (JSON.stringify(next) !== JSON.stringify(query)) query = next;
+      if (!named && !isEmptyQuery(next)) navigate(withReviewList(currentAddress(), next), { replace: true });
     });
   });
+  /** Another filter or search: kept, and in the address; another filter, or a search begun or cleared, a step in the
+   * tab's history; more words typed in a search, in place */
   function chooseQuery(next: ListQuery) {
+    const typed = !!query.q && !!next.q && JSON.stringify({ ...next, q: '' }) === JSON.stringify({ ...query, q: '' });
     query = next;
     if (project) keepFilter(project, next);
+    navigate(withReviewList(currentAddress(), next), { replace: typed });
   }
   let entries = $state.raw<ReviewEntry[]>([]);
   // The reviews atm can't read (ATM-617), listed after them
   let unreadable = $state.raw<UnreadableReview[]>([]);
   // The review shown
   let shown = $state.raw<ReviewPageData | null>(null);
+  /** The app's tab it is shown on (ATM-700); none in the browser */
+  const tab = $derived(inApp ? appTabs.active : undefined);
   let loading = $state(false);
   let busy = $state(false);
   let problem = $state<string | null>(null);
@@ -90,18 +102,19 @@
   let shownText = '';
   let entriesText = '';
 
-  let asked = 0;
+  // Only the latest ask's answer is shown (ATM-675)
+  const loads = latest();
   async function load() {
     const id = project;
     if (!id) return;
-    const ask = ++asked;
+    const ask = loads.ask();
     if (!at.review) loading = !entries.length;
     try {
       if (at.review) {
         const page = await loadReview(id, at.review, at.round, at.against);
         learnReviews(id, [page.review]);
         const text = JSON.stringify(page);
-        if (ask === asked && text !== shownText) {
+        if (ask.current() && text !== shownText) {
           shownText = text;
           [shown, choices] = [page, []];
         }
@@ -113,22 +126,23 @@
         );
         learnUnreadable(id, listed.unreadable ?? []);
         const text = JSON.stringify([listed.reviews, listed.unreadable]);
-        if (ask === asked && text !== entriesText) {
+        if (ask.current() && text !== entriesText) {
           entriesText = text;
           [entries, unreadable] = [listed.reviews, listed.unreadable ?? []];
         }
       }
-      if (ask === asked) problem = null;
+      if (ask.current()) problem = null;
     } catch (e) {
-      if (ask !== asked) return;
+      if (!ask.current()) return;
       problem = (e as Error).message;
       const review = at.review;
       if (review && !shown) {
         const listed = await loadReviews(id, NO_QUERY).catch(() => null);
-        if (ask === asked) choices = (listed?.reviews ?? []).filter((r) => r.review.reference.startsWith(`${review}.`));
+        if (ask.current()) choices = (listed?.reviews ?? []).filter((r) => r.review.reference.startsWith(`${review}.`));
       }
     } finally {
-      if (ask === asked) loading = false;
+      if (ask.current()) loading = false;
+      ask.done();
     }
   }
 
@@ -221,10 +235,14 @@
     return null;
   }
 
+  /** The review's sub-tab shown (ATM-697): the address's; on its Overview's path with a file (a link from before the
+   * sub-tabs had addresses), Diffs */
+  const shownSection = $derived(at.section === 'overview' && at.file ? 'diffs' : at.section);
   const review = $derived(shown?.review.reference ?? at.review ?? '');
   const listAddress = $derived(withReview(currentAddress(), { review: null }));
   /** Where the review was opened from in this tab (ATM-686): its back button goes Back there, saying where; a review
-   * opened on its own (a new tab, a link from elsewhere) goes up to its reviews list. Another place over the review
+   * opened on its own (a new tab, a link from elsewhere) goes up to its reviews list, in its place (ATM-696: no way
+   * back to a review left that way). Another place over the review
    * (a task's details) or another file or round is the same page: its way back is the review's (navigation.ts) */
   const cameFrom = $derived.by(() => {
     void router.url;
@@ -260,45 +278,48 @@
   {#if at.review}
     {#if shown && project}
       {@const page = shown}
-      <ReviewPage
-        {page}
-        project={shortName}
-        file={at.file}
-        side={(revision) => revisionDocuments(project, revision)}
-        imageAt={(revision, path) => v1FileUrl(project, path, revision)}
-        isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
-        taskHref={taskPage}
-        tasks={taskLinks}
-        backHref={cameFrom ?? listAddress}
-        backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
-        onback={() => (cameFrom ? goBack() : go(listAddress))}
-        {busy}
-        {problem}
-        docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
-        onfile={(path) => go(withReview(currentAddress(), { ...at, file: path }), true)}
-        onround={(round, against) => go(withReview(currentAddress(), { ...at, round, against }))}
-        onviewed={(file) => (viewed = toggleViewed(page.review.id, page.view.round, page.view.against, file))}
-        oncomment={({ path, picked, body }) =>
-          change(
-            addComment(project, review, {
-              path,
-              lines: picked?.lines ?? null,
-              side: picked?.side ?? 'new',
-              quote: picked?.quote ?? null,
-              round: path ? page.view.round : null,
-              body,
-            }),
-          )}
-        onreply={(to, body) => change(replyTo(project, review, to, body))}
-        onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
-        onedit={(comment, body) => change(editComment(project, review, comment, body))}
-        onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
-        onclose={(reason) => change(closeReview(project, review, reason))}
-        onpoke={(body) => change(pokeReview(project, review, body))}
-        ondrafts={{
-          comment: (path, picked, body) =>
+      <!-- Another review is another page (ATM-675, audit D2): nothing typed on one, no file it was at, stays for the next;
+           and in the app another tab is another page too, its questions left open kept for it (ATM-700) -->
+      {#key `${tab ?? ''}:${page.review.id}`}
+        <ReviewPage
+          {page}
+          appTab={tab}
+          project={shortName}
+          file={at.file}
+          section={shownSection}
+          comment={at.comment}
+          onsection={(section) =>
+            go(
+              withReview(currentAddress(), {
+                ...at,
+                section,
+                file: section === 'diffs' ? at.file : null,
+                comment: null,
+              }),
+            )}
+          side={(revision) => revisionDocuments(project, revision)}
+          imageAt={(revision, path) => v1FileUrl(project, path, revision)}
+          isViewed={(file: ViewFile) => isViewed(viewed, page.review.id, page.view.round, page.view.against, file)}
+          taskHref={taskPage}
+          tasks={taskLinks}
+          backHref={cameFrom ?? listAddress}
+          backLabel={cameFrom ? placeName(cameFrom) : 'Reviews'}
+          onback={() => (cameFrom ? goBack() : go(listAddress, true))}
+          {busy}
+          {problem}
+          docStyle={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
+          onfile={(path, comment) =>
+            go(
+              withReview(currentAddress(), { ...at, section: 'diffs', file: path, comment: comment ?? null }),
+              // Another file on the Diffs tab, in place; from another tab, or to a comment, a step
+              shownSection === 'diffs' && !comment,
+            )}
+          onround={(round, against) =>
+            go(withReview(currentAddress(), { ...at, section: 'diffs', round, against, comment: null }))}
+          onviewed={(file) => (viewed = toggleViewed(page.review.id, page.view.round, page.view.against, file))}
+          oncomment={({ path, picked, body }) =>
             change(
-              addDraft(project, review, {
+              addComment(project, review, {
                 path,
                 lines: picked?.lines ?? null,
                 side: picked?.side ?? 'new',
@@ -306,13 +327,33 @@
                 round: path ? page.view.round : null,
                 body,
               }),
-            ),
-          reply: (to, body) => change(addDraft(project, review, { reply_to: to, body })),
-          edit: (id, body) => change(updateDraft(project, review, id, body)),
-          remove: (id) => change(removeDraft(project, review, id)),
-        }}
-        ondocument={(ref) => dashboard.openDocument(ref)}
-      />
+            )}
+          onreply={(to, body) => change(replyTo(project, review, to, body))}
+          onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
+          onedit={(comment, body) => change(editComment(project, review, comment, body))}
+          onsubmit={(decision, body) =>
+            change(submitDecision(project, review, body ? { decision, body } : { decision }))}
+          onclose={(reason) => change(closeReview(project, review, reason))}
+          onpoke={(body) => change(pokeReview(project, review, body))}
+          ondrafts={{
+            comment: (path, picked, body) =>
+              change(
+                addDraft(project, review, {
+                  path,
+                  lines: picked?.lines ?? null,
+                  side: picked?.side ?? 'new',
+                  quote: picked?.quote ?? null,
+                  round: path ? page.view.round : null,
+                  body,
+                }),
+              ),
+            reply: (to, body) => change(addDraft(project, review, { reply_to: to, body })),
+            edit: (id, body) => change(updateDraft(project, review, id, body)),
+            remove: (id) => change(removeDraft(project, review, id)),
+          }}
+          ondocument={(ref) => dashboard.openDocument(ref)}
+        />
+      {/key}
     {:else if problem}
       <p class="reviews-problem" role="alert">{problem}</p>
       {#if choices.length}

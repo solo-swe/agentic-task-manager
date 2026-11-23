@@ -1,9 +1,10 @@
 <script lang="ts">
+  import type { Stats } from '$generated/types';
   import { BURNDOWN_RANGES, burndown, rangeSprint, rangeStart } from '../burndown';
   import { ACTIVE, BACKLOG, FILTER_GROUPS } from '../filters';
-  import { forecastSprints, withWholeSprintEstimates } from '../forecast';
+  import { fromServed } from '../forecast';
   import { dashboard } from '../state.svelte';
-  import { timeUse } from '../timeuse';
+  import { loadStats, timeUseOf } from '../stats';
   import BurndownChart from './BurndownChart.svelte';
   import ComponentTable from './ComponentTable.svelte';
   import InfoTip from '../ui/InfoTip.svelte';
@@ -38,12 +39,11 @@
     ].join(' · '),
   );
   const model = $derived(dashboard.sprints);
-  const whole = $derived(forecastSprints(dashboard.history, now, dashboard.history, dashboard.vocab, model));
-  const forecast = $derived(
-    filtered
-      ? withWholeSprintEstimates(forecastSprints(tasks, now, dashboard.history, dashboard.vocab, model), whole)
-      : whole,
-  );
+  // atm's forecast (ATM-722): the whole project's, from the state; with filters on, the slice's, with the whole
+  // project's estimates, asked for below with the burndown's period
+  const whole = $derived(fromServed(dashboard.stats?.forecast, model));
+  let served = $state.raw<Stats | null>(null);
+  const forecast = $derived(filtered && served ? fromServed(served.forecast, model) : whole);
   // Clicking a sprint row focuses the burndown on that sprint (FR-4.6); a filter that hides it resets the focus
   // The focused sprint is part of the project's saved view (dashboard state)
   // By default the active sprint, whichever it is (ACTIVE, T-323); all sprints while none is active
@@ -63,12 +63,35 @@
     '14d': 'Last 14 days',
     all: 'All time',
   });
-  const chart = $derived(burndown(tasks, forecast, now, focus, dashboard.vocab, from, model));
-  // Agent time, waiting on you and idle over the burndown's range, for the matching tasks (T-242; shared with the
-  // Activity popup, timeuse.ts)
-  const use = $derived(
-    timeUse(tasks, from === undefined ? null : { start: from, end: chart.end ?? now }, now, dashboard.vocab),
-  );
+  const chart = $derived(burndown(tasks, forecast, now, focus, from, model));
+  // The period's end: a focused closed sprint's end, else now (the chart's, without going through the slice's forecast)
+  const until = $derived.by(() => {
+    const sprint = focus === undefined ? undefined : model.sprints.find((s) => s.id === focus);
+    const end = sprint?.state === 'closed' ? Date.parse(sprint.end ?? '') : NaN;
+    return Number.isNaN(end) || end >= now ? undefined : end;
+  });
+  // The slice's figures and where the time went over the burndown's range, atm's (ATM-722, T-242): asked for again
+  // on every load of the project (its stats change) and whenever the slice or the range does
+  $effect(() => {
+    const project = dashboard.projectId;
+    void dashboard.stats;
+    if (!project) return;
+    const request = {
+      ...(filtered ? { tasks: tasks.map((t) => t.id) } : {}),
+      ...(from !== undefined ? { from, to: until ?? now } : {}),
+    };
+    let stale = false;
+    loadStats(project, request)
+      .then((answer) => {
+        if (!stale) served = answer;
+      })
+      .catch((e: unknown) => console.error('Loading the stats failed:', e));
+    return () => {
+      stale = true;
+    };
+  });
+  // Agent time, waiting on you and idle over the burndown's range, for the matching tasks
+  const use = $derived(timeUseOf(served ? served.time_use : dashboard.stats?.time_use));
 
   // The By component table: the focused sprint's tasks, else all of them (T-323)
   const focusTasks = $derived(
@@ -125,9 +148,9 @@
             people, not agents, so the forecast ends at their number, not at zero.
           </p>
           <p>
-            It assumes <strong>one agent, one task at a time</strong>: parallel agents finish sooner. Tasks labelled
-            <code>interactive</code> are left out of the pace, as they include time spent waiting on you. Filters choose the
-            lines, not the pace.
+            It assumes <strong>one agent, one task at a time</strong>: parallel agents finish sooner. Tasks done
+            <strong>with you</strong> are left out of the pace, as they include time spent waiting on you. Filters choose
+            the lines, not the pace.
           </p>
         </InfoTip>
       </h3>

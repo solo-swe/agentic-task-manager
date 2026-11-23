@@ -102,6 +102,14 @@ export function fileRef(
   return links ? { href: links.file(commit, path, lines), host: HOST_NAMES[links.kind] } : null;
 }
 
+/** A submodule's commit in its own repository, from the address `.gitmodules` gives (ATM-676, audit D3): through
+ * safeUrl (I14), as its host builds commit links, without a trailing `.git`; null for an address that isn't http(s)
+ * (an SSH remote) or a host atm builds no links for */
+export function submoduleCommitUrl(repository: unknown, sha: string): string | null {
+  const address = repositoryOf({ repository })?.replace(/\.git$/i, '');
+  return (address && repoLinks(address)?.commit(sha)) ?? null;
+}
+
 function refFor(meta: RepoMeta, build: (links: NonNullable<ReturnType<typeof repoLinks>>) => string): RepoRef {
   const repository = repositoryOf(meta);
   if (!repository) return { kind: 'hint' };

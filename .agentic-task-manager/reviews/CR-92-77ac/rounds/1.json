@@ -1,0 +1,47 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "efdde4e58a5e14fc70ec9bcb627ec22ee0d17d32",
+    "head": "82596fee2d330f0e949a76ff4df956a28ca9f2ec"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/review.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/src/vocabulary.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/sprints.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/sprints/tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/keys.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/security.json",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T20:51:34Z"
+}

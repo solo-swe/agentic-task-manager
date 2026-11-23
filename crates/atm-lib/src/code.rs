@@ -13,32 +13,12 @@ use atm_db::working::Working;
 use atm_vcs::GitVcs;
 use serde_json::{Map, Value, json};
 
+use crate::lookup::{no_task, task_at};
 use crate::project::Project;
 
 fn needs_git(vcs: Option<&GitVcs>) -> Result<&GitVcs> {
     vcs.filter(|v| v.in_repository())
         .ok_or_else(|| Error::failed("atm vcs commit needs a git repository"))
-}
-
-/// The position of the task with this ID in the change's document, or an error that says when it is archived.
-fn task_at(work: &mut Working, task_id: &str) -> Result<usize> {
-    let at = work.document["tasks"].as_array().and_then(|list| {
-        list.iter()
-            .position(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
-    });
-    if let Some(at) = at {
-        return Ok(at);
-    }
-    let archived = work.archive()?["tasks"].as_array().is_some_and(|list| {
-        list.iter()
-            .any(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
-    });
-    let hint = if archived {
-        " (it is archived: atm db unarchive brings it back)"
-    } else {
-        ""
-    };
-    Err(Error::failed(format!("no task {task_id}{hint}")))
 }
 
 /// Apply the workflow's trailer rule: `forbid` removes Co-Authored-By lines, `{require}` adds the missing lines.
@@ -74,17 +54,15 @@ fn commit_message(text: &str, trailers: Option<&Value>) -> String {
 /// The task's commit is `sha` (known only once the commit exists: a change for the next commit). Returns the task.
 fn record_on_task(project: &mut Project, task_id: &str, sha: &str) -> Result<Task> {
     let actor = project.actor().map(String::from);
-    let mut recorded = Task::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let at = task_at(work, task_id)?;
-        if let Some(task) = work.tasks()[at].as_object_mut() {
-            task.insert("commit".into(), json!(sha));
-            touch(task, actor.as_deref(), &now_iso());
-            recorded.clone_from(task);
-        }
-        Ok(())
-    })?;
-    Ok(recorded)
+        let Some(task) = work.tasks()[at].as_object_mut() else {
+            return Ok(Task::new());
+        };
+        task.insert("commit".into(), json!(sha));
+        touch(task, actor.as_deref(), &now_iso());
+        Ok(task.clone())
+    })
 }
 
 /// The files named relative to `cwd`, relative to the repository instead (what [`commit_task`] takes), checked as a
@@ -175,12 +153,10 @@ pub fn commit_task(
     let task = if let Some(task) = store.get_task(task_id)? {
         task.clone()
     } else {
-        let hint = if store.get_archived_task(task_id)?.is_some() {
-            " (it is archived: atm db unarchive brings it back)"
-        } else {
-            ""
-        };
-        return Err(Error::failed(format!("no task {task_id}{hint}")));
+        return Err(no_task(
+            task_id,
+            store.get_archived_task(task_id)?.is_some(),
+        ));
     };
     let meta = store
         .document()?
@@ -240,22 +216,23 @@ pub fn record_commit(
     rev: &str,
 ) -> Result<Value> {
     let vcs = needs_git(vcs)?;
-    if rev.starts_with('-') {
-        return Err(Error::Invalid(format!(
+    let given = atm_vcs::Rev::new(rev).map_err(|_| {
+        Error::Invalid(format!(
             "--record takes a revision, not an option: {}",
             repr_str(rev)
-        )));
-    }
+        ))
+    })?;
     let sha = vcs
-        .resolve(rev)
+        .resolve(&given)
         .ok_or_else(|| Error::failed(format!("no commit {rev} in this repository")))?;
-    if !vcs.in_history(&sha) {
+    let commit = atm_vcs::Rev::object_id(&sha)?;
+    if !vcs.in_history(&commit) {
         return Err(Error::failed(format!(
             "{} is not on the current branch (an ancestor of HEAD)",
             &sha[..7.min(sha.len())]
         )));
     }
-    let text = vcs.message(&sha)?;
+    let text = vcs.message(&commit)?;
     let task = record_on_task(project, task_id, &sha)?;
     let id = task.get("id").map(py_str).unwrap_or_default();
     // With task keys (ADR-007 §9) the message names its key, an alias or a key with an earlier prefix
@@ -292,14 +269,8 @@ pub fn record_commit(
 }
 
 /// An http:// or https:// address with no space in it (the dashboard links to it: never `javascript:` or `data:`,
-/// docs/security-review.md F9).
-fn http_url(url: &str) -> bool {
-    let lower = url.to_lowercase();
-    let rest = lower
-        .strip_prefix("https://")
-        .or_else(|| lower.strip_prefix("http://"));
-    rest.is_some_and(|r| !r.is_empty() && !r.chars().any(char::is_whitespace))
-}
+/// docs/security-review.md F9)
+use atm_common::repository::web_address as http_url;
 
 /// `atm vcs pr`: the PR that contains the tasks (DM-4.3: they are then In PR). Returns the task IDs.
 ///
@@ -323,14 +294,13 @@ pub fn record_pr(
         )));
     }
     let actor = project.actor().map(String::from);
-    let mut recorded = Vec::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let found = ids
             .iter()
             .map(|id| task_at(work, id))
             .collect::<Result<Vec<usize>>>()?;
         let stamp = now_iso();
-        recorded.clear();
+        let mut recorded = Vec::new();
         for at in found {
             if let Some(task) = work.tasks()[at].as_object_mut() {
                 task.insert("pr".into(), json!({"number": number, "url": url}));
@@ -339,9 +309,8 @@ pub fn record_pr(
                 recorded.push(task.get("id").map(py_str).unwrap_or_default());
             }
         }
-        Ok(())
-    })?;
-    Ok(recorded)
+        Ok(recorded)
+    })
 }
 
 fn pr_number(task: &Value) -> Option<i64> {
@@ -452,8 +421,7 @@ pub fn record_merge(project: &mut Project, pr: i64, at: Option<&str>) -> Result<
         )));
     }
     let actor = project.actor().map(String::from);
-    let mut outcome = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let in_pr: Vec<usize> = work.document["tasks"]
             .as_array()
             .into_iter()
@@ -482,10 +450,8 @@ pub fn record_merge(project: &mut Project, pr: i64, at: Option<&str>) -> Result<
             }
         }
         let (released, pending) = release_with_merge(&mut work.document, &in_pr, pr, &when)?;
-        outcome = json!({"pr": pr, "tasks": changed, "already": already, "released": released, "pending": pending});
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok(json!({"pr": pr, "tasks": changed, "already": already, "released": released, "pending": pending}))
+    })
 }
 
 /// `atm vcs repository`: `meta.repository`, if set.
@@ -521,8 +487,7 @@ pub fn set_repository(project: &mut Project, url: &str, previous: Option<&str>) 
         })?),
         None => None,
     };
-    let mut outcome = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         if !work.document.get("meta").is_some_and(Value::is_object) {
             work.document["meta"] = json!({});
         }
@@ -539,10 +504,8 @@ pub fn set_repository(project: &mut Project, url: &str, previous: Option<&str>) 
                 moved += move_pr_links(tasks, before, &address);
             }
         }
-        outcome = json!({"repository": address, "moved_links": moved, "previous": before});
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok(json!({"repository": address, "moved_links": moved, "previous": before}))
+    })
 }
 
 /// `atm db init`: fill `meta.repository` from the version control's remote when there is none. The address set, if
@@ -560,8 +523,7 @@ pub fn ensure_repository(project: &mut Project, vcs: Option<&GitVcs>) -> Result<
     else {
         return Ok(None);
     };
-    let mut set = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         if !work.document.get("meta").is_some_and(Value::is_object) {
             work.document["meta"] = json!({});
         }
@@ -569,13 +531,11 @@ pub fn ensure_repository(project: &mut Project, vcs: Option<&GitVcs>) -> Result<
             .get("repository")
             .is_some_and(atm_common::py::truthy)
         {
-            return Ok(());
+            return Ok(None);
         }
         work.document["meta"]["repository"] = json!(url);
-        set = Some(url.clone());
-        Ok(())
-    })?;
-    Ok(set)
+        Ok(Some(url.clone()))
+    })
 }
 
 /// The remote's default branch (`origin/HEAD`), else `main`: the base of a workflow that names none.
@@ -588,6 +548,13 @@ pub fn default_base(cwd: &std::path::Path) -> String {
     )
     .and_then(|r| r.split_once('/').map(|(_, branch)| branch.to_string()))
     .unwrap_or_else(|| "main".into())
+}
+
+/// The commit the project's working copy at `root` is on, by its full object ID, through the project's version
+/// control; none outside a repository. A front end names a revision so (ATM-671) without knowing which VCS it is.
+#[must_use]
+pub fn head_commit(root: &std::path::Path) -> Option<String> {
+    GitVcs::new(root).head()
 }
 
 #[cfg(test)]
@@ -614,13 +581,5 @@ mod tests {
         assert!(mentions("feat(T-1): x", "T-1"));
         assert!(!mentions("feat(T-12): x", "T-1"));
         assert!(!mentions("xT-1", "T-1"));
-    }
-
-    #[test]
-    fn only_web_addresses_are_pr_links() {
-        assert!(http_url("https://github.com/o/r/pull/1"));
-        assert!(http_url("HTTP://x"));
-        assert!(!http_url("javascript:alert(1)"));
-        assert!(!http_url("https://a b"));
     }
 }

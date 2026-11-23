@@ -1,0 +1,35 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 848f036f..7bc8821c 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -837,10 +837,11 @@
+     font-size: var(--text-md);
+   }
+   /* The top bar: the title and the decision, then the tabs and the Diffs tab's tools */
++  /* In the page's background, as a project's header: the app's selected tab, in it too, joins it (ATM-608) */
+   .review-top {
+     flex: none;
+     border-bottom: 1px solid var(--border);
+-    background: var(--surface);
++    background: var(--bg);
+   }
+   .review-top-row {
+     display: flex;
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 504d2ee1..52b8588b 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -326,6 +326,13 @@ test.describe('the dashboard in the atm app', () => {
+     await expect(tabs.nth(1).locator('.app-tab-chooser')).toHaveCount(0);
+     // The window's own bar and sidebar toggle are there, as on every tab
+     await expect(page.locator('#app-titlebar')).toBeVisible();
++    // The selected tab joins the review's top bar under it, in one colour, as a project's tab joins its page (ATM-608)
++    const colours = await page.evaluate(() => {
++      const of = (selector: string) => getComputedStyle(document.querySelector(selector)!).backgroundColor;
++      return { tab: of('.title-bar-tab.selected'), top: of('.review-top'), bar: of('#app-titlebar') };
++    });
++    expect(colours.top).toBe(colours.tab);
++    expect(colours.bar).not.toBe(colours.tab);
+     // The first tab still shows the reviews
+     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
+     await tabs.nth(0).click();

@@ -246,8 +246,12 @@ test.describe('the document viewer', () => {
   });
 
   test('the Hand-drawn theme writes the document on a ruled notebook page', async ({ page, tasksServer }) => {
+    // The theme's own page, chosen (GitHub is the default since ATM-706)
     await page.addInitScript(() =>
-      localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn', mode: 'light', autoRefresh: false })),
+      localStorage.setItem(
+        'atm-dashboard',
+        JSON.stringify({ theme: 'hand-drawn', mode: 'light', docStyle: 'auto', autoRefresh: false }),
+      ),
     );
     await openWithDocument(page, tasksServer);
     const page_ = viewer(page).locator('.doc-page');
@@ -269,19 +273,21 @@ test.describe('the document viewer', () => {
     const page_ = viewer(page).locator('.doc-page');
     const style = (prop: 'fontFamily' | 'fontSize' | 'maxWidth' | 'backgroundImage', sel = '.compmd') =>
       (sel ? page_.locator(sel) : page_).evaluate((el, p) => getComputedStyle(el)[p], prop);
-    await expect(viewer(page)).not.toHaveAttribute('data-doc-style');
+    // A reader who never chose one gets GitHub (ATM-706)
+    await expect(viewer(page)).toHaveAttribute('data-doc-style', 'github');
     await openMenu(page, '#settings-btn');
-    await expect(page.locator('#doc-style-select')).toHaveValue('auto');
+    await expect(page.locator('#doc-style-select')).toHaveValue('github');
     await expect(page.locator('#doc-style-select option')).toHaveText([
-      'Auto (the theme’s page)',
       'GitHub',
       'Docs',
       'Magazine',
+      'Theme (the theme’s page)',
     ]);
+    // Every style's page is GitHub's width, its type its own
     for (const [id, font, size, width] of [
+      ['docs', 'Charter', '18px', '980px'],
+      ['magazine', 'Bodoni', '17px', '980px'],
       ['github', 'Segoe UI', '16px', '980px'],
-      ['docs', 'Charter', '18px', '816px'],
-      ['magazine', 'Bodoni', '17px', '760px'],
     ]) {
       await page.locator('#doc-style-select').selectOption(id);
       await expect(viewer(page)).toHaveAttribute('data-doc-style', id);
@@ -292,6 +298,7 @@ test.describe('the document viewer', () => {
       const heading = await page_.locator('h1').evaluate((el) => getComputedStyle(el).fontFamily);
       expect(id === 'magazine' ? heading : await style('fontFamily')).toContain(font);
     }
+    await page.locator('#doc-style-select').selectOption('magazine');
     await page.reload();
     await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
     await expect(viewer(page)).toHaveAttribute('data-doc-style', 'magazine');
@@ -445,7 +452,10 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     const place = await page.locator('#doc-viewer').evaluate((el) => {
       const mid = (r: DOMRect) => r.top + r.height / 2;
       const row = (n: number) => el.querySelector(`#doc-gutter div[data-line="${n}"]`)!.getBoundingClientRect();
-      const h1 = el.querySelector('.compmd-page h1')!.getBoundingClientRect();
+      // The heading's text, not its box: a style's heading has padding and a rule under it (GitHub's, ATM-706)
+      const heading = document.createRange();
+      heading.selectNodeContents(el.querySelector('.compmd-page h1')!);
+      const h1 = heading.getClientRects()[0];
       // The paragraph's two source lines: the text node's text before and after its soft break
       const text = el.querySelector('.compmd-page > p')!.firstChild as Text;
       const range = (from: number, to: number) => {

@@ -4,7 +4,7 @@
 /// A page's path without its leading `/` and an optional trailing `/`: the root, `board`, `progress`, `agents`,
 /// `reviews` (every project's, ATM-575), `projects`, `projects/<id>`, `projects/<id>/<tab>` (a tab in lowercase
 /// letters) or a review's page, `projects/<id>/reviews/<CR>` (its reference: letters, digits, `-` and `.`, as
-/// `CR-8.2`).
+/// `CR-8.2`), on its Overview, or `…/<CR>/diffs` or `…/<CR>/comments`, its other sub-tabs (ATM-697).
 fn is_form(rest: &str) -> bool {
     if matches!(
         rest,
@@ -26,7 +26,9 @@ fn is_form(rest: &str) -> bool {
     match parts.as_slice() {
         [id] => !id.is_empty(),
         [id, t] => !id.is_empty() && tab(t),
-        [id, "reviews", r] => !id.is_empty() && reference(r),
+        [id, "reviews", r] | [id, "reviews", r, "diffs" | "comments"] => {
+            !id.is_empty() && reference(r)
+        }
         _ => false,
     }
 }
@@ -74,6 +76,9 @@ mod tests {
             "/projects/abcd1234/reviews/CR-8.2/",
             "/projects/abcd1234/reviews/0193c0de-77aa",
             "/w/work/projects/abcd1234/reviews/CR-7",
+            "/projects/abcd1234/reviews/CR-7/comments",
+            "/projects/abcd1234/reviews/CR-7/diffs/",
+            "/w/work/projects/abcd1234/reviews/CR-8.2/diffs",
         ] {
             assert!(is_page(page), "{page}");
         }
@@ -92,7 +97,11 @@ mod tests {
             "/w/work/tasks.json",
             "/w/work/projects/abcd1234/list/x",
             "/projects/abcd1234/reviews//",
-            "/projects/abcd1234/reviews/CR-7/comments",
+            "/projects/abcd1234/reviews/CR-7/overview",
+            "/projects/abcd1234/reviews/CR-7/files",
+            "/projects/abcd1234/reviews/CR-7/diffs/x",
+            "/projects/abcd1234/reviews/CR-7/Diffs",
+            "/projects//reviews/CR-7/diffs",
             "/projects/abcd1234/reviews/CR 7",
             "/projects/abcd1234/reviews/CR_7",
             "/projects/abcd1234/reviews/<x>",

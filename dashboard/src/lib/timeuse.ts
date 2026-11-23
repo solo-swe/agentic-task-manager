@@ -6,8 +6,8 @@
 // Agent time adds up parallel agents: each agent's own overlapping spans merged, then summed.
 import { MIN_IDLE_MS, gaps } from './insights';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
-import { ms, startedBy, workSpan } from './work';
+import { taskKind } from './vocab';
+import { ms, startedBy, workSpans } from './work';
 
 export interface Interval {
   start: number;
@@ -77,8 +77,8 @@ export function coveredMs(intervals: Interval[], from: number, to: number): numb
  * When the task waited on you: each review (the `reviews` atm keeps; the current one to now; for older files, a done
  * task's `review_requested_at` to its completion) and each block on the user (`blocks`; the current one to now).
  */
-export function waitingIntervals(task: Task, now: number, vocab: Vocabulary = DEFAULT_VOCABULARY): Interval[] {
-  const kind = kindOf(vocab, task.status);
+export function waitingIntervals(task: Task, now: number): Interval[] {
+  const kind = taskKind(task);
   const out: Interval[] = [];
   const add = (from: string | undefined, to: number | null) => {
     const start = ms(from);
@@ -87,7 +87,10 @@ export function waitingIntervals(task: Task, now: number, vocab: Vocabulary = DE
   for (const r of task.reviews ?? []) add(r.from, ms(r.to));
   for (const b of task.blocks ?? []) if (b.on === 'user') add(b.from, ms(b.to));
   const recorded = (from: string | undefined) => (task.reviews ?? []).some((r) => r.from === from);
-  if (kind === 'review') add(task.review_requested_at, now);
+  // Waiting on you now only while atm says it waits on its reviewer or you (ATM-717): approved or sent back, it is
+  // back with its agent
+  const onYou = task.derived?.waiting?.on === 'reviewer' || task.derived?.waiting?.on === 'user';
+  if (kind === 'review' && onYou) add(task.review_requested_at, now);
   else if (kind === 'done' && !recorded(task.review_requested_at)) add(task.review_requested_at, ms(task.completed_at));
   if (kind === 'blocked' && task.waiting_on === 'user') add(task.blocked_at, now);
   return out;
@@ -98,17 +101,14 @@ export function waitingIntervals(task: Task, now: number, vocab: Vocabulary = DE
  * no work falls in it.
  * `split` gives the same three-way split for part of it (a chart's bucket).
  */
-export function timeUse(
-  tasks: Task[],
-  period: Interval | null,
-  now: number,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
-): TimeUseWithSplit | null {
-  const work = tasks.flatMap((t) => {
-    const span = workSpan(t, now, vocab);
-    return span && span.end > span.start ? [{ agent: startedBy(t) ?? '', start: span.start, end: span.end }] : [];
-  });
-  const waitingAll = mergeIntervals(tasks.flatMap((t) => waitingIntervals(t, now, vocab)));
+export function timeUse(tasks: Task[], period: Interval | null, now: number): TimeUseWithSplit | null {
+  // Each stretch of each task's work, as atm counts it (ATM-721), by who did it
+  const work = tasks.flatMap((t) =>
+    workSpans(t, now)
+      .filter((p) => p.end > p.start)
+      .map((p) => ({ agent: p.by ?? startedBy(t) ?? '', start: p.start, end: p.end })),
+  );
+  const waitingAll = mergeIntervals(tasks.flatMap((t) => waitingIntervals(t, now)));
   const firstWork = Math.min(...work.map((w) => w.start));
   const from = Math.max(period?.start ?? -Infinity, firstWork);
   const to = period ? Math.min(period.end, now) : now;

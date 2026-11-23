@@ -73,6 +73,8 @@ test.describe('Kanban board', () => {
           copy('T-024', 'todo', { status: 'todo' }), // behind the main worktree: not shown
           view(onlyHere, 'todo'),
         ],
+        // Which copies the board shows from here, as atm ranks them (ATM-724): not T-024, behind main's
+        shown: ['T-027', 'T-029', 'T-099'],
       },
     ]);
     await openKanban(page, tasksServer, 'kanban');
@@ -184,9 +186,25 @@ test.describe('Kanban board', () => {
     await card(page, 'T-030').click();
     await expect(page.locator('#detail-panel h3')).toHaveText('T-030 Waiting on work in progress');
     await page.keyboard.press('Escape');
-    await card(page, 'T-025').focus();
+    // The card's one stop for the keyboard is its link (ATM-698)
+    await card(page, 'T-025').locator('.card-link').focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('#detail-panel h3')).toHaveText('T-025 Build the board');
+  });
+
+  // ATM-698: a card is a real link to its details, for Copy Link and a new tab; a plain click still opens them here
+  test('a card is a link to its details: its address the page’s with ?task=, a plain click in place', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openKanban(page, tasksServer, 'kanban');
+    const link = card(page, 'T-025').locator('a.card-link');
+    await expect(link).toHaveAttribute('href', /^\/projects\/[^/?]+(\/kanban)?\?(.*&)?task=T-025$/);
+    // A click anywhere on the card is the link's (it covers the card), and opens the details here
+    const before = await page.evaluate(() => history.length);
+    await card(page, 'T-025').click({ position: { x: 8, y: 8 } });
+    await expect(page.locator('#detail-panel h3')).toHaveText('T-025 Build the board');
+    expect(await page.evaluate(() => history.length)).toBe(before + 1);
   });
 
   // ATM-619: a card in review shows its code review, a link that opens it from the board, not the task
@@ -298,7 +316,8 @@ test.describe('Kanban board', () => {
     await expect(column(page, 'done').locator('.kanban-card')).toHaveCount(20);
   });
 
-  test('columns reach down to the status bar and scroll inside; the page itself never scrolls (T-237, T-262)', async ({
+  // @webkit: the app's engine (Hakan: in the app, the regular themes' board scrolled as a whole, with a scrollbar)
+  test('columns reach down to the status bar and scroll inside; the page itself never scrolls (T-237, T-262) @webkit', async ({
     page,
     tasksServer,
   }) => {
@@ -311,6 +330,9 @@ test.describe('Kanban board', () => {
       if (await showAll.count()) await showAll.click();
       // One scrollbar at most: the page is exactly the window's height
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(height);
+      // The board doesn't scroll as a whole: its columns fit it, each scrolling inside (without a scrollbar)
+      const board = page.locator('.kanban-board');
+      expect(await board.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(0);
       const footer = (await page.locator('footer').boundingBox())!;
       const box = (await done.boundingBox())!;
       expect(footer.y - (box.y + box.height)).toBeGreaterThanOrEqual(0);

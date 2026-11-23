@@ -1,0 +1,413 @@
+diff --git a/crates/atm-fs/src/watch.rs b/crates/atm-fs/src/watch.rs
+index 0ca95a1d..bde4cd25 100644
+--- a/crates/atm-fs/src/watch.rs
++++ b/crates/atm-fs/src/watch.rs
+@@ -44,9 +44,15 @@ pub fn watch_tree_where(
+ ) -> Result<Subscription> {
+     let failed = |e: notify::Error| Error::failed(format!("watching for changes: {e}"));
+     let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
++        // Events missed: whatever changed is unknown, so it counts, whatever `keep` would say (ATM-727)
+         let Ok(events) = result else {
++            on_change();
+             return;
+         };
++        if events.iter().any(|e| e.need_rescan()) {
++            on_change();
++            return;
++        }
+         let paths: Vec<PathBuf> = events
+             .iter()
+             .filter(|e| is_change(e))
+@@ -72,7 +78,9 @@ fn watch_with(
+ ) -> Result<Subscription> {
+     let failed = |e: notify::Error| Error::failed(format!("watching for changes: {e}"));
+     let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
+-        if result.is_ok_and(|events| events.iter().any(|e| is_change(e))) {
++        // Events missed (an error, or the system's queue overflowed: a rescan) count as a change (ATM-727): a watch
++        // that looks only when told mustn't miss one
++        if result.is_err() || result.is_ok_and(|events| events.iter().any(|e| is_change(e))) {
+             on_change();
+         }
+     })
+diff --git a/crates/atm-lib/src/review_listen.rs b/crates/atm-lib/src/review_listen.rs
+index 36e9c89e..f7f47f51 100644
+--- a/crates/atm-lib/src/review_listen.rs
++++ b/crates/atm-lib/src/review_listen.rs
+@@ -26,7 +26,9 @@ use crate::reviews::{
+     Status,
+ };
+ 
+-/// How often a listener looks again even without being told: a watcher can miss an event (a busy file system).
++/// How often a watch wakes with nothing told (ATM-727), only to see whether its time is up or its shell is gone, and to
++/// renew its lease: it looks only when told of a change. A watcher that missed events says so (a rescan), which counts
++/// as a change (atm-fs).
+ const RECHECK: Duration = Duration::from_secs(5);
+ 
+ mod cursor;
+diff --git a/crates/atm-lib/src/review_listen/wait.rs b/crates/atm-lib/src/review_listen/wait.rs
+index ebd18f12..35c7592f 100644
+--- a/crates/atm-lib/src/review_listen/wait.rs
++++ b/crates/atm-lib/src/review_listen/wait.rs
+@@ -1,7 +1,7 @@
+ //! `atm review wait`: until a reviewer submits on a review, or decides it.
+ 
+ use super::{
+-    Arc, Chain, Comment, Duration, FileStore, HashSet, Instant, Project, RECHECK, Receiver, Result,
++    Arc, Chain, Comment, Duration, FileStore, HashSet, Instant, Project, Receiver, Result,
+     ReviewHeader, ReviewRef, ReviewStore, Status, Value, channel, json, reviews,
+ };
+ 
+@@ -89,7 +89,19 @@ pub fn wait(
+     let seen: HashSet<String> = start.comments().map(|c| c.id.0.clone()).collect();
+     let (_subscription, told) = listen(&store)?;
+     let deadline = Instant::now() + timeout;
++    // Looked at once, then each time the reviews change (ATM-727): never on a timer
++    let mut look = true;
+     loop {
++        if !look {
++            let left = deadline.saturating_duration_since(Instant::now());
++            if left.is_zero() {
++                return Ok(None);
++            }
++            look = told.recv_timeout(left).is_ok();
++            continue;
++        }
++        while told.try_recv().is_ok() {}
++        look = false;
+         let review = store.get_review(&ReviewRef(start.header.id.0.clone()))?;
+         let new: Vec<Value> = review
+             .chains
+@@ -116,10 +128,5 @@ pub fn wait(
+         if done {
+             return Ok(Some(json!({ "review": review.header, "comments": new })));
+         }
+-        let left = deadline.saturating_duration_since(Instant::now());
+-        if left.is_zero() {
+-            return Ok(None);
+-        }
+-        let _ = told.recv_timeout(left.min(RECHECK));
+     }
+ }
+diff --git a/crates/atm-lib/src/review_listen/watch.rs b/crates/atm-lib/src/review_listen/watch.rs
+index 812f104b..b0fa8741 100644
+--- a/crates/atm-lib/src/review_listen/watch.rs
++++ b/crates/atm-lib/src/review_listen/watch.rs
+@@ -1,12 +1,94 @@
+ //! The agent's one watch (§3.9): each person's comment and decision about its work, as it comes.
+ 
++use std::sync::mpsc::Sender;
++
++use atm_db::subscription::{Keep, OnChange, Subscription, watch_tree_where};
++
+ use super::{
+-    Duration, FileStore, HashMap, HashSet, Instant, Lease, Mine, Path, Project, RECHECK, Result,
+-    Review, ReviewHeader, Status, Value, about_my_work, all_reviews, cursor_file, decided,
+-    decision_about_my_work, heard, inbox_file, is_agent, json, keyed_now, lease_file, listen,
+-    old_seen_key, parse_iso, reviews, save_cursor, seen_key, starting_point, with_parents, work_of,
++    Arc, Duration, FileStore, HashMap, HashSet, Instant, Lease, Mine, Path, PathBuf, Project,
++    RECHECK, Receiver, Result, Review, ReviewFilter, ReviewHeader, ReviewStore, Status, Value,
++    about_my_work, all_reviews, channel, cursor_file, decided, decision_about_my_work, heard,
++    inbox_file, is_agent, json, keyed_now, lease_file, old_seen_key, parse_iso, reviews,
++    save_cursor, seen_key, starting_point, with_parents, work_of,
+ };
+ 
++/// What a look reads, each watched for changes (ATM-727: a watch looks only when told, never on a timer; a look reads
++/// every review, the tasks and git's working copy):
++/// - the reviews, every comment and decision;
++/// - the task file: a task the agent takes or finishes changes which comments are its work (ATM-663, R5);
++/// - the working copy, while a live review is open: a file the agent edits makes a comment on it the agent's. Without
++///   one, nothing there matters to a watch, and building in it (`target/`) would wake it for nothing.
++struct Sources {
++    told: Receiver<()>,
++    sent: Sender<()>,
++    _reviews: Subscription,
++    _tasks: Option<Subscription>,
++    working_copy: Option<Subscription>,
++}
++
++impl Sources {
++    fn notice(sent: &Sender<()>) -> OnChange {
++        let sent = sent.clone();
++        Arc::new(move || {
++            let _ = sent.send(());
++        })
++    }
++
++    fn of(store: &FileStore, root: Option<&Path>) -> Result<Self> {
++        let (sent, told) = channel();
++        let reviews = store.subscribe(Self::notice(&sent))?;
++        // The task file alone: atm's lock files come and go beside it on every command
++        let tasks = root
++            .map(|r| r.join(atm_common::TASK_DIR))
++            .filter(|dir| dir.is_dir())
++            .map(|dir| {
++                let keep: Keep = Arc::new(|paths: &[PathBuf]| {
++                    paths
++                        .iter()
++                        .any(|p| p.file_name().is_some_and(|n| n == atm_common::TASKS_FILE))
++                });
++                watch_tree_where(&[dir], keep, Self::notice(&sent))
++            })
++            .transpose()?;
++        Ok(Self {
++            told,
++            sent,
++            _reviews: reviews,
++            _tasks: tasks,
++            working_copy: None,
++        })
++    }
++
++    /// The working copy watched while a live review is open, not otherwise (a project outside git has none to watch).
++    fn follow_working_copy(&mut self, project: &Project, store: &FileStore) {
++        let live = ReviewFilter {
++            statuses: vec![Status::Live],
++            task: None,
++        };
++        let any_live = store.list_reviews(&live).is_ok_and(|l| !l.is_empty());
++        if !any_live {
++            self.working_copy = None;
++        } else if self.working_copy.is_none() {
++            self.working_copy =
++                reviews::subscribe_working_copy(project, Self::notice(&self.sent)).ok();
++        }
++    }
++}
++
++/// The process that started this one, while it runs (ATM-727): once the shell that ran a watch is gone, the watch is
++/// another process's (the system's), and nothing reads what it prints. 0 where it can't be known (Windows): it never
++/// changes there.
++fn parent() -> u32 {
++    #[cfg(unix)]
++    {
++        std::os::unix::process::parent_id()
++    }
++    #[cfg(not(unix))]
++    {
++        0
++    }
++}
++
+ /// What a watch is asked for, beyond its time (ATM-624).
+ #[derive(Debug, Clone, Default)]
+ pub struct WatchOptions {
+@@ -43,11 +125,12 @@ pub fn watch(
+     let store = reviews::store(project)?;
+     let file = cursor_file(root.as_deref(), me);
+     let (mut seen, mut statuses) = starting_point(&store, &file, options.since.as_deref())?;
+-    let (_subscription, told) = listen(&store)?;
+-    // Known to be running while it does (ATM-642): renewed on every look, removed when it ends
++    let mut sources = Sources::of(&store, root.as_deref())?;
++    // Known to be running while it does (ATM-642): renewed on every wake, removed when it ends
+     let lease = Lease::take(lease_file(root.as_deref(), me));
+     ready();
+     let deadline = Instant::now() + timeout;
++    let started_by = parent();
+     let mut count = 0;
+     // The first look is at once: what came while no watch ran
+     let mut first = true;
+@@ -58,10 +141,18 @@ pub fn watch(
+             if left.is_zero() {
+                 return Ok(count);
+             }
+-            let _ = told.recv_timeout(left.min(RECHECK));
++            // Woken by a change, or by its timer only to see whether its time is up or its shell gone
++            let notified = sources.told.recv_timeout(left.min(RECHECK)).is_ok();
++            // Its shell gone (stopped by its harness): no one reads it any more (ATM-727)
++            if parent() != started_by {
++                return Ok(count);
++            }
++            if !notified {
++                continue;
++            }
+         }
+         first = false;
+-        while told.try_recv().is_ok() {}
++        while sources.told.try_recv().is_ok() {}
+         let news = look(
+             project,
+             root.as_deref(),
+@@ -71,6 +162,8 @@ pub fn watch(
+             &mut seen,
+             &mut statuses,
+         )?;
++        // A live review opened or ended meanwhile: the working copy watched as long as one is open
++        sources.follow_working_copy(project, &store);
+         let told_now = news.len();
+         for heard in news {
+             emit(heard);
+diff --git a/tests/scripts/reviews/watch-idle.test.mjs b/tests/scripts/reviews/watch-idle.test.mjs
+new file mode 100644
+index 00000000..70538193
+--- /dev/null
++++ b/tests/scripts/reviews/watch-idle.test.mjs
+@@ -0,0 +1,169 @@
++// ATM-727 (Hakan): review watches burned CPU while they waited, each 8–12% of a core for hours. Every five-second
++// recheck looked in full (every review read, the tasks, git's working copy) though nothing had changed, and a watch
++// whose shell was gone ran on until its time was up, hours later.
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import fs from 'node:fs';
++import path from 'node:path';
++import { describe, test } from 'node:test';
++import { ATM, baseEnv, makeProject, removeDir, tempDir } from '../helpers.mjs';
++import { AGENT, HAKAN, background, ok, project, until } from './fixtures.mjs';
++
++const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
++
++/** A watch's cursor (written on every look, ATM-624), in the state folder `home`; none before the first look */
++function cursorOf(home) {
++  const dir = path.join(home, 'watches');
++  if (!fs.existsSync(dir)) return undefined;
++  const name = fs
++    .readdirSync(dir)
++    .find((f) => /^[0-9a-f]{16}\.json$/.test(f));
++  return name && path.join(dir, name);
++}
++
++const alive = (pid) => {
++  try {
++    process.kill(pid, 0);
++    return true;
++  } catch {
++    return false;
++  }
++};
++
++describe('a review watch while it waits (ATM-727)', () => {
++  test('a recheck with nothing changed doesn’t look again; a change still is heard at once', async () => {
++    const root = project();
++    const home = tempDir('atm-watch-home-');
++    const env = { ...AGENT, ATM_HOME: home };
++    let watching;
++    try {
++      // Its own review, so a decision on it is the agent's to hear
++      fs.writeFileSync(path.join(root, 'a.txt'), 'changed\n');
++      ok(['review', 'create', '--title', 'Quiet', '--task', 'T-1', '--uncommitted'], root, env);
++      watching = background(['review', 'watch', '--json', '--timeout', '30s'], root, env);
++      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
++      await until(() => cursorOf(home) !== undefined, 'the first look');
++      // What was written just before the watch began may still be told late (FSEvents): a look or two, then quiet
++      let first = fs.statSync(cursorOf(home)).mtimeMs;
++      for (let settled = 0; settled < 3; ) {
++        await sleep(500);
++        const now = fs.statSync(cursorOf(home)).mtimeMs;
++        settled = now === first ? settled + 1 : 0;
++        first = now;
++      }
++      // Past a recheck (every 5 s), nothing changed: no look, so the cursor isn't written again
++      await sleep(6_500);
++      assert.equal(fs.statSync(cursorOf(home)).mtimeMs, first, 'looked again with nothing changed');
++      // A decision on its own review is still told, from the store's notice, well within a recheck
++      const asked = Date.now();
++      ok(['review', 'submit', 'CR-1', '--request-changes'], root, { ...HAKAN, ATM_HOME: home });
++      await until(() => watching.lines.length >= 1, 'the decision heard', 10_000);
++      assert.equal(JSON.parse(watching.lines[0]).decision, 'changes_requested');
++      assert.ok(Date.now() - asked < 4_000, `heard after ${Date.now() - asked} ms`);
++    } finally {
++      watching?.stop();
++      removeDir(root);
++      removeDir(home);
++    }
++  });
++
++  // Hakan on CR-125: no timed looks at all; what a look reads is watched instead
++  test('a running watch hears at once what becomes the agent’s when it takes the task (the task file watched)', async () => {
++    const root = makeProject({
++      commit: true,
++      files: {
++        '.agentic-task-manager/tasks.json': {
++          meta: { project: 'Takes' },
++          tasks: [{ id: 'T-1', name: 'One', type: 'feature', status: 'todo', files: ['a.txt'] }],
++        },
++        'a.txt': 'a\n',
++      },
++    });
++    const home = tempDir('atm-watch-home-');
++    const A = { ATM_AGENT: 'claude:A', ATM_HOME: home };
++    const B = { ATM_AGENT: 'claude:B', ATM_HOME: home };
++    let watching;
++    try {
++      // B worked T-1 and had it sent back; nothing of it is A's
++      ok(['task', 'state', 'T-1', 'in_progress'], root, B);
++      fs.writeFileSync(path.join(root, 'a.txt'), 'a, changed\n');
++      ok(['review', 'create', '--title', 'One', '--task', 'T-1', '--uncommitted'], root, B);
++      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Name it better.'], root, { ...HAKAN, ATM_HOME: home });
++      ok(['review', 'submit', 'CR-1', '--request-changes'], root, { ...HAKAN, ATM_HOME: home });
++      watching = background(['review', 'watch', '--json', '--timeout', '30s', '--since', '2000-01-01T00:00:00Z'], root, A);
++      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
++      await until(() => cursorOf(home) !== undefined, 'the first look');
++      await sleep(1_000);
++      assert.equal(watching.lines.length, 0, 'not A’s work');
++      // A takes the task back: the task file changes, and the watch tells both at once
++      const taken = Date.now();
++      ok(['task', 'state', 'T-1', 'in_progress'], root, A);
++      await until(() => watching.lines.length >= 2, 'both told', 10_000);
++      assert.ok(Date.now() - taken < 4_000, `told after ${Date.now() - taken} ms`);
++    } finally {
++      watching?.stop();
++      removeDir(root);
++      removeDir(home);
++    }
++  });
++
++  test('the working copy wakes a watch only while a live review is open', async () => {
++    const root = project();
++    const home = tempDir('atm-watch-home-');
++    const env = { ...AGENT, ATM_HOME: home };
++    let watching;
++    /** The cursor's time once it has stopped moving: what was written before may be told late (FSEvents) */
++    const settled = async () => {
++      let last = fs.statSync(cursorOf(home)).mtimeMs;
++      for (let quiet = 0; quiet < 3; ) {
++        await sleep(500);
++        const now = fs.statSync(cursorOf(home)).mtimeMs;
++        quiet = now === last ? quiet + 1 : 0;
++        last = now;
++      }
++      return last;
++    };
++    try {
++      watching = background(['review', 'watch', '--json', '--timeout', '40s'], root, env);
++      await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
++      await until(() => cursorOf(home) !== undefined, 'the first look');
++      // No live review: an edit there is nothing to the watch
++      let before = await settled();
++      fs.writeFileSync(path.join(root, 'a.txt'), 'edited\n');
++      await sleep(2_000);
++      assert.equal(fs.statSync(cursorOf(home)).mtimeMs, before, 'woken by the working copy without a live review');
++      // A live review opened: the next edit there wakes it
++      ok(['review', 'live'], root, env);
++      before = await settled();
++      fs.writeFileSync(path.join(root, 'a.txt'), 'edited again\n');
++      await until(() => fs.statSync(cursorOf(home)).mtimeMs !== before, 'the edit to wake the watch', 4_000);
++    } finally {
++      watching?.stop();
++      removeDir(root);
++      removeDir(home);
++    }
++  });
++
++  // A harness stopping a watch stops its shell; the watch, given to the system, ran on unread
++  test('a watch whose shell is gone stops', { skip: process.platform === 'win32' }, async () => {
++    const root = project();
++    const home = tempDir('atm-watch-home-');
++    try {
++      // The shell starts the watch and, once it has started, ends, as a stopped harness's shell does
++      const shell = spawn('sh', ['-c', `"$ATM" review watch --json --timeout 60s >/dev/null 2>&1 & echo $!; sleep 2`], {
++        cwd: root,
++        env: { ...baseEnv(), ...AGENT, ATM_HOME: home, ATM },
++      });
++      let out = '';
++      shell.stdout.on('data', (d) => (out += d));
++      await new Promise((resolve) => shell.on('close', resolve));
++      const pid = Number(out.trim());
++      assert.ok(pid > 0, `the watch's pid: ${out}`);
++      // It notices at its next wake, within a recheck (5 s)
++      await until(() => !alive(pid), 'the orphaned watch to stop', 15_000);
++    } finally {
++      removeDir(root);
++      removeDir(home);
++    }
++  });
++});

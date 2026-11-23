@@ -2,21 +2,44 @@
 //! who holds a claim, an agent's own lease that just expired, and the records a change leaves in the claims store
 //! (a claim, a completion, a task waiting in this working copy).
 
-use atm_common::edits::{add_note, back_to_todo};
 use atm_common::py::py_str_opt;
 use atm_common::time::{format_iso, now, now_iso, parse_iso};
 use atm_common::{Error, Kind, Result, Vocabulary};
-use atm_db::working::Here;
+use atm_db::working::{Here, Working};
 use serde_json::{Map, Value, json};
 
 use crate::loop_rules::lease_minutes;
 
+/// A claim's agent while its lease runs, none once it has run out.
+pub(crate) fn holder(claim: &Value, now: i64) -> Option<&str> {
+    let until = claim
+        .get("lease_expires_at")
+        .and_then(Value::as_str)
+        .and_then(atm_common::time::parse_iso)?;
+    (until > now)
+        .then(|| claim.get("agent").and_then(Value::as_str))
+        .flatten()
+}
+
+/// The claims store as the loop's rule reads it (ATM-667, audit L7): its claims whose lease still runs at `now`, the
+/// rest of the store as it is. Read only: `atm project status` and the dashboard's Next up name the task `atm loop
+/// next` would, which drops expired claims first (and writes that it did).
+#[must_use]
+pub fn live_claims(store: &Map<String, Value>, now: i64) -> Map<String, Value> {
+    let mut live = store.clone();
+    if let Some(Value::Object(claims)) = live.get_mut("claims") {
+        claims.retain(|_, claim| holder(claim, now).is_some());
+    }
+    live
+}
+
 /// When a lease taken now runs out.
 #[must_use]
 pub fn lease_until(document: &Value) -> String {
-    #[allow(clippy::cast_possible_truncation)] // reason: a lease's seconds fit an i64
+    #[allow(clippy::cast_possible_truncation)]
+    // reason: a lease's seconds fit an i64 (at most a year's)
     let seconds = (lease_minutes(document) * 60.0) as i64;
-    format_iso(now() + seconds)
+    format_iso(now().saturating_add(seconds))
 }
 
 /// `{:g}` of a number of minutes, as the Python atm prints it in messages: `120`, `0.5`.
@@ -36,6 +59,30 @@ fn task_at<'a>(document: &'a mut Value, task_id: &str) -> Option<&'a mut Map<Str
         .iter_mut()
         .filter_map(Value::as_object_mut)
         .find(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
+}
+
+/// A section of the claims store (`claims`, `completed`, `waiting`, `resolved`, `hints`), made a map when it isn't one.
+pub(crate) fn section<'a>(
+    store: &'a mut Map<String, Value>,
+    key: &str,
+) -> &'a mut Map<String, Value> {
+    let entry = store.entry(key).or_insert_with(|| json!({}));
+    if !entry.is_object() {
+        *entry = json!({});
+    }
+    entry
+        .as_object_mut()
+        .expect("the section was made an object just above")
+}
+
+/// The expiry every change that reads claims begins with (ATM-681): the change's claims whose lease ran out are
+/// dropped, their tasks back to to do. Returns the expired claims.
+pub(crate) fn expire(work: &mut Working, vocab: &Vocabulary) -> Vec<Value> {
+    drop_expired_claims(
+        &mut work.document,
+        section(&mut work.claims_store, "claims"),
+        vocab,
+    )
 }
 
 /// Drop the claims whose lease ran out; their tasks in this working copy go back to to do, with a failure note.
@@ -61,14 +108,11 @@ pub fn drop_expired_claims(
         let Some(claim) = claims.shift_remove(&task_id) else {
             continue;
         };
+        // The lapse's transition is the machine's (ATM-712, docs/task-review-state-machine.md §3.3)
         if let Some(task) = task_at(document, &task_id)
             && vocab.kind_of(task.get("status")) == Some(Kind::Active)
         {
-            let stamp = now_iso();
-            back_to_todo(task, vocab, None, &stamp, true);
-            let text = format!("lease expired ({})", py_str_opt(claim.get("agent")));
-            // A note built by atm, short by construction
-            let _ = add_note(task, "failure", &text, None, &stamp, false);
+            crate::lifecycle::lapse(task, vocab, &claim);
         }
         expired.push(claim);
     }
@@ -88,14 +132,11 @@ pub fn check_holder(
     if let Some(claim) = claims.get(task_id).filter(|c| atm_common::py::truthy(c))
         && claim.get("agent").and_then(Value::as_str) != agent
     {
-        return Err(Error::Failed {
-            message: format!(
-                "can't {command} {task_id}: it is claimed by {} until {}",
-                py_str_opt(claim.get("agent")),
-                py_str_opt(claim.get("lease_expires_at"))
-            ),
-            code: 4,
-        });
+        return Err(Error::Conflict(format!(
+            "can't {command} {task_id}: it is claimed by {} until {}",
+            py_str_opt(claim.get("agent")),
+            py_str_opt(claim.get("lease_expires_at"))
+        )));
     }
     Ok(())
 }
@@ -141,12 +182,9 @@ pub fn own_lease_expired(
         Some(then) => format!("Run `atm task state {task_id} in_progress`, then `{then}` again."),
         None => format!("Run `atm task state {task_id} in_progress` to claim it again."),
     };
-    Some(Error::Failed {
-        message: format!(
-            "{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next}"
-        ),
-        code: 4,
-    })
+    Some(Error::Conflict(format!(
+        "{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next}"
+    )))
 }
 
 /// A new claim on the task, from this working copy (its worktree and branch, T-202).

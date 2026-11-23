@@ -165,8 +165,9 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain 
   locally, `--trace on` while looking into a failure.
 
 ## CI
-- **Releases of the CLI** (T-452, [packaging/README.md](packaging/README.md)): `packaging/release.sh <version> --push`
-  on `main` tags `v<version>`; `.github/workflows/release.yml` builds, signs and notarizes, and drafts the GitHub
+- **Releases of the CLI** (T-452, [packaging/README.md](packaging/README.md)): a plain tag on the merged
+  `main` (`git tag -a v<version> origin/main -m 'atm <version>'`, pushed; the Release workflow checks it's `main`'s
+  version, ATM-705); `.github/workflows/release.yml` builds, signs and notarizes, and drafts the GitHub
   release; publishing it runs `.github/workflows/homebrew.yml`, which updates `Formula/atm.rb` in
   `solo-swe/homebrew-tap`, and `.github/workflows/skills.yml`, which exports the skills to `solo-swe/skills`, the public
   skills repo our apps share ([ADR-002](docs/adr/ADR-002-atm-public-skills-repo.md)). Their secrets are listed in the

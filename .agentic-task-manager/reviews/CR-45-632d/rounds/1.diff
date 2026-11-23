@@ -1,0 +1,643 @@
+diff --git a/crates/atm-db/src/jsongit/merge.rs b/crates/atm-db/src/jsongit/merge.rs
+index 0f724781..327c8c18 100644
+--- a/crates/atm-db/src/jsongit/merge.rs
++++ b/crates/atm-db/src/jsongit/merge.rs
+@@ -466,19 +466,33 @@ fn same_format(base: &Value, ours: &Value, theirs: &Value) -> [Value; 3] {
+     sides
+ }
+ 
+-/// In a keys-format merge (ADR-007 §4), no two tasks may share a number. Of two that do: a final one keeps it (only
+-/// the base branch makes numbers final); of two provisional ones, ours keeps it and theirs takes the next free number
+-/// (above every number and both sides' `meta.next_number`), keeping its old key as an alias. Two final ones can't
+-/// happen; if they do, both are kept and it is a conflict. The next free number, for `meta.next_number`.
++/// The newer of two tasks by their UUIDs, when both are version 7 (time-ordered, ADR-007 §1): whether `a` is newer
++/// than `b`. None when either isn't (a task migrated from an ID has a version 8 UUID, not time-ordered).
++fn newer(a: &Value, b: &Value) -> Option<bool> {
++    let v7 = |t: &Value| {
++        t.get("id")
++            .and_then(Value::as_str)
++            .filter(|id| id.len() == 36 && id.as_bytes()[14] == b'7')
++            .map(str::to_ascii_lowercase)
++    };
++    Some(v7(a)? > v7(b)?)
++}
++
++/// In a keys-format merge, no two tasks may share a number, and a clash never stops a merge (ADR-009). Of two that
++/// do, one takes the next free number (above every number and both sides' `meta.next_number`), keeping its old key
++/// as an alias: the one **not on the base branch** (`on_base`, from git), so a key the base branch has never moves;
++/// when both or neither are, the **newer** one (its `UUIDv7`'s time); when that can't be told, theirs. The next free
++/// number, for `meta.next_number`, and what moved (`(from, to)` keys).
+ fn renumber_clashes(
+     tasks: &mut [Value],
+     ours: &[(Value, &Map<String, Value>)],
+     key: &str,
+     stored_next: u64,
+-    conflicts: &mut Vec<String>,
+-) -> u64 {
++    on_base: &dyn Fn(&str) -> bool,
++) -> (u64, Vec<(String, String)>) {
+     let number = |t: &Value| t.get("number").and_then(Value::as_u64);
+-    let final_ = |t: &Value| t.get("key_final").and_then(Value::as_bool) == Some(true);
++    let based = |t: &Value| t.get("id").and_then(Value::as_str).is_some_and(on_base);
++    let mut renumbered = Vec::new();
+     let mut next = tasks
+         .iter()
+         .filter_map(number)
+@@ -496,28 +510,23 @@ fn renumber_clashes(
+             continue;
+         };
+         let (a, b) = (&tasks[j], &tasks[i]);
+-        let mover = match (final_(a), final_(b)) {
+-            (true, true) => {
+-                conflicts.push(format!(
+-                    "{}: two final tasks have this number ({} and {}); both kept, give one another number by hand",
+-                    task_key(key, n),
+-                    py_str(&id_of_value(a)),
+-                    py_str(&id_of_value(b))
+-                ));
+-                continue;
+-            }
++        let mover = match (based(a), based(b)) {
+             (true, false) => i,
+             (false, true) => j,
+-            // Both provisional: ours keeps it
+-            (false, false) => {
+-                if lookup(ours, &id_of_value(b)).is_some()
+-                    && lookup(ours, &id_of_value(a)).is_none()
+-                {
+-                    j
+-                } else {
+-                    i
++            // Both on it (two branches made it so) or neither: the newer moves; else theirs
++            _ => match newer(a, b) {
++                Some(true) => j,
++                Some(false) => i,
++                None => {
++                    if lookup(ours, &id_of_value(b)).is_some()
++                        && lookup(ours, &id_of_value(a)).is_none()
++                    {
++                        j
++                    } else {
++                        i
++                    }
+                 }
+-            }
++            },
+         };
+         if mover == j {
+             // The one seen first moves: the other takes its place
+@@ -537,10 +546,11 @@ fn renumber_clashes(
+         }
+         task["number"] = json!(next);
+         task["aliases"] = Value::Array(aliases);
++        renumbered.push((old, task_key(key, next)));
+         seen.push((next, mover));
+         next += 1;
+     }
+-    next
++    (next, renumbered)
+ }
+ 
+ fn id_of_value(task: &Value) -> Value {
+@@ -552,8 +562,21 @@ fn id_of_value(task: &Value) -> Value {
+ /// format, tasks match by UUID and numbers that clash are settled ([`renumber_clashes`]).
+ #[must_use]
+ pub fn merge_task_files(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<String>) {
++    merge_task_files_with(base, ours, theirs, &|_| false)
++}
++
++/// [`merge_task_files`], with which task UUIDs are on the project's base branch (`on_base`, read from git by the
++/// driver): a clash moves the task that isn't (ADR-009). What moved is kept in `meta.renumbered` (`[{from, to}]`),
++/// which the next `atm db migrate` says once.
++#[must_use]
++pub fn merge_task_files_with(
++    base: &Value,
++    ours: &Value,
++    theirs: &Value,
++    on_base: &dyn Fn(&str) -> bool,
++) -> (Value, Vec<String>) {
+     let [base, ours, theirs] = same_format(base, ours, theirs);
+-    let (mut merged, mut conflicts) = merge_same_format(&base, &ours, &theirs);
++    let (mut merged, conflicts) = merge_same_format(&base, &ours, &theirs);
+     if keys_format(&merged) {
+         let key = project_key(&merged).unwrap_or_default().to_string();
+         let stored = |d: &Value| {
+@@ -565,14 +588,27 @@ pub fn merge_task_files(base: &Value, ours: &Value, theirs: &Value) -> (Value, V
+         let stored_next = stored(&ours).max(stored(&theirs));
+         let our_list = tasks_of(&ours);
+         let our_tasks = by_id(&our_list);
+-        let next = merged
++        let (next, moved) = merged
+             .get_mut("tasks")
+             .and_then(Value::as_array_mut)
+-            .map_or(stored_next, |tasks| {
+-                renumber_clashes(tasks, &our_tasks, &key, stored_next, &mut conflicts)
++            .map_or((stored_next, Vec::new()), |tasks| {
++                renumber_clashes(tasks, &our_tasks, &key, stored_next, on_base)
+             });
+         if let Some(meta) = merged.get_mut("meta").and_then(Value::as_object_mut) {
+             meta.insert("next_number".into(), json!(next));
++            if !moved.is_empty() {
++                let mut renumbered = meta
++                    .get("renumbered")
++                    .and_then(Value::as_array)
++                    .cloned()
++                    .unwrap_or_default();
++                renumbered.extend(
++                    moved
++                        .into_iter()
++                        .map(|(from, to)| json!({"from": from, "to": to})),
++                );
++                meta.insert("renumbered".into(), Value::Array(renumbered));
++            }
+         }
+     }
+     (merged, conflicts)
+@@ -734,6 +770,19 @@ fn merge_same_format(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<
+ /// # Errors
+ /// A version that isn't task data (resolve the conflict by hand), or one that can't be written.
+ pub fn merge_files(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String>> {
++    merge_files_with(base, ours, theirs, &|_| false)
++}
++
++/// [`merge_files`], with which task UUIDs are on the base branch ([`merge_task_files_with`]).
++///
++/// # Errors
++/// As [`merge_files`].
++pub fn merge_files_with(
++    base: &Path,
++    ours: &Path,
++    theirs: &Path,
++    on_base: &dyn Fn(&str) -> bool,
++) -> Result<Vec<String>> {
+     let mut versions: Vec<Option<Value>> =
+         [base, ours, theirs].iter().map(|p| read_json(p)).collect();
+     if versions[0].is_none() && std::fs::metadata(base).is_ok_and(|m| m.len() == 0) {
+@@ -751,7 +800,7 @@ pub fn merge_files(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String
+     let [Some(b), Some(o), Some(t)] = [&versions[0], &versions[1], &versions[2]] else {
+         return Err(Error::failed("tasks.json merge: one side is missing"));
+     };
+-    let (merged, conflicts) = merge_task_files(b, o, t);
++    let (merged, conflicts) = merge_task_files_with(b, o, t, on_base);
+     write_text_atomic(ours, &(to_json(&merged) + "\n"))
+         .map_err(|e| Error::failed(format!("{}: {e}", ours.shown())))?;
+     Ok(conflicts)
+diff --git a/crates/atm-db/src/jsongit/merge/tests.rs b/crates/atm-db/src/jsongit/merge/tests.rs
+index 0373b40a..577629a1 100644
+--- a/crates/atm-db/src/jsongit/merge/tests.rs
++++ b/crates/atm-db/src/jsongit/merge/tests.rs
+@@ -176,14 +176,11 @@ fn numbers(merged: &Value) -> Vec<(String, u64)> {
+ }
+ 
+ #[test]
+-fn keyed_two_branches_adding_a_task_keep_both_and_theirs_takes_the_next_number() {
+-    let base = keyed(json!([{"id": A, "number": 4, "key_final": true}]));
+-    let ours = keyed(
+-        json!([{"id": A, "number": 4, "key_final": true}, {"id": B, "number": 5, "key_final": false}]),
+-    );
+-    let theirs = keyed(
+-        json!([{"id": A, "number": 4, "key_final": true}, {"id": C, "number": 5, "key_final": false}]),
+-    );
++fn keyed_two_branches_adding_a_task_keep_both_and_the_newer_takes_the_next_number() {
++    let base = keyed(json!([{"id": A, "number": 4}]));
++    let ours = keyed(json!([{"id": A, "number": 4}, {"id": B, "number": 5}]));
++    // C is the newer (its UUIDv7's time is later): it moves
++    let theirs = keyed(json!([{"id": A, "number": 4}, {"id": C, "number": 5}]));
+     let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+     assert!(conflicts.is_empty(), "{conflicts:?}");
+     assert_eq!(
+@@ -197,28 +194,83 @@ fn keyed_two_branches_adding_a_task_keep_both_and_theirs_takes_the_next_number()
+     );
+     assert_eq!(merged["tasks"][1].get("aliases"), None);
+     assert_eq!(merged["meta"]["next_number"], json!(7));
++    // What moved, for the next atm db migrate to say
++    assert_eq!(
++        merged["meta"]["renumbered"],
++        json!([{"from": "ATM-5", "to": "ATM-6"}])
++    );
+ }
+ 
++/// ADR-009: of two tasks with one number, the one not on the base branch moves, however new; both or neither on it,
++/// the newer; never a conflict
+ #[test]
+-fn keyed_a_final_number_never_moves_and_two_final_ones_are_a_conflict() {
++fn keyed_a_clash_moves_the_task_not_on_the_base_branch_else_the_newer_never_a_conflict() {
+     let base = keyed(json!([]));
+-    // Ours added B as 5 on a branch; theirs is main, where C is 5 for good
+-    let ours = keyed(json!([{"id": B, "number": 5, "key_final": false}]));
+-    let theirs = keyed(json!([{"id": C, "number": 5, "key_final": true}]));
+-    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
++    let ours = keyed(json!([{"id": B, "number": 5}]));
++    let theirs = keyed(json!([{"id": C, "number": 5}]));
++    let on = |ids: &'static [&'static str]| move |id: &str| ids.contains(&id);
++    // Theirs is main, where C (the newer) is 5: B moves
++    let (merged, conflicts) = merge_task_files_with(&base, &ours, &theirs, &on(&[C]));
+     assert!(conflicts.is_empty(), "{conflicts:?}");
+     assert_eq!(numbers(&merged), [("b2".into(), 6), ("c3".into(), 5)]);
+     assert_eq!(merged["tasks"][0]["aliases"], json!(["ATM-5"]));
+-
++    // B on main: C moves
++    let (merged, _) = merge_task_files_with(&base, &ours, &theirs, &on(&[B]));
++    assert_eq!(numbers(&merged), [("b2".into(), 5), ("c3".into(), 6)]);
++    // Both on it (each made it there): the newer, C, moves; which side is ours doesn't matter
++    for (o, t) in [(&ours, &theirs), (&theirs, &ours)] {
++        let (merged, conflicts) = merge_task_files_with(&base, o, t, &on(&[B, C]));
++        assert!(conflicts.is_empty(), "{conflicts:?}");
++        let mut got = numbers(&merged);
++        got.sort();
++        assert_eq!(got, [("b2".into(), 5), ("c3".into(), 6)]);
++    }
++    // An old file's key_final changes nothing: a clash is never a conflict
+     let ours = keyed(json!([{"id": B, "number": 5, "key_final": true}]));
++    let theirs = keyed(json!([{"id": C, "number": 5, "key_final": true}]));
+     let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
++    assert!(conflicts.is_empty(), "{conflicts:?}");
++    assert_eq!(numbers(&merged), [("b2".into(), 5), ("c3".into(), 6)]);
++}
++
++#[test]
++fn keyed_tasks_migrated_from_ids_can_t_be_told_apart_by_age_theirs_moves() {
++    // Version 8 UUIDs (migrated from IDs): not time-ordered
++    const M: &str = "0193a5b2-7c1d-8e2f-8a3b-4c5d6e7f80f1";
++    const N: &str = "0193a5b2-7c1d-8e2f-8a3b-4c5d6e7f80e2";
++    let base = keyed(json!([]));
++    let (merged, _) = merge_task_files(
++        &base,
++        &keyed(json!([{"id": M, "number": 5}])),
++        &keyed(json!([{"id": N, "number": 5}])),
++    );
++    assert_eq!(numbers(&merged), [("f1".into(), 5), ("e2".into(), 6)]);
++}
++
++/// Several clashes in one merge each move once, each to its own next number, all recorded
++#[test]
++fn keyed_several_clashes_in_one_merge_each_take_a_number_of_their_own() {
++    const D: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f80d4";
++    const E: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f80e5";
++    let base = keyed(json!([]));
++    let ours = keyed(json!([{"id": A, "number": 5}, {"id": B, "number": 6}]));
++    let theirs = keyed(json!([{"id": D, "number": 5}, {"id": E, "number": 6}]));
++    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
++    assert!(conflicts.is_empty(), "{conflicts:?}");
+     assert_eq!(
+-        conflicts,
+-        [format!(
+-            "ATM-5: two final tasks have this number ({B} and {C}); both kept, give one another number by hand"
+-        )]
++        numbers(&merged),
++        [
++            ("a1".into(), 5),
++            ("b2".into(), 6),
++            ("d4".into(), 7),
++            ("e5".into(), 8)
++        ]
++    );
++    assert_eq!(
++        merged["meta"]["renumbered"],
++        json!([{"from": "ATM-5", "to": "ATM-7"}, {"from": "ATM-6", "to": "ATM-8"}])
+     );
+-    assert_eq!(numbers(&merged), [("b2".into(), 5), ("c3".into(), 5)]);
++    assert_eq!(merged["meta"]["next_number"], json!(9));
+ }
+ 
+ #[test]
+@@ -748,9 +800,8 @@ fn a_project_migrated_to_sprints_on_either_side_has_no_phases_left() {
+ #[test]
+ fn keyed_a_renumbered_task_goes_above_either_sides_next_number_and_keeps_its_aliases() {
+     let base = keyed(json!([]));
+-    let ours = keyed(json!([{"id": B, "number": 5, "key_final": false}]));
+-    let mut theirs =
+-        keyed(json!([{"id": C, "number": 5, "key_final": false, "aliases": ["OLD-1"]}]));
++    let ours = keyed(json!([{"id": B, "number": 5}]));
++    let mut theirs = keyed(json!([{"id": C, "number": 5, "aliases": ["OLD-1"]}]));
+     theirs["meta"]["next_number"] = json!(9);
+     let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+     assert!(conflicts.is_empty(), "{conflicts:?}");
+@@ -762,7 +813,7 @@ fn keyed_a_renumbered_task_goes_above_either_sides_next_number_and_keeps_its_ali
+ #[test]
+ fn keyed_the_next_number_is_never_below_the_highest_number_plus_one() {
+     let file = |next: u64| {
+-        let mut file = keyed(json!([{"id": A, "number": 7, "key_final": true}]));
++        let mut file = keyed(json!([{"id": A, "number": 7}]));
+         file["meta"]["next_number"] = json!(next);
+         file
+     };
+diff --git a/crates/atm-db/src/jsongit/migrate.rs b/crates/atm-db/src/jsongit/migrate.rs
+index 9dca46aa..522efe5f 100644
+--- a/crates/atm-db/src/jsongit/migrate.rs
++++ b/crates/atm-db/src/jsongit/migrate.rs
+@@ -345,6 +345,36 @@ fn migrate_phases(paths: &Paths) -> Result<Option<Vec<Value>>> {
+     Ok(Some(written.1))
+ }
+ 
++/// What a merge renumbered (ADR-009: a clash moved a task to the next free number, `meta.renumbered`), said once:
++/// taken out of `tasks.json`, the list given back. None when nothing moved.
++fn take_renumbered(paths: &Paths) -> Result<Vec<Value>> {
++    let listed = |document: &Value| {
++        document
++            .pointer("/meta/renumbered")
++            .and_then(Value::as_array)
++            .cloned()
++            .unwrap_or_default()
++    };
++    // A file that can't be read: nothing to say here (the command the skill runs next reports the problem)
++    if load_tasks(paths).map_or(true, |loaded| listed(&loaded.document).is_empty()) {
++        return Ok(Vec::new());
++    }
++    let moved = {
++        let _lock = lock(&paths.dir, None)?;
++        let mut document = load_tasks(paths)?.document;
++        let moved = listed(&document);
++        if let Some(meta) = document.get_mut("meta").and_then(Value::as_object_mut) {
++            meta.shift_remove("renumbered");
++        }
++        write_json(&paths.tasks, &document)?;
++        moved
++    };
++    if in_git(&paths.root) {
++        stage(&paths.root, &[&paths.tasks]);
++    }
++    Ok(moved)
++}
++
+ /// How many tasks of the list carry `key_final` (ADR-007's provisional keys, gone with ADR-009).
+ fn with_key_final(tasks: &[Value]) -> usize {
+     tasks
+@@ -491,7 +521,7 @@ fn ensure_gitignore(task_dir: &Path) -> Result<bool> {
+ /// Move a legacy `tasks.json` into the task folder (staged with `git mv` when git tracks it), set the folder up, and
+ /// bring the task data up to date. What it did: `{moved, removed_dashboard, warning, gitignore_updated,
+ /// merge_driver_updated, cleaned_up, finish_times_filled, sprints_from_phases, with_user_from_label,
+-/// key_final_dropped[, suggest]}`.
++/// key_final_dropped, renumbered[, suggest]}`.
+ ///
+ /// # Errors
+ /// When a file can't be moved, read or written.
+@@ -508,6 +538,7 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
+         "sprints_from_phases": null,
+         "with_user_from_label": 0,
+         "key_final_dropped": 0,
++        "renumbered": [],
+     })
+     .as_object()
+     .cloned()
+@@ -580,6 +611,7 @@ pub fn migrate(paths: &Paths) -> Result<Map<String, Value>> {
+         json!(migrate_interactive(paths)?),
+     );
+     result.insert("key_final_dropped".into(), json!(drop_key_final(paths)?));
++    result.insert("renumbered".into(), Value::Array(take_renumbered(paths)?));
+     // An unreadable file: the command the skill runs next reports the problem
+     if let Ok(loaded) = load_tasks(paths) {
+         let size = std::fs::metadata(&paths.tasks).map_or(0, |m| m.len());
+@@ -662,6 +694,20 @@ pub fn describe_migration(r: &Map<String, Value>, paths: &Paths) -> Vec<String>
+             "Task keys are plain now (ADR-009): dropped key_final from {tasks} (staged, not committed)."
+         ));
+     }
++    for moved in r
++        .get("renumbered")
++        .and_then(Value::as_array)
++        .into_iter()
++        .flatten()
++    {
++        let (from, to) = (
++            atm_common::py::py_str_opt(moved.get("from")),
++            atm_common::py::py_str_opt(moved.get("to")),
++        );
++        lines.push(format!(
++            "{from} is now {to} (both branches made {from}); {from} still finds it."
++        ));
++    }
+     if lines.is_empty() {
+         lines.push("Nothing to migrate.".into());
+     }
+diff --git a/crates/atm-db/src/jsongit/migrate/tests.rs b/crates/atm-db/src/jsongit/migrate/tests.rs
+index 2c75dea0..411c7d3b 100644
+--- a/crates/atm-db/src/jsongit/migrate/tests.rs
++++ b/crates/atm-db/src/jsongit/migrate/tests.rs
+@@ -110,6 +110,31 @@ fn key_final_is_dropped_from_the_tasks_and_the_archive_once() {
+     assert_eq!(describe_migration(&again, &paths), ["Nothing to migrate."]);
+ }
+ 
++/// ADR-009 (ATM-636): what a merge renumbered is said once by the next migrate, then forgotten
++#[test]
++fn what_a_merge_renumbered_is_said_once() {
++    let (_dir, paths) = project(
++        r#"{"meta": {"format": 2, "key": "ATM", "renumbered": [{"from": "ATM-5", "to": "ATM-9"}]}, "tasks": [
++            {"id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8009", "number": 9, "aliases": ["ATM-5"], "status": "todo"}
++        ]}"#,
++    );
++    let result = migrate(&paths).unwrap();
++    assert_eq!(
++        result["renumbered"],
++        json!([{"from": "ATM-5", "to": "ATM-9"}])
++    );
++    assert!(describe_migration(&result, &paths).contains(
++        &"ATM-5 is now ATM-9 (both branches made ATM-5); ATM-5 still finds it.".to_string()
++    ));
++    assert_eq!(
++        read_json(&paths.tasks).unwrap()["meta"].get("renumbered"),
++        None
++    );
++    let again = migrate(&paths).unwrap();
++    assert_eq!(again["renumbered"], json!([]));
++    assert_eq!(describe_migration(&again, &paths), ["Nothing to migrate."]);
++}
++
+ #[test]
+ fn phases_become_sprints_named_after_them() {
+     let mut document = json!({
+diff --git a/crates/atm-lib/src/maintenance.rs b/crates/atm-lib/src/maintenance.rs
+index 5ff33a5b..8978df5f 100644
+--- a/crates/atm-lib/src/maintenance.rs
++++ b/crates/atm-lib/src/maintenance.rs
+@@ -158,6 +158,43 @@ impl StoreMaintenance {
+     }
+ }
+ 
++/// The task UUIDs on the project's base branch (`meta.workflow.base` of this branch's file, else the remote's default
++/// branch), as `origin/<base>` has them in its task file and archive (ADR-009: a clash moves the task that isn't
++/// there). Git runs a merge driver at the working copy's top; none when git has no such branch here.
++fn tasks_on_base_branch(ours: &Path) -> Vec<String> {
++    let Ok(root) = std::env::current_dir() else {
++        return Vec::new();
++    };
++    let vcs = atm_vcs::GitVcs::new(&root);
++    let document = std::fs::read_to_string(ours)
++        .ok()
++        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
++    let branch = document
++        .as_ref()
++        .and_then(|d| d.pointer("/meta/workflow/base"))
++        .and_then(serde_json::Value::as_str)
++        .map_or_else(|| vcs.default_base(), String::from);
++    let mut ids = Vec::new();
++    for file in ["tasks.json", "tasks-archive.json"] {
++        let relative = format!("{}/{file}", atm_common::TASK_DIR);
++        let Some(text) = vcs.file_on_remote_branch(&branch, &relative) else {
++            continue;
++        };
++        let Ok(doc) = serde_json::from_str::<serde_json::Value>(&text) else {
++            continue;
++        };
++        ids.extend(
++            doc["tasks"]
++                .as_array()
++                .into_iter()
++                .flatten()
++                .filter_map(|t| t.get("id").and_then(serde_json::Value::as_str))
++                .map(String::from),
++        );
++    }
++    ids
++}
++
+ /// `atm db merge-driver` (git runs it, on three files, outside any opened project): merge the versions of a task file
+ /// task by task, or of a review's `comments.md` or `review.md` (by `path`, the file git merges; none from a driver
+ /// registered before reviews, which merged only task files), writing the result over `ours`. Returns the conflicts
+@@ -173,7 +210,11 @@ pub fn merge_versions(
+ ) -> Result<Vec<String>> {
+     let name = path.map(|p| p.rsplit('/').next().unwrap_or(p));
+     if !matches!(name, Some("comments.md" | "review.md")) {
+-        return atm_db::jsongit::merge::merge_files(base, ours, theirs);
++        // A number clash moves the task that isn't on the base branch (ADR-009), read from git
++        let on_base = tasks_on_base_branch(ours);
++        return atm_db::jsongit::merge::merge_files_with(base, ours, theirs, &|id| {
++            on_base.iter().any(|known| known == id)
++        });
+     }
+     let read = |p: &Path| {
+         std::fs::read_to_string(p)
+diff --git a/docs/agent/commands.md b/docs/agent/commands.md
+index b3fdffa7..f0dccee8 100644
+--- a/docs/agent/commands.md
++++ b/docs/agent/commands.md
+@@ -7,8 +7,10 @@ cut; `--color auto|always|never` only styles it for a terminal.
+ 
+ `<id>` is a task's key (`ATM-527`, any case) in a project with task keys, or its old ID (`T-527`), an alias or its UUID;
+ in a project without keys, its ID (`atm docs tasks`). Keys are plain from the moment a task is made: use them anywhere
+-(commit messages too). If two branches gave the same number, the merge moves one task to the next free number and its
+-old key keeps finding it. (A `~` before a key, as older atm printed it, is still taken and ignored.)
++(commit messages too). If two branches gave the same number, the merge moves one task to the next free number (the one
++not on the base branch; when both or neither are, the newer), the next `atm db migrate` says which ("ATM-538 is now
++ATM-541"), and its old key keeps finding it once no task holds that number. (A `~` before a key, as older atm printed
++it, is still taken and ignored.)
+ 
+ ## Reading
+ 
+diff --git a/tests/scripts/merge.test.mjs b/tests/scripts/merge.test.mjs
+index b78a3a3b..234a21f1 100644
+--- a/tests/scripts/merge.test.mjs
++++ b/tests/scripts/merge.test.mjs
+@@ -384,7 +384,9 @@ describe('merge driver: task keys', () => {
+     }
+   };
+ 
+-  test('two branches each adding a task keep both; the incoming one takes the next number, its old key an alias', () => {
++  // ADR-009 (ATM-636): a clash never stops a merge; with neither task on the base branch (no remote here), the newer
++  // moves to the next free number, its old key an alias
++  test('two branches each adding a task keep both; with neither on the base branch, the newer takes the next number', () => {
+     withRepo((root) => {
+       assert.equal(runAtm(['project', 'key', 'set', 'MERGE'], root).code, 0);
+       git(['commit', '-q', '-am', 'task keys'], root);
+@@ -401,13 +403,61 @@ describe('merge driver: task keys', () => {
+       const onMain = merged.tasks.find((t) => t.name === 'on main');
+       const onOther = merged.tasks.find((t) => t.name === 'on other');
+       assert.ok(onMain && onOther && onMain.id !== onOther.id, 'two tasks, two UUIDs');
+-      assert.equal(onMain.number, next, 'ours keeps its number');
+-      assert.equal(onOther.number, next + 1);
+-      assert.deepEqual(onOther.aliases, [`MERGE-${next}`], 'the key from the name, Merge');
++      assert.equal(onOther.number, next, 'the older keeps its number');
++      assert.equal(onMain.number, next + 1, 'the newer moves');
++      assert.deepEqual(onMain.aliases, [`MERGE-${next}`], 'the key from the name, Merge');
+       assert.equal(merged.meta.next_number, next + 2);
+     });
+   });
+ 
++  // ADR-009 (ATM-636): the task on the base branch (origin/main) keeps its number, whichever way the merge goes and
++  // however old the other is; the next atm db migrate says once what moved
++  test('a clash moves the task not on origin’s base branch, merging either way; migrate says so once', () => {
++    withRepo((root) => {
++      const remote = tempDir('atm-remote-');
++      try {
++        git(['init', '-q', '--bare', remote], root);
++        git(['remote', 'add', 'origin', remote], root);
++        assert.equal(runAtm(['project', 'key', 'set', 'MERGE'], root).code, 0);
++        git(['commit', '-q', '-am', 'task keys'], root);
++        git(['push', '-q', '-u', 'origin', 'main'], root);
++        git(['remote', 'set-head', 'origin', 'main'], root);
++        const next = read(root).meta.next_number;
++        // The older task, on a branch; the newer, on main and pushed
++        git(['switch', '-q', '-c', 'other'], root);
++        add(root, 'on other');
++        git(['commit', '-q', '-am', 'other'], root);
++        git(['switch', '-q', 'main'], root);
++        add(root, 'on main');
++        git(['commit', '-q', '-am', 'main'], root);
++        git(['push', '-q', 'origin', 'main'], root);
++        // main merged into the branch: the branch's own task moves, though it is the older
++        git(['switch', '-q', 'other'], root);
++        let r = spawnSync('git', ['merge', '--no-edit', 'main'], { cwd: root, encoding: 'utf8' });
++        assert.equal(r.status, 0, r.stdout + r.stderr);
++        let merged = read(root);
++        const number = (name) => merged.tasks.find((t) => t.name === name).number;
++        assert.deepEqual([number('on main'), number('on other')], [next, next + 1]);
++        assert.deepEqual(merged.meta.renumbered, [{ from: `MERGE-${next}`, to: `MERGE-${next + 1}` }]);
++        const migrated = runAtm(['db', 'migrate'], root);
++        assert.match(
++          migrated.stdout,
++          new RegExp(`^MERGE-${next} is now MERGE-${next + 1} \\(both branches made MERGE-${next}\\)`, 'm'),
++        );
++        assert.equal(read(root).meta.renumbered, undefined, 'said once');
++        git(['commit', '-q', '-am', 'migrate'], root);
++        // And the branch merged back into main: nothing clashes any more, main's task kept its number
++        git(['switch', '-q', 'main'], root);
++        r = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root, encoding: 'utf8' });
++        assert.equal(r.status, 0, r.stdout + r.stderr);
++        merged = read(root);
++        assert.deepEqual([number('on main'), number('on other')], [next, next + 1]);
++      } finally {
++        removeDir(remote);
++      }
++    });
++  });
++
+   test('a branch made before the migration merges into the migrated main task by task', () => {
+     withRepo((root) => {
+       git(['switch', '-q', '-c', 'other'], root);
+diff --git a/tests/scripts/scenarios/migrate-phases.json b/tests/scripts/scenarios/migrate-phases.json
+index c1ea3bd2..c742bbdc 100644
+--- a/tests/scripts/scenarios/migrate-phases.json
++++ b/tests/scripts/scenarios/migrate-phases.json
+@@ -191,7 +191,8 @@
+         "finish_times_filled": 0,
+         "sprints_from_phases": [{ "id": "Phase 1.5", "state": "planned" }],
+         "with_user_from_label": 0,
+-        "key_final_dropped": 0
++        "key_final_dropped": 0,
++        "renumbered": []
+       }
+     }
+   },
+diff --git a/tests/scripts/scenarios/migrate.json b/tests/scripts/scenarios/migrate.json
+index 6aa6d37b..d8f34a1b 100644
+--- a/tests/scripts/scenarios/migrate.json
++++ b/tests/scripts/scenarios/migrate.json
+@@ -69,7 +69,8 @@
+         "finish_times_filled": 0,
+         "sprints_from_phases": null,
+         "with_user_from_label": 0,
+-        "key_final_dropped": 0
++        "key_final_dropped": 0,
++        "renumbered": []
+       }
+     }
+   },
+@@ -235,7 +236,8 @@
+         "finish_times_filled": 0,
+         "sprints_from_phases": null,
+         "with_user_from_label": 0,
+-        "key_final_dropped": 0
++        "key_final_dropped": 0,
++        "renumbered": []
+       },
+       "files": {
+         ".agentic-task-manager/.server.json": false,

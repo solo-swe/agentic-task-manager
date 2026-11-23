@@ -8,7 +8,9 @@
 
 use std::collections::HashSet;
 
-use atm_common::archive::{archivable_by, archive_settings, finished_at, in_open_pr, recent_since};
+use atm_common::archive::{
+    archivable_by, archive_settings, awaits_sprint_review, finished_at, in_open_pr, recent_since,
+};
 use atm_common::keys::{keys_format, next_task_number};
 use atm_common::py::{py_str, py_str_opt};
 use atm_common::time::{format_iso, now_iso, parse_iso};
@@ -101,7 +103,7 @@ fn days_text(document: &Value, keep: Option<f64>) -> String {
 }
 
 /// The finished tasks that stay in `tasks.json`, and why (T-352), as [`archivable_by`] decides: in an open PR,
-/// finished in the last keep days, not before `--before`, not in the `--sprint` chosen. `[{id, reason}]`, in file
+/// waiting for its sprint's review (ATM-668), finished in the last keep days, not before `--before`, not in the `--sprint` chosen. `[{id, reason}]`, in file
 /// order.
 fn kept_finished(
     document: &Value,
@@ -131,6 +133,8 @@ fn kept_finished(
                 "in open PR #{}",
                 py_str_opt(t.get("pr").and_then(|p| p.get("number")))
             )
+        } else if awaits_sprint_review(t) {
+            "waiting for its sprint's review".to_string()
         } else if finished.is_some_and(|f| f > recent) {
             format!("finished in the last {days} days")
         } else if let Some(before) = before
@@ -180,10 +184,10 @@ fn plan_archive(
         let mut chosen = HashSet::new();
         for name in &request.sprints {
             let Some(sprint) = vocab.find_sprint(Some(&json!(name))) else {
-                return Err(Error::Failed {
-                    message: format!("no sprint {}", atm_common::py::repr_str(name)),
-                    code: 2,
-                });
+                return Err(Error::Invalid(format!(
+                    "no sprint {}",
+                    atm_common::py::repr_str(name)
+                )));
             };
             chosen.insert(sprint.get("id").map(py_str).unwrap_or_default());
         }
@@ -237,8 +241,7 @@ pub fn archive_finished(project: &mut Project, request: &ArchiveRequest) -> Resu
             sizes: store.sizes(),
         });
     }
-    let mut result = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    let (moved, duplicates_dropped, kept) = project.change(|work: &mut Working| {
         let document = work.document.clone();
         let mut archive = work.archive()?.clone();
         let (moving, dropped, kept) = plan_archive(&document, &mut archive, request, before)?;
@@ -257,7 +260,7 @@ pub fn archive_finished(project: &mut Project, request: &ArchiveRequest) -> Resu
                     .filter_map(Value::as_object)
                     .cloned()
                     .collect();
-                let next = next_task_number(&work.document, &archived);
+                let next = next_task_number(&work.document, &archived)?;
                 work.document["meta"]["next_number"] = json!(next);
             } else {
                 let next = next_free_number(&work.document);
@@ -279,10 +282,8 @@ pub fn archive_finished(project: &mut Project, request: &ArchiveRequest) -> Resu
             work.document["meta"]["archived"] = json!(count);
             *work.archive()? = archive;
         }
-        result = Some((ids, dropped, kept));
-        Ok(())
+        Ok((ids, dropped, kept))
     })?;
-    let (moved, duplicates_dropped, kept) = result.unwrap_or_default();
     Ok(Archived {
         moved,
         duplicates_dropped,
@@ -305,8 +306,15 @@ pub struct Unarchived {
 /// # Errors
 /// A task that isn't in the archive (already back, or never there), a store error.
 pub fn unarchive_tasks(project: &mut Project, ids: &[String]) -> Result<Unarchived> {
-    let mut result = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    // A task named twice (its key and an alias, or a repeat) comes back once (ATM-668, audit L3), in the order given
+    let mut seen = HashSet::new();
+    let ids: Vec<String> = ids
+        .iter()
+        .filter(|id| seen.insert(id.as_str()))
+        .cloned()
+        .collect();
+    let ids = ids.as_slice();
+    let moves_back = project.change(|work: &mut Working| {
         let mut archive = work.archive()?.clone();
         drop_duplicates(&work.document, &mut archive);
         let found = |id: &str| {
@@ -366,12 +374,11 @@ pub fn unarchive_tasks(project: &mut Project, ids: &[String]) -> Result<Unarchiv
             });
         }
         *work.archive()? = archive;
-        result = Some(again);
-        Ok(())
+        Ok(again)
     })?;
     Ok(Unarchived {
         restored: ids.to_vec(),
-        moves_back: result.unwrap_or_default(),
+        moves_back,
     })
 }
 
@@ -389,9 +396,11 @@ pub fn archive_hint_now(project: &Project) -> Result<Option<Value>> {
 }
 
 /// The project's tasks as the REST API's v1 route gives them (docs/multi-project-api.md §2.5), in one snapshot:
-/// `meta` (as read: a tolerant read leaves out what doesn't work), `bytes` (how big the task data is), `tasks` (each
-/// with what atm derives for it), `problems` (what a tolerant read found wrong with the file) and, for the working
-/// tasks, `archive_hint` when atm suggests archiving.
+/// `meta` (as read: a tolerant read leaves out what doesn't work), `vocabulary` (as atm resolved it:
+/// [`crate::vocabulary::served`]), `sprints` and `releases` with their figures ([`crate::sprints::sprint_views`],
+/// [`crate::releases::release_views`]), `bytes` (how big the task data is), `tasks` (each with what atm derives for it),
+/// `problems` (what a tolerant read found wrong with the file) and, for the working tasks, `archive_hint` when atm
+/// suggests archiving.
 ///
 /// # Errors
 /// A filter naming no such sprint or release (exit code 2), task data that can't be read.
@@ -403,8 +412,15 @@ pub fn task_snapshot(project: &Project, filters: &crate::query::Filters) -> Resu
         .filter(|m| atm_common::py::truthy(m))
         .cloned()
         .unwrap_or_else(|| json!({}));
+    let vocabulary = crate::vocabulary::served(
+        store.vocabulary()?,
+        meta.as_object().unwrap_or(&serde_json::Map::new()),
+    );
     let mut snapshot = json!({
         "meta": meta,
+        "vocabulary": vocabulary,
+        "sprints": crate::sprints::sprint_views(project)?,
+        "releases": crate::releases::release_views(project)?,
         "bytes": store.sizes().0,
         "tasks": crate::query::task_views(project, filters)?,
         "problems": crate::query::read_problems(project)?,

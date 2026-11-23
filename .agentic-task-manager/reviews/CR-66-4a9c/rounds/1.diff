@@ -1,0 +1,260 @@
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index 608f7c3e..23fdb12a 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -305,12 +305,20 @@
+   let wanted = $state<string | null>(null);
+   const cardOf = (path: string) =>
+     list?.querySelector<HTMLElement>(`.review-file-card[data-file="${CSS.escape(path)}"]`) ?? null;
++  /** `card` at the list's top, as near as it scrolls: the list scrolled by the difference, and nothing else (ATM-656:
++   * `scrollIntoView` also scrolls what holds the list, and in WebKit landed a few px off one time in two) */
++  function toTop(card: HTMLElement | null) {
++    const el = list;
++    if (!el || !card) return;
++    const off = card.getBoundingClientRect().top - el.getBoundingClientRect().top;
++    if (Math.abs(off) >= 1) el.scrollTop += off;
++  }
+   async function showFile(path: string, address = true) {
+     tab = 'diffs';
+     holdNearCards();
+     wanted = path;
+     await tick();
+-    cardOf(path)?.scrollIntoView({ block: 'start' });
++    toTop(cardOf(path));
+     atFile = chosen = pinned = path;
+     // The address follows once the page is idle: the file is drawn first (a navigation re-renders the layout)
+     writing?.();
+@@ -326,7 +334,7 @@
+     if (!el) return;
+     const unpin = () => (pinned = null);
+     const settle = new ResizeObserver(() => {
+-      if (pinned) cardOf(pinned)?.scrollIntoView({ block: 'start' });
++      if (pinned) toTop(cardOf(pinned));
+     });
+     for (const card of el.querySelectorAll('.review-file-card')) settle.observe(card);
+     const events = ['wheel', 'touchstart', 'mousedown', 'keydown'] as const;
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index a2ba66fc..8d97c65e 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -692,6 +692,107 @@ test.describe('a review’s page', () => {
+     },
+   );
+ 
++  // ATM-656 (Hakan): a jump to a file from the tree sometimes ended elsewhere: the files above it drawn after the jump
++  // grew and pushed it out of view. The file's header stays where the jump put it (the pane's top, or as near as the
++  // pane can scroll), frame after frame, while the files around it are drawn
++  test(
++    'a jump to a file stays on it while the files above it are drawn: one in the middle, the last, one scrolled at once',
++    WEBKIT_TOO,
++    async ({ page, tasksServer }) => {
++      // Shaped as the long review of the performance tests (94 files, a few long ones, some long lines)
++      const sizes = Array.from({ length: 94 }, (_, i) => (i % 31 === 0 ? 600 : i % 7 === 0 ? 120 : 12));
++      const files = sizes.map((added, i) => {
++        const path = `src/d${String(Math.floor(i / 10)).padStart(2, '0')}/f${String(i).padStart(3, '0')}.rs`;
++        const body = Array.from(
++          { length: added },
++          (_, n) => `+let value_${n} = "${'x'.repeat(n % 5 === 0 ? 240 : 30)}";`,
++        ).join('\n');
++        return {
++          path,
++          old_path: path,
++          status: 'modified',
++          binary: false,
++          patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,${added + 3} @@\n line 1\n line 2\n line 3\n${body}\n`,
++          before: `b${i}`,
++          after: `a${i}`,
++        };
++      });
++      await openReviews(page, tasksServer);
++      files.forEach((f, i) => {
++        const head = ['line 1', 'line 2', 'line 3'];
++        const added = f.patch
++          .split('\n')
++          .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
++          .map((l) => l.slice(1));
++        const doc = (text: string) => projectDocument(f.path, text, { kind: 'code', language: 'rust', line_offset: 1 });
++        tasksServer
++          .setRevisionDocument(`b${i}`, doc(head.join('\n') + '\n'))
++          .setRevisionDocument(`a${i}`, doc([...head, ...added].join('\n') + '\n'));
++      });
++      tasksServer.setReview('CR-2', reviewPage({ chains: [], view: { round: 3, against: null, files } }));
++      await page.goto(reviewPath(tasksServer, '/CR-2'));
++      await page.getByRole('tab', { name: /^Diffs/ }).click();
++      await expect(diffOf(page, files[0].path).locator('.diff-line').first()).toBeVisible();
++      /** The file's card top against the pane's, as each frame was drawn (read right after it: a read in the frame's own
++       * callback comes before the page holds the file in place for it), for 1.5 s from when the jump brought it in */
++      const followed = (path: string) =>
++        page.evaluate(
++          (p) =>
++            new Promise<number[]>((done) => {
++              const pane = document.querySelector<HTMLElement>('.review-diffs')!;
++              const tops: number[] = [];
++              let start: number | null = null;
++              const after = new MessageChannel();
++              after.port1.onmessage = () => read();
++              const frame = () => after.port2.postMessage(null);
++              const read = () => {
++                const card = document.querySelector(`.review-file-card[data-file="${CSS.escape(p)}"]`);
++                const top = card
++                  ? Math.round(card.getBoundingClientRect().top - pane.getBoundingClientRect().top)
++                  : null;
++                if (start === null && top !== null && top > -40 && top < pane.clientHeight) start = performance.now();
++                if (start !== null && top !== null) tops.push(top);
++                if (start === null || performance.now() - start < 1500) requestAnimationFrame(frame);
++                else done(tops);
++              };
++              requestAnimationFrame(frame);
++            }),
++          path,
++        );
++      // A file in the middle, the last file, and one scrolled a little at once (the reader's own scroll ends the jump's
++      // hold: what is in view stays put all the same while the cards above it are drawn)
++      for (const [target, scrolled] of [
++        [files[47], false],
++        [files.at(-1)!, false],
++        [files[70], true],
++      ] as const) {
++        const name = target.path.split('/').at(-1)!;
++        const tops = followed(target.path);
++        await page.locator('.review-file-name', { hasText: name }).first().click();
++        if (scrolled) {
++          const box = (await page.locator('.review-diffs').boundingBox())!;
++          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
++          await page.mouse.wheel(0, 30);
++        }
++        // From the frame it reached the place it ends at (the first frames may catch it on its way there, or the wheel's
++        // own scroll still landing)
++        const all = await tops;
++        const last = all.at(-1)!;
++        const seen = all.slice(all.findIndex((t) => Math.abs(t - last) < 4));
++        const pane = (await page.locator('.review-diffs').boundingBox())!;
++        expect(last, `${name}: ${JSON.stringify(seen)}`).toBeLessThan(pane.height / 2);
++        // At the top (scrolled: as far below it as the wheel went, when WebKit took the wheel in time)
++        if (target !== files.at(-1)) {
++          expect(last, `${name}: ${JSON.stringify(seen)}`).toBeLessThan(16);
++          expect(last, `${name}: ${JSON.stringify(seen)}`).toBeGreaterThan(scrolled ? -60 : -16);
++        }
++        // Once there, it stays: no frame after it arrived moves it (it moved 400 px for a frame in WebKit, or for good)
++        for (const top of seen) expect(Math.abs(top - last), `${name}: ${JSON.stringify(seen)}`).toBeLessThan(4);
++        await expect(diffOf(page, target.path)).toBeInViewport();
++      }
++    },
++  );
++
+   // ATM-626 (Hakan, the app): the Rendered view of a new Markdown document showed only about its first page
+   for (const added of [true, false])
+     test(`Rendered: a long ${added ? 'new' : 'changed'} document is drawn to its end`, async ({
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 0410a69f..78770c39 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -346,14 +346,32 @@ describe('ReviewPage: Diffs', () => {
+     expect(card(container, 'README.md')).toHaveClass('folded');
+   });
+ 
++  /** A layout for the list, which jsdom has none of: each card 1,000 px below the one before (plus `grown`, as if the
++   * cards above it grew), the list at the window's top; what `scrollTop` the page sets moves them all (ATM-656: the
++   * list is scrolled by the card's distance from its top, not `scrollIntoView`) */
++  function laidOut(container: HTMLElement) {
++    const list = container.querySelector('.review-diffs') as HTMLElement;
++    const grown = { by: 0 };
++    list.getBoundingClientRect = () => ({ top: 0, bottom: 800 }) as DOMRect;
++    container.querySelectorAll<HTMLElement>('.review-file-card').forEach((c, i) => {
++      c.getBoundingClientRect = () => {
++        const top = (i + 1) * 1000 + grown.by - list.scrollTop;
++        return { top, bottom: top + 900 } as DOMRect;
++      };
++    });
++    /** The card's top, against the list's */
++    const topOf = (path: string) => card(container, path).getBoundingClientRect().top;
++    return { list, grown, topOf };
++  }
++
+   it('a click in the tree goes to the file’s card and puts it in the address; a tick there marks it viewed', async () => {
+     const { container, onfile, onviewed } = await diffs();
+-    const scroll = vi.mocked(Element.prototype.scrollIntoView);
++    const { topOf } = laidOut(container);
+     await fireEvent.click(within(container.querySelector('.review-files') as HTMLElement).getByText('a.rs'));
+     // The address follows once the page is idle
+     expect(onfile).not.toHaveBeenCalled();
+     await vi.waitFor(() => expect(onfile).toHaveBeenCalledWith('src/a.rs'));
+-    expect(scroll.mock.contexts.at(-1)).toBe(card(container, 'src/a.rs'));
++    expect(topOf('src/a.rs')).toBe(0);
+     expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs');
+     await fireEvent.click(
+       within(container.querySelector('.review-files') as HTMLElement).getByLabelText('Viewed src/b.rs'),
+@@ -375,38 +393,52 @@ describe('ReviewPage: Diffs', () => {
+     );
+     try {
+       const { container } = await diffs();
+-      const scroll = vi.mocked(Element.prototype.scrollIntoView);
++      const { list, grown, topOf } = laidOut(container);
+       await fireEvent.click(within(container.querySelector('.review-files') as HTMLElement).getByText('a.rs'));
+-      const grow = () => resized.forEach((callback) => callback([], {} as ResizeObserver));
+-      scroll.mockClear();
+-      grow();
+-      expect(scroll.mock.contexts).toContain(card(container, 'src/a.rs'));
++      /** The cards above grow by `by`, and the list's observers hear of it */
++      const grow = (by: number) => {
++        grown.by += by;
++        resized.forEach((callback) => callback([], {} as ResizeObserver));
++      };
++      expect(topOf('src/a.rs')).toBe(0);
++      grow(300);
++      expect(topOf('src/a.rs')).toBe(0);
+       // The user scrolls the list: it stays where they put it
+-      await fireEvent.wheel(container.querySelector('.review-diffs') as HTMLElement);
+-      scroll.mockClear();
+-      grow();
+-      expect(scroll.mock.contexts).not.toContain(card(container, 'src/a.rs'));
++      await fireEvent.wheel(list);
++      grow(300);
++      expect(topOf('src/a.rs')).toBe(300);
+       // Another file gone to is pinned in its turn; Next unpins it
+       await fireEvent.keyDown(window, { key: ']' });
+-      scroll.mockClear();
+-      grow();
+-      expect(scroll.mock.contexts).toContain(card(container, 'src/b.rs'));
++      grow(300);
++      expect(topOf('src/b.rs')).toBe(0);
+       await fireEvent.click(screen.getByRole('button', { name: 'Next change' }));
+-      scroll.mockClear();
+-      grow();
+-      expect(scroll.mock.contexts).not.toContain(card(container, 'src/b.rs'));
++      const at = list.scrollTop;
++      grow(300);
++      expect(list.scrollTop).toBe(at);
+     } finally {
+       vi.unstubAllGlobals();
+     }
+   });
+ 
+   it('the address’s file is gone to when the page opens, without writing the address again', async () => {
+-    const { container, onfile } = show(data(), { file: 'src/a.rs' });
+-    await vi.waitFor(() =>
+-      expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs'),
+-    );
+-    expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toContain(card(container, 'src/a.rs'));
+-    expect(onfile).not.toHaveBeenCalled();
++    // A layout from the start (the page goes to the file as it opens): each card 1,000 px below the one before
++    const rect = HTMLElement.prototype.getBoundingClientRect;
++    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
++      const list = this.parentElement;
++      if (!this.classList.contains('review-file-card') || !list) return { top: 0, bottom: 800 } as DOMRect;
++      const top = ([...list.children].indexOf(this) + 1) * 1000 - list.scrollTop;
++      return { top, bottom: top + 900 } as DOMRect;
++    };
++    try {
++      const { container, onfile } = show(data(), { file: 'src/a.rs' });
++      await vi.waitFor(() =>
++        expect(container.querySelector('.review-file.current [data-file]')?.getAttribute('data-file')).toBe('src/a.rs'),
++      );
++      expect(card(container, 'src/a.rs').getBoundingClientRect().top).toBe(0);
++      expect(onfile).not.toHaveBeenCalled();
++    } finally {
++      HTMLElement.prototype.getBoundingClientRect = rect;
++    }
+   });
+ 
+   // ATM-595: the tree's folders fold, by click and keys, all at once, kept for the session; a jump opens them

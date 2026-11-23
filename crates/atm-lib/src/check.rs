@@ -28,12 +28,7 @@ pub struct Checked {
 /// The resolutions a finished task can have (SR-2.8).
 const RESOLUTIONS: [&str; 4] = ["done", "wont_do", "duplicate", "obsolete"];
 
-fn valid_label(label: &str) -> bool {
-    (1..=32).contains(&label.len())
-        && label
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
-}
+use atm_common::valid_label;
 
 fn is_list_of_strings(value: &Value) -> bool {
     value
@@ -108,7 +103,7 @@ fn check_resolution(
 }
 
 fn find_release<'v>(vocab: &'v Vocabulary, release: &Value) -> Option<&'v Map<String, Value>> {
-    vocab.releases.iter().find(|r| r.get("id") == Some(release))
+    vocab.find_release(release)
 }
 
 /// The checks of one task (well formed: an object with a string ID).

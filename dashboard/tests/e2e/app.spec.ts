@@ -424,6 +424,68 @@ test.describe('the dashboard in the atm app', () => {
     },
   );
 
+  // ATM-700 (docs/tabs-and-navigation-design.md §4.2): a question stays on its tab; the app's own stay above every tab
+  test('a Submit review form left open is there again on its tab; Settings stays open across a switch', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    const header = {
+      id: 'r2',
+      reference: 'CR-2',
+      number: 2,
+      title: 'Trim the names',
+      status: 'waiting',
+      tasks: [],
+      author: 'claude:a',
+      reviewers: [],
+      created: '2026-11-17T10:00:00Z',
+      updated: '2026-11-17T10:00:00Z',
+    };
+    tasksServer
+      .setReviews({ reviews: [{ review: header, branch: null, chains: 0, open: 0, needs_you: true }], you: 'Ana' })
+      .setReview('CR-2', {
+        review: header,
+        summary: '',
+        branch: null,
+        rounds: [{ number: 1, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
+        chains: [],
+        view: { round: 1, against: null, files: [] },
+        needs_you: true,
+        you: 'Ana',
+      });
+    tasksServer.link(`/projects/${tasksServer.projectId}/reviews/CR-2`);
+    await page.goto('/');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+
+    // Half written, then another tab shown and back: the form as it was
+    await page.getByRole('button', { name: 'Other decisions' }).click();
+    await page.getByLabel('Summary').fill('Half written');
+    await page.locator('#app-tab-new').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(page.locator('#review-page')).toHaveCount(0);
+    await tabs.nth(0).click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    await expect(page.getByLabel('Summary')).toHaveValue('Half written');
+
+    // The same review in the other tab is its own page: no form open there
+    await tasksServer.pushLink(`/projects/${tasksServer.projectId}/reviews/CR-2`);
+    await expect(tabs).toHaveCount(3);
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    await expect(page.getByLabel('Summary')).toHaveCount(0);
+
+    // Settings is the app's: open across a switch of tab
+    await tasksServer.chooseMenu({ kind: 'settings' });
+    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
+    // The link's tab opened right of the first; the one before it is the first, with its form
+    await tasksServer.chooseMenu({ kind: 'previous_tab' });
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
+    await expect(page.getByLabel('Summary')).toHaveValue('Half written');
+  });
+
   test('a review opens in a tab of its own (ATM-574), labelled by it, under the window’s own title bar', async ({
     page,
     tasksServer,
@@ -469,9 +531,12 @@ test.describe('the dashboard in the atm app', () => {
     await page.locator('.review-back').click();
     await expect(page.locator('#review-list')).toBeVisible();
 
-    // ⌘-click: a tab of its own
+    // ⌘-click: a tab of its own, in the background, this tab still the list (ATM-698, as browsers do)
     await page.locator('.review-row[data-review="CR-2"] .review-link').click({ modifiers: ['ControlOrMeta'] });
     await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#review-list')).toBeVisible();
+    await tabs.nth(1).click();
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
     // Opened on its own, its back button goes up to its reviews list
@@ -561,6 +626,264 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.windowCalls).toContain('close_window');
   });
 
+  // ATM-698 (docs/tabs-and-navigation-design.md §4.5): clicks as in a browser, on every card and row
+  test('⌘-click and a middle click on a card or row open a tab in the background; ⇧⌘-click brings it forward', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/kanban`);
+    await page.goto('/');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    const card = page.locator('.kanban-card[data-id="T-004"] .card-link');
+    await card.click({ button: 'middle' });
+    await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await card.click({ modifiers: ['ControlOrMeta', 'Shift'] });
+    await expect(tabs).toHaveCount(3);
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => addressOf(page)).toContain('task=T-004');
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+    // A list row's name, the same: a real link to its details
+    await tabs.nth(0).click({ timeout: 5000 });
+    await page.locator('#tab-list').click();
+    const row = page.locator('.task-card[data-id="T-004"] a.task-name');
+    await expect(row).toHaveAttribute('href', /\/list\?(.*&)?task=T-004$/);
+    await row.click({ modifiers: ['ControlOrMeta'] });
+    await expect(tabs).toHaveCount(4);
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    // A plain click opens it here
+    await row.click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await expect(tabs).toHaveCount(4);
+  });
+
+  // ATM-699 (docs/tabs-and-navigation-design.md §4.5): atm's own right-click menus, WebKit's turned off
+  test('right-click menus: on a card, on selected text, on a tab, elsewhere; each item does what it says; a field keeps the system’s', async ({
+    page,
+    context,
+    tasksServer,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/kanban`);
+    await page.goto('/');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    const menu = page.locator('#app-context-menu');
+    const items = menu.locator('.app-context-item');
+    const item = (id: string) => menu.locator(`[data-item="${id}"]`);
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    const card = page.locator('.kanban-card[data-id="T-004"]');
+
+    // A card: Open, Open in New Tab, Open in New Window, Copy Link
+    await card.click({ button: 'right' });
+    await expect(items).toHaveText(['Open', 'Open in New Tab', 'Open in New Window', 'Copy Link']);
+    await item('copy-link').click();
+    await expect(menu).toBeHidden();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`atm://projects/${tasksServer.projectId}/kanban?task=T-004`);
+    await card.click({ button: 'right' });
+    await item('open-tab').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await card.click({ button: 'right' });
+    await item('open-window').click();
+    await expect.poll(() => tasksServer.openedWindows.length).toBe(1);
+    expect(tasksServer.openedWindows[0]).toContain('task=T-004');
+    await card.click({ button: 'right' });
+    await item('open').click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+
+    // Selected text (ATM-699, Hakan): atm's menu, not WebKit's (whose Reload isn't the app's); Copy copies it. The
+    // task's description, text a reader selects
+    const description = page.locator('#detail-description');
+    // Rendered once CompMD has drawn it: select it then
+    await expect(description).toHaveText(/\S/);
+    await description.selectText();
+    const selected = await page.evaluate(() => getSelection()?.toString() ?? '');
+    expect(selected.trim()).not.toBe('');
+    await description.click({ button: 'right' });
+    await expect(items).toHaveText(['Copy', 'Back', 'Forward', 'Reload']);
+    await item('copy').click();
+    await expect(menu).toBeHidden();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(selected);
+    await page.keyboard.press('Escape');
+
+    // A tab: its six items; Close Other Tabs leaves it alone
+    await tabs.nth(1).click({ button: 'right' });
+    await expect(items).toHaveText([
+      'New Tab',
+      'Duplicate',
+      'Move to New Window',
+      'Copy Link',
+      'Close',
+      'Close Other Tabs',
+    ]);
+    await item('duplicate').click();
+    await expect(tabs).toHaveCount(3);
+    // The tab duplicated was the card's, its details over its page: the copy shows them too
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+    await tabs.nth(0).click({ button: 'right' });
+    await item('close-others').click();
+    await expect(tabs).toHaveCount(1);
+
+    // Elsewhere: Back, Forward, Reload; Back is there after a step
+    await page.locator('#tab-list').click();
+    await page.locator('#app-titlebar-end').click({ button: 'right' });
+    await expect(items).toHaveText(['Back', 'Forward', 'Reload']);
+    await expect(item('forward')).toHaveAttribute('data-disabled', '');
+    await item('back').click();
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+
+    // Over text that can be edited: none of atm's (the system's shows)
+    await page.locator('#task-search').click({ button: 'right' });
+    await expect(menu).toBeHidden();
+  });
+
+  // ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): each tab its own history; a switch adds nothing
+  test('Back and Forward walk the active tab’s own history; a switch of tab adds to neither; the page’s own stays put', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/list`);
+    await page.goto('/');
+    await expect(page.locator('#panel-list')).toBeVisible();
+    const depth = await page.evaluate(() => history.length);
+    const at = () => addressOf(page).split('?')[0];
+    const base = `/projects/${tasksServer.projectId}`;
+
+    // Steps in this tab: the Kanban view, then a task's details over it
+    await page.locator('#tab-kanban').click();
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    await page.locator('.kanban-card[data-id="T-004"] .card-title, .kanban-card[data-id="T-004"]').first().click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    // The page's own history never grew
+    expect(await page.evaluate(() => history.length)).toBe(depth);
+
+    // Back: the details close, the board stays; Back again: the list; Forward: the board
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+    await expect.poll(at).toBe(`${base}/kanban`);
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect.poll(at).toBe(`${base}/list`);
+    await tasksServer.chooseMenu({ kind: 'back' }); // nothing before the tab's first entry
+    await expect.poll(at).toBe(`${base}/list`);
+    await tasksServer.chooseMenu({ kind: 'forward' });
+    await expect.poll(at).toBe(`${base}/kanban`);
+
+    // A new tab: its own history, Back going nowhere
+    await page.locator('#app-tab-new').click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    // Back to the first tab: as it was left, and its Back still the list (the switch added nothing)
+    await page.locator('#app-titlebar [role="tab"]').nth(0).click();
+    await expect.poll(at).toBe(`${base}/kanban`);
+    await tasksServer.chooseMenu({ kind: 'back' });
+    await expect.poll(at).toBe(`${base}/list`);
+    // The mouse's back and forward buttons too
+    await page.mouse.move(400, 300);
+    await page.evaluate(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 4, bubbles: true })));
+    await expect.poll(at).toBe(`${base}/kanban`);
+    await page.evaluate(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 3, bubbles: true })));
+    await expect.poll(at).toBe(`${base}/list`);
+    expect(await page.evaluate(() => history.length)).toBe(depth);
+  });
+
+  // ATM-695 (docs/tabs-and-navigation-design.md §4.5): ‹ › left of the sidebar toggle, on the active tab's history
+  test('the ‹ › arrows step through the tab’s history, disabled at its ends, follow the tab switched to, and list its entries', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/list`);
+    await page.goto('/');
+    await expect(page.locator('#panel-list')).toBeVisible();
+    const at = () => addressOf(page).split('?')[0];
+    const base = `/projects/${tasksServer.projectId}`;
+    // The sidebar is open: they are in its top strip, before its toggle
+    const strip = page.locator('#app-sidebar-top');
+    const backArrow = strip.locator('#app-back');
+    const forwardArrow = strip.locator('#app-forward');
+    expect(await strip.locator('button').evaluateAll((all) => all.map((b) => b.id))).toEqual([
+      'app-back',
+      'app-forward',
+      'app-sidebar-toggle',
+    ]);
+    await expect(backArrow).toBeDisabled();
+    await expect(forwardArrow).toBeDisabled();
+
+    // Two steps: the board, the graph
+    await page.locator('#tab-kanban').click();
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    await page.locator('#tab-graph').click();
+    await expect.poll(at).toBe(`${base}/graph`);
+    await expect(backArrow).toBeEnabled();
+    await expect(forwardArrow).toBeDisabled();
+
+    // ‹ steps back, › forward
+    await backArrow.click();
+    await expect.poll(at).toBe(`${base}/kanban`);
+    await expect(forwardArrow).toBeEnabled();
+    await backArrow.click();
+    await expect.poll(at).toBe(`${base}/list`);
+    await expect(backArrow).toBeDisabled();
+    await forwardArrow.click();
+    await expect.poll(at).toBe(`${base}/kanban`);
+
+    // A right-click on › lists what is ahead, nearest first; choosing one jumps there
+    await forwardArrow.click({ button: 'right' });
+    const ahead = page.locator('#app-forward-menu .app-history-menu-item');
+    await expect(ahead).toHaveText(['Graph — Standard Project']);
+    await ahead.first().click();
+    await expect.poll(at).toBe(`${base}/graph`);
+    // On ‹, what is behind, nearest first
+    await backArrow.click({ button: 'right' });
+    const behind = page.locator('#app-back-menu .app-history-menu-item');
+    await expect(behind).toHaveText(['Kanban — Standard Project', 'List — Standard Project']);
+    await behind.nth(1).click();
+    await expect.poll(at).toBe(`${base}/list`);
+    await expect(backArrow).toBeDisabled();
+    await expect(forwardArrow).toBeEnabled();
+
+    // A long press lists them too, and steps nowhere
+    const box = (await forwardArrow.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(page.locator('#app-forward-menu')).toBeVisible();
+    await page.mouse.up();
+    await expect(page.locator('#app-forward-menu .app-history-menu-item')).toHaveCount(2);
+    expect(at()).toBe(`${base}/list`);
+    await page.keyboard.press('Escape');
+
+    // A new tab: its own history, both disabled; back to the first, the arrows follow it
+    await page.locator('#app-tab-new').click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(backArrow).toBeDisabled();
+    await expect(forwardArrow).toBeDisabled();
+    await page.locator('#app-titlebar [role="tab"]').nth(0).click();
+    await expect.poll(at).toBe(`${base}/list`);
+    await expect(forwardArrow).toBeEnabled();
+
+    // The sidebar closed: they move to the title bar, before its toggle
+    await page.locator('#app-sidebar-toggle').click();
+    const bar = page.locator('#app-titlebar');
+    await expect(bar.locator('#app-back + #app-forward')).toHaveCount(1);
+    await expect(bar.locator('.app-history + #app-sidebar-toggle')).toHaveCount(1);
+    await bar.locator('#app-forward').click();
+    await expect.poll(at).toBe(`${base}/kanban`);
+  });
+
   test('the sidebar (T-515): projects open here or, ⌘-clicked, in a new tab; a task too; its button and menu hide it', async ({
     page,
     tasksServer,
@@ -597,6 +920,10 @@ test.describe('the dashboard in the atm app', () => {
     const id = await card.getAttribute('data-id');
     await card.click({ modifiers: ['ControlOrMeta'] });
     await expect(tabs).toHaveCount(3);
+    // In the background, right of this tab, which stays as it was (ATM-698)
+    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+    await tabs.nth(1).click();
     await expect.poll(() => addressOf(page)).toContain(`task=${id}`);
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
     await page.keyboard.press('Escape');
@@ -681,6 +1008,43 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
     await expect(page.locator('#in-tab-trail')).toHaveCount(0);
   });
+
+  // Hakan: in the app, the regular themes' board scrolled as a whole, with a scrollbar, where each column should
+  // scroll inside without one (the sticky-notes and hand-drawn themes, whose columns stretch, didn't)
+  for (const theme of ['default', 'sticky-notes']) {
+    test(`in the app, the board fits its tab and each column scrolls inside it, without a scrollbar (${theme}) @webkit`, async ({
+      page,
+      tasksServer,
+    }) => {
+      await tasksServer.asApp();
+      tasksServer.use('kanban');
+      // A large window, and a small one (Hakan's: about 1000 × 615)
+      for (const [width, height] of [
+        [1280, 720],
+        [1000, 615],
+      ]) {
+        await page.setViewportSize({ width, height });
+        await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+        if (theme !== 'default') await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        const done = page.locator('.kanban-column[data-status="done"]');
+        const showAll = done.getByRole('button', { name: /Show all/ });
+        if (await showAll.count()) await showAll.click();
+        // The board doesn't scroll as a whole, nor does the tab or the page
+        const overflow = (selector: string) =>
+          page.locator(selector).evaluate((el) => el.scrollHeight - el.clientHeight);
+        await expect.poll(() => overflow('.kanban-board'), { message: `${width} × ${height}` }).toBeLessThanOrEqual(0);
+        // The tab and the page neither (in a small window the board keeps its 320px minimum, and the page gives way)
+        if (height >= 720) {
+          expect(await overflow('#app-main')).toBeLessThanOrEqual(0);
+          expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(0);
+        }
+        // The column does, inside, with no scrollbar taking room
+        const cards = done.locator('.kanban-cards');
+        expect(await cards.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+        expect(await cards.evaluate((el) => (el as HTMLElement).offsetWidth - el.clientWidth)).toBe(0);
+      }
+    });
+  }
 
   test('the status bar (T-516): up to date, the agents at work, the copyright, the version and the links', async ({
     page,

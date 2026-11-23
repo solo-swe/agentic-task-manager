@@ -2,6 +2,8 @@ use serde_json::{Map, Value, json};
 
 use super::*;
 
+mod docs;
+
 fn task(v: Value) -> Task {
     match v {
         Value::Object(m) => m,
@@ -14,7 +16,7 @@ fn vocab() -> Vocabulary {
 }
 
 fn run(t: &mut Task, command: Command, options: &Options, agent: Option<&str>) -> Result<Value> {
-    let none = |_: &str| Ok(false);
+    let none = |_: &str| Ok(None);
     change_status(
         t,
         command,
@@ -50,10 +52,12 @@ fn full_options() -> Options {
 }
 
 /// docs/task-states.md's transitions: (command, from, to). Every other pair is refused.
-const TABLE: [(Command, Kind, Kind); 19] = [
+const TABLE: [(Command, Kind, Kind); 20] = [
     (Command::Start, Kind::Todo, Kind::Active),
     (Command::Start, Kind::Review, Kind::Active),
     (Command::Review, Kind::Active, Kind::Review),
+    // A round on a review sent back (ATM-713)
+    (Command::Review, Kind::Review, Kind::Review),
     (Command::Done, Kind::Active, Kind::Done),
     (Command::Done, Kind::Review, Kind::Done),
     (Command::Fail, Kind::Active, Kind::Todo),
@@ -80,6 +84,7 @@ fn every_kind_and_command_follows_the_table() {
             // for, drop and skip a rejection): give it the one that opens this command's way
             let review_state = match command {
                 Command::Drop | Command::Skip => "rejected",
+                Command::Review => "changes_requested",
                 _ => "approved",
             };
             let mut t =
@@ -116,6 +121,39 @@ fn every_kind_and_command_follows_the_table() {
     }
 }
 
+/// ATM-713 (docs/task-review-state-machine.md §3.2: changes requested → waiting, a round): a review sent back asks for
+/// review again, its last round kept with its outcome; waiting or decided otherwise, it is the review's to decide
+#[test]
+fn a_review_sent_back_is_asked_for_again_and_only_then() {
+    let mut sent_back = task(json!({
+        "id": "T-1", "status": "in_review", "review_state": "changes_requested",
+        "review_requested_at": "2026-11-01T10:00:00Z", "reviewed_at": "2026-11-01T11:00:00Z",
+    }));
+    let options = Options {
+        note: Some("CR-1: round 2".into()),
+        ..Options::default()
+    };
+    run(&mut sent_back, Command::Review, &options, Some("claude:1")).unwrap();
+    assert_eq!(sent_back["status"], "in_review");
+    assert_eq!(sent_back["review_state"], "waiting");
+    assert!(sent_back.get("reviewed_at").is_none());
+    assert_eq!(
+        sent_back["reviews"],
+        json!([{ "from": "2026-11-01T10:00:00Z", "to": "2026-11-01T11:00:00Z", "outcome": "changes_requested" }])
+    );
+    for state in ["waiting", "approved", "rejected"] {
+        let mut t = task(json!({"id": "T-1", "status": "in_review", "review_state": state}));
+        let error = run(&mut t, Command::Review, &options, Some("claude:1")).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("can't ask for T-1's review again: it is in review"),
+            "{state}: {error}"
+        );
+        assert_eq!(t["review_state"], state, "{state}: unchanged");
+    }
+}
+
 #[test]
 fn the_destinations_agree_with_the_table() {
     for (command, _, to) in TABLE {
@@ -125,7 +163,7 @@ fn the_destinations_agree_with_the_table() {
 
 #[test]
 fn start_needs_done_dependencies_and_records_who() {
-    let none = |_: &str| Ok(false);
+    let none = |_: &str| Ok(None);
     let dep = task(json!({"id": "T-0", "status": "todo"}));
     let mut t = task(json!({"id": "T-1", "status": "todo", "dependencies": ["T-0"]}));
     let error = change_status(
@@ -341,7 +379,7 @@ fn run_in(
     options: &Options,
     agent: Option<&str>,
 ) -> Result<Value> {
-    let none = |_: &str| Ok(false);
+    let none = |_: &str| Ok(None);
     change_status(t, command, options, vocab, &[], agent, "S", &none)
 }
 
@@ -557,7 +595,8 @@ fn a_task_without_a_known_status_counts_as_to_do() {
 
 #[test]
 fn a_dependency_is_done_when_it_is_finished_or_archived() {
-    let archived = |id: &str| Ok(id == "T-A");
+    let archived =
+        |id: &str| Ok((id == "T-A").then(|| task(json!({"id": "T-A", "status": "done"}))));
     for (deps, waiting) in [
         (json!(["T-D"]), None),
         (json!(["T-A"]), None),

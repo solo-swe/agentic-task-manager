@@ -256,7 +256,7 @@ test.describe('Activity widget', () => {
     for (const id of ['T-101', 'T-102', 'T-103', 'T-104'])
       data.tasks.push(quick(id, '2026-04-01T10:00:00Z', '2026-04-01T10:10:00Z'));
     data.tasks.push(quick('T-105', '2026-03-31T10:00:00Z', '2026-04-01T10:40:00Z'));
-    for (const t of data.tasks) if (t.id === 'T-003') t.labels = ['interactive'];
+    for (const t of data.tasks) if (t.id === 'T-003') t.with = 'user';
     tasksServer.use(data);
     await page.reload();
     await activityPill(page).click();
@@ -373,7 +373,7 @@ test.describe('Activity widget', () => {
   }) => {
     // T-003 (08:40–09:40) and T-005 (09:10–10:30) worked with you
     const data = loadFixture('agents');
-    for (const t of data.tasks) if (t.id === 'T-003' || t.id === 'T-005') t.labels = ['interactive'];
+    for (const t of data.tasks) if (t.id === 'T-003' || t.id === 'T-005') t.with = 'user';
     tasksServer.use(data);
     tasksServer.claims([
       {

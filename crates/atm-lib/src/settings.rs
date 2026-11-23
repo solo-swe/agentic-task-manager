@@ -28,12 +28,51 @@ fn meta_mut(document: &mut Value) -> &mut Map<String, Value> {
         .expect("made an object just above")
 }
 
+/// The `meta` keys `atm db init --meta-file` sets on a project that already has its task data (ATM-669, audit L5):
+/// its name and description, its settings and its vocabularies. Every other key is kept by a command of its own, or by
+/// atm itself, so the file never bypasses it.
+const INIT_KEYS: [&str; 16] = [
+    "project",
+    "description",
+    "repository",
+    "repository_type",
+    "logo",
+    "lease_minutes",
+    "statuses",
+    "types",
+    "priorities",
+    "default_priority",
+    "labels",
+    "components",
+    "workflow",
+    "archive",
+    "sprint_names",
+    "review",
+];
+
+/// What changes a `meta` key `--meta-file` may not set on an existing project.
+fn changed_by(key: &str) -> &'static str {
+    match key {
+        "key" | "key_history" => {
+            "atm project key set <KEY> changes it, keeping the old key as its tasks' alias"
+        }
+        "sprints" | "phases" => "the atm sprint commands change the sprints",
+        "releases" => "the atm release commands change the releases",
+        "format" | "next_number" | "next_id" | "archived" | "created" => {
+            "atm keeps it itself (atm db migrate, atm task add, atm db archive)"
+        }
+        _ => "it isn't a project setting atm knows",
+    }
+}
+
 /// `atm db init --meta-file`: merge `new`'s keys into `meta` (project, description, vocabularies, ...), creating the
 /// task data when there is none, so `/atm-create-tasks` never writes the file itself. The vocabularies are checked
-/// before anything is written; `meta.id` is kept. Returns (created, the keys set, sorted).
+/// before anything is written; `meta.id` is kept. On an existing project only [`INIT_KEYS`] change; another key the
+/// file gives with a new value is refused, naming what changes it, and nothing is written (one with the value the
+/// project has is left as it is). Returns (created, the keys set, sorted).
 ///
 /// # Errors
-/// Vocabularies that can't work, a store error.
+/// Vocabularies that can't work, a key an existing project's file may not change, a store error.
 pub fn init_meta(project: &mut Project, new: &Map<String, Value>) -> Result<(bool, Vec<String>)> {
     let new: Map<String, Value> = new
         .iter()
@@ -77,15 +116,31 @@ pub fn init_meta(project: &mut Project, new: &Map<String, Value>) -> Result<(boo
         project.store_mut().create(&document)?;
         return Ok((true, keys));
     }
-    project.store_mut().change(&mut |work: &mut Working| {
+    let mut set = project.change(|work: &mut Working| {
         let meta = meta_mut(&mut work.document);
+        let refused: Vec<String> = new
+            .iter()
+            .filter(|(key, value)| !INIT_KEYS.contains(&key.as_str()) && meta.get(*key) != Some(*value))
+            .map(|(key, _)| format!("meta.{key}: {}", changed_by(key)))
+            .collect();
+        if !refused.is_empty() {
+            return Err(Error::Invalid(format!(
+                "this project has its task data: --meta-file sets its name, settings and vocabularies, not {}",
+                refused.join("; ")
+            )));
+        }
+        let mut set = Vec::new();
         for (key, value) in &new {
-            meta.insert(key.clone(), value.clone());
+            if INIT_KEYS.contains(&key.as_str()) {
+                meta.insert(key.clone(), value.clone());
+                set.push(key.clone());
+            }
         }
         atm_common::Vocabulary::of_document(&work.document)?;
-        Ok(())
+        Ok(set)
     })?;
-    Ok((false, keys))
+    set.sort();
+    Ok((false, set))
 }
 
 /// Eight random hexadecimal digits: a new project's `meta.id`.
@@ -110,22 +165,19 @@ pub fn ensure_project_id(project: &mut Project) -> Result<Option<String>> {
     if !project.store().exists() {
         return Ok(None);
     }
-    let mut given = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let meta = meta_mut(&mut work.document);
         if meta
             .get("id")
             .and_then(Value::as_str)
             .is_some_and(|id| !id.is_empty())
         {
-            return Ok(());
+            return Ok(None);
         }
         let id = random_id();
         meta.insert("id".into(), json!(id));
-        given = Some(id);
-        Ok(())
-    })?;
-    Ok(given)
+        Ok(Some(id))
+    })
 }
 
 /// `atm project workflow`: the project's workflow with its defaults, or none when none is set.
@@ -197,8 +249,7 @@ pub fn set_workflow(
         _ => {}
     }
     let remove_trailers = change.trailers.as_deref() == Some("none");
-    let mut result = Map::new();
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let meta = meta_mut(&mut work.document);
         let mut workflow = meta
             .get("workflow")
@@ -213,10 +264,8 @@ pub fn set_workflow(
         }
         meta.insert("workflow".into(), Value::Object(workflow));
         // Checked before anything is written
-        result = workflow_of(meta)?.unwrap_or_default();
-        Ok(())
-    })?;
-    Ok(result)
+        Ok(workflow_of(meta)?.unwrap_or_default())
+    })
 }
 
 /// The project's root, where its logo is looked for; none for a store without a working copy.
@@ -268,7 +317,7 @@ pub fn set_logo(project: &mut Project, path: &str, cwd: &Path) -> Result<String>
         }
         None => path.to_string(),
     };
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         meta_mut(&mut work.document).insert("logo".into(), json!(relative));
         Ok(())
     })?;
@@ -280,12 +329,9 @@ pub fn set_logo(project: &mut Project, path: &str, cwd: &Path) -> Result<String>
 /// # Errors
 /// A store error.
 pub fn unset_logo(project: &mut Project) -> Result<bool> {
-    let mut removed = false;
-    project.store_mut().change(&mut |work: &mut Working| {
-        removed = meta_mut(&mut work.document).shift_remove("logo").is_some();
-        Ok(())
-    })?;
-    Ok(removed)
+    project.change(|work: &mut Working| {
+        Ok(meta_mut(&mut work.document).shift_remove("logo").is_some())
+    })
 }
 
 /// One of a project's vocabularies (T-500).
@@ -374,8 +420,7 @@ pub fn set_project_key(project: &mut Project, key: &str) -> Result<KeySet> {
             atm_common::py::repr_str(&key)
         )));
     }
-    let mut outcome = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let keyed = atm_common::keys::keys_format(&work.document);
         if !work.document.get("meta").is_some_and(Value::is_object) {
             work.document["meta"] = json!({});
@@ -411,14 +456,12 @@ pub fn set_project_key(project: &mut Project, key: &str) -> Result<KeySet> {
         } else {
             meta.insert("key_history".into(), json!(history));
         }
-        outcome = Some(KeySet {
+        Ok(KeySet {
             from: from.clone(),
             to: key.clone(),
             history: history.clone(),
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| Error::failed("the key wasn't set"))
+        })
+    })
 }
 
 /// `atm project vocab rename` (T-500): an entry of the statuses, types or priorities gets the ID `new` (and, given, the
@@ -443,8 +486,7 @@ pub fn rename_term(
             "nothing to change: give a new ID or --label for {from}"
         )));
     }
-    let mut outcome: Option<RenamedTerm> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = atm_common::Vocabulary::of_document(&work.document)?;
         // The list as it is in effect: meta's, else the defaults, as objects
         let entries: Vec<Map<String, Value>> = match list {
@@ -481,15 +523,12 @@ pub fn rename_term(
             .filter_map(|e| e.get("id").and_then(Value::as_str))
             .collect();
         let Some(at) = ids.iter().position(|id| *id == from) else {
-            return Err(Error::Failed {
-                message: format!(
-                    "no {} {from}; the {}: {}",
-                    list.task_field(),
-                    list.meta_key(),
-                    ids.join(", ")
-                ),
-                code: 2,
-            });
+            return Err(Error::Invalid(format!(
+                "no {} {from}; the {}: {}",
+                list.task_field(),
+                list.meta_key(),
+                ids.join(", ")
+            )));
         };
         if to != from && ids.contains(&to.as_str()) {
             return Err(Error::Invalid(format!(
@@ -504,39 +543,89 @@ pub fn rename_term(
         }
         let renamed_label = entries[at].get("label").cloned().unwrap_or(Value::Null);
         let meta = meta_mut(&mut work.document);
-        meta.insert(
-            list.meta_key().into(),
-            Value::Array(entries.into_iter().map(Value::Object).collect()),
-        );
+        let written = renamed_in_place(meta.get(list.meta_key()), from, &to, label)
+            .unwrap_or_else(|| Value::Array(entries.into_iter().map(Value::Object).collect()));
+        meta.insert(list.meta_key().into(), written);
         if list == VocabList::Priority && vocab.default_priority == from {
             meta.insert("default_priority".into(), json!(to));
         }
         let field = list.task_field();
-        let tasks = rename_field(work.document["tasks"].as_array_mut(), field, from, &to);
-        let archived = rename_field(
-            work.archive()?
-                .get_mut("tasks")
-                .and_then(Value::as_array_mut),
-            field,
-            from,
-            &to,
-        );
+        let (tasks, archived) =
+            crate::lookup::in_both(work, |list| rename_field(list, field, from, &to))?;
         atm_common::Vocabulary::of_document(&work.document)?;
-        outcome = Some(RenamedTerm {
+        Ok(RenamedTerm {
             from: from.to_string(),
             to: to.clone(),
             label: renamed_label,
             tasks,
             archived,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| Error::Invalid(format!("no {} {from}", list.task_field())))
+        })
+    })
+}
+
+/// The project's own list `stored`, entry `from` renamed `to` (and labelled `label`) in place: every other key of it,
+/// and every other entry, kept as they are (ATM-669, audit L5: rebuilt from `id`, `label` and `kind`, an entry lost the
+/// rest). None when the project has no such list of its own, or `from` isn't in it (the defaults are in effect).
+fn renamed_in_place(
+    stored: Option<&Value>,
+    from: &str,
+    to: &str,
+    label: Option<&str>,
+) -> Option<Value> {
+    let entry_id = |e: &Value| {
+        e.as_str()
+            .or_else(|| e.get("id").and_then(Value::as_str))
+            .map(String::from)
+    };
+    let mut items = stored?.as_array()?.clone();
+    let entry = items
+        .iter_mut()
+        .find(|e| entry_id(e).as_deref() == Some(from))?;
+    match entry {
+        Value::Object(m) => {
+            m.insert("id".into(), json!(to));
+            if let Some(label) = label {
+                m.insert("label".into(), json!(label));
+            }
+        }
+        _ => *entry = label.map_or_else(|| json!(to), |l| json!({"id": to, "label": l})),
+    }
+    Some(Value::Array(items))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::relative_to;
+    use super::{relative_to, renamed_in_place};
+    use serde_json::json;
+
+    #[test]
+    fn a_renamed_entry_keeps_its_other_keys_and_so_do_the_others() {
+        let stored = json!([
+            { "id": "todo", "label": "To Do", "kind": "todo", "color": "#999" },
+            { "id": "doing", "label": "Doing", "kind": "active", "hint": "work" },
+            "plain",
+        ]);
+        assert_eq!(
+            renamed_in_place(Some(&stored), "doing", "wip", Some("WIP")),
+            Some(json!([
+                { "id": "todo", "label": "To Do", "kind": "todo", "color": "#999" },
+                { "id": "wip", "label": "WIP", "kind": "active", "hint": "work" },
+                "plain",
+            ]))
+        );
+        // A plain entry stays plain, or takes the label given
+        assert_eq!(
+            renamed_in_place(Some(&stored), "plain", "simple", None).unwrap()[2],
+            json!("simple")
+        );
+        assert_eq!(
+            renamed_in_place(Some(&stored), "plain", "simple", Some("Simple")).unwrap()[2],
+            json!({ "id": "simple", "label": "Simple" })
+        );
+        // Not the project's own, or not in it: the defaults are in effect
+        assert_eq!(renamed_in_place(None, "doing", "wip", None), None);
+        assert_eq!(renamed_in_place(Some(&stored), "gone", "wip", None), None);
+    }
     use std::path::Path;
 
     #[test]

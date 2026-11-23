@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use atm_common::edits::is_agent;
 use atm_common::keys::{key_of, keys_format, label_of, number_of, with_key};
 use atm_common::py::{py_str, py_str_opt, strip, truthy};
 use atm_common::rules::{natural_cmp, unfinished_dependencies};
@@ -34,8 +35,6 @@ const BOARD_CAP: usize = 30;
 /// To-do tasks per project, so one project's new batch doesn't fill the To Do column.
 const BOARD_READY_CAP: usize = 10;
 const BOARD_DONE_HOURS: i64 = 24;
-/// The review states in which a task in review waits for its agent, not the reviewer.
-const REWORK_STATES: [&str; 2] = ["changes_requested", "approved"];
 
 fn time_of(value: Option<&Value>) -> Option<i64> {
     value.and_then(Value::as_str).and_then(parse_iso)
@@ -63,11 +62,16 @@ fn count(kinds: &[Option<Kind>], kind: Kind) -> usize {
 }
 
 /// A sprint as the overview shows it: its name, state, due date and release, and done of its tasks but the skipped.
-fn sprint_numbers(sprint: &Map<String, Value>, own: &[Option<Kind>]) -> Map<String, Value> {
+/// The one percent rule (ATM-720): done of the tasks but the skipped; a sprint with none left to count is 100 %, here
+/// and in the sprints atm serves with the tasks.
+pub(crate) fn sprint_numbers(
+    sprint: &Map<String, Value>,
+    own: &[Option<Kind>],
+) -> Map<String, Value> {
     let done = count(own, Kind::Done);
     let total = own.len() - count(own, Kind::Skipped);
     let field = |k: &str| sprint.get(k).cloned().unwrap_or(Value::Null);
-    json!({
+    let mut numbers = json!({
         "id": field("id"),
         "state": field("state"),
         "due": field("due"),
@@ -78,11 +82,14 @@ fn sprint_numbers(sprint: &Map<String, Value>, own: &[Option<Kind>]) -> Map<Stri
     })
     .as_object()
     .cloned()
-    .unwrap_or_default()
+    .unwrap_or_default();
+    // Days to its due date, by the one rule (ATM-720)
+    crate::sprints::due_fields(sprint, &mut numbers);
+    numbers
 }
 
 fn sprint_of<'v>(vocab: &'v Vocabulary, task: &Task) -> Option<&'v Map<String, Value>> {
-    vocab.find_sprint(task.get("sprint"))
+    vocab.sprint_of(task)
 }
 
 fn sprint_key(sprint: &Map<String, Value>) -> String {
@@ -144,10 +151,7 @@ fn recent_sprints(vocab: &Vocabulary, tasks: &[&Task], kinds: &[Option<Kind>]) -
 }
 
 fn active_sprint(vocab: &Vocabulary) -> Option<&Map<String, Value>> {
-    vocab
-        .sprints
-        .iter()
-        .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
+    vocab.active_sprint()
 }
 
 fn in_sprint(vocab: &Vocabulary, task: &Task, sprint: &Map<String, Value>) -> bool {
@@ -190,14 +194,8 @@ fn description(meta: Option<&Value>) -> Value {
     json!(text.chars().take(DESCRIPTION_CAP - 1).collect::<String>() + "…")
 }
 
-/// Only a web address is linked (docs/security-review.md F9): `http://` or `https://`, then no white space.
-fn web_address(url: &str) -> bool {
-    let lower = url.to_ascii_lowercase();
-    let rest = lower
-        .strip_prefix("https://")
-        .or_else(|| lower.strip_prefix("http://"));
-    rest.is_some_and(|r| !r.is_empty() && !r.chars().any(char::is_whitespace))
-}
+/// Only a web address is linked (docs/security-review.md F9)
+use atm_common::repository::web_address;
 
 /// The project's git line for its card: the working copy's branch, and the latest PR recorded on its tasks (the
 /// highest number), `merged` once its tasks have `merged_at`. No forge call and no CI state.
@@ -304,7 +302,7 @@ fn todo_order<'t>(
     all: &[&'t Task],
     kinds: &[Option<Kind>],
     loop_ready: &[&Task],
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<Vec<Todo<'t>>> {
     let rank = |t: &Task| {
         let id = t.get("id");
@@ -490,44 +488,25 @@ fn board(
     })
 }
 
-/// A task's work as (start, end), as the dashboard counts it: from `started_at` until it asked for a review or was
-/// done, or until now while active; none for a task that holds none.
-fn work_span(vocab: &Vocabulary, task: &Task, current: i64) -> Option<(i64, i64)> {
-    let start = time_of(task.get("started_at"))?;
-    let end = match vocab.kind_of(task.get("status")) {
-        Some(Kind::Active) => current.max(start),
-        Some(kind @ (Kind::Done | Kind::Review)) => {
-            let finished = if kind == Kind::Done {
-                task.get("completed_at")
-            } else {
-                task.get("updated_at")
-            };
-            time_of(task.get("review_requested_at"))
-                .or_else(|| time_of(finished))
-                .unwrap_or(start)
-        }
-        _ => return None,
-    };
-    Some((start, end.max(start)))
-}
-
-/// Agent time (T-255): the work of tasks an agent started, or nobody recorded (before v4), each agent's spans merged
-/// so an agent on two tasks counts once; parallel agents add up. In minutes.
+/// Agent time (T-255): the work of tasks (atm-lib's one rule, every attempt and round: [`crate::work`]) an agent did,
+/// or nobody recorded (before v4), each agent's spans merged so an agent on two tasks counts once; parallel agents add
+/// up. In minutes.
 fn agent_minutes(vocab: &Vocabulary, tasks: &[&Task], current: i64) -> i64 {
     let mut spans: Vec<(String, Vec<(i64, i64)>)> = Vec::new();
     for (i, t) in tasks.iter().enumerate() {
-        let starter = started_by(t).filter(|s| truthy(s)).map(py_str);
-        if starter.as_ref().is_some_and(|s| !s.starts_with("claude:")) {
-            continue;
-        }
-        let Some(span) = work_span(vocab, t, current) else {
+        let Some(work) = crate::work::work_of(vocab, t, current) else {
             continue;
         };
-        // Unattributed spans are each their own
-        let key = starter.unwrap_or_else(|| format!("\u{0}{i}"));
-        match spans.iter_mut().find(|(k, _)| *k == key) {
-            Some((_, list)) => list.push(span),
-            None => spans.push((key, vec![span])),
+        for span in work.spans {
+            if span.by.is_some() && !is_agent(span.by.as_deref()) {
+                continue;
+            }
+            // Unattributed spans are each task's own
+            let key = span.by.unwrap_or_else(|| format!("\u{0}{i}"));
+            match spans.iter_mut().find(|(k, _)| *k == key) {
+                Some((_, list)) => list.push((span.from, span.to)),
+                None => spans.push((key, vec![(span.from, span.to)])),
+            }
         }
     }
     let mut total = 0i64;
@@ -599,11 +578,7 @@ pub fn project_summary(project: &Project) -> Result<Value> {
     let document = store.document()?;
     let vocab = store.vocabulary()?;
     let tasks = store.list_tasks()?;
-    let archived = |id: &str| {
-        store
-            .get_archived_task(id)
-            .map(|t| t.is_some_and(|t| !t.is_empty()))
-    };
+    let archived = |id: &str| crate::query::archived_task(store, id);
     let kinds: Vec<Option<Kind>> = tasks
         .iter()
         .map(|t| vocab.kind_of(t.get("status")))
@@ -672,11 +647,15 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         label: &label,
     };
     // What the loop takes next with its default selection, by the very rule `atm loop next` follows
+    let here = store.working_copy().map(atm_common::Shown::shown);
+    // Live claims only, as `atm loop next` reads them (ATM-667)
+    let live_claims = crate::leases::live_claims(&claims, atm_common::time::now());
     let order = loop_order(
         vocab,
         document,
         &tasks,
-        &claims,
+        &live_claims,
+        here.as_deref(),
         &Selection::default(),
         None,
         false,
@@ -765,21 +744,32 @@ pub fn project_summary(project: &Project) -> Result<Value> {
     let active = active_sprint(vocab);
     let mut needs_you_tasks = Vec::new();
     for (t, k) in tasks.iter().zip(&kinds) {
-        let reason = match k {
-            Some(Kind::Review) if through_review(t) => None,
-            Some(Kind::Review) => {
-                let state = t.get("review_state").and_then(Value::as_str);
-                (!state.is_some_and(|s| REWORK_STATES.contains(&s))).then_some("review")
-            }
-            Some(Kind::Blocked) if t.get("waiting_on").and_then(Value::as_str) == Some("user") => {
-                Some("blocked")
-            }
-            Some(Kind::Todo) if t.get("with").and_then(Value::as_str) == Some("user") => {
-                let in_scope = active.is_none_or(|a| in_sprint(vocab, t, a));
-                (in_scope && unfinished_dependencies(vocab, &tasks, t, &archived)?.is_empty())
-                    .then_some("together")
-            }
-            _ => None,
+        // atm's one rule (ATM-717, `waiting`), as each task's view has it; its dependencies looked up only for work
+        // with the user, the one case they decide
+        let with_user = t.get("with").and_then(Value::as_str) == Some("user");
+        let waiting_for: Vec<String> = if *k == Some(Kind::Todo) && with_user {
+            unfinished_dependencies(vocab, &tasks, t, &archived)?
+                .into_iter()
+                .map(|(d, _)| d)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let answer = crate::waiting::of(
+            vocab,
+            t,
+            crate::waiting::Context {
+                ready: *k == Some(Kind::Todo) && waiting_for.is_empty(),
+                waiting_for: &waiting_for,
+                in_scope: crate::waiting::in_active_scope(vocab, t),
+            },
+        );
+        let reason = match answer.needs_you {
+            Some(crate::waiting::NeedsYou::Review) if through_review(t) => None,
+            Some(crate::waiting::NeedsYou::Review) => Some("review"),
+            Some(crate::waiting::NeedsYou::Blocked) => Some("blocked"),
+            Some(crate::waiting::NeedsYou::Together) => Some("together"),
+            None => None,
         };
         if let Some(reason) = reason {
             let entry = json!({"id": t.get("id"), "name": capped(t.get("name")), "reason": reason});
@@ -837,6 +827,8 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         "board": board(&shown, &tasks, &kinds, &todo_refs, current, &live, true),
         "board_active_sprint": sprint_board,
         "stats": project_stats(project, document, vocab, &tasks, current),
+        // The overview's Progress tab (ATM-722): from the summary, no project's tasks loaded for it
+        "progress": crate::stats::overview(project, current * 1000)?,
     }))
 }
 

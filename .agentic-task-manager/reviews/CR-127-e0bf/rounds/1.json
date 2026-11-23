@@ -1,0 +1,287 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "0deac327e4dc0f41d0e76c14ab7be662f90840f0",
+    "head": "3a88ca229a43cbbee005f8d757c6c2394300eb7c"
+  },
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/build.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/capabilities/main.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/commands/reads.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/integration_tests.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "app/src-tauri/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/source.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/stats.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-api/src/routes/test_support.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/project.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-common/schema/api.schema.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/lib.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/sprints.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/sprints/views.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/stats.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/stats/forecast.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/stats/intervals.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/stats/people.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/stats/progress.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/stats/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/stats/time.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/summary.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/workspaces.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/http.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/api/ipc.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/burndown.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/forecast.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/insights.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/overview-data.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/overview/OverviewProgress.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/progress/ProgressTab.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/progress/ProgressWidget.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/projectinfo.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/projectstats.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/ProjectTab.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/stats.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/archive.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/helpers.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/overview-progress.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/project.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/burndown.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/forecast.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/insights.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/overview-data.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/projectinfo.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/projectstats.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/state.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/stats.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/summary.helpers.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/stats.json",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/serve.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-23T10:52:29Z"
+}

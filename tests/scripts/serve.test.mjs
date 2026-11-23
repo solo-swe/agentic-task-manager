@@ -101,7 +101,7 @@ function rawGet(port, urlPath, host) {
     const req = http.request({ host: '127.0.0.1', port, path: urlPath, headers: { Host: host } }, (res) => {
       let body = '';
       res.on('data', (d) => (body += d));
-      res.on('end', () => resolve({ status: res.statusCode, body }));
+      res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }));
     });
     req.on('error', reject);
     req.end();
@@ -151,6 +151,13 @@ describe('serve', () => {
     const again = atm(['service', 'start', '--port', String(port + 5)], root);
     assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/projects/abcd1234`));
     assert.equal(record(atmHome).pid, r.pid);
+    // --json: one object, never the text (ATM-679, audit C11)
+    assert.deepEqual(JSON.parse(atm(['service', 'start', '--json'], root).stdout), {
+      url: `http://localhost:${port}/projects/abcd1234`,
+      started: false,
+      listed: true,
+      migrated: [],
+    });
 
     const running = atm(['service', 'status'], root).stdout;
     assert.match(running, new RegExp(`running: http://localhost:${port}/ .*pid ${r.pid}`));
@@ -158,11 +165,15 @@ describe('serve', () => {
     assert.equal(status.running, true);
     assert.equal(status.url, `http://localhost:${port}/`);
 
-    assert.equal(atm(['service', 'stop'], root).stdout, `Dashboard server stopped (pid ${r.pid}).\n`);
+    assert.deepEqual(JSON.parse(atm(['service', 'stop', '--json'], root).stdout), {
+      stopped: [{ pid: r.pid, port, recorded: true }],
+      stale_record: null,
+    });
     assert.equal(alive(r.pid), false);
     assert.equal(record(atmHome), null);
     assert.equal(atm(['service', 'status'], root).stdout, 'Dashboard server is not running.\n');
     assert.equal(atm(['service', 'stop'], root).stdout, 'Dashboard server is not running.\n');
+    assert.deepEqual(JSON.parse(atm(['service', 'stop', '--json'], root).stdout), { stopped: [], stale_record: null });
   });
 
   test('one server for two projects; /api/projects lists them', async () => {
@@ -244,7 +255,20 @@ describe('serve', () => {
     const url = `http://localhost:${port}/api/projects`;
     const first = await fetch(url);
     const byId = Object.fromEntries((await first.json()).projects.map((p) => [p.id, p]));
-    assert.deepEqual(byId.abcd1234.summary, {
+    // The overview's Progress tab (ATM-722), checked on its own: its burndown has a point a day, from the first task's
+    // (1 February, day 20485 since 1970) to today. Its total leaves the skipped task out; no pace, so no forecast
+    const { progress, ...rest } = byId.abcd1234.summary;
+    const day = (iso) => Math.floor(Date.parse(iso) / 86_400_000);
+    assert.deepEqual([progress.done, progress.total, progress.open_releases, progress.forecast], [3, 7, [], null]);
+    assert.deepEqual(progress.done_days, [
+      [day('2026-02-01'), 1],
+      [day('2026-03-13'), 1],
+      [day('2026-03-15'), 1],
+    ]);
+    assert.deepEqual(progress.burndown[0], [day('2026-02-01'), 7, 6]);
+    assert.deepEqual(progress.burndown.at(-1), [day('2026-03-15'), 7, 4]);
+    assert.equal(progress.burndown.length, day('2026-03-15') - day('2026-02-01') + 1);
+    assert.deepEqual(rest, {
       total: 8,
       done: 3,
       skipped: 1,
@@ -260,7 +284,12 @@ describe('serve', () => {
         completed_at: '2026-03-15T10:00:00Z',
       },
       // No code reviews in this project (ATM-606: reviews.rs's tests count them)
-      needs_you: { review: 1, blocked_on_user: 1, together: 0, code_reviews: 0 },
+      needs_you: {
+        review: 1,
+        blocked_on_user: 1,
+        together: 0,
+        code_reviews: 0,
+      },
       needs_you_tasks: [
         { id: 'T-5', name: 'T-5', reason: 'review' },
         { id: 'T-6', name: 'T-6', reason: 'blocked' },
@@ -602,7 +631,9 @@ describe('serve', () => {
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const summary = api.projects.find((p) => p.id === 'sprinted').summary;
-    assert.deepEqual(summary.active_sprint, {
+    // Its days to the due date by the project's day (ATM-720), negative: it is overdue by now; and when it passed
+    const { days_left: daysLeft, due_end: dueEnd, ...active } = summary.active_sprint;
+    assert.deepEqual(active, {
       id: 'Now',
       state: 'active',
       due: '2026-04-01',
@@ -612,6 +643,8 @@ describe('serve', () => {
       percent: 50,
       goal: 'Ship',
     });
+    assert.ok(Number.isInteger(daysLeft) && daysLeft < 0, String(daysLeft));
+    assert.match(dueEnd, /^2026-04-0[12]T\d\d:59:59Z$/);
     // The open ones with tasks (Now, Next; Empty has none), filled up to four with the latest closed, in the project's order
     assert.deepEqual(
       summary.recent_sprints.map((s) => [s.id, s.state, s.done, s.total]),
@@ -746,6 +779,26 @@ describe('serve', () => {
       'If-None-Match': doc.headers.get('etag'),
     });
     assert.equal(again.status, 304);
+    // ATM-671 (audit H5): a read another site's page sends is refused before anything runs; atm's own page's is not
+    for (const [headers, status] of [
+      [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
+      [{ Origin: 'https://evil.example' }, 403],
+      [{ Origin: 'null' }, 403],
+      [{ 'Sec-Fetch-Site': 'same-origin' }, 200],
+      [{ Origin: `http://localhost:${port}` }, 200],
+      [{ Origin: 'http://localhost:5173' }, 200],
+    ]) {
+      assert.equal((await get('documents', 'docs/x.md', headers)).status, status, JSON.stringify(headers));
+    }
+    // The page itself may be opened from another site, and its assets loaded
+    assert.equal(
+      (
+        await fetch(`http://localhost:${port}/`, {
+          headers: { 'Sec-Fetch-Site': 'cross-site' },
+        })
+      ).status,
+      200,
+    );
     fs.writeFileSync(path.join(root, 'docs/x.md'), '# Changed\n');
     const changed = await get('documents', 'docs/x.md', {
       'If-None-Match': doc.headers.get('etag'),
@@ -971,17 +1024,24 @@ describe('serve', () => {
       headers: { 'If-None-Match': etag },
     });
     assert.equal(after.status, 200);
-    const changed = (await after.json()).worktrees[1].tasks;
+    const afterTrees = (await after.json()).worktrees;
+    const changed = afterTrees[1].tasks;
     assert.deepEqual(
       changed.map((v) => [v.task.id, v.task.status, v.derived.kind]),
       [['T-1', 'in_progress', 'active']],
     );
+    // Which copy the board shows is atm's (ATM-724): the linked one's T-1 got further, by the merge driver's ranking
+    assert.deepEqual(afterTrees[1].shown, ['T-1']);
+    assert.equal(afterTrees[0].shown, undefined);
     // A copy's derived values are worked out in its own worktree (§11.10 A, T-387): there T-2 now waits for T-1,
     // which is in progress there
     assert.equal(atm(['task', 'edit', 'T-2', '--add-dep', 'T-1'], linked).code, 0);
-    const copies = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
+    const copiesTree = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1];
+    const copies = copiesTree.tasks;
     const t2 = copies.find((v) => v.task.id === 'T-2');
     assert.deepEqual([t2.derived.kind, t2.derived.ready, t2.derived.waiting_for], ['todo', false, ['T-1']]);
+    // T-2's copy differs but got no further than main's (to do in both): main's is shown
+    assert.deepEqual(copiesTree.shown, ['T-1']);
     const claims = await (await fetch(`${base}/p/abcd1234/claims.json`)).json();
     assert.deepEqual(
       claims.claims.map((c) => [c.task, c.agent, c.branch]),
@@ -1002,11 +1062,12 @@ describe('serve', () => {
       ],
     );
     assert.equal(atm(['task', 'state', 'T-1', 'todo', '--answer', 'This one'], root).code, 0);
-    const left = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
+    const leftTree = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1];
     assert.deepEqual(
-      left.map((v) => v.task.id),
+      leftTree.tasks.map((v) => v.task.id),
       ['T-2'],
     );
+    assert.deepEqual(leftTree.shown, []);
     atm(['service', 'stop'], root);
   });
 
@@ -1062,7 +1123,12 @@ describe('serve', () => {
     const send = (method, url, body, headers = {}) =>
       fetch(url, {
         method,
-        headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Atm-Session': token, ...headers },
+        headers: {
+          Origin: origin,
+          'Content-Type': 'application/json',
+          'X-Atm-Session': token,
+          ...headers,
+        },
         body: typeof body === 'string' ? body : JSON.stringify(body),
       });
     const refused = async (r) => [r.status, (await r.json()).error];
@@ -1070,16 +1136,27 @@ describe('serve', () => {
 
     // With the token, from the page's origin, as JSON, each route its resource: a review, a chain, a reply, the
     // reviewer's own text changed, the chain resolved, its tasks, a decision; as the user
-    let r = await send('POST', reviews, { title: 'Look at a', change: { files: ['a.txt'] } });
+    let r = await send('POST', reviews, {
+      title: 'Look at a',
+      change: { files: ['a.txt'] },
+    });
     assert.equal(r.status, 201, await r.clone().text());
     assert.equal((await r.json()).reference, 'CR-1');
-    r = await send('POST', `${reviews}/CR-1/comments`, { path: 'a.txt', lines: [1, 1], body: 'Why one?' });
+    r = await send('POST', `${reviews}/CR-1/comments`, {
+      path: 'a.txt',
+      lines: [1, 1],
+      body: 'Why one?',
+    });
     assert.equal(r.status, 201, await r.clone().text());
     assert.equal((await r.json()).comment, 'c1');
-    r = await send('POST', `${reviews}/CR-1/comments/c1/replies`, { body: 'Because.' });
+    r = await send('POST', `${reviews}/CR-1/comments/c1/replies`, {
+      body: 'Because.',
+    });
     assert.equal(r.status, 201, await r.clone().text());
     assert.equal((await r.json()).comment, 'c2');
-    r = await send('PATCH', `${reviews}/CR-1/comments/c1`, { body: 'Why line one?' });
+    r = await send('PATCH', `${reviews}/CR-1/comments/c1`, {
+      body: 'Why line one?',
+    });
     assert.equal(r.status, 200, await r.clone().text());
     r = await send('PATCH', `${reviews}/CR-1/comments/c1`, { resolved: true });
     assert.equal(r.status, 200, await r.clone().text());
@@ -1100,19 +1177,31 @@ describe('serve', () => {
       403,
       "no session token, or not this server's",
     ]);
-    assert.deepEqual(await refused(await send('POST', onComments, comment, { 'X-Atm-Session': 'f'.repeat(64) })), [
-      403,
-      "no session token, or not this server's",
-    ]);
-    assert.deepEqual(await refused(await send('POST', onComments, comment, { Origin: 'https://evil.example' })), [
-      403,
-      "a change comes from atm's own page",
-    ]);
+    assert.deepEqual(
+      await refused(
+        await send('POST', onComments, comment, {
+          'X-Atm-Session': 'f'.repeat(64),
+        }),
+      ),
+      [403, "no session token, or not this server's"],
+    );
+    assert.deepEqual(
+      await refused(
+        await send('POST', onComments, comment, {
+          Origin: 'https://evil.example',
+        }),
+      ),
+      [403, "a change comes from atm's own page"],
+    );
     assert.deepEqual(
       await refused(
         await fetch(onComments, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin, 'X-Atm-Session': token },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Origin: origin,
+            'X-Atm-Session': token,
+          },
           body: 'body=Not+this+one',
         }),
       ),
@@ -1121,7 +1210,10 @@ describe('serve', () => {
     // No CORS: a preflight is never answered, so another site's page can't send the token's header
     const preflight = await fetch(onComments, {
       method: 'OPTIONS',
-      headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'POST' },
+      headers: {
+        Origin: 'https://evil.example',
+        'Access-Control-Request-Method': 'POST',
+      },
     });
     assert.equal(preflight.status, 405);
     assert.equal(preflight.headers.get('access-control-allow-origin'), null);
@@ -1129,19 +1221,45 @@ describe('serve', () => {
     assert.equal((await send('POST', `${reviews}/CR-1/votes`, {})).status, 404);
     assert.equal((await send('PUT', onComments, comment)).status, 405);
     assert.equal(
-      (await send('POST', `${reviews}/CR-1/comments/c1/replies`, { body: 'x', author: 'claude:x' })).status,
+      (
+        await send('POST', `${reviews}/CR-1/comments/c1/replies`, {
+          body: 'x',
+          author: 'claude:x',
+        })
+      ).status,
       400,
     );
     // Changing both a comment's text and its box at once, or a review to anything but closed
-    assert.equal((await send('PATCH', `${reviews}/CR-1/comments/c1`, { body: 'x', resolved: false })).status, 400);
-    assert.equal((await send('PATCH', `${reviews}/CR-1`, { status: 'approved', reason: 'x' })).status, 400);
+    assert.equal(
+      (
+        await send('PATCH', `${reviews}/CR-1/comments/c1`, {
+          body: 'x',
+          resolved: false,
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await send('PATCH', `${reviews}/CR-1`, {
+          status: 'approved',
+          reason: 'x',
+        })
+      ).status,
+      400,
+    );
     [chain] = comments();
     assert.equal(chain.comments.flatMap((c) => [c, ...c.replies]).length, 2, 'nothing refused was written');
     // A decision goes through the review's rules: its author (here the user, who opened it) can't decide it, unless
     // the user overrides that, saying why (feedback received elsewhere), which the review records
-    r = await send('POST', `${reviews}/CR-1/decisions`, { decision: 'approve' });
+    r = await send('POST', `${reviews}/CR-1/decisions`, {
+      decision: 'approve',
+    });
     assert.equal(r.status, 403, await r.clone().text());
-    r = await send('POST', `${reviews}/CR-1/decisions`, { decision: 'approve', override_rules: { reason: ' ' } });
+    r = await send('POST', `${reviews}/CR-1/decisions`, {
+      decision: 'approve',
+      override_rules: { reason: ' ' },
+    });
     assert.equal(r.status, 400, await r.clone().text());
     r = await send('POST', `${reviews}/CR-1/decisions`, {
       decision: 'approve',
@@ -1154,17 +1272,30 @@ describe('serve', () => {
     assert.equal(record.resolved, true);
 
     // Another review closed, as its author may
-    r = await send('POST', reviews, { title: 'Look at a again', change: { files: ['a.txt'] } });
+    r = await send('POST', reviews, {
+      title: 'Look at a again',
+      change: { files: ['a.txt'] },
+    });
     assert.equal(r.status, 201, await r.clone().text());
-    r = await send('PATCH', `${reviews}/CR-2`, { status: 'closed', reason: 'Not needed.' });
+    r = await send('PATCH', `${reviews}/CR-2`, {
+      status: 'closed',
+      reason: 'Not needed.',
+    });
     assert.equal(r.status, 200, await r.clone().text());
     assert.equal((await r.json()).status, 'closed');
 
     // ATM-612: drafts, the user's alone, kept in atm's state folder and never in the repository, sent together
-    r = await send('POST', reviews, { title: 'Drafted', change: { files: ['a.txt'] } });
+    r = await send('POST', reviews, {
+      title: 'Drafted',
+      change: { files: ['a.txt'] },
+    });
     assert.equal(r.status, 201, await r.clone().text());
     const drafts = `${reviews}/CR-3/drafts`;
-    r = await send('POST', drafts, { path: 'a.txt', lines: [2, 2], body: 'Two?' });
+    r = await send('POST', drafts, {
+      path: 'a.txt',
+      lines: [2, 2],
+      body: 'Two?',
+    });
     assert.equal(r.status, 201, await r.clone().text());
     assert.equal((await r.json()).id, 'd1');
     r = await send('POST', drafts, { body: 'Overall fine.' });
@@ -1192,7 +1323,9 @@ describe('serve', () => {
     assert.equal(kept.length, 1, 'kept in the state folder');
     assert.ok(!git(['status', '--porcelain', '--untracked-files=all'], root).includes('draft'), 'nothing in the repo');
     // Publish comments: a comment with no words of its own sends them
-    r = await send('POST', `${reviews}/CR-3/decisions`, { decision: 'comment' });
+    r = await send('POST', `${reviews}/CR-3/decisions`, {
+      decision: 'comment',
+    });
     assert.equal(r.status, 201, await r.clone().text());
     const [sent] = JSON.parse(atm(['review', 'comments', 'CR-3', '--json'], root).stdout);
     assert.deepEqual([sent.comments[0].body, sent.anchor.path], ['Why two?', 'a.txt']);
@@ -1341,7 +1474,10 @@ describe('serve', () => {
 
     let [status, body] = await json('/api/v2/workspaces');
     assert.equal(status, 200);
-    assert.deepEqual(same(body), { workspaces: [{ id: 'default', projects: 1 }], recent: 'default' });
+    assert.deepEqual(same(body), {
+      workspaces: [{ id: 'default', projects: 1 }],
+      recent: 'default',
+    });
 
     // A second workspace listing the same project (the `atm workspace` commands come with T-493)
     const folder = path.join(atmHome, 'workspaces');
@@ -1511,9 +1647,13 @@ describe('serve', () => {
         for (const [name, value] of Object.entries(headers))
           assert.equal(r.headers.get(name), value, `${file}: ${name}`);
       }
-      // The contract's refusals: GET only, and nothing but the hash's frames and the packs, never the manifest
+      // HEAD as for every other asset (ATM-672, audit H12): the contract's GET, its body left out
       const frame = base + `compmd/frames/${hash}/strict.html`;
-      assert.equal((await fetch(frame, { method: 'HEAD' })).status, 405);
+      const head = await fetch(frame, { method: 'HEAD' });
+      assert.equal(head.status, 200);
+      assert.equal(await head.text(), '');
+      assert.equal(head.headers.get('x-content-type-options'), 'nosniff');
+      // The contract's refusals: nothing but the hash's frames and the packs, never the manifest
       assert.equal((await fetch(base + 'compmd/manifest.json')).status, 404);
       assert.equal((await fetch(base + 'compmd/frames/0000000000000000/strict.html')).status, 404);
       assert.equal((await fetch(base + 'compmd/packs/@comp-markdown/mermaid@9.9.9/dist/mermaid.js')).status, 404);
@@ -1538,7 +1678,18 @@ describe('serve', () => {
         [`/assets//compmd/${version}/compmd.js`, 'an empty segment'],
         ['/assets/', 'the folder'],
       ]) {
-        assert.equal((await rawGet(port, p, host)).status, 404, why);
+        const refused = await rawGet(port, p, host);
+        assert.equal(refused.status, 404, why);
+        // One policy for every /assets/ answer, a refusal too (ATM-672, audit H12)
+        assert.equal(refused.headers['x-content-type-options'], 'nosniff', why);
+        assert.equal(refused.headers['cross-origin-resource-policy'], 'cross-origin', why);
+      }
+      // Every answer under /assets/: never sniffed, readable from anywhere (CompMD's frames have an opaque origin)
+      for (const file of [...Object.keys(rows), 'compmd/manifest.json']) {
+        const r = await fetch(base + file.replace('{hash}', hash));
+        assert.equal(r.headers.get('x-content-type-options'), 'nosniff', file);
+        assert.equal(r.headers.get('cross-origin-resource-policy'), 'cross-origin', file);
+        assert.equal(r.headers.get('access-control-allow-origin'), '*', file);
       }
     } finally {
       run(['service', 'stop']);
@@ -1558,6 +1709,8 @@ describe('serve', () => {
       child.on('close', (code) => resolve({ code, stdout }));
     });
 
+  // The record names the stand-in, started when the record says: the server atm recorded (ATM-673, audit C14), so
+  // stop may signal it
   test('stop ends a server that ignores SIGTERM, and forgets it only once it is gone (T-390)', async () => {
     const atmHome = home();
     const port = ports();
@@ -1591,6 +1744,73 @@ describe('serve', () => {
     assert.equal(alive(stubborn.pid), false);
     assert.equal(fs.existsSync(path.join(atmHome, 'server.json')), false);
   });
+
+  // ATM-673 (audit C6): anyone on the machine may answer whoami on a local port, naming any pid; stop signals only a
+  // process that is `atm _serve`, or the one its record names
+  test('stop signals only an atm server: a stand-in answering as this folder’s, naming itself or another process, keeps running', async () => {
+    const atmHome = home();
+    const port = ports();
+    // Another process, which the stand-in names as the server on the second port
+    const victim = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+    cleanups.push(() => alive(victim.pid) && process.kill(victim.pid, 'SIGKILL'));
+    const standIn = (on, pid) =>
+      "const http = require('http');" +
+      `http.createServer((q, r) => { r.setHeader('content-type', 'application/json');` +
+      ` r.end(JSON.stringify({ atm: true, pid: ${pid}, port: ${on}, home: ${JSON.stringify(homeId(atmHome))} })); })` +
+      `.listen(${on}, () => console.log('ready'));`;
+    const itself = spawn(process.execPath, ['-e', standIn(port, 'process.pid')], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    const other = spawn(process.execPath, ['-e', standIn(port + 1, victim.pid)], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    for (const p of [itself, other]) {
+      cleanups.push(() => alive(p.pid) && process.kill(p.pid, 'SIGKILL'));
+      await new Promise((resolve) => p.stdout.once('data', resolve));
+    }
+    // The record names the first stand-in's pid, but a server that started an hour ago (audit C14: an earlier server's
+    // record, its pid another process's since); the second answers without a record, a stray
+    const earlier = new Date(Date.now() - 3600_000).toISOString();
+    fs.writeFileSync(
+      path.join(atmHome, 'server.json'),
+      JSON.stringify({
+        pid: itself.pid,
+        port,
+        version: '0.0.1',
+        build: 'x',
+        started_at: earlier,
+      }),
+    );
+    const root = project();
+    const stopped = await atmAsync(['service', 'stop', '--port', String(port)], root, atmHome);
+    assert.notEqual(stopped.code, 0);
+    // Neither process was signalled, and the record of the one still running is kept
+    assert.equal(alive(itself.pid), true);
+    assert.equal(alive(victim.pid), true);
+    assert.equal(alive(other.pid), true);
+    assert.equal(fs.existsSync(path.join(atmHome, 'server.json')), true);
+  });
+
+  // ATM-673 (audit C10): the state folder is its owner's only, however it got there, and so are the files atm keeps in it
+  test(
+    'an existing state folder another user could read is made its owner’s only; its server record too',
+    { skip: process.platform === 'win32' },
+    () => {
+      const atmHome = home();
+      fs.mkdirSync(atmHome, { recursive: true });
+      fs.chmodSync(atmHome, 0o755);
+      const root = project();
+      const port = ports();
+      const atm = atmIn(atmHome);
+      assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+      try {
+        assert.equal(fs.statSync(atmHome).mode & 0o777, 0o700);
+        assert.equal(fs.statSync(path.join(atmHome, 'server.json')).mode & 0o777, 0o600);
+      } finally {
+        atm(['service', 'stop', '--port', String(port)], root);
+      }
+    },
+  );
 
   test('two `atm serve start` at once start one server (T-390)', async () => {
     const atmHome = home();
@@ -1814,8 +2034,14 @@ describe('serve', () => {
     for (const p of [shop, blog]) assert.equal(atm(['workspace', 'add-project'], p).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], shop).code, 0);
-    const search = async (q, extra = '') =>
-      (await fetch(`http://localhost:${port}/api/search?q=${encodeURIComponent(q)}${extra}`)).json();
+    // Stamped as every JSON answer is (ATM-672, audit H13); the projects' lists beside the stamp
+    const search = async (q, extra = '') => {
+      const { generated_at: stamp, ...found } = await (
+        await fetch(`http://localhost:${port}/api/search?q=${encodeURIComponent(q)}${extra}`)
+      ).json();
+      assert.equal(typeof stamp, 'string', q);
+      return found;
+    };
 
     assert.deepEqual(await search('checkout'), { aaaa1111: ['T-1'] });
     assert.deepEqual(await search('card'), { aaaa1111: ['T-2'] });
@@ -1955,7 +2181,14 @@ describe('serve', () => {
     const keyed = (id, name, key) => {
       const root = project({
         meta: { id, project: name },
-        tasks: [{ id: 'T-1', name: `${name}'s first`, type: 'feature', status: 'todo' }],
+        tasks: [
+          {
+            id: 'T-1',
+            name: `${name}'s first`,
+            type: 'feature',
+            status: 'todo',
+          },
+        ],
       });
       assert.equal(atm(['db', 'migrate'], root).code, 0);
       assert.equal(atm(['project', 'key', 'set', key], root).code, 0);
@@ -2045,6 +2278,17 @@ describe('serve', () => {
     assert.equal(body.problems.length, 2); // the entry left out, and the priorities
     assert.match(body.problems.join('\n'), /isn't a task/);
     assert.match(body.problems.join('\n'), /meta\.priorities/);
+    // The vocabulary as atm resolved it (ATM-718): the priorities it couldn't use are the defaults, the rest the
+    // project's; the dashboard shows this and the problems, never meta again
+    assert.deepEqual(
+      body.vocabulary.priorities.map((p) => p.id),
+      ['P0', 'P1', 'P2', 'P3'],
+    );
+    assert.equal(body.vocabulary.default_priority, 'P2');
+    assert.deepEqual(
+      body.vocabulary.statuses.map((s) => `${s.id}:${s.kind}`),
+      ['todo:todo', 'in_progress:active', 'in_review:review', 'blocked:blocked', 'done:done', 'skipped:skipped'],
+    );
     atm(['service', 'stop'], root);
   });
 

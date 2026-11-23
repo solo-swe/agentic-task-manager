@@ -18,6 +18,7 @@ mod logo;
 mod query;
 mod reviews;
 mod source;
+mod stats;
 mod tasks;
 #[cfg(test)]
 mod test_support;
@@ -112,22 +113,30 @@ fn not_modified(tag: &str, headers: &[(&str, &str)]) -> Response {
     )
 }
 
-/// atm-lib's refusals as HTTP statuses: a malformed request, no such thing, one too large, one atm doesn't show.
-fn error_response(error: &atm_common::Error) -> Response {
-    let status = match error {
+/// atm-lib's errors as HTTP statuses, the one mapping every route uses (ATM-664): a malformed request, no such
+/// thing, one too large, one atm doesn't show, one another holds; anything else is the server's.
+fn status_of(error: &atm_common::Error) -> StatusCode {
+    match error {
         atm_common::Error::Invalid(_) => StatusCode::BAD_REQUEST,
         atm_common::Error::NotFound(_) => StatusCode::NOT_FOUND,
         atm_common::Error::TooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
         atm_common::Error::Refused(_) => StatusCode::FORBIDDEN,
+        atm_common::Error::Conflict(_) => StatusCode::CONFLICT,
         atm_common::Error::Failed { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-    };
-    send_error(status, &error.to_string())
+    }
+}
+
+/// An error's answer: its status ([`status_of`]) and its message.
+fn error_response(error: &atm_common::Error) -> Response {
+    send_error(status_of(error), &error.to_string())
 }
 
 /// A read about one project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProjectRead<'a> {
     Tasks,
+    /// Its stats, progress and forecast (ATM-722)
+    Stats,
     Documents,
     Files,
     Claims,
@@ -145,6 +154,7 @@ impl<'a> ProjectRead<'a> {
     fn named(rest: &[&'a str]) -> Option<Self> {
         Some(match rest {
             ["tasks"] => Self::Tasks,
+            ["stats"] => Self::Stats,
             ["documents"] => Self::Documents,
             ["files"] => Self::Files,
             ["claims"] => Self::Claims,
@@ -173,6 +183,7 @@ fn serve_project_read(
     let project = project.as_ref();
     match read {
         ProjectRead::Tasks => tasks::get_tasks(project, query, request),
+        ProjectRead::Stats => stats::get_stats(project, query),
         ProjectRead::Documents => documents::get_document(project, query, request),
         ProjectRead::Files => documents::get_file(project, query, request),
         ProjectRead::Logo => logo::get_logo(project, request),
@@ -242,6 +253,7 @@ pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) 
         && !id.is_empty()
         && let Some(
             read @ (ProjectRead::Tasks
+            | ProjectRead::Stats
             | ProjectRead::Documents
             | ProjectRead::Files
             | ProjectRead::Reviews
@@ -367,6 +379,27 @@ mod tests {
         }
     }
 
+    /// ATM-664: what the audit found reaching the dashboard as 500, as atm builds it: a note too long is the
+    /// request's fault (400), an unknown task none (404), a task another agent holds a conflict (409), each with the
+    /// CLI's exit code beside it
+    #[test]
+    fn a_usage_error_is_400_an_unknown_task_404_and_a_claim_held_by_another_409() {
+        let too_long = atm_common::edits::check_note(&"x".repeat(501)).unwrap_err();
+        let document = json!({"meta": {}, "tasks": [{"id": "T-1"}]});
+        let unknown =
+            atm_common::keys::resolve::<atm_common::Task>(&document, &[], "T-9").unwrap_err();
+        let held =
+            atm_common::Error::Conflict("can't done T-1: it is claimed by claude:B until …".into());
+        for (error, status, code) in [
+            (too_long, StatusCode::BAD_REQUEST, 2),
+            (unknown, StatusCode::NOT_FOUND, 1),
+            (held, StatusCode::CONFLICT, 4),
+        ] {
+            assert_eq!(answer(error_response(&error)).status, status, "{error}");
+            assert_eq!(error.code(), code, "{error}");
+        }
+    }
+
     /// A fake whose project `p1` has a logo, so every read gets as far as its own call
     fn fake() -> Fake {
         Fake::with(FakeProject {
@@ -478,18 +511,25 @@ mod tests {
             ("/p/p1/logo", "", vec![project("default"), Call::ReadLogo]),
             (
                 "/api/v2/workspaces/work/projects/p1/documents",
-                "path=a.md&at=t1",
+                // A revision is a full object ID (ATM-671)
+                "path=a.md&at=0123456789abcdef0123456789abcdef01234567",
                 vec![
                     project("work"),
-                    Call::DocumentAt("a.md".into(), "t1".into()),
+                    Call::DocumentAt(
+                        "a.md".into(),
+                        "0123456789abcdef0123456789abcdef01234567".into(),
+                    ),
                 ],
             ),
             (
                 "/api/v1/projects/p1/documents",
-                "path=a.md&at=t1",
+                "path=a.md&at=0123456789abcdef0123456789abcdef01234567",
                 vec![
                     project("default"),
-                    Call::DocumentAt("a.md".into(), "t1".into()),
+                    Call::DocumentAt(
+                        "a.md".into(),
+                        "0123456789abcdef0123456789abcdef01234567".into(),
+                    ),
                 ],
             ),
             (

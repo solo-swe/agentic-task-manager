@@ -1,0 +1,143 @@
+diff --git a/crates/atm-review/src/files.rs b/crates/atm-review/src/files.rs
+index 1b98748c..f48e78ef 100644
+--- a/crates/atm-review/src/files.rs
++++ b/crates/atm-review/src/files.rs
+@@ -17,7 +17,8 @@ pub mod review_md {
+         id: String,
+         number: u32,
+         title: String,
+-        status: Status,
++        /// As the file writes it ([`stored`]): an older atm reads the review too
++        status: String,
+         #[serde(default)]
+         tasks: Vec<String>,
+         /// None (left out) while whose change it is isn't known
+@@ -29,6 +30,27 @@ pub mod review_md {
+         updated: Datetime,
+     }
+ 
++    /// A status as `review.md` writes it: its name, but waiting on the reviewers, which the file keeps writing as
++    /// `open`, as atm before 0.41.0 did and reads (ATM-613 renamed the status, not the file's word for it: a clone or
++    /// an app on an older atm would otherwise not see the review at all)
++    fn stored(status: Status) -> &'static str {
++        match status {
++            Status::Waiting => "open",
++            other => other.name(),
++        }
++    }
++
++    /// A status from `review.md`: `open` (as written) or `waiting` (as a 0.41.0 build wrote it a while) is waiting
++    fn status_of(name: &str) -> Result<Status> {
++        if name == "open" || name == "waiting" {
++            return Ok(Status::Waiting);
++        }
++        Status::EVERY
++            .into_iter()
++            .find(|s| s.name() == name)
++            .ok_or_else(|| Error::Invalid(format!("review.md's header can't be read: no status {name}")))
++    }
++
+     fn date(text: &str, what: &str) -> Result<Datetime> {
+         text.parse()
+             .map_err(|e| Error::Invalid(format!("the review's {what} isn't a date ({text}): {e}")))
+@@ -43,7 +65,7 @@ pub mod review_md {
+             id: header.id.0.clone(),
+             number: header.number,
+             title: header.title.clone(),
+-            status: header.status,
++            status: stored(header.status).to_string(),
+             tasks: header.tasks.clone(),
+             author: header.author.as_ref().map(|a| a.0.clone()),
+             reviewers: header.reviewers.iter().map(|r| r.0.clone()).collect(),
+@@ -91,7 +113,7 @@ pub mod review_md {
+                 reference: ReviewRef::numbered(header.number),
+                 number: header.number,
+                 title: header.title,
+-                status: header.status,
++                status: status_of(&header.status)?,
+                 // A task by its key; one an earlier atm wrote as people read a provisional key (`~CMD-36`, ATM-594)
+                 // is the same key
+                 tasks: header
+@@ -643,6 +665,27 @@ written at the margin by hand
+         assert_eq!(review_md::read(&tight).unwrap().1, "Summary.");
+     }
+ 
++    /// ATM-613: waiting on the reviewers is written `open`, as atm before 0.41.0 wrote and reads it, so an app or a
++    /// clone on an older atm still sees the review; `waiting`, as a 0.41.0 build wrote it a while, reads the same
++    #[test]
++    fn waiting_is_written_open_for_an_older_atm_and_both_read_as_waiting() {
++        let mut waiting = header();
++        waiting.status = Status::Waiting;
++        let text = review_md::write(&waiting, "").unwrap();
++        assert!(text.contains("status = \"open\"\n"), "{text}");
++        assert_eq!(review_md::read(&text).unwrap().0.status, Status::Waiting);
++        let newer = text.replace("status = \"open\"", "status = \"waiting\"");
++        assert_eq!(review_md::read(&newer).unwrap().0.status, Status::Waiting);
++        // Every other status by its own name, both ways
++        for status in Status::EVERY.into_iter().filter(|s| *s != Status::Waiting) {
++            let mut h = header();
++            h.status = status;
++            let text = review_md::write(&h, "").unwrap();
++            assert!(text.contains(&format!("status = \"{}\"\n", status.name())), "{text}");
++            assert_eq!(review_md::read(&text).unwrap().0.status, status);
++        }
++    }
++
+     #[test]
+     fn a_review_md_with_a_status_or_date_atm_doesnt_know_cant_be_read() {
+         for header in [
+diff --git a/docs/code-review-design.md b/docs/code-review-design.md
+index 3c37f732..3a0f125e 100644
+--- a/docs/code-review-design.md
++++ b/docs/code-review-design.md
+@@ -161,7 +161,7 @@ stateDiagram-v2
+ | Status | Means | Who moves it there |
+ |---|---|---|
+ | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
+-| `waiting` | *Waiting for review*: waiting on the reviewers (ATM-613: `open` until 0.41.0, still read as this) | the author, with a round |
++| `waiting` | *Waiting for review*: waiting on the reviewers (ATM-613: `open` until 0.41.0). `review.md` still writes it `open`, so an app or a clone on an older atm sees the review (reading `waiting` too) | the author, with a round |
+ | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
+ | `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words, as a comment (the page's *Publish comments*; ATM-597): it isn't sent back again (CR-2); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
+ | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index 80d3b27c..9efbb2f6 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -59,7 +59,8 @@ describe('atm review', () => {
+         AGENT,
+       ).json();
+       assert.equal(opened.reference, 'CR-1');
+-      // Waiting on its reviewers (ATM-613: `open` until 0.41.0); a file an earlier atm wrote with `open` reads the same
++      // Waiting on its reviewers (ATM-613), shown so; the file keeps writing `open`, as an older atm reads it (an app
++      // or a clone on 0.40.0 sees the review), and reads `waiting` too
+       assert.equal(opened.status, 'waiting');
+       const reviewFile = path.join(
+         root,
+@@ -67,12 +68,16 @@ describe('atm review', () => {
+         fs.readdirSync(path.join(root, '.agentic-task-manager/reviews')).find((f) => f.startsWith('CR-1-')),
+         'review.md',
+       );
+-      assert.match(fs.readFileSync(reviewFile, 'utf8'), /status = "waiting"/);
++      assert.match(fs.readFileSync(reviewFile, 'utf8'), /status = "open"/);
+       fs.writeFileSync(
+         reviewFile,
+-        fs.readFileSync(reviewFile, 'utf8').replace('status = "waiting"', 'status = "open"'),
++        fs.readFileSync(reviewFile, 'utf8').replace('status = "open"', 'status = "waiting"'),
+       );
+       assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.status, 'waiting');
++      fs.writeFileSync(
++        reviewFile,
++        fs.readFileSync(reviewFile, 'utf8').replace('status = "waiting"', 'status = "open"'),
++      );
+       // Open, in a filter, is every review not decided yet; waiting is its own status
+       assert.equal(ok(['review', 'list', '--status', 'open', '--json'], root, HAKAN).json().length, 1);
+       assert.equal(ok(['review', 'list', '--status', 'waiting', '--json'], root, HAKAN).json().length, 1);
+@@ -619,7 +624,7 @@ describe('a provisional task key in reviews (ATM-594)', () => {
+         fs
+           .readFileSync(file, 'utf8')
+           .replace('tasks = ["ATM-12"]', 'tasks = ["~ATM-12"]')
+-          .replace('status = "waiting"', 'status = "approved"'),
++          .replace('status = "open"', 'status = "approved"'),
+       );
+       assert.deepEqual(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.tasks, ['ATM-12']);
+       const doctor = atm(['doctor'], root, HAKAN);

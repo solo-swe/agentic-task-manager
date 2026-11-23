@@ -6,6 +6,7 @@ import { dashboard } from '../../src/lib/state.svelte';
 import type { Task } from '../../src/lib/types';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';
+import { vocabulary } from './views';
 
 // standard.json's done tasks: T-001, T-002, T-003, T-004, T-012
 const staged = (workflow?: string) => {
@@ -16,7 +17,9 @@ const staged = (workflow?: string) => {
         ? { ...t, pr: { number: 7, url: 'https://example.com/pr/7' } }
         : t,
   );
-  loadIntoDashboard({ ...standard, meta: workflow ? { workflow: { type: workflow } } : {}, tasks });
+  // The project's workflow, as atm serves it with the vocabulary
+  const vocab = vocabulary({ workflow: workflow ? { type: workflow, verify: true, trailers: [] } : null });
+  loadIntoDashboard({ ...standard, meta: {}, tasks }, undefined, vocab);
   const board = buildBoard(dashboard.tasks, dashboard.tasks, { showSkipped: false, statusFilter: new Set() });
   return render(KanbanColumns, { columns: board, showAllDone: false, onshowall: () => {} }).container;
 };

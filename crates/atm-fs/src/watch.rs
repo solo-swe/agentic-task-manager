@@ -44,9 +44,15 @@ pub fn watch_tree_where(
 ) -> Result<Subscription> {
     let failed = |e: notify::Error| Error::failed(format!("watching for changes: {e}"));
     let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
+        // Events missed: whatever changed is unknown, so it counts, whatever `keep` would say (ATM-727)
         let Ok(events) = result else {
+            on_change();
             return;
         };
+        if events.iter().any(|e| e.need_rescan()) {
+            on_change();
+            return;
+        }
         let paths: Vec<PathBuf> = events
             .iter()
             .filter(|e| is_change(e))
@@ -72,7 +78,9 @@ fn watch_with(
 ) -> Result<Subscription> {
     let failed = |e: notify::Error| Error::failed(format!("watching for changes: {e}"));
     let mut watcher = new_debouncer(SETTLE, None, move |result: DebounceEventResult| {
-        if result.is_ok_and(|events| events.iter().any(|e| is_change(e))) {
+        // Events missed (an error, or the system's queue overflowed: a rescan) count as a change (ATM-727): a watch
+        // that looks only when told mustn't miss one
+        if result.is_err() || result.is_ok_and(|events| events.iter().any(|e| is_change(e))) {
             on_change();
         }
     })

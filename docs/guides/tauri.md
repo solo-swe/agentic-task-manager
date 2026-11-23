@@ -64,8 +64,17 @@ atm's own rules for the atm app, the desktop distribution proposed in
 ## Security
 
 - **Capabilities are least privilege:** each window gets only the commands and plugin permissions it uses.
-- **Rendered task text is never given a capability:** CompMD's sandbox origin is not listed in any capability
+- **Rendered task text never calls the app:** Tauri counts every scheme the app registers as local, so a window's
+  capability (`"local": true`) covers CompMD's frames (`compmd:`) and atm's files (`atm:`) as well as the app's page:
+  leaving them out of a capability doesn't keep them out. The app's invoke handler is wrapped in
+  `navigation::guarded`, which answers only a call whose `Origin` is the app's page and refuses one from the frames or
+  the files (ATM-677; `a_call_from_compmds_frames_is_refused_though_the_capability_covers_it` shows both). Register a
+  new command through that handler, never around it
   ([compmd-rendering-design.md](../compmd-rendering-design.md)).
+- **Webviews stay on the app's origins:** `navigation::plugin` guards every webview's navigation (the windows made
+  from the configuration too): the app's page, CompMD's frames, atm's files and `about:`, what the policy's
+  `frame-src` and `script-src` load; anything else is refused, and a link elsewhere opens in the browser through
+  `open_url`. A new origin the page loads goes in its list and the policy together.
 - **Strict CSP for the shell:** the dashboard server's policy ([security-architecture.md](../security-architecture.md)
   I13, I26: own scripts by hash, no remote or inline scripts, no `blob:`, `data:` or `'self'` in `script-src`,
   `frame-ancestors 'none'`), with CompMD's two folders in `script-src` and `connect-src` and the frames' origin in

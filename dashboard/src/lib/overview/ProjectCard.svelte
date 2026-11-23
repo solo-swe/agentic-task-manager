@@ -1,10 +1,10 @@
 <script lang="ts">
   // One project on the overview (docs/multi-project-dashboard-proposal.md 3.5), from its server summary
-  import { formatAgo } from '../claims';
+  import { formatAgo, formatDateTime } from '../format';
   import type { ProjectEntry } from '../load';
   import { needsYou, statsLine } from '../projects';
   import { dashboard } from '../state.svelte';
-  import { daysUntil, dueText } from '../sprints';
+  import { dueText } from '../sprints';
   import { phaseColor } from '../theme';
   import { safeUrl } from '../url';
   import Icon from '../ui/Icon.svelte';
@@ -26,7 +26,8 @@
   // A project with sprints (SR-7.7): rings for its recent sprints, and the active sprint's line
   const sprints = $derived(s?.recent_sprints ?? null);
   const active = $derived(s?.active_sprint ?? null);
-  const dueIn = $derived(active?.due ? daysUntil(active.due, dashboard.loadedAt) : undefined);
+  // Days to its due date, as atm counts them (ATM-720: the project's day)
+  const dueIn = $derived(active?.days_left);
   // The whole project's count, in the rings' tooltip
   const overall = $derived(
     s ? `${s.done} / ${counted} done${s.skipped ? ` · ${s.skipped} skipped` : ''} (${s.percent}%)` : '',
@@ -287,9 +288,7 @@
         <!-- The task finished last, and when (T-208): replaces the bare "12 m ago" -->
         <span
           class="project-card-last"
-          title="Last finished: {taskLabel(lastDone)} {lastDone.name}, {new Date(
-            lastDone.completed_at,
-          ).toLocaleString()}"
+          title="Last finished: {taskLabel(lastDone)} {lastDone.name}, {formatDateTime(lastDone.completed_at)}"
         >
           <!-- When, in the quiet label style (T-335) -->
           <span class="project-card-label project-card-last-when"

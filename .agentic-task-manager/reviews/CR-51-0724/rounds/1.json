@@ -1,0 +1,62 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "41c67d0f46d257bc522c42f0ac3f19766163b6fd",
+    "head": "f7687957848019a461354248ea66c86c7b8ca656"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/loop_.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/main.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/reviews.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/atm-do-task/SKILL.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/atm-loop-tasks/SKILL.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/next.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/scenarios/selections.json",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T07:05:00Z"
+}

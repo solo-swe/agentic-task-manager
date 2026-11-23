@@ -1,0 +1,1626 @@
+diff --git a/crates/atm-api/src/routes/test_support.rs b/crates/atm-api/src/routes/test_support.rs
+index 68658fcb..a88342c9 100644
+--- a/crates/atm-api/src/routes/test_support.rs
++++ b/crates/atm-api/src/routes/test_support.rs
+@@ -93,7 +93,7 @@ pub(super) fn header() -> ReviewHeader {
+         reference: ReviewRef("CR-1".into()),
+         number: 1,
+         title: "Look".into(),
+-        status: Status::Open,
++        status: Status::Waiting,
+         tasks: Vec::new(),
+         author: None,
+         reviewers: Vec::new(),
+diff --git a/crates/atm-cli/src/commands/review.rs b/crates/atm-cli/src/commands/review.rs
+index 755884fe..f629338b 100644
+--- a/crates/atm-cli/src/commands/review.rs
++++ b/crates/atm-cli/src/commands/review.rs
+@@ -119,7 +119,8 @@ pub enum ReviewCommand {
+     },
+     /// List the reviews, of every working copy, newest first.
+     List {
+-        /// Only these statuses (repeatable): draft, open, live, changes_requested, approved, closed
++        /// Only these statuses (repeatable): open (any not decided yet: draft, waiting, live or changes_requested), or
++        /// one of draft, waiting, live, changes_requested, approved, closed
+         #[arg(long = "status", value_name = "STATUS")]
+         statuses: Vec<String>,
+         /// Only the reviews of this task
+@@ -445,10 +446,11 @@ fn heard_line(heard: &Value) -> String {
+     )
+ }
+ 
+-fn status_of(name: &str) -> Result<Status> {
+-    serde_json::from_value(json!(name)).map_err(|_| {
++/// The statuses `--status <name>` stands for: `open`, every review not decided yet (ATM-613); any other, its own.
++fn status_of(name: &str) -> Result<Vec<Status>> {
++    Status::filter_named(name).ok_or_else(|| {
+         Error::Invalid(format!(
+-            "no status {name}: draft, open, live, changes_requested, approved or closed"
++            "no status {name}: open (any not decided yet), draft, waiting, live, changes_requested, approved or closed"
+         ))
+     })
+ }
+@@ -554,7 +556,11 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+                     tasks,
+                     author: Some(author),
+                     reviewers: reviewers.into_iter().map(Actor).collect(),
+-                    status: if draft { Status::Draft } else { Status::Open },
++                    status: if draft {
++                        Status::Draft
++                    } else {
++                        Status::Waiting
++                    },
+                     first,
+                 },
+             )?;
+@@ -683,7 +689,8 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<u8> {
+                 statuses: statuses
+                     .iter()
+                     .map(|s| status_of(s))
+-                    .collect::<Result<_>>()?,
++                    .collect::<Result<Vec<_>>>()?
++                    .concat(),
+                 task: task.map(|t| reviews::task_reference(&project, &t)),
+             };
+             let root = project
+@@ -1076,14 +1083,17 @@ mod tests {
+     fn a_status_is_one_of_the_reviews() {
+         for name in [
+             "draft",
+-            "open",
++            "waiting",
+             "live",
+             "changes_requested",
+             "approved",
+             "closed",
+         ] {
+-            assert_eq!(status_of(name).unwrap().name(), name);
++            let named: Vec<&str> = status_of(name).unwrap().iter().map(|s| s.name()).collect();
++            assert_eq!(named, [name]);
+         }
++        // Open: every review not decided yet (ATM-613)
++        assert_eq!(status_of("open").unwrap(), Status::OPEN);
+         for bad in ["", "Open", "changes-requested", "merged"] {
+             assert_eq!(status_of(bad).unwrap_err().code(), 2, "{bad}");
+         }
+diff --git a/crates/atm-lib/src/review_listen.rs b/crates/atm-lib/src/review_listen.rs
+index 0fdfd27f..3bec9c0b 100644
+--- a/crates/atm-lib/src/review_listen.rs
++++ b/crates/atm-lib/src/review_listen.rs
+@@ -553,7 +553,7 @@ mod tests {
+     fn a_decision_is_approved_changes_requested_or_closed() {
+         for (status, expected) in [
+             (Status::Draft, false),
+-            (Status::Open, false),
++            (Status::Waiting, false),
+             (Status::Live, false),
+             (Status::ChangesRequested, true),
+             (Status::Approved, true),
+@@ -591,7 +591,7 @@ mod tests {
+ 
+     #[test]
+     fn a_comment_heard_names_its_review_chain_place_and_text() {
+-        let r = review(Status::Open, &["ATM-1"]);
++        let r = review(Status::Waiting, &["ATM-1"]);
+         let parent = comment("c1", "claude:me", "Done", Vec::new());
+         let reply = comment("c2", "Hakan", "Why?", Vec::new());
+         let c = chain(Some("src/a.rs"), Vec::new());
+@@ -635,7 +635,7 @@ mod tests {
+ 
+     #[test]
+     fn a_review_of_none_of_the_agents_tasks_isnt_its() {
+-        let theirs = review(Status::Open, &["ATM-3"]);
++        let theirs = review(Status::Waiting, &["ATM-3"]);
+         assert_eq!(
+             about(&theirs, &by_hakan(Some("src/a.rs"), "ATM-1")),
+             NOT_MINE
+@@ -652,7 +652,7 @@ mod tests {
+ 
+     #[test]
+     fn in_a_batch_review_a_comment_is_the_agents_by_file_by_task_named_or_by_its_own_chain() {
+-        let batch = review(Status::Open, &["ATM-1", "ATM-2", "ATM-3"]);
++        let batch = review(Status::Waiting, &["ATM-1", "ATM-2", "ATM-3"]);
+         for (path, body, expected) in [
+             // a file its task touched
+             (Some("docs/a.md"), "x", "ATM-2"),
+diff --git a/crates/atm-lib/src/review_pages.rs b/crates/atm-lib/src/review_pages.rs
+index 4ac19303..ff5f5b1f 100644
+--- a/crates/atm-lib/src/review_pages.rs
++++ b/crates/atm-lib/src/review_pages.rs
+@@ -39,10 +39,12 @@ pub struct ReviewQuery {
+     pub branch: Option<String>,
+ }
+ 
+-fn status_named(name: &str) -> Result<Status> {
+-    serde_json::from_value(json!(name)).map_err(|_| {
++/// The statuses a query's `status=` stands for: `open`, every review not decided yet (ATM-613: the list's *Open*);
++/// any other, its own.
++fn status_named(name: &str) -> Result<Vec<Status>> {
++    Status::filter_named(name).ok_or_else(|| {
+         Error::Invalid(format!(
+-            "{name}: not a review status (draft, open, live, changes_requested, approved, closed)"
++            "{name}: not a review status (open, draft, waiting, live, changes_requested, approved, closed)"
+         ))
+     })
+ }
+@@ -53,7 +55,7 @@ fn status_named(name: &str) -> Result<Status> {
+ pub fn needs(header: &ReviewHeader, me: &Actor) -> bool {
+     let authored = header.author.as_ref() == Some(me);
+     match header.status {
+-        Status::Open | Status::Live => {
++        Status::Waiting | Status::Live => {
+             if header.reviewers.is_empty() {
+                 !authored
+             } else {
+@@ -187,7 +189,8 @@ pub fn list_reviews(project: &Project, query: &ReviewQuery) -> Result<Value> {
+         .status
+         .iter()
+         .map(|s| status_named(s))
+-        .collect::<Result<Vec<_>>>()?;
++        .collect::<Result<Vec<_>>>()?
++        .concat();
+     let root = project
+         .root()
+         .ok_or_else(|| Error::NotFound("this project has no folder with reviews".into()))?;
+@@ -673,7 +676,7 @@ mod tests {
+             // Its decision is yours: whatever was written
+             (
+                 "open, you its reviewer",
+-                talked(header(Status::Open, agent, &["Ana"]), "Ana", &[]),
++                talked(header(Status::Waiting, agent, &["Ana"]), "Ana", &[]),
+                 Some("review"),
+             ),
+             // Sent back, the agent answered you after your comment
+@@ -721,7 +724,7 @@ mod tests {
+             // Your own review: the comments of others on it
+             (
+                 "your own, commented on",
+-                talked(header(Status::Open, Some("Ana"), &["Bo"]), "Bo", &[]),
++                talked(header(Status::Waiting, Some("Ana"), &["Bo"]), "Bo", &[]),
+                 Some("answered"),
+             ),
+             // Decided: nothing waits, answered or not
+@@ -752,12 +755,12 @@ mod tests {
+     fn a_review_needs_its_reviewers_while_open_and_its_author_once_sent_back() {
+         let ana = Actor::from("Ana");
+         for (status, author, reviewers, expected) in [
+-            (Status::Open, Some("claude:a"), &["Ana"][..], true),
+-            (Status::Open, Some("claude:a"), &["Bo"][..], false),
++            (Status::Waiting, Some("claude:a"), &["Ana"][..], true),
++            (Status::Waiting, Some("claude:a"), &["Bo"][..], false),
+             // No reviewers named: anyone but the author
+-            (Status::Open, Some("claude:a"), &[][..], true),
+-            (Status::Open, Some("Ana"), &[][..], false),
+-            (Status::Open, None, &[][..], true),
++            (Status::Waiting, Some("claude:a"), &[][..], true),
++            (Status::Waiting, Some("Ana"), &[][..], false),
++            (Status::Waiting, None, &[][..], true),
+             (Status::Live, Some("claude:a"), &["Ana"][..], true),
+             (Status::Live, Some("Ana"), &["Bo"][..], false),
+             (Status::ChangesRequested, Some("Ana"), &["Bo"][..], true),
+@@ -781,7 +784,7 @@ mod tests {
+ 
+     #[test]
+     fn a_review_fits_the_author_reviewer_and_branch_asked_for() {
+-        let h = header(Status::Open, Some("claude:a"), &["Ana", "Bo"]);
++        let h = header(Status::Waiting, Some("claude:a"), &["Ana", "Bo"]);
+         let query =
+             |author: Option<&str>, reviewer: Option<&str>, branch: Option<&str>| ReviewQuery {
+                 author: author.map(String::from),
+@@ -808,24 +811,27 @@ mod tests {
+             assert_eq!(fits(&h, on, &q), expected, "{q:?} on {on:?}");
+         }
+         // No author yet: only a query naming none fits
+-        let unknown = header(Status::Open, None, &[]);
++        let unknown = header(Status::Waiting, None, &[]);
+         assert!(!fits(&unknown, None, &query(Some("claude:a"), None, None)));
+         assert!(fits(&unknown, None, &query(None, None, None)));
+     }
+ 
+     #[test]
+-    fn a_status_is_one_of_a_reviews() {
++    fn a_status_is_one_of_a_reviews_or_open_every_one_not_decided() {
+         assert_eq!(
+             status_named("changes_requested").unwrap(),
+-            Status::ChangesRequested
++            [Status::ChangesRequested]
+         );
++        assert_eq!(status_named("waiting").unwrap(), [Status::Waiting]);
++        // ATM-613: the list's Open
++        assert_eq!(status_named("open").unwrap(), Status::OPEN);
+         for bad in ["", "Open", "merged"] {
+             assert!(matches!(status_named(bad), Err(Error::Invalid(_))), "{bad}");
+         }
+     }
+ 
+     fn review(title: &str, summary: &str, rounds: Vec<Round>) -> Review {
+-        let mut h = header(Status::Open, None, &[]);
++        let mut h = header(Status::Waiting, None, &[]);
+         h.title = title.into();
+         Review {
+             header: h,
+diff --git a/crates/atm-lib/src/review_requests.rs b/crates/atm-lib/src/review_requests.rs
+index 7f535d95..905550a2 100644
+--- a/crates/atm-lib/src/review_requests.rs
++++ b/crates/atm-lib/src/review_requests.rs
+@@ -219,7 +219,7 @@ pub fn open_review(project: &mut Project, opening: ReviewOpening) -> Result<Revi
+             author: Some(by),
+             reviewers: opening.reviewers.into_iter().map(Actor).collect(),
+             status: match opening.start {
+-                ReviewStart::Open => Status::Open,
++                ReviewStart::Open => Status::Waiting,
+                 ReviewStart::Draft => Status::Draft,
+                 ReviewStart::Live => Status::Live,
+             },
+@@ -441,7 +441,7 @@ mod tests {
+ 
+     #[test]
+     fn a_page_closes_a_review_and_changes_nothing_else_of_it() {
+-        for status in [Status::Open, Status::Approved, Status::Draft] {
++        for status in [Status::Waiting, Status::Approved, Status::Draft] {
+             let closing = ReviewClosing {
+                 status,
+                 reason: "why".into(),
+diff --git a/crates/atm-lib/src/reviews.rs b/crates/atm-lib/src/reviews.rs
+index ec3cc620..8f754418 100644
+--- a/crates/atm-lib/src/reviews.rs
++++ b/crates/atm-lib/src/reviews.rs
+@@ -354,7 +354,7 @@ pub fn create(project: &mut Project, mut new: NewReview) -> Result<ReviewHeader>
+         let _ = atm_db::jsongit::setup::ensure_review_merge(&paths);
+     }
+     link(project, &header, &ids, true)?;
+-    if header.status == Status::Open {
++    if header.status == Status::Waiting {
+         ask_review(project, &ids, &header, &header.title)?;
+     }
+     Ok(header)
+@@ -522,7 +522,7 @@ pub fn set_tasks(
+             &format!("No longer reviewed in {}", header.reference),
+         )?;
+     }
+-    if header.status == Status::Open {
++    if header.status == Status::Waiting {
+         ask_review(project, &added, &header, &header.title)?;
+     }
+     Ok(header)
+@@ -706,7 +706,7 @@ mod tests {
+                 tasks: vec!["T-1".into()],
+                 author: Some("claude:1".into()),
+                 reviewers: vec!["Hakan".into()],
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first: round(),
+             },
+         )
+@@ -761,7 +761,7 @@ mod tests {
+                 tasks: vec!["T-1".into(), "T-2".into()],
+                 author: Some("claude:1".into()),
+                 reviewers: vec!["Hakan".into()],
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first: round(),
+             },
+         )
+@@ -847,7 +847,7 @@ mod tests {
+                 tasks: vec!["T-1".into()],
+                 author: Some("claude:1".into()),
+                 reviewers: vec!["Hakan".into()],
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first: round(),
+             },
+         )
+@@ -895,7 +895,7 @@ mod tests {
+                 tasks: tasks.iter().map(|t| (*t).to_string()).collect(),
+                 author: Some("claude:1".into()),
+                 reviewers: vec!["Hakan".into()],
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first: round(),
+             },
+         )
+@@ -1150,7 +1150,7 @@ mod tests {
+                 tasks: vec!["T-1".into()],
+                 author: None,
+                 reviewers: Vec::new(),
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first,
+             },
+         )
+@@ -1227,7 +1227,7 @@ mod tests {
+                 tasks: vec!["T-1".into()],
+                 author: None,
+                 reviewers: Vec::new(),
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first,
+             },
+         )
+@@ -1414,7 +1414,7 @@ mod tests {
+         let reviews = super::store(&hakan).unwrap();
+         assert_eq!(
+             reviews.get_review(&header.reference).unwrap().header.status,
+-            Status::Open
++            Status::Waiting
+         );
+         // A round neither: refused before anything is written
+         let mut agent = reopen(&dir.0, "claude:1");
+diff --git a/crates/atm-review/src/edits.rs b/crates/atm-review/src/edits.rs
+index c45ce55f..5a1e1aff 100644
+--- a/crates/atm-review/src/edits.rs
++++ b/crates/atm-review/src/edits.rs
+@@ -179,7 +179,7 @@ mod tests {
+                 reference: ReviewRef::numbered(1),
+                 number: 1,
+                 title: "T".into(),
+-                status: Status::Open,
++                status: Status::Waiting,
+                 tasks: Vec::new(),
+                 author: None,
+                 reviewers: Vec::new(),
+diff --git a/crates/atm-review/src/folder.rs b/crates/atm-review/src/folder.rs
+index 7568e9e0..b239b4eb 100644
+--- a/crates/atm-review/src/folder.rs
++++ b/crates/atm-review/src/folder.rs
+@@ -601,7 +601,7 @@ mod tests {
+             tasks: vec!["ATM-482".into()],
+             author: Some(agent()),
+             reviewers: vec![hakan()],
+-            status: Status::Open,
++            status: Status::Waiting,
+             first: NewRound {
+                 kind: RoundKind::Range {
+                     base: "a1".into(),
+@@ -664,7 +664,7 @@ mod tests {
+         // Another store (another process) reads the same
+         let again = FileStore::open(&task_dir).unwrap();
+         let review = again.get_review(&cr).unwrap();
+-        assert_eq!(review.header.status, Status::Open);
++        assert_eq!(review.header.status, Status::Waiting);
+         assert_eq!(review.rounds.len(), 2);
+         assert_eq!(review.chains[0].comments[0].replies[0].body, "Because.");
+         assert_eq!(
+@@ -733,7 +733,7 @@ mod tests {
+             reference: ReviewRef::numbered(number),
+             number,
+             title: title.into(),
+-            status: Status::Open,
++            status: Status::Waiting,
+             tasks: Vec::new(),
+             author: Some(agent()),
+             reviewers: Vec::new(),
+diff --git a/crates/atm-review/src/memory.rs b/crates/atm-review/src/memory.rs
+index 025e079e..822be9de 100644
+--- a/crates/atm-review/src/memory.rs
++++ b/crates/atm-review/src/memory.rs
+@@ -287,7 +287,7 @@ mod tests {
+                 tasks: Vec::new(),
+                 author: Some(by.clone()),
+                 reviewers: Vec::new(),
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first: NewRound {
+                     kind: RoundKind::Files,
+                     submodule: None,
+diff --git a/crates/atm-review/src/merge.rs b/crates/atm-review/src/merge.rs
+index cb978a6d..05f66b75 100644
+--- a/crates/atm-review/src/merge.rs
++++ b/crates/atm-review/src/merge.rs
+@@ -408,9 +408,10 @@ mod tests {
+ 
+     #[test]
+     fn the_header_takes_each_sides_change_and_on_both_the_later() {
+-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
++        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
+         // Ours retitled it (earlier); theirs decided it (later) and changed the summary
+-        let ours = review_md::write(&header(Status::Open, "Better title", T2), "Summary.").unwrap();
++        let ours =
++            review_md::write(&header(Status::Waiting, "Better title", T2), "Summary.").unwrap();
+         let theirs =
+             review_md::write(&header(Status::Approved, "Title", T3), "Summary, theirs.").unwrap();
+         let (merged, summary) =
+@@ -661,7 +662,7 @@ mod tests {
+ 
+     #[test]
+     fn with_an_unreadable_base_both_changed_and_the_later_side_wins() {
+-        let ours = review_md::write(&header(Status::Open, "Ours", T2), "Ours.").unwrap();
++        let ours = review_md::write(&header(Status::Waiting, "Ours", T2), "Ours.").unwrap();
+         let theirs = review_md::write(&header(Status::Approved, "Theirs", T3), "Theirs.").unwrap();
+         let (h, s) = merged("not a review", &ours, &theirs);
+         assert_eq!(
+@@ -670,20 +671,20 @@ mod tests {
+         );
+         // Ours later: ours wins
+         let ours = review_md::write(
+-            &header(Status::Open, "Ours", "2026-11-17T13:00:00Z"),
++            &header(Status::Waiting, "Ours", "2026-11-17T13:00:00Z"),
+             "Ours.",
+         )
+         .unwrap();
+         let (h, s) = merged("", &ours, &theirs);
+         assert_eq!(
+             (h.title.as_str(), h.status, s.as_str()),
+-            ("Ours", Status::Open, "Ours.")
++            ("Ours", Status::Waiting, "Ours.")
+         );
+     }
+ 
+     #[test]
+     fn both_changed_and_updated_at_the_same_time_keeps_ours() {
+-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
++        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
+         let ours =
+             review_md::write(&header(Status::ChangesRequested, "Title", T2), "Summary.").unwrap();
+         let theirs = review_md::write(&header(Status::Approved, "Title", T2), "Summary.").unwrap();
+@@ -696,12 +697,12 @@ mod tests {
+ 
+     #[test]
+     fn tasks_reviewers_and_summary_are_merged_field_by_field() {
+-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
++        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
+         // Ours changed the tasks and the summary (earlier); theirs changed the reviewers and the title (later)
+-        let mut our_header = header(Status::Open, "Title", T2);
++        let mut our_header = header(Status::Waiting, "Title", T2);
+         our_header.tasks = vec!["ATM-1".into(), "ATM-2".into()];
+         let ours = review_md::write(&our_header, "Summary, ours.").unwrap();
+-        let mut their_header = header(Status::Open, "Retitled", T3);
++        let mut their_header = header(Status::Waiting, "Retitled", T3);
+         their_header.reviewers = vec![Actor("Ana".into())];
+         let theirs = review_md::write(&their_header, "Summary.").unwrap();
+         let (h, s) = merged(&base, &ours, &theirs);
+@@ -714,7 +715,7 @@ mod tests {
+ 
+     #[test]
+     fn an_unreadable_theirs_is_an_error() {
+-        let base = review_md::write(&header(Status::Open, "Title", T1), "Summary.").unwrap();
++        let base = review_md::write(&header(Status::Waiting, "Title", T1), "Summary.").unwrap();
+         assert!(merge_review(&base, &base, "no header").is_err());
+     }
+ }
+diff --git a/crates/atm-review/src/model.rs b/crates/atm-review/src/model.rs
+index 67dcc21f..86741220 100644
+--- a/crates/atm-review/src/model.rs
++++ b/crates/atm-review/src/model.rs
+@@ -59,8 +59,10 @@ impl From<&str> for Actor {
+ pub enum Status {
+     /// The author is still putting it together; not waiting on anyone.
+     Draft,
+-    /// Waiting on the reviewers.
+-    Open,
++    /// Waiting on the reviewers: *Waiting for review* (ATM-613; `open` until 0.41.0, still read as this). An *open*
++    /// review is any not decided yet ([`Status::OPEN`]).
++    #[serde(alias = "open")]
++    Waiting,
+     /// The change is being made; reviewers comment as it grows (§3.5).
+     Live,
+     /// Sent back for fixes.
+@@ -77,7 +79,7 @@ impl Status {
+     pub fn name(self) -> &'static str {
+         match self {
+             Self::Draft => "draft",
+-            Self::Open => "open",
++            Self::Waiting => "waiting",
+             Self::Live => "live",
+             Self::ChangesRequested => "changes_requested",
+             Self::Approved => "approved",
+@@ -85,6 +87,37 @@ impl Status {
+         }
+     }
+ 
++    /// The statuses of an *open* review, one not decided yet (ATM-613): `--status open`, and the list's *Open*.
++    pub const OPEN: [Self; 4] = [
++        Self::Draft,
++        Self::Waiting,
++        Self::Live,
++        Self::ChangesRequested,
++    ];
++
++    /// Every status, in their order (§3.2).
++    pub const EVERY: [Self; 6] = [
++        Self::Draft,
++        Self::Waiting,
++        Self::Live,
++        Self::ChangesRequested,
++        Self::Approved,
++        Self::Closed,
++    ];
++
++    /// The statuses a filter's name stands for (ATM-613): `open`, every review not decided yet ([`Status::OPEN`]);
++    /// any other, its status alone; none for a name that is neither.
++    #[must_use]
++    pub fn filter_named(name: &str) -> Option<Vec<Self>> {
++        if name == "open" {
++            return Some(Self::OPEN.to_vec());
++        }
++        Self::EVERY
++            .into_iter()
++            .find(|s| s.name() == name)
++            .map(|s| vec![s])
++    }
++
+     /// A review that has ended: approved or closed.
+     #[must_use]
+     pub fn ended(self) -> bool {
+@@ -319,7 +352,7 @@ mod tests {
+ 
+     const ALL: [Status; 6] = [
+         Status::Draft,
+-        Status::Open,
++        Status::Waiting,
+         Status::Live,
+         Status::ChangesRequested,
+         Status::Approved,
+@@ -333,7 +366,7 @@ mod tests {
+             names,
+             [
+                 ("draft", false),
+-                ("open", false),
++                ("waiting", false),
+                 ("live", false),
+                 ("changes_requested", false),
+                 ("approved", true),
+@@ -346,6 +379,36 @@ mod tests {
+             assert_eq!(written, status.name());
+             assert_eq!(serde_json::from_value::<Status>(written).unwrap(), status);
+         }
++        assert_eq!(ALL, Status::EVERY);
++    }
++
++    /// ATM-613: a review an earlier atm wrote as `open` reads as waiting, and is written as `waiting`
++    #[test]
++    fn open_as_an_earlier_atm_wrote_it_reads_as_waiting() {
++        let read: Status = serde_json::from_value(serde_json::json!("open")).unwrap();
++        assert_eq!(read, Status::Waiting);
++        assert_eq!(serde_json::to_value(read).unwrap(), "waiting");
++    }
++
++    /// ATM-613: `open` in a filter is every review not decided yet; another name, its own status
++    #[test]
++    fn open_in_a_filter_is_every_status_not_decided_and_another_name_its_own() {
++        assert_eq!(
++            Status::filter_named("open"),
++            Some(vec![
++                Status::Draft,
++                Status::Waiting,
++                Status::Live,
++                Status::ChangesRequested
++            ])
++        );
++        assert!(Status::OPEN.iter().all(|s| !s.ended()));
++        for status in ALL {
++            assert_eq!(Status::filter_named(status.name()), Some(vec![status]));
++        }
++        for bad in ["", "Open", "merged", "changes-requested"] {
++            assert_eq!(Status::filter_named(bad), None, "{bad}");
++        }
+     }
+ 
+     #[test]
+@@ -436,7 +499,7 @@ mod tests {
+                 reference: ReviewRef::numbered(1),
+                 number: 1,
+                 title: "T".into(),
+-                status: Status::Open,
++                status: Status::Waiting,
+                 tasks: Vec::new(),
+                 author: None,
+                 reviewers: Vec::new(),
+diff --git a/crates/atm-review/src/rounds.rs b/crates/atm-review/src/rounds.rs
+index af8cd164..47504b8c 100644
+--- a/crates/atm-review/src/rounds.rs
++++ b/crates/atm-review/src/rounds.rs
+@@ -536,7 +536,7 @@ mod tests {
+                 tasks: Vec::new(),
+                 author: Some(agent.clone()),
+                 reviewers: Vec::new(),
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first: from_working(&vcs, "HEAD", &agent).unwrap(),
+             })
+             .unwrap();
+@@ -755,7 +755,7 @@ mod tests {
+                 tasks: Vec::new(),
+                 author: Some(by.clone()),
+                 reviewers: Vec::new(),
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first: NewRound {
+                     kind: RoundKind::Files,
+                     submodule: None,
+@@ -1004,7 +1004,7 @@ mod tests {
+                 tasks: Vec::new(),
+                 author: Some(by.clone()),
+                 reviewers: Vec::new(),
+-                status: Status::Open,
++                status: Status::Waiting,
+                 first,
+             })
+             .unwrap();
+diff --git a/crates/atm-review/src/rules.rs b/crates/atm-review/src/rules.rs
+index 9b3460fb..a75c55be 100644
+--- a/crates/atm-review/src/rules.rs
++++ b/crates/atm-review/src/rules.rs
+@@ -89,7 +89,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+     /// # Errors
+     /// Another status, an empty title, or the store's.
+     pub fn create(&mut self, new: NewReview) -> Result<ReviewHeader> {
+-        if !matches!(new.status, Status::Draft | Status::Open | Status::Live) {
++        if !matches!(new.status, Status::Draft | Status::Waiting | Status::Live) {
+             return Err(Error::Invalid(format!(
+                 "a review starts as a draft, open or live, not {}",
+                 new.status.name()
+@@ -116,7 +116,8 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+                 review.header.reference
+             )));
+         }
+-        self.store.set_status(&review.header.id, Status::Open, by)
++        self.store
++            .set_status(&review.header.id, Status::Waiting, by)
+     }
+ 
+     /// The author's next round, after addressing the comments: a review sent back is open again, and a live one ends
+@@ -150,7 +151,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+             Status::ChangesRequested | Status::Live
+         ) {
+             self.store
+-                .set_status(&review.header.id, Status::Open, &by)?;
++                .set_status(&review.header.id, Status::Waiting, &by)?;
+         }
+         Ok(number)
+     }
+@@ -313,7 +314,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+             Verdict::Approve => {
+                 if !matches!(
+                     status,
+-                    Status::Open | Status::Live | Status::ChangesRequested
++                    Status::Waiting | Status::Live | Status::ChangesRequested
+                 ) {
+                     return Err(not_now(&review, "be approved"));
+                 }
+@@ -330,7 +331,7 @@ impl<'a, S: ReviewStore + ?Sized> Reviews<'a, S> {
+             // Sent back already, it isn't sent back again (CR-2): a reviewer's further words are a comment, which
+             // the page calls *Publish comments*
+             Verdict::RequestChanges => {
+-                if status != Status::Open {
++                if status != Status::Waiting {
+                     return Err(not_now(&review, "be sent back"));
+                 }
+                 Some(Status::ChangesRequested)
+@@ -500,11 +501,11 @@ mod tests {
+     fn a_review_starts_as_a_draft_open_or_live_with_a_title_and_its_first_round() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        let header = reviews.create(new_review(Status::Open)).unwrap();
++        let header = reviews.create(new_review(Status::Waiting)).unwrap();
+         assert_eq!(header.reference, cr(1));
+         assert_eq!(header.number, 1);
+         assert!(reviews.create(new_review(Status::Approved)).is_err());
+-        let mut untitled = new_review(Status::Open);
++        let mut untitled = new_review(Status::Waiting);
+         untitled.title = "  ".into();
+         assert!(reviews.create(untitled).is_err());
+         assert_eq!(
+@@ -523,7 +524,7 @@ mod tests {
+     fn a_review_is_decided_by_its_reviewers_or_with_none_by_anyone_but_its_author() {
+         let mut store = MemoryStore::new();
+         let header = Reviews::new(&mut store)
+-            .create(new_review(Status::Open))
++            .create(new_review(Status::Waiting))
+             .unwrap();
+         assert!(decides(&header, &hakan()));
+         assert!(!decides(&header, &agent()));
+@@ -539,7 +540,7 @@ mod tests {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+         // Hakan's own review, no reviewers named: by the rules, not his to decide
+-        let mut own = new_review(Status::Open);
++        let mut own = new_review(Status::Waiting);
+         own.author = Some(hakan());
+         own.reviewers.clear();
+         reviews.create(own).unwrap();
+@@ -577,7 +578,7 @@ mod tests {
+         );
+ 
+         // It lifts who may decide, nothing else: an approval still needs every comment resolved
+-        let mut other = new_review(Status::Open);
++        let mut other = new_review(Status::Waiting);
+         other.author = Some(hakan());
+         other.reviewers.clear();
+         reviews.create(other).unwrap();
+@@ -598,7 +599,7 @@ mod tests {
+                 .contains("comments are open")
+         );
+         // A reviewer who may decide records no override
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         reviews
+             .submit(
+                 &cr(3),
+@@ -629,7 +630,7 @@ mod tests {
+         reviews.add_round(&cr(1), round(&agent())).unwrap();
+         let header = reviews.store().get_review(&cr(1)).unwrap().header;
+         assert_eq!(header.author, Some(agent()));
+-        assert_eq!(header.status, Status::Open);
++        assert_eq!(header.status, Status::Waiting);
+         assert!(decides(&header, &hakan()) && !decides(&header, &agent()));
+     }
+ 
+@@ -637,7 +638,7 @@ mod tests {
+     fn sent_back_fixed_in_a_round_then_approved_once_every_comment_is_resolved() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         let question = reviews
+             .comment(
+                 &cr(1),
+@@ -669,7 +670,7 @@ mod tests {
+             .unwrap();
+         assert_eq!(status(reviews.store(), 1), Status::ChangesRequested);
+         assert_eq!(reviews.add_round(&cr(1), round(&agent())).unwrap(), 2);
+-        assert_eq!(status(reviews.store(), 1), Status::Open);
++        assert_eq!(status(reviews.store(), 1), Status::Waiting);
+ 
+         // Approving names what is still open: the question and the request's own words
+         let refused = reviews
+@@ -718,7 +719,7 @@ mod tests {
+     fn a_comments_author_resolves_their_own_and_edits_only_their_own() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         let note = reviews
+             .comment(&cr(1), on("a.rs", 1), "A note for the reviewer.", &agent())
+             .unwrap();
+@@ -741,7 +742,7 @@ mod tests {
+     fn a_comment_needs_text_and_a_round_the_review_has() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         assert!(
+             reviews
+                 .comment(&cr(1), on("a.rs", 2), "no round 2", &hakan())
+@@ -766,7 +767,7 @@ mod tests {
+         );
+         assert!(reviews.ask_for_review(&cr(1), &hakan()).is_err());
+         reviews.ask_for_review(&cr(1), &agent()).unwrap();
+-        assert_eq!(status(reviews.store(), 1), Status::Open);
++        assert_eq!(status(reviews.store(), 1), Status::Waiting);
+         assert!(reviews.ask_for_review(&cr(1), &agent()).is_err());
+     }
+ 
+@@ -795,7 +796,7 @@ mod tests {
+         assert_eq!(status(reviews.store(), 2), Status::Approved);
+ 
+         reviews.add_round(&cr(1), round(&agent())).unwrap();
+-        assert_eq!(status(reviews.store(), 1), Status::Open);
++        assert_eq!(status(reviews.store(), 1), Status::Waiting);
+         assert!(reviews.checkpoint(&cr(1), checkpoint).is_err());
+     }
+ 
+@@ -803,7 +804,7 @@ mod tests {
+     fn closed_by_its_author_or_a_reviewer_with_the_reason_kept() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         assert!(
+             reviews
+                 .close(&cr(1), "no", &Actor::from("someone else"))
+@@ -823,7 +824,7 @@ mod tests {
+     fn its_tasks_are_changed_by_its_author_or_a_reviewer() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         assert!(
+             reviews
+                 .set_tasks(&cr(1), vec![], &Actor::from("someone else"))
+@@ -844,7 +845,7 @@ mod tests {
+ 
+     /// Store a review of `status`, whatever the rules say about starting there: a review that came to it.
+     fn at(store: &mut MemoryStore, status: Status) -> ReviewRef {
+-        let header = store.create_review(new_review(Status::Open)).unwrap();
++        let header = store.create_review(new_review(Status::Waiting)).unwrap();
+         store.set_status(&header.id, status, &hakan()).unwrap();
+         header.reference
+     }
+@@ -861,7 +862,7 @@ mod tests {
+     fn only_draft_open_and_live_are_statuses_a_review_starts_in() {
+         for (status, starts) in [
+             (Status::Draft, true),
+-            (Status::Open, true),
++            (Status::Waiting, true),
+             (Status::Live, true),
+             (Status::ChangesRequested, false),
+             (Status::Approved, false),
+@@ -884,7 +885,7 @@ mod tests {
+     fn whose_change_it_is_and_who_decides_when_no_author_is_known() {
+         let mut store = MemoryStore::new();
+         let mut header = Reviews::new(&mut store)
+-            .create(new_review(Status::Open))
++            .create(new_review(Status::Waiting))
+             .unwrap();
+         assert!(is_author(&header, &agent()) && !is_author(&header, &hakan()));
+         header.author = None;
+@@ -966,7 +967,7 @@ mod tests {
+ 
+     #[test]
+     fn only_a_draft_is_asked_for_review() {
+-        for status in [Status::Open, Status::Live, Status::ChangesRequested] {
++        for status in [Status::Waiting, Status::Live, Status::ChangesRequested] {
+             let mut store = MemoryStore::new();
+             let reference = at(&mut store, status);
+             assert!(
+@@ -991,9 +992,9 @@ mod tests {
+     fn a_round_reopens_a_review_sent_back_or_live_and_leaves_a_draft_or_open_one_as_it_is() {
+         for (before, after) in [
+             (Status::Draft, Status::Draft),
+-            (Status::Open, Status::Open),
+-            (Status::Live, Status::Open),
+-            (Status::ChangesRequested, Status::Open),
++            (Status::Waiting, Status::Waiting),
++            (Status::Live, Status::Waiting),
++            (Status::ChangesRequested, Status::Waiting),
+         ] {
+             let mut store = MemoryStore::new();
+             let reference = at(&mut store, before);
+@@ -1016,7 +1017,7 @@ mod tests {
+     fn a_round_is_its_authors_and_someone_elses_is_refused_and_not_kept() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         for by in [hakan(), someone()] {
+             assert!(is_refused(&reviews.add_round(&cr(1), round(&by))), "{by:?}");
+         }
+@@ -1040,7 +1041,7 @@ mod tests {
+ 
+     #[test]
+     fn a_checkpoint_is_only_a_live_reviews_and_anyone_taking_part_makes_one() {
+-        for status in [Status::Draft, Status::Open, Status::ChangesRequested] {
++        for status in [Status::Draft, Status::Waiting, Status::ChangesRequested] {
+             let mut store = MemoryStore::new();
+             let reference = at(&mut store, status);
+             assert!(
+@@ -1101,7 +1102,7 @@ mod tests {
+     fn a_reply_is_edited_by_its_author_only_and_a_missing_comment_is_not_found() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         let question = reviews
+             .comment(&cr(1), on("a.rs", 1), "Why?", &hakan())
+             .unwrap();
+@@ -1133,7 +1134,7 @@ mod tests {
+     fn a_comment_is_resolved_and_reopened_by_a_decider_or_its_author_only() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         let question = reviews
+             .comment(&cr(1), on("a.rs", 1), "Why?", &hakan())
+             .unwrap();
+@@ -1160,7 +1161,7 @@ mod tests {
+             Err(Error::NotFound(_))
+         ));
+         // With no reviewers named, anyone but the review's author decides, so resolves another's comment
+-        let mut open = new_review(Status::Open);
++        let mut open = new_review(Status::Waiting);
+         open.reviewers.clear();
+         reviews.create(open).unwrap();
+         let note = reviews
+@@ -1174,7 +1175,7 @@ mod tests {
+     fn a_comment_verdict_keeps_the_status_and_leaves_its_words_open() {
+         for status in [
+             Status::Draft,
+-            Status::Open,
++            Status::Waiting,
+             Status::Live,
+             Status::ChangesRequested,
+         ] {
+@@ -1201,7 +1202,7 @@ mod tests {
+     fn a_submits_words_are_about_the_last_round_and_blank_words_are_none() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         reviews.add_round(&cr(1), round(&agent())).unwrap();
+         reviews
+             .submit(&cr(1), Verdict::Comment, Some(" \n"), None, &hakan())
+@@ -1232,7 +1233,7 @@ mod tests {
+         for verdict in [Verdict::Approve, Verdict::RequestChanges, Verdict::Comment] {
+             let mut store = MemoryStore::new();
+             let mut reviews = Reviews::new(&mut store);
+-            reviews.create(new_review(Status::Open)).unwrap();
++            reviews.create(new_review(Status::Waiting)).unwrap();
+             for by in [agent(), someone()] {
+                 assert!(
+                     is_refused(&reviews.submit(&cr(1), verdict, Some("x"), None, &by)),
+@@ -1242,7 +1243,7 @@ mod tests {
+             let review = reviews.store().get_review(&cr(1)).unwrap();
+             assert_eq!(
+                 (review.header.status, review.chains.len()),
+-                (Status::Open, 0)
++                (Status::Waiting, 0)
+             );
+         }
+     }
+@@ -1253,7 +1254,7 @@ mod tests {
+     fn a_review_not_ended_takes_comments_and_replies_whatever_its_status() {
+         for status in [
+             Status::Draft,
+-            Status::Open,
++            Status::Waiting,
+             Status::Live,
+             Status::ChangesRequested,
+         ] {
+@@ -1281,7 +1282,7 @@ mod tests {
+     fn an_approval_is_for_an_open_live_or_sent_back_review_and_a_send_back_for_an_open_one() {
+         for (status, verdict, after) in [
+             (Status::Draft, Verdict::Approve, None),
+-            (Status::Open, Verdict::Approve, Some(Status::Approved)),
++            (Status::Waiting, Verdict::Approve, Some(Status::Approved)),
+             (Status::Live, Verdict::Approve, Some(Status::Approved)),
+             // Sent back, then approved after all (ATM-609)
+             (
+@@ -1291,7 +1292,7 @@ mod tests {
+             ),
+             (Status::Draft, Verdict::RequestChanges, None),
+             (
+-                Status::Open,
++                Status::Waiting,
+                 Verdict::RequestChanges,
+                 Some(Status::ChangesRequested),
+             ),
+@@ -1299,7 +1300,7 @@ mod tests {
+             // Sent back already: not again (CR-2); further words are a comment, below
+             (Status::ChangesRequested, Verdict::RequestChanges, None),
+             (Status::Draft, Verdict::Comment, Some(Status::Draft)),
+-            (Status::Open, Verdict::Comment, Some(Status::Open)),
++            (Status::Waiting, Verdict::Comment, Some(Status::Waiting)),
+             (Status::Live, Verdict::Comment, Some(Status::Live)),
+             (
+                 Status::ChangesRequested,
+@@ -1332,7 +1333,7 @@ mod tests {
+     fn an_override_by_someone_not_a_reviewer_is_recorded_as_such() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         reviews
+             .submit(
+                 &cr(1),
+@@ -1375,7 +1376,7 @@ mod tests {
+         }
+         // A reviewer closes it as well as its author, the reason resolved
+         let mut store = MemoryStore::new();
+-        let reference = at(&mut store, Status::Open);
++        let reference = at(&mut store, Status::Waiting);
+         Reviews::new(&mut store)
+             .close(&reference, "Not needed.", &hakan())
+             .unwrap();
+@@ -1406,7 +1407,7 @@ mod tests {
+     fn its_summary_is_changed_by_its_author_while_it_is_open() {
+         let mut store = MemoryStore::new();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         let title = reviews.store().get_review(&cr(1)).unwrap().header.title;
+         reviews
+             .edit_summary(&cr(1), "1. Do this.\n2. Then that.", &agent())
+@@ -1439,7 +1440,7 @@ mod tests {
+             }))
+             .unwrap();
+         let mut reviews = Reviews::new(&mut store);
+-        reviews.create(new_review(Status::Open)).unwrap();
++        reviews.create(new_review(Status::Waiting)).unwrap();
+         reviews
+             .comment(&cr(1), on("a.rs", 1), "One.", &hakan())
+             .unwrap();
+diff --git a/crates/atm-review/src/store_contract.rs b/crates/atm-review/src/store_contract.rs
+index a6dd41bc..113747b1 100644
+--- a/crates/atm-review/src/store_contract.rs
++++ b/crates/atm-review/src/store_contract.rs
+@@ -120,7 +120,7 @@ pub(crate) fn a_new_review_is_kept_numbered_with_its_first_round(store: &mut dyn
+ /// Reviews are listed newest first, by status (one or several) and by task.
+ pub(crate) fn reviews_are_listed_newest_first_and_filtered(store: &mut dyn ReviewStore) {
+     store
+-        .create_review(new_review("One", Status::Open, &["ATM-1"]))
++        .create_review(new_review("One", Status::Waiting, &["ATM-1"]))
+         .unwrap();
+     store
+         .create_review(new_review("Two", Status::Draft, &["ATM-1", "ATM-2"]))
+@@ -140,14 +140,14 @@ pub(crate) fn reviews_are_listed_newest_first_and_filtered(store: &mut dyn Revie
+         (ReviewFilter::default(), vec!["Three", "Two", "One"]),
+         (
+             ReviewFilter {
+-                statuses: vec![Status::Open],
++                statuses: vec![Status::Waiting],
+                 task: None,
+             },
+             vec!["One"],
+         ),
+         (
+             ReviewFilter {
+-                statuses: vec![Status::Open, Status::Live],
++                statuses: vec![Status::Waiting, Status::Live],
+                 task: None,
+             },
+             vec!["Three", "One"],
+@@ -187,7 +187,7 @@ pub(crate) fn reviews_are_listed_newest_first_and_filtered(store: &mut dyn Revie
+ 
+ /// A review's header and summary are changed as asked, and its rounds added after the last.
+ pub(crate) fn a_reviews_header_and_rounds_are_changed_as_asked(store: &mut dyn ReviewStore) {
+-    let mut unknown = new_review("One", Status::Open, &["ATM-1"]);
++    let mut unknown = new_review("One", Status::Waiting, &["ATM-1"]);
+     unknown.author = None;
+     let id = store.create_review(unknown).unwrap().id;
+     store
+@@ -232,7 +232,7 @@ pub(crate) fn a_reviews_header_and_rounds_are_changed_as_asked(store: &mut dyn R
+ /// Chains are started, replied to, edited, resolved and listed, and a missing comment isn't found.
+ pub(crate) fn comments_are_kept_replied_to_edited_and_resolved(store: &mut dyn ReviewStore) {
+     let id = store
+-        .create_review(new_review("One", Status::Open, &[]))
++        .create_review(new_review("One", Status::Waiting, &[]))
+         .unwrap()
+         .id;
+     let question = store.add_comment(&id, anchor(), "Why?", &hakan()).unwrap();
+@@ -294,12 +294,15 @@ pub(crate) fn comments_are_kept_replied_to_edited_and_resolved(store: &mut dyn R
+ /// Every method on a review the store hasn't is `NotFound`.
+ pub(crate) fn every_method_on_a_review_it_hasnt_is_not_found(store: &mut dyn ReviewStore) {
+     store
+-        .create_review(new_review("One", Status::Open, &[]))
++        .create_review(new_review("One", Status::Waiting, &[]))
+         .unwrap();
+     let id = ReviewId("0193a8f2-0000-7000-8000-00000000dead".into());
+     let c1 = CommentId("c1".into());
+     let results = [
+-        ("set_status", store.set_status(&id, Status::Open, &hakan())),
++        (
++            "set_status",
++            store.set_status(&id, Status::Waiting, &hakan()),
++        ),
+         ("edit_summary", store.edit_summary(&id, "t", "s")),
+         ("set_tasks", store.set_tasks(&id, Vec::new())),
+         ("set_author", store.set_author(&id, &agent())),
+diff --git a/dashboard/src/lib/review-filter.ts b/dashboard/src/lib/review-filter.ts
+index be93d760..3d41e689 100644
+--- a/dashboard/src/lib/review-filter.ts
++++ b/dashboard/src/lib/review-filter.ts
+@@ -1,5 +1,5 @@
+ import { readStored, writeStored } from './prefs';
+-import { NO_QUERY, STATUS_LABELS, type ListQuery, type ReviewStatus } from './reviews/types';
++import { NO_QUERY, STATUS_LABELS, type ListQuery, type StatusFilter } from './reviews/types';
+ 
+ // The reviews list's last filter, kept in this browser per project (ATM-604): the list opens with it. Its statuses,
+ // author, reviewer, task and branch; not the search words, which are for the moment.
+@@ -14,9 +14,10 @@ export function keptFilter(project: string): ListQuery {
+   const query: ListQuery = { ...NO_QUERY, status: [] };
+   if (!kept || typeof kept !== 'object' || Array.isArray(kept)) return query;
+   const from = kept as Record<string, unknown>;
++  // A status, or open (every review not decided yet: what a filter kept before ATM-613 meant by it, near enough)
+   if (Array.isArray(from.status))
+     query.status = from.status.filter(
+-      (s): s is ReviewStatus => typeof s === 'string' && Object.hasOwn(STATUS_LABELS, s),
++      (s): s is StatusFilter => typeof s === 'string' && (s === 'open' || Object.hasOwn(STATUS_LABELS, s)),
+     );
+   for (const key of TEXTS) if (typeof from[key] === 'string') query[key] = from[key];
+   return query;
+diff --git a/dashboard/src/lib/reviews/ReviewList.svelte b/dashboard/src/lib/reviews/ReviewList.svelte
+index a0ebb3f4..90a580bf 100644
+--- a/dashboard/src/lib/reviews/ReviewList.svelte
++++ b/dashboard/src/lib/reviews/ReviewList.svelte
+@@ -1,6 +1,13 @@
+ <script lang="ts">
+   import Icon from '../ui/Icon.svelte';
+-  import { NO_QUERY, STATUS_LABELS, type ListQuery as Query, type ReviewEntry, type ReviewStatus } from './types';
++  import {
++    NO_QUERY,
++    STATUS_LABELS,
++    type ListQuery as Query,
++    type ReviewEntry,
++    type ReviewStatus,
++    type StatusFilter,
++  } from './types';
+ 
+   // The reviews page (docs/code-review-design.md §3.11, ATM-574): a project's reviews, the latest activity first,
+   // with search (title, summary and comments, every word) and filters (status, author, reviewer, task, branch); those
+@@ -45,7 +52,9 @@
+     }
+   }
+ 
+-  const STATUSES = Object.keys(STATUS_LABELS) as ReviewStatus[];
++  // Open first, every review not decided yet (ATM-613), then each status to narrow it further
++  const STATUSES: StatusFilter[] = ['open', ...(Object.keys(STATUS_LABELS) as ReviewStatus[])];
++  const FILTER_LABELS: Record<StatusFilter, string> = { open: 'Open', ...STATUS_LABELS };
+ 
+   // The choices each filter offers: what the reviews listed have, and what is chosen
+   const choices = (pick: (e: ReviewEntry) => (string | null)[], chosen: string) =>
+@@ -67,7 +76,7 @@
+     timer = setTimeout(() => onquery({ ...query, q: text.trim() }), 250);
+   }
+ 
+-  function toggleStatus(status: ReviewStatus) {
++  function toggleStatus(status: StatusFilter) {
+     const status_ = query.status.includes(status)
+       ? query.status.filter((s) => s !== status)
+       : [...query.status, status];
+@@ -163,7 +172,8 @@
+         class="review-chip status-{status}"
+         aria-pressed={query.status.includes(status)}
+         data-status={status}
+-        onclick={() => toggleStatus(status)}>{STATUS_LABELS[status]}</button
++        title={status === 'open' ? 'Every review not decided yet: draft, waiting, live or sent back' : undefined}
++        onclick={() => toggleStatus(status)}>{FILTER_LABELS[status]}</button
+       >
+     {/each}
+     {#each [['author', 'Author', authors], ['reviewer', 'Reviewer', reviewers], ['task', 'Task', tasks], ['branch', 'Branch', branches]] as const as [key, label, options] (key)}
+@@ -426,7 +436,7 @@
+     border-color: color-mix(in srgb, var(--red) 50%, transparent);
+     background: color-mix(in srgb, var(--red) 10%, transparent);
+   }
+-  .review-status.status-open,
++  .review-status.status-waiting,
+   .review-status.status-live {
+     color: var(--accent);
+     border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index ee099312..c3d80465 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -920,7 +920,7 @@
+     border-color: color-mix(in srgb, var(--red) 50%, transparent);
+     background: color-mix(in srgb, var(--red) 10%, transparent);
+   }
+-  .review-status.status-open,
++  .review-status.status-waiting,
+   .review-status.status-live {
+     color: var(--accent);
+     border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+diff --git a/dashboard/src/lib/reviews/types.ts b/dashboard/src/lib/reviews/types.ts
+index 620caa91..2f2b23c8 100644
+--- a/dashboard/src/lib/reviews/types.ts
++++ b/dashboard/src/lib/reviews/types.ts
+@@ -35,7 +35,14 @@ export interface Picked {
+   quote: string;
+ }
+ 
+-export type ReviewStatus = 'draft' | 'open' | 'live' | 'changes_requested' | 'approved' | 'closed';
++/** Where a review stands; `waiting` is waiting on its reviewers (ATM-613: `open` until 0.41.0) */
++export type ReviewStatus = 'draft' | 'waiting' | 'live' | 'changes_requested' | 'approved' | 'closed';
++
++/** A status filter: one status, or `open`, every review not decided yet (draft, waiting, live, sent back) */
++export type StatusFilter = ReviewStatus | 'open';
++
++/** The statuses of an open review, one not decided yet (as atm-review's `Status::OPEN`) */
++export const OPEN_STATUSES: readonly ReviewStatus[] = ['draft', 'waiting', 'live', 'changes_requested'];
+ 
+ /** A review's header (`review.md`'s): what lists and searches need */
+ export interface ReviewHeader {
+@@ -121,7 +128,8 @@ export interface ReviewPageData {
+ /** What the reviews page lists by: each one given (not empty) must fit */
+ export interface ListQuery {
+   q: string;
+-  status: ReviewStatus[];
++  /** `open` among them: every review not decided yet (the server expands it) */
++  status: StatusFilter[];
+   author: string;
+   reviewer: string;
+   task: string;
+@@ -132,7 +140,7 @@ export const NO_QUERY: ListQuery = { q: '', status: [], author: '', reviewer: ''
+ 
+ export const STATUS_LABELS: Record<ReviewStatus, string> = {
+   draft: 'Draft',
+-  open: 'Open',
++  waiting: 'Waiting for review',
+   live: 'Live',
+   changes_requested: 'Changes requested',
+   approved: 'Approved',
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 52b8588b..1c6cd09d 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -292,7 +292,7 @@ test.describe('the dashboard in the atm app', () => {
+       reference: 'CR-2',
+       number: 2,
+       title: 'Trim the names',
+-      status: 'open',
++      status: 'waiting',
+       tasks: [],
+       author: 'claude:a',
+       reviewers: [],
+diff --git a/dashboard/tests/e2e/helpers.ts b/dashboard/tests/e2e/helpers.ts
+index f76fc318..e5fe8575 100644
+--- a/dashboard/tests/e2e/helpers.ts
++++ b/dashboard/tests/e2e/helpers.ts
+@@ -352,8 +352,7 @@ export class TasksServer {
+       summary,
+       logo: this.logos.has(id) ? `p/${id}/logo` : null,
+     });
+-    const own =
+-      this.ownSummary ?? (this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null);
++    const own = this.ownSummary ?? (this.summarized && this.body && this.status === 200 ? atmSummary(this.body) : null);
+     return [
+       project(this.projectId, typeof this.meta.project === 'string' ? this.meta.project : this.projectId, own),
+       ...[...this.others].map(([id, p]) => project(id, p.name, p.summary)),
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 852f3f6e..83f6662d 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -39,7 +39,7 @@ const NEW_D = '# Plan\n\nFirst step.\n\nNew ending.\n';
+ const PATCH_D =
+   'diff --git a/docs/plan.md b/docs/plan.md\n--- a/docs/plan.md\n+++ b/docs/plan.md\n@@ -5 +5 @@\n-Old ending.\n+New ending.\n';
+ 
+-const header = (n: number, status = 'open', more: Record<string, unknown> = {}) => ({
++const header = (n: number, status = 'waiting', more: Record<string, unknown> = {}) => ({
+   id: `r${n}`,
+   reference: `CR-${n}`,
+   number: n,
+@@ -192,7 +192,14 @@ test.describe('the reviews tab', () => {
+     tasksServer.setReviews({
+       reviews: [
+         { review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true, waiting: 'review' },
+-        { review: header(3, 'changes_requested'), branch: null, chains: 1, open: 1, needs_you: false, waiting: 'answered' },
++        {
++          review: header(3, 'changes_requested'),
++          branch: null,
++          chains: 1,
++          open: 1,
++          needs_you: false,
++          waiting: 'answered',
++        },
+       ],
+       you: 'Ana',
+     });
+@@ -270,20 +277,20 @@ test.describe('the reviews tab', () => {
+     tasksServer.setReviews({
+       reviews: [
+         {
+-          review: header(8, 'open', { reference: 'CR-8.1', title: 'Theirs' }),
++          review: header(8, 'waiting', { reference: 'CR-8.1', title: 'Theirs' }),
+           branch: null,
+           chains: 0,
+           open: 0,
+           needs_you: false,
+         },
+         {
+-          review: header(9, 'open', { reference: 'CR-8.2', title: 'Mine' }),
++          review: header(9, 'waiting', { reference: 'CR-8.2', title: 'Mine' }),
+           branch: null,
+           chains: 0,
+           open: 0,
+           needs_you: false,
+         },
+-        { review: header(1, 'open'), branch: null, chains: 0, open: 0, needs_you: false },
++        { review: header(1, 'waiting'), branch: null, chains: 0, open: 0, needs_you: false },
+       ],
+       you: 'Ana',
+     });
+@@ -291,7 +298,10 @@ test.describe('the reviews tab', () => {
+     await expect(page.getByRole('alert')).toContainText('CR-8 is 2 reviews');
+     const choices = page.getByRole('list', { name: 'The reviews CR-8 names' });
+     await expect(choices.getByRole('listitem')).toHaveText([/CR-8\.1\s+Theirs/, /CR-8\.2\s+Mine/]);
+-    tasksServer.setReview('CR-8.2', reviewPage({ review: header(9, 'open', { reference: 'CR-8.2', title: 'Mine' }) }));
++    tasksServer.setReview(
++      'CR-8.2',
++      reviewPage({ review: header(9, 'waiting', { reference: 'CR-8.2', title: 'Mine' }) }),
++    );
+     await choices.getByRole('link', { name: 'CR-8.2' }).click();
+     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-8.2');
+   });
+diff --git a/dashboard/tests/unit/ReviewList.component.test.ts b/dashboard/tests/unit/ReviewList.component.test.ts
+index 41189810..0be77162 100644
+--- a/dashboard/tests/unit/ReviewList.component.test.ts
++++ b/dashboard/tests/unit/ReviewList.component.test.ts
+@@ -52,7 +52,7 @@ afterEach(() => vi.useRealTimers());
+ describe('ReviewList', () => {
+   it('lists each review: its reference, title, status, tasks, branch, author, open chains', () => {
+     const { container } = show([
+-      entry(2, 'open', { tasks: ['ATM-1', 'ATM-2'] }, { branch: 'dev/1' }),
++      entry(2, 'waiting', { tasks: ['ATM-1', 'ATM-2'] }, { branch: 'dev/1' }),
+       entry(1, 'approved', { author: null }, { branch: null }),
+     ]);
+     const rows = [...container.querySelectorAll('.review-row')];
+@@ -60,7 +60,7 @@ describe('ReviewList', () => {
+     const first = within(rows[0] as HTMLElement);
+     expect(first.getByRole('link').getAttribute('href')).toBe('/projects/p1/reviews/CR-2');
+     expect(first.getByText('Review 2')).toBeTruthy();
+-    expect(first.getByText('Open')).toBeTruthy();
++    expect(first.getByText('Waiting for review')).toBeTruthy();
+     expect(first.getByText('ATM-1, ATM-2')).toBeTruthy();
+     expect(first.getByText('dev/1')).toBeTruthy();
+     expect(first.getByText('1 open of 2')).toBeTruthy();
+@@ -70,7 +70,7 @@ describe('ReviewList', () => {
+ 
+   it('marks those that need you, and offers the first of them next', async () => {
+     const { container, onopen } = show([
+-      entry(3, 'open'),
++      entry(3, 'waiting'),
+       entry(2, 'changes_requested', {}, { needs_you: true }),
+       entry(1, 'live', {}, { needs_you: true }),
+     ]);
+@@ -85,12 +85,12 @@ describe('ReviewList', () => {
+   });
+ 
+   it('offers no next review when none needs you', () => {
+-    show([entry(1, 'open')]);
++    show([entry(1, 'waiting')]);
+     expect(screen.queryByRole('button', { name: /Next review needing you/ })).toBeNull();
+   });
+ 
+   it('opens a review on a click, in a new tab with ⌘ or Ctrl; leaves Shift, Alt and other buttons to the browser', async () => {
+-    const { onopen } = show([entry(1, 'open')]);
++    const { onopen } = show([entry(1, 'waiting')]);
+     const link = screen.getByRole('link');
+     await fireEvent.click(link);
+     await fireEvent.click(link, { metaKey: true });
+@@ -108,7 +108,7 @@ describe('ReviewList', () => {
+   });
+ 
+   it('asks for a search once typing stops, trimmed', async () => {
+-    const { onquery } = show([entry(1, 'open')]);
++    const { onquery } = show([entry(1, 'waiting')]);
+     const search = screen.getByRole('searchbox', { name: 'Search reviews' });
+     await fireEvent.input(search, { target: { value: 'tw' } });
+     await fireEvent.input(search, { target: { value: ' two words ' } });
+@@ -118,8 +118,24 @@ describe('ReviewList', () => {
+     expect(onquery).toHaveBeenCalledWith({ ...NO_QUERY, q: 'two words' });
+   });
+ 
++  // ATM-613: Open is every review not decided yet, the first chip; the statuses narrow it further
++  it('Open comes first, standing for every review not decided yet, before each status', () => {
++    show([]);
++    const chips = [...document.querySelectorAll('.review-chip')];
++    expect(chips.map((c) => [c.getAttribute('data-status'), c.textContent])).toEqual([
++      ['open', 'Open'],
++      ['draft', 'Draft'],
++      ['waiting', 'Waiting for review'],
++      ['live', 'Live'],
++      ['changes_requested', 'Changes requested'],
++      ['approved', 'Approved'],
++      ['closed', 'Closed'],
++    ]);
++    expect(chips[0].getAttribute('title')).toMatch(/not decided yet/);
++  });
++
+   it('a status chip adds the status to the query, or takes it out; the others stay', async () => {
+-    const { onquery } = show([entry(1, 'open')], { ...NO_QUERY, status: ['open'], author: 'Ana' });
++    const { onquery } = show([entry(1, 'waiting')], { ...NO_QUERY, status: ['open'], author: 'Ana' });
+     expect(screen.getByRole('button', { name: 'Open' }).getAttribute('aria-pressed')).toBe('true');
+     await fireEvent.click(screen.getByRole('button', { name: 'Live' }));
+     await fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+@@ -132,8 +148,8 @@ describe('ReviewList', () => {
+   it('each filter offers what the reviews listed have, and what is chosen', async () => {
+     const { onquery } = show(
+       [
+-        entry(2, 'open', { author: 'claude:b', reviewers: ['Ana', 'Bo'], tasks: ['ATM-2'] }, { branch: 'dev/2' }),
+-        entry(1, 'open', { author: 'claude:a', reviewers: ['Ana'], tasks: ['ATM-1'] }, { branch: null }),
++        entry(2, 'waiting', { author: 'claude:b', reviewers: ['Ana', 'Bo'], tasks: ['ATM-2'] }, { branch: 'dev/2' }),
++        entry(1, 'waiting', { author: 'claude:a', reviewers: ['Ana'], tasks: ['ATM-1'] }, { branch: null }),
+       ],
+       { ...NO_QUERY, branch: 'gone' },
+     );
+@@ -149,9 +165,9 @@ describe('ReviewList', () => {
+   });
+ 
+   it('clears every filter, offered only while one is set', async () => {
+-    show([entry(1, 'open')]);
++    show([entry(1, 'waiting')]);
+     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
+-    const { onquery } = show([entry(1, 'open')], { ...NO_QUERY, task: 'ATM-1' });
++    const { onquery } = show([entry(1, 'waiting')], { ...NO_QUERY, task: 'ATM-1' });
+     await fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+     expect(onquery).toHaveBeenCalledWith(NO_QUERY);
+   });
+@@ -166,7 +182,7 @@ describe('ReviewList', () => {
+     const none = show([]);
+     expect(screen.getByText(/No reviews yet/)).toBeTruthy();
+     none.unmount();
+-    show([entry(1, 'open')], { ...NO_QUERY }, { problem: 'no review CR-9' });
++    show([entry(1, 'waiting')], { ...NO_QUERY }, { problem: 'no review CR-9' });
+     expect(screen.getByRole('alert').textContent).toBe('no review CR-9');
+     expect(screen.queryByRole('link')).toBeNull();
+   });
+diff --git a/dashboard/tests/unit/ReviewPage.component.test.ts b/dashboard/tests/unit/ReviewPage.component.test.ts
+index 2fdbd34e..494879c2 100644
+--- a/dashboard/tests/unit/ReviewPage.component.test.ts
++++ b/dashboard/tests/unit/ReviewPage.component.test.ts
+@@ -42,7 +42,7 @@ function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['
+       reference: 'CR-7',
+       number: 7,
+       title: 'Trim the names',
+-      status: 'open',
++      status: 'waiting',
+       tasks: ['ATM-1'],
+       author: 'claude:a',
+       reviewers: ['Ana'],
+@@ -134,7 +134,7 @@ describe('ReviewPage: the top bar', () => {
+     const { container } = show(data(), { backHref: '/projects/p1/reviews', onback });
+     const top = within(container.querySelector('.review-top') as HTMLElement);
+     expect(top.getByRole('heading').textContent?.replace(/\s+/g, ' ').trim()).toBe('ATM CR-7 Trim the names');
+-    expect(top.getByText('Open')).toBeTruthy();
++    expect(top.getByText('Waiting for review')).toBeTruthy();
+     expect(top.getByText('Needs you')).toBeTruthy();
+     const back = top.getByRole('link', { name: 'Reviews' });
+     expect(back.querySelector('.icon-arrow-left')).not.toBeNull();
+diff --git a/dashboard/tests/unit/review-filter.test.ts b/dashboard/tests/unit/review-filter.test.ts
+index 3dbb1032..93f4bf3c 100644
+--- a/dashboard/tests/unit/review-filter.test.ts
++++ b/dashboard/tests/unit/review-filter.test.ts
+@@ -43,6 +43,12 @@ describe('the reviews list’s kept filter', () => {
+     expect(stored()).toBeNull();
+   });
+ 
++  // ATM-613: open is every review not decided yet, and waiting its own status
++  it('keeps open, every review not decided yet, beside a status', () => {
++    keepFilter('p1', query({ status: ['open', 'waiting'] }));
++    expect(keptFilter('p1').status).toEqual(['open', 'waiting']);
++  });
++
+   it('leaves out what was stored that isn’t a filter: unknown statuses, wrong types, a broken value', () => {
+     localStorage.setItem(
+       REVIEW_FILTER_KEY,
+diff --git a/docs/agent/reviews.md b/docs/agent/reviews.md
+index bc71c99d..54a2ee9e 100644
+--- a/docs/agent/reviews.md
++++ b/docs/agent/reviews.md
+@@ -12,8 +12,9 @@
+   is of the submodule's commits, its files named as the project has them (`lib/b.txt`); `--file` paths in one
+   submodule are read from it; files of two repositories are two reviews. A range in the project that moves a
+   submodule lists the move as one entry (its two commits), commented on as a whole (`--file lib`, no `--lines`).
+-- **Statuses:** draft, open (waiting on the reviewers), live (being reviewed as it is made), changes_requested (sent
+-  back), approved, closed.
++- **Statuses:** draft, waiting (waiting on the reviewers; `open` before atm 0.41.0), live (being reviewed as it is
++  made), changes_requested (sent back), approved, closed. In a filter, `open` is every review not decided yet
++  (`atm review list --status open`: draft, waiting, live or changes_requested).
+ - **Reading it:** `atm review show CR-7` (the header, rounds and counts), `atm review comments CR-7 [--open]` (every
+   chain, as `comments.md` has them), `atm review show CR-7 --round 2 [--against 1]` (a round's diff, or what changed
+   since an earlier round). `atm review list [--status open] [--task <key>] [--mine] [--search '<words>']`.
+@@ -33,7 +34,7 @@
+   holding a task in that working copy, or the one whose task it names; nobody's until then). Your first
+   `atm review round` names you its author. The reviewer sees your working copy as you write it; each comment (and an
+   approval) records what they saw as a checkpoint round, so its lines stay anchored as you go on. It ends with their
+-  approval, your `atm review round` (it becomes open), or their closing it.
++  approval, your `atm review round` (it becomes waiting), or their closing it.
+ - **Listening, two ways** (never a loop of your own):
+   - `atm review wait CR-7 [--for decision] [--timeout 2h] --json`, in the background, once your task is in review
+     (its claim is released then, so there is none to hold): it ends when the reviewer submits (or decides) with what
+diff --git a/docs/code-review-design.md b/docs/code-review-design.md
+index 5d23db1b..3c37f732 100644
+--- a/docs/code-review-design.md
++++ b/docs/code-review-design.md
+@@ -141,17 +141,17 @@ A review goes through these statuses:
+ ```mermaid
+ stateDiagram-v2
+     [*] --> draft: create --draft
+-    [*] --> open: create
++    [*] --> waiting: create
+     [*] --> live: live
+-    draft --> open: the author asks for review
+-    open --> changes_requested: a reviewer submits "request changes"
+-    changes_requested --> open: the author adds a round
+-    open --> approved: a reviewer approves (every top-level comment resolved)
++    draft --> waiting: the author asks for review
++    waiting --> changes_requested: a reviewer submits "request changes"
++    changes_requested --> waiting: the author adds a round
++    waiting --> approved: a reviewer approves (every top-level comment resolved)
+     live --> approved: a reviewer approves (every top-level comment resolved)
+     changes_requested --> approved: a reviewer approves after all (every top-level comment resolved; ATM-609)
+-    live --> open: the author ends the live review with a round
++    live --> waiting: the author ends the live review with a round
+     draft --> closed
+-    open --> closed
++    waiting --> closed
+     changes_requested --> closed
+     live --> closed
+     approved --> [*]
+@@ -161,12 +161,16 @@ stateDiagram-v2
+ | Status | Means | Who moves it there |
+ |---|---|---|
+ | `draft` | the author is still putting it together; not shown as waiting on anyone | the author |
+-| `open` | waiting on the reviewers | the author, with a round |
++| `waiting` | *Waiting for review*: waiting on the reviewers (ATM-613: `open` until 0.41.0, still read as this) | the author, with a round |
+ | `live` | the change is being made; reviewers comment as it grows (§3.5) | the author, or the user |
+ | `changes_requested` | sent back for fixes; it still takes comments, replies and a reviewer's further words, as a comment (the page's *Publish comments*; ATM-597): it isn't sent back again (CR-2); a reviewer may still approve it, its comments resolved, with no round since (ATM-609) | a reviewer, when submitting |
+ | `approved` | approved; only when every comment is resolved (§3.4) | a reviewer, when submitting |
+ | `closed` | ended without approval (abandoned, replaced) | the author, or a reviewer |
+ 
++An **open** review is one not decided yet: draft, waiting, live or changes requested (ATM-613). `open` names that
++group wherever statuses are filtered (`atm review list --status open`, the list's `status=open`, its *Open* button);
++it is no status of its own.
++
+ **How it relates to its tasks** (the review's decisions are its tasks', §3.8). A review names **one task or several**,
+ and the names can be given at three points, marked ① ② ③ below:
+ 
+@@ -341,14 +345,14 @@ programming than to a review at the end. It suits long tasks, where a wrong turn
+   an approval still needs every top-level comment resolved. An agent never uses it on its own: no skill pre-approves
+   `atm review submit`, so its harness asks the user each time.
+ - **Ending it:** a reviewer **approves** it (every top-level comment resolved), on the latest checkpoint; or the author
+-  ends it with a round, which makes it an ordinary `open` review; or it is closed.
++  ends it with a round, which makes it an ordinary `waiting` review; or it is closed.
+ - **When the task is finished**, the agent asks for its review as its review mode says, and atm sees which case it is:
+ 
+   | During the task | At the end |
+   |---|---|
+   | no live review, no comments | the agent creates the CR (`atm review create --task ATM-482 …`) and the task goes in review, as today |
+   | a live review, approved, the task's change unchanged since the approved checkpoint | **no other CR**: the live review's approval is the task's (`review_state = approved`, with the CR's link) |
+-  | a live review, not approved (or changed since its approval) | no new CR: the agent ends the live review with a round on the final change (`atm review round CR-9`), which makes it `open`, and the task goes in review on it |
++  | a live review, not approved (or changed since its approval) | no new CR: the agent ends the live review with a round on the final change (`atm review round CR-9`), which makes it `waiting`, and the task goes in review on it |
+ 
+ ### 3.6 Rounds, anchors and drift
+ 
+diff --git a/docs/multi-project-api.md b/docs/multi-project-api.md
+index 1ac957c6..2be00c21 100644
+--- a/docs/multi-project-api.md
++++ b/docs/multi-project-api.md
+@@ -254,7 +254,9 @@ old parameters from its hash and moves to the new address.
+ - `GET …/reviews?q=&status=&author=&reviewer=&task=&branch=`: the reviews of every working copy (a review on two
+   branches listed once), each one given of the query fitting (`status` repeats; `q` every word in the title, summary
+   or a comment, in any case), the latest activity first: `{reviews: [{review: <header>, branch, chains, open,
+-  needs_you, waiting}], you}`. A review needs the user when it is open or live with them a reviewer (anyone but its
++  needs_you, waiting}], you}`. `status=open` is every review not decided yet (draft, waiting, live, changes_requested; ATM-613), `status=waiting`
++  the status waiting on the reviewers (`open` before 0.41.0). A review needs the user when it is waiting or live with
++  them a reviewer (anyone but its
+   author when it names none), or sent back with them its author. `waiting` (ATM-606): `"review"` when it needs them,
+   `"answered"` when someone else wrote in it after they last did (as the summary's `code_reviews`), else `null`. A
+   status that isn't one is `400`.
+diff --git a/tests/scripts/reviews.test.mjs b/tests/scripts/reviews.test.mjs
+index aa2ba502..80d3b27c 100644
+--- a/tests/scripts/reviews.test.mjs
++++ b/tests/scripts/reviews.test.mjs
+@@ -59,7 +59,24 @@ describe('atm review', () => {
+         AGENT,
+       ).json();
+       assert.equal(opened.reference, 'CR-1');
+-      assert.equal(opened.status, 'open');
++      // Waiting on its reviewers (ATM-613: `open` until 0.41.0); a file an earlier atm wrote with `open` reads the same
++      assert.equal(opened.status, 'waiting');
++      const reviewFile = path.join(
++        root,
++        '.agentic-task-manager/reviews',
++        fs.readdirSync(path.join(root, '.agentic-task-manager/reviews')).find((f) => f.startsWith('CR-1-')),
++        'review.md',
++      );
++      assert.match(fs.readFileSync(reviewFile, 'utf8'), /status = "waiting"/);
++      fs.writeFileSync(
++        reviewFile,
++        fs.readFileSync(reviewFile, 'utf8').replace('status = "waiting"', 'status = "open"'),
++      );
++      assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.status, 'waiting');
++      // Open, in a filter, is every review not decided yet; waiting is its own status
++      assert.equal(ok(['review', 'list', '--status', 'open', '--json'], root, HAKAN).json().length, 1);
++      assert.equal(ok(['review', 'list', '--status', 'waiting', '--json'], root, HAKAN).json().length, 1);
++      assert.equal(ok(['review', 'list', '--status', 'live', '--json'], root, HAKAN).json().length, 0);
+       assert.equal(task(root, 'T-1').status, 'in_review');
+       assert.equal(task(root, 'T-1').code_reviews[0].ref, 'CR-1');
+ 
+@@ -201,7 +218,7 @@ describe('atm review', () => {
+       assert.match(atm(['review', 'round', 'CR-1'], root, HAKAN).stderr, /not a reviewer's/);
+       ok(['review', 'round', 'CR-1'], root, AGENT);
+       header = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header;
+-      assert.deepEqual([header.author, header.status], [AGENT.ATM_AGENT, 'open']);
++      assert.deepEqual([header.author, header.status], [AGENT.ATM_AGENT, 'waiting']);
+       // Hakan decides it, as its reviewer, once his comment is resolved; the agent can't
+       ok(['review', 'resolve', 'CR-1', 'c1'], root, HAKAN);
+       assert.notEqual(atm(['review', 'submit', 'CR-1', '--approve'], root, AGENT).code, 0);
+@@ -308,7 +325,7 @@ describe('atm review', () => {
+       }
+       // None of them changed the review
+       const review = ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json();
+-      assert.deepEqual([review.header.status, review.chains.length], ['open', 0]);
++      assert.deepEqual([review.header.status, review.chains.length], ['waiting', 0]);
+     } finally {
+       removeDir(root);
+     }
+@@ -602,7 +619,7 @@ describe('a provisional task key in reviews (ATM-594)', () => {
+         fs
+           .readFileSync(file, 'utf8')
+           .replace('tasks = ["ATM-12"]', 'tasks = ["~ATM-12"]')
+-          .replace('status = "open"', 'status = "approved"'),
++          .replace('status = "waiting"', 'status = "approved"'),
+       );
+       assert.deepEqual(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().header.tasks, ['ATM-12']);
+       const doctor = atm(['doctor'], root, HAKAN);

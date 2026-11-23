@@ -1,0 +1,37 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "b8548126dd84781bd4479147f7cba2d4b362e4c9",
+    "head": "204e834a68ac2de32abe691a74b5d67236cc4245"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/review.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/review_pages.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/keys.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T08:02:14Z"
+}

@@ -30,15 +30,18 @@ export function knownTheme(id: unknown): string {
 }
 
 /** How the document viewer's page looks (T-404). These are host styles, so the dashboard defines them
- * (themes/doc-styles.css), after the ideas of CompMD's editor's own; 'auto' is the theme's page */
+ * (themes/doc-styles.css), after the ideas of CompMD's editor's own; 'auto' is the theme's page. GitHub first and the
+ * default, the theme's own page last (ATM-706, Hakan: GitHub's page is the right size, the theme's isn't paper). A
+ * reader's choice is stored only when they make it (prefs.ts), so one who chose keeps theirs, and one who never did
+ * gets GitHub */
 export const DOC_STYLES = [
-  { id: 'auto', name: 'Auto (the theme’s page)' },
   { id: 'github', name: 'GitHub' },
   { id: 'docs', name: 'Docs' },
   { id: 'magazine', name: 'Magazine' },
+  { id: 'auto', name: 'Theme (the theme’s page)' },
 ] as const;
 export type DocStyle = (typeof DOC_STYLES)[number]['id'];
-export const DEFAULT_DOC_STYLE: DocStyle = 'auto';
+export const DEFAULT_DOC_STYLE: DocStyle = 'github';
 
 export function knownDocStyle(id: unknown): DocStyle {
   return DOC_STYLES.find((s) => s.id === id)?.id ?? DEFAULT_DOC_STYLE;

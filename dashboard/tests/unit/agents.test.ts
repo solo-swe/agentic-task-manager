@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { agentTimeline, timeTicks, UNATTRIBUTED } from '../../src/lib/agents';
 import type { Claim } from '../../src/lib/claims';
 import type { Task } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
+import { vocabulary, withKinds } from './views';
+
+/** The timeline of `tasks` as atm serves them: with their kinds, in `vocab` */
+const timeline = (
+  tasks: Task[],
+  claims: Parameters<typeof agentTimeline>[1],
+  now: number,
+  matching?: ReadonlySet<string>,
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
+) => agentTimeline(withKinds(tasks, vocab), claims, now, matching);
 
 const M = 60_000;
 const T0 = Date.parse('2026-04-01T08:00:00Z');
@@ -33,7 +43,7 @@ describe('agentTimeline', () => {
   it('ends a bar when the task asked for a review; reviews are finished work but not done', () => {
     const reviewing = { ...worked('a', 0, null, 'alice'), status: 'in_review', review_requested_at: iso(T0 + 15 * M) };
     const approved = { ...worked('b', 20, 120, 'alice'), review_requested_at: iso(T0 + 30 * M) };
-    const t = agentTimeline([reviewing, approved], new Map(), T0 + 200 * M)!;
+    const t = timeline([reviewing, approved], new Map(), T0 + 200 * M)!;
     const [alice] = t.lanes;
     expect(alice.bars.map((b) => [b.task.id, (b.end - b.start) / M, b.live])).toEqual([
       ['a', 15, false],
@@ -43,14 +53,14 @@ describe('agentTimeline', () => {
   });
 
   it("follows a project's statuses by kind", () => {
-    const vocab = resolveVocabulary({
+    const vocab = vocabulary({
       statuses: [
-        { id: 'backlog', kind: 'todo' },
-        { id: 'doing', kind: 'active' },
-        { id: 'shipped', kind: 'done' },
+        { id: 'backlog', label: 'Backlog', kind: 'todo' },
+        { id: 'doing', label: 'Doing', kind: 'active' },
+        { id: 'shipped', label: 'Shipped', kind: 'done' },
       ],
     });
-    const t = agentTimeline(
+    const t = timeline(
       [
         { ...worked('a', 0, 10, 'alice'), status: 'shipped' },
         { ...worked('b', 20, null, 'alice'), status: 'doing' },
@@ -64,14 +74,14 @@ describe('agentTimeline', () => {
   });
 
   it('is null when no task has been started', () => {
-    expect(agentTimeline([], new Map(), T0)).toBeNull();
+    expect(timeline([], new Map(), T0)).toBeNull();
     const todo = { ...worked('a', 0, 10), status: 'todo' };
     const noStart = { ...worked('b', 0, 10), started_at: undefined };
-    expect(agentTimeline([todo, noStart], new Map(), T0)).toBeNull();
+    expect(timeline([todo, noStart], new Map(), T0)).toBeNull();
   });
 
   it('gives each agent a lane of bars from start to completion, in time order', () => {
-    const t = agentTimeline(
+    const t = timeline(
       [worked('b', 30, 50, 'alice'), worked('a', 0, 20, 'alice'), worked('c', 10, 40, 'bob')],
       new Map(),
       T0 + 60 * M,
@@ -88,7 +98,7 @@ describe('agentTimeline', () => {
 
   it('work in progress runs to now and belongs to the agent holding the claim', () => {
     const now = T0 + 45 * M;
-    const t = agentTimeline(
+    const t = timeline(
       [worked('a', 0, 20, 'alice'), worked('b', 30, null, 'alice')],
       new Map([['b', claim('b', 'bob')]]),
       now,
@@ -101,12 +111,12 @@ describe('agentTimeline', () => {
   });
 
   it('a task without a recorded agent goes to the unattributed lane, which comes last', () => {
-    const t = agentTimeline([worked('old', 50, 60), worked('a', 0, 10, 'alice')], new Map(), T0)!;
+    const t = timeline([worked('old', 50, 60), worked('a', 0, 10, 'alice')], new Map(), T0)!;
     expect(t.lanes.map((l) => l.agent)).toEqual(['alice', UNATTRIBUTED]);
   });
 
   it('lanes are ordered by most recent activity', () => {
-    const t = agentTimeline(
+    const t = timeline(
       [worked('a', 0, 10, 'alice'), worked('b', 0, 30, 'bob'), worked('c', 0, 20, 'carol')],
       new Map(),
       T0,
@@ -114,12 +124,30 @@ describe('agentTimeline', () => {
     expect(t.lanes.map((l) => l.agent)).toEqual(['bob', 'carol', 'alice']);
   });
 
-  it('a done task without completion time is a zero-length bar; one ending before it started is too', () => {
+  it('a done task without completion time is a zero-length bar; one ending before it started has none, as atm says', () => {
     const noEnd = { ...worked('a', 10, 20, 'alice'), completed_at: undefined };
     const backwards = worked('b', 30, 25, 'alice');
-    const [a, b] = agentTimeline([noEnd, backwards], new Map(), T0)!.lanes[0].bars;
-    expect(a.end - a.start).toBe(0);
-    expect(b.end - b.start).toBe(0);
+    const bars = timeline([noEnd, backwards], new Map(), T0)!.lanes[0].bars;
+    expect(bars.map((b) => [b.task.id, b.end - b.start])).toEqual([['a', 0]]);
+  });
+
+  it('a bar per stretch of its work, in the lane of who did it (ATM-721): an attempt taken back is another agent’s', () => {
+    const t = worked('a', 60, 90, 'bob');
+    // atm's work: alice's attempt that lapsed, then bob's
+    const work = {
+      minutes: 50,
+      live: false,
+      spans: [
+        { from: iso(T0), to: iso(T0 + 20 * M), by: 'alice' },
+        { from: iso(T0 + 60 * M), to: iso(T0 + 90 * M), by: 'bob' },
+      ],
+    };
+    const lanes = timeline([{ ...t, derived: { ...t.derived, work } as Task['derived'] }], new Map(), T0)!.lanes;
+    expect(lanes.map((l) => [l.agent, l.bars.map((b) => (b.end - b.start) / M), l.done])).toEqual([
+      // Done in bob's lane, who finished it; alice's attempt was taken over
+      ['bob', [30], 1],
+      ['alice', [20], 0],
+    ]);
   });
 });
 

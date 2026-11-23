@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DetailPanel from '../../src/lib/details/DetailPanel.svelte';
 import { compmdSettled } from './compmd.helpers';
 import { dashboard } from '../../src/lib/state.svelte';
-import type { TasksFile } from '../../src/lib/types';
+import type { TaskDerived } from '$generated/types';
+import type { Task, TasksFile } from '../../src/lib/types';
 import archiveFile from '../fixtures/archive.json';
 import sprints from '../fixtures/sprints.json';
 import standard from '../fixtures/standard.json';
@@ -18,6 +19,13 @@ vi.mock('../../src/lib/compmd', async (actual) => ({
 
 // The archive's meta (archived_at) isn't part of tasks.json's
 const archive = archiveFile as unknown as TasksFile;
+
+/** What atm derives for the task, as its tasks route would serve it (stubbed; atm-lib's rules have their own tests) */
+const atmSays = (derived: Partial<TaskDerived>) => ({
+  derived: { kind: '', ready: false, waiting_for: [], priority: '', archived: false, ...derived },
+});
+/** atm's answer for a task in review waiting for its reviewer */
+const forReview = atmSays({ kind: 'review', waiting: { on: 'reviewer' } });
 
 function open(fields: Record<string, unknown>, id = 'T-005') {
   const tasks = standard.tasks.map((t) => (t.id === id ? { ...t, ...fields } : t));
@@ -36,6 +44,23 @@ describe('DetailPanel', () => {
     [...container.querySelectorAll<HTMLElement>('#detail-rail .detail-rail-item')].map((b) => b.dataset.group);
   const bodyGroups = (container: HTMLElement) =>
     [...container.querySelectorAll<HTMLElement>('#detail-body [data-group]')].map((g) => g.dataset.group);
+
+  // ATM-680 (audit D11): Escape closes the panel when it is open and nothing else took the key
+  it('Escape closes the open panel, not one a composer or menu already handled, and does nothing when closed', () => {
+    open({});
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    handled.preventDefault();
+    document.dispatchEvent(handled);
+    expect(dashboard.detailOpen).toBe(true);
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(dashboard.detailOpen).toBe(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(dashboard.detailOpen).toBe(false);
+    // Closed: Escape changes nothing (no close again)
+    const close = vi.spyOn(dashboard, 'closeDetail');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(close).not.toHaveBeenCalled();
+  });
 
   it('shows its sprint and release, and the sprints it was carried through, flagged from twice (SR-7.6, SR-4.5)', () => {
     loadIntoDashboard(sprints as TasksFile);
@@ -89,6 +114,37 @@ describe('DetailPanel', () => {
     expect(plain.querySelector('#detail-with-user')).toBeNull();
   });
 
+  // ATM-719: the links pointing at a task, its resolution and its release are atm's, never worked out from the fields
+  it('shows the links, resolution and release atm gives, not what the fields would say', () => {
+    const fields: Record<string, Record<string, unknown>> = {
+      // T-002's fields say nothing points at it; atm's answers say otherwise
+      'T-002': {
+        status: 'skipped',
+        release: '9.9',
+        derived: {
+          kind: 'skipped',
+          resolution: 'obsolete',
+          required_by: ['T-004'],
+          related_by: ['T-001'],
+          duplicated_by: ['T-003'],
+          effective_release: '2.0',
+        },
+      },
+    };
+    loadIntoDashboard({ ...standard, tasks: standard.tasks.map((t) => ({ ...t, ...fields[t.id] })) });
+    const { container } = render(DetailPanel);
+    const ids = (selector: string) =>
+      [...container.querySelectorAll(`${selector} .detail-dep-item strong`)].map((s) => s.textContent);
+    dashboard.showDetail('T-002');
+    flushSync();
+    expect(ids('#detail-related')).toEqual(['T-001']);
+    expect(ids('#detail-duplicated-by')).toEqual(['T-003']);
+    expect(container.querySelector('#detail-resolution')).toHaveTextContent('obsolete');
+    expect(container.textContent).toContain('Required By');
+    expect(container.textContent).toContain('2.0');
+    expect(container.textContent).not.toContain('9.9');
+  });
+
   it('shows how it ended when not done, what it duplicates or is duplicated by, and related tasks both ways (SR-7.6)', () => {
     const fields: Record<string, Record<string, unknown>> = {
       'T-001': { related: ['T-002'] },
@@ -126,19 +182,10 @@ describe('DetailPanel', () => {
     expect(container.querySelector('#detail-resolution')).toHaveTextContent("won't do");
   });
 
-  it('a task carried twice or more is flagged', () => {
+  it('a task carried twice or more is flagged, as atm counts it (derived.carried)', () => {
     const data = sprints as TasksFile;
     const tasks = (data.tasks ?? []).map((t) =>
-      t.id === 'T-003'
-        ? {
-            ...t,
-            sprint_history: [
-              { sprint: 'Old', from: '2026-03-01T09:00:00Z', to: '2026-03-20T09:00:00Z' },
-              { sprint: 'Foundations', from: '2026-04-01T09:00:00Z', to: '2026-04-05T18:00:00Z' },
-              { sprint: 'Ada Lovelace', from: '2026-04-05T18:00:00Z' },
-            ],
-          }
-        : t,
+      t.id === 'T-003' ? { ...t, derived: { ...t.derived, carried: 2 } as Task['derived'] } : t,
     );
     loadIntoDashboard({ ...data, tasks });
     const { container } = render(DetailPanel);
@@ -218,10 +265,12 @@ describe('DetailPanel', () => {
   });
 
   it('a blocked task lists its questions and how to answer them', async () => {
+    const questions = ['REST or GraphQL?', 'Which DB?'];
     const container = open({
       status: 'blocked',
       waiting_on: 'user',
-      questions: ['REST or GraphQL?', 'Which DB?'],
+      questions,
+      ...atmSays({ kind: 'blocked', waiting: { on: 'user', questions } }),
     });
     await compmdSettled();
     const section = container.querySelector('#detail-blocked')!;
@@ -330,6 +379,7 @@ describe('DetailPanel', () => {
   it('renders notes, the review note and questions with CompMD, with HTML kept as text (T-219)', async () => {
     const container = open({
       status: 'in_review',
+      ...forReview,
       notes: [
         { at: '2026-04-01T08:00:00Z', by: 'Hakan', kind: 'done', text: 'Ran `npm test`; see [CI](https://ci.example)' },
         { at: '2026-04-02T08:00:00Z', by: 'claude:aaaa', kind: 'review', text: 'Check **the toolbar** <i>x</i>' },
@@ -345,7 +395,13 @@ describe('DetailPanel', () => {
     expect(notes[1].querySelector('a')).toHaveAttribute('target', '_blank');
     expect(container.querySelector('#detail-review .review-note strong')).toHaveTextContent('the toolbar');
 
-    const blocked = open({ status: 'blocked', waiting_on: 'user', questions: ['Keep `--force`? [why](javascript:x)'] });
+    const asked = ['Keep `--force`? [why](javascript:x)'];
+    const blocked = open({
+      status: 'blocked',
+      waiting_on: 'user',
+      questions: asked,
+      ...atmSays({ kind: 'blocked', waiting: { on: 'user', questions: asked } }),
+    });
     await compmdSettled();
     const question = blocked.querySelector('.block-questions li')!;
     expect(question.querySelector('code')).toHaveTextContent('--force');
@@ -373,9 +429,9 @@ describe('DetailPanel', () => {
     });
 
     it('in review with one: it, prominent, linking to its page; with two, the latest first and the other after it', () => {
-      const one = open({ status: 'in_review', code_reviews: reviews.slice(1) });
+      const one = open({ status: 'in_review', ...forReview, code_reviews: reviews.slice(1) });
       expect(links(one, '#detail-review')).toEqual([['CR-7', true, '/projects/p1/reviews/CR-7']]);
-      const two = open({ status: 'in_review', code_reviews: reviews });
+      const two = open({ status: 'in_review', ...forReview, code_reviews: reviews });
       expect(links(two, '#detail-review')).toEqual([
         ['CR-7', true, '/projects/p1/reviews/CR-7'],
         ['CR-3', false, '/projects/p1/reviews/CR-3'],
@@ -383,8 +439,22 @@ describe('DetailPanel', () => {
       expect(two.querySelector('#detail-code-reviews')).toBeNull();
     });
 
+    // ATM-717: the review it waits on, as atm says it, is the prominent one, even when a later one is linked
+    it('in review: the review atm says it waits on first, prominent, the others after it', () => {
+      const waitsOnOlder = atmSays({
+        kind: 'review',
+        waiting: { on: 'reviewer' },
+        review: { id: 'u1', ref: 'CR-3', status: 'waiting' },
+      });
+      const container = open({ status: 'in_review', ...waitsOnOlder, code_reviews: reviews });
+      expect(links(container, '#detail-review')).toEqual([
+        ['CR-3', true, '/projects/p1/reviews/CR-3'],
+        ['CR-7', false, '/projects/p1/reviews/CR-7'],
+      ]);
+    });
+
     it('in review without one: no link, as before', () => {
-      const container = open({ status: 'in_review' });
+      const container = open({ status: 'in_review', ...forReview });
       expect(container.querySelector('#detail-review')).not.toBeNull();
       expect(container.querySelector('.review-link')).toBeNull();
     });
@@ -401,7 +471,7 @@ describe('DetailPanel', () => {
 
     it('the status the page knows, never asked for; needs you when the project’s summary says so', async () => {
       const { learnReviews } = await import('../../src/lib/reviews/known.svelte');
-      const container = open({ status: 'in_review', code_reviews: reviews });
+      const container = open({ status: 'in_review', ...forReview, code_reviews: reviews });
       const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
       expect(latest().textContent).toBe('CR-7');
       learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
@@ -425,7 +495,7 @@ describe('DetailPanel', () => {
     it('a review atm can’t read says so, with why, instead of its status; readable again, its status', async () => {
       const { learnReviews, learnUnreadable } = await import('../../src/lib/reviews/known.svelte');
       learnReviews('p1', [{ reference: 'CR-7', status: 'waiting' }]);
-      const container = open({ status: 'in_review', code_reviews: reviews });
+      const container = open({ status: 'in_review', ...forReview, code_reviews: reviews });
       const latest = () => container.querySelector('#detail-review .review-link.prominent')!;
       learnUnreadable('p1', [{ reference: 'CR-7', problem: 'no status frozen' }]);
       learnUnreadable('p2', [{ reference: 'CR-3', problem: 'another project’s' }]);

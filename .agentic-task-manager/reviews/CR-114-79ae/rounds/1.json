@@ -1,0 +1,77 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "ab47e50f711739ceac3f231393c4d89a8d897bf9",
+    "head": "5689639b1650092fc1aa1900ad5ca0c4ac7759b3"
+  },
+  "files": [
+    {
+      "path": ".github/dependabot.yml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": ".github/workflows/homebrew.yml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": ".github/workflows/skills.yml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ci-workflow.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/skills.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "packaging/homebrew-cask.sh",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "packaging/homebrew-formula.sh",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/atm-loop-tasks/SKILL.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/claude-code.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/sandbox/Dockerfile",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/sandbox/compose.yaml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/packaging.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-22T17:28:43Z"
+}

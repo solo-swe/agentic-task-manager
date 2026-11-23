@@ -212,6 +212,35 @@
     }
   },
   {
+    "name": "close refuses while a task in the sprint is claimed in another worktree, though it is to do here (ATM-668, audit L8)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Now", "state": "active" }] },
+          "tasks": [{ "id": "T-1", "status": "todo", "sprint": "Now" }]
+        },
+        ".agentic-task-manager/claims-store.json": {
+          "claims": {
+            "T-1": {
+              "task": "T-1",
+              "agent": "bob",
+              "branch": "agent-2",
+              "worktree": "/elsewhere",
+              "claimed_at": "2026-05-01T10:00:00Z",
+              "lease_expires_at": "2026-05-01T12:00:00Z"
+            }
+          }
+        }
+      }
+    },
+    "args": ["sprint", "close", "Now", "--carry-to", "backlog"],
+    "env": { "ATM_NOW": "2026-05-01T11:00:00Z" },
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["T-1 is in progress: finish or release it before closing the sprint"]
+    }
+  },
+  {
     "name": "close refuses while a task in the sprint is claimed, and without --carry-to when tasks are unfinished",
     "setup": {
       "files": {

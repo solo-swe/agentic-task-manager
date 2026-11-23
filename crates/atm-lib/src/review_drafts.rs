@@ -9,7 +9,6 @@
 
 use std::path::{Path, PathBuf};
 
-use atm_common::sha256::sha256_hex;
 use atm_common::{Error, Result};
 use serde::{Deserialize, Serialize};
 
@@ -117,7 +116,7 @@ impl Drafts {
             root.map(|r| r.display().to_string()).unwrap_or_default()
         );
         self.dir
-            .join(format!("{}.json", &sha256_hex(key.as_bytes())[..16]))
+            .join(atm_common::home::keyed_file_name(&key, ".json"))
     }
 
     fn read(file: &Path) -> Result<Kept> {
@@ -136,6 +135,15 @@ impl Drafts {
         }
     }
 
+    /// The drafts in `file` changed by `change` under the drafts folder's lock (ATM-674, audit R11): read, changed and
+    /// written by one command at a time, so two at once (two tabs, the dashboard and a terminal) both keep theirs.
+    fn changing<T>(file: &Path, change: impl FnOnce(&mut Kept) -> Result<T>) -> Result<T> {
+        let dir = file.parent().unwrap_or(file);
+        let _lock = atm_db::jsongit::lock::lock(dir, None)?;
+        let mut kept = Self::read(file)?;
+        change(&mut kept)
+    }
+
     /// Kept even with none left, so the next draft's number is never one given before.
     fn write(file: &Path, kept: &Kept) -> Result<()> {
         let text = serde_json::to_string_pretty(kept)
@@ -144,7 +152,7 @@ impl Drafts {
             std::fs::create_dir_all(dir)
                 .map_err(|e| Error::failed(format!("{} can't be made: {e}", dir.display())))?;
         }
-        atm_common::home::write_text_atomic(file, &text).map_err(|e| {
+        atm_common::home::write_private_atomic(file, &text).map_err(|e| {
             Error::failed(format!(
                 "the drafts in {} can't be written: {e}",
                 file.display()
@@ -262,17 +270,18 @@ pub fn add_draft_in(
             round,
         }
     };
-    let mut kept = Drafts::read(&file)?;
-    kept.next += 1;
-    let draft = Draft {
-        id: format!("d{}", kept.next),
-        at: atm_common::time::now_iso(),
-        body,
-        place,
-    };
-    kept.drafts.push(draft.clone());
-    Drafts::write(&file, &kept)?;
-    Ok(draft)
+    Drafts::changing(&file, |kept| {
+        kept.next += 1;
+        let draft = Draft {
+            id: format!("d{}", kept.next),
+            at: atm_common::time::now_iso(),
+            body,
+            place,
+        };
+        kept.drafts.push(draft.clone());
+        Drafts::write(&file, kept)?;
+        Ok(draft)
+    })
 }
 
 /// A new draft among the user's.
@@ -296,17 +305,18 @@ pub fn update_draft_in(
 ) -> Result<Draft> {
     let (found, file) = opened(project, review, drafts)?;
     let body = review_requests::checked_text("the draft", &update.body)?.to_string();
-    let mut kept = Drafts::read(&file)?;
-    let draft = kept
-        .drafts
-        .iter_mut()
-        .find(|d| d.id == id)
-        .ok_or_else(|| no_draft(&found, id))?;
-    draft.body = body;
-    draft.at = atm_common::time::now_iso();
-    let changed = draft.clone();
-    Drafts::write(&file, &kept)?;
-    Ok(changed)
+    Drafts::changing(&file, |kept| {
+        let draft = kept
+            .drafts
+            .iter_mut()
+            .find(|d| d.id == id)
+            .ok_or_else(|| no_draft(&found, id))?;
+        draft.body = body;
+        draft.at = atm_common::time::now_iso();
+        let changed = draft.clone();
+        Drafts::write(&file, kept)?;
+        Ok(changed)
+    })
 }
 
 /// A draft of the user's changed.
@@ -333,13 +343,14 @@ pub fn remove_draft_in(
     drafts: &Drafts,
 ) -> Result<()> {
     let (found, file) = opened(project, review, drafts)?;
-    let mut kept = Drafts::read(&file)?;
-    let before = kept.drafts.len();
-    kept.drafts.retain(|d| d.id != id);
-    if kept.drafts.len() == before {
-        return Err(no_draft(&found, id));
-    }
-    Drafts::write(&file, &kept)
+    Drafts::changing(&file, |kept| {
+        let before = kept.drafts.len();
+        kept.drafts.retain(|d| d.id != id);
+        if kept.drafts.len() == before {
+            return Err(no_draft(&found, id));
+        }
+        Drafts::write(&file, kept)
+    })
 }
 
 /// A draft of the user's thrown away.
@@ -369,7 +380,17 @@ pub fn send_drafts_in(
     drafts: &Drafts,
 ) -> Result<Vec<CommentId>> {
     let (_, file) = opened(project, review, drafts)?;
-    let mut kept = Drafts::read(&file)?;
+    // Under the lock throughout: two sends at once never send a draft twice
+    Drafts::changing(&file, |kept| send_kept(project, review, &file, kept))
+}
+
+/// [`send_drafts_in`]'s sending, the drafts locked: each draft removed from the file once sent, before the next.
+fn send_kept(
+    project: &Project,
+    review: &ReviewRef,
+    file: &Path,
+    kept: &mut Kept,
+) -> Result<Vec<CommentId>> {
     let mut sent = Vec::new();
     while let Some(draft) = kept.drafts.first().cloned() {
         let result = match draft.place {
@@ -407,7 +428,7 @@ pub fn send_drafts_in(
         })?;
         sent.push(id);
         kept.drafts.remove(0);
-        Drafts::write(&file, &kept)?;
+        Drafts::write(file, kept)?;
     }
     Ok(sent)
 }

@@ -2,13 +2,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchFile,
   fetchProjectFile,
+  idSegment,
+  projectFileUrl,
   reviewUrl,
   reviewsUrl,
   v1DocumentAtUrl,
+  v1FileUrl,
+  v1TasksUrl,
   type Fetch,
   type Validators,
 } from '../../src/lib/api/http';
 import { apiWorkspace, setApiWorkspace, workspacePrefix } from '../../src/lib/api/workspace';
+
+describe('an ID in an API path (ATM-676, audit D7)', () => {
+  it('is escaped; ., .. and empty are refused, never a path the URL parser would work out', () => {
+    expect(idSegment('a b/c')).toBe('a%20b%2Fc');
+    expect(idSegment('CR-1.2')).toBe('CR-1.2');
+    for (const id of ['', '.', '..']) expect(() => idSegment(id), id).toThrow("isn't an ID");
+    expect(() => v1TasksUrl('..')).toThrow();
+    expect(() => projectFileUrl('.', 'claims.json')).toThrow();
+    expect(() => reviewUrl('p1', '..')).toThrow();
+  });
+});
 
 /** A fetch answering `status` with `body` and `headers`, recording what it was asked */
 function answering(status: number, body = '', headers: Record<string, string> = {}) {
@@ -144,5 +159,20 @@ describe('the review routes’ addresses', () => {
     expect(v1DocumentAtUrl('p1', 'a.md', 'HEAD~1')).toBe('/api/v1/projects/p1/documents?path=a.md&at=HEAD~1');
     setApiWorkspace('w');
     expect(v1DocumentAtUrl('p1', 'a.md', 'r&1')).toBe('/api/v2/workspaces/w/projects/p1/documents?path=a.md&at=r%261');
+  });
+
+  // ATM-672, audit H9: what the browser keeps for good is kept per atm version, the page's own
+  it('a file or an image at a revision names atm’s version, so another atm’s answer is another address', () => {
+    const meta = document.head.appendChild(document.createElement('meta'));
+    meta.name = 'atm-dashboard-version';
+    meta.content = '0.43.0';
+    try {
+      expect(v1DocumentAtUrl('p1', 'a.md', '3fa1')).toBe('/api/v1/projects/p1/documents?path=a.md&at=3fa1&v=0.43.0');
+      expect(v1FileUrl('p1', 'a.png', '3fa1')).toBe('/api/v1/projects/p1/files?path=a.png&at=3fa1&v=0.43.0');
+      // The working copy's file: asked again each time, no version needed
+      expect(v1FileUrl('p1', 'a.png')).toBe('/api/v1/projects/p1/files?path=a.png');
+    } finally {
+      meta.remove();
+    }
   });
 });

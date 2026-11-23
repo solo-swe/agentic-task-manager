@@ -3,12 +3,13 @@
   import { dashboard } from '../state.svelte';
   import { kindStyle, phaseColor, typeStyle } from '../theme';
   import { effectiveReview, REVIEW_STATE_LABELS } from '../review';
-  import { carriedCount, effectiveRelease } from '../sprints';
+  import { effectiveRelease } from '../sprints';
   import { RESOLUTION_LABELS, relationsOf, resolutionOf } from '../relations';
-  import { kindOf, statusLabel } from '../vocab';
+  import { kindOf, statusLabel, taskKind } from '../vocab';
   import { actorsLine, earlierAttempts } from '../actors';
   import { noteKindLabel, shortSha, taskNotes } from '../notes';
-  import { blockSummary, blockWait, reviewSummary, reviewWait } from '../waiting';
+  import { waitLine } from '../waiting';
+  import { formatDateTime } from '../format';
   import { taskTimes } from '../work';
   import { commitRef } from '../repo';
   import { referenceTo, type DocumentRef } from '../documents';
@@ -60,34 +61,36 @@
     )
       dashboard.wantArchive();
   });
-  const claim = $derived(
-    task && kindOf(dashboard.vocab, task.status) === 'active' ? dashboard.claims.get(task.id) : undefined,
-  );
+  const claim = $derived(task && taskKind(task) === 'active' ? dashboard.claims.get(task.id) : undefined);
   const statusStyle = (status: string) => kindStyle(kindOf(dashboard.vocab, status));
-  const review = $derived(task ? reviewWait(task, dashboard.loadedAt, dashboard.vocab) : null);
-  const block = $derived(task ? blockWait(task, dashboard.loadedAt, dashboard.vocab) : null);
+  // Who it waits on, as atm says it (ATM-717)
+  const wait = $derived(task ? waitLine(task, dashboard.loadedAt) : null);
   const notes = $derived(task ? taskNotes(task) : []);
   // Its sprint (or the backlog), its release (its own, else its sprint's), and the sprints it was carried through
   // (SR-7.6, SR-4.5): shown when it was in more than one; flagged once carried twice or more
   const sprint = $derived(task ? dashboard.sprints.sprintOf(task) : undefined);
-  const release = $derived(task ? effectiveRelease(dashboard.sprints, task) : undefined);
+  const release = $derived(task ? effectiveRelease(task) : undefined);
   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
-  const carried = $derived(task && sprint ? carriedCount(task, sprint) : 0);
+  // How many sprints it was carried through, as atm counts it (ATM-720)
+  const carried = $derived(task?.derived?.carried ?? 0);
   const reviewMode = $derived(task ? effectiveReview(task) : 'none');
-  // Its code reviews (ATM-585: `code_reviews`, oldest first): the latest to open, the others after it, in the project
-  // shown
+  // Its code reviews (ATM-585: `code_reviews`, oldest first): the one it waits on to open, as atm says it (ATM-717),
+  // the others after it, latest first, in the project shown
   const codeReviews = $derived(task?.code_reviews ?? []);
-  const latestReview = $derived(codeReviews.at(-1) ?? null);
-  const earlierReviews = $derived(codeReviews.slice(0, -1).reverse());
+  const latestReview = $derived(task?.derived?.review ?? codeReviews.at(-1) ?? null);
+  const earlierReviews = $derived(codeReviews.filter((r) => r.id !== latestReview?.id).reverse());
   /** Where a review of the task stands, as its view from atm says (ATM-621) */
   const reviewStatusOf = (id: string) => task?.derived?.review_statuses?.[id];
   const reviewProject = $derived(dashboard.projectId);
   const actors = $derived(task ? actorsLine(task) : '');
   const attempts = $derived(task ? earlierAttempts(task) : []);
-  const requiredBy = $derived(task ? dashboard.tasks.filter((t) => (t.dependencies ?? []).includes(task.id)) : []);
-  // How it ended, when not done, and its links that don't block, both ways (SR-2.8, SR-7.6)
-  const resolution = $derived(task ? resolutionOf(task, dashboard.vocab) : undefined);
-  const relations = $derived(task ? relationsOf(task, dashboard.tasks) : { related: [], duplicatedBy: [] });
+  // The tasks that depend on it, as atm finds them (ATM-719: `derived.required_by`), those the page has
+  const requiredBy = $derived(
+    (task?.derived?.required_by ?? []).flatMap((id) => dashboard.tasks.find((t) => t.id === id) ?? []),
+  );
+  // How it ended, when not done, and its links that don't block, both ways (SR-2.8, SR-7.6), as atm says them
+  const resolution = $derived(task ? resolutionOf(task) : undefined);
+  const relations = $derived(task ? relationsOf(task) : { related: [], duplicatedBy: [] });
   const linked = $derived(
     (task?.dependencies ?? []).length ||
       requiredBy.length ||
@@ -96,7 +99,7 @@
       relations.duplicatedBy.length,
   );
   // Created, started, sent for review, finished, how long the work took, last updated
-  const times = $derived(task ? taskTimes(task, dashboard.loadedAt, dashboard.vocab) : []);
+  const times = $derived(task ? taskTimes(task, dashboard.loadedAt) : []);
 
   // The sections in groups, one rail entry each (T-280); only the groups the task has
   const groups = $derived.by(() => {
@@ -191,8 +194,11 @@
     if (e.target === e.currentTarget) dashboard.closeDetail();
   }
 
+  // Escape closes the panel when it is open and nothing else took the key (ATM-680, audit D11): a composer, a menu or
+  // a dialog that handles its own Escape keeps the panel open
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') dashboard.closeDetail();
+    if (e.key !== 'Escape' || e.defaultPrevented || !dashboard.detailOpen) return;
+    dashboard.closeDetail();
   }
 </script>
 
@@ -413,9 +419,7 @@
             <li class="detail-note note-{note.kind}" data-kind={note.kind}>
               <div class="note-head">
                 <span class="note-kind">{noteKindLabel(note.kind)}</span>
-                <span class="note-meta"
-                  >{note.by ? `${note.by} · ` : ''}{note.at ? new Date(note.at).toLocaleString() : ''}</span
-                >
+                <span class="note-meta">{note.by ? `${note.by} · ` : ''}{formatDateTime(note.at)}</span>
               </div>
               <div class="note-text">
                 <CompMd text={note.text} {task} onopen={openDocument} />
@@ -429,7 +433,7 @@
   {#if claim || actors || attempts.length || task.commit || times.length}
     <div class="detail-group" data-group="activity">
       {#if claim}
-        {@const since = new Date(claim.claimed_at).toLocaleString()}
+        {@const since = formatDateTime(claim.claimed_at)}
         {@const until = new Date(claim.lease_expires_at).toLocaleTimeString()}
         <div class="detail-section" id="detail-claim">
           <div class="label">Claimed by</div>
@@ -456,7 +460,7 @@
           <div class="label">Timestamps</div>
           <div class="value" style="font-size:13px;color:var(--text-muted)">
             {#each times as row, i (row.label)}{#if i}<br />{/if}{row.label}:
-              {row.at ? new Date(row.at).toLocaleString() : row.text}{/each}
+              {row.at ? formatDateTime(row.at) : row.text}{/each}
           </div>
         </div>
       {/if}
@@ -494,11 +498,11 @@
 
 <!-- Why the task waits, if it does: above the description, the first thing to read -->
 {#snippet waiting(task: Task)}
-  {#if review}
+  {#if wait?.kind === 'review'}
     <div class="detail-section" id="detail-review">
       <div class="label">In review</div>
       <div class="value" style="font-size:13px">
-        <div><strong>{reviewSummary(review)}</strong></div>
+        <div><strong>{wait.text}</strong></div>
         {#if latestReview && reviewProject}
           <!-- Its code review, the latest it names, to open (ATM-585); the earlier ones after it -->
           <div class="detail-review-links">
@@ -515,9 +519,11 @@
               />{/each}
           </div>
         {/if}
-        <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
-        {#if review.note}<div class="review-note">
-            <CompMd text={review.note.text} {task} onopen={openDocument} />
+        {#if task.derived?.waiting?.since}
+          <div style="color:var(--text-muted)">Since {formatDateTime(task.derived.waiting.since)}</div>
+        {/if}
+        {#if wait.note}<div class="review-note">
+            <CompMd text={wait.note.text} {task} onopen={openDocument} />
           </div>{/if}
       </div>
     </div>
@@ -534,17 +540,17 @@
       </div>
     </div>
   {/if}
-  {#if block}
+  {#if wait?.kind === 'block'}
     <div class="detail-section" id="detail-blocked">
       <div class="label">Blocked</div>
       <div class="value" style="font-size:13px">
-        <div><strong>{blockSummary(block)}</strong></div>
-        {#if task.blocked_at}
-          <div style="color:var(--text-muted)">Since {new Date(task.blocked_at).toLocaleString()}</div>
+        <div><strong>{wait.text}</strong></div>
+        {#if task.derived?.waiting?.since}
+          <div style="color:var(--text-muted)">Since {formatDateTime(task.derived.waiting.since)}</div>
         {/if}
-        {#if block.questions.length}
+        {#if wait.questions.length}
           <ol class="block-questions">
-            {#each block.questions as question, i (i)}<li>
+            {#each wait.questions as question, i (i)}<li>
                 <CompMd text={question} {task} inline onopen={openDocument} />
               </li>{/each}
           </ol>

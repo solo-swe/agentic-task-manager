@@ -44,29 +44,35 @@ pub struct Filters {
     pub archived: bool,
 }
 
-/// In PR: a recorded PR, not merged yet (DM-4.3).
-#[must_use]
-pub fn in_open_pr(task: &Task) -> bool {
-    task.get("pr").is_some_and(Value::is_object) && !task.get("merged_at").is_some_and(truthy)
-}
+/// In PR: a recorded PR, not merged yet (DM-4.3): atm-common's one rule.
+pub use atm_common::archive::in_open_pr;
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
+use atm_common::task_id as id_of;
 
 /// The IDs of the to-do tasks whose dependencies are all done (a dependency only in the archive is done).
 ///
 /// # Errors
 /// When the archive has to be read and can't be.
 pub fn ready_ids(project: &Project) -> Result<HashSet<String>> {
+    ready_ids_of(project)
+}
+
+/// The archive's task with an ID, for the dependency rules (`rules::ArchivedTask`, ATM-667): an empty entry is none.
+///
+/// # Errors
+/// When the archive has to be read and can't be.
+pub(crate) fn archived_task(store: &dyn atm_db::Store, id: &str) -> Result<Option<Task>> {
+    Ok(store
+        .get_archived_task(id)?
+        .filter(|t| !t.is_empty())
+        .cloned())
+}
+
+fn ready_ids_of(project: &Project) -> Result<HashSet<String>> {
     let store = project.store();
     let vocab = store.vocabulary()?;
     let tasks = store.list_tasks()?;
-    let archived = |id: &str| {
-        store
-            .get_archived_task(id)
-            .map(|t| t.is_some_and(|t| !t.is_empty()))
-    };
+    let archived = |id: &str| archived_task(store, id);
     let mut ready = HashSet::new();
     for t in &tasks {
         if vocab.kind_of(t.get("status")) == Some(Kind::Todo)
@@ -99,10 +105,10 @@ fn sprint_names(vocab: &Vocabulary, given: &[String]) -> Result<Vec<String>> {
                     } else {
                         ids.join(", ")
                     };
-                    Error::Failed {
-                        message: format!("no sprint {}; the sprints: {known}", repr_str(name)),
-                        code: 2,
-                    }
+                    Error::Invalid(format!(
+                        "no sprint {}; the sprints: {known}",
+                        repr_str(name)
+                    ))
                 })
         })
         .collect()
@@ -136,10 +142,7 @@ impl Scope {
     }
 
     pub(crate) fn keeps(&self, vocab: &Vocabulary, t: &Task) -> bool {
-        let sprint = vocab
-            .find_sprint(t.get("sprint"))
-            .and_then(|s| s.get("id"))
-            .and_then(Value::as_str);
+        let sprint = vocab.sprint_id_of(t);
         if !self.names.is_empty() && !sprint.is_some_and(|s| self.names.iter().any(|n| n == s)) {
             return false;
         }
@@ -225,6 +228,21 @@ pub fn list_matching<'p>(project: &'p Project, filters: &Filters) -> Result<Vec<
         }
     }
     Ok(kept)
+}
+
+/// How a finished task ended (SR-2.8, ATM-719): its own resolution, else the default (`done` for a done task,
+/// `wont_do` for a skipped one, as atm stores one only when it isn't the default); None while it isn't finished.
+#[must_use]
+pub fn task_resolution(vocab: &Vocabulary, task: &Task) -> Option<String> {
+    let own = task
+        .get("resolution")
+        .and_then(Value::as_str)
+        .filter(|r| !r.is_empty());
+    match vocab.kind_of(task.get("status"))? {
+        Kind::Done => Some(own.unwrap_or("done").to_string()),
+        Kind::Skipped => Some(own.unwrap_or("wont_do").to_string()),
+        _ => None,
+    }
 }
 
 /// A done task's stage (DM-4.3): `done`, `in_pr` (a recorded PR, not merged) or `merged`; None for other kinds.
@@ -318,6 +336,28 @@ impl ReviewStatuses {
     }
 }
 
+/// A task's resolution and the links pointing at it (ATM-719): the tasks that depend on it, relate to it and
+/// duplicate it, each left out when there is none
+fn links_and_resolution(
+    vocab: &Vocabulary,
+    links: &crate::tasks::Backlinks,
+    t: &Task,
+    derived: &mut Map<String, Value>,
+) {
+    if let Some(resolution) = task_resolution(vocab, t) {
+        derived.insert("resolution".into(), json!(resolution));
+    }
+    for (field, ids) in [
+        ("required_by", links.required_by(t)),
+        ("related_by", links.related_by(t)),
+        ("duplicated_by", links.duplicated_by(t)),
+    ] {
+        if !ids.is_empty() {
+            derived.insert(field.into(), json!(ids));
+        }
+    }
+}
+
 /// The tasks the filters keep, each as `{task, derived}`: what atm derives for it (the REST API's tasks,
 /// docs/layered-architecture.md §6.2): its kind, whether it is ready, the dependencies it waits for, who a blocked
 /// task waits on, its effective priority, review mode and release, its stage, and whether it is archived. What
@@ -330,11 +370,7 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
     let vocab = store.vocabulary()?;
     let tasks = store.list_tasks()?;
     let ready = ready_ids(project)?;
-    let archived = |id: &str| {
-        store
-            .get_archived_task(id)
-            .map(|t| t.is_some_and(|t| !t.is_empty()))
-    };
+    let archived = |id: &str| archived_task(store, id);
     // A task a tolerant read found wrong (T-377) says so; what its broken fields would decide isn't decided
     let troubled = if filters.archived {
         Map::new()
@@ -343,6 +379,9 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
     };
     let mut lookup = crate::foreign::Lookup::default();
     let statuses = ReviewStatuses::of(project);
+    // The sprint each task is in, as the sprints served with the tasks count them (ATM-720): phases too, unmigrated
+    let sprints = crate::sprints::task_sprints(project)?;
+    let links = crate::tasks::Backlinks::of(&tasks);
     let mut views = Vec::new();
     for t in list_matching(project, filters)? {
         let kind = vocab.kind_of(t.get("status"));
@@ -359,10 +398,23 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         if let Some(kind) = kind {
             derived.insert("kind".into(), json!(kind.as_str()));
         }
-        derived.insert(
-            "ready".into(),
-            json!(id_of(t).is_some_and(|id| ready.contains(id)) && problems.is_none()),
-        );
+        // Its work by one rule, every attempt and round (ATM-721)
+        if let Some(work) = crate::work::work_of(vocab, t, atm_common::time::now()) {
+            derived.insert("work".into(), work.to_json());
+        }
+        if let Some(place) = id_of(t).and_then(|id| sprints.get(id)) {
+            derived.insert("sprint".into(), json!(place.sprint));
+            if place.carried > 0 {
+                derived.insert("carried".into(), json!(place.carried));
+            }
+            // Left unfinished in a closed sprint (ATM-719): the loop never takes it until it is moved
+            if place.closed && !matches!(kind, Some(Kind::Done | Kind::Skipped)) {
+                derived.insert("in_closed_sprint".into(), json!(true));
+            }
+        }
+        links_and_resolution(vocab, &links, t, &mut derived);
+        let is_ready = id_of(t).is_some_and(|id| ready.contains(id)) && problems.is_none();
+        derived.insert("ready".into(), json!(is_ready));
         derived.insert("waiting_for".into(), json!(waiting_for));
         if let Some(problems) = problems {
             derived.insert("problems".into(), problems.clone());
@@ -389,6 +441,27 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         }
         // Where each of its code reviews stands (ATM-621), so its badge says so from the first load
         let reviews = statuses.of_task(t);
+        // Who it waits on, whether it needs the user, whether agent work is left, and the review it waits on
+        // (ATM-717): atm's one rule, so no front end works them out
+        let answer = crate::waiting::of(
+            vocab,
+            t,
+            crate::waiting::Context {
+                ready: is_ready,
+                waiting_for: &waiting_for,
+                in_scope: crate::waiting::in_active_scope(vocab, t),
+            },
+        );
+        if let Some(waiting) = &answer.waiting {
+            derived.insert("waiting".into(), json!(waiting));
+        }
+        if let Some(reason) = answer.needs_you {
+            derived.insert("needs_you".into(), json!(reason));
+        }
+        derived.insert("agent_work".into(), json!(answer.agent_work));
+        if let Some(review) = crate::waiting::review_of(t, &reviews) {
+            derived.insert("review".into(), review);
+        }
         if !reviews.is_empty() {
             derived.insert("review_statuses".into(), Value::Object(reviews));
         }
@@ -456,6 +529,16 @@ pub fn search_tasks(project: &Project, query: &str, also: &str) -> Result<Vec<St
                 .then(|| id.to_string())
         })
         .collect())
+}
+
+/// The claims held at `now` (s): [`list_claims`] without those whose lease has run out, by the loop's rule
+/// (ATM-724, `leases::holder`), so the dashboard shows who works on what as atm sees it, by atm's clock.
+#[must_use]
+pub fn held_claims(project: &Project, now: i64) -> Vec<Value> {
+    list_claims(project)
+        .into_iter()
+        .filter(|claim| crate::leases::holder(claim, now).is_some())
+        .collect()
 }
 
 /// The project's claims, from every working copy, by task.

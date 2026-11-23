@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { dependencyChain, layoutGraph, NODE_H, NODE_W, truncate, type GraphLayout } from '../../src/lib/graph/layout';
+import {
+  dependencyChain,
+  graphFocus,
+  layoutGraph,
+  NODE_H,
+  NODE_W,
+  truncate,
+  type GraphLayout,
+} from '../../src/lib/graph/layout';
 import type { Task } from '../../src/lib/types';
 import standard from '../fixtures/standard.json';
 import cycle from '../fixtures/cycle.json';
@@ -122,6 +130,25 @@ describe('dependencyChain', () => {
   it('ends in a cycle', () => {
     const c = layoutGraph(cycle.tasks as Task[]);
     expect(dependencyChain(c.edges, 'T-002').has('T-002')).toBe(true);
+  });
+});
+
+// ATM-680 (audit D12): the first view's focus by kind, so a project's own status IDs get one
+describe('graphFocus', () => {
+  const kinded = (id: string, status: string, kind: string) =>
+    ({ ...task(id), status, derived: { kind, ready: true, waiting_for: [], priority: 'P2', archived: false } }) as Task;
+
+  it('a matching task at work first, else one to do, by kind whatever the status is called; none else', () => {
+    const l = layoutGraph([
+      kinded('a', 'queued', 'todo'),
+      kinded('b', 'hacking', 'active'),
+      kinded('c', 'shipped', 'done'),
+    ]);
+    const all = new Set(['a', 'b', 'c']);
+    expect(graphFocus(l.nodes, all)?.task.id).toBe('b');
+    expect(graphFocus(l.nodes, new Set(['a', 'c']))?.task.id).toBe('a');
+    expect(graphFocus(l.nodes, new Set(['c']))).toBeUndefined();
+    expect(graphFocus([], all)).toBeUndefined();
   });
 });
 

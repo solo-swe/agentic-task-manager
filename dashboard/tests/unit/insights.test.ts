@@ -5,7 +5,6 @@ import {
   gaps,
   MAX_ACTIVITY_BUCKETS,
   median,
-  progressBreakdown,
   periodPhrase,
   PRESET_BUCKET_MS,
   rangeAxis,
@@ -14,8 +13,17 @@ import {
   sparklineTitle,
 } from '../../src/lib/insights';
 import type { Task } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
-import standard from '../fixtures/standard.json';
+import { DEFAULT_VOCABULARY, type Vocabulary } from '../../src/lib/vocab';
+import { vocabulary, withKinds } from './views';
+
+// What the tests measure, on the tasks as atm serves them: with their kinds in `vocab`
+const series = (
+  tasks: Task[],
+  period?: { start: number; end: number } | null,
+  now?: number,
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
+  bucket?: number,
+) => activitySeries(withKinds(tasks, vocab), period, now, bucket);
 
 const H = 3_600_000;
 const T0 = Date.parse('2026-04-01T08:10:00Z');
@@ -50,104 +58,11 @@ describe('median', () => {
   });
 });
 
-describe('progressBreakdown', () => {
-  it('shares done overall, per phase and per type', () => {
-    const tasks = [
-      task('a', { status: 'done', phase: 1 }),
-      task('b', { phase: 1, type: 'test' }),
-      task('c', { status: 'done', phase: 0, type: 'test' }),
-      task('d', { status: 'in_progress', phase: 0 }),
-    ];
-    const p = progressBreakdown(tasks);
-    expect(p.overall).toEqual({ key: 'all', label: 'All tasks', done: 2, total: 4, skipped: 0, ratio: 0.5 });
-    expect(p.byPhase.map((s) => [s.label, s.done, s.total])).toEqual([
-      ['Phase 0', 1, 2],
-      ['Phase 1', 1, 2],
-    ]);
-    expect(p.byType.map((s) => [s.key, s.ratio])).toEqual([
-      ['feature', 0.5],
-      ['test', 0.5],
-    ]);
-  });
-
-  it('counts statuses in workflow order, unknown statuses last', () => {
-    const tasks = ['todo', 'weird', 'done', 'blocked', 'done', 'in_progress'].map((status, i) =>
-      task(String(i), { status }),
-    );
-    expect(progressBreakdown(tasks).byStatus).toEqual([
-      { status: 'done', count: 2 },
-      { status: 'in_progress', count: 1 },
-      { status: 'todo', count: 1 },
-      { status: 'blocked', count: 1 },
-      { status: 'weird', count: 1 },
-    ]);
-  });
-
-  it('no tasks: a ratio of 0, not NaN', () => {
-    expect(progressBreakdown([]).overall.ratio).toBe(0);
-  });
-
-  it('archived tasks count as done overall, so archiving never lowers the percentage (T-238)', () => {
-    const current = [task('a', { status: 'done' }), task('b', { status: 'todo' }), task('c', { status: 'todo' })];
-    // 6 archived, not loaded: counted from meta.archived
-    const p = progressBreakdown(current, undefined, 6);
-    expect(p.overall).toMatchObject({ done: 7, total: 9 });
-    expect(p.overall.ratio).toBeCloseTo(7 / 9);
-    expect(p.archived).toBe(6);
-    // Phases and types are the tasks passed in: tasks.json's until the archive is loaded
-    expect(p.byPhase.map((s) => s.total)).toEqual([3]);
-    // Loaded: the history has them, and the count is only for the tooltip
-    const archived = Array.from({ length: 6 }, (_, i) => task(`x${i}`, { status: 'done' }));
-    const loaded = progressBreakdown([...current, ...archived], undefined, 0, 6);
-    expect(loaded.overall).toMatchObject({ done: 7, total: 9 });
-    expect(loaded.archived).toBe(6);
-  });
-
-  it('skipped tasks count as neither done nor left: 7 done and 3 skipped is 100%, the 3 shown apart', () => {
-    const tasks = [
-      ...Array.from({ length: 7 }, (_, i) => task(`d${i}`, { status: 'done' })),
-      ...Array.from({ length: 3 }, (_, i) => task(`s${i}`, { status: 'skipped' })),
-    ];
-    expect(progressBreakdown(tasks).overall).toMatchObject({ done: 7, total: 7, skipped: 3, ratio: 1 });
-    const someLeft = progressBreakdown([...tasks, task('t', { status: 'todo' })]).overall;
-    expect(someLeft).toMatchObject({ done: 7, total: 8, skipped: 3, ratio: 7 / 8 });
-  });
-
-  it('a group of only skipped tasks is finished, not 0%', () => {
-    const p = progressBreakdown([task('a', { status: 'skipped', phase: 2 }), task('b', { status: 'todo', phase: 1 })]);
-    expect(p.byPhase.map((s) => [s.label, s.total, s.skipped, s.ratio])).toEqual([
-      ['Phase 1', 1, 0, 0],
-      ['Phase 2', 0, 1, 1],
-    ]);
-  });
-
-  it("follows a project's statuses by kind: done-kind is done, the split is in kind order", () => {
-    const vocab = resolveVocabulary({
-      statuses: [
-        { id: 'backlog', kind: 'todo' },
-        { id: 'doing', kind: 'active' },
-        { id: 'awaiting_user', kind: 'review' },
-        { id: 'shipped', kind: 'done' },
-      ],
-    });
-    const tasks = ['backlog', 'awaiting_user', 'shipped', 'doing', 'shipped'].map((status, i) =>
-      task(String(i), { status }),
-    );
-    const p = progressBreakdown(tasks, vocab);
-    expect(p.overall.done).toBe(2);
-    expect(p.byStatus.map((s) => s.status)).toEqual(['shipped', 'doing', 'awaiting_user', 'backlog']);
-  });
-
-  it('works on the standard fixture', () => {
-    const p = progressBreakdown(standard.tasks as Task[]);
-    expect([p.overall.total, p.overall.skipped]).toEqual([11, 1]); // one of its 12 tasks is skipped
-    expect(p.byStatus.reduce((n, s) => n + s.count, 0)).toBe(12);
-  });
-});
+// Progress overall, by status, type and sprint is atm's (ATM-722: atm-lib's stats::progress, tested there)
 
 describe('activitySeries', () => {
   it('measures time per task and agent work until the review was requested', () => {
-    const s = activitySeries(
+    const s = series(
       [
         worked('a', 0, 4, { agent: 'alice', review_requested_at: iso(T0 + H) }),
         worked('b', 1, undefined, { agent: 'bob', status: 'in_review', review_requested_at: iso(T0 + 2 * H) }),
@@ -163,23 +78,23 @@ describe('activitySeries', () => {
   });
 
   it("follows a project's statuses by kind", () => {
-    const vocab = resolveVocabulary({
+    const vocab = vocabulary({
       statuses: [
-        { id: 'backlog', kind: 'todo' },
-        { id: 'doing', kind: 'active' },
-        { id: 'shipped', kind: 'done' },
+        { id: 'backlog', label: 'Backlog', kind: 'todo' },
+        { id: 'doing', label: 'Doing', kind: 'active' },
+        { id: 'shipped', label: 'Shipped', kind: 'done' },
       ],
     });
     const tasks = [worked('a', 0, 1, { status: 'shipped' }), worked('b', 1, undefined, { status: 'doing' })];
-    expect(activitySeries(tasks, null, T0 + 2 * H)).toBeNull();
-    const s = activitySeries(tasks, null, T0 + 2 * H, vocab)!;
+    expect(series(tasks, null, T0 + 2 * H)).toBeNull();
+    const s = series(tasks, null, T0 + 2 * H, vocab)!;
     // b, in the project's active status, is still at work in the last bucket
     expect([s.totalCompleted, s.buckets.at(-1)!.byKind.agents]).toEqual([1, 1]);
   });
 
   it('is null without completions', () => {
-    expect(activitySeries([])).toBeNull();
-    expect(activitySeries([worked('a', 0)])).toBeNull();
+    expect(series([])).toBeNull();
+    expect(series([worked('a', 0)])).toBeNull();
   });
 
   it('buckets completions by hour over a short span, with per-type counts and a rolling average', () => {
@@ -191,7 +106,7 @@ describe('activitySeries', () => {
       worked('e', 3, undefined),
       task('f', { created_at: iso(T0 + 2.5 * H) }),
     ];
-    const s = activitySeries(tasks)!;
+    const s = series(tasks)!;
     expect(s.unitLabel).toBe('hour');
     expect(s.bucketMs).toBe(H);
     expect(s.totalCompleted).toBe(4);
@@ -206,7 +121,7 @@ describe('activitySeries', () => {
   });
 
   it('measures cycle times from start to completion, oldest first, with their median', () => {
-    const s = activitySeries([worked('slow', 0, 3), worked('fast', 1, 1.5), worked('bad', 2, 1)])!;
+    const s = series([worked('slow', 0, 3), worked('fast', 1, 1.5), worked('bad', 2, 1)])!;
     expect(s.cycleTimes.map((c) => [c.id, c.minutes])).toEqual([
       ['fast', 30],
       ['slow', 180],
@@ -225,7 +140,7 @@ describe('activitySeries', () => {
   });
 
   it('marks interactive tasks: their time includes working with you (T-246)', () => {
-    const s = activitySeries([worked('alone', 0, 1), worked('pair', 1, 3, { labels: ['ux', 'interactive'] })])!;
+    const s = series([worked('alone', 0, 1), worked('pair', 1, 3, { labels: ['ux'], with: 'user' })])!;
     expect(s.cycleTimes.map((c) => [c.id, c.withYou])).toEqual([
       ['alone', false],
       ['pair', true],
@@ -233,15 +148,15 @@ describe('activitySeries', () => {
   });
 
   it('picks longer buckets for longer spans, never more than the maximum', () => {
-    const days = activitySeries([worked('a', 0, 1), worked('b', 0, 24 * 20)])!;
+    const days = series([worked('a', 0, 1), worked('b', 0, 24 * 20)])!;
     expect(days.unitLabel).toBe('day');
-    const months = activitySeries([worked('a', 0, 1), worked('b', 0, 24 * 365 * 5)])!;
+    const months = series([worked('a', 0, 1), worked('b', 0, 24 * 365 * 5)])!;
     expect(months.unitLabel).toBe('30 days');
     for (const s of [days]) expect(s.buckets.length).toBeLessThanOrEqual(MAX_ACTIVITY_BUCKETS);
   });
 
   it('tasks without a start time still count as completions, but have no cycle time', () => {
-    const s = activitySeries([task('a', { status: 'done', completed_at: iso(T0) })])!;
+    const s = series([task('a', { status: 'done', completed_at: iso(T0) })])!;
     expect(s.totalCompleted).toBe(1);
     expect(s.cycleTimes).toEqual([]);
     expect(s.medianCycleMinutes).toBeNull();
@@ -252,7 +167,7 @@ describe('the sparkline tooltip (T-249)', () => {
   it('says what the line is, and what the current bucket has so far while it is not over', () => {
     const tasks = [worked('a', 0, 0.5), worked('b', 0.2, 0.6), worked('c', 1, 2.5)];
     // The last bucket is the hour from 10:00; at 10:40 it isn't over
-    const s = activitySeries(tasks, null, T0 + 2.5 * H)!;
+    const s = series(tasks, null, T0 + 2.5 * H)!;
     expect(sparklineTitle(s, T0 + 2.5 * H)).toBe(
       'Tasks completed per hour, all time: 3 · the line is the average of the last 3 hours · this hour so far: 1 · ' +
         'click for details',
@@ -261,7 +176,7 @@ describe('the sparkline tooltip (T-249)', () => {
     expect(sparklineTitle(s, T0 + 5 * H)).toBe(
       'Tasks completed per hour, all time: 3 · the line is the average of the last 3 hours · click for details',
     );
-    const months = activitySeries([worked('a', 0, 1), worked('b', 0, 24 * 365 * 5)])!;
+    const months = series([worked('a', 0, 1), worked('b', 0, 24 * 365 * 5)])!;
     expect(sparklineTitle(months, Date.parse('2040-01-01'))).toContain('the average of the last 3 periods of 30 days');
   });
 });
@@ -300,13 +215,13 @@ describe('rangeWindow and activity in a period', () => {
       { id: 'A', name: 'A', type: 'feature', status: 'done', started_at: t(1, 9), completed_at: t(1, 10) },
       { id: 'B', name: 'B', type: 'feature', status: 'done', started_at: t(1, 11), completed_at: t(1, 12) },
     ] as Task[];
-    const week = activitySeries(tasks, rangeAxis({ preset: 'week' }, now), now, undefined, PRESET_BUCKET_MS.week)!;
+    const week = series(tasks, rangeAxis({ preset: 'week' }, now), now, undefined, PRESET_BUCKET_MS.week)!;
     expect(week.buckets).toHaveLength(7);
     expect(week.buckets.map((b) => b.completed.length)).toEqual([0, 0, 1 + 1, 0, 0, 0, 0]);
     expect(week.totalCompleted).toBe(2);
     // No idle time in the future: idle only up to now
     expect(week.idle.every((g) => g.end <= now)).toBe(true);
-    const day = activitySeries(tasks, rangeAxis({ preset: 'day' }, now), now, undefined, PRESET_BUCKET_MS.day)!;
+    const day = series(tasks, rangeAxis({ preset: 'day' }, now), now, undefined, PRESET_BUCKET_MS.day)!;
     expect(day.buckets).toHaveLength(24);
     expect(day.buckets.filter((b) => b.completed.length).map((b) => new Date(b.start).getHours())).toEqual([10, 12]);
   });
@@ -338,7 +253,7 @@ describe('rangeWindow and activity in a period', () => {
 
   it('a period limits the buckets and counts', () => {
     const tasks = [worked('a', 0, 0.5), worked('b', 1, 2.5), worked('c', 2, 2.7)];
-    const s = activitySeries(tasks, { start: T0 + 2 * H, end: T0 + 3 * H })!;
+    const s = series(tasks, { start: T0 + 2 * H, end: T0 + 3 * H })!;
     expect(s.unitLabel).toBe('5 minutes');
     expect(s.totalCompleted).toBe(2);
     expect(s.cycleTimes.map((c) => c.id)).toEqual(['b', 'c']);
@@ -347,7 +262,7 @@ describe('rangeWindow and activity in a period', () => {
   it('each stepped period has its natural bucket: an hour per 5 minutes, a day per hour, a week or month per day', () => {
     const tasks = [worked('a', 0, 0.5), worked('b', 1, 2.5)];
     const bucketOf = (preset: 'hour' | 'day' | 'week' | 'month') => {
-      const s = activitySeries(tasks, rangeWindow({ preset }, now), now, undefined, PRESET_BUCKET_MS[preset])!;
+      const s = series(tasks, rangeWindow({ preset }, now), now, undefined, PRESET_BUCKET_MS[preset])!;
       return [s.unitLabel, s.buckets.length];
     };
     expect(bucketOf('hour')).toEqual(['5 minutes', 12]);
@@ -397,7 +312,7 @@ describe('idle stretches', () => {
 
   it('activity reports idle time from the first start to now', () => {
     // a: 0–0.5 h, b: 2–2.5 h, now 3 h: idle 0.5–2 h and 2.5–3 h
-    const s = activitySeries([worked('a', 0, 0.5), worked('b', 2, 2.5)], null, T0 + 3 * H)!;
+    const s = series([worked('a', 0, 0.5), worked('b', 2, 2.5)], null, T0 + 3 * H)!;
     expect(s.idle).toEqual([
       { start: T0 + 0.5 * H, end: T0 + 2 * H },
       { start: T0 + 2.5 * H, end: T0 + 3 * H },
@@ -406,7 +321,7 @@ describe('idle stretches', () => {
   });
 
   it('agents busy per period: each agent at most fully busy', () => {
-    const s = activitySeries(
+    const s = series(
       [worked('a', 0, 0.5, { agent: 'x' }), worked('b', 0, 0.5, { agent: 'x' }), worked('c', 0, 1, { agent: 'y' })],
       null,
       T0 + H,
@@ -416,7 +331,7 @@ describe('idle stretches', () => {
   });
 
   it('per bucket by kind: Claude sessions and unattributed work are agents, anyone else people, each capped (T-247)', () => {
-    const s = activitySeries(
+    const s = series(
       [
         worked('a', 0, 1, { agent: 'claude:a1' }),
         worked('b', 0, 0.5, { agent: 'Hakan' }),

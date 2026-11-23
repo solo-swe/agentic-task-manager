@@ -13,6 +13,7 @@ use atm_lib::review_requests::{
     ReviewTasks,
 };
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewId, ReviewRef, Status};
+use atm_lib::stats::StatsQuery;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::Response;
 use serde_json::{Map, Value, json};
@@ -29,6 +30,7 @@ pub(super) enum Call {
     Searched(String, String),
     Project(String, String),
     Tasks(Filters),
+    Stats(StatsQuery),
     OthersVersion,
     Claims,
     Worktrees,
@@ -127,6 +129,8 @@ impl Default for FakeReviews {
 pub(super) struct FakeProject {
     pub stamp: Value,
     pub tasks: Result<Value>,
+    /// What its stats answer (ATM-722)
+    pub stats: Result<Value>,
     pub others: Value,
     pub claims: Vec<Value>,
     pub worktrees: Vec<Value>,
@@ -154,6 +158,7 @@ impl Default for FakeProject {
         Self {
             stamp: json!({"tasks": [1, 1], "archive": null, "claims": [1, 1], "copies": [1]}),
             tasks: Ok(json!({"tasks": [], "meta": {}})),
+            stats: Ok(json!({"progress": {}, "forecast": {}})),
             others: json!({}),
             claims: Vec::new(),
             worktrees: Vec::new(),
@@ -316,6 +321,11 @@ impl ProjectSource for Bound<FakeProject> {
         self.fake.tasks.clone()
     }
 
+    fn stats(&self, query: &StatsQuery) -> Result<Value> {
+        self.calls.note(Call::Stats(query.clone()));
+        self.fake.stats.clone()
+    }
+
     fn others_version(&self) -> Value {
         self.calls.note(Call::OthersVersion);
         self.fake.others.clone()
@@ -338,13 +348,14 @@ impl ProjectSource for Bound<FakeProject> {
             .map(|(stamp, kind, _)| (stamp.clone(), *kind))
     }
 
-    fn read_logo(&self) -> Vec<u8> {
+    fn read_logo(&self) -> Option<Vec<u8>> {
         self.calls.note(Call::ReadLogo);
+        // An empty logo stands for one that can't be read
         self.fake
             .logo
             .as_ref()
             .map(|(_, _, bytes)| bytes.clone())
-            .unwrap_or_default()
+            .filter(|bytes| !bytes.is_empty())
     }
 
     fn file_version(&self, path: &str) -> Result<(u64, u128)> {
@@ -525,7 +536,7 @@ pub(super) fn draft() -> Draft {
 }
 
 /// Each of atm-lib's refusals, with the status a route answers it with.
-pub(super) fn refusals() -> [(Error, StatusCode); 5] {
+pub(super) fn refusals() -> [(Error, StatusCode); 6] {
     [
         (Error::Invalid("malformed".into()), StatusCode::BAD_REQUEST),
         (Error::NotFound("no such".into()), StatusCode::NOT_FOUND),
@@ -534,6 +545,7 @@ pub(super) fn refusals() -> [(Error, StatusCode); 5] {
             StatusCode::PAYLOAD_TOO_LARGE,
         ),
         (Error::Refused("not shown".into()), StatusCode::FORBIDDEN),
+        (Error::Conflict("claimed".into()), StatusCode::CONFLICT),
         (Error::failed("broken"), StatusCode::INTERNAL_SERVER_ERROR),
     ]
 }

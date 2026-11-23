@@ -1,0 +1,497 @@
+diff --git a/dashboard/src/app.css b/dashboard/src/app.css
+index 0d122030..b3742c55 100644
+--- a/dashboard/src/app.css
++++ b/dashboard/src/app.css
+@@ -2175,6 +2175,8 @@ button.menu-trigger:hover,
+   font-weight: 500;
+   margin-bottom: var(--space-3);
+   cursor: pointer;
++  /* A real link since ATM-698, as it looked as a button */
++  text-decoration: none;
+ }
+ .task-name:hover {
+   color: var(--accent);
+@@ -4006,11 +4008,36 @@ svg.graph-minimap.hidden {
+   padding: var(--space-1) var(--space-3);
+ }
+ .kanban-card-name {
++  display: block;
+   margin-top: var(--space-3);
+   font-family: var(--card-font, inherit);
+   font-size: var(--card-font-size, var(--text-md));
+   font-weight: var(--card-font-weight, normal);
+   line-height: 1.4;
++  color: inherit;
++  text-decoration: none;
++}
++/* A card is its link (ATM-698): the link covers it, so ⌘-click and a middle click anywhere on it are the link's; the
++   card's own links and buttons stay above it */
++.kanban-card {
++  position: relative;
++}
++.kanban-card .card-link::after {
++  content: '';
++  position: absolute;
++  inset: 0;
++}
++.kanban-card a:not(.card-link),
++.kanban-card button {
++  position: relative;
++  z-index: 1;
++}
++.kanban-card .card-link:focus-visible {
++  outline: none;
++}
++.kanban-card:has(.card-link:focus-visible) {
++  outline: 2px solid var(--accent);
++  outline-offset: 1px;
+ }
+ .kanban-readiness {
+   margin-top: var(--space-3);
+diff --git a/dashboard/src/lib/app-tabs.svelte.ts b/dashboard/src/lib/app-tabs.svelte.ts
+index 8708365b..f78698de 100644
+--- a/dashboard/src/lib/app-tabs.svelte.ts
++++ b/dashboard/src/lib/app-tabs.svelte.ts
+@@ -153,10 +153,18 @@ export class AppTabs implements TabHistory {
+ 
+   /** A new tab at `address`, after the active one, and active, its history starting there (Back disabled until it
+    * moves). Its address, to go to */
+-  open(address: string): string {
++  open(address: string): string;
++  /** In the `background` (⌘-click, a middle click; ATM-698): right of the active one, which stays shown: nothing to
++   * go to */
++  open(address: string, background: boolean): string | undefined;
++  open(address: string, background = false): string | undefined {
+     const tab: AppTab = { id: `t${this.#next++}`, address, history: historyAt(address) };
+     const at = this.tabs.findIndex((t) => t.id === this.active);
+     this.tabs.splice(at < 0 ? this.tabs.length : at + 1, 0, tab);
++    if (background && at >= 0) {
++      this.#save();
++      return undefined;
++    }
+     this.active = tab.id;
+     this.#save();
+     return address;
+diff --git a/dashboard/src/lib/kanban/KanbanCard.svelte b/dashboard/src/lib/kanban/KanbanCard.svelte
+index d80347da..65a3ca0f 100644
+--- a/dashboard/src/lib/kanban/KanbanCard.svelte
++++ b/dashboard/src/lib/kanban/KanbanCard.svelte
+@@ -1,5 +1,6 @@
+ <script lang="ts">
+   import { claimSummary } from '../claims';
++  import { followInPlace } from '../new-tab-clicks';
+   import ReviewLink from '../details/ReviewLink.svelte';
+   import type { KanbanCard } from '../kanban';
+   import { dashboard } from '../state.svelte';
+@@ -39,15 +40,7 @@
+ 
+   // Its code review, while it is in review (ATM-619): a link on the card that opens the review, not the task
+   const codeReview = $derived(kind === 'review' ? (task.code_reviews?.at(-1) ?? null) : null);
+-
+-  function onKeydown(e: KeyboardEvent) {
+-    // A key on a link inside it (its review's) is the link's
+-    if (e.target !== e.currentTarget) return;
+-    if (e.key === 'Enter' || e.key === ' ') {
+-      e.preventDefault();
+-      dashboard.showDetail(task.id);
+-    }
+-  }
++  const href = $derived(dashboard.taskAddress(task));
+ </script>
+ 
+ <div
+@@ -56,10 +49,6 @@
+   data-id={task.id}
+   data-type={task.type}
+   data-priority={priorityOf(dashboard.vocab, task)}
+-  role="button"
+-  tabindex="0"
+-  onclick={() => dashboard.showDetail(task.id)}
+-  onkeydown={onKeydown}
+ >
+   <div class="kanban-card-top">
+     <span class="kanban-card-id"><TaskKey {task} /></span>
+@@ -87,7 +76,11 @@
+     <LabelChips {task} compact />
+     {#if card.nextUp}<span class="kanban-next-up">Next up</span>{/if}
+   </div>
+-  <div class="kanban-card-name">{task.name}</div>
++  <!-- A real link to its details (ATM-698): Copy Link, ⌘-click and a middle click work as on any link; a plain
++       click opens them here. It covers the card (`.card-link`), under the card's own links -->
++  <a class="kanban-card-name card-link" {href} onclick={(e) => followInPlace(e, () => dashboard.showDetail(task.id))}
++    >{task.name}</a
++  >
+   {#if claim}
+     <div class="kanban-claim" title="Claimed by {claim.agent}">{claimSummary(claim, dashboard.loadedAt)}</div>
+   {/if}
+diff --git a/dashboard/src/lib/new-tab-clicks.ts b/dashboard/src/lib/new-tab-clicks.ts
+index 953cdede..4b70d192 100644
+--- a/dashboard/src/lib/new-tab-clicks.ts
++++ b/dashboard/src/lib/new-tab-clicks.ts
+@@ -1,15 +1,36 @@
+ // In the atm app, ⌘-click, Ctrl-click or a middle click opens a task or a document in a new tab (T-515, left from
+ // T-514), as a browser opens a link. One listener on the page decides (routes/+layout.svelte); this says where to.
+-import { hrefOf, linkAt } from './compmd';
++import { dashboardAddress, hrefOf, linkAt } from './compmd';
+ import { docOf, withDoc } from './documents';
+ import { withTask } from './routes';
+ 
+-/** The address a click on `target` opens in a new tab, from the page at `address`; null for anything else */
++/** The address a click on `target` opens in a new tab, from the page at `address`; null for anything else: a task's
++ * card or row, a document's link, or any link to one of the dashboard's own pages (a review row, a reference; ATM-698:
++ * every card and row is a real link, and this is the one place a click on one opens a tab) */
+ export function newTabAddress(target: Element | null, address: string): string | null {
+-  const task = target?.closest<HTMLElement>('.kanban-card[data-id], .task-card[data-id]')?.dataset.id;
+-  if (task) return withTask(address, task);
+   const link = linkAt(target);
+   const href = link ? hrefOf(link) : null;
+   const doc = href ? docOf(href) : null;
+-  return doc ? withDoc(address, doc) : null;
++  if (doc) return withDoc(address, doc);
++  // `#…` links are the text's own (a task's key): the text opens them. Another link to one of the dashboard's pages,
++  // resolved from the page shown
++  const own =
++    href && !href.startsWith('#') ? dashboardAddress(new URL(href, location.origin + address).href) : null;
++  if (own) return own;
++  const task = target?.closest<HTMLElement>('.kanban-card[data-id], .task-card[data-id]')?.dataset.id;
++  return task ? withTask(address, task) : null;
++}
++
++/** A click that opens in place: the main button, no ⌘, Ctrl, ⇧ or ⌥ (any other is a new tab's, or the browser's) */
++export function plainClick(e: MouseEvent): boolean {
++  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
++}
++
++/** A card's or row's link clicked (ATM-698): a plain click opens it in place with `open` (its details), and goes no
++ * further; any other is left to the browser (a new tab), or in the app to the page's one handler, which saw it first */
++export function followInPlace(e: MouseEvent, open: () => void) {
++  if (!plainClick(e)) return;
++  e.preventDefault();
++  e.stopPropagation();
++  open();
+ }
+diff --git a/dashboard/src/lib/overview/AllProjectsBoard.svelte b/dashboard/src/lib/overview/AllProjectsBoard.svelte
+index ddd37bec..67318e56 100644
+--- a/dashboard/src/lib/overview/AllProjectsBoard.svelte
++++ b/dashboard/src/lib/overview/AllProjectsBoard.svelte
+@@ -21,6 +21,8 @@
+   import ProjectLogo from '../ui/ProjectLogo.svelte';
+   import TaskKey from '../ui/TaskKey.svelte';
+   import { shortId } from '../keys';
++  import { followInPlace } from '../new-tab-clicks';
++  import { withTask } from '../routes';
+ 
+   let { projects }: { projects: ProjectEntry[] } = $props();
+ 
+@@ -93,13 +95,6 @@
+   function open(item: AllBoardCard) {
+     void dashboard.openOnBoard(item.project.id, item.card.id);
+   }
+-
+-  function onKeydown(e: KeyboardEvent, item: AllBoardCard) {
+-    if (e.key === 'Enter' || e.key === ' ') {
+-      e.preventDefault();
+-      open(item);
+-    }
+-  }
+ </script>
+ 
+ <!-- The five columns, of every project or of one project's lane (no chips there: the lane says whose they are) -->
+@@ -117,15 +112,7 @@
+           {@const card = item.card}
+           {@const ts = typeStyle(card.type ?? '')}
+           {@const line = status(item, column.id)}
+-          <div
+-            class="kanban-card board-card"
+-            data-id={card.id}
+-            data-project={item.project.id}
+-            role="button"
+-            tabindex="0"
+-            onclick={() => open(item)}
+-            onkeydown={(e) => onKeydown(e, item)}
+-          >
++          <div class="kanban-card board-card" data-id={card.id} data-project={item.project.id}>
+             <div class="kanban-card-top">
+               {#if !lane}
+                 <button
+@@ -164,7 +151,12 @@
+                 >
+               {/if}
+             </div>
+-            <div class="kanban-card-name">{card.name}</div>
++            <!-- A real link (ATM-698): the task on its project's page; a plain click opens its details over the board -->
++            <a
++              class="kanban-card-name card-link"
++              href={withTask(dashboard.projectAddress(item.project.id), card.key ?? card.id)}
++              onclick={(e) => followInPlace(e, () => open(item))}>{card.name}</a
++            >
+             {#if line}
+               <div
+                 class="kanban-waiting board-card-status"
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 8d29be3c..54415a51 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -991,6 +991,14 @@ export class DashboardState {
+     this.query = '';
+   }
+ 
++  /** The address of task `task`'s details over this page (ATM-698): a card's and a row's link, for Copy Link and a new
++   * tab; reads the page's tab so a card's link follows it */
++  taskAddress(task: Task): string {
++    void this.tab;
++    void this.projectId;
++    return withTask(currentAddress(), taskLabel(task));
++  }
++
+   /** A task's details, in the address (?task=) on a project's page: opening them is a new history entry, so Back
+    * closes them; another task's replace them in place. A task opened on the Omniboard isn't in the address (T-411). */
+   showDetail(id: string) {
+diff --git a/dashboard/src/lib/tab-actions.ts b/dashboard/src/lib/tab-actions.ts
+index 27280502..6069bf34 100644
+--- a/dashboard/src/lib/tab-actions.ts
++++ b/dashboard/src/lib/tab-actions.ts
+@@ -10,9 +10,15 @@ export function wantsNewTab(e: MouseEvent): boolean {
+   return e.metaKey || e.ctrlKey || e.button === 1;
+ }
+ 
++/** Whether such a click keeps the new tab in the background, as browsers do: all but ⇧⌘ (⇧Ctrl) brings it forward */
++export function inBackground(e: MouseEvent): boolean {
++  return !e.shiftKey;
++}
++
+ export interface TabActions {
+-  /** A new tab at `address` (the workspace's overview by default) */
+-  open(address?: string): void;
++  /** A new tab at `address` (the workspace's overview by default), shown; in the `background`, right of this one,
++   * which stays shown (ATM-698: ⌘-click and a middle click; ⇧⌘-click brings it forward) */
++  open(address?: string, background?: boolean): void;
+   select(id: string): void;
+   /** Close tab `id`, the active one by default */
+   close(id?: string): void;
+@@ -47,7 +53,8 @@ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): T
+     return change();
+   };
+   return {
+-    open: (address = '/') => go(leaving(() => tabs.open(address))),
++    open: (address = '/', background = false) =>
++      background ? void tabs.open(address, true) : go(leaving(() => tabs.open(address))),
+     select: (id) => go(id === tabs.active ? undefined : (leaving(() => tabs.select(id)) ?? undefined)),
+     close: (id = tabs.active) => go(tabs.close(id)),
+     step: (step) => go(leaving(() => tabs.step(step)) ?? undefined),
+diff --git a/dashboard/src/lib/tasks/TaskCard.svelte b/dashboard/src/lib/tasks/TaskCard.svelte
+index 4e34ec13..481f4542 100644
+--- a/dashboard/src/lib/tasks/TaskCard.svelte
++++ b/dashboard/src/lib/tasks/TaskCard.svelte
+@@ -1,5 +1,6 @@
+ <script lang="ts">
+   import { claimSummary } from '../claims';
++  import { followInPlace } from '../new-tab-clicks';
+   import ReviewLink from '../details/ReviewLink.svelte';
+   import { scrollToTask } from '../scroll';
+   import { dashboard } from '../state.svelte';
+@@ -46,7 +47,13 @@
+ <div class="task-card status-{task.status} kind-{kind ?? 'none'}" id="task-{task.id}" data-id={task.id}>
+   <div class="task-id"><TaskKey {task} /></div>
+   <div class="task-body">
+-    <button type="button" class="task-name" onclick={() => dashboard.showDetail(task.id)}>{task.name}</button>
++    <!-- A real link to its details (ATM-698): a plain click opens them here, any other click is the browser's or the
++         app's new tab -->
++    <a
++      class="task-name"
++      href={dashboard.taskAddress(task)}
++      onclick={(e) => followInPlace(e, () => dashboard.showDetail(task.id))}>{task.name}</a
++    >
+     {#if excerpt}<div class="task-excerpt">{excerpt}</div>{/if}
+     <div class="task-meta">
+       {#if showSprint}
+diff --git a/dashboard/src/routes/+layout.svelte b/dashboard/src/routes/+layout.svelte
+index 8a4005e6..86c609a5 100644
+--- a/dashboard/src/routes/+layout.svelte
++++ b/dashboard/src/routes/+layout.svelte
+@@ -44,7 +44,7 @@
+     type EntryState,
+   } from '../lib/navigation';
+   import { newTabAddress } from '../lib/new-tab-clicks';
+-  import { tabActions, wantsNewTab } from '../lib/tab-actions';
++  import { inBackground, tabActions, wantsNewTab } from '../lib/tab-actions';
+ 
+   const tabs = tabActions();
+ 
+@@ -57,7 +57,8 @@
+     if (!address) return;
+     e.preventDefault();
+     e.stopPropagation();
+-    tabs.open(address);
++    // In the background, right of this tab; ⇧⌘ brings it forward (ATM-698)
++    tabs.open(address, inBackground(e));
+   }
+   import { dashboard } from '../lib/state.svelte';
+ 
+diff --git a/dashboard/tests/e2e/all-projects-board.spec.ts b/dashboard/tests/e2e/all-projects-board.spec.ts
+index bb2da630..97f89931 100644
+--- a/dashboard/tests/e2e/all-projects-board.spec.ts
++++ b/dashboard/tests/e2e/all-projects-board.spec.ts
+@@ -143,7 +143,8 @@ test.describe('All projects board', () => {
+     await expect(page.locator('#detail-overlay.open')).toHaveCount(0);
+     await expect(page.locator('#all-board')).toBeVisible();
+     // Another card, by the keyboard
+-    await page.locator('#all-board .board-card[data-project="shop"][data-id="T-005"]').press('Enter');
++    // (its link: the card's one stop for the keyboard, ATM-698)
++    await page.locator('#all-board .board-card[data-project="shop"][data-id="T-005"] .card-link').press('Enter');
+     await expect(panel.locator('h3 > span').first()).toHaveText('T-005');
+     await page.keyboard.press('Escape');
+     expect(page.url()).toBe(url);
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index 94b7b887..d9eeec71 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -469,9 +469,12 @@ test.describe('the dashboard in the atm app', () => {
+     await page.locator('.review-back').click();
+     await expect(page.locator('#review-list')).toBeVisible();
+ 
+-    // ⌘-click: a tab of its own
++    // ⌘-click: a tab of its own, in the background, this tab still the list (ATM-698, as browsers do)
+     await page.locator('.review-row[data-review="CR-2"] .review-link').click({ modifiers: ['ControlOrMeta'] });
+     await expect(tabs).toHaveCount(2);
++    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#review-list')).toBeVisible();
++    await tabs.nth(1).click();
+     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+     // Opened on its own, its back button goes up to its reviews list
+@@ -561,6 +564,42 @@ test.describe('the dashboard in the atm app', () => {
+     expect(tasksServer.windowCalls).toContain('close_window');
+   });
+ 
++  // ATM-698 (docs/tabs-and-navigation-design.md §4.5): clicks as in a browser, on every card and row
++  test('⌘-click and a middle click on a card or row open a tab in the background; ⇧⌘-click brings it forward', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.use('standard');
++    tasksServer.link(`/projects/${tasksServer.projectId}/kanban`);
++    await page.goto('/');
++    const tabs = page.locator('#app-titlebar [role="tab"]');
++    await expect(page.locator('#panel-kanban')).toBeVisible();
++    const card = page.locator('.kanban-card[data-id="T-004"] .card-link');
++    await card.click({ button: 'middle' });
++    await expect(tabs).toHaveCount(2);
++    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
++    await card.click({ modifiers: ['ControlOrMeta', 'Shift'] });
++    await expect(tabs).toHaveCount(3);
++    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
++    await expect.poll(() => addressOf(page)).toContain('task=T-004');
++    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++    await page.keyboard.press('Escape');
++    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
++    // A list row's name, the same: a real link to its details
++    await tabs.nth(0).click({ timeout: 5000 });
++    await page.locator('#tab-list').click();
++    const row = page.locator('.task-card[data-id="T-004"] a.task-name');
++    await expect(row).toHaveAttribute('href', /\/list\?(.*&)?task=T-004$/);
++    await row.click({ modifiers: ['ControlOrMeta'] });
++    await expect(tabs).toHaveCount(4);
++    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
++    // A plain click opens it here
++    await row.click();
++    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++    await expect(tabs).toHaveCount(4);
++  });
++
+   // ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): each tab its own history; a switch adds nothing
+   test('Back and Forward walk the active tab’s own history; a switch of tab adds to neither; the page’s own stays put', async ({
+     page,
+@@ -649,6 +688,10 @@ test.describe('the dashboard in the atm app', () => {
+     const id = await card.getAttribute('data-id');
+     await card.click({ modifiers: ['ControlOrMeta'] });
+     await expect(tabs).toHaveCount(3);
++    // In the background, right of this tab, which stays as it was (ATM-698)
++    await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
++    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
++    await tabs.nth(1).click();
+     await expect.poll(() => addressOf(page)).toContain(`task=${id}`);
+     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+     await page.keyboard.press('Escape');
+diff --git a/dashboard/tests/e2e/kanban.spec.ts b/dashboard/tests/e2e/kanban.spec.ts
+index e245d7d1..44c9c1d6 100644
+--- a/dashboard/tests/e2e/kanban.spec.ts
++++ b/dashboard/tests/e2e/kanban.spec.ts
+@@ -184,11 +184,27 @@ test.describe('Kanban board', () => {
+     await card(page, 'T-030').click();
+     await expect(page.locator('#detail-panel h3')).toHaveText('T-030 Waiting on work in progress');
+     await page.keyboard.press('Escape');
+-    await card(page, 'T-025').focus();
++    // The card's one stop for the keyboard is its link (ATM-698)
++    await card(page, 'T-025').locator('.card-link').focus();
+     await page.keyboard.press('Enter');
+     await expect(page.locator('#detail-panel h3')).toHaveText('T-025 Build the board');
+   });
+ 
++  // ATM-698: a card is a real link to its details, for Copy Link and a new tab; a plain click still opens them here
++  test('a card is a link to its details: its address the page’s with ?task=, a plain click in place', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openKanban(page, tasksServer, 'kanban');
++    const link = card(page, 'T-025').locator('a.card-link');
++    await expect(link).toHaveAttribute('href', /^\/projects\/[^/?]+(\/kanban)?\?(.*&)?task=T-025$/);
++    // A click anywhere on the card is the link's (it covers the card), and opens the details here
++    const before = await page.evaluate(() => history.length);
++    await card(page, 'T-025').click({ position: { x: 8, y: 8 } });
++    await expect(page.locator('#detail-panel h3')).toHaveText('T-025 Build the board');
++    expect(await page.evaluate(() => history.length)).toBe(before + 1);
++  });
++
+   // ATM-619: a card in review shows its code review, a link that opens it from the board, not the task
+   test('a card in review links to its code review: Enter or a click opens it; ⌘-click a tab of its own', async ({
+     page,
+diff --git a/dashboard/tests/unit/new-tab-clicks.test.ts b/dashboard/tests/unit/new-tab-clicks.test.ts
+index d3b91dcb..cb500bab 100644
+--- a/dashboard/tests/unit/new-tab-clicks.test.ts
++++ b/dashboard/tests/unit/new-tab-clicks.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, expect, it } from 'vitest';
+-import { newTabAddress } from '../../src/lib/new-tab-clicks';
+-import { wantsNewTab } from '../../src/lib/tab-actions';
++import { followInPlace, newTabAddress, plainClick } from '../../src/lib/new-tab-clicks';
++import { inBackground, wantsNewTab } from '../../src/lib/tab-actions';
+ 
+ function element(html: string, selector: string): Element {
+   const host = document.createElement('div');
+@@ -30,4 +30,34 @@ describe('open in a new tab (T-515)', () => {
+     expect(wantsNewTab(new MouseEvent('auxclick', { button: 1 }))).toBe(true);
+     expect(wantsNewTab(new MouseEvent('click'))).toBe(false);
+   });
++
++  // ATM-698: every card and row is a real link; a link to any of the dashboard's pages opens in a new tab
++  it('a link to one of the dashboard’s pages (a card’s, a review row’s, a reference) is its address; `#…` and other sites aren’t', () => {
++    const here = '/projects/abc/kanban';
++    expect(newTabAddress(element('<a href="/projects/abc/reviews/CR-7">r</a>', 'a'), here)).toBe(
++      '/projects/abc/reviews/CR-7',
++    );
++    expect(newTabAddress(element('<a href="/projects/abc/list?task=ATM-1"><b>x</b></a>', 'b'), here)).toBe(
++      '/projects/abc/list?task=ATM-1',
++    );
++    expect(newTabAddress(element('<a href="/api/projects">x</a>', 'a'), here)).toBeNull();
++    // A task's key in text is the text's to open (CompMD's link handler)
++    expect(newTabAddress(element('<a href="#task=ATM-1">x</a>', 'a'), here)).toBeNull();
++  });
++
++  it('a plain click opens in place, any other is left alone; ⇧ keeps the new tab forward, else it is in the background', () => {
++    let opened = 0;
++    const open = () => opened++;
++    const plain = new MouseEvent('click', { button: 0, cancelable: true });
++    followInPlace(plain, open);
++    expect([opened, plain.defaultPrevented]).toEqual([1, true]);
++    for (const other of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
++      const e = new MouseEvent('click', { button: 0, cancelable: true, ...other });
++      followInPlace(e, open);
++      expect([opened, e.defaultPrevented], JSON.stringify(other)).toEqual([1, false]);
++    }
++    expect(plainClick(new MouseEvent('click'))).toBe(true);
++    expect(inBackground(new MouseEvent('click', { metaKey: true }))).toBe(true);
++    expect(inBackground(new MouseEvent('click', { metaKey: true, shiftKey: true }))).toBe(false);
++  });
+ });

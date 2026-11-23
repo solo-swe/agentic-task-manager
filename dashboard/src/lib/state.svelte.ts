@@ -23,10 +23,10 @@ import {
   type WorkspaceEntry,
 } from './load';
 import { compareVersions } from './changelog';
-import { projectComponents } from './components';
 import { getPref, setPref, storageAvailable } from './prefs';
 import { dashboardBuild, dashboardVersion } from './release-notes';
 import {
+  DEFAULT_DOC_STYLE,
   isModePref,
   knownDocSize,
   knownDocStyle,
@@ -51,7 +51,7 @@ import {
 } from './filters';
 import { dialogOf, withDialog, type DialogId } from './dialogs';
 import { docOf, withDoc, type DocumentRef } from './documents';
-import { currentAddress, entryState, navigate } from './navigation';
+import { back, closeTo, currentAddress, entryState, navigate } from './navigation';
 
 /** How many of the document viewer's own history entries lead to this one (0: not the viewer's) */
 function documentDepth(): number {
@@ -77,14 +77,17 @@ import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
-import type { ForeignTask } from '$generated/types';
+import type { ForeignTask, Stats } from '$generated/types';
+import { loadStats } from './stats';
 import { findTask, refView, taskLabel, type OtherProject, type RefView } from './keys';
+import { latest, type Ticket } from './latest';
 import type { ListGroupBy } from './list-groups';
 import { loadProjectSources, type ProjectSource } from './overview-data';
-import { leftovers as leftoversOf, scopeOf } from './scope';
+import { scopeOf } from './scope';
 import { sprintParamOf, withSprintParam } from './sprint-param';
-import { sprintModel } from './sprints';
-import { DEFAULT_VOCABULARY, resolveVocabulary, type Vocabulary } from './vocab';
+import type { Release } from './releases';
+import { NO_SPRINTS, type SprintModel } from './sprints';
+import { DEFAULT_VOCABULARY, type Vocabulary } from './vocab';
 import { loadWorktrees, mergeWorktrees, type Worktree, type WorktreesResult } from './worktrees';
 import { clearView, defaultView, projectKey, readView, sanitizeView, writeView, type SavedView } from './view-store';
 
@@ -244,11 +247,15 @@ export class DashboardState {
     this.archive.length ? [...this.tasks, ...this.archive.filter((t) => !this.taskMap.has(t.id))] : this.tasks,
   );
   /** The project's sprints and which sprint each task is in (lib/sprints.ts); read from phases until it is migrated */
-  sprints = $derived(sprintModel(this.meta, this.history, this.vocab));
-  /** The project's components (meta.components), in their order; tasks name them by ID (T-323) */
-  components = $derived(projectComponents(this.meta));
-  /** Open tasks left in closed sprints, which no loop takes until they are moved (lib/scope.ts, T-323) */
-  leftovers = $derived(leftoversOf(this.tasks, this.sprints, this.vocab));
+  sprints = $state.raw<SprintModel>(NO_SPRINTS);
+  /** The project's releases, with their figures, as atm serves them (ATM-720) */
+  releases = $state.raw<Release[]>([]);
+  /** The whole project's stats, progress and forecast, as atm serves them (ATM-722); null before they come */
+  stats = $state.raw<Stats | null>(null);
+  /** The project's components, as atm serves them with the vocabulary, in their order; tasks name them by ID (T-323) */
+  components = $derived(this.vocab.components);
+  /** Open tasks left in closed sprints, which no loop takes until they are moved (T-323), as atm says it (ATM-719) */
+  leftovers = $derived(this.tasks.filter((t) => t.derived?.in_closed_sprint === true));
   // Archived tasks by ID, for dependency stubs in the detail panel
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   archiveMap = $derived<ReadonlyMap<string, Task>>(new Map(this.archive.map((t) => [t.id, t])));
@@ -371,7 +378,7 @@ export class DashboardState {
   viewKey = $state<string | null>(null);
 
   whatsNewOpen = $state(false);
-  /** The open About or Help dialog; mirrored in the address ("?about") so it can be linked */
+  /** The open About or Help dialog: app-wide, not in the address (ATM-697); an older address's flag opens it */
   dialog = $state<DialogId | null>(dialogOf(currentAddress()));
   /** The file open in the document viewer, from the address (?doc=<path>:L<n>), so it can be linked and Reload
    * keeps it (docs/compmd-viewer-design.md V2) */
@@ -386,7 +393,7 @@ export class DashboardState {
   );
   theme = $state(knownTheme(getPref('theme', 'default')));
   /** The document viewer's page (T-404), per browser like the theme */
-  docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', 'auto')));
+  docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', DEFAULT_DOC_STYLE)));
   /** The size of a document's text (ATM-691), per browser like its style */
   docSize = $state<DocSize>(knownDocSize(getPref('docSize', 'medium')));
   systemPrefersLight = $state(prefersLight());
@@ -413,6 +420,15 @@ export class DashboardState {
   #dismissedBuild = '';
   #archiveValidators: Validators | undefined;
   #archiveWanted = false;
+  /** What is shown, by workspace and project: a load's answer applies only while it is (ATM-675) */
+  #shownKey = () => (this.projectId === null ? '' : this.#keptKey(this.projectId));
+  /** The page's loads (fetchAndApply, a task opened on the Omniboard), the archive's and the overview's: only the
+   * latest one's answer is applied, and only while what it was for is shown (ATM-675, audit D1) */
+  #loads = latest(this.#shownKey);
+  #archiveLoads = latest(this.#shownKey);
+  #sourcesLoads = latest(() => this.workspace);
+  /** The task opened on the Omniboard whose details show once its project's data is in */
+  #peekTask: string | null = null;
   // The main worktree's tasks as loaded, and the project's worktrees: `tasks` is the two merged
   #mainTasks: Task[] = [];
   #worktrees: Worktree[] = [];
@@ -442,16 +458,24 @@ export class DashboardState {
 
   private async refreshArchive() {
     if (!this.projectId) return;
-    const result = await loadArchive(
-      this.projectId,
-      browserFetch,
-      this.archiveLoaded ? this.#archiveValidators : undefined,
-    );
-    if (!result.unchanged) {
-      this.#archiveValidators = result.validators;
-      this.archive = result.tasks;
+    const key = this.#shownKey();
+    const ticket = this.#archiveLoads.ask();
+    try {
+      const result = await loadArchive(
+        this.projectId,
+        browserFetch,
+        this.archiveLoaded ? this.#archiveValidators : undefined,
+      );
+      // Another project shown by now, or a newer answer already in: this one changes nothing
+      if (!ticket.current(key)) return;
+      if (!result.unchanged) {
+        this.#archiveValidators = result.validators;
+        this.archive = result.tasks;
+      }
+      this.archiveLoaded = true;
+    } finally {
+      ticket.done();
     }
-    this.archiveLoaded = true;
   }
 
   async load() {
@@ -475,9 +499,16 @@ export class DashboardState {
     setTimeout(() => (this.reloading = false), RELOAD_SPIN_MS);
   }
 
+  /** The timer's reload: skipped while a load is still out (ATM-675), so slow answers don't pile up */
+  poll() {
+    if (this.#loads.busy) return;
+    void this.reload();
+  }
+
   /** Re-fetch the project list and decide the page from the URL; returns the project to load, or null for a page
-   * without one (the overview, how to add a project, an unknown project). */
-  private async refreshProjects(): Promise<string | null> {
+   * without one (the overview, how to add a project, an unknown project); undefined when a newer load was asked for
+   * meanwhile (its answer is the page's). */
+  private async refreshProjects(ticket: Ticket): Promise<string | null | undefined> {
     // Another workspace: its own projects, from its own routes; a project of the same ID there is another project
     const workspace = workspaceOf(currentAddress());
     if (workspace !== apiWorkspace()) {
@@ -489,6 +520,7 @@ export class DashboardState {
     }
     this.workspace = workspace;
     const result = await loadProjects(browserFetch, this.#projectsValidators);
+    if (!ticket.current()) return undefined;
     if (!result.unchanged) {
       this.#projectsValidators = result.validators;
       this.projects = result.projects;
@@ -585,6 +617,9 @@ export class DashboardState {
     this.meta = undefined;
     this.#loaded = undefined;
     this.vocab = DEFAULT_VOCABULARY;
+    this.sprints = NO_SPRINTS;
+    this.releases = [];
+    this.stats = null;
     this.projectName = DEFAULT_PROJECT_NAME;
     this.detailOpen = false;
     this.detailId = null;
@@ -619,8 +654,14 @@ export class DashboardState {
   /** The address changed (a link, Back, or the dashboard's own move): pick up the dialog, the document, the tab and
    * the task, and the page when it names another one. */
   onNavigate() {
-    const address = currentAddress();
-    this.dialog = dialogOf(address);
+    let address = currentAddress();
+    // An older address's dialog flag (?about): its dialog opens, and the address is the page's without it
+    const named = dialogOf(address);
+    if (named) {
+      this.dialog = named;
+      address = withDialog(address, null);
+      navigate(address, { replace: true, state: entryState() });
+    }
     // The same document stays the same reference (its own moves land here too): the viewer doesn't load it again
     const docRef = docOf(address);
     if (JSON.stringify(docRef) !== JSON.stringify(this.docRef)) this.docRef = docRef;
@@ -750,21 +791,34 @@ export class DashboardState {
   }
 
   private async fetchAndApply() {
+    const ticket = this.#loads.ask();
+    try {
+      await this.fetchAndApplyFor(ticket);
+    } finally {
+      ticket.done();
+    }
+  }
+
+  /** One load of the page, its answers applied only while it is the latest (ATM-675) */
+  private async fetchAndApplyFor(ticket: Ticket) {
     // The first load waits, as `/` may go to another workspace; a poll doesn't
     if (this.projectsLoaded) void this.refreshWorkspaces();
     else await this.refreshWorkspaces();
-    const project = await this.refreshProjects();
+    if (!ticket.current()) return;
+    const project = await this.refreshProjects(ticket);
+    // A newer load was asked for meanwhile: its answers are the page's
+    if (project === undefined) return;
     void this.checkServerBuild(); // the server answered: ask which dashboard it holds now
     void this.checkAppUpdate(); // in the app: on start, then now and then
     if (project === null) {
       if (this.route.page === 'overview') await this.refreshProjectSources();
       // A task open on the Omniboard (T-411): its project's data kept current under the board
-      if (this.peeking && this.projectId) await this.loadProjectData(this.projectId);
-      this.loadedAt = Date.now();
+      if (this.peeking && this.projectId && (await this.loadProjectData(this.projectId, ticket))) this.showPeeked();
+      if (ticket.current()) this.loadedAt = Date.now();
       return;
     }
-    // Another project by now: its own load shows it
-    if (!(await this.loadProjectData(project))) return;
+    // Another project by now, or a newer load: that load shows it
+    if (!(await this.loadProjectData(project, ticket))) return;
     const first = !this.loaded;
     if (first) this.restoreView();
     if (this.#pendingNeedsYou) {
@@ -786,21 +840,36 @@ export class DashboardState {
   async openOnBoard(projectId: string, taskId: string) {
     if (projectId !== this.projectId) this.switchProject(projectId);
     this.peeking = true;
-    await this.loadProjectData(projectId);
-    if (this.projectId !== projectId || !this.peeking) return; // another card was opened meanwhile, or another page
+    this.#peekTask = taskId;
+    const ticket = this.#loads.ask();
+    try {
+      // Not applied: another card was opened meanwhile, another page, or a newer load came (which shows the task)
+      if (await this.loadProjectData(projectId, ticket)) this.showPeeked();
+    } finally {
+      ticket.done();
+    }
+  }
+
+  /** The details of the task opened on the Omniboard, once its project's data is in */
+  private showPeeked() {
+    const taskId = this.#peekTask;
+    this.#peekTask = null;
+    if (!taskId || !this.peeking || !this.projectId) return;
     if (this.findTask(taskId)) {
       this.showDetail(taskId);
       return;
     }
     // Not in the data loaded (the board and the project disagree for a moment): its project's page, as before
     this.peeking = false;
-    this.openProject(projectId, { task: taskId });
+    this.openProject(this.projectId, { task: taskId });
   }
 
   /** The project's tasks, claims and worktrees, applied to the state (the project's page, or a task opened on the
-   * Omniboard); whether they were (not when another project is shown by the time they come) */
-  private async loadProjectData(project: string): Promise<boolean> {
-    const [result, claims, trees] = await Promise.all([
+   * Omniboard); whether they were: not when another project (or the same ID in another workspace) is shown by the
+   * time they come, or a newer load was asked for (ATM-675) */
+  private async loadProjectData(project: string, ticket: Ticket): Promise<boolean> {
+    const key = this.#keptKey(project);
+    const loads = Promise.all([
       // The validators are this project's (switchProject forgets another's), from its page or the Omniboard
       loadTasks(project, browserFetch, this.#validators),
       loadClaims(project),
@@ -813,12 +882,23 @@ export class DashboardState {
         ? this.refreshArchive().catch((e) => console.error('Reloading the archive failed:', e))
         : undefined,
     ]);
+    // The whole project's figures (ATM-722), on every load: they run to now. Asked for with the rest, but the tasks
+    // never wait for them (the figures take atm longer to work out): they come in when they come, if the page still
+    // shows the project. A failure leaves the last ones
+    void loadStats(project).then(
+      (stats) => {
+        if (ticket.current(key)) this.stats = stats;
+      },
+      (e) => console.error('Loading the stats failed:', e),
+    );
+    const [result, claims, trees] = await loads;
+    // Another project shown meanwhile (a quick switch of tab), or a newer load: this answer is not the page's, the
+    // worktrees neither
+    if (!ticket.current(key)) return false;
     if (!trees.unchanged) {
       this.#worktreesValidators = trees.validators;
       this.#worktrees = trees.worktrees;
     }
-    // Another project shown meanwhile (a quick switch of tab): this one's answer is not the page's
-    if (project !== this.projectId) return false;
     if (result.unchanged) {
       // tasks.json is as it was: keep the tasks (no re-parse, no re-render); claims and the clock still move
       this.claims = claims;
@@ -848,8 +928,17 @@ export class DashboardState {
   /** Every listed project's tasks and claims, for the overview's views across projects; a failure keeps what was
    * there */
   private async refreshProjectSources() {
-    this.projectSources = await loadProjectSources(this.projects, this.projectSources);
-    this.projectSourcesLoaded = true;
+    const key = this.workspace;
+    const ticket = this.#sourcesLoads.ask();
+    try {
+      const sources = await loadProjectSources(this.projects, this.projectSources);
+      // Another workspace by now, or a newer answer already in (ATM-675)
+      if (!ticket.current(key)) return;
+      this.projectSources = sources;
+      this.projectSourcesLoaded = true;
+    } finally {
+      ticket.done();
+    }
   }
 
   setBoardGroupByProject(on: boolean) {
@@ -927,6 +1016,14 @@ export class DashboardState {
     this.query = '';
   }
 
+  /** The address of task `task`'s details over this page (ATM-698): a card's and a row's link, for Copy Link and a new
+   * tab; reads the page's tab so a card's link follows it */
+  taskAddress(task: Task): string {
+    void this.tab;
+    void this.projectId;
+    return withTask(currentAddress(), taskLabel(task));
+  }
+
   /** A task's details, in the address (?task=) on a project's page: opening them is a new history entry, so Back
    * closes them; another task's replace them in place. A task opened on the Omniboard isn't in the address (T-411). */
   showDetail(id: string) {
@@ -959,11 +1056,13 @@ export class DashboardState {
     navigate(withTask(currentAddress(), taskLabel(task)), { replace: true, state: entryState() });
   }
 
+  /** Closes the details: Back, when they were opened over the page under them (ATM-696), so Back after the close
+   * doesn't land on that page twice; else (a link, a reload) the entry replaced by the page */
   closeDetail() {
     this.detailOpen = false;
     this.peeking = false;
     const address = withTask(currentAddress(), null);
-    if (address !== currentAddress()) navigate(address, { replace: true });
+    if (address !== currentAddress()) closeTo(address);
   }
 
   openWhatsNew() {
@@ -977,15 +1076,13 @@ export class DashboardState {
     this.whatsNewOpen = false;
   }
 
+  /** Opens an app-wide dialog, above every tab: no step in any history (ATM-697) */
   openDialog(id: DialogId) {
     this.dialog = id;
-    navigate(withDialog(currentAddress(), id));
   }
 
-  /** Closes the dialog without a new history entry, so Back doesn't reopen it. */
   closeDialog() {
     this.dialog = null;
-    navigate(withDialog(currentAddress(), null), { replace: true });
   }
 
   /** Opens a file of the project in the document viewer: a new history entry, marked as the viewer's, so the
@@ -1001,7 +1098,8 @@ export class DashboardState {
    * document opened from a link or a reload, closes it without a new history entry */
   documentBack() {
     if (documentDepth() > 0) {
-      history.back();
+      // The tab's history: the app's tab's own (ATM-694), else the browser's
+      back(1);
       return;
     }
     this.closeDocument();
@@ -1012,7 +1110,7 @@ export class DashboardState {
   closeDocument() {
     const depth = documentDepth();
     if (depth > 0) {
-      history.go(-depth);
+      back(depth);
       return;
     }
     this.docRef = null;
@@ -1126,7 +1224,9 @@ export class DashboardState {
     this.archiveHint = loaded.archiveHint ?? null;
     this.meta = loaded.meta;
     this.#loaded = loaded;
-    this.vocab = resolveVocabulary(loaded.meta);
+    this.vocab = loaded.vocab ?? DEFAULT_VOCABULARY;
+    this.sprints = loaded.sprints ?? NO_SPRINTS;
+    this.releases = loaded.releases ?? [];
     this.#mainTasks = loaded.tasks;
     this.tasks = loaded.tasks;
     this.taskMap = loaded.taskMap;
@@ -1138,7 +1238,7 @@ export class DashboardState {
 
   /** Show each task from the worktree where it got furthest (lib/worktrees.ts) */
   private mergeWorktrees() {
-    const merged = mergeWorktrees(this.#mainTasks, this.#worktrees, this.vocab);
+    const merged = mergeWorktrees(this.#mainTasks, this.#worktrees);
     if (merged.tasks !== this.tasks) {
       this.tasks = merged.tasks;
       // eslint-disable-next-line svelte/prefer-svelte-reactivity

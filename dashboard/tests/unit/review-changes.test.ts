@@ -148,6 +148,17 @@ describe('in the browser', () => {
     expect(asked(fetch).url).toBe('/api/v2/workspaces/my%20work/projects/p%2F1/reviews/CR%208/comments/c%201/replies');
   });
 
+  it('a workspace, project, review or comment ID of . or .. is refused, nothing sent (ATM-676, audit D7)', async () => {
+    const fetch = answering(201, {});
+    const refused = { ok: false, message: 'A review, project or workspace ID can’t be . or ..' };
+    expect(await replyTo('..', 'CR-8', 'c1', 'x')).toEqual(refused);
+    expect(await replyTo('p1', '..', 'c1', 'x')).toEqual(refused);
+    expect(await replyTo('p1', 'CR-8', '.', 'x')).toEqual(refused);
+    setApiWorkspace('..');
+    expect(await submitDecision('p1', 'CR-8', { decision: 'approve' })).toEqual(refused);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('a refusal is its message; a body that isn’t JSON, its status; a failed request, its error', async () => {
     answering(403, { error: "the review's author can't decide it" });
     expect(await submitDecision('p1', 'CR-7', { decision: 'approve' })).toEqual({

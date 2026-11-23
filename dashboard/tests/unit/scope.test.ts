@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVE, BACKLOG } from '../../src/lib/filters';
-import { countKinds, lastClosed, leftovers, scopeOf, scopeTasks } from '../../src/lib/scope';
-import { NO_SPRINTS, sprintModel } from '../../src/lib/sprints';
+import { countKinds, lastClosed, scopeOf, scopeTasks } from '../../src/lib/scope';
+import { NO_SPRINTS } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { sprintModel, withKinds } from './views';
 import sprintsFile from '../fixtures/sprints.json';
 
 const file = sprintsFile as TasksFile;
-const tasks = file.tasks as Task[];
-const vocab = resolveVocabulary(file.meta);
+const tasks = withKinds(file.tasks as Task[]);
+const vocab = DEFAULT_VOCABULARY;
 const model = sprintModel(file.meta, tasks, vocab);
 const ids = (list: Task[]) => list.map((t) => t.id);
 type SprintEntry = { id: string; state: string };
@@ -67,20 +68,8 @@ describe('scopeTasks and countKinds', () => {
   });
 
   it('counts by kind; the total leaves the skipped out', () => {
-    const counted = countKinds([...tasks, { ...tasks[0], id: 'T-009', status: 'skipped' }], vocab);
+    const counted = countKinds(withKinds([...tasks, { ...tasks[0], id: 'T-009', status: 'skipped' }]));
     expect(counted).toEqual({ total: 5, done: 1, todo: 3, active: 1, review: 0, blocked: 0, skipped: 1 });
-  });
-});
-
-describe('leftovers (T-323)', () => {
-  it('open tasks in closed sprints: not the done or skipped ones, nor open ones in other sprints', () => {
-    // T-001 is done in the closed Foundations; reopened, it is left over
-    const reopened = tasks.map((t) => (t.id === 'T-001' ? { ...t, status: 'todo' } : t));
-    expect(leftovers(tasks, model, vocab)).toEqual([]);
-    expect(ids(leftovers(reopened, model, vocab))).toEqual(['T-001']);
-    const skipped = tasks.map((t) => (t.id === 'T-001' ? { ...t, status: 'skipped' } : t));
-    expect(leftovers(skipped, model, vocab)).toEqual([]);
-    expect(leftovers(reopened, NO_SPRINTS, vocab)).toEqual([]);
   });
 });
 

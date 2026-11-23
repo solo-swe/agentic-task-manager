@@ -1,0 +1,37 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index d4dc3f32..84262653 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -157,7 +157,9 @@ the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain
+   instant, and a timer is skipped with `page.clock` (`cards.spec.ts`). More workers than Playwright's default don't
+   help here (the machine is saturated at 5) and break the timing budgets. A test measured against a budget is tagged
+   `@timed` (`test.describe('…', { tag: '@timed' }, …)`): it runs in the `timed` project, once every other test has
+-  passed, so no heavy test shares the machine with it (`playwright.config.ts`, ATM-641). Traces are recorded only on CI's retry;
++  passed, so no heavy test shares the machine with it (`playwright.config.ts`, ATM-641), and on one worker, so no
++  other timed test does either (ATM-654: beside each other they missed their budgets; it adds about half a minute to
++  the run). Traces are recorded only on CI's retry;
+   locally, `--trace on` while looking into a failure.
+ 
+ ## CI
+diff --git a/dashboard/playwright.config.ts b/dashboard/playwright.config.ts
+index 93b37b4f..a4d8f998 100644
+--- a/dashboard/playwright.config.ts
++++ b/dashboard/playwright.config.ts
+@@ -39,7 +39,8 @@ export default defineConfig({
+   // them miss it (the long review's settle, 104 to 110 ms for 100, beside a review of 5,000 lines and a WebKit page
+   // busy for seconds; alone, 26 to 61).
+   // - `svelte`: every other test;
+-  // - `timed`: the @timed tests, once `svelte` is done;
++  // - `timed`: the @timed tests, once `svelte` is done, one at a time (ATM-654: beside each other they missed their
++  //   budgets too, the long review's first draw 443 ms for 200; alone, 50 to 100);
+   // - `measure`: a real review measured in Chromium and WebKit (real-review.spec.ts), last; it runs only when given a
+   //   review (a developer's real-review.local.json, or the environment).
+   // A project runs only once the one before it passed: with a functional test failing, the timed ones wait for its fix.
+@@ -56,6 +57,7 @@ export default defineConfig({
+       testIgnore: /real-review\.spec\.ts/,
+       grep: /@timed/,
+       dependencies: ['svelte'],
++      workers: 1,
+       use: { baseURL: `http://localhost:${PORT}/` },
+     },
+     { name: 'measure', testMatch: /real-review\.spec\.ts/, dependencies: ['timed'] },

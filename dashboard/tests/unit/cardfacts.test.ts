@@ -1,20 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { cardFacts, cardNote } from '../../src/lib/cardfacts';
 import type { Task } from '../../src/lib/types';
+import { withKinds } from './views';
+
+/** A card's facts for `task` as atm serves it, with its kind */
+const facts = (task: Task, now: number) => cardFacts(withKinds([task])[0], now);
 
 const NOW = Date.parse('2026-01-02T12:00:00Z');
 const base: Task = { id: 'T-1', name: 'A task', type: 'feature', status: 'todo' } as Task;
 
 describe('cardFacts', () => {
   it('a to-do task: who created it and when', () => {
-    const f = cardFacts({ ...base, created_by: 'Ada', created_at: '2026-01-02T10:00:00Z' }, NOW);
+    const f = facts({ ...base, created_by: 'Ada', created_at: '2026-01-02T10:00:00Z' }, NOW);
     expect(f.people).toEqual([{ role: 'created', who: 'Ada' }]);
     expect(f.when).toBe('created 2 h ago');
     expect(f.took).toBeNull();
   });
 
   it('a task in progress: who works on it, since when, and its work so far', () => {
-    const f = cardFacts(
+    const f = facts(
       { ...base, status: 'in_progress', started_by: 'claude:abc', started_at: '2026-01-02T11:20:00Z' },
       NOW,
     );
@@ -24,7 +28,7 @@ describe('cardFacts', () => {
   });
 
   it('a done task: who finished it when not its worker, when, and how long it took', () => {
-    const f = cardFacts(
+    const f = facts(
       {
         ...base,
         status: 'done',
@@ -45,12 +49,12 @@ describe('cardFacts', () => {
 
   it('a done task finished at once has no work time; a skipped one says when', () => {
     const at = '2026-01-02T09:00:00Z';
-    expect(cardFacts({ ...base, status: 'done', started_at: at, completed_at: at }, NOW).took).toBeNull();
-    expect(cardFacts({ ...base, status: 'skipped', skipped_at: at }, NOW).when).toMatch(/^skipped .* ago$/);
+    expect(facts({ ...base, status: 'done', started_at: at, completed_at: at }, NOW).took).toBeNull();
+    expect(facts({ ...base, status: 'skipped', skipped_at: at }, NOW).when).toMatch(/^skipped .* ago$/);
   });
 
   it('nothing known: no people, no time', () => {
-    expect(cardFacts({ ...base, status: 'in_review' }, NOW)).toEqual({ people: [], when: null, took: null });
+    expect(facts({ ...base, status: 'in_review' }, NOW)).toEqual({ people: [], when: null, took: null });
   });
 });
 

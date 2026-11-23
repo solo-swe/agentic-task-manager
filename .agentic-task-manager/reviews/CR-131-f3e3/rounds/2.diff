@@ -1,0 +1,212 @@
+diff --git a/.github/workflows/homebrew.yml b/.github/workflows/homebrew.yml
+index df1a004e..e76b3ef9 100644
+--- a/.github/workflows/homebrew.yml
++++ b/.github/workflows/homebrew.yml
+@@ -18,7 +18,10 @@ permissions:
+ 
+ jobs:
+   formula:
+-    runs-on: ubuntu-latest
++    runs-on: ubuntu-24.04
++    # The tap's deploy key is the `release` environment's (ATM-661, audit A5), for a v* tag only: a run by hand names
++    # the tag as its ref (`gh workflow run Homebrew --ref v0.33.0 -f tag=v0.33.0`)
++    environment: release
+     # Pre-releases aren't what `brew install` should get
+     if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+     env:
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 00bf5b75..0b8c5c34 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -32,19 +32,23 @@ jobs:
+         run: |
+           git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "$GITHUB_REF_NAME isn't on main"; exit 1; }
+ 
++  # The signing secrets are the `release` environment's (ATM-661, audit A5), which only a v* tag may use; every step
++  # that compiles runs before the first step that has one (A1), so no build script, proc macro or npm package sees them
+   build:
+     name: Build (${{ matrix.target }})
+     needs: tag
++    environment: release
+     strategy:
+       fail-fast: true
+       matrix:
+         include:
+-          - { os: macos-latest, target: aarch64-apple-darwin }
+-          - { os: macos-latest, target: x86_64-apple-darwin }
++          # Runners pinned by version, as CI's are (A11)
++          - { os: macos-15, target: aarch64-apple-darwin }
++          - { os: macos-15, target: x86_64-apple-darwin }
+           # The oldest supported Ubuntu, so the binary runs on systems with an older glibc too
+           - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
+           - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
++          - { os: windows-2025, target: x86_64-pc-windows-msvc }
+     runs-on: ${{ matrix.os }}
+     steps:
+       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+@@ -106,7 +110,8 @@ jobs:
+   app-macos:
+     name: The app (universal DMG)
+     needs: tag
+-    runs-on: macos-latest
++    environment: release
++    runs-on: macos-15
+     steps:
+       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+         with:
+@@ -132,6 +137,11 @@ jobs:
+           done
+           lipo -create -output app/src-tauri/binaries/atm-universal-apple-darwin \
+             target/aarch64-apple-darwin/release/atm target/x86_64-apple-darwin/release/atm
++      # The app compiled as Tauri's bundler compiles it (both architectures, its features), with no secret in the
++      # environment (ATM-661, audit A1): the signing step below then finds nothing left to build, and only bundles,
++      # signs and notarizes
++      - name: Compile the app, with no secrets
++        run: pnpm --dir dashboard run app:bundle --target universal-apple-darwin --no-bundle
+       - name: Import the Developer ID certificate
+         env:
+           CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+@@ -173,7 +183,7 @@ jobs:
+   release:
+     name: Draft the GitHub release
+     needs: [build, app-macos]
+-    runs-on: ubuntu-latest
++    runs-on: ubuntu-24.04
+     permissions:
+       contents: write
+     steps:
+diff --git a/.github/workflows/skills.yml b/.github/workflows/skills.yml
+index 489f008d..f846aaf0 100644
+--- a/.github/workflows/skills.yml
++++ b/.github/workflows/skills.yml
+@@ -18,7 +18,10 @@ permissions:
+ 
+ jobs:
+   export:
+-    runs-on: ubuntu-latest
++    runs-on: ubuntu-24.04
++    # The skills repo's deploy key is the `release` environment's (ATM-661, audit A5), for a v* tag only: a run by hand
++    # names the tag as its ref (`gh workflow run Skills --ref v0.33.0 -f tag=v0.33.0`)
++    environment: release
+     # Pre-releases aren't what users should get
+     if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+     env:
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 797d7827..7eba490a 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -48,6 +48,11 @@ clicks and right-click menus as in a browser). Review watches idle while they wa
+   skipped task is skipped now, not done), the pace and each sprint's estimate in the loop's order, time use, the
+   project's numbers, the time per task, people and agents. `atm project status` prints the forecast. The summaries
+   carry the overview's Progress tab (`progress`), so it loads no project's tasks.
++- **Release signing kept from compiling** (ATM-661): the release workflow compiles the app (`tauri build
++  --no-bundle`) and the CLI before any step has a signing secret; the jobs that read a secret are in a `release`
++  environment, for `v*` tags only, which Homebrew's and Skills' hand runs name as their ref; every release runner is
++  pinned by version. Set up the environment, its secrets and a `v*` tag ruleset on GitHub before releasing
++  (`packaging/README.md`).
+ - **Every document style is GitHub's width**; GitHub is the default and first, Theme last (ATM-706).
+ - **In the app, the regular themes' board scrolls as a whole** (ATM-707).
+ - **Review watches don't depend on the agent remembering** (ATM-708): `--once` in the skills, unread events on every
+diff --git a/dashboard/tests/unit/ci-workflow.test.ts b/dashboard/tests/unit/ci-workflow.test.ts
+index b2bf2747..38828d6e 100644
+--- a/dashboard/tests/unit/ci-workflow.test.ts
++++ b/dashboard/tests/unit/ci-workflow.test.ts
+@@ -138,6 +138,51 @@ describe('release workflows (I18, I19; T-452)', () => {
+     for (const name of ['build', 'app-macos']) expect(job(name)).toMatch(/^ {4}needs: tag$/m);
+     expect(job('release')).toMatch(/^ {4}needs: \[build, app-macos\]$/m);
+   });
++
++  // ATM-661 (audit A1, A5, A11): the signing and deploy secrets are kept from everything that compiles
++  const workflows = { 'release.yml': release, 'homebrew.yml': homebrew, 'skills.yml': read('skills.yml') };
++  const jobsOf = (w: string) =>
++    w
++      .slice(w.indexOf('\njobs:\n'))
++      .split(/^ {2}(?=[\w-]+:\n)/m)
++      .slice(1);
++  const stepsOf = (job: string) => job.split(/^ {6}- /m).slice(1);
++  const compiles = (step: string) => /cargo build|--no-bundle/.test(step);
++
++  for (const [name, w] of Object.entries(workflows)) {
++    it(`${name}: a step with a secret comes after every step that compiles, and compiles nothing itself`, () => {
++      for (const job of jobsOf(w)) {
++        const steps = stepsOf(job);
++        const secret = steps.findIndex((s) => /secrets\./.test(s));
++        if (secret < 0) continue;
++        const lastCompile = steps.reduce((last, s, i) => (compiles(s) ? i : last), -1);
++        expect(lastCompile, job.split('\n')[0]).toBeLessThan(secret);
++        for (const step of steps.filter((s) => /secrets\./.test(s))) expect(step).not.toMatch(/cargo build/);
++      }
++    });
++
++    it(`${name}: every job with a secret is in the release environment (v* tags only)`, () => {
++      const holding = jobsOf(w).filter((job) => /secrets\./.test(job));
++      expect(holding.length).toBeGreaterThan(0);
++      for (const job of holding) expect(job, job.split('\n')[0]).toMatch(/^ {4}environment: release$/m);
++    });
++
++    it(`${name}: every runner is pinned by version, never a -latest label`, () => {
++      const runners = w.split('\n').filter((line) => /runs-on:|\bos: /.test(line));
++      expect(runners.length).toBeGreaterThan(0);
++      for (const line of runners) expect(line).not.toMatch(/-latest/);
++    });
++  }
++
++  it('the app compiles with no secret before it is bundled and signed', () => {
++    const app = jobsOf(release).find((j) => j.startsWith('app-macos:'))!;
++    const steps = stepsOf(app);
++    const compile = steps.findIndex((s) => /app:bundle --target universal-apple-darwin --no-bundle/.test(s));
++    const sign = steps.findIndex((s) => /app:bundle --target universal-apple-darwin\n/.test(s));
++    expect(compile).toBeGreaterThan(0);
++    expect(steps[compile]).not.toMatch(/env:/);
++    expect(sign).toBeGreaterThan(compile);
++  });
+ });
+ 
+ describe('Dependabot (I19, T-275)', () => {
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 1c41e653..11401384 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -690,6 +690,12 @@ CI permission beyond reading and the first secrets:
+   only in the Skills job (`.github/workflows/skills.yml`, T-453), which writes `skills/atm-*` and the README's atm
+   section to `solo-swe/skills` from the published release's own tag, and tags `atm-v<version>`. No secret reaches a
+   pull request's run: none of these workflows runs on pull requests.
++- **Secrets kept from what compiles** (ATM-661, audit A1, A5): every secret is the `release` environment's, which
++  only a `v*` tag may use (its deployment rule, with a `v*` tag ruleset, set on GitHub), and every job that reads one
++  names it. In those jobs every step that compiles (`cargo build`, the app's `tauri build --no-bundle`) runs before
++  the first step with a secret, so no build script, proc macro or npm package runs with a signing key in its
++  environment; the signing steps only bundle, sign and notarize. The runners are pinned by version (A11).
++  `ci-workflow.test.ts` checks the order, the environment and the runners.
+ - **What users install** is checksummed in the formula, from the release's `SHA256SUMS`; the macOS binaries are signed
+   with the Developer ID (hardened runtime) and notarized. Actions are pinned by SHA (I19).
+ 
+diff --git a/packaging/README.md b/packaging/README.md
+index 9f74f712..a01d24d9 100644
+--- a/packaging/README.md
++++ b/packaging/README.md
+@@ -74,7 +74,11 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
+ 
+ ## Secrets and keys
+ 
+-Set in this repository's settings (Secrets and variables → Actions), the same as agentic-status-bar's:
++Set as the secrets of the repository's **`release` environment** (Settings → Environments → `release`; ATM-661,
++audit A5), not as repository secrets, so only a job that names the environment can read them. The environment's
++deployment rule allows only tags matching `v*`, and a tag ruleset for `v*` (who may create, move or delete a release
++tag) goes with it. Both are set by hand on GitHub. The Homebrew and Skills workflows run on a published release (its
++tag); run by hand, they name the tag as their ref: `gh workflow run Homebrew --ref v0.43.0 -f tag=v0.43.0`.
+ 
+ | Secret | What it is |
+ |---|---|
+@@ -88,7 +92,10 @@ Set in this repository's settings (Secrets and variables → Actions), the same
+ | `TAURI_SIGNING_PRIVATE_KEY` | The app updater's private key (T-483; `tauri signer generate`), as Tauri writes it: it signs the app's update archive. Not the Developer ID |
+ | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password |
+ 
+-The release workflow reads the signing secrets only in the macOS jobs (the CLI's and the app's); only its last job,
++The release workflow reads the signing secrets only in the macOS jobs (the CLI's and the app's), and only once
++everything is compiled (ATM-661, audit A1): the CLI by `cargo build`, the app by `tauri build --no-bundle`, both with
++no secret in their environment, so no build script, proc macro or npm package sees one; the signing step then only
++bundles, signs and notarizes. `dashboard/tests/unit/ci-workflow.test.ts` checks the order. Only its last job,
+ which builds nothing, can write to the repository (its releases). The Homebrew workflow reads only the tap's deploy
+ key, the Skills workflow only the skills repo's. The app is signed and notarized with the CLI's secrets; its update
+ archive is signed with the updater key as well.

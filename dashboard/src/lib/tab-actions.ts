@@ -3,16 +3,23 @@
 // goes to the address it answers; closing the last tab closes the window.
 import { appTabs, type AppTabs } from './app-tabs.svelte';
 import { closeWindow, openWindow } from './api/shell';
-import { navigate } from './navigation';
+import { rememberScroll, showTab } from './navigation';
+import { forgetTab } from './tab-parked';
 
 /** A click that asks for a new tab: ⌘-click, Ctrl-click or a middle click, as in a browser */
 export function wantsNewTab(e: MouseEvent): boolean {
   return e.metaKey || e.ctrlKey || e.button === 1;
 }
 
+/** Whether such a click keeps the new tab in the background, as browsers do: all but ⇧⌘ (⇧Ctrl) brings it forward */
+export function inBackground(e: MouseEvent): boolean {
+  return !e.shiftKey;
+}
+
 export interface TabActions {
-  /** A new tab at `address` (the workspace's overview by default) */
-  open(address?: string): void;
+  /** A new tab at `address` (the workspace's overview by default), shown; in the `background`, right of this one,
+   * which stays shown (ATM-698: ⌘-click and a middle click; ⇧⌘-click brings it forward) */
+  open(address?: string, background?: boolean): void;
   select(id: string): void;
   /** Close tab `id`, the active one by default */
   close(id?: string): void;
@@ -24,13 +31,16 @@ export interface TabActions {
 
 /** What a window has to do for its tabs: in tests, stand-ins */
 export interface TabWindow {
+  /** Show the active tab, now at `address` */
   go(address: string): void;
+  /** The tab shown is about to be left: it keeps where its page is scrolled */
+  leave?(): void;
   closeWindow(): unknown;
   openWindow(address: string): Promise<boolean>;
 }
 
-/** A tab shown: an entry with no way back in it, as the one before is another tab's (ATM-686) */
-const window_: TabWindow = { go: (address) => navigate(address, { fresh: true }), closeWindow, openWindow };
+/** A tab shown as it was left, its history as it was (ATM-694): a switch adds to no history */
+const window_: TabWindow = { go: () => showTab(), leave: rememberScroll, closeWindow, openWindow };
 
 /** The actions on `tabs`, in `win` */
 export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): TabActions {
@@ -38,11 +48,21 @@ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): T
     if (address === null) void win.closeWindow();
     else if (address !== undefined) win.go(address);
   };
+  /** The tab shown is left (a switch, a new tab): before the tabs change, so its own entry keeps its scroll */
+  const leaving = <T>(change: () => T): T => {
+    win.leave?.();
+    return change();
+  };
   return {
-    open: (address = '/') => go(tabs.open(address)),
-    select: (id) => go(tabs.select(id) ?? undefined),
-    close: (id = tabs.active) => go(tabs.close(id)),
-    step: (step) => go(tabs.step(step) ?? undefined),
+    open: (address = '/', background = false) =>
+      background ? void tabs.open(address, true) : go(leaving(() => tabs.open(address))),
+    select: (id) => go(id === tabs.active ? undefined : (leaving(() => tabs.select(id)) ?? undefined)),
+    close: (id = tabs.active) => {
+      // Its questions left open go with it (ATM-700)
+      forgetTab(id);
+      go(tabs.close(id));
+    },
+    step: (step) => go(leaving(() => tabs.step(step)) ?? undefined),
     move: (id, to) => tabs.move(id, to),
     toWindow: () => {
       const tab = tabs.current;

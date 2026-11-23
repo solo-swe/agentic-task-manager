@@ -8,6 +8,7 @@
   import { appShell, onBarMouseDown, type AppShell } from '../api/shell';
   import type { ProjectEntry } from '../load';
   import { getPref, setPref } from '../prefs';
+  import HistoryArrows from './HistoryArrows.svelte';
   import SidebarToggle from './SidebarToggle.svelte';
   import { needsYou } from '../projects';
   import { dashboard } from '../state.svelte';
@@ -101,6 +102,8 @@
       id="app-sidebar-top"
       onmousedown={onBarMouseDown}
     >
+      <!-- Back and Forward left of the toggle (ATM-695), as in the title bar while the sidebar is closed -->
+      <HistoryArrows />
       <SidebarToggle />
     </div>
     <ul class="app-sidebar-list">

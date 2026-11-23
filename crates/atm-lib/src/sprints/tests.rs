@@ -183,29 +183,32 @@ fn renaming_a_sprint_renames_it_everywhere_it_is_named() {
             {"id": "Old"}, {"id": "B"}
         ]}),
     );
-    let renamed = rename_sprint(&mut p, "old", " New ").unwrap();
+    let renamed = rename_sprint(&mut p, "old", " Renamed ").unwrap();
     assert_eq!(
         renamed,
         Renamed {
             from: "Old".into(),
-            to: "New".into(),
+            to: "Renamed".into(),
             tasks: 2,
             archived: 1,
             reports: 1
         }
     );
     let doc = document(&p);
-    assert_eq!(doc["tasks"][0]["sprint"], json!("New"));
+    assert_eq!(doc["tasks"][0]["sprint"], json!("Renamed"));
     assert_eq!(
         doc["tasks"][0]["updated_at"],
         json!("U"),
         "the task isn't touched"
     );
-    assert_eq!(doc["tasks"][1]["sprint_history"][0]["sprint"], json!("New"));
-    assert_eq!(doc["meta"]["sprints"][0]["report"]["to"], json!("New"));
+    assert_eq!(
+        doc["tasks"][1]["sprint_history"][0]["sprint"],
+        json!("Renamed")
+    );
+    assert_eq!(doc["meta"]["sprints"][0]["report"]["to"], json!("Renamed"));
     assert_eq!(
         p.store().list_archived().unwrap()[0]["sprint"],
-        json!("New")
+        json!("Renamed")
     );
 }
 
@@ -230,11 +233,39 @@ fn a_rename_needs_a_new_free_name_that_fits() {
             "gone",
             "there is already a sprint 'Gone' (or tasks' history names one)".to_string(),
         ),
+        // Shell-safe, and none of the words atm takes for itself (ATM-665)
+        (
+            "s1;x",
+            "'s1;x' is not a sprint name: ';' not allowed (letters, digits, spaces and ._-&,:()/+#)".to_string(),
+        ),
+        (
+            "a $(rm) `b`",
+            "'a $(rm) `b`' is not a sprint name: '$', '`' not allowed (letters, digits, spaces and ._-&,:()/+#)"
+                .to_string(),
+        ),
+        (
+            "BACKLOG",
+            "'BACKLOG' is a word atm takes for itself (backlog, new, active, next): name the sprint otherwise".to_string(),
+        ),
+        (
+            "next",
+            "'next' is a word atm takes for itself (backlog, new, active, next): name the sprint otherwise".to_string(),
+        ),
     ] {
         assert_eq!(refused(&mut p, |p| rename_sprint(p, "A", new)), message);
     }
-    // its own name in another case is its own
+    // its own name in another case is its own; what names have is fine
     assert_eq!(rename_sprint(&mut p, "A", "a").unwrap().to, "a");
+    for fine in [
+        "Task&review state machine",
+        "Code reviews: records and CLI",
+        "The app, continued",
+        "Nov 20-3:05pm",
+        "Café (v2) / #3+",
+    ] {
+        assert_eq!(rename_sprint(&mut p, "B", fine).unwrap().to, fine);
+        rename_sprint(&mut p, fine, "B").unwrap();
+    }
 }
 
 #[test]
@@ -616,16 +647,16 @@ fn closing_carries_the_unfinished_tasks_and_records_the_report() {
     );
     let err = close_sprint(&mut p, "S", None, None, false).unwrap_err();
     assert!(err.to_string().starts_with("T-2 isn't finished"), "{err}");
-    let closed = close_sprint(&mut p, "S", Some("new"), Some("Next"), false).unwrap();
+    let closed = close_sprint(&mut p, "S", Some("new"), Some("Later"), false).unwrap();
     assert_eq!(
         closed.sprint["report"],
-        json!({"done": ["T-1"], "carried": ["T-2"], "added": [], "to": "Next"})
+        json!({"done": ["T-1"], "carried": ["T-2"], "added": [], "to": "Later"})
     );
     assert!(closed.was_active);
-    assert_eq!(closed.created.unwrap()["id"], json!("Next"));
+    assert_eq!(closed.created.unwrap()["id"], json!("Later"));
     let doc = p.store().document().unwrap();
-    assert_eq!(doc["tasks"][1]["sprint"], json!("Next"));
-    assert_eq!(doc["meta"]["sprints"][1]["id"], json!("Next"));
+    assert_eq!(doc["tasks"][1]["sprint"], json!("Later"));
+    assert_eq!(doc["meta"]["sprints"][1]["id"], json!("Later"));
 }
 
 #[test]

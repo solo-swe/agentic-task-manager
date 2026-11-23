@@ -193,9 +193,7 @@ pub async fn set_title<R: Runtime>(
     window: WebviewWindow<R>,
     title: String,
 ) -> Result<(), AppError> {
-    window
-        .set_title(&title_of(&title))
-        .map_err(|e| AppError::Failed(e.to_string()))
+    Ok(window.set_title(&title_of(&title))?)
 }
 
 /// Open a new window at `address`, one of the dashboard's pages, checked as a deep link is; its page gets the address
@@ -214,9 +212,8 @@ pub async fn open_window<R: Runtime>(
         .ok_or_else(|| AppError::Invalid("not one of the dashboard's pages".into()))?;
     let label = state.new_window_label();
     state.links().send(&label, address);
-    build_window(&app, &label)
-        .map(|_| ())
-        .map_err(|e| AppError::Failed(e.to_string()))
+    build_window(&app, &label)?;
+    Ok(())
 }
 
 #[cfg(test)]

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PREFS_KEY, setPref } from '../../src/lib/prefs';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { sprintModel, withKinds, withLinks } from './views';
 import {
   clearView,
   defaultView,
@@ -177,11 +177,13 @@ describe('reading and writing', () => {
 });
 
 describe('sanitizeView', () => {
-  const tasks = [
-    { ...task(0, 'feature', 'done'), labels: ['ux'], started_by: 'claude:a', release: '1.0', components: ['api'] },
-    task(1, 'test', 'todo'),
-  ];
-  const vocab = resolveVocabulary({});
+  const tasks = withLinks(
+    withKinds([
+      { ...task(0, 'feature', 'done'), labels: ['ux'], started_by: 'claude:a', release: '1.0', components: ['api'] },
+      task(1, 'test', 'todo'),
+    ]),
+  );
+  const vocab = DEFAULT_VOCABULARY;
   const model = sprintModel({}, tasks, vocab);
 
   it('drops filter values and a focused sprint the tasks no longer have', () => {

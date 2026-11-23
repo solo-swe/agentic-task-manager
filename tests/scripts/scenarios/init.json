@@ -46,6 +46,60 @@
     }
   },
   {
+    "name": "init --meta-file on an existing project refuses the key, the format and the sprints, naming what changes each, and writes nothing (ATM-669)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "abcd1234", "project": "Old", "key": "OLD", "format": 2, "next_number": 7 },
+          "tasks": []
+        },
+        "meta.json": {
+          "project": "New",
+          "key": "NEW",
+          "format": 1,
+          "sprints": [{ "id": "S1" }]
+        }
+      }
+    },
+    "args": ["db", "init", "--meta-file", "meta.json"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": [
+        "meta.key: atm project key set <KEY> changes it",
+        "meta.format: atm keeps it itself",
+        "meta.sprints: the atm sprint commands change the sprints"
+      ],
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "abcd1234", "project": "Old", "key": "OLD", "format": 2, "next_number": 7 },
+          "tasks": []
+        }
+      }
+    }
+  },
+  {
+    "name": "init --meta-file run again on an existing project changes its description, its key given as it is (ATM-669)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "abcd1234", "project": "Demo", "key": "DEMO" },
+          "tasks": []
+        },
+        "meta.json": { "project": "Demo", "key": "DEMO", "description": "One line about it" }
+      }
+    },
+    "args": ["db", "init", "--meta-file", "meta.json"],
+    "expect": {
+      "stdoutIncludes": ["Updated tasks.json meta: description, project\n"],
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "id": "abcd1234", "project": "Demo", "key": "DEMO", "description": "One line about it" },
+          "tasks": []
+        }
+      }
+    }
+  },
+  {
     "name": "init --meta-file refuses a bad vocabulary, and nothing is written",
     "setup": {
       "files": {

@@ -1,30 +1,13 @@
 // A project's components (meta.components, written by atm components): the parts of the project with the globs of
-// their files. Tasks name them by ID; the dashboard shows their labels (T-323).
-import type { Task, TasksFile } from './types';
+// their files, as atm serves them with the vocabulary (ATM-718). Tasks name them by ID; the dashboard shows their
+// labels (T-323).
+import type { Task } from './types';
 
 export interface Component {
   id: string;
   label: string;
   paths: string[];
   review?: string;
-}
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
-
-/** The project's components in their order, read leniently: entries without an ID are left out */
-export function projectComponents(meta: TasksFile['meta']): Component[] {
-  if (!isRecord(meta) || !Array.isArray(meta.components)) return [];
-  return meta.components.filter(isRecord).flatMap((c) => {
-    if (typeof c.id !== 'string' || !c.id) return [];
-    return [
-      {
-        id: c.id,
-        label: typeof c.label === 'string' && c.label ? c.label : c.id,
-        paths: Array.isArray(c.paths) ? c.paths.filter((p): p is string => typeof p === 'string') : [],
-        ...(typeof c.review === 'string' ? { review: c.review } : {}),
-      },
-    ];
-  });
 }
 
 /** A component's label by its ID; an ID the project doesn't define shows as itself */

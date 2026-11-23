@@ -3,7 +3,6 @@
 import type { KanbanCard } from './kanban';
 import type { Task } from './types';
 import { safeUrl } from './url';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
 
 export type Stage = 'done' | 'in_pr' | 'merged';
 export const STAGES: Stage[] = ['done', 'in_pr', 'merged'];
@@ -20,11 +19,11 @@ export function hasStage(task: Task): boolean {
   return !!prOf(task) || !!task.merged_at;
 }
 
-/** A done-kind task's stage; undefined for tasks that aren't done */
-export function stageOf(task: Task, vocab: Vocabulary = DEFAULT_VOCABULARY): Stage | undefined {
-  if (kindOf(vocab, task.status) !== 'done') return undefined;
-  if (task.merged_at) return 'merged';
-  return prOf(task) ? 'in_pr' : 'done';
+/** A done task's stage, as atm says it (`derived.stage`, ATM-719: every task the dashboard has comes with atm's
+ * values, archived ones and a worktree's copies too); undefined for a task that isn't done */
+export function stageOf(task: Task): Stage | undefined {
+  const served = task.derived?.stage;
+  return served && (STAGES as string[]).includes(served) ? (served as Stage) : undefined;
 }
 
 export interface DoneSection {
@@ -41,12 +40,12 @@ export interface DoneSection {
  * The Done column of a pull-request project, in sections: In PR (one per PR, the newest PR first), Done (not pushed
  * yet), Merged. Empty sections are left out; cards keep the column's order within each section.
  */
-export function doneSections(cards: KanbanCard[], vocab: Vocabulary = DEFAULT_VOCABULARY): DoneSection[] {
+export function doneSections(cards: KanbanCard[]): DoneSection[] {
   const prs = new Map<number, DoneSection>();
   const done: KanbanCard[] = [];
   const merged: KanbanCard[] = [];
   for (const card of cards) {
-    const stage = stageOf(card.task, vocab) ?? 'done';
+    const stage = stageOf(card.task) ?? 'done';
     if (stage === 'merged') merged.push(card);
     else if (stage === 'in_pr') {
       const pr = prOf(card.task)!;
@@ -65,12 +64,4 @@ export function doneSections(cards: KanbanCard[], vocab: Vocabulary = DEFAULT_VO
   if (done.length) sections.push({ id: 'done', stage: 'done', label: 'Done', cards: done });
   if (merged.length) sections.push({ id: 'merged', stage: 'merged', label: 'Merged', cards: merged });
   return sections;
-}
-
-/** The project's workflow type (meta.workflow.type), if it names one */
-export function workflowType(meta: { workflow?: unknown } | undefined): string | undefined {
-  const w = meta?.workflow;
-  return typeof w === 'object' && w !== null && typeof (w as { type?: unknown }).type === 'string'
-    ? (w as { type: string }).type
-    : undefined;
 }

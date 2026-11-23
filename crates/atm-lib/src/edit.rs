@@ -98,12 +98,7 @@ fn py_list(value: Option<&Value>, key: &str) -> Result<Vec<Value>> {
 }
 
 /// The label rule: lowercase letters, digits, `-` and `_`, at most 32 characters.
-fn valid_label(label: &str) -> bool {
-    (1..=32).contains(&label.len())
-        && label
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
-}
+use atm_common::valid_label;
 
 fn check_labels(labels: &[Value]) -> Result<()> {
     for label in labels {
@@ -454,7 +449,11 @@ fn add_keyed_tasks(
         .filter_map(Value::as_object)
         .cloned()
         .collect();
-    let first = next_task_number(&work.document, &archive);
+    let first = next_task_number(&work.document, &archive)?;
+    // The last of the new numbers fits too (ATM-666): never one wrapped round to a number given already
+    first
+        .checked_add(tasks.len() as u64)
+        .ok_or_else(|| Error::Invalid("no task numbers are left for these tasks".into()))?;
     let uuids: Vec<String> = tasks.iter().map(|_| new_task_uuid()).collect();
     let prefix = project_key(&work.document).unwrap_or_default().to_string();
     let label = |n: usize| task_key(&prefix, first + n as u64);
@@ -561,14 +560,11 @@ pub struct Added {
 /// exist, a cycle): nothing is written then.
 pub fn add_new_tasks(project: &mut Project, entries: &[Task]) -> Result<Added> {
     let actor = project.actor().map(String::from);
-    let mut added: Option<Added> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let tasks = add_tasks(work, entries, actor.as_deref())?;
         let vocab = Vocabulary::of_document(&work.document)?;
-        added = Some(Added { tasks, vocab });
-        Ok(())
-    })?;
-    added.ok_or_else(|| Error::failed("no tasks added"))
+        Ok(Added { tasks, vocab })
+    })
 }
 
 /// What `atm task edit` changes: what isn't given (`None`, or an empty list) changes nothing; an empty `release`,
@@ -851,21 +847,9 @@ fn edit_task(
 /// cycle: nothing is written then.
 pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit) -> Result<Edited> {
     let actor = project.actor().map(String::from);
-    let mut edited: Option<Edited> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let mut archived = Archived::default();
-        let at = work.document["tasks"].as_array().and_then(|list| {
-            list.iter()
-                .position(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
-        });
-        let Some(at) = at else {
-            let hint = if archived.has(work, &json!(task_id))? {
-                " (it is archived: atm db unarchive brings it back)"
-            } else {
-                ""
-            };
-            return Err(Error::failed(format!("no task {task_id}{hint}")));
-        };
+        let at = crate::lookup::task_at(work, task_id)?;
         let mut task = work.document["tasks"][at]
             .as_object()
             .cloned()
@@ -890,14 +874,12 @@ pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit)
             work.tasks()[at] = Value::Object(task.clone());
         }
         let vocab = Vocabulary::of_document(&work.document)?;
-        edited = Some(Edited {
+        Ok(Edited {
             task,
             changed,
             vocab,
-        });
-        Ok(())
-    })?;
-    edited.ok_or_else(|| Error::failed(format!("no change to {task_id}")))
+        })
+    })
 }
 
 /// What a label's rename changed: how many tasks follow it.
@@ -950,21 +932,13 @@ pub fn relabel(project: &mut Project, from: &str, to: &str) -> Result<RelabeledT
             repr_str(from)
         )));
     }
-    let mut outcome: Option<RelabeledTasks> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
-        let tasks = relabel_in(work.document["tasks"].as_array_mut(), from, to);
-        let archived = relabel_in(
-            work.archive()?
-                .get_mut("tasks")
-                .and_then(Value::as_array_mut),
-            from,
-            to,
-        );
+    project.change(|work: &mut Working| {
+        let (tasks, archived) = crate::lookup::in_both(work, |list| relabel_in(list, from, to))?;
         if tasks + archived == 0 {
-            return Err(Error::Failed {
-                message: format!("no task has the label {}", repr_str(from)),
-                code: 2,
-            });
+            return Err(Error::Invalid(format!(
+                "no task has the label {}",
+                repr_str(from)
+            )));
         }
         if let Some(entries) = work
             .document
@@ -982,10 +956,8 @@ pub fn relabel(project: &mut Project, from: &str, to: &str) -> Result<RelabeledT
                 }
             }
         }
-        outcome = Some(RelabeledTasks { tasks, archived });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| Error::Invalid(format!("no label {}", repr_str(from))))
+        Ok(RelabeledTasks { tasks, archived })
+    })
 }
 
 #[cfg(test)]

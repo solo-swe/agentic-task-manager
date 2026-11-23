@@ -14,6 +14,7 @@ use atm_lib::review_requests::{
     ReviewTasks,
 };
 use atm_lib::reviews::{CommentId, ReviewHeader, ReviewRef};
+use atm_lib::stats::StatsQuery;
 use atm_lib::workspaces::{Member, Workspace, Workspaces, file_stamp};
 use serde_json::{Map, Value};
 
@@ -61,6 +62,11 @@ pub trait ProjectSource {
     /// # Errors
     /// Task data too large; a filter naming no such sprint or release (`Invalid`); unreadable task data.
     fn tasks(&self, filters: &Filters) -> Result<Value>;
+    /// Its stats, progress and forecast for a slice and a period (ATM-722).
+    ///
+    /// # Errors
+    /// Task data too large; unreadable task data.
+    fn stats(&self, query: &StatsQuery) -> Result<Value>;
     /// What the other projects its tasks name are now, for the tasks' `ETag`.
     fn others_version(&self) -> Value;
     /// The claims of all its worktrees.
@@ -70,7 +76,8 @@ pub trait ProjectSource {
     /// Its logo's version (null when the file isn't there) and content type, when it names one.
     fn logo(&self) -> Option<(Value, &'static str)>;
     /// Its logo's bytes.
-    fn read_logo(&self) -> Vec<u8>;
+    /// The logo's bytes; none when it can't be read (gone since it was found, or unreadable: ATM-671).
+    fn read_logo(&self) -> Option<Vec<u8>>;
     /// The size and mtime of the file at `path` in its working copy, once atm-docs has checked the path.
     ///
     /// # Errors
@@ -271,6 +278,10 @@ impl ProjectSource for Member {
         Member::tasks(self, filters)
     }
 
+    fn stats(&self, query: &StatsQuery) -> Result<Value> {
+        Member::stats(self, query)
+    }
+
     fn others_version(&self) -> Value {
         Member::others_version(self)
     }
@@ -287,10 +298,8 @@ impl ProjectSource for Member {
         Member::logo(self).map(|(file, kind)| (file_stamp(&file), kind))
     }
 
-    fn read_logo(&self) -> Vec<u8> {
-        Member::logo(self)
-            .and_then(|(file, _)| std::fs::read(file).ok())
-            .unwrap_or_default()
+    fn read_logo(&self) -> Option<Vec<u8>> {
+        Member::logo(self).and_then(|(file, _)| std::fs::read(file).ok())
     }
 
     fn file_version(&self, path: &str) -> Result<(u64, u128)> {

@@ -1,0 +1,82 @@
+{
+  "number": 2,
+  "kind": {
+    "kind": "range",
+    "base": "d0db5ceeb6f8b42e003bc073bf3bebe8aae8c939",
+    "head": "f7c2adbe52b15e446df9ac31285c10fda72e4d2c"
+  },
+  "files": [
+    {
+      "path": "crates/atm-common/schema/api.schema.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/reviews.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/src/summary.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/app.css",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/Header.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/NeedsYouMenu.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/ui/HintScroll.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/waiting.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/needs-you.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/overview-reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/NeedsYouMenu.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/waiting.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T05:54:32Z"
+}

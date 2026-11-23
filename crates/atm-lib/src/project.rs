@@ -6,7 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
-use atm_common::Result;
+use atm_common::{Error, Result};
+use atm_db::working::Working;
 use atm_db::{ProjectSettings, Store};
 use atm_vcs::GitVcs;
 
@@ -79,6 +80,12 @@ impl Project {
         self.actor.as_deref()
     }
 
+    /// Who works on it, as a review records them (ATM-681: the one place): "someone" when nobody is named.
+    #[must_use]
+    pub fn review_actor(&self) -> atm_review::Actor {
+        atm_review::Actor(self.actor().unwrap_or("someone").to_string())
+    }
+
     /// Its store.
     #[must_use]
     pub fn store(&self) -> &dyn Store {
@@ -88,6 +95,24 @@ impl Project {
     /// Its store, to change.
     pub fn store_mut(&mut self) -> &mut dyn Store {
         self.store.as_mut()
+    }
+
+    /// Change the task data under its lock, as the store's `change` does, and give back what `change` returned
+    /// (ATM-681): nothing is written when it fails, and an error it deferred comes back after the writes, instead of
+    /// its value.
+    ///
+    /// # Errors
+    /// As the store's `change`: the lock, the files, `change`'s own error or the one it deferred.
+    pub fn change<T>(&mut self, mut change: impl FnMut(&mut Working) -> Result<T>) -> Result<T> {
+        let mut out = None;
+        self.store.change(&mut |work: &mut Working| {
+            out = Some(change(work)?);
+            Ok(())
+        })?;
+        // The store runs a change once, so a store that returned without running it isn't one atm knows
+        out.ok_or_else(|| {
+            Error::failed("the task data wasn't changed: the store didn't run the change")
+        })
     }
 
     /// The stored ID of the task a reference names (ADR-007 §5): in a keys-format file, a key, a key with an earlier
@@ -103,8 +128,8 @@ impl Project {
         if !atm_common::keys::keys_format(document) {
             return Ok(reference.to_string());
         }
-        let archive: Vec<atm_common::Task> =
-            self.store.list_archived()?.into_iter().cloned().collect();
+        // Read where it is, never copied (ATM-708)
+        let archive = self.store.list_archived()?;
         let found = atm_common::keys::resolve(document, &archive, reference)?;
         Ok(found
             .task
@@ -112,6 +137,24 @@ impl Project {
             .and_then(serde_json::Value::as_str)
             .unwrap_or(reference)
             .to_string())
+    }
+
+    /// [`Project::resolve_task`], checked: the task is among the working tasks, as a command that changes it needs
+    /// (ATM-682, audit C17: so `--dry-run` refuses what the real run would). Its stored ID.
+    ///
+    /// # Errors
+    /// As [`Project::resolve_task`]; no such working task (saying when it is archived).
+    pub fn working_task(&self, reference: &str) -> Result<String> {
+        let id = self.resolve_task(reference)?;
+        if self.store.get_task(&id)?.is_some() {
+            return Ok(id);
+        }
+        let archived = self
+            .store
+            .list_archived()?
+            .iter()
+            .any(|t| t.get("id").and_then(serde_json::Value::as_str) == Some(id.as_str()));
+        Err(crate::lookup::no_task(reference, archived))
     }
 
     /// A dependency or related task to store (ADR-007 §5, §7): a task of this project by [`Project::resolve_task`], or,

@@ -20,7 +20,7 @@
   );
   // A closed sprint still holding open tasks (reopened after it closed) doesn't fold away with the others (T-323)
   const leftover = (g: ListGroup) => {
-    const c = countKinds(g.tasks, dashboard.vocab);
+    const c = countKinds(g.tasks);
     return c.total > c.done;
   };
   const open = $derived(groups.filter((g) => g.sprint?.state !== 'closed' || leftover(g)));
@@ -33,7 +33,7 @@
 </script>
 
 {#snippet group(g: ListGroup)}
-  {@const counts = countKinds(g.tasks, dashboard.vocab)}
+  {@const counts = countKinds(g.tasks)}
   <section class="list-group" data-group={g.key}>
     {#if groupBy !== 'none'}
       <header class="list-group-header">

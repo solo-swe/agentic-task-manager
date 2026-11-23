@@ -14,7 +14,7 @@ pub const SCHEME: &str = "atm";
 /// A link longer than this is refused: no page's address comes near it.
 const MAX_LINK: usize = 4096;
 /// The first part of a page's path: the dashboard's pages (`docs/multi-project-api.md` §2.7).
-const PAGES: [&str; 5] = ["projects", "board", "progress", "agents", "w"];
+const PAGES: [&str; 6] = ["projects", "board", "progress", "agents", "reviews", "w"];
 
 /// The dashboard address an `atm://` link opens (`/projects/abc/list?task=T-1`), or none for anything else: another
 /// scheme, a path that isn't one of the dashboard's pages, `.` or `..` segments, a fragment, characters an address
@@ -65,9 +65,7 @@ struct Inner {
 
 impl Links {
     fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        crate::locked(&self.inner)
     }
 
     /// A link the app was opened with, for `window`'s page: sent now, or kept for it. Whether it was a link the app
@@ -97,6 +95,13 @@ impl Links {
         let mut inner = self.inner();
         inner.channels.insert(window.to_owned(), channel);
         inner.waiting.remove(window)
+    }
+
+    /// `window`'s page started loading (a reload, ATM-677, audit A8): the old page's channel is dropped, so an address
+    /// sent before the new page subscribes waits for it rather than going to a page that is gone. What already waits
+    /// stays.
+    pub fn page_started(&self, window: &str) {
+        self.inner().channels.remove(window);
     }
 
     /// `window` closed: nothing more goes to it.
@@ -185,6 +190,16 @@ mod tests {
         assert_eq!(
             link_address("atm://progress?sprint=S+1&release=0.41.0").as_deref(),
             Some("/progress?sprint=S+1&release=0.41.0")
+        );
+        // A review's sub-tab and a comment in view (ATM-697), the Reviews list's filter
+        assert_eq!(
+            link_address("atm://projects/abc/reviews/CR-7/diffs?file=docs/x.md&comment=c12")
+                .as_deref(),
+            Some("/projects/abc/reviews/CR-7/diffs?file=docs/x.md&comment=c12")
+        );
+        assert_eq!(
+            link_address("atm://projects/abc/reviews?status=waiting&q=tabs").as_deref(),
+            Some("/projects/abc/reviews?status=waiting&q=tabs")
         );
     }
 
@@ -308,6 +323,27 @@ mod tests {
         assert!(links.open("main", "atm://board"));
         assert_eq!(text(to_new.recv().expect("a link")), "\"/board\"");
         assert!(to_old.try_recv().is_err());
+    }
+
+    /// ATM-677, audit A8: a link sent while the page reloads (after its load started, before the new page subscribed)
+    /// waits for the new page, never reaching the old page's channel; one waiting already stays
+    #[test]
+    fn a_link_sent_while_the_page_reloads_waits_for_the_new_page() {
+        let links = Links::default();
+        let (old, to_old) = recorded();
+        links.subscribe("main", old);
+        links.page_started("main");
+        assert!(links.open("main", "atm://board"));
+        assert!(to_old.try_recv().is_err(), "the page that is gone got it");
+        let (new, _) = recorded();
+        assert_eq!(links.subscribe("main", new).as_deref(), Some("/board"));
+        // Waiting before the page started: kept for it
+        links.send("window-1", "/projects/abc".into());
+        links.page_started("window-1");
+        assert_eq!(
+            links.subscribe("window-1", recorded().0).as_deref(),
+            Some("/projects/abc")
+        );
     }
 
     /// A link the app doesn't open changes nothing: the address waiting stays

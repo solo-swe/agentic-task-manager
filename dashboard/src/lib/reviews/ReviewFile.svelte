@@ -49,6 +49,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { DocumentSource } from '../documents/source';
+  import { submoduleCommitUrl } from '../repo';
   import Icon from '../ui/Icon.svelte';
   import ChainBox from './ChainBox.svelte';
   import ComposerActions from './ComposerActions.svelte';
@@ -66,6 +67,7 @@
     file,
     chains,
     drifted,
+    elsewhere = [],
     before,
     after,
     viewed,
@@ -89,6 +91,8 @@
     file: ViewFile;
     chains: Chain[];
     drifted: PlacedChain[];
+    /** Its comments made on a round the view doesn't hold (ATM-725): listed, linking to their round */
+    elsewhere?: PlacedChain[];
     before: DocumentSource | null;
     after: DocumentSource | null;
     viewed: boolean;
@@ -125,7 +129,8 @@
   // are on the entry as a whole
   const moved = $derived(file.submodule ?? null);
   const short = (sha: string) => sha.slice(0, 7);
-  const commitUrl = (sha: string) => (moved?.repository ? `${moved.repository}/commit/${sha}` : null);
+  // Through safeUrl, as its host builds commit links (ATM-676, audit D3): the address comes from the reviewed change
+  const commitUrl = (sha: string) => submoduleCommitUrl(moved?.repository, sha);
   let writing = $state(false);
   let draft = $state('');
   let problem = $state<string | null>(null);
@@ -274,6 +279,16 @@
           <button class="review-drifted-link" onclick={() => chain.drifted && onround(chain.drifted.round)}>
             see it where it was made, round {chain.drifted?.round}{chain.drifted?.lines
               ? `, lines ${chain.drifted.lines[0]}–${chain.drifted.lines[1]}`
+              : ''}
+          </button>
+        </p>
+      {/each}
+      {#each elsewhere as chain (chain.id)}
+        <p class="review-drifted review-elsewhere" data-chain={chain.id}>
+          A comment on round {chain.anchor.round}, which this view doesn't show:
+          <button class="review-drifted-link" onclick={() => onround(chain.anchor.round)}>
+            see it on round {chain.anchor.round}{chain.anchor.lines
+              ? `, lines ${chain.anchor.lines[0]}–${chain.anchor.lines[1]}`
               : ''}
           </button>
         </p>

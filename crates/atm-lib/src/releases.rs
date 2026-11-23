@@ -19,27 +19,12 @@ fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
 }
 
-/// A done task's stage: merged once its PR merged, `in_pr` while its PR is open, else done; none when it isn't done.
-fn stage_of(vocab: &Vocabulary, task: &Task) -> Option<&'static str> {
-    if vocab.kind_of(task.get("status")) != Some(Kind::Done) {
-        return None;
-    }
-    let pr = task.get("pr").is_some_and(Value::is_object);
-    if pr && task.get("merged_at").is_some_and(atm_common::py::truthy) {
-        return Some("merged");
-    }
-    Some(if pr { "in_pr" } else { "done" })
-}
-
 fn release_id(release: &Map<String, Value>) -> String {
     release.get("id").map(py_str).unwrap_or_default()
 }
 
 fn find_release<'v>(vocab: &'v Vocabulary, id: &str) -> Option<&'v Map<String, Value>> {
-    vocab
-        .releases
-        .iter()
-        .find(|r| r.get("id").and_then(Value::as_str) == Some(id))
+    vocab.find_release(&Value::from(id))
 }
 
 /// No such release, naming the releases (exit code 2).
@@ -50,10 +35,10 @@ fn unknown_release(vocab: &Vocabulary, id: &str) -> Error {
     } else {
         ids.join(", ")
     };
-    Error::Failed {
-        message: format!("no release {}; the releases: {known}", repr_str(id)),
-        code: 2,
-    }
+    Error::Invalid(format!(
+        "no release {}; the releases: {known}",
+        repr_str(id)
+    ))
 }
 
 /// The releases in order, each with its tasks (by effective release, both files) by kind and by stage.
@@ -74,7 +59,8 @@ fn release_overview(vocab: &Vocabulary, tasks: &[&Task], include_archived: bool)
                 {
                     by_kind[at] += 1;
                 }
-                if let Some(stage) = stage_of(vocab, task)
+                // The one stage rule, the task views' (ATM-667, audit L11): merged once pushed or its PR merged
+                if let Some(stage) = crate::query::task_stage(vocab, task)
                     && let Some(at) = STAGES.iter().position(|s| *s == stage)
                 {
                     by_stage[at] += 1;
@@ -231,8 +217,7 @@ pub fn add_release(
             repr_str(at)
         )));
     }
-    let mut outcome: Option<AddedRelease> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         if find_release(&vocab, id).is_some() {
             return Err(invalid(format!(
@@ -276,13 +261,11 @@ pub fn add_release(
             list.push(Value::Object(release.clone()));
         }
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(AddedRelease {
+        Ok(AddedRelease {
             release: Value::Object(release),
             tasks: given,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| invalid(format!("no release {}", repr_str(id))))
+        })
+    })
 }
 
 /// `atm release edit`: a release's name or target (`None` leaves it, an empty value removes it). Returns the release
@@ -296,8 +279,7 @@ pub fn edit_release(
     name: Option<&str>,
     target: Option<&str>,
 ) -> Result<(Value, Vec<String>)> {
-    let mut outcome = (Value::Null, Vec::new());
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_release(&work.document, &vocab, id)?;
         let mut release = release_at(&mut work.document, at).clone();
@@ -306,10 +288,8 @@ pub fn edit_release(
             release_at(&mut work.document, at).clone_from(&release);
             Vocabulary::of_document(&work.document)?;
         }
-        outcome = (Value::Object(release), changed);
-        Ok(())
-    })?;
-    Ok(outcome)
+        Ok((Value::Object(release), changed))
+    })
 }
 
 /// What marking a release by hand did: the release after it, and its tasks that weren't merged.
@@ -352,8 +332,7 @@ pub fn mark_release(
             repr_str(date)
         )));
     }
-    let mut outcome: Option<MarkedRelease> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_release(&work.document, &vocab, id)?;
         let mut tasks: Vec<Value> = work.document["tasks"].as_array().cloned().unwrap_or_default();
@@ -401,14 +380,12 @@ pub fn mark_release(
         }
         let release = Value::Object(release.clone());
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(MarkedRelease {
+        Ok(MarkedRelease {
             release,
             open: open.clone(),
             unmerged: unmerged.clone(),
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| invalid(format!("no release {}", repr_str(id))))
+        })
+    })
 }
 
 /// What a release's rename changed: its IDs, and how many tasks and sprints follow it.
@@ -450,8 +427,7 @@ pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<Rena
             repr_str(new)
         )));
     }
-    let mut outcome: Option<RenamedRelease> = None;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_release(&work.document, &vocab, id)?;
         if new == id {
@@ -464,7 +440,8 @@ pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<Rena
             )));
         }
         release_at(&mut work.document, at).insert("id".into(), json!(new));
-        let tasks = rename_release_in(work.document["tasks"].as_array_mut(), id, new);
+        let (tasks, archived) =
+            crate::lookup::in_both(work, |list| rename_release_in(list, id, new))?;
         let sprints = rename_release_in(
             work.document["meta"]
                 .get_mut("sprints")
@@ -472,24 +449,15 @@ pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<Rena
             id,
             new,
         );
-        let archived = rename_release_in(
-            work.archive()?
-                .get_mut("tasks")
-                .and_then(Value::as_array_mut),
-            id,
-            new,
-        );
         Vocabulary::of_document(&work.document)?;
-        outcome = Some(RenamedRelease {
+        Ok(RenamedRelease {
             from: id.to_string(),
             to: new.to_string(),
             tasks,
             archived,
             sprints,
-        });
-        Ok(())
-    })?;
-    outcome.ok_or_else(|| invalid(format!("no release {}", repr_str(id))))
+        })
+    })
 }
 
 /// `atm release archive`: it leaves the open releases (`atm release list --all` shows it). Returns the release.
@@ -497,8 +465,7 @@ pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<Rena
 /// # Errors
 /// An unknown release, or one archived already.
 pub fn archive_release(project: &mut Project, id: &str) -> Result<Value> {
-    let mut archived = Value::Null;
-    project.store_mut().change(&mut |work: &mut Working| {
+    project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
         let at = stored_release(&work.document, &vocab, id)?;
         let release = release_at(&mut work.document, at);
@@ -509,10 +476,8 @@ pub fn archive_release(project: &mut Project, id: &str) -> Result<Value> {
             )));
         }
         release.insert("state".into(), json!("archived"));
-        archived = Value::Object(release.clone());
-        Ok(())
-    })?;
-    Ok(archived)
+        Ok(Value::Object(release.clone()))
+    })
 }
 
 /// The task's last outcome note (what `atm task state done --note` said).
@@ -539,11 +504,23 @@ pub fn release_notes(project: &Project, id: &str) -> Result<Value> {
     let release = find_release(vocab, id).ok_or_else(|| unknown_release(vocab, id))?;
     let mut tasks = store.list_tasks()?;
     tasks.extend(store.list_archived()?);
+    let (groups, open) = notes_of(vocab, &own_tasks(vocab, &tasks, id));
+    Ok(json!({"release": release, "groups": groups, "open": open}))
+}
+
+/// The tasks whose effective release is `id`.
+fn own_tasks<'t>(vocab: &Vocabulary, tasks: &[&'t Task], id: &str) -> Vec<&'t Task> {
     let wanted = json!(id);
-    let own: Vec<&Task> = tasks
-        .into_iter()
+    tasks
+        .iter()
+        .copied()
         .filter(|t| vocab.effective_release(t).as_ref() == Some(&wanted))
-        .collect();
+        .collect()
+}
+
+/// A release's notes from its tasks (`own`): its done tasks grouped by type in the project's order, each `{id, key?,
+/// name, outcome}`; and those not done yet, `{id, key?, name, status}`.
+fn notes_of(vocab: &Vocabulary, own: &[&Task]) -> (Vec<Value>, Vec<Value>) {
     let done: Vec<&Task> = own
         .iter()
         .copied()
@@ -561,23 +538,88 @@ pub fn release_notes(project: &Project, id: &str) -> Result<Value> {
         }
     }
     let field = |t: &Task, key: &str| t.get(key).cloned().unwrap_or(Value::Null);
+    // With task keys, the key too (ADR-007): the dashboard shows tasks by it
+    let item = |t: &Task, extra: (&str, Value)| {
+        let mut item = json!({"id": field(t, "id"), "name": field(t, "name"), extra.0: extra.1});
+        if let Some(key) = t.get("key").filter(|k| k.is_string()) {
+            item["key"] = key.clone();
+        }
+        item
+    };
     let groups: Vec<Value> = types
         .iter()
         .filter_map(|(type_id, label)| {
             let items: Vec<Value> = done
                 .iter()
                 .filter(|t| t.get("type").unwrap_or(&Value::Null) == type_id)
-                .map(|t| json!({"id": field(t, "id"), "name": field(t, "name"), "outcome": outcome_of(t)}))
+                .map(|t| item(t, ("outcome", outcome_of(t))))
                 .collect();
             (!items.is_empty()).then(|| json!({"type": type_id, "label": label, "tasks": items}))
         })
         .collect();
     let open: Vec<Value> = own
         .iter()
-        .filter(|t| !matches!(vocab.kind_of(t.get("status")), Some(Kind::Done | Kind::Skipped)))
-        .map(|t| json!({"id": field(t, "id"), "name": field(t, "name"), "status": field(t, "status")}))
+        .filter(|t| {
+            !matches!(
+                vocab.kind_of(t.get("status")),
+                Some(Kind::Done | Kind::Skipped)
+            )
+        })
+        .map(|t| item(t, ("status", field(t, "status"))))
         .collect();
-    Ok(json!({"release": release, "groups": groups, "open": open}))
+    (groups, open)
+}
+
+/// The releases for the dashboard (ATM-720), every one in the project's order (archived ones too), each with its
+/// stored fields and:
+/// - `sprints`: the sprints that deliver to it;
+/// - `total` (its tasks but the skipped), `done`, `in_pr` and `merged` (by the task views' stage rule);
+/// - `notes`: `{groups, open}`, as `atm release notes` drafts them.
+///
+/// # Errors
+/// A task file that can't be read.
+pub fn release_views(project: &Project) -> Result<Vec<Value>> {
+    let store = project.store();
+    let vocab = store.vocabulary()?;
+    let mut tasks = store.list_tasks()?;
+    tasks.extend(store.list_archived()?);
+    Ok(vocab
+        .releases
+        .iter()
+        .map(|r| {
+            let id = r.get("id").map(py_str).unwrap_or_default();
+            let own = own_tasks(vocab, &tasks, &id);
+            let counted: Vec<&&Task> = own
+                .iter()
+                .filter(|t| vocab.kind_of(t.get("status")) != Some(Kind::Skipped))
+                .collect();
+            let stages: Vec<&str> = counted
+                .iter()
+                .filter_map(|t| crate::query::task_stage(vocab, t))
+                .collect();
+            let sprints: Vec<Value> = vocab
+                .sprints
+                .iter()
+                .filter(|s| s.get("release").and_then(Value::as_str) == Some(id.as_str()))
+                .filter_map(|s| s.get("id").cloned())
+                .collect();
+            let (groups, open) = notes_of(vocab, &own);
+            let mut view = r.clone();
+            view.insert("sprints".into(), json!(sprints));
+            view.insert("total".into(), json!(counted.len()));
+            view.insert("done".into(), json!(stages.len()));
+            view.insert(
+                "in_pr".into(),
+                json!(stages.iter().filter(|s| **s == "in_pr").count()),
+            );
+            view.insert(
+                "merged".into(),
+                json!(stages.iter().filter(|s| **s == "merged").count()),
+            );
+            view.insert("notes".into(), json!({"groups": groups, "open": open}));
+            Value::Object(view)
+        })
+        .collect())
 }
 
 #[cfg(test)]

@@ -6,7 +6,7 @@
   // Velocity (T-323): tasks done per closed sprint, the last ten in order, with the average as a dashed line. One
   // series, in the accent colour; each bar names its sprint, and its tooltip what was carried over and added. The
   // sprint table above is the table view.
-  const data = $derived(velocity(dashboard.sprints, dashboard.history, dashboard.vocab));
+  const data = $derived(velocity(dashboard.sprints));
   const max = $derived(Math.max(1, ...data.sprints.map((s) => s.done)));
   const height = (n: number) => `${(n / max) * 100}%`;
   const tip = (s: (typeof data.sprints)[number]) =>

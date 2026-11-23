@@ -39,8 +39,10 @@ const PROGRESS_FIELDS: [&str; 18] = [
     "blocked_at",
 ];
 
-/// How far along a status's kind is (DM-3.3); a status without a kind ranks like todo.
-fn kind_rank(kind: Option<Kind>) -> u8 {
+/// How far along a status's kind is (DM-3.3); a status without a kind ranks like todo. The one ranking: the merge
+/// driver's, and which working copy's copy of a task the board shows (ATM-724, `atm_lib::worktrees`).
+#[must_use]
+pub fn kind_rank(kind: Option<Kind>) -> u8 {
     match kind {
         Some(Kind::Active | Kind::Blocked | Kind::Review) => 1,
         Some(Kind::Done | Kind::Skipped) => 2,
@@ -220,7 +222,7 @@ fn merge_task(
             progress.get(&key).cloned()
         } else if key == "notes" {
             Some(merge_notes(o, t))
-        } else if key == "blocks" || key == "reviews" {
+        } else if key == "blocks" || key == "reviews" || key == "attempts" {
             Some(merge_intervals(o, t))
         } else if key == "sprint_history" {
             Some(merge_history(o, t))
@@ -736,17 +738,26 @@ fn merge_same_format(base: &Value, ours: &Value, theirs: &Value) -> (Value, Vec<
             let mut meta = Map::new();
             let mut meta_keys: Vec<String> = o.keys().cloned().collect();
             meta_keys.extend(t.keys().filter(|k| !o.contains_key(*k)).cloned());
+            // The keys both branches changed, this branch's kept: reported as a task's fields are (ATM-674, audit R13)
+            let mut both = Vec::new();
             for k in meta_keys {
                 let value = if META_LISTS.contains(&k.as_str()) {
                     let (value, item_conflicts) = merge_items(&k, b.get(&k), o.get(&k), t.get(&k));
                     conflicts.extend(item_conflicts);
                     Some(value)
                 } else {
-                    merge_value(b.get(&k), o.get(&k), t.get(&k)).0
+                    let (value, conflicted) = merge_value(b.get(&k), o.get(&k), t.get(&k));
+                    if conflicted {
+                        both.push(k.clone());
+                    }
+                    value
                 };
                 if let Some(value) = value {
                     meta.insert(k, value);
                 }
+            }
+            if !both.is_empty() {
+                conflicts.push(format!("meta: both branches changed {}", both.join(", ")));
             }
             if meta.contains_key("sprints") {
                 meta.shift_remove("phases"); // a project migrated on either side has no phases left (SR-8.5)

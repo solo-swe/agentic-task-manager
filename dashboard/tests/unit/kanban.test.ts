@@ -3,13 +3,20 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BACKLOG } from '../../src/lib/filters';
 import { buildBoard, buildLanes, readiness } from '../../src/lib/kanban';
-import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
-import { resolveVocabulary } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { sprintModel, vocabulary, withKinds } from './views';
 import sprintsData from '../fixtures/sprints.json';
 import standard from '../fixtures/standard.json';
 
 const sprintsFixture = sprintsData as TasksFile;
+
+// The board and lanes of tasks as atm serves them: each with its kind in the board's vocabulary
+type Options = Parameters<typeof buildBoard>[2];
+const boardOf = (tasks: Task[], allTasks: Task[], options: Options) =>
+  buildBoard(withKinds(tasks, options.vocab), withKinds(allTasks, options.vocab), options);
+const lanesOf = (tasks: Task[], allTasks: Task[], options: Parameters<typeof buildLanes>[2]) =>
+  buildLanes(withKinds(tasks, options.vocab), withKinds(allTasks, options.vocab), options);
 
 const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
   id,
@@ -56,7 +63,7 @@ describe('readiness: atm’s word, for every task (T-366, T-387)', () => {
 describe('Next up: atm says which task it is (T-321)', () => {
   const tasks = [t('T-1', 'todo'), t('T-2', 'todo'), t('T-3', 'in_review', { review_state: 'changes_requested' })];
   const marked = (nextUp: string | null | undefined) =>
-    buildBoard(tasks, tasks, { ...all, nextUp })
+    boardOf(tasks, tasks, { ...all, nextUp })
       .flatMap((c) => c.cards)
       .filter((c) => c.nextUp)
       .map((c) => c.task.id);
@@ -85,7 +92,7 @@ describe('Next up: atm says which task it is (T-321)', () => {
 
 describe('buildBoard', () => {
   it("has the vocabulary's columns by default (Skipped hidden), with counts", () => {
-    const board = buildBoard(standard.tasks as Task[], standard.tasks as Task[], all);
+    const board = boardOf(standard.tasks as Task[], standard.tasks as Task[], all);
     expect(board.map((c) => [c.label, c.cards.length])).toEqual([
       ['To Do', 4],
       ['In Progress', 1],
@@ -97,7 +104,7 @@ describe('buildBoard', () => {
 
   it('shows Skipped on request and Other only for unknown statuses', () => {
     const tasks = [t('a', 'skipped'), t('b', 'review'), t('c', 'todo')];
-    expect(buildBoard(tasks, tasks, all).map((c) => c.id)).toEqual([
+    expect(boardOf(tasks, tasks, all).map((c) => c.id)).toEqual([
       'todo',
       'in_progress',
       'in_review',
@@ -105,19 +112,17 @@ describe('buildBoard', () => {
       'done',
       'other',
     ]);
-    expect(buildBoard(tasks, tasks, { ...all, showSkipped: true }).map((c) => c.id)).toContain('skipped');
-    expect(buildBoard([tasks[2]], tasks, all).map((c) => c.id)).not.toContain('other');
+    expect(boardOf(tasks, tasks, { ...all, showSkipped: true }).map((c) => c.id)).toContain('skipped');
+    expect(boardOf([tasks[2]], tasks, all).map((c) => c.id)).not.toContain('other');
   });
 
   it('keeps every column under a status filter, adding Skipped when the filter names it', () => {
     const tasks = standard.tasks as Task[];
     const done = tasks.filter((x) => x.status === 'done');
-    const board = buildBoard(done, tasks, { ...all, statusFilter: new Set(['done', 'skipped']) });
+    const board = boardOf(done, tasks, { ...all, statusFilter: new Set(['done', 'skipped']) });
     expect(board.map((c) => c.id)).toEqual(['todo', 'in_progress', 'in_review', 'blocked', 'done', 'skipped']);
     expect(board.find((c) => c.id === 'in_review')!.cards).toEqual([]);
-    expect(buildBoard(done, tasks, { ...all, statusFilter: new Set(['done']) }).map((c) => c.id)).not.toContain(
-      'skipped',
-    );
+    expect(boardOf(done, tasks, { ...all, statusFilter: new Set(['done']) }).map((c) => c.id)).not.toContain('skipped');
   });
 
   it('orders Todo ready-first, then by priority and ID', () => {
@@ -125,10 +130,11 @@ describe('buildBoard', () => {
       t('T-1', 'todo', { dependencies: ['T-9'], derived: said('T-9') }),
       t('T-3', 'todo', { derived: said() }),
       t('T-2', 'todo', { derived: said() }),
-      t('T-4', 'todo', { priority: 'P0', derived: said() }),
+      // atm's priority is the one that counts (ATM-680)
+      t('T-4', 'todo', { priority: 'P0', derived: { ...said()!, priority: 'P0' } }),
       t('T-9', 'in_progress'),
     ];
-    const todo = buildBoard(tasks, tasks, all)[0];
+    const todo = boardOf(tasks, tasks, all)[0];
     expect(ids(todo.cards)).toEqual(['T-4', 'T-2', 'T-3', 'T-1']);
     expect(todo.cards.map((c) => c.readiness?.ready)).toEqual([true, true, true, false]);
   });
@@ -141,14 +147,14 @@ describe('buildBoard', () => {
       t('d', 'done', { updated_at: '2026-04-05T00:00:00Z' }),
       t('e', 'done'),
     ];
-    const board = buildBoard(tasks, tasks, all);
+    const board = boardOf(tasks, tasks, all);
     expect(ids(board.find((c) => c.id === 'in_progress')!.cards)).toEqual(['b', 'a']);
     expect(ids(board.find((c) => c.id === 'done')!.cards)).toEqual(['d', 'c', 'e']);
   });
 
   it('readiness is atm’s, whatever the filters show; so is Next up', () => {
     const allTasks = [t('T-1', 'todo'), t('T-2', 'todo', { dependencies: ['T-3'], derived: said() }), t('T-3', 'done')];
-    const todo = buildBoard([allTasks[1]], allTasks, { ...all, nextUp: 'T-1' })[0];
+    const todo = boardOf([allTasks[1]], allTasks, { ...all, nextUp: 'T-1' })[0];
     expect(todo.cards[0].readiness).toEqual({ ready: true });
     // T-1 (hidden by the filter) is still the loop's next pick
     expect(todo.cards[0].nextUp).toBe(false);
@@ -156,7 +162,7 @@ describe('buildBoard', () => {
 });
 
 describe('a custom vocabulary', () => {
-  const vocab = resolveVocabulary({
+  const vocab = vocabulary({
     statuses: [
       { id: 'backlog', label: 'Backlog', kind: 'todo' },
       { id: 'doing', label: 'Doing', kind: 'active' },
@@ -177,7 +183,7 @@ describe('a custom vocabulary', () => {
   const options = { ...all, vocab };
 
   it('makes its columns, in its order and with its labels; skipped-kind columns behind the toggle', () => {
-    const board = buildBoard(tasks, tasks, options);
+    const board = boardOf(tasks, tasks, options);
     expect(board.map((c) => [c.id, c.label, c.kind])).toEqual([
       ['backlog', 'Backlog', 'todo'],
       ['doing', 'Doing', 'active'],
@@ -186,11 +192,11 @@ describe('a custom vocabulary', () => {
       // `todo` isn't one of its statuses
       ['other', 'Other', undefined],
     ]);
-    expect(buildBoard(tasks, tasks, { ...options, showSkipped: true }).map((c) => c.id)).toContain('dropped');
+    expect(boardOf(tasks, tasks, { ...options, showSkipped: true }).map((c) => c.id)).toContain('dropped');
   });
 
   it('its to-do-kind column shows atm’s readiness', () => {
-    const backlog = buildBoard(tasks, tasks, options)[0];
+    const backlog = boardOf(tasks, tasks, options)[0];
     expect(backlog.cards.map((c) => [c.task.id, c.readiness])).toEqual([
       ['T-2', { ready: true }],
       ['T-3', { ready: false, waitingOn: ['T-4'] }],
@@ -198,7 +204,7 @@ describe('a custom vocabulary', () => {
   });
 
   it('counts done-kind tasks as done in lanes', () => {
-    expect(buildLanes(tasks, tasks, options)[0].done).toBe(1);
+    expect(lanesOf(tasks, tasks, options)[0].done).toBe(1);
   });
 });
 
@@ -210,8 +216,8 @@ describe('buildLanes', () => {
       t('c', 'review', { phase: 1 }),
       t('d', 'in_progress', { phase: 1 }),
     ];
-    const sprints = sprintModel({}, tasks, resolveVocabulary({}));
-    const lanes = buildLanes(tasks, tasks, { ...all, sprints });
+    const sprints = sprintModel({}, withKinds(tasks), DEFAULT_VOCABULARY);
+    const lanes = lanesOf(tasks, tasks, { ...all, sprints });
     expect(lanes.map((l) => [l.key, l.index, l.done, l.total])).toEqual([
       ['Phase 0', 0, 1, 2],
       ['Phase 1', 1, 0, 2],
@@ -225,9 +231,9 @@ describe('buildLanes', () => {
 
   it("follows the project's sprint order, leaves out sprints without tasks, and puts the backlog last (SR-7.3)", () => {
     const tasks = sprintsFixture.tasks as Task[];
-    const vocab = resolveVocabulary(sprintsFixture.meta);
-    const sprints = sprintModel(sprintsFixture.meta, tasks, vocab);
-    const lanes = buildLanes(tasks, tasks, { ...all, vocab, sprints });
+    const vocab = DEFAULT_VOCABULARY;
+    const sprints = sprintModel(sprintsFixture.meta, withKinds(tasks), vocab);
+    const lanes = lanesOf(tasks, tasks, { ...all, vocab, sprints });
     expect(lanes.map((l) => [l.key, l.index, l.done, l.total])).toEqual([
       ['Foundations', 0, 1, 1],
       ['Ada Lovelace', 1, 0, 3],
@@ -237,6 +243,6 @@ describe('buildLanes', () => {
 
   it('without sprints or phases, every task is in the backlog lane', () => {
     const tasks = [{ id: 'a', name: 'a', type: 'feature', description: '', status: 'todo' } as Task];
-    expect(buildLanes(tasks, tasks, all).map((l) => [l.key, l.total])).toEqual([[BACKLOG, 1]]);
+    expect(lanesOf(tasks, tasks, all).map((l) => [l.key, l.total])).toEqual([[BACKLOG, 1]]);
   });
 });

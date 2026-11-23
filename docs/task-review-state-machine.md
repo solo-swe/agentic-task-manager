@@ -327,6 +327,78 @@ makes the order safe:
    `atm doctor` already detects this case ("CR-1 is approved but the task still waits for its review"). The machine
    applies it instead of only reporting it.
 
+### 5.4 The code: plain enums and `match`, the tables as data
+
+**No state-machine crate.** Surveyed in November 2026 (Hakan's question on CR-58): statig, smlang, rust-fsm, finny
+and statum are maintained; sm, typestate, machine and sfsm aren't. Each misses what this machine needs most:
+
+| Needed | What the crates give |
+|---|---|
+| **A refusal with its own words and exit code**, which the CLI, REST's `can.why` and the UI all show | Only smlang's guards return a reason, and its "not in this state" is a generic error |
+| **A pure `check`, writing nothing** (the `can` map, `check_submit`, dry runs) | None has a dry run with its guards (statig: clone the machine and try) |
+| **Two tables composed:** one event moves a review and every task it names, all or nothing | Each models one machine over one context; composing two costs more adapter code than the tables |
+| **State read from files on every command** | They assume a machine that stays in memory, fed events |
+
+The typestate crates check transitions at compile time, but events here come at run time (the CLI, REST, IPC) and
+the state from JSON files.
+
+**The shape**, using today's names where they exist:
+
+```rust
+// atm-review/src/rules.rs: the review table, pure. No other crate learns it
+pub enum ReviewEvent<'a> {
+    AskForReview,                      // draft → waiting
+    Round,                             // waiting, changes requested → waiting; live: a checkpoint
+    EndLive,                           // live → waiting (the author's round)
+    Submit { decision: Verdict, open_comments: usize, drafts: usize },
+    Close { reason: &'a str },
+    SetTasks,
+}
+pub struct ReviewRefusal { pub why: String, pub code: u8 }   // 2 usage, 4 conflict
+
+/// The review's next status, or why not. Reads nothing, writes nothing. Every (status, event) pair written out, no
+/// catch-all: the compiler flags a new status or event until it is handled
+pub fn review_next(header: &ReviewHeader, event: &ReviewEvent, by: &Actor) -> Result<Status, ReviewRefusal>;
+// Reviews::{add_round, submit, close, set_tasks, …} stay, each calling review_next first; check_submit goes
+
+// atm-lib/src/state.rs: the task table, pure (Command, Kind and the guards change_status checks today)
+pub fn task_next(task: &Task, vocab: &Vocabulary, command: Command, claim: Option<&Claim>, by: &str)
+    -> Result<Kind, TaskRefusal>;
+
+// atm-lib/src/lifecycle.rs (new): the composition, the only place a transition is applied
+pub struct State { pub tasks: Vec<Task>, pub claims: Vec<Claim>, pub review: Option<ReviewHeader> }
+pub enum Event {
+    Task { task: String, command: state::Command },            // atm task state, task review …
+    Review { review: ReviewRef, event: ReviewEventOwned },     // atm review …
+    ClaimExpired { task: String },                             // drop_expired_claims
+}
+pub struct Outcome { pub review: Option<Status>, pub tasks: Vec<(String, Kind, Vec<Note>)>, pub claims: Vec<ClaimChange> }
+pub struct Refusal { pub why: String, pub code: u8 }
+
+/// review_next, then task_next for each task the event names (found by review_keys::task_of): one Outcome, or the
+/// first refusal. Pure: §5.2's `can` is this
+pub fn check(state: &State, event: &Event, by: &str) -> Result<Outcome, Refusal>;
+/// Load, check, then write in §5.3's order
+pub fn apply(project: &mut Project, event: Event, by: &str) -> Result<Outcome>;
+/// Each action's check for this reader, for `GET …/reviews/<CR>`'s `can`
+pub fn can(project: &Project, review: &ReviewRef, by: &str) -> BTreeMap<&'static str, Result<(), Refusal>>;
+```
+
+`changes::change_task_status`, `reviews::{create, add_round, submit, close, set_tasks}`, `apply_live_approval` and
+`leases::drop_expired_claims` become thin wrappers: build an `Event`, call `lifecycle::apply`. atm-cli, atm-api and the
+app call only those.
+
+**Tests**, so the code, the tables and §3's diagrams can't drift:
+- each table as a `const` array of (state, event, actor, expected), one test per row;
+- a test that walks every (status × event) pair and compares it with the table;
+- the order of the guards, tested: the UI shows the first refusal (ended before "you can't decide" before "c12 is
+  open");
+- `check` on built `State`s with every row of §4.2's tables;
+- `apply`'s order with a fake store behind a trait: a write that fails after the review's leaves what §5.3 says.
+
+What this costs: no diagram drawn from the code (the tests keep this document honest), and §5.3's two-file order
+is atm's to keep, as it would be with any crate.
+
 ## 6. Today, mapped onto it
 
 ### 6.1 Where the rules are

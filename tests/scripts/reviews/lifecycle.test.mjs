@@ -336,8 +336,8 @@ describe('atm review', () => {
       ok(['review', 'round', 'CR-1', '--summary-file', 'next.md'], root, AGENT);
       assert.equal(ok(['review', 'show', 'CR-1', '--json'], root, HAKAN).json().summary, '1. Check the fourth line.');
       const missing = atm(['review', 'round', 'CR-1', '--summary-file', 'none.md'], root, AGENT);
-      assert.equal(missing.code, 1);
-      assert.match(missing.stderr, /can't read none\.md/);
+      assert.equal(missing.code, 2);
+      assert.match(missing.stderr, /--summary-file none\.md: can't read it/);
       assert.match(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 3 ·/);
       assert.doesNotMatch(ok(['review', 'show', 'CR-1'], root, HAKAN).stdout, /round 4 ·/);
     } finally {

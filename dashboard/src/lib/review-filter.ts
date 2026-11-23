@@ -1,3 +1,4 @@
+import type { ReviewListAddress } from './address';
 import { readStored, writeStored } from './prefs';
 import { NO_QUERY, STATUS_LABELS, type ListQuery, type StatusFilter } from './reviews/types';
 
@@ -15,12 +16,22 @@ export function keptFilter(project: string): ListQuery {
   if (!kept || typeof kept !== 'object' || Array.isArray(kept)) return query;
   const from = kept as Record<string, unknown>;
   // A status, or open (every review not decided yet: what a filter kept before ATM-613 meant by it, near enough)
-  if (Array.isArray(from.status))
-    query.status = from.status.filter(
-      (s): s is StatusFilter => typeof s === 'string' && (s === 'open' || Object.hasOwn(STATUS_LABELS, s)),
-    );
+  if (Array.isArray(from.status)) query.status = from.status.filter(isStatus);
   for (const key of TEXTS) if (typeof from[key] === 'string') query[key] = from[key];
   return query;
+}
+
+const isStatus = (s: unknown): s is StatusFilter =>
+  typeof s === 'string' && (s === 'open' || Object.hasOwn(STATUS_LABELS, s));
+
+/** The list's query from what its address names (ATM-697): a status atm has no such name for left out */
+export function queryFrom(named: ReviewListAddress): ListQuery {
+  return { ...named, status: named.status.filter(isStatus) };
+}
+
+/** Whether `query` lists by nothing: no filter, no search words */
+export function isEmptyQuery(query: ListQuery): boolean {
+  return !query.q && !query.status.length && TEXTS.every((k) => !query[k]);
 }
 
 /** Keeps `query`'s filter for `project` (its search words aside); an empty filter forgets the project's. */

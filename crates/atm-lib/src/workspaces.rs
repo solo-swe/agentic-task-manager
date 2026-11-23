@@ -18,7 +18,7 @@ use crate::Project;
 use crate::archive::{project_stamp, task_snapshot};
 use crate::documents::{read_document, read_image};
 use crate::foreign;
-use crate::query::{Filters, list_claims};
+use crate::query::Filters;
 use crate::settings::get_logo;
 use crate::summary::project_summary;
 use crate::worktrees::working_copies;
@@ -290,6 +290,29 @@ impl Listing<'_> {
     }
 }
 
+/// A full git object ID: 40 hex digits (SHA-1) or 64 (SHA-256), in lower case as git writes them. Anything shorter
+/// could name another object later; a name (`HEAD`, a branch) moves; an expression (`HEAD~1`, `:/fix`) is git's to
+/// work out. A file is read at a revision a page names only by one (ATM-671, audit H6), the REST routes and the app's
+/// commands alike.
+#[must_use]
+pub fn is_object_id(revision: &str) -> bool {
+    matches!(revision.len(), 40 | 64)
+        && revision
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// `revision` as a page may name one, or why not.
+fn checked_revision(revision: &str) -> Result<()> {
+    if is_object_id(revision) {
+        Ok(())
+    } else {
+        Err(Error::Invalid(format!(
+            "at={revision}: a revision is a full object ID"
+        )))
+    }
+}
+
 /// One of a workspace's projects, found by its ID with its data there: what each read about one project (the REST
 /// API's routes, the app's commands) is answered from, so both answer the same.
 pub struct Member {
@@ -334,6 +357,22 @@ impl Member {
         task_snapshot(&Workspace::project_tolerant(&self.entry)?, filters)
     }
 
+    /// Its stats, progress and forecast for `query`'s slice and period, now ([`crate::stats::project_stats`]); read
+    /// tolerantly, as its tasks are.
+    ///
+    /// # Errors
+    /// As [`Member::tasks`].
+    pub fn stats(&self, query: &crate::stats::StatsQuery) -> Result<Value> {
+        if too_large(&self.stamp) {
+            return Err(Error::TooLarge(format!(
+                "larger than {} MB",
+                MAX_SERVED_BYTES / 1_000_000
+            )));
+        }
+        let now = atm_common::time::now() * 1000;
+        crate::stats::project_stats(&Workspace::project_tolerant(&self.entry)?, query, now)
+    }
+
     /// What the other projects its tasks name are now ([`foreign::named_version`]): with [`Member::stamp`], what its
     /// task views depend on, for the tasks route's `ETag` (docs/cross-project-freshness-design.md §5.3 D). Null when
     /// it can't be opened.
@@ -342,10 +381,13 @@ impl Member {
         Workspace::project_tolerant(&self.entry).map_or(Value::Null, |p| foreign::named_version(&p))
     }
 
-    /// The claims of all its worktrees, from the shared claims store.
+    /// The claims of all its worktrees held now, from the shared claims store: an expired lease is left out, by atm's
+    /// clock (ATM-724).
     #[must_use]
     pub fn claims(&self) -> Vec<Value> {
-        self.project().map(|p| list_claims(&p)).unwrap_or_default()
+        self.project()
+            .map(|p| crate::query::held_claims(&p, atm_common::time::now()))
+            .unwrap_or_default()
     }
 
     /// Its working copies, main first, and the tasks that differ in the others.
@@ -375,6 +417,7 @@ impl Member {
     /// # Errors
     /// As [`Member::document`], and a revision that isn't one, or doesn't have the file.
     pub fn document_at(&self, path: &str, revision: &str) -> Result<Value> {
+        checked_revision(revision)?;
         crate::documents::read_document_at(self.project()?.vcs().as_ref(), revision, path)
     }
 
@@ -426,6 +469,7 @@ impl Member {
     /// # Errors
     /// As [`Member::document_at`], and a file that isn't an image.
     pub fn image_at(&self, path: &str, revision: &str) -> Result<(Vec<u8>, &'static str)> {
+        checked_revision(revision)?;
         crate::documents::read_image_at(self.project()?.vcs().as_ref(), revision, path)
     }
 

@@ -1,11 +1,10 @@
-// Who did what, when: one lane per agent with a bar per task, for the task's work (work.ts: from start to completion
-// or review request, or to now while active). The agent comes from the task (written by `atm start`) or, for work in
-// progress, from its live claim.
+// Who did what, when: one lane per agent with a bar per stretch of a task's work (atm's, work.ts: every attempt and
+// round, to now while active). The agent is who did the stretch (atm says it) or, for work in progress, its live claim.
 import type { ClaimMap } from './claims';
 import { median } from './insights';
 import type { Task } from './types';
-import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
-import { startedBy, workSpan } from './work';
+import { taskKind } from './vocab';
+import { startedBy, workSpans } from './work';
 
 export const UNATTRIBUTED = '';
 
@@ -15,6 +14,8 @@ export interface AgentBar {
   end: number;
   /** Still in progress: the bar runs to now */
   live: boolean;
+  /** An earlier stretch of the task's work (an attempt taken back, a round before a review), not its last */
+  earlier?: boolean;
   /** On the overview's Agents tab (T-333): the task's project, and a key unique across projects */
   project?: { id: string; name: string };
   key?: string;
@@ -51,28 +52,38 @@ export function agentTimeline(
   claims: ClaimMap,
   now: number,
   matching?: ReadonlySet<string>,
-  vocab: Vocabulary = DEFAULT_VOCABULARY,
 ): AgentTimeline | null {
   const byAgent = new Map<string, AgentBar[]>();
   for (const task of tasks) {
-    const span = workSpan(task, now, vocab);
-    if (!span) continue;
-    const agent = (span.live ? claims.get(task.id)?.agent : undefined) ?? startedBy(task) ?? UNATTRIBUTED;
-    byAgent.set(agent, [...(byAgent.get(agent) ?? []), { task, ...span }]);
+    // A bar per stretch of its work, as atm counts it (ATM-721): each attempt and round, in the lane of who did it
+    const pieces = workSpans(task, now);
+    pieces.forEach((piece, i) => {
+      const last = i === pieces.length - 1;
+      const live = !!task.derived?.work?.live && last;
+      const agent = (live ? claims.get(task.id)?.agent : undefined) ?? piece.by ?? startedBy(task) ?? UNATTRIBUTED;
+      const bar = { task, start: piece.start, end: piece.end, live, ...(last ? {} : { earlier: true }) };
+      byAgent.set(agent, [...(byAgent.get(agent) ?? []), bar]);
+    });
   }
   if (byAgent.size === 0) return null;
 
   const lanes: AgentLane[] = [...byAgent].map(([agent, all]) => {
     const bars = matching ? all.filter((b) => matching.has(b.task.id)) : all;
-    // Work handed over for review is finished work, but the task isn't done yet
-    const finished = bars.filter((b) => !b.live);
+    // Work handed over for review is finished work, but the task isn't done yet. A task's stretches in a lane count as
+    // one task, their minutes together
+    const finished = new Map<Task, number>();
+    for (const b of bars)
+      if (!bars.some((o) => o.task === b.task && o.live))
+        finished.set(b.task, (finished.get(b.task) ?? 0) + (b.end - b.start) / 60_000);
     return {
       agent,
       bars: all.sort((a, b) => a.start - b.start),
       matches: bars.length > 0,
-      done: finished.filter((b) => kindOf(vocab, b.task.status) === 'done').length,
-      medianMinutes: median(finished.map((b) => (b.end - b.start) / 60_000)),
-      current: bars.filter((b) => b.live).map((b) => b.task),
+      // Done in the lane that worked its last stretch, not in one whose attempt it took over
+      done: [...finished.keys()].filter((t) => taskKind(t) === 'done' && bars.some((b) => b.task === t && !b.earlier))
+        .length,
+      medianMinutes: median([...finished.values()]),
+      current: [...new Set(bars.filter((b) => b.live).map((b) => b.task))],
       lastActive: Math.max(...all.map((b) => b.end)),
     };
   });

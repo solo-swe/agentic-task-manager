@@ -1,0 +1,52 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "10a1e634ce2413a36a5d4f31adb28305bff863ea",
+    "head": "345ecb04a70a51d9df0dcc391c62a5bd16032400"
+  },
+  "files": [
+    {
+      "path": "crates/atm-lib/src/review_pages/list.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-lib/tests/reviews/listing.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/page.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/reviews/types.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/helpers.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/ReviewList.component.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/page.test.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/multi-project-api.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-22T20:55:39Z"
+}

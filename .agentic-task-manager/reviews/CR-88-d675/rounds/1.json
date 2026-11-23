@@ -1,0 +1,22 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "453dda89ce3303a3d9fa72f2b7a403d6663e42a9",
+    "head": "978917529078bf4954da1d0ec0ff7b21ff674487"
+  },
+  "files": [
+    {
+      "path": "crates/atm-lib/src/review_listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/reviews/listening.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T17:55:41Z"
+}

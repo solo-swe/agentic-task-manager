@@ -1,0 +1,452 @@
+diff --git a/crates/atm-api/src/lib.rs b/crates/atm-api/src/lib.rs
+index b2304022..b288541b 100644
+--- a/crates/atm-api/src/lib.rs
++++ b/crates/atm-api/src/lib.rs
+@@ -98,6 +98,23 @@ fn same_token(a: &str, b: &str) -> bool {
+             == 0
+ }
+ 
++/// Whether a request comes from another site's page (ATM-671): the browser says so (`Sec-Fetch-Site: cross-site`), or
++/// its `Origin` isn't on this machine (`localhost` or `127.0.0.1`, any port: the dashboard's dev server, on another
++/// port, sends its requests on). A client without these headers (atm itself, a script) is none.
++fn from_another_site(headers: &HeaderMap) -> bool {
++    let value = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
++    if value("sec-fetch-site").is_some_and(|s| s.eq_ignore_ascii_case("cross-site")) {
++        return true;
++    }
++    value(header::ORIGIN.as_str()).is_some_and(|origin| {
++        let host = origin
++            .strip_prefix("http://")
++            .and_then(|rest| rest.split(':').next())
++            .unwrap_or_default();
++        !(host == "localhost" || host == "127.0.0.1")
++    })
++}
++
+ /// Why a review change is refused before anything is read (docs/code-review-design.md §3.12): it must come from the
+ /// page this server served, with its token, as JSON. None when it may go on.
+ fn review_change_refused(served: &Served, host: &str, headers: &HeaderMap) -> Option<Response> {
+@@ -265,6 +282,14 @@ async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> R
+         return serve_checked_review_change(Arc::clone(&served), host, request).await;
+     }
+     let path = request.uri().path();
++    // A read another site's page sends (ATM-671, audit H5): reads write too (`recent.json`) and run git, so a GET
++    // from elsewhere is refused. Opening the page itself from another site is fine, and so are its assets
++    if !pages::is_page(path)
++        && !path.starts_with(assets::PREFIX)
++        && from_another_site(request.headers())
++    {
++        return send_error(StatusCode::FORBIDDEN, "a read comes from atm's own page");
++    }
+     if pages::is_page(path) {
+         let policy = page_csp(&served.hashes, &format!("http://{host}"));
+         return send(
+diff --git a/crates/atm-api/src/routes.rs b/crates/atm-api/src/routes.rs
+index dcab9e9c..c12a662b 100644
+--- a/crates/atm-api/src/routes.rs
++++ b/crates/atm-api/src/routes.rs
+@@ -504,18 +504,25 @@ mod tests {
+             ("/p/p1/logo", "", vec![project("default"), Call::ReadLogo]),
+             (
+                 "/api/v2/workspaces/work/projects/p1/documents",
+-                "path=a.md&at=t1",
++                // A revision is a full object ID (ATM-671)
++                "path=a.md&at=0123456789abcdef0123456789abcdef01234567",
+                 vec![
+                     project("work"),
+-                    Call::DocumentAt("a.md".into(), "t1".into()),
++                    Call::DocumentAt(
++                        "a.md".into(),
++                        "0123456789abcdef0123456789abcdef01234567".into(),
++                    ),
+                 ],
+             ),
+             (
+                 "/api/v1/projects/p1/documents",
+-                "path=a.md&at=t1",
++                "path=a.md&at=0123456789abcdef0123456789abcdef01234567",
+                 vec![
+                     project("default"),
+-                    Call::DocumentAt("a.md".into(), "t1".into()),
++                    Call::DocumentAt(
++                        "a.md".into(),
++                        "0123456789abcdef0123456789abcdef01234567".into(),
++                    ),
+                 ],
+             ),
+             (
+diff --git a/crates/atm-api/src/routes/documents.rs b/crates/atm-api/src/routes/documents.rs
+index 1ad5bffe..3030637e 100644
+--- a/crates/atm-api/src/routes/documents.rs
++++ b/crates/atm-api/src/routes/documents.rs
+@@ -25,11 +25,12 @@ pub(super) fn get_document(
+     let path = parameter(query, "path");
+     let at = parameter(query, "at");
+     if !at.is_empty() {
++        // A full object ID only, as a round records its sides (ATM-671, audit H6): never a name or an expression git
++        // would work out (`:/<regex>` searches every commit's message)
+         if !is_object_id(&at) {
+-            return match project.document_at(&path, &at) {
+-                Ok(document) => ok_json(&document, None),
+-                Err(e) => error_response(&e),
+-            };
++            return error_response(&atm_common::Error::Invalid(format!(
++                "at={at}: a revision is a full object ID"
++            )));
+         }
+         let tag = etag(&json!(["document-at", at, path]));
+         if unchanged(request, &tag) {
+@@ -83,7 +84,13 @@ pub(super) fn get_file(project: &dyn ProjectSource, query: &str, request: &Heade
+     let path = parameter(query, "path");
+     let at = parameter(query, "at");
+     if !at.is_empty() {
+-        let kept = is_object_id(&at);
++        // A full object ID only, as for a document (ATM-671)
++        if !is_object_id(&at) {
++            return error_response(&atm_common::Error::Invalid(format!(
++                "at={at}: a revision is a full object ID"
++            )));
++        }
++        let kept = true;
+         let tag = etag(&json!(["image-at", at, path]));
+         if kept && unchanged(request, &tag) {
+             return not_modified(&tag, &[IMAGE_HEADERS[0], IMAGE_HEADERS[1], KEPT]);
+@@ -252,19 +259,15 @@ mod tests {
+         assert_eq!(again.status, StatusCode::NOT_MODIFIED);
+         assert!(again.header("content-security-policy").ends_with("sandbox"));
+         assert_eq!(calls.taken(), []);
+-        // A name that can move: read each time, never kept
++        // Anything but a full object ID (a name that moves): refused, unasked (ATM-671)
+         let moving = answer(get_file(
+             project.as_ref(),
+             "path=pic.gif&at=HEAD",
+             &having(&first.tag()),
+         ));
+-        assert_eq!(moving.status, StatusCode::OK);
++        assert_eq!(moving.status, StatusCode::BAD_REQUEST);
+         assert_eq!(moving.tag(), "");
+-        assert_eq!(moving.header("cache-control"), "no-cache");
+-        assert_eq!(
+-            calls.taken(),
+-            [Call::ImageAt("pic.gif".into(), "HEAD".into())]
+-        );
++        assert_eq!(calls.taken(), []);
+         // What atm-docs refuses: its status
+         for (error, status) in refusals() {
+             let (project, _) = bound(FakeProject {
+@@ -336,26 +339,22 @@ mod tests {
+         assert_eq!(image.json(), json!({"error": "not an image"}));
+     }
+ 
+-    /// A review round's side: the file as a commit or tree has it, asked of atm-lib with the revision as given (it
+-    /// checks it); never the working copy's version, never tagged
++    /// A review round's side is named by a full object ID (ATM-671, audit H6): anything else (a short ID, a name that
++    /// moves, an expression git would work out, an option) is refused before atm-lib is asked
+     #[test]
+-    fn a_document_at_a_revision_is_atm_libs_answer_untagged() {
+-        for (query, path, revision) in [
+-            ("path=docs%2Fa+b.md&at=3fa1", PATH, "3fa1"),
+-            ("at=HEAD&path=a.md", "a.md", "HEAD"),
+-            ("path=&at=t1", "", "t1"),
+-            ("path=a.md&at=--output%3Dx", "a.md", "--output=x"),
++    fn a_document_at_anything_but_a_full_object_id_is_refused_unasked() {
++        for query in [
++            "path=docs%2Fa+b.md&at=3fa1",
++            "at=HEAD&path=a.md",
++            "path=&at=t1",
++            "path=a.md&at=--output%3Dx",
++            "path=a.md&at=%3A%2Ffix",
+         ] {
+             let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), Some("aaaa")));
+             let answer = answer(get_document(project.as_ref(), query, &having("\"any\"")));
+-            assert_eq!(answer.status, StatusCode::OK, "{query}");
+-            assert_eq!(answer.json(), json!({"path": "a.md", "revision": "t1"}));
++            assert_eq!(answer.status, StatusCode::BAD_REQUEST, "{query}");
+             assert_eq!(answer.tag(), "", "{query}");
+-            assert_eq!(
+-                calls.taken(),
+-                [Call::DocumentAt(path.into(), revision.into())],
+-                "{query}"
+-            );
++            assert_eq!(calls.taken(), [], "{query}");
+         }
+         // No revision: the working copy's
+         let (project, calls) = bound(fake(PATH, Ok(file((1, 1))), None));
+@@ -455,7 +454,11 @@ mod tests {
+                 at_revision: Err(error.clone()),
+                 ..FakeProject::default()
+             });
+-            let answer = answer(get_document(project.as_ref(), "path=a.md&at=x", &plain()));
++            let answer = answer(get_document(
++                project.as_ref(),
++                &format!("path=a.md&at={SHA1}"),
++                &plain(),
++            ));
+             assert_eq!(answer.status, status, "{error}");
+             assert_eq!(answer.json(), json!({"error": error.to_string()}));
+         }
+diff --git a/crates/atm-api/src/routes/logo.rs b/crates/atm-api/src/routes/logo.rs
+index 1e573728..6cb3d45f 100644
+--- a/crates/atm-api/src/routes/logo.rs
++++ b/crates/atm-api/src/routes/logo.rs
+@@ -4,7 +4,7 @@ use axum::http::{HeaderMap, StatusCode};
+ use axum::response::Response;
+ 
+ use super::source::ProjectSource;
+-use super::{IMAGE_HEADERS, etag};
++use super::{IMAGE_HEADERS, etag, unchanged};
+ use crate::{send_conditional, send_error};
+ 
+ /// `GET …/projects/<p>/logo`: the project's logo (the store checks it is inside the project and small enough), kept
+@@ -16,8 +16,15 @@ pub(super) fn get_logo(project: &dyn ProjectSource, request: &HeaderMap) -> Resp
+     if stamp.is_null() {
+         return send_error(StatusCode::NOT_FOUND, "no logo");
+     }
+-    let read = || project.read_logo();
+-    send_conditional(request, &etag(&stamp), read, kind, &IMAGE_HEADERS)
++    let tag = etag(&stamp);
++    if unchanged(request, &tag) {
++        return send_conditional(request, &tag, Vec::new, kind, &IMAGE_HEADERS);
++    }
++    // One that can't be read is none, never an empty image kept as this version (ATM-671, audit H8)
++    let Some(bytes) = project.read_logo() else {
++        return send_error(StatusCode::NOT_FOUND, "no logo");
++    };
++    send_conditional(request, &tag, move || bytes, kind, &IMAGE_HEADERS)
+ }
+ 
+ #[cfg(test)]
+@@ -34,6 +41,19 @@ mod tests {
+         }
+     }
+ 
++    trait Unreadable {
++        /// The same logo, found but not readable (the fake's empty bytes)
++        fn without_logo_bytes(self) -> Self;
++    }
++    impl Unreadable for FakeProject {
++        fn without_logo_bytes(mut self) -> Self {
++            if let Some(logo) = self.logo.as_mut() {
++                logo.2 = Vec::new();
++            }
++            self
++        }
++    }
++
+     #[test]
+     fn a_logo_is_its_bytes_as_its_type_sandboxed_and_asked_for_each_time() {
+         for kind in ["image/png", "image/svg+xml", "image/jpeg"] {
+@@ -74,6 +94,16 @@ mod tests {
+         }
+     }
+ 
++    /// ATM-671 (audit H8): a logo found but not readable was a cached, empty 200
++    #[test]
++    fn a_logo_that_cant_be_read_is_not_found_and_not_cached() {
++        let (project, calls) = bound(with_logo(json!([6, "1"]), "image/png").without_logo_bytes());
++        let answer = answer(get_logo(project.as_ref(), &plain()));
++        assert_eq!(answer.status, StatusCode::NOT_FOUND);
++        assert_eq!(answer.tag(), "");
++        assert_eq!(calls.taken(), [Call::ReadLogo]);
++    }
++
+     #[test]
+     fn no_logo_named_or_its_file_gone_is_not_found_and_nothing_is_read() {
+         for fake in [
+diff --git a/crates/atm-api/src/routes/source.rs b/crates/atm-api/src/routes/source.rs
+index d6659a44..3e91023a 100644
+--- a/crates/atm-api/src/routes/source.rs
++++ b/crates/atm-api/src/routes/source.rs
+@@ -70,7 +70,8 @@ pub trait ProjectSource {
+     /// Its logo's version (null when the file isn't there) and content type, when it names one.
+     fn logo(&self) -> Option<(Value, &'static str)>;
+     /// Its logo's bytes.
+-    fn read_logo(&self) -> Vec<u8>;
++    /// The logo's bytes; none when it can't be read (gone since it was found, or unreadable: ATM-671).
++    fn read_logo(&self) -> Option<Vec<u8>>;
+     /// The size and mtime of the file at `path` in its working copy, once atm-docs has checked the path.
+     ///
+     /// # Errors
+@@ -287,10 +288,8 @@ impl ProjectSource for Member {
+         Member::logo(self).map(|(file, kind)| (file_stamp(&file), kind))
+     }
+ 
+-    fn read_logo(&self) -> Vec<u8> {
+-        Member::logo(self)
+-            .and_then(|(file, _)| std::fs::read(file).ok())
+-            .unwrap_or_default()
++    fn read_logo(&self) -> Option<Vec<u8>> {
++        Member::logo(self).and_then(|(file, _)| std::fs::read(file).ok())
+     }
+ 
+     fn file_version(&self, path: &str) -> Result<(u64, u128)> {
+diff --git a/crates/atm-api/src/routes/test_support.rs b/crates/atm-api/src/routes/test_support.rs
+index b66187bf..57d61238 100644
+--- a/crates/atm-api/src/routes/test_support.rs
++++ b/crates/atm-api/src/routes/test_support.rs
+@@ -338,13 +338,14 @@ impl ProjectSource for Bound<FakeProject> {
+             .map(|(stamp, kind, _)| (stamp.clone(), *kind))
+     }
+ 
+-    fn read_logo(&self) -> Vec<u8> {
++    fn read_logo(&self) -> Option<Vec<u8>> {
+         self.calls.note(Call::ReadLogo);
++        // An empty logo stands for one that can't be read
+         self.fake
+             .logo
+             .as_ref()
+             .map(|(_, _, bytes)| bytes.clone())
+-            .unwrap_or_default()
++            .filter(|bytes| !bytes.is_empty())
+     }
+ 
+     fn file_version(&self, path: &str) -> Result<(u64, u128)> {
+diff --git a/crates/atm-db/src/jsongit/logo.rs b/crates/atm-db/src/jsongit/logo.rs
+index 6efdae96..26580448 100644
+--- a/crates/atm-db/src/jsongit/logo.rs
++++ b/crates/atm-db/src/jsongit/logo.rs
+@@ -63,6 +63,29 @@ pub fn logo_file(root: &Path, relative: &str) -> Result<(PathBuf, &'static str)>
+             "{relative}: a logo is an SVG, PNG, WebP or ICO image"
+         )));
+     };
++    // As the files route reads a file (ATM-671, audit H7): never in git's or atm's own folder, in any case, and never
++    // through a symbolic link on the way, even one pointing inside the project
++    let own_folder = |s: &str| {
++        let name = s.trim_end_matches(['.', ' ']).to_ascii_lowercase();
++        name == ".git" || name == ".agentic-task-manager"
++    };
++    if relative.split(['/', '\\']).any(own_folder) {
++        return Err(refused(format!(
++            "{relative}: a logo isn't read from git's or atm's own folders"
++        )));
++    }
++    let mut on_the_way = root.to_path_buf();
++    for part in relative
++        .split(['/', '\\'])
++        .filter(|p| !p.is_empty() && *p != ".")
++    {
++        on_the_way.push(part);
++        if std::fs::symlink_metadata(&on_the_way).is_ok_and(|m| m.file_type().is_symlink()) {
++            return Err(refused(format!(
++                "{relative}: a logo isn't read through a symbolic link"
++            )));
++        }
++    }
+     let real_root = atm_common::pathtext::canonical(root).unwrap_or_else(|_| root.to_path_buf());
+     let joined = real_root.join(relative);
+     // A missing file can't be resolved: its folder decides whether it is inside
+@@ -241,8 +264,36 @@ mod tests {
+         let error = logo_file(project.path(), "logo.svg").unwrap_err();
+         assert_eq!(
+             error.to_string(),
+-            "logo.svg: the logo must be inside the project folder"
++            "logo.svg: a logo isn't read through a symbolic link"
+         );
++        // ATM-671 (audit H7): a link inside the project is refused too, as the files route refuses it, and so is
++        // git's own folder, in any case
++        put(project.path(), "real.svg", 1);
++        std::os::unix::fs::symlink(
++            project.path().join("real.svg"),
++            project.path().join("alias.svg"),
++        )
++        .unwrap();
++        assert!(
++            logo_file(project.path(), "alias.svg")
++                .unwrap_err()
++                .to_string()
++                .contains("symbolic link")
++        );
++        assert!(logo_file(project.path(), "real.svg").is_ok());
++        for in_git in [
++            ".git/logo.svg",
++            ".GIT/logo.svg",
++            "a/.agentic-task-manager/logo.svg",
++        ] {
++            assert!(
++                logo_file(project.path(), in_git)
++                    .unwrap_err()
++                    .to_string()
++                    .contains("own folders"),
++                "{in_git}"
++            );
++        }
+     }
+ 
+     #[test]
+diff --git a/crates/atm-docs/src/lib.rs b/crates/atm-docs/src/lib.rs
+index 0bd17a21..3d2b17f9 100644
+--- a/crates/atm-docs/src/lib.rs
++++ b/crates/atm-docs/src/lib.rs
+@@ -128,10 +128,13 @@ pub fn document_path(path: &str) -> Result<&str> {
+     let path = path_shape(path)?;
+     let refused = |what: &str| Err(Error::Refused(format!("{path}: {what} aren't shown")));
+     let segments: Vec<&str> = path.split('/').collect();
+-    if segments
+-        .iter()
+-        .any(|s| matches!(*s, ".git" | ".agentic-task-manager"))
+-    {
++    // In any case (ATM-671, audit H2: macOS's and Windows' file systems find `.GIT/config` as `.git/config`), and as
++    // Windows also reads a name with dots or spaces after it (`.git.`, `.git `)
++    let own_folder = |s: &str| {
++        let name = s.trim_end_matches(['.', ' ']).to_ascii_lowercase();
++        name == ".git" || name == ".agentic-task-manager"
++    };
++    if segments.iter().any(|s| own_folder(s)) {
+         return refused("git's and atm's own folders");
+     }
+     let name = segments.last().copied().unwrap_or_default();
+@@ -601,6 +604,12 @@ mod tests {
+             ".git/config",
+             "sub/.git/HEAD",
+             ".agentic-task-manager/tasks.json",
++            // In any case, and as Windows reads trailing dots and spaces (ATM-671)
++            ".GIT/config",
++            "sub/.Git/HEAD",
++            ".Agentic-Task-Manager/tasks.json",
++            ".git./config",
++            ".git /config",
+             ".env",
+             "src/.env.local",
+             ".ENV.production",
+diff --git a/docs/security-architecture.md b/docs/security-architecture.md
+index 9d841a83..1d4ff7cd 100644
+--- a/docs/security-architecture.md
++++ b/docs/security-architecture.md
+@@ -82,8 +82,8 @@ with the task that adds it.
+ | #   | Invariant                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Enforced by                                                                                                                                             |
+ | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+ | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `serve.test.mjs` "a request for another Host is refused"                                                                                                |
+-| I11 | **Nothing changes state over HTTP but a project's reviews, from atm's own page**: GET and HEAD everywhere, and POST, PATCH, PUT and DELETE only on the review routes (ATM-572, docs/code-review-design.md §3.12: `POST …/projects/<p>/reviews`, `PATCH …/reviews/<CR>`, `PUT …/reviews/<CR>/tasks`, `POST …/reviews/<CR>/decisions`, `POST …/reviews/<CR>/comments`, `PATCH …/comments/<c>`, `POST …/comments/<c>/replies`, `POST …/reviews/<CR>/pokes` (ATM-611: a review-level comment marked as a poke, with the same checks; an agent's identity is refused), `POST …/reviews/<CR>/drafts`, `PATCH …/drafts/<d>` and `DELETE …/drafts/<d>` (ATM-612: the user's drafts, written to their own state folder's `drafts/`, a file per project, review and person, **never to the repository or the review's folder**, so no other person, no agent and no commit sees them until a decision sends them as the user's comments; DELETE only there, with the same checks and an empty JSON body; an agent's identity is refused; their read, `GET …/reviews/<CR>/drafts`, and the review's page answer the asking user's drafts only)). Each such request must carry the Host check (I10), an `Origin` that is the server's own, this start's session token (random, 244 bits, in the page atm serves as `<meta name="atm-session">`, which another site can't read) in `X-Atm-Session`, and a JSON body (at most 1 MB; a plain form can't send one); no CORS preflight is answered (OPTIONS is 405), so no other site's page can send the header. Each route is one atm-lib call (`review_requests`), acting as the user at the machine (their git name: never an agent's identity, whatever environment started the server), each body read with `deny_unknown_fields`, texts at most 100,000 characters, files inside the repository, revisions resolved to commits before git sees them (never an option); a review's decisions keep its rules (its author can't decide it, I23). The one other exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks | documents                                                                                                                                               | files | claims | worktrees | logo | reviews | reviews/<CR>`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search`(reads every project's`tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json`and`logo`(computed through atm-lib; the task files themselves are no longer served as stored, T-374),`api/v1/projects/<id>/tasks`(a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of`find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…`(atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack:`.js`, `.wasm`and`.html`only, embedded in the binary from the build's`dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/reviews`and`…/reviews/<CR>`(a project's code reviews and a review's page, read through atm-lib as the user, ATM-574),`api/v1/projects/<id>/documents?path=`(with`&at=<rev>`: as a commit or tree has it, the revision resolved before git sees it, the same path checks, ATM-574) and `…/files?path=`(a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path, never in `.git` or `.agentic-task-manager`, not an environment file (`.env`, `.env.local`, …; `.env.example`, `.sample` and `.template` are shown), not a key file, not a file git ignores; other hidden files, `.github/` or `.gitignore`, are shown (ATM-598, CR-3) (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink;`files`only an image whose bytes match its type, sandboxed; `files` with `&at=<rev>` too (a review's image file's sides, ATM-689): the image as that commit or tree has it, through the same checks as `documents?…&at=` and then the image's),`whoami`and`/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "review changes (ATM-572)…" (each route; refused without the token, with another, from another origin, as a form, with an unknown field; no preflight answered; ATM-612's drafts kept in the state folder, not the repository, a DELETE refused without the token), "review reads (ATM-574)…" (read-only; a revision that is an option or no object refused); atm-api's `routes` unit tests (each route on a fake atm-lib), "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-docs/src/lib.rs`'s tests (moved from atm-lib, ATM-570; a file at a revision passes the same checks, its revision never an option for git) |
+-| I12 | **Only the registered projects' data is served**: their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project (a git submodule's checkout is inside it; a file in it is ignored by the submodule's own rules)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
++| I11 | **Nothing changes state over HTTP but a project's reviews, from atm's own page**; and no other site's page has the server read for it (ATM-671: reads write `recent.json` and run git): a GET or HEAD but the page itself and `/assets/` is refused (403) when the browser says it comes from another site (`Sec-Fetch-Site: cross-site`) or its `Origin` isn't on this machine: GET and HEAD everywhere, and POST, PATCH, PUT and DELETE only on the review routes (ATM-572, docs/code-review-design.md §3.12: `POST …/projects/<p>/reviews`, `PATCH …/reviews/<CR>`, `PUT …/reviews/<CR>/tasks`, `POST …/reviews/<CR>/decisions`, `POST …/reviews/<CR>/comments`, `PATCH …/comments/<c>`, `POST …/comments/<c>/replies`, `POST …/reviews/<CR>/pokes` (ATM-611: a review-level comment marked as a poke, with the same checks; an agent's identity is refused), `POST …/reviews/<CR>/drafts`, `PATCH …/drafts/<d>` and `DELETE …/drafts/<d>` (ATM-612: the user's drafts, written to their own state folder's `drafts/`, a file per project, review and person, **never to the repository or the review's folder**, so no other person, no agent and no commit sees them until a decision sends them as the user's comments; DELETE only there, with the same checks and an empty JSON body; an agent's identity is refused; their read, `GET …/reviews/<CR>/drafts`, and the review's page answer the asking user's drafts only)). Each such request must carry the Host check (I10), an `Origin` that is the server's own, this start's session token (random, 244 bits, in the page atm serves as `<meta name="atm-session">`, which another site can't read) in `X-Atm-Session`, and a JSON body (at most 1 MB; a plain form can't send one); no CORS preflight is answered (OPTIONS is 405), so no other site's page can send the header. Each route is one atm-lib call (`review_requests`), acting as the user at the machine (their git name: never an agent's identity, whatever environment started the server), each body read with `deny_unknown_fields`, texts at most 100,000 characters, files inside the repository, revisions resolved to commits before git sees them (never an option); a review's decisions keep its rules (its author can't decide it, I23). The one other exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks | documents                                                                                                                                               | files | claims | worktrees | logo | reviews | reviews/<CR>`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search`(reads every project's`tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json`and`logo`(computed through atm-lib; the task files themselves are no longer served as stored, T-374),`api/v1/projects/<id>/tasks`(a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of`find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…`(atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack:`.js`, `.wasm`and`.html`only, embedded in the binary from the build's`dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/reviews`and`…/reviews/<CR>`(a project's code reviews and a review's page, read through atm-lib as the user, ATM-574),`api/v1/projects/<id>/documents?path=`(with`&at=<rev>`: as a commit or tree has it, the revision resolved before git sees it, the same path checks, ATM-574) and `…/files?path=`(a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path, never in `.git` or `.agentic-task-manager`, not an environment file (`.env`, `.env.local`, …; `.env.example`, `.sample` and `.template` are shown), not a key file, not a file git ignores; other hidden files, `.github/` or `.gitignore`, are shown (ATM-598, CR-3) (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink;`files`only an image whose bytes match its type, sandboxed; `files` with `&at=<rev>` too (a review's image file's sides, ATM-689): the image as that commit or tree has it, through the same checks as `documents?…&at=` and then the image's),`whoami`and`/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "review changes (ATM-572)…" (each route; refused without the token, with another, from another origin, as a form, with an unknown field; no preflight answered; ATM-612's drafts kept in the state folder, not the repository, a DELETE refused without the token), "review reads (ATM-574)…" (read-only; a revision that is an option or no object refused); atm-api's `routes` unit tests (each route on a fake atm-lib), "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-docs/src/lib.rs`'s tests (moved from atm-lib, ATM-570; a file at a revision passes the same checks, its revision never an option for git) |
++| I12 | **Only the registered projects' data is served**; never git's or atm's own folders, in any case (`.GIT`, and Windows' `.git.`), a logo neither, nor one through a symbolic link, and a logo that can't be read is a 404; a file at a revision is named by a full object ID only (ATM-671): their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project (a git submodule's checkout is inside it; a file in it is ignored by the submodule's own rules)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
+ | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts`                                                 |
+ 
+ ### Dashboard (B4)
+diff --git a/tests/scripts/serve.test.mjs b/tests/scripts/serve.test.mjs
+index 686f678f..7dfcb4c6 100644
+--- a/tests/scripts/serve.test.mjs
++++ b/tests/scripts/serve.test.mjs
+@@ -746,6 +746,22 @@ describe('serve', () => {
+       'If-None-Match': doc.headers.get('etag'),
+     });
+     assert.equal(again.status, 304);
++    // ATM-671 (audit H5): a read another site's page sends is refused before anything runs; atm's own page's is not
++    for (const [headers, status] of [
++      [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
++      [{ Origin: 'https://evil.example' }, 403],
++      [{ Origin: 'null' }, 403],
++      [{ 'Sec-Fetch-Site': 'same-origin' }, 200],
++      [{ Origin: `http://localhost:${port}` }, 200],
++      [{ Origin: 'http://localhost:5173' }, 200],
++    ]) {
++      assert.equal((await get('documents', 'docs/x.md', headers)).status, status, JSON.stringify(headers));
++    }
++    // The page itself may be opened from another site, and its assets loaded
++    assert.equal(
++      (await fetch(`http://localhost:${port}/`, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status,
++      200,
++    );
+     fs.writeFileSync(path.join(root, 'docs/x.md'), '# Changed\n');
+     const changed = await get('documents', 'docs/x.md', {
+       'If-None-Match': doc.headers.get('etag'),

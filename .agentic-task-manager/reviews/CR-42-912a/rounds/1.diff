@@ -1,0 +1,95 @@
+diff --git a/dashboard/src/lib/graph/DepGraph.svelte b/dashboard/src/lib/graph/DepGraph.svelte
+index d5f2c18b..830bb8a1 100644
+--- a/dashboard/src/lib/graph/DepGraph.svelte
++++ b/dashboard/src/lib/graph/DepGraph.svelte
+@@ -107,6 +107,11 @@
+     view = v;
+   }
+   const active = $derived(dashboard.loaded && !empty && vw > 0 && vh > 0);
++  // Labels only where they can be read (ATM-629, decided with Hakan): below this zoom the nodes' 12 and 10 px text is
++  // under 6 px on screen, and shaping it was most of what the tab took to show with 500 tasks (their fitted view is
++  // that small). A node then names its task on hover; zoomed in, its labels are drawn
++  const LABEL_MIN_ZOOM = 0.5;
++  const labelled = $derived(view.k >= LABEL_MIN_ZOOM);
+ 
+   const nodeSize = { w: NODE_W, h: NODE_H };
+   // The tasks the search and filters leave in (in "Dim", the others are laid out too, greyed out)
+@@ -332,6 +337,7 @@
+             class:graph-hovered={hovered === t.id}
+             class:graph-faded={chain && !chain.has(t.id)}
+             data-id={t.id}
++            data-labelled={labelled ? '' : undefined}
+           >
+             <rect
+               x={node.x}
+@@ -343,16 +349,20 @@
+               stroke={ts.color}
+               stroke-width="1.5"
+             />
+-            <text x={node.x + 8} y={node.y + 18} fill={ts.color} font-weight="700" font-size="12"
+-              >{`${statusEmoji(t.status)} `}{#if isProvisional(t)}<tspan
+-                  class="graph-provisional"
+-                  opacity="0.7"
+-                  font-style="italic"><title>{PROVISIONAL_TIP}</title>{taskLabel(t)}</tspan
+-                >{:else}{taskLabel(t)}{/if}{` ${TYPE_EMOJI[t.type] ?? ''}`}</text
+-            >
+-            <text x={node.x + 8} y={node.y + 36} fill="var(--text-muted)" font-size="10" font-weight="400"
+-              >{node.label}</text
+-            >
++            {#if labelled}
++              <text x={node.x + 8} y={node.y + 18} fill={ts.color} font-weight="700" font-size="12"
++                >{`${statusEmoji(t.status)} `}{#if isProvisional(t)}<tspan
++                    class="graph-provisional"
++                    opacity="0.7"
++                    font-style="italic"><title>{PROVISIONAL_TIP}</title>{taskLabel(t)}</tspan
++                  >{:else}{taskLabel(t)}{/if}{` ${TYPE_EMOJI[t.type] ?? ''}`}</text
++              >
++              <text x={node.x + 8} y={node.y + 36} fill="var(--text-muted)" font-size="10" font-weight="400"
++                >{node.label}</text
++              >
++            {:else}
++              <title>{taskLabel(t)} {t.name}</title>
++            {/if}
+           </g>
+         {/each}
+       {/if}
+diff --git a/dashboard/tests/e2e/performance.spec.ts b/dashboard/tests/e2e/performance.spec.ts
+index 5a5dbfb8..28c825cd 100644
+--- a/dashboard/tests/e2e/performance.spec.ts
++++ b/dashboard/tests/e2e/performance.spec.ts
+@@ -165,7 +165,8 @@ test.describe('performance with 500 tasks', () => {
+       progress: await timeAction(page, '#tab-progress', "document.querySelector('#burndown svg')?.isConnected"),
+       // Mounted when selected: the timeline is built from scratch
+       agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
+-      // Drawn when selected (T-525): its nodes, as the List's rows
++      // Drawn when selected (T-525): its nodes, as the List's rows; fitted, 500 tasks are at 10%, where a node's labels
++      // are too small to read and aren't drawn (ATM-629: shaping their text was half of it)
+       graph: await timeAction(
+         page,
+         '#tab-graph',
+@@ -177,6 +178,25 @@ test.describe('performance with 500 tasks', () => {
+     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
+   });
+ 
++  // ATM-629: a node's labels are drawn only where they can be read; below that, it names its task on hover
++  test('the graph of 500 tasks, fitted, draws its nodes without labels; zoomed to 100%, with them', async ({
++    page,
++  }) => {
++    await page.locator('#tab-graph').click();
++    const nodes = page.locator('#panel-graph #dep-graph .graph-node');
++    await expect(nodes).toHaveCount(500);
++    await expect(page.locator('.graph-zoom-level')).toHaveText('10%');
++    await expect(nodes.locator('text')).toHaveCount(0);
++    await expect(nodes.first().locator('title')).not.toBeEmpty();
++    await page
++      .locator('.graph-controls button')
++      .and(page.getByTitle(/^Actual size/))
++      .click();
++    await expect(page.locator('.graph-zoom-level')).toHaveText('100%');
++    await expect(page.locator('#panel-graph .graph-node[data-labelled]')).toHaveCount(500);
++    await expect(nodes.first().locator('text')).toHaveCount(2);
++  });
++
+   test('a reload that changes the data, on every tab', async ({ page, tasksServer }) => {
+     const data = loadFixture('large-500');
+     // The change shows in the Kanban, which stays mounted under every view (the List is built only while it is shown,

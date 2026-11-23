@@ -1,0 +1,67 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "f90574967a5d0372fe78b95f050b6f9dbab570fa",
+    "head": "f13a823ac1ed593b5ce4ef0d95b474d875e64b30"
+  },
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "Cargo.toml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/package.json",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/pnpm-lock.yaml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/pnpm-workspace.yaml",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/compmd-runtime.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/compmd-llms.txt",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/review-performance.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/security-architecture.md",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T17:53:58Z"
+}

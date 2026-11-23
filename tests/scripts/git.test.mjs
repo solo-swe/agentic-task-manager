@@ -289,7 +289,14 @@ describe('atm commit --record', () => {
 
       const json = runAtm(['vcs', 'commit', 'T-001', '--record', 'HEAD', '--json'], root, ENV);
       assert.equal(json.code, 0, json.stderr);
-      assert.deepEqual(JSON.parse(json.stdout), { task: 'T-001', commit: sha, recorded: true });
+      // Every field the text says, `hint` null when there is none (ATM-679, audit C11)
+      assert.deepEqual(JSON.parse(json.stdout), {
+        task: 'T-001',
+        commit: sha,
+        summary: 'feat(T-001): Add login',
+        recorded: true,
+        hint: null,
+      });
     } finally {
       removeDir(root);
     }

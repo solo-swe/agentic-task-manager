@@ -1,0 +1,112 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "e7a0cb537f99998d76c17e33da700e0643b82c2e",
+    "head": "c68b3cb69add50a599f9b444902e242e86267be0"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/review.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/decide.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/listen.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/open.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/read.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/commands/review/talk.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-cli/src/main.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/files.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/files/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/folder.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/folder/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rounds.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rounds/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules/table.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules/tests.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules/tests/comments.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules/tests/deciding.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules/tests/rounds.rs",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "crates/atm-review/src/rules/tests/table.rs",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-21T13:38:37Z"
+}

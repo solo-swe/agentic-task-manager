@@ -1,15 +1,20 @@
 //! Time as atm writes it (the Python atm's `common/core.py`): seconds since 1970 in UTC, written as ISO 8601 to the
-//! second (`2026-05-01T08:00:00Z`). `ATM_NOW` replaces the current time, for tests.
+//! second (`2026-05-01T08:00:00Z`). `ATM_NOW` replaces the current time, for tests, in debug builds only.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// The current time in seconds since 1970 (UTC); `ATM_NOW` (ISO 8601) overrides it.
+/// Whether `ATM_NOW` may replace the clock: in a debug build (the CLI suite's and the e2e suite's binaries) only,
+/// never in a release (ATM-665/666, audit C4: `ATM_NOW=2099-… atm loop next --claim` took every other agent's
+/// task, their leases run out by that clock). A second variable would be no barrier: whoever sets one sets both.
+pub const CLOCK_OVERRIDE: bool = cfg!(debug_assertions);
+
+/// The current time in seconds since 1970 (UTC); in a debug build, `ATM_NOW` (ISO 8601) overrides it.
 #[must_use]
 pub fn now() -> i64 {
-    std::env::var("ATM_NOW")
-        .ok()
-        .and_then(|t| parse_iso(&t))
-        .unwrap_or_else(real_now)
+    if CLOCK_OVERRIDE && let Some(at) = std::env::var("ATM_NOW").ok().and_then(|t| parse_iso(&t)) {
+        return at;
+    }
+    real_now()
 }
 
 /// The clock's time, whatever `ATM_NOW` says (how old a lock is).
@@ -58,6 +63,53 @@ pub fn local_now() -> i64 {
     let offset = jiff::Timestamp::from_second(now)
         .map_or(0, |at| jiff::tz::TimeZone::system().to_offset(at).seconds());
     now + i64::from(offset)
+}
+
+/// A `YYYY-MM-DD` date as days since 1970-01-01, or None when the text isn't a date.
+fn date_days(date: &str) -> Option<i64> {
+    let b = date.as_bytes();
+    let shape = b.len() == 10
+        && b.iter().enumerate().all(|(i, c)| {
+            if i == 4 || i == 7 {
+                *c == b'-'
+            } else {
+                c.is_ascii_digit()
+            }
+        });
+    if !shape {
+        return None;
+    }
+    let (year, month, day) = (
+        date[0..4].parse().ok()?,
+        date[5..7].parse().ok()?,
+        date[8..10].parse().ok()?,
+    );
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let days = days_from_civil(year, month, day);
+    // A day the month doesn't have (2026-02-30) isn't one
+    (civil_from_days(days) == (year, month, day)).then_some(days)
+}
+
+/// The one due-date rule (ATM-720): the days from the project's day (today, local, by atm's clock) to `date`
+/// (`YYYY-MM-DD`): 0 on the day, 1 the day before, negative once it has passed; None for a text that isn't a date.
+#[must_use]
+pub fn days_until(date: &str) -> Option<i64> {
+    Some(date_days(date)? - local_now().div_euclid(86_400))
+}
+
+/// When a due date (`YYYY-MM-DD`) has passed: the last second of that day in the local time zone, as atm writes a time;
+/// None for a text that isn't a date.
+#[must_use]
+pub fn end_of_day(date: &str) -> Option<String> {
+    date_days(date)?;
+    let day: jiff::civil::Date = date.parse().ok()?;
+    let end = day
+        .at(23, 59, 59, 0)
+        .to_zoned(jiff::tz::TimeZone::system())
+        .ok()?;
+    Some(format_iso(end.timestamp().as_second()))
 }
 
 /// A time's calendar fields: year, month (1–12), day, hour, minute.
@@ -118,7 +170,8 @@ pub fn parse_iso(text: &str) -> Option<i64> {
         && (1..=month_days[usize::try_from(month - 1).ok()?]).contains(&day)
         && hour < 24
         && minute < 60
-        && second < 62;
+        // No leap second: 23:59:60 would be the next day's 00:00:00 written another way (ATM-666, audit C16)
+        && second < 60;
     valid.then(|| days_from_civil(year, month, day) * 86_400 + hour * 3600 + minute * 60 + second)
 }
 
@@ -153,14 +206,60 @@ mod tests {
     }
 
     #[test]
+    fn a_due_date_counts_days_from_the_local_day_today_zero_yesterday_minus_one() {
+        let (year, month, day, _, _) = civil(local_now());
+        let today = format!("{year:04}-{month:02}-{day:02}");
+        assert_eq!(days_until(&today), Some(0));
+        let shifted = |by: i64| {
+            let (y, m, d) = civil_from_days(date_days(&today).unwrap() + by);
+            format!("{y:04}-{m:02}-{d:02}")
+        };
+        assert_eq!(days_until(&shifted(1)), Some(1));
+        assert_eq!(days_until(&shifted(-1)), Some(-1));
+        assert_eq!(days_until(&shifted(30)), Some(30));
+        for bad in [
+            "",
+            "2026-5-01",
+            "2026-02-30",
+            "2026-13-01",
+            "12 April",
+            "2026-04-12T00:00:00Z",
+        ] {
+            assert_eq!(days_until(bad), None, "{bad}");
+            assert_eq!(end_of_day(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_due_date_ends_at_the_last_second_of_its_local_day() {
+        // In local time it is 23:59:59 that day, with that day's offset (a summer and a winter date)
+        for date in ["2026-04-08", "2026-12-24"] {
+            let end = parse_iso(&end_of_day(date).unwrap()).unwrap();
+            let local = jiff::Timestamp::from_second(end)
+                .unwrap()
+                .to_zoned(jiff::tz::TimeZone::system())
+                .datetime();
+            assert_eq!(local.to_string(), format!("{date}T23:59:59"));
+        }
+    }
+
+    /// ATM-666 (audit C4): `ATM_NOW` moved the clock in every build, so `ATM_NOW=2099-… atm loop next --claim` took
+    /// every other agent's task; now only a debug build (the tests' binaries) heeds it
+    #[test]
+    fn atm_now_moves_the_clock_in_a_debug_build_only() {
+        assert_eq!(super::CLOCK_OVERRIDE, cfg!(debug_assertions));
+    }
+
+    #[test]
     fn a_time_is_read_up_to_each_fields_limit_and_refused_past_it() {
         for (text, read) in [
             ("2026-01-01T23:59:59Z", true),
             ("2026-01-01T24:00:00Z", false),
             ("2026-01-01T00:60:00Z", false),
-            // Python's strptime takes leap seconds up to 61
-            ("2026-01-01T00:00:61Z", true),
-            ("2026-01-01T00:00:62Z", false),
+            // No leap second (ATM-666): 23:59:60 would be the next day's midnight written another way
+            ("2026-01-01T00:00:59Z", true),
+            ("2026-01-01T23:59:60Z", false),
+            ("2026-01-01T00:00:61Z", false),
             ("2026-01-00T00:00:00Z", false),
             ("2026-04-30T00:00:00Z", true),
             ("2026-04-31T00:00:00Z", false),

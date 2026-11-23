@@ -2,11 +2,12 @@ import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import Header from '../../src/lib/shell/Header.svelte';
 import { dashboard } from '../../src/lib/state.svelte';
-import type { TasksFile } from '../../src/lib/types';
+import type { Task, TasksFile } from '../../src/lib/types';
 import archive from '../fixtures/archive.json';
 import sprints from '../fixtures/sprints.json';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';
+import { viewed } from './views';
 
 describe('Header', () => {
   beforeEach(() => loadIntoDashboard(standard));
@@ -55,13 +56,18 @@ describe('Header', () => {
     expect(container.querySelector('#subtitle')).toHaveTextContent('5 tasks across 2 sprints · 1 in the backlog');
   });
 
-  it('counts tasks in review and tasks blocked on the user, and lists them', async () => {
+  it('counts the tasks atm says need you, and lists them', async () => {
+    // atm's answers (ATM-717): T-005 waits for its review, T-008 on a question for you; T-006, approved, doesn't
     const tasks = standard.tasks.map((t) =>
       t.id === 'T-005'
-        ? { ...t, status: 'in_review' }
+        ? viewed({ ...t, status: 'in_review' } as Task, { needs_you: 'review' })
         : t.id === 'T-008'
-          ? { ...t, status: 'blocked', waiting_on: 'user', questions: ['Which DB?'] }
-          : t,
+          ? viewed({ ...t, status: 'blocked', waiting_on: 'user', questions: ['Which DB?'] } as Task, {
+              needs_you: 'blocked',
+            })
+          : t.id === 'T-006'
+            ? viewed({ ...t, status: 'in_review', review_state: 'approved' } as Task, {})
+            : t,
     );
     loadIntoDashboard({ ...standard, tasks });
     const { container } = render(Header);

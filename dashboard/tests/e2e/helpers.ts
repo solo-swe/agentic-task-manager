@@ -25,6 +25,7 @@ const WORKSPACES = /\/api\/v2\/workspaces(\?.*)?$/;
 const AGENT_SKILLS = ['atm-do-task', 'atm-serve'];
 const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
+const V1_STATS = /\/api\/v1\/projects\/([^/]+)\/stats(\?.*)?$/;
 const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
 const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
 /** A project's reviews, or one review's page (ATM-574) */
@@ -66,7 +67,7 @@ export function asTaskViews(
   archived = false,
   registered: readonly string[] = [],
 ): string {
-  const key = JSON.stringify([body, archive, archived, registered]);
+  const key = JSON.stringify([body, archive, archived, registered, atmNow]);
   const cached = viewCache.get(key);
   if (cached !== undefined) return cached;
   const read = atmViews(body, archive, archived, registered);
@@ -75,6 +76,23 @@ export function asTaskViews(
   viewCache.set(key, views);
   return views;
 }
+
+/** The time atm counts by in this test (its `ATM_NOW`, which a debug build heeds), or the real time: what atm says by
+ * the day (a sprint's days to its due date, ATM-720) is then as of the page's fixed clock. Reset after each test */
+let atmNow: string | undefined;
+
+/** Run the fixture's atm at `at` (a spec that fixes the page's clock, `page.clock.setFixedTime`, sets it too) */
+export function atmNowFor(at: Date | undefined) {
+  atmNow = at ? at.toISOString().replace(/\.\d{3}Z$/, 'Z') : undefined;
+}
+
+/** The environment atm runs in for the fixture: its own state folder, and the test's clock */
+const atmEnv = (dir: string) => ({
+  ...process.env,
+  ATM_STATE_DIR: path.join(dir, '.atm-state'),
+  GIT_CEILING_DIRECTORIES: os.tmpdir(),
+  ...(atmNow ? { ATM_NOW: atmNow } : {}),
+});
 
 /** atm's tolerant read of the files (`atm task list --derived --tolerant`: meta, tasks, problems; with `archived`, the
  * archive's tasks, T-372), or null when even that refuses them (not a task file). The `registered` projects' task
@@ -86,7 +104,7 @@ function atmViews(
   registered: readonly string[] = [],
 ): Record<string, unknown> | null {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-views-'));
-  const env = { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: os.tmpdir() };
+  const env = atmEnv(dir);
   const others: string[] = [];
   try {
     mkdirSync(path.join(dir, '.agentic-task-manager'));
@@ -122,6 +140,51 @@ function atmViews(
     for (const folder of [dir, ...others]) rmSync(folder, { recursive: true, force: true });
   }
 }
+/** Whether `body` is a task file atm reads (an object with a list of tasks) */
+function isTaskFile(body: string): boolean {
+  try {
+    const data = JSON.parse(body) as unknown;
+    return !!data && typeof data === 'object' && Array.isArray((data as TasksData).tasks);
+  } catch {
+    return false;
+  }
+}
+
+/** Stats already worked out, by the files and the query they are of */
+const statsCache = new Map<string, string>();
+
+/**
+ * GET …/projects/<id>/stats for a project holding `body` (and `archive`), with the slice and period `query` asks
+ * (ATM-722): atm-cli's own (`atm project stats`), so the dashboard is tested against atm's rules, not a copy of them.
+ */
+export function asStats(body: string, archive: string | null, query: URLSearchParams): string {
+  const key = JSON.stringify([body, archive, query.toString(), atmNow]);
+  const cached = statsCache.get(key);
+  if (cached !== undefined) return cached;
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-stats-'));
+  try {
+    mkdirSync(path.join(dir, '.agentic-task-manager'));
+    writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
+    if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
+    const slice = (query.get('tasks') ?? '').split(',').filter(Boolean);
+    const args = [
+      'project',
+      'stats',
+      ...slice.flatMap((id) => ['--task', id]),
+      ...(query.get('from') ? ['--from', query.get('from')!] : []),
+      ...(query.get('to') ? ['--to', query.get('to')!] : []),
+    ];
+    const [program, ...rest] = atm(args);
+    const r = spawnSync(program, rest, { cwd: dir, encoding: 'utf8', maxBuffer: 64 << 20, env: atmEnv(dir) });
+    if (r.status !== 0) throw new Error(`atm project stats failed: ${r.error?.message ?? r.stderr}`);
+    const answer = JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', ...JSON.parse(r.stdout) });
+    statsCache.set(key, answer);
+    return answer;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /** The id of the project the fixture serves by default */
 export const FIXTURE_PROJECT = 'fixture';
 
@@ -149,13 +212,18 @@ function atmSummary(body: string): Record<string, unknown> {
     const r = spawnSync(program, args, {
       cwd: dir,
       encoding: 'utf8',
-      env: { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      env: { ...atmEnv(dir), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
     if (r.status !== 0) throw new Error(`atm project summary failed: ${r.stderr}`);
     return JSON.parse(r.stdout) as Record<string, unknown>;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/** The summary atm serve would give a project holding `data` (a fixture by name or inline tasks): atm-cli's own */
+export function atmSummaryOf(data: string | TasksData): Record<string, unknown> {
+  return atmSummary(toBody(data));
 }
 
 /** A project summary as api/projects gives it (docs/multi-project-api.md 3.2), with chosen fields */
@@ -175,6 +243,7 @@ export function summary(fields: Record<string, unknown> = {}): Record<string, un
     needs_you: { review: 0, blocked_on_user: 0 },
     last_activity: '2026-01-01T00:00:00Z',
     completions_14d: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 1],
+    progress: { done: 4, total: 10, open_releases: [], done_days: [], burndown: [], forecast: null },
     ...fields,
   };
 }
@@ -208,6 +277,71 @@ export function board(
       return [id, { count: counts[id] ?? cards.length, cards }];
     }),
   );
+}
+
+interface CommentFake {
+  id: string;
+  author: string;
+  resolved: boolean | null;
+  poke?: boolean;
+  editable?: boolean;
+  replies?: CommentFake[];
+}
+type Answer = { ok: boolean; why?: string };
+export interface ReviewPageFake {
+  review: { status: string };
+  you: string;
+  chains: { comments: CommentFake[] }[];
+  can?: Record<string, Answer>;
+}
+
+/** atm's answers on a review's page (ATM-633, ATM-723), as the fixture plays atm: what its reader may do (`can`:
+ * nothing on an ended review; Approve not while a comment is open; sent back only while waiting; rounds the author's,
+ * whom the fixture's reader never is) and which comments they may edit (`editable`: their own, not a poke, the review
+ * not ended). What the page gives is kept: a test's own `can` answers, its own `editable` */
+function withAtmAnswers(reference: string, page: ReviewPageFake): ReviewPageFake {
+  const status = page.review.status;
+  const ended = status === 'approved' || status === 'closed';
+  const all = (cs: CommentFake[]): CommentFake[] => cs.flatMap((c) => [c, ...all(c.replies ?? [])]);
+  const open = page.chains.flatMap((ch) => all(ch.comments)).filter((c) => c.resolved === false);
+  const no = (why: string): Answer => ({ ok: false, why });
+  const actions = ['approve', 'request_changes', 'comment', 'round', 'close'];
+  const can: Record<string, Answer> = ended
+    ? Object.fromEntries(actions.map((a) => [a, no(`${reference} is ${status}: it can’t be changed`)]))
+    : {
+        approve: open.length
+          ? no(`${reference} can’t be approved while comments are open: ${open.map((c) => c.id).join(', ')}`)
+          : { ok: true },
+        request_changes:
+          status === 'waiting'
+            ? { ok: true }
+            : no(`${reference} is ${status.replace('_', ' ')}: it can’t be sent back`),
+        comment: { ok: true },
+        round: no(`only ${reference}’s author adds its rounds`),
+        close: { ok: true },
+      };
+  const mark = (c: CommentFake): CommentFake => ({
+    ...c,
+    editable: c.editable ?? (!ended && !c.poke && c.author === page.you),
+    replies: (c.replies ?? []).map(mark),
+  });
+  return {
+    ...page,
+    can: { ...can, ...page.can },
+    // In the view (ATM-725) unless the test says it is on another round: the fixture serves one page for every view
+    chains: page.chains.map((ch) => ({ in_view: true, ...ch, comments: ch.comments.map(mark) })),
+  };
+}
+
+/** A reviews list with atm's `ended` on each entry (ATM-714), as the fixture plays atm: approved or closed, unless the
+ * entry gives its own */
+function withEnded(list: unknown): unknown {
+  const reviews = (list as { reviews?: { review: { status: string }; ended?: boolean }[] } | null)?.reviews;
+  if (!Array.isArray(reviews)) return list;
+  return {
+    ...(list as object),
+    reviews: reviews.map((e) => ({ ended: ['approved', 'closed'].includes(e.review.status), ...e })),
+  };
 }
 
 /** A channel's ID in an app command's arguments: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its
@@ -294,20 +428,21 @@ export class TasksServer {
 
   /** Serve the reviews list (`GET …/reviews`) */
   setReviews(list: unknown) {
-    this.reviewList = list;
+    this.reviewList = withEnded(list);
     return this;
   }
 
   /** Another project's reviews list (ATM-575, the overview's Reviews over every project); one without is a 404 */
   private projectReviewLists = new Map<string, unknown>();
   setProjectReviews(project: string, list: unknown) {
-    this.projectReviewLists.set(project, list);
+    this.projectReviewLists.set(project, withEnded(list));
     return this;
   }
 
-  /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round */
+  /** Serve review `reference`'s page (`GET …/reviews/<CR>`), for any round, with atm's answers on it (`can`, each
+   * comment's `editable`) unless the page gives its own */
   setReview(reference: string, page: unknown) {
-    this.reviewPages.set(reference, page);
+    this.reviewPages.set(reference, withAtmAnswers(reference, page as ReviewPageFake));
     return this;
   }
 
@@ -447,6 +582,21 @@ export class TasksServer {
           ? this.withReviewStatuses(asTaskViews(body, this.archiveBody, false, this.registeredBodies))
           : asTaskViews(body),
       );
+    });
+    await this.page.route(V1_STATS, (route) => {
+      const url = new URL(route.request().url());
+      const id = decodeURIComponent(V1_STATS.exec(url.href)![1]);
+      const other = this.others.get(id);
+      const body = id === this.projectId ? this.body : (other?.body ?? null);
+      // A body that isn't a task file (a test of the dashboard's error handling) has no stats, as atm refuses it
+      if (body === null || !isTaskFile(body))
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
+      const archive = id === this.projectId ? this.archiveBody : null;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: asStats(body, archive, url.searchParams),
+      });
     });
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
     await this.page.route(ARCHIVE_JSON, (route) => {
@@ -696,6 +846,8 @@ export class TasksServer {
   windowShell = { system_menu_bar: true, system_window_buttons: true };
   /** The window commands the page called (T-513), in order */
   windowCalls: string[] = [];
+  /** The addresses the page opened a new window at (`open_window`), in order */
+  openedWindows: string[] = [];
   /** How many times the page asked the app for a project's tasks (`project_tasks`) */
   projectTaskRequests = 0;
   /** The tabs the window comes back with as the app starts (`restored_tabs`, T-518), answered once */
@@ -807,8 +959,9 @@ export class TasksServer {
   }
 
   /** Where the default project's code reviews stand, by review ID (ATM-621): what atm reads from its reviews folder
-   * into each task's `derived.review_statuses`. The fixture's views come from atm run outside git, with no reviews
-   * folder, so a test sets them here; atm's own reading is tested by atm-lib and the CLI suite */
+   * into each task's `derived.review_statuses`, and into the status of the review it waits on (`derived.review`,
+   * ATM-717). The fixture's views come from atm run outside git, with no reviews folder, so atm names the review
+   * without a status and a test sets them here; atm's own reading and choice are tested by atm-lib and the CLI suite */
   reviewStatuses: Record<string, string> = {};
 
   /** Task views (as text) with the statuses of the reviews each task links, as atm serves them */
@@ -822,7 +975,13 @@ export class TasksServer {
       const known = Object.fromEntries(
         links.filter((l) => l.id in this.reviewStatuses).map((l) => [l.id, this.reviewStatuses[l.id]]),
       );
-      if (Object.keys(known).length) view.derived = { ...view.derived, review_statuses: known };
+      if (!Object.keys(known).length) continue;
+      const review = view.derived.review as { id: string } | undefined;
+      view.derived = {
+        ...view.derived,
+        review_statuses: known,
+        ...(review && review.id in known ? { review: { ...review, status: known[review.id] } } : {}),
+      };
     }
     return JSON.stringify(parsed);
   }
@@ -859,6 +1018,14 @@ export class TasksServer {
               : asTaskViews(body),
           ),
         };
+      }
+      case 'project_stats': {
+        if (!body || !isTaskFile(body)) return unknown;
+        const query = new URLSearchParams();
+        if (Array.isArray(args.tasks)) query.set('tasks', (args.tasks as string[]).join(','));
+        if (typeof args.from === 'number') query.set('from', String(args.from));
+        if (typeof args.to === 'number') query.set('to', String(args.to));
+        return { ok: views(asStats(body, project === this.projectId ? this.archiveBody : null, query)) };
       }
       case 'project_reviews':
         return body ? { ok: this.reviewList ?? { reviews: [], you: 'Ana' } } : unknown;
@@ -974,6 +1141,10 @@ export class TasksServer {
       case 'open_url':
         this.openedUrls.push(String(args.url));
         return { ok: null };
+      // A new window at an address (T-514, ATM-699's menus): recorded, as the app would open it
+      case 'open_window':
+        this.openedWindows.push(String(args.address));
+        return { ok: null };
       // The menu (T-512)
       case 'subscribe_menu':
         this.menuChannel = channelId(args.channel);
@@ -1054,10 +1225,12 @@ export class TasksServer {
     return this;
   }
 
-  /** Work out the task views now, when the data is set, so no request waits for atm (the timing tests measure them) */
+  /** Work out the task views and the whole project's stats now, when the data is set, so no request waits for atm:
+   * the timing tests measure them, and atm runs in this process, so a request working one out holds up the others */
   private warm() {
     if (this.body !== null) asTaskViews(this.body, this.archiveBody);
     if (this.body !== null && this.archiveBody !== null) asTaskViews(this.body, this.archiveBody, true);
+    if (this.body !== null && isTaskFile(this.body)) asStats(this.body, this.archiveBody, new URLSearchParams());
   }
 
   fail(status = 404) {
@@ -1074,7 +1247,15 @@ export const test = base.extend<Fixtures>({
   tasksServer: async ({ page }, use) => {
     const server = new TasksServer(page);
     await server.install();
+    // atm works the figures out to its now (ATM-722: the stats): a spec that fixes the page's clock runs atm at that
+    // time too, so both say the same
+    const setFixedTime = page.clock.setFixedTime.bind(page.clock);
+    page.clock.setFixedTime = async (time) => {
+      atmNowFor(new Date(time));
+      return setFixedTime(time);
+    };
     await use(server);
+    atmNowFor(undefined);
   },
 
   // The dashboard promises zero external dependencies: any non-localhost request fails the test.

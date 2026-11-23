@@ -1,0 +1,233 @@
+diff --git a/dashboard/src/lib/documents/CompMd.svelte b/dashboard/src/lib/documents/CompMd.svelte
+index 21b72773..d2a0cd35 100644
+--- a/dashboard/src/lib/documents/CompMd.svelte
++++ b/dashboard/src/lib/documents/CompMd.svelte
+@@ -60,11 +60,11 @@
+   /** How long a turn waits for CompMD to say it has drawn before the next one goes anyway */
+   const TURN_LIMIT_MS = 3000;
+ 
+-  /** A project's text (a task's, or a document's): a relative link in it opens the document viewer (V1a–V1c), resolved
+-   * from the project's root for task text and from the document's folder in a document. Help and What's new come with
+-   * the plugin, not the project: their relative links stay text. */
++  /** A project's text (a task's, a document's, or one given `onopen`: a code review's summary and comments, ATM-586): a
++   * relative link in it opens the document viewer (V1a–V1c), resolved from the project's root, or from the document's
++   * folder in a document. Help and What's new come with the plugin, not the project: their relative links stay text. */
+   const docLink = $derived(
+-    task || path
++    task || path || onopen
+       ? (url: string) => {
+           const ref = referenceTo(url, path);
+           return ref ? viewerLink(ref) : null;
+diff --git a/dashboard/src/lib/reviews/ChainBox.svelte b/dashboard/src/lib/reviews/ChainBox.svelte
+index bdcda991..6a5106a8 100644
+--- a/dashboard/src/lib/reviews/ChainBox.svelte
++++ b/dashboard/src/lib/reviews/ChainBox.svelte
+@@ -3,6 +3,7 @@
+   import { formatWhen } from '../format';
+   import Icon from '../ui/Icon.svelte';
+   import { focusOnShow } from './focus';
++  import { documentLinks } from './links';
+   import type { Chain, ReviewComment } from './types';
+ 
+   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
+@@ -31,6 +32,9 @@
+     onselect?: (selected: boolean, keep: boolean) => void;
+   } = $props();
+ 
++  /** A link in a comment to a document of the project: what the review's page does with it (ATM-586) */
++  const openLink = documentLinks();
++
+   let replyingTo = $state<string | null>(null);
+   let draft = $state('');
+ 
+@@ -98,7 +102,7 @@
+       <strong class="chain-author">{c.author}</strong>
+       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
+     </div>
+-    <div class="chain-body"><CompMd text={c.body} /></div>
++    <div class="chain-body"><CompMd text={c.body} onopen={openLink} /></div>
+     {#if onreply}
+       {#if replyingTo === c.id}
+         <form
+diff --git a/dashboard/src/lib/reviews/ReviewPage.svelte b/dashboard/src/lib/reviews/ReviewPage.svelte
+index c3d80465..828354f1 100644
+--- a/dashboard/src/lib/reviews/ReviewPage.svelte
++++ b/dashboard/src/lib/reviews/ReviewPage.svelte
+@@ -1,12 +1,14 @@
+ <script lang="ts">
+   import { onDestroy, onMount, tick, untrack } from 'svelte';
+   import CompMd from '../documents/CompMd.svelte';
++  import type { DocumentRef } from '../documents';
+   import type { DocumentSource } from '../documents/source';
+   import { formatWhen } from '../format';
+   import { readStored, writeStored } from '../prefs';
+   import Icon from '../ui/Icon.svelte';
+   import ChainBox from './ChainBox.svelte';
+   import { focusOnShow } from './focus';
++  import { setDocumentLinks } from './links';
+   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
+   import {
+     chainsOf,
+@@ -51,6 +53,7 @@
+     onresolve,
+     onsubmit,
+     onclose,
++    ondocument,
+   }: {
+     page: ReviewPageData;
+     /** The project's short name (its key), before the reference */
+@@ -80,6 +83,9 @@
+     onsubmit: (decision: 'approve' | 'request_changes' | 'comment', body: string) => void;
+     /** The review closed, ended without approval, the summary its reason (ATM-576: how a live review ends unapproved) */
+     onclose?: (reason: string) => void;
++    /** A link in the summary or a comment to a document of the project that isn't a file of the round's: the task
++     * manager opens its document viewer (ATM-586) */
++    ondocument?: (ref: DocumentRef) => void;
+   } = $props();
+ 
+   const review = $derived(page.review);
+@@ -168,6 +174,14 @@
+ 
+   let writing: (() => void) | null = null;
+   onDestroy(() => writing?.());
++  /** A link in the summary or a comment to a document of the project (ATM-586): a file the round changed opens its diff
++   * here, the review being about it; anything else, or a document's heading or text, the document viewer */
++  function openLink(ref: DocumentRef) {
++    if (!ref.heading && !ref.text && files.some((f) => f.path === ref.path)) void showFile(ref.path);
++    else ondocument?.(ref);
++  }
++  setDocumentLinks(openLink);
++
+   /** The file just gone to: its card is made at once, the others after it */
+   let wanted = $state<string | null>(null);
+   const cardOf = (path: string) =>
+@@ -654,7 +668,7 @@
+         <div class="review-main">
+           <section class="review-card review-summary" aria-label="Description">
+             <h2 class="review-card-title">Description</h2>
+-            {#if page.summary.trim()}<CompMd text={page.summary} />{:else}<p class="review-empty">
++            {#if page.summary.trim()}<CompMd text={page.summary} onopen={openLink} />{:else}<p class="review-empty">
+                 No description.
+               </p>{/if}
+           </section>
+diff --git a/dashboard/src/lib/reviews/links.ts b/dashboard/src/lib/reviews/links.ts
+new file mode 100644
+index 00000000..3a90803f
+--- /dev/null
++++ b/dashboard/src/lib/reviews/links.ts
+@@ -0,0 +1,18 @@
++import { getContext, setContext } from 'svelte';
++import type { DocumentRef } from '../documents';
++
++// What a link to one of the project's documents does in a review's texts (ATM-586): its summary and every comment, in
++// whatever part of the page draws them (the Overview, the Comments tab, a chain in a diff). The review's page decides
++// and gives it to them through the component tree.
++
++const KEY = Symbol('review-document-links');
++
++/** The review's page: what a link to a document of the project does in the texts under it */
++export function setDocumentLinks(open: (ref: DocumentRef) => void): void {
++  setContext(KEY, open);
++}
++
++/** What a link to a document of the project does here; none outside a review's page (such a link then does nothing) */
++export function documentLinks(): ((ref: DocumentRef) => void) | undefined {
++  return getContext<((ref: DocumentRef) => void) | undefined>(KEY);
++}
+diff --git a/dashboard/src/lib/shell/ReviewsTab.svelte b/dashboard/src/lib/shell/ReviewsTab.svelte
+index 3d43478b..6d7789a8 100644
+--- a/dashboard/src/lib/shell/ReviewsTab.svelte
++++ b/dashboard/src/lib/shell/ReviewsTab.svelte
+@@ -237,6 +237,7 @@
+         onresolve={(comment, resolved) => change(resolveComment(project, review, comment, resolved))}
+         onsubmit={(decision, body) => change(submitDecision(project, review, body ? { decision, body } : { decision }))}
+         onclose={(reason) => change(closeReview(project, review, reason))}
++        ondocument={(ref) => dashboard.openDocument(ref)}
+       />
+     {:else if problem}
+       <p class="reviews-problem" role="alert">{problem}</p>
+diff --git a/dashboard/tests/e2e/reviews.spec.ts b/dashboard/tests/e2e/reviews.spec.ts
+index 83f6662d..48ad1937 100644
+--- a/dashboard/tests/e2e/reviews.spec.ts
++++ b/dashboard/tests/e2e/reviews.spec.ts
+@@ -331,6 +331,49 @@ test.describe('a review’s page', () => {
+     await expect(page.locator('#tab-reviews')).toHaveAttribute('aria-selected', 'true');
+   });
+ 
++  // ATM-586: links in a review's texts to the project's documents: a file of the round opens its diff, anything else
++  // the document viewer
++  test('a link in the summary or a comment: a file the round changed opens its diff, another document the viewer', async ({
++    page,
++    tasksServer,
++  }) => {
++    await openReviews(page, tasksServer);
++    const own = reviewPage();
++    tasksServer.setReview(
++      'CR-2',
++      reviewPage({
++        summary: 'Trims the names: see [the design](docs/design.md) and [the change](src/a.rs).',
++        chains: [
++          ...own.chains,
++          {
++            id: 't4',
++            anchor: { round: 3, path: null, side: 'new', lines: null, quote: null },
++            comments: [comment('c4', 'As [the plan](docs/plan.md) says.')],
++            placed: null,
++            drifted: null,
++          },
++        ],
++      }),
++    );
++    tasksServer.setDocument(projectDocument('docs/design.md', '# The design\n\nHow.\n'));
++    tasksServer.setDocument(projectDocument('docs/plan.md', '# The plan\n\nWhen.\n'));
++    await page.goto(reviewPath(tasksServer, '/CR-2'));
++    const summary = page.locator('.review-overview .review-main');
++    await summary.getByRole('link', { name: 'the design' }).click();
++    await expect(page.locator('#doc-title')).toHaveText('The design');
++    await page.keyboard.press('Escape');
++    await expect(page.locator('#doc-title')).toHaveCount(0);
++    // A comment's link, the same
++    await page.locator('.review-conversation [data-chain="t4"]').getByRole('link', { name: 'the plan' }).click();
++    await expect(page.locator('#doc-title')).toHaveText('The plan');
++    await page.keyboard.press('Escape');
++    // A file the round changed: its diff, on the Diffs tab
++    await summary.getByRole('link', { name: 'the change' }).click();
++    await expect(page.getByRole('tab', { name: /^Diffs/ })).toHaveAttribute('aria-selected', 'true');
++    await expect(card(page, 'src/a.rs')).toBeInViewport();
++    await expect(page.locator('#doc-title')).toHaveCount(0);
++  });
++
+   test('Overview: the summary, the facts, the tasks as links, the review’s own chains', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/CompMd.component.test.ts b/dashboard/tests/unit/CompMd.component.test.ts
+index fae708c1..b85d2489 100644
+--- a/dashboard/tests/unit/CompMd.component.test.ts
++++ b/dashboard/tests/unit/CompMd.component.test.ts
+@@ -39,6 +39,26 @@ afterEach(() => {
+ });
+ 
+ describe('CompMd', () => {
++  // ATM-586: a code review's summary and comments are the project's text: given onopen, their relative links open the
++  // document viewer, as a task's do; without it (Help, What's new) they stay text
++  it('given onopen, a relative link opens its document; without, it stays text', async () => {
++    loadCompmd.mockImplementation(realCompmd);
++    const onopen = vi.fn();
++    const text = 'See [the design](docs/design.md#routes) and [lines](src/a.rs#L3-L4).';
++    const { container, unmount } = render(CompMd, { text, onopen });
++    await vi.waitFor(() => expect(container.querySelectorAll('a')).toHaveLength(2));
++    container.querySelectorAll('a').forEach((a) => a.click());
++    expect(onopen.mock.calls).toEqual([
++      [{ path: 'docs/design.md', heading: 'routes' }],
++      [{ path: 'src/a.rs', lines: [3, 4] }],
++    ]);
++    unmount();
++    const plain = render(CompMd, { text });
++    await vi.waitFor(() => expect(plain.container.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready'));
++    expect(plain.container.querySelector('a')).toBeNull();
++    expect(plain.container).toHaveTextContent('See the design and lines.');
++  });
++
+   it('when CompMD can’t load, the text shows as written, with a note saying why', async () => {
+     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+     loadCompmd.mockRejectedValue(new Error('compmd.js: 404'));

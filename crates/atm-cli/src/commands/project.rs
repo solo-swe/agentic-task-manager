@@ -8,6 +8,7 @@ use atm_common::Result;
 use atm_common::py::{py_str, py_str_opt, truthy};
 use atm_lib::Project;
 use atm_lib::query::Filters;
+use atm_lib::stats::{StatsQuery, project_stats};
 use atm_lib::status::{StatusReport, status_report};
 use clap::Subcommand;
 use serde_json::Value;
@@ -49,6 +50,19 @@ pub enum ProjectCommand {
     /// The project's summary, as the dashboard's overview gets it (JSON).
     #[command(hide = true)]
     Summary,
+    /// The project's stats, progress and forecast, as the dashboard gets them (JSON, ATM-722).
+    #[command(hide = true)]
+    Stats {
+        /// Only these tasks (IDs or keys, repeatable): a view's slice
+        #[arg(long = "task")]
+        tasks: Vec<String>,
+        /// The period's start, in ms since 1970
+        #[arg(long)]
+        from: Option<i64>,
+        /// The period's end, in ms since 1970
+        #[arg(long)]
+        to: Option<i64>,
+    },
     /// The project's vocabularies: its statuses, types and priorities.
     #[command(subcommand)]
     Vocab(VocabCommand),
@@ -285,6 +299,13 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
             if let (Some(warning), Some(report)) = (&shared, status.report.as_object_mut()) {
                 report.insert("key_warning".into(), serde_json::json!(warning));
             }
+            // When the work may be done, by the agents' pace (ATM-722): atm's forecast, the dashboard's too
+            let now = atm_common::time::now() * 1000;
+            let forecast =
+                project_stats(&project, &StatsQuery::default(), now)?["forecast"].clone();
+            if let Some(report) = status.report.as_object_mut() {
+                report.insert("forecast".into(), forecast.clone());
+            }
             if ctx.json {
                 print_json(&status.report);
             } else {
@@ -306,6 +327,9 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 for line in status_lines(&status, &with) {
                     crate::output::emit(&line);
                 }
+                if let Some(line) = forecast_line(&forecast) {
+                    crate::output::emit(&labels.text(&line));
+                }
                 if let Some(warning) = shared {
                     crate::output::emit(&format!(
                         "{} {}",
@@ -325,12 +349,58 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
             print_json(&atm_lib::summary::project_summary(&Project::open(cwd)?)?);
             Ok(())
         }
+        ProjectCommand::Stats { tasks, from, to } => {
+            let query = StatsQuery {
+                tasks: (!tasks.is_empty()).then(|| tasks.into_iter().collect()),
+                from,
+                to,
+            };
+            let now = atm_common::time::now() * 1000;
+            print_json(&project_stats(&Project::open_tolerant(cwd)?, &query, now)?);
+            Ok(())
+        }
         ProjectCommand::Vocab(command) => vocab(command, ctx, cwd),
         ProjectCommand::Key(command) => key(command, ctx, cwd),
     }
 }
 
 mod settings;
+
+/// Minutes in words: `45 m`, `2 h 10 m`, `3 h`.
+fn minutes_text(minutes: f64) -> String {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    // reason: minutes of work, small and positive
+    let total = minutes.max(0.0).round() as u64;
+    match (total / 60, total % 60) {
+        (0, m) => format!("{m} m"),
+        (h, 0) => format!("{h} h"),
+        (h, m) => format!("{h} h {m} m"),
+    }
+}
+
+/// `atm project status`'s forecast line (ATM-722): when the sprint the loop works on next may be done, at the agents'
+/// pace; none without a pace or anything left to estimate.
+fn forecast_line(forecast: &Value) -> Option<String> {
+    let pace = forecast.get("pace").filter(|p| !p.is_null())?;
+    let next = forecast
+        .get("sprints")?
+        .as_array()?
+        .iter()
+        .find(|r| r.get("estimate").is_some())?;
+    let minutes = |key: &str| next["estimate"]["minutes"][key].as_f64().unwrap_or(0.0);
+    let name = next
+        .get("sprint")
+        .and_then(Value::as_str)
+        .map_or_else(|| "the backlog".to_string(), |s| format!("the sprint {s}"));
+    Some(format!(
+        "Forecast: {name} done in about {} of agent work ({} to {}), at {} a task (the last {}).",
+        minutes_text(minutes("likely")),
+        minutes_text(minutes("low")),
+        minutes_text(minutes("high")),
+        minutes_text(pace["likely"].as_f64().unwrap_or(0.0)),
+        pace["based_on"].as_u64().unwrap_or(0)
+    ))
+}
 
 fn text(value: &Value) -> String {
     py_str(value)

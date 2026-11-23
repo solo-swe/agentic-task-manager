@@ -1,0 +1,57 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "819ce6292c136088c96056ea23fa1df6efff95b1",
+    "head": "7e8b77d2d9bb5dad1e5da0f46258dfa0c62788ce"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/documents/DocumentViewer.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/latest.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/overview/OverviewReviews.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/RefreshMenu.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/shell/ReviewsTab.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/latest.test.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/state.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-20T22:17:41Z"
+}

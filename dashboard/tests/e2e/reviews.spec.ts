@@ -52,6 +52,10 @@ const NEW_D = '# Plan\n\nFirst step.\n\nNew ending.\n';
 const PATCH_D =
   'diff --git a/docs/plan.md b/docs/plan.md\n--- a/docs/plan.md\n+++ b/docs/plan.md\n@@ -5 +5 @@\n-Old ending.\n+New ending.\n';
 
+/** An hour before the run: a decided review is among the recent ones whatever day the suite runs (after
+ * `RECENT_DAYS`, the list folds it under *Older*) */
+const RECENTLY = new Date(Date.now() - 60 * 60_000).toISOString();
+
 const header = (n: number, status = 'waiting', more: Record<string, unknown> = {}) => ({
   id: `r${n}`,
   reference: `CR-${n}`,
@@ -61,8 +65,8 @@ const header = (n: number, status = 'waiting', more: Record<string, unknown> = {
   tasks: ['T-001'],
   author: 'claude:a',
   reviewers: [],
-  created: '2026-11-17T10:00:00Z',
-  updated: '2026-11-17T10:00:00Z',
+  created: RECENTLY,
+  updated: RECENTLY,
   ...more,
 });
 
@@ -72,7 +76,7 @@ const comment = (id: string, body: string, resolved: boolean | null = false) => 
   at: '2026-11-17T10:00:00Z',
   body,
   resolved,
-  replies: [],
+  replies: [] as unknown[],
 });
 
 const file = (path: string, patch: string, status = 'modified', before: string | null = 'base1') => ({
@@ -85,7 +89,8 @@ const file = (path: string, patch: string, status = 'modified', before: string |
   after: 'head3',
 });
 
-/** CR-2's page: three rounds, three files, a chain in place, a drifted one, one on the review */
+/** CR-2's page: three rounds, three files, a chain in place, a drifted one, one on the review (`setReview` adds atm's
+ * answers on it, `can` and `editable`, unless it gives them) */
 function reviewPage(more: Record<string, unknown> = {}) {
   return {
     review: header(2),
@@ -297,13 +302,20 @@ test.describe('the reviews tab', () => {
   }) => {
     await openReviews(page, tasksServer);
     const open = page.getByRole('button', { name: 'Open', exact: true });
-    await page.getByRole('searchbox', { name: 'Search reviews' }).fill('names');
+    const search = page.getByRole('searchbox', { name: 'Search reviews' });
+    await search.fill('names');
     await open.click();
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names&status=open');
+    // A reload keeps both: they are the address's (ATM-697)
     await page.reload();
     await expect(open).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('');
+    await expect(search).toHaveValue('names');
+    // The list opened afresh (an address naming no filter): the filter kept in the browser, not the words
+    await page.goto(reviewPath(tasksServer));
+    await expect(open).toHaveAttribute('aria-pressed', 'true');
+    await expect(search).toHaveValue('');
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?status=open');
+    await expect.poll(() => shown(page)).toBe(`${reviewPath(tasksServer)}?status=open`);
     await page.getByRole('button', { name: 'Clear' }).click();
     await expect(open).toHaveAttribute('aria-pressed', 'false');
     await page.reload();
@@ -401,8 +413,87 @@ test.describe('the reviews tab', () => {
     }) => {
       await openReviews(page, tasksServer, 'CR-2');
       await expect(back(page)).toHaveText('Reviews');
+      const depth = await page.evaluate(() => history.length);
       await back(page).click();
       await expect(page.locator('#review-list')).toBeVisible();
+      // In the review's place (ATM-696): no entry added, so Back doesn't come back to it
+      expect(await page.evaluate(() => history.length)).toBe(depth);
+    });
+
+    test('from the Reviews list: back to it, through the history', async ({ page, tasksServer }) => {
+      await openReviews(page, tasksServer);
+      await page.locator('.review-row[data-review="CR-2"] .review-link').click();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+      await expect(back(page)).toHaveText('Reviews');
+      await back(page).click();
+      await expect(page.locator('#review-list')).toBeVisible();
+      await page.goForward();
+      await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
+    });
+  });
+
+  // ATM-697 (docs/tabs-and-navigation-design.md §4.4): everything a review's page and the list show has an address
+  test.describe('an address for everything the reviews tab shows', () => {
+    const selected = (page: Page, name: RegExp) =>
+      expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
+
+    test('a review’s sub-tab is in its path: kept over a reload, and each a step for Back and Forward', async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer, 'CR-2');
+      await selected(page, /^Overview/);
+      await page.getByRole('tab', { name: /^Comments/ }).click();
+      await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2/comments'));
+      await page.getByRole('tab', { name: /^Diffs/ }).click();
+      await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2/diffs'));
+      await page.reload();
+      await selected(page, /^Diffs/);
+      await page.goBack();
+      await selected(page, /^Comments/);
+      await page.goBack();
+      await selected(page, /^Overview/);
+      await page.goForward();
+      await selected(page, /^Comments/);
+      // A sub-tab is the review's own page: its back button still says where the review came from
+      await expect(page.locator('.review-back')).toHaveText('Reviews');
+    });
+
+    test('a comment in view is in the query: going to it from the Comments tab, a link to it, Back', async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer, 'CR-2/comments');
+      await selected(page, /^Comments/);
+      await page.getByRole('button', { name: 'src/a.rs · Line 3' }).click();
+      await expect.poll(() => shown(page)).toBe(`${reviewPath(tasksServer, '/CR-2/diffs')}?file=src/a.rs&comment=c1`);
+      await expect(page.locator('.review-comment-in-view')).toHaveAttribute('data-comment', 'c1');
+      await page.goBack();
+      await selected(page, /^Comments/);
+      // A link from outside (as an atm:// link opens it): the review at the comment, on its tab, marked
+      await page.goto(`${reviewPath(tasksServer, '/CR-2/diffs')}?file=src/a.rs&comment=c1`);
+      await selected(page, /^Diffs/);
+      const marked = page.locator('.review-comment-in-view');
+      await expect(marked).toHaveAttribute('data-comment', 'c1');
+      await expect(marked).toBeInViewport();
+    });
+
+    test('the list’s filter and search are in its address: kept over a reload, and Back goes to the one before', async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer);
+      await page.getByRole('searchbox', { name: 'Search reviews' }).fill('names');
+      await expect.poll(() => shown(page)).toBe(`${reviewPath(tasksServer)}?q=names`);
+      await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('?q=names');
+      await page.reload();
+      await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('names');
+      // Words typed are the entry's own: Back goes to before the search
+      await page.goBack();
+      await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer));
+      await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('');
+      await page.goForward();
+      await expect(page.getByRole('searchbox', { name: 'Search reviews' })).toHaveValue('names');
     });
   });
 
@@ -1422,15 +1513,53 @@ test.describe('a review’s page', () => {
     await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'README.md');
     await expect(card(page, 'README.md')).toBeInViewport();
     // The address follows once the page is idle
-    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2?file=README.md'));
+    await expect.poll(() => shown(page)).toBe(reviewPath(tasksServer, '/CR-2/diffs?file=README.md'));
     // The address's file opens the Diffs tab at it
     await page.reload();
     await expect(page.getByRole('tab', { name: /^Diffs/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.review-file.current .review-file-name')).toHaveAttribute('data-file', 'README.md');
     await page.selectOption('#review-against', '1');
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=3&against=1');
-    expect(shown(page)).toBe(reviewPath(tasksServer, '/CR-2?round=3&against=1&file=README.md'));
+    expect(shown(page)).toBe(reviewPath(tasksServer, '/CR-2/diffs?round=3&against=1&file=README.md'));
     await page.selectOption('#review-round', '2');
+    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=2');
+  });
+
+  // ATM-725: a round's views are its whole change, what changed since an earlier round, and its own increment
+  test('the picker: Round 3 (whole), Since round 1, Round 3 only; each asked of the server', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDiffs(page, tasksServer);
+    await expect(page.locator('#review-against option')).toHaveText([
+      'Round 3 (whole)',
+      'Since round 1',
+      'Round 3 only',
+    ]);
+    await page.selectOption('#review-against', '2');
+    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=3&against=2');
+    await page.selectOption('#review-against', '');
+    await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=3');
+    // Round 1 has only its whole change (the fixture serves one page for every view: round 1's, now)
+    tasksServer.setReview('CR-2', reviewPage({ view: { ...reviewPage().view, round: 1 } }));
+    await page.selectOption('#review-round', '1');
+    await expect(page.locator('#review-against option')).toHaveText(['Round 1 (whole)']);
+  });
+
+  test('a comment on a round the view doesn’t hold is listed, linking to its round, not placed', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDiffs(page, tasksServer);
+    // Since round 2: c1, made on round 2, is on a round the view doesn't hold
+    const chains: Record<string, unknown>[] = reviewPage().chains;
+    chains[0] = { ...chains[0], anchor: { ...reviewPage().chains[0].anchor, round: 2 }, in_view: false };
+    tasksServer.setReview('CR-2', reviewPage({ chains, view: { ...reviewPage().view, against: 2 } }));
+    await page.reload();
+    const listed = card(page, 'src/a.rs').locator('.review-elsewhere[data-chain="t1"]');
+    await expect(listed).toContainText('A comment on round 2');
+    await expect(card(page, 'src/a.rs').locator('[data-comment="c1"]')).toHaveCount(0);
+    await listed.getByRole('button', { name: /see it on round 2, lines 3–3/ }).click();
     await expect.poll(() => tasksServer.reviewRequests.at(-1)).toBe('CR-2?round=2');
   });
 
@@ -1542,11 +1671,18 @@ test.describe('the diff viewer on a review’s page', () => {
     const medium = await fontSize();
     await page.evaluate(() => (document.documentElement.dataset.docSize = 'huge'));
     await expect.poll(fontSize).toBeCloseTo(medium * 1.3, 1);
+    // Level with the heading's text, not its box (a style's heading has padding and a rule under it, ATM-706)
+    const headingText = () =>
+      newSide.locator('.compmd-page h1').evaluate((el) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        const box = r.getClientRects()[0];
+        return box.top + box.height / 2;
+      });
     await expect
       .poll(async () => {
         const n = (await newSide.locator('.doc-gutter-lines [data-line="1"]').boundingBox())!;
-        const h = (await newSide.locator('.compmd-page h1').boundingBox())!;
-        return Math.abs(n.y + n.height / 2 - (h.y + h.height / 2));
+        return Math.abs(n.y + n.height / 2 - (await headingText()));
       })
       .toBeLessThan(4);
     await page.getByRole('button', { name: 'Unified' }).click();
@@ -1827,8 +1963,8 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(number).toHaveClass(/marked/);
     const numberBox = (await number.boundingBox())!;
     expect(Math.abs(numberBox.y - text.y)).toBeLessThan(text.height);
-    // ATM-645: in Unified, as wide as the document viewer's page (820 px where the desk has room), its margin the
-    // viewer's: one component
+    // ATM-645: in Unified, as wide as the document viewer's page (its style's, GitHub's 980 px by default since
+    // ATM-706, where the desk has room), its margin the viewer's: one component
     await page.getByRole('button', { name: 'Unified' }).click();
     const one = view.locator('.diff-pane.diff-new');
     const widths = await one.evaluate((desk) => {
@@ -1841,8 +1977,8 @@ test.describe('the diff viewer on a review’s page', () => {
         max: getComputedStyle(page).maxWidth,
       };
     });
-    expect(widths.max).toBe('820px');
-    expect(widths.page).toBe(Math.min(820, widths.room));
+    expect(widths.max).toBe('980px');
+    expect(widths.page).toBe(Math.min(980, widths.room));
   });
 
   // ATM-627 (Hakan, the app): writing a comment on the rendered view, the document was drawn over the comment box
@@ -1946,7 +2082,8 @@ test.describe('the diff viewer on a review’s page', () => {
     const box = (await composer.boundingBox())!;
     const sheet = (await newSide.locator('.doc-page').boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(sheet.x + sheet.width);
-    expect(Math.abs(box.y - (text.y + text.height / 2 - 16))).toBeLessThan(4);
+    // Level with line 1's number, which is on the heading's text (its box has padding and a rule in a style, ATM-706)
+    expect(Math.abs(box.y - (number.y + number.height / 2 - 16))).toBeLessThan(4);
     await page.mouse.move(0, 0);
     await expect(newSide.locator('.diff-plus.held')).toHaveCount(1);
     await expect(newSide.locator('.diff-block-mark.diff-picked')).not.toHaveCount(0);
@@ -2348,6 +2485,43 @@ test.describe('the diff viewer on a review’s page', () => {
       });
   });
 
+  // ATM-675 (audit D2): the page was one component across reviews, so what was typed on one was posted to the next
+  test('a comment typed on one review isn’t there on the next one gone to', async ({ page, tasksServer }) => {
+    const data = loadFixture('standard');
+    Object.assign(
+      data.tasks.find((t) => t.id === 'T-001')!,
+      {
+        status: 'in_review',
+        code_reviews: [
+          { id: 'r2', ref: 'CR-2' },
+          { id: 'r1', ref: 'CR-1' },
+        ],
+      },
+    );
+    tasksServer
+      .setReviews({
+        reviews: [
+          { review: header(2), branch: 'dev/1', chains: 3, open: 2, needs_you: true },
+          { review: header(1), branch: 'dev/1', chains: 0, open: 0, needs_you: true },
+        ],
+        you: 'Ana',
+      })
+      .setReview('CR-2', reviewPage())
+      .setReview('CR-1', reviewPage({ review: header(1), chains: [] }));
+    await openDashboard(page, tasksServer, data, { tab: 'reviews' });
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('button', { name: 'Comment on the review' }).click();
+    await page.locator('#review-comment-body').fill('Half a thought');
+    // To CR-1 without leaving the page: from the details of the task both review
+    await page.locator('#review-page a[data-task="T-001"]').first().click();
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.locator('#detail-review .review-link', { hasText: 'CR-1' }).click();
+    await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-1');
+    await expect(page.locator('#review-comment-body')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Comment on the review' }).click();
+    await expect(page.locator('#review-comment-body')).toHaveValue('');
+  });
+
   test('viewed folds a file, kept in the browser; its fold opens it again', async ({ page, tasksServer }) => {
     await openDiffs(page, tasksServer);
     await card(page, 'src/a.rs').getByLabel('Viewed src/a.rs').check();
@@ -2451,6 +2625,80 @@ test.describe('the diff viewer on a review’s page', () => {
     await chain.locator('.chain-body').click();
     await page.mouse.move(0, 0);
     await expect(diffOf(page, 'src/a.rs').locator('.diff-new .diff-line.commented')).toHaveCount(1);
+  });
+
+  // ATM-633 (docs/task-review-state-machine.md §5.2): the page shows what the server's state machine allows, with its
+  // words, and never repeats the rules
+  test('Approve is as the server’s can says: blocked with its why, then allowed; Request changes too', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const why = 'CR-2 can’t be approved while comments are open: c1';
+    tasksServer.setReview(
+      'CR-2',
+      reviewPage({
+        can: {
+          approve: { ok: false, why },
+          request_changes: { ok: false, why: 'CR-2 is changes requested: it can’t be sent back' },
+          comment: { ok: true },
+        },
+      }),
+    );
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await page.getByRole('button', { name: 'Submit review' }).click();
+    await expect(page.locator('#review-approve, [data-decision="approve"]').first()).toBeDisabled();
+    await expect(page.locator('#review-approve-why')).toContainText(why);
+    await expect(page.locator('[data-decision="request_changes"]')).toHaveCount(0);
+    // The server allows it now (the comment resolved elsewhere): the page follows its next answer, Approve one click
+    // (ATM-723: atm's answer, not the comments the page holds)
+    const allowed = { approve: { ok: true }, request_changes: { ok: true }, comment: { ok: true } };
+    tasksServer.setReview('CR-2', reviewPage({ can: allowed }));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await expect(page.locator('#review-approve')).toBeEnabled();
+    await page.getByRole('button', { name: 'Other decisions' }).click();
+    await expect(page.locator('[data-decision="approve"]')).toBeEnabled();
+    await expect(page.locator('#review-approve-why')).toHaveCount(0);
+    await expect(page.locator('[data-decision="request_changes"]')).toBeVisible();
+  });
+
+  // ATM-723: the controls follow atm's answers on each kind of review, the page keeping no rule of its own
+  for (const [status, offered] of [
+    ['waiting', ['comment', 'request_changes', 'approve']],
+    ['live', ['comment', 'close', 'approve']],
+    ['changes_requested', ['comment', 'approve']],
+  ] as const) {
+    test(`a ${status} review offers ${offered.join(', ')}; Edit on your own comments`, async ({
+      page,
+      tasksServer,
+    }) => {
+      await openReviews(page, tasksServer);
+      const chains = reviewPage().chains;
+      // On the review: the reviewer's comment, and the agent's reply to it
+      const theirs = { ...comment('c4', 'Thanks.', null), author: 'claude:a' };
+      // Open: a resolved comment is folded, its Edit not drawn
+      chains[2] = { ...chains[2], comments: [{ ...comment('c3', 'Nice and small.'), replies: [theirs] }] };
+      tasksServer.setReview('CR-2', reviewPage({ review: header(2, status), chains }));
+      await page.goto(reviewPath(tasksServer, '/CR-2'));
+      await page.getByRole('button', { name: /Submit review|Publish comments/ }).click();
+      await expect(page.locator('.review-submit [data-decision]')).toHaveCount(offered.length);
+      for (const decision of offered) await expect(page.locator(`[data-decision="${decision}"]`)).toBeVisible();
+      await expect(page.locator('[data-decision="approve"]')).toBeDisabled(); // c1 is open
+      const conversation = page.locator('.review-conversation');
+      const edit = (id: string) =>
+        conversation.locator(`[data-comment="${id}"] > .chain-meta`).getByRole('button', { name: 'Edit comment' });
+      await expect(edit('c3')).toHaveCount(1);
+      await expect(edit('c4')).toHaveCount(0);
+    });
+  }
+
+  test('an approved review offers no decision, no poke and no Edit', async ({ page, tasksServer }) => {
+    await openReviews(page, tasksServer);
+    tasksServer.setReview('CR-2', reviewPage({ review: header(2, 'approved') }));
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    await expect(page.locator('#review-page')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Submit review|Approve|Poke/ })).toHaveCount(0);
+    await expect(page.locator('[aria-label="Edit comment"]')).toHaveCount(0);
   });
 
   test('every comment resolved: Submit review is Approve, and one click approves', async ({ page, tasksServer }) => {
@@ -2575,10 +2823,10 @@ test.describe('the diff viewer on a review’s page', () => {
       });
     tasksServer.answerReviewChanges(403, { error: "the review's author can't decide it" });
     await page.getByRole('button', { name: 'Submit review' }).click();
-    // Its comments open, Approve can't be pressed, and says why (ATM-601)
+    // Its comments open, Approve can't be pressed, and says why in atm's words (ATM-601, ATM-723)
     const approve = page.getByRole('button', { name: 'Approve' });
     await expect(approve).toBeDisabled();
-    await expect(approve).toHaveAccessibleDescription(/still open: resolve them first/);
+    await expect(approve).toHaveAccessibleDescription('CR-2 can’t be approved while comments are open: c1, c2');
     await page.getByLabel('Summary').fill('One more.');
     await page.getByRole('button', { name: 'Comment', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveText("the review's author can't decide it");

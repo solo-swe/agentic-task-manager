@@ -85,12 +85,41 @@ pub fn locked_with_claims(paths: &Paths) -> Result<Locks> {
 
 /// The shared store, each section an object: live `claims`, `completed` tasks (done in some worktree), `waiting`
 /// ones (blocked or in review in some worktree), `resolved` ones (decided in another worktree than they wait in), and
-/// `hints` (when each hint was last shown).
+/// `hints` (when each hint was last shown). For reading: a store that can't be read reads as empty. A change reads it
+/// with [`load_store`].
 #[must_use]
 pub fn read_store(paths: &Paths) -> Map<String, Value> {
     let data = read_json(&claims_store_path(paths))
         .and_then(|d| d.as_object().cloned())
         .unwrap_or_default();
+    sections_of(&data)
+}
+
+/// The shared store, for a change: as [`read_store`], but a store that is there and can't be read is an error rather
+/// than empty (ATM-674, audit R9: written back, the empty store dropped every live claim), as a task file that can't
+/// be read is. A store not there yet is empty.
+///
+/// # Errors
+/// When the store's file is there but isn't a JSON object.
+pub fn load_store(paths: &Paths) -> Result<Map<String, Value>> {
+    let file = claims_store_path(paths);
+    if !file.exists() {
+        return Ok(sections_of(&Map::new()));
+    }
+    let data = read_json(&file)
+        .and_then(|d| d.as_object().cloned())
+        .ok_or_else(|| {
+            Error::failed(format!(
+                "{} can't be read (not a JSON object): nothing was changed, so the claims it holds aren't lost. \
+                 Fix it, or remove it to drop them",
+                file.shown()
+            ))
+        })?;
+    Ok(sections_of(&data))
+}
+
+/// The store's sections from its file's object.
+fn sections_of(data: &Map<String, Value>) -> Map<String, Value> {
     // `claims` and `completed` as Python's `or {}` reads them: anything falsy is empty
     let or_empty = |key: &str| {
         data.get(key)
@@ -192,6 +221,28 @@ mod tests {
         );
         let _locks = locked_with_claims(&paths).unwrap();
         assert!(paths.dir.join(".lock").is_dir());
+    }
+
+    /// ATM-674, audit R9: a store that is there but can't be read is an error for a change, and reads as empty for a
+    /// look; one not there yet is empty for both
+    #[test]
+    fn an_unreadable_store_refuses_a_change_and_reads_as_empty() {
+        let dir = TestDir::new();
+        std::fs::create_dir(dir.path().join(TASK_DIR)).unwrap();
+        let paths = find_paths(dir.path()).unwrap();
+        assert_eq!(load_store(&paths).unwrap(), read_store(&paths));
+        let file = claims_store_path(&paths);
+        for bad in ["{\"claims\": {\"T-1\"", "[]", ""] {
+            std::fs::write(&file, bad).unwrap();
+            let error = load_store(&paths).unwrap_err().to_string();
+            assert!(error.contains("can't be read"), "{bad:?}: {error}");
+            assert_eq!(read_store(&paths)["claims"], json!({}));
+            assert_eq!(
+                std::fs::read_to_string(&file).unwrap(),
+                bad,
+                "left as it was"
+            );
+        }
     }
 
     #[test]

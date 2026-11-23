@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftedComments, withDrafts } from '../../src/lib/reviews/drafts';
+import { withDrafts } from '../../src/lib/reviews/drafts';
 import type { PlacedChain, PlacedDraft, ReviewComment } from '../../src/lib/reviews/types';
 
 // The user's drafts among a review's chains (lib/reviews/drafts.ts, ATM-612): a draft comment a chain of its own,
@@ -20,6 +20,7 @@ const chain = (id: string, comments: ReviewComment[]): PlacedChain => ({
   comments,
   placed: [3, 4],
   drifted: null,
+  in_view: true,
 });
 const onLines = (id: string, more: Partial<PlacedDraft> = {}): PlacedDraft =>
   ({
@@ -69,7 +70,11 @@ describe('withDrafts', () => {
       ],
       placed: [9, 9],
       drifted: null,
+      in_view: true,
     });
+    // On a round the view doesn't hold, as the server says (ATM-725)
+    const [, elsewhere] = withDrafts([chain('t1', [])], [onLines('d1', { in_view: false })], 'Hakan', 2);
+    expect(elsewhere.in_view).toBe(false);
   });
 
   it('one on what a live review is now is on the round shown; on the review, no file; drifted as the server says', () => {
@@ -107,12 +112,5 @@ describe('withDrafts', () => {
     expect(shown[1]).toEqual(chains[1]);
     // The page's own chains are left as they were
     expect(chains[0].comments[0].replies).toHaveLength(1);
-  });
-});
-
-describe('draftedComments', () => {
-  it('counts the drafts that would be open comments once sent, not the replies', () => {
-    expect(draftedComments(undefined)).toBe(0);
-    expect(draftedComments([onLines('d1'), reply('d2', 'c1'), onLines('d3')])).toBe(2);
   });
 });

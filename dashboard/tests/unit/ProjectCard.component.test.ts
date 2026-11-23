@@ -82,7 +82,8 @@ describe('ProjectCard: a project with sprints (SR-7.7)', () => {
     const { container } = render(ProjectCard, {
       project: withSprints({
         recent_sprints: [sprint('Foundations', 'closed', 4, 4), sprint('Ada Lovelace', 'active', 1, 3)],
-        active_sprint: { ...sprint('Ada Lovelace', 'active', 1, 3), due: '2026-04-12', goal: 'Sign-in' },
+        // atm says how many days are left (ATM-720: the project's day)
+        active_sprint: { ...sprint('Ada Lovelace', 'active', 1, 3), due: '2026-04-12', goal: 'Sign-in', days_left: 3 },
       }),
     });
     expect(rings(container).map((r) => r.querySelector('.project-card-ring-label')?.textContent)).toEqual([

@@ -153,6 +153,9 @@ pub fn text_of(windows: Vec<SavedWindow>) -> String {
 #[derive(Default)]
 pub struct Session {
     inner: Mutex<Inner>,
+    /// Held from taking the windows to the file being in place (ATM-677, audit A3): one write at a time, so two never
+    /// share a partial file and the last taken is the last written
+    writing: Mutex<()>,
 }
 
 #[derive(Default)]
@@ -177,9 +180,7 @@ struct Inner {
 
 impl Session {
     fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        crate::locked(&self.inner)
     }
 
     /// Keep the windows in `path`.
@@ -274,15 +275,14 @@ impl Session {
     /// # Errors
     /// When the file can't be written.
     pub fn write(&self) -> std::io::Result<()> {
+        let _writing = crate::locked(&self.writing);
         let Some(path) = self.inner().path.clone() else {
             return Ok(());
         };
         if let Some(folder) = path.parent() {
             std::fs::create_dir_all(folder)?;
         }
-        let next = path.with_extension("json.next");
-        std::fs::write(&next, text_of(self.saved()))?;
-        std::fs::rename(&next, &path)
+        atm_common::home::write_private_atomic(&path, &text_of(self.saved()))
     }
 }
 
@@ -397,10 +397,7 @@ pub async fn save_tabs<R: Runtime>(
         .checked()
         .ok_or_else(|| AppError::Invalid("no tab is one of the dashboard's pages".into()))?;
     if state.session().show(window.label(), tabs) {
-        state
-            .session()
-            .write()
-            .map_err(|e| AppError::Failed(e.to_string()))?;
+        state.session().write()?;
     }
     Ok(())
 }
@@ -442,10 +439,8 @@ pub async fn reload_window<R: Runtime>(
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
     state.session().reloading(window.label());
-    let url = window.url().map_err(|e| AppError::Failed(e.to_string()))?;
-    window
-        .navigate(page_url(url))
-        .map_err(|e| AppError::Failed(e.to_string()))
+    let url = window.url()?;
+    Ok(window.navigate(page_url(url))?)
 }
 
 #[cfg(test)]
@@ -846,7 +841,37 @@ mod tests {
         session.write().expect("written");
         let text = std::fs::read_to_string(folder.join(FILE)).expect("the file");
         assert_eq!(parse(&text), session.saved());
-        assert!(!folder.join("windows.json.next").exists());
+        assert_eq!(
+            std::fs::read_dir(&folder).expect("the folder").count(),
+            1,
+            "no partial file is left"
+        );
+        std::fs::remove_dir_all(&folder).expect("clean up");
+    }
+
+    /// ATM-677, audit A3: writes from several threads at once (windows moving, a page saying its tabs) each succeed,
+    /// and the file is whole, the windows as they are now
+    #[test]
+    fn writes_at_once_each_succeed_and_leave_the_file_whole() {
+        let folder =
+            std::env::temp_dir().join(format!("atm-app-session-race-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        let session = Session::default();
+        session.keep_in(folder.join(FILE));
+        std::thread::scope(|scope| {
+            for n in 0..8 {
+                let session = &session;
+                scope.spawn(move || {
+                    for _ in 0..10 {
+                        session.show(&format!("w{n}"), tabs(&["/board"], 0));
+                        session.write().expect("written");
+                    }
+                });
+            }
+        });
+        let text = std::fs::read_to_string(folder.join(FILE)).expect("the file");
+        assert_eq!(parse(&text), session.saved());
+        assert_eq!(std::fs::read_dir(&folder).expect("the folder").count(), 1);
         std::fs::remove_dir_all(&folder).expect("clean up");
     }
 }

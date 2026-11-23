@@ -16,9 +16,6 @@ use serde_json::{Map, Value};
 /// (T-439), as every atm command an agent runs renews its claims.
 pub const DEFAULT_LEASE_MINUTES: f64 = 120.0;
 
-/// Review states that make a task in review work for an agent again (SR-3.9).
-const REWORK_STATES: [&str; 2] = ["changes_requested", "approved"];
-
 /// The project's lease length in minutes: `meta.lease_minutes` when it is a positive number (or a text of one).
 #[must_use]
 pub fn lease_minutes(document: &Value) -> f64 {
@@ -30,10 +27,14 @@ pub fn lease_minutes(document: &Value) -> f64 {
         Some(Value::Bool(b)) => Some(f64::from(u8::from(*b))),
         Some(_) => None,
     };
+    // At most a year (ATM-666, audit L9): `inf` or 1e300 made a lease's seconds overflow, and no claim ever ran out
     minutes
-        .filter(|m| *m > 0.0)
-        .unwrap_or(DEFAULT_LEASE_MINUTES)
+        .filter(|m| m.is_finite() && *m > 0.0)
+        .map_or(DEFAULT_LEASE_MINUTES, |m| m.min(MAX_LEASE_MINUTES))
 }
+
+/// The longest lease: a year.
+pub const MAX_LEASE_MINUTES: f64 = 365.0 * 24.0 * 60.0;
 
 /// What the loop works on (SR-3.2): the active sprint (the default, in a project with sprints), named sprints, a list
 /// of tasks, all tasks, or the backlog; `task_type` narrows it.
@@ -51,15 +52,10 @@ pub struct Selection {
     pub task_type: Option<String>,
 }
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
+use atm_common::task_id as id_of;
 
 fn sprint_id<'v>(vocab: &'v Vocabulary, task: &Task) -> Option<&'v str> {
-    vocab
-        .find_sprint(task.get("sprint"))
-        .and_then(|s| s.get("id"))
-        .and_then(Value::as_str)
+    vocab.sprint_id_of(task)
 }
 
 /// The tasks a selection covers, in any status, with each one's rank in the selection's own order and the words for
@@ -92,10 +88,10 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
             .filter(|i| !tasks.iter().any(|t| id_of(t) == Some(i)))
             .collect();
         if !missing.is_empty() {
-            return Err(Error::Failed {
-                message: format!("--tasks: no task {}", missing.join(", ")),
-                code: 2,
-            });
+            return Err(Error::Invalid(format!(
+                "--tasks: no task {}",
+                missing.join(", ")
+            )));
         }
         scope = "the listed tasks".into();
         let order: Vec<String> = sel.tasks.clone();
@@ -125,7 +121,7 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
         Box::new(move |t| Some(found(t)))
     } else if sel.backlog {
         scope = "the backlog".into();
-        Box::new(move |t| vocab.find_sprint(t.get("sprint")).is_none().then_some(0))
+        Box::new(move |t| vocab.sprint_of(t).is_none().then_some(0))
     } else if !sel.sprints.is_empty() {
         let mut named = Vec::new();
         for name in &sel.sprints {
@@ -138,16 +134,16 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
                     } else {
                         ids.join(", ")
                     };
-                    Error::Failed {
-                        message: format!("no sprint {}; the sprints: {known}", repr_str(name)),
-                        code: 2,
-                    }
+                    Error::Invalid(format!(
+                        "no sprint {}; the sprints: {known}",
+                        repr_str(name)
+                    ))
                 })?;
             if sprint.get("state").and_then(Value::as_str) == Some("closed") {
-                return Err(Error::Failed {
-                    message: format!("the sprint {} is closed", repr_str(&names_of(sprint))),
-                    code: 2,
-                });
+                return Err(Error::Invalid(format!(
+                    "the sprint {} is closed",
+                    repr_str(&names_of(sprint))
+                )));
             }
             named.push(names_of(sprint));
         }
@@ -228,7 +224,7 @@ fn offered_to(document: &Value, task: &Task, agent: Option<&str>) -> bool {
     };
     #[allow(clippy::cast_possible_truncation)] // reason: minutes of a lease in seconds fit an i64
     let lease = (lease_minutes(document) * 60.0) as i64;
-    now() >= reviewed + lease
+    now() >= reviewed.saturating_add(lease)
 }
 
 /// What the loop sees for a selection: the tasks it could take now in its order, the selection's tasks, the
@@ -249,8 +245,25 @@ pub struct LoopOrder<'t> {
     pub problem: Option<String>,
 }
 
+/// The tasks blocked or in review in another worktree than `here` (T-204): this worktree's copy doesn't say so until
+/// the branches merge. A wait recorded here is the task's own status here, which the loop reads from the task itself
+/// (ATM-657: a review decided here left a record that kept the task from its agent).
+fn waiting_elsewhere<'s>(
+    store: &'s Map<String, Value>,
+    here: Option<&str>,
+) -> impl Iterator<Item = &'s String> {
+    store
+        .get("waiting")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter(move |(_, record)| record.get("worktree").and_then(Value::as_str) != here)
+        .map(|(id, _)| id)
+}
+
 /// Every task the loop could take now, in the order it takes them (tasks back from review first, then the
-/// selection's own order, the most urgent priority and the lowest ID): `loop next` hands out the first.
+/// selection's own order, the most urgent priority and the lowest ID): `loop next` hands out the first. `here` is the
+/// worktree it runs in (the working copy's folder; none outside git).
 ///
 /// # Errors
 /// A selection naming a task or sprint the project doesn't have (exit code 2); an archive that can't be read.
@@ -260,10 +273,11 @@ pub fn loop_order<'t>(
     document: &Value,
     tasks: &[&'t Task],
     store: &Map<String, Value>,
+    here: Option<&str>,
     sel: &Selection,
     agent: Option<&str>,
     with_user: bool,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<LoopOrder<'t>> {
     let selected = select(vocab, tasks, sel)?;
     if let Some(problem) = selected.problem {
@@ -281,9 +295,7 @@ pub fn loop_order<'t>(
     let mut candidates: Vec<(&Task, bool, usize)> = Vec::new();
     for (t, r) in selected.tasks.iter().zip(&selected.rank) {
         let rework = kind(t) == Some(Kind::Review)
-            && t.get("review_state")
-                .and_then(Value::as_str)
-                .is_some_and(|s| REWORK_STATES.contains(&s))
+            && atm_common::rules::awaits_agent(t.get("review_state").and_then(Value::as_str))
             && offered_to(document, t, agent);
         if rework {
             candidates.push((t, true, *r));
@@ -311,9 +323,10 @@ pub fn loop_order<'t>(
             .map(|m| m.keys().cloned().collect::<Vec<_>>())
             .unwrap_or_default()
     };
-    let taken: HashSet<String> = [section("claims"), section("completed"), section("waiting")]
+    let taken: HashSet<String> = [section("claims"), section("completed")]
         .concat()
         .into_iter()
+        .chain(waiting_elsewhere(store, here).cloned())
         .collect();
     let mut ready = Vec::new();
     for c in &candidates {
@@ -354,13 +367,14 @@ pub fn next_task<'t>(
     document: &Value,
     tasks: &[&'t Task],
     store: &Map<String, Value>,
+    here: Option<&str>,
     sel: &Selection,
     agent: Option<&str>,
     with_user: bool,
-    archived: &dyn Fn(&str) -> Result<bool>,
+    archived: &atm_common::rules::ArchivedTask,
 ) -> Result<(Option<&'t Task>, Option<String>)> {
     let order = loop_order(
-        vocab, document, tasks, store, sel, agent, with_user, archived,
+        vocab, document, tasks, store, here, sel, agent, with_user, archived,
     )?;
     if let Some(problem) = order.problem {
         return Ok((None, Some(problem)));
@@ -451,8 +465,14 @@ pub fn next_task<'t>(
             .copied()
             .collect::<Vec<_>>()
     };
-    let (claimed, done_elsewhere, waiting_elsewhere) =
-        (pick("claims"), pick("completed"), pick("waiting"));
+    let elsewhere: HashSet<&String> = waiting_elsewhere(store, here).collect();
+    let (claimed, done_elsewhere) = (pick("claims"), pick("completed"));
+    let waiting_elsewhere: Vec<&Task> = order
+        .candidates
+        .iter()
+        .filter(|t| id_of(t).is_some_and(|id| elsewhere.contains(&id.to_string())))
+        .copied()
+        .collect();
     let mut parts = vec![format!(
         "{} todo task(s) waiting on dependencies",
         order.candidates.len()

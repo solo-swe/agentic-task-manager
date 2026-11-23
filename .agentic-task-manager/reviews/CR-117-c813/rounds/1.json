@@ -1,0 +1,42 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "1bdd9aace6ea4b018e2342f976100f65a5d83329",
+    "head": "695a2413455a540442316676c7c4338b8fd8ca0f"
+  },
+  "files": [
+    {
+      "path": "dashboard/src/lib/context-menus.ts",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/ui/AppContextMenu.svelte",
+      "status": "added",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/routes/+layout.svelte",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/app.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/helpers.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/context-menus.test.ts",
+      "status": "added",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-22T19:35:55Z"
+}

@@ -12,6 +12,13 @@
       "type": "integer",
       "description": "How big the project's working task data is (tasks.json), for the archive notice"
     },
+    "vocabulary": { "$ref": "#/$defs/ProjectVocabulary" },
+    "sprints": { "$ref": "#/$defs/ServedSprints" },
+    "releases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ServedRelease" },
+      "description": "Every release in the project's order, archived ones too, with its figures (ATM-720)"
+    },
     "tasks": { "type": "array", "items": { "$ref": "#/$defs/TaskView" } },
     "problems": {
       "type": "array",
@@ -21,6 +28,211 @@
     "archive_hint": { "$ref": "#/$defs/ArchiveHint" }
   },
   "$defs": {
+    "ProjectVocabulary": {
+      "type": "object",
+      "description": "The project's vocabulary as atm resolved it (ATM-718): what meta defines, the defaults for the rest; a list a tolerant read couldn't use is its default, and `problems` says so",
+      "required": [
+        "statuses",
+        "types",
+        "priorities",
+        "default_priority",
+        "labels",
+        "components",
+        "workflow",
+        "review",
+        "phases"
+      ],
+      "properties": {
+        "statuses": { "type": "array", "items": { "$ref": "#/$defs/ServedStatus" } },
+        "types": { "type": "array", "items": { "$ref": "#/$defs/ServedTerm" } },
+        "priorities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ServedTerm" },
+          "description": "Most urgent first"
+        },
+        "default_priority": { "type": "string", "description": "The priority of a task without one; one of `priorities`" },
+        "labels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ServedTerm" },
+          "description": "meta.labels, in their order, each with its text (its ID when it has none)"
+        },
+        "components": { "type": "array", "items": { "$ref": "#/$defs/ServedComponent" } },
+        "workflow": {
+          "description": "The project's workflow with its defaults filled in, or null without one",
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/ServedWorkflow" }]
+        },
+        "review": { "type": "string", "description": "The project's review mode" },
+        "phases": {
+          "type": "array",
+          "description": "The named phases of a project from before sprints (meta.phases)",
+          "items": { "$ref": "#/$defs/ServedPhase" }
+        }
+      }
+    },
+    "ServedStatus": {
+      "type": "object",
+      "required": ["id", "label", "kind"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "kind": { "enum": ["todo", "active", "review", "blocked", "done", "skipped"] }
+      }
+    },
+    "TaskWork": {
+      "type": "object",
+      "description": "A task's work by atm's one rule (ATM-721): every attempt and every round, less its review rounds and blocks. Absent for a task that holds none",
+      "required": ["minutes", "live", "spans"],
+      "properties": {
+        "minutes": { "type": "number", "description": "Its length" },
+        "live": { "type": "boolean", "description": "An agent is at it now: its last span runs to now" },
+        "spans": { "type": "array", "items": { "$ref": "#/$defs/WorkSpan" }, "description": "In time order" }
+      }
+    },
+    "WorkSpan": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "description": "ISO 8601 UTC" },
+        "to": { "type": "string", "description": "ISO 8601 UTC" },
+        "by": { "type": "string", "description": "Who did it" }
+      }
+    },
+    "ServedSprints": {
+      "type": "object",
+      "description": "The project's sprints as atm counts them (ATM-720): each in its order, closed ones too, and the backlog",
+      "required": ["sprints", "backlog", "from_phases"],
+      "properties": {
+        "sprints": { "type": "array", "items": { "$ref": "#/$defs/ServedSprint" } },
+        "backlog": { "type": "integer", "description": "Unfinished tasks in no sprint, as `atm sprint list` counts them" },
+        "from_phases": {
+          "type": "boolean",
+          "description": "An unmigrated project's phases, read as the sprints `atm db migrate` would make: they can't be changed until it runs"
+        }
+      }
+    },
+    "ServedSprint": {
+      "type": "object",
+      "required": ["id", "state", "done", "total", "percent", "added", "carried", "review_pending"],
+      "properties": {
+        "id": { "type": "string", "description": "Its name" },
+        "state": { "enum": ["planned", "active", "closed"] },
+        "goal": { "type": "string" },
+        "release": { "type": "string" },
+        "start": { "type": "string", "description": "ISO 8601 UTC, when it became active" },
+        "end": { "type": "string", "description": "ISO 8601 UTC, when it closed" },
+        "due": { "type": "string", "description": "The planned end, YYYY-MM-DD" },
+        "report": { "$ref": "#/$defs/ServedSprintReport" },
+        "done": { "type": "integer" },
+        "total": { "type": "integer", "description": "Its tasks but the skipped ones" },
+        "percent": { "type": "integer", "description": "Done of total; 100 with none to count" },
+        "added": { "type": "integer", "description": "Pulled in after it started" },
+        "carried": { "type": "integer", "description": "In another sprint before this one" },
+        "review_pending": { "type": "integer", "description": "Done batch tasks waiting for the end-of-sprint review" },
+        "days_left": {
+          "type": "integer",
+          "description": "Days to its due date by the project's day (0 on it, negative overdue), while it isn't closed"
+        },
+        "due_end": { "type": "string", "description": "ISO 8601 UTC: when its due date has passed, while it isn't closed" }
+      }
+    },
+    "ServedSprintReport": {
+      "type": "object",
+      "description": "What a closed sprint did, as its close recorded it",
+      "properties": {
+        "done": { "type": "array", "items": { "type": "string" } },
+        "carried": { "type": "array", "items": { "type": "string" } },
+        "added": { "type": "array", "items": { "type": "string" } },
+        "to": { "type": "string" }
+      }
+    },
+    "ServedRelease": {
+      "type": "object",
+      "required": ["id", "state", "sprints", "total", "done", "in_pr", "merged", "notes"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "state": { "enum": ["planned", "released", "archived"] },
+        "target": { "type": "string" },
+        "pr": { "$ref": "#/$defs/ReleasePr" },
+        "released_at": { "type": "string" },
+        "sprints": { "type": "array", "items": { "type": "string" }, "description": "The sprints that deliver to it" },
+        "total": { "type": "integer", "description": "Its tasks (own release, or their sprint's) but the skipped" },
+        "done": { "type": "integer" },
+        "in_pr": { "type": "integer" },
+        "merged": { "type": "integer" },
+        "notes": { "$ref": "#/$defs/ReleaseNotes" }
+      }
+    },
+    "ReleasePr": {
+      "type": "object",
+      "required": ["number"],
+      "properties": { "number": { "type": "integer" }, "url": { "type": "string" } }
+    },
+    "ReleaseNotes": {
+      "type": "object",
+      "description": "The notes as `atm release notes` drafts them: the done tasks by type, then those not done yet",
+      "required": ["groups", "open"],
+      "properties": {
+        "groups": { "type": "array", "items": { "$ref": "#/$defs/ReleaseNotesGroup" } },
+        "open": { "type": "array", "items": { "$ref": "#/$defs/ReleaseNotesTask" } }
+      }
+    },
+    "ReleaseNotesGroup": {
+      "type": "object",
+      "required": ["type", "label", "tasks"],
+      "properties": {
+        "type": { "type": "string" },
+        "label": { "type": "string" },
+        "tasks": { "type": "array", "items": { "$ref": "#/$defs/ReleaseNotesTask" } }
+      }
+    },
+    "ReleaseNotesTask": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "key": { "type": "string" },
+        "name": { "type": "string" },
+        "outcome": { "type": ["string", "null"] },
+        "status": { "type": "string" }
+      }
+    },
+    "ServedPhase": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": { "id": { "type": "integer" }, "name": { "type": "string" } }
+    },
+    "ServedTrailers": {
+      "type": "object",
+      "properties": { "require": { "type": "array", "items": { "type": "string" } } }
+    },
+    "ServedTerm": {
+      "type": "object",
+      "required": ["id", "label"],
+      "properties": { "id": { "type": "string" }, "label": { "type": "string" } }
+    },
+    "ServedComponent": {
+      "type": "object",
+      "required": ["id", "label", "paths"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "paths": { "type": "array", "items": { "type": "string" } },
+        "review": { "type": "string" }
+      }
+    },
+    "ServedWorkflow": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "base": { "type": "string" },
+        "verify": {},
+        "max_rounds": { "type": "integer" },
+        "commit_template": { "type": "string" },
+        "trailers": { "$ref": "#/$defs/ServedTrailers" }
+      }
+    },
     "ArchiveHint": {
       "type": "object",
       "description": "atm's suggestion to archive (CLI-5.1), present when the working tasks are over meta.archive's thresholds (T-372)",
@@ -67,7 +279,39 @@
           "description": "Its review mode: its own, else its component's, else the project's"
         },
         "effective_release": { "type": "string", "description": "Its release: its own, else its sprint's" },
+        "sprint": {
+          "type": "string",
+          "description": "The sprint it is in, by the sprint's name as the project writes it (ATM-720); an unmigrated project's phase's sprint. Absent in the backlog"
+        },
+        "carried": {
+          "type": "integer",
+          "description": "How many sprints it was carried through before its sprint (SR-4.5); absent when none"
+        },
+        "work": { "$ref": "#/$defs/TaskWork" },
         "stage": { "type": "string", "description": "A done task's stage: done, in_pr or merged (DM-4.3)" },
+        "resolution": {
+          "type": "string",
+          "description": "How a finished task ended (SR-2.8): its own, else done or wont_do; absent while it isn't finished (ATM-719)"
+        },
+        "in_closed_sprint": {
+          "type": "boolean",
+          "description": "Left unfinished in a closed sprint, which the loop never takes (ATM-719); absent otherwise"
+        },
+        "required_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The tasks whose dependencies name it (ATM-719); absent when none"
+        },
+        "related_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The tasks that relate to it, not among its own related (SR-2.8, ATM-719); absent when none"
+        },
+        "duplicated_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The tasks that duplicate it (ATM-719); absent when none"
+        },
         "archived": { "type": "boolean", "description": "From the archive" },
         "problems": {
           "type": "array",
@@ -79,12 +323,54 @@
           "additionalProperties": { "$ref": "#/$defs/ForeignTask" },
           "description": "The other projects' tasks it names (<project id>:<UUID> in dependencies, related or duplicate_of), by reference, as they are there (ADR-007 §7); absent when it names none"
         },
+        "waiting": {
+          "$ref": "#/$defs/TaskWaiting",
+          "description": "Who the task waits on now, and since when (ATM-717); absent when it waits on nobody (to do and ready, active, finished)"
+        },
+        "needs_you": {
+          "enum": ["review", "blocked", "together"],
+          "description": "Why it needs the user, by atm's one rule (ATM-717): in review and waiting for the reviewer (or rejected), blocked on a question for them, or to do together now (ready, in the active sprint or with none active). Absent when it doesn't"
+        },
+        "agent_work": {
+          "type": "boolean",
+          "description": "Whether agent work is left on it (ATM-717): to do or active, sent back or approved but not finished, or a status atm doesn't know; not while it waits on a reviewer, the user or a decision, nor once finished"
+        },
+        "review": {
+          "$ref": "#/$defs/TaskReview",
+          "description": "The code review it waits on (ATM-717); absent without one"
+        },
         "review_statuses": {
           "type": "object",
           "additionalProperties": {
             "enum": ["draft", "waiting", "live", "changes_requested", "approved", "closed", "unreadable"]
           },
           "description": "Where each of its code reviews stands (ATM-621), by the review's ID as its code_reviews link it: the review's status, or unreadable for one atm can't read (ATM-617); one this working copy doesn't have is left out, and the field is absent when it has none"
+        }
+      }
+    },
+    "TaskWaiting": {
+      "type": "object",
+      "description": "Who a task waits on, by atm-lib's one rule (`waiting`, ATM-717): its reviewer while its review waits (since the request); its agent once approved or sent back (since the decision), or blocked on an agent; the user when blocked on them, rejected, or to do together; its dependencies when to do and not ready; unknown when blocked by hand",
+      "required": ["on"],
+      "properties": {
+        "on": { "enum": ["reviewer", "agent", "user", "dependencies", "unknown"] },
+        "since": { "type": "string", "description": "ISO 8601, when known" },
+        "questions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "A blocked task's open questions; absent when none"
+        }
+      }
+    },
+    "TaskReview": {
+      "type": "object",
+      "description": "The code review a task waits on (ATM-717): of its linked reviews, the latest one still open here (draft, waiting, live or sent back), else the latest link; without a status when this working copy doesn't have it (another branch's)",
+      "required": ["id", "ref"],
+      "properties": {
+        "id": { "type": "string" },
+        "ref": { "type": "string" },
+        "status": {
+          "enum": ["draft", "waiting", "live", "changes_requested", "approved", "closed", "unreadable"]
         }
       }
     },
@@ -230,7 +516,9 @@
         "release": { "type": ["string", "null"] },
         "done": { "type": "integer" },
         "total": { "type": "integer", "description": "Its tasks but the skipped" },
-        "percent": { "type": "integer" }
+        "percent": { "type": "integer" },
+        "days_left": { "type": "integer", "description": "Days to its due date by the project's day, while open (ATM-720)" },
+        "due_end": { "type": "string", "description": "When its due date has passed, while open" }
       }
     },
     "ActiveSprint": {
@@ -245,7 +533,9 @@
         "done": { "type": "integer" },
         "total": { "type": "integer", "description": "Its tasks but the skipped" },
         "percent": { "type": "integer" },
-        "goal": { "type": ["string", "null"] }
+        "goal": { "type": ["string", "null"] },
+        "days_left": { "type": "integer", "description": "Days to its due date by the project's day (ATM-720)" },
+        "due_end": { "type": "string", "description": "When its due date has passed" }
       }
     },
     "WorkingClaim": {
@@ -426,7 +716,8 @@
         "completions_14d",
         "board",
         "board_active_sprint",
-        "stats"
+        "stats",
+        "progress"
       ],
       "properties": {
         "total": { "type": "integer" },
@@ -470,7 +761,168 @@
           "anyOf": [{ "$ref": "#/$defs/ProjectBoard" }, { "type": "null" }],
           "description": "The same, of the active sprint's tasks only; null without an active sprint (T-340)"
         },
-        "stats": { "$ref": "#/$defs/ProjectStats" }
+        "stats": { "$ref": "#/$defs/ProjectStats" },
+        "progress": { "$ref": "#/$defs/OverviewProgress" }
+      }
+    },
+    "OverviewProgress": {
+      "type": "object",
+      "description": "What the overview's Progress tab shows of a project (ATM-722): no project's tasks are loaded for it",
+      "required": ["done", "total", "open_releases", "done_days", "burndown", "forecast"],
+      "properties": {
+        "done": { "type": "integer" },
+        "total": { "type": "integer", "description": "All its tasks but the skipped, the archived ones too" },
+        "open_releases": { "type": "array", "items": { "$ref": "#/$defs/OpenRelease" } },
+        "done_days": {
+          "type": "array",
+          "items": { "type": "array", "items": { "type": "integer" } },
+          "description": "[day, completions] for each day with some: days since 1970, in UTC"
+        },
+        "burndown": {
+          "type": "array",
+          "items": { "type": "array", "items": { "type": "integer" } },
+          "description": "[day, scope, remaining] at the end of each day, from the first task's to today"
+        },
+        "forecast": {
+          "anyOf": [{ "$ref": "#/$defs/WorkLeft" }, { "type": "null" }],
+          "description": "The agent work left at the agents' pace; null without a pace"
+        }
+      }
+    },
+    "OpenRelease": {
+      "type": "object",
+      "description": "A planned release's figures",
+      "required": ["id", "done", "total"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": ["string", "null"] },
+        "done": { "type": "integer" },
+        "total": { "type": "integer" }
+      }
+    },
+    "WorkLeft": {
+      "type": "object",
+      "description": "The agent work left at the agents' pace",
+      "required": ["minutes", "waiting"],
+      "properties": {
+        "minutes": { "$ref": "#/$defs/Spread" },
+        "waiting": { "type": "integer", "description": "Open tasks waiting on someone, not on agent work" }
+      }
+    },
+    "Spread": {
+      "type": "object",
+      "description": "A likely value and the quartiles around it",
+      "required": ["likely", "low", "high"],
+      "properties": { "likely": { "type": "number" }, "low": { "type": "number" }, "high": { "type": "number" } }
+    },
+    "Share": {
+      "type": "object",
+      "description": "A group's completion: done of all but the skipped",
+      "required": ["key", "label", "done", "total", "skipped", "ratio"],
+      "properties": {
+        "key": { "type": ["string", "null"], "description": "The group's: a type, a sprint (null for the backlog), or all" },
+        "label": { "type": "string" },
+        "done": { "type": "integer" },
+        "total": { "type": "integer" },
+        "skipped": { "type": "integer" },
+        "ratio": { "type": "number", "description": "0–1; 1 when every task was skipped" }
+      }
+    },
+    "ForecastRow": {
+      "type": "object",
+      "description": "A sprint's tasks counted (the backlog's: sprint null), and when they may be done",
+      "required": ["sprint", "total", "done", "skipped", "remaining", "blocked", "in_review", "state"],
+      "properties": {
+        "sprint": { "type": ["string", "null"] },
+        "total": { "type": "integer" },
+        "done": { "type": "integer" },
+        "skipped": { "type": "integer" },
+        "remaining": { "type": "integer", "description": "Agent work left on them" },
+        "blocked": { "type": "integer" },
+        "in_review": { "type": "integer" },
+        "state": { "type": "string", "enum": ["done", "in_progress", "not_started"] },
+        "completed_at": { "type": "number", "description": "ms; once every task is finished" },
+        "estimate": { "$ref": "#/$defs/Estimate" }
+      }
+    },
+    "Estimate": {
+      "type": "object",
+      "description": "Working minutes until a sprint is done, and the times then (ms)",
+      "required": ["minutes", "finish_at"],
+      "properties": { "minutes": { "$ref": "#/$defs/Spread" }, "finish_at": { "$ref": "#/$defs/Spread" } }
+    },
+    "StatusCount": {
+      "type": "object",
+      "required": ["status", "count"],
+      "properties": { "status": { "type": "string" }, "count": { "type": "integer" } }
+    },
+    "Progress": {
+      "type": "object",
+      "description": "How far along a slice is: overall, by status, type and sprint (archived tasks as they are)",
+      "required": ["overall", "archived", "by_status", "by_type", "by_sprint"],
+      "properties": {
+        "overall": { "$ref": "#/$defs/Share" },
+        "archived": { "type": "integer" },
+        "by_status": { "type": "array", "items": { "$ref": "#/$defs/StatusCount" } },
+        "by_type": { "type": "array", "items": { "$ref": "#/$defs/Share" } },
+        "by_sprint": { "type": "array", "items": { "$ref": "#/$defs/Share" } }
+      }
+    },
+    "Pace": {
+      "type": "object",
+      "description": "Minutes per task: the middle of the last 10, and the quartiles",
+      "required": ["likely", "low", "high", "based_on"],
+      "properties": {
+        "likely": { "type": "number" },
+        "low": { "type": "number" },
+        "high": { "type": "number" },
+        "based_on": { "type": "integer" }
+      }
+    },
+    "Forecast": {
+      "type": "object",
+      "required": ["pace", "sprints"],
+      "properties": {
+        "pace": { "anyOf": [{ "$ref": "#/$defs/Pace" }, { "type": "null" }] },
+        "sprints": { "type": "array", "items": { "$ref": "#/$defs/ForecastRow" } },
+        "next": {
+          "anyOf": [{ "$ref": "#/$defs/NextInLoop" }, { "type": "null" }],
+          "description": "The row the loop works on next, by the whole project's; null when nothing is left"
+        }
+      }
+    },
+    "NextInLoop": {
+      "type": "object",
+      "required": ["sprint"],
+      "properties": { "sprint": { "type": ["string", "null"], "description": "null: the backlog" } }
+    },
+    "TimeUse": {
+      "type": "object",
+      "description": "Where the time went: working, waiting on you, idle (ms); waiting and idle as [start, end] pairs",
+      "required": ["from", "to", "working_ms", "waiting_ms", "idle_ms", "agent_ms", "max_agents", "waiting", "idle"],
+      "properties": {
+        "from": { "type": "number" },
+        "to": { "type": "number" },
+        "working_ms": { "type": "number" },
+        "waiting_ms": { "type": "number" },
+        "idle_ms": { "type": "number" },
+        "agent_ms": { "type": "number" },
+        "max_agents": { "type": "integer" },
+        "waiting": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } },
+        "idle": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } }
+      }
+    },
+    "Stats": {
+      "type": "object",
+      "description": "GET …/projects/<p>/stats (ATM-722): the slice's progress, forecast and time use; the project's own numbers",
+      "required": ["progress", "forecast", "time_use", "stats", "histogram", "actors"],
+      "properties": {
+        "progress": { "$ref": "#/$defs/Progress" },
+        "forecast": { "$ref": "#/$defs/Forecast" },
+        "time_use": { "anyOf": [{ "$ref": "#/$defs/TimeUse" }, { "type": "null" }] },
+        "stats": { "type": "object", "description": "The project's numbers", "additionalProperties": true },
+        "histogram": { "type": "object", "description": "The time per done task, binned", "additionalProperties": true },
+        "actors": { "type": "object", "description": "The people and the agents", "additionalProperties": true }
       }
     },
     "StatusSprint": {

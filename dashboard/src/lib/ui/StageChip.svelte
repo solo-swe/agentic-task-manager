@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDateTime } from '../format';
   import { pullRef } from '../repo';
   import { prOf, stageOf } from '../stages';
   import { dashboard } from '../state.svelte';
@@ -8,10 +9,10 @@
   // A done task's stage when it has one (D-4.2): "PR #12" or "Merged", linking to the pull request (lib/repo.ts);
   // nothing otherwise
   let { task }: { task: Task } = $props();
-  const stage = $derived(stageOf(task, dashboard.vocab));
+  const stage = $derived(stageOf(task));
   const pr = $derived(prOf(task));
   const merged = $derived(
-    `Merged${pr ? ` in #${pr.number}` : ''}${task.merged_at ? ` on ${new Date(task.merged_at).toLocaleString()}` : ''}`,
+    `Merged${pr ? ` in #${pr.number}` : ''}${task.merged_at ? ` on ${formatDateTime(task.merged_at)}` : ''}`,
   );
 </script>
 

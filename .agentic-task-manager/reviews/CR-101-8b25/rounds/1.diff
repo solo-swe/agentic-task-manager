@@ -1,0 +1,777 @@
+diff --git a/dashboard/src/lib/app-tabs.svelte.ts b/dashboard/src/lib/app-tabs.svelte.ts
+index b2be7793..8708365b 100644
+--- a/dashboard/src/lib/app-tabs.svelte.ts
++++ b/dashboard/src/lib/app-tabs.svelte.ts
+@@ -1,15 +1,38 @@
+-// The atm app's tabs (T-514, docs/app-desktop-ui-design.md §3): a tab is an address. The window has one page and one
+-// dashboard state; switching tabs navigates to the tab's address, and the active tab follows the page as it moves (a
+-// link, Back, a view). Kept per window for its page's life, and over a reload (sessionStorage is the window's own).
++// The atm app's tabs (T-514, docs/tabs-and-navigation-design.md §4.1): a tab is a place with its own history. The
++// window has one page and one dashboard state; switching tabs shows the tab as it was left (adding to no history), and
++// Back and Forward walk the active tab's (ATM-694). Kept per window for its page's life, and over a reload
++// (sessionStorage is the window's own).
+ import { addressParams } from './address';
+ import type { KeptTabs } from './api/shell';
++import type { HistoryEntry, TabHistory } from './navigation';
+ 
+-/** A tab: its ID (never reused in the window) and the address it shows */
++/** A tab: its ID (never reused in the window), the address it shows, and its own history (ATM-694,
++ * docs/tabs-and-navigation-design.md §4.1): the entries it went through and where it is in them. `address` is always
++ * the current entry's */
+ export interface AppTab {
+   id: string;
+   address: string;
++  history: { entries: HistoryEntry[]; at: number };
+ }
+ 
++/** A tab's history, starting at `address` */
++const historyAt = (address: string): AppTab['history'] => ({ entries: [{ address, state: {} }], at: 0 });
++
++/** A tab kept by an older page (no history): its address its one entry */
++function withHistory(tab: Partial<AppTab> & { id: string; address: string }): AppTab {
++  const history = tab.history;
++  const usable =
++    history &&
++    Array.isArray(history.entries) &&
++    history.entries.length > 0 &&
++    history.at >= 0 &&
++    history.at < history.entries.length;
++  return { id: tab.id, address: tab.address, history: usable ? history : historyAt(tab.address) };
++}
++
++/** How many entries a tab's history keeps: the oldest go first */
++const HISTORY_LIMIT = 50;
++
+ /** Where the tabs are kept over a reload */
+ const STORE = 'atm-app-tabs';
+ 
+@@ -18,7 +41,7 @@ export function tabProject(address: string): string | null {
+   return addressParams(address).get('project');
+ }
+ 
+-export class AppTabs {
++export class AppTabs implements TabHistory {
+   tabs = $state<AppTab[]>([]);
+   active = $state('');
+   #next = 1;
+@@ -33,7 +56,7 @@ export class AppTabs {
+    * itself, the active one following `address`; else with one tab at `address` */
+   start(address: string, restored: KeptTabs | null = null): string | null {
+     if (restored && restored.addresses.length > 0) {
+-      this.tabs = restored.addresses.map((a) => ({ id: `t${this.#next++}`, address: a }));
++      this.tabs = restored.addresses.map((a) => ({ id: `t${this.#next++}`, address: a, history: historyAt(a) }));
+       this.active = (this.tabs[restored.active] ?? this.tabs[0]).id;
+       this.#save();
+       return this.current!.address;
+@@ -41,7 +64,7 @@ export class AppTabs {
+     try {
+       const kept = JSON.parse(this.#storage?.getItem(STORE) ?? 'null') as { tabs: AppTab[]; active: string } | null;
+       if (kept && kept.tabs.length > 0 && kept.tabs.some((t) => t.id === kept.active)) {
+-        this.tabs = kept.tabs;
++        this.tabs = kept.tabs.map(withHistory);
+         this.active = kept.active;
+         this.#next = Math.max(...kept.tabs.map((t) => Number(t.id.replace(/\D/g, '')) || 0)) + 1;
+         this.follow(address);
+@@ -71,18 +94,67 @@ export class AppTabs {
+     return this.tabs.find((t) => t.id === this.active);
+   }
+ 
+-  /** The page moved: the active tab shows where it is now */
++  /** The page moved without the tab's history (its first address written another way, a move of the router's own):
++   * the active tab's current entry shows where it is now */
+   follow(address: string) {
+     const tab = this.current;
+     if (tab && tab.address !== address) {
+       tab.address = address;
++      tab.history.entries[tab.history.at] = { ...tab.history.entries[tab.history.at], address };
+       this.#save();
+     }
+   }
+ 
+-  /** A new tab at `address`, after the active one, and active. Its address, to go to */
++  // The active tab's history (ATM-694): navigation.ts moves through it in the app, where the page's own history stays
++  // one entry deep
++
++  /** A step: the entry after the current one, those that were after it gone (as a browser's Forward is) */
++  push(entry: HistoryEntry) {
++    const tab = this.current;
++    if (!tab) return;
++    const entries = [...tab.history.entries.slice(0, tab.history.at + 1), entry].slice(-HISTORY_LIMIT);
++    tab.history = { entries, at: entries.length - 1 };
++    tab.address = entry.address;
++    this.#save();
++  }
++
++  /** The current entry, changed in place */
++  replace(entry: HistoryEntry) {
++    const tab = this.current;
++    if (!tab) return;
++    tab.history.entries[tab.history.at] = entry;
++    tab.address = entry.address;
++    this.#save();
++  }
++
++  /** The entry `delta` steps from the current one (−1 Back, 1 Forward), now current; none past either end */
++  go(delta: number): HistoryEntry | null {
++    const tab = this.current;
++    const to = tab ? tab.history.at + delta : -1;
++    if (!tab || delta === 0 || to < 0 || to >= tab.history.entries.length) return null;
++    tab.history = { ...tab.history, at: to };
++    tab.address = tab.history.entries[to].address;
++    this.#save();
++    return tab.history.entries[to];
++  }
++
++  /** Whether the active tab can go `delta` steps (Back disabled at its first entry) */
++  canGo(delta: number): boolean {
++    const tab = this.current;
++    const to = tab ? tab.history.at + delta : -1;
++    return !!tab && delta !== 0 && to >= 0 && to < tab.history.entries.length;
++  }
++
++  /** The active tab's current entry */
++  entry(): HistoryEntry | null {
++    const tab = this.current;
++    return tab ? tab.history.entries[tab.history.at] : null;
++  }
++
++  /** A new tab at `address`, after the active one, and active, its history starting there (Back disabled until it
++   * moves). Its address, to go to */
+   open(address: string): string {
+-    const tab = { id: `t${this.#next++}`, address };
++    const tab: AppTab = { id: `t${this.#next++}`, address, history: historyAt(address) };
+     const at = this.tabs.findIndex((t) => t.id === this.active);
+     this.tabs.splice(at < 0 ? this.tabs.length : at + 1, 0, tab);
+     this.active = tab.id;
+diff --git a/dashboard/src/lib/menu-actions.ts b/dashboard/src/lib/menu-actions.ts
+index 770a5cdd..64cd5fe7 100644
+--- a/dashboard/src/lib/menu-actions.ts
++++ b/dashboard/src/lib/menu-actions.ts
+@@ -5,7 +5,7 @@ import { inApp } from './api/http';
+ import type { MenuAction, MenuState, SystemItem } from './api/menu';
+ import { openUrl, reloadWindow } from './api/shell';
+ import type { TabActions } from './tab-actions';
+-import { currentAddress } from './navigation';
++import { back as goBack, currentAddress, forward as goForward } from './navigation';
+ import { pluginInfo } from './plugin-info';
+ import type { DialogId } from './dialogs';
+ import type { ViewId } from './tabs';
+@@ -43,8 +43,9 @@ export interface PageActions {
+ }
+ 
+ export const pageActions: PageActions = {
+-  back: () => history.back(),
+-  forward: () => history.forward(),
++  // The tab's history: in the app, the active title-bar tab's own (ATM-694); in the browser, its tab's
++  back: () => void goBack(),
++  forward: () => void goForward(),
+   // In the app, through the app (ATM-584): the address is a route, which the app has no file for
+   reload: () => void (inApp ? reloadWindow(() => location.reload()) : location.reload()),
+   // In the app, in the user's browser (T-551): the window opens no new tab itself
+diff --git a/dashboard/src/lib/navigation.ts b/dashboard/src/lib/navigation.ts
+index f17ac60a..07ea72b3 100644
+--- a/dashboard/src/lib/navigation.ts
++++ b/dashboard/src/lib/navigation.ts
+@@ -4,8 +4,12 @@
+ // new one, though the router's navigation finishes a moment later.
+ //
+ // Every entry pushed remembers the address it was reached from (ATM-686), so a page's own back button can go Back,
+-// saying where to (docs/tabs-and-navigation-design.md §4.3). A replaced entry keeps what it had; one a switch of the
+-// app's tabs pushes (`fresh`) has none: the entry before it is another tab's.
++// saying where to (docs/tabs-and-navigation-design.md §4.3). A replaced entry keeps what it had.
++//
++// In the app each title-bar tab has its own history (ATM-694, §4.1): `useTabHistory` hands in the tabs, `navigate`
++// steps in the active tab's history, `back` and `forward` walk it, each entry's scroll restored, and the page's own
++// history stays one entry deep (every move replaces it). A switch of tab shows the other tab as it was left
++// (`showTab`), adding nothing. In the browser, a browser tab is the tab: its own history, as before.
+ import { addressOf } from './address';
+ 
+ /** What the document viewer marks its own history entries with (state.svelte.ts documentDepth), and where an entry
+@@ -40,14 +44,104 @@ export function useRouter(next: Router) {
+   router = next;
+ }
+ 
++/** Where a page was scrolled: each scrolled element with an ID, by it */
++export type ScrollMemo = Record<string, { top: number; left: number }>;
++
++/** An entry of a tab's own history (ATM-694): its address, its state, and where its page was scrolled when it was
++ * left */
++export interface HistoryEntry {
++  address: string;
++  state: EntryState;
++  scroll?: ScrollMemo;
++}
++
++/** A tab's own history (the app's tabs, app-tabs.svelte.ts): in the app the page's history stays one entry deep and
++ * Back and Forward walk this instead, the active tab's (docs/tabs-and-navigation-design.md §4.1) */
++export interface TabHistory {
++  push(entry: HistoryEntry): void;
++  replace(entry: HistoryEntry): void;
++  /** The entry `delta` steps away, now current; none past either end */
++  go(delta: number): HistoryEntry | null;
++  canGo(delta: number): boolean;
++  entry(): HistoryEntry | null;
++}
++
++let tabHistory: TabHistory | null = null;
++
++/** In the app: navigate, Back and Forward go through the active tab's history (ATM-694) */
++export function useTabHistory(next: TabHistory | null) {
++  tabHistory = next;
++}
++
++/** The most scrolled elements an entry remembers */
++const SCROLL_LIMIT = 20;
++
++/** Where the page is scrolled now: the elements with an ID that are scrolled */
++export function scrollOf(root: ParentNode = document): ScrollMemo {
++  const memo: ScrollMemo = {};
++  let kept = 0;
++  for (const el of root.querySelectorAll<HTMLElement>('[id]')) {
++    if (el.scrollTop === 0 && el.scrollLeft === 0) continue;
++    memo[el.id] = { top: el.scrollTop, left: el.scrollLeft };
++    if (++kept >= SCROLL_LIMIT) break;
++  }
++  return memo;
++}
++
++/** The scroll to restore once the page has drawn the entry gone to (arrived) */
++let pendingScroll: ScrollMemo | null = null;
++
++/** Scroll the page as `memo` says, once its elements are there: now, and again after the next frames (a view drawn
++ * late) */
++export function restoreScroll(memo: ScrollMemo, root: Document = document) {
++  const put = () => {
++    for (const [id, { top, left }] of Object.entries(memo)) {
++      const el = root.getElementById(id);
++      if (el) {
++        el.scrollTop = top;
++        el.scrollLeft = left;
++      }
++    }
++  };
++  put();
++  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(put));
++}
++
++/** The shown entry of the active tab keeps where its page is scrolled, before the page leaves it (a step, Back, a
++ * switch of tab) */
++export function rememberScroll() {
++  const entry = tabHistory?.entry();
++  if (entry && typeof document !== 'undefined') tabHistory!.replace({ ...entry, scroll: scrollOf() });
++}
++
++/** Show `entry` of the tab's history: the page's one entry replaced by it, its scroll restored once it is drawn */
++function show(entry: HistoryEntry) {
++  written = entry.address;
++  pendingScroll = entry.scroll ?? null;
++  router.go(entry.address, { replace: true, state: entry.state });
++  if (router === browserRouter) arrived();
++}
++
++/** Show the active tab as it was left (a switch of tab, ATM-694): no step in any history */
++export function showTab() {
++  const entry = tabHistory?.entry();
++  if (entry) show(entry);
++}
++
+ /** The address shown: the one written last until the router has moved there, then the location's */
+ export function currentAddress(): string {
+   return written ?? addressOf(location);
+ }
+ 
+-/** The router has arrived (a navigation of its own, Back, a link): the location is the address again */
++/** The router has arrived (a navigation of its own, Back, a link): the location is the address again, and an entry
++ * gone back or forward to is scrolled as it was left */
+ export function arrived() {
+   written = null;
++  if (pendingScroll) {
++    const memo = pendingScroll;
++    pendingScroll = null;
++    restoreScroll(memo);
++  }
+ }
+ 
+ /** Where an entry pushed at `address` now is reached from: the one shown; or, on the same page (its path), where
+@@ -72,8 +166,23 @@ export function navigate(
+     : replace
+       ? { ...(atmFrom ? { atmFrom } : {}), ...(atmSteps ? { atmSteps } : {}) }
+       : originOf(address, currentAddress(), router.state());
++  const entryState = { ...where, ...state };
++  if (tabHistory) {
++    // The app (ATM-694): a step in the active tab's history; the page's own history stays one entry deep
++    if (replace) {
++      const shown = tabHistory.entry();
++      tabHistory.replace({ address, state: entryState, ...(shown?.scroll ? { scroll: shown.scroll } : {}) });
++    } else {
++      rememberScroll();
++      tabHistory.push({ address, state: entryState });
++    }
++    written = address;
++    router.go(address, { replace: true, state: entryState });
++    if (router === browserRouter) written = null;
++    return;
++  }
+   written = address;
+-  router.go(address, { replace, state: { ...where, ...state } });
++  router.go(address, { replace, state: entryState });
+   if (router === browserRouter) written = null;
+ }
+ 
+@@ -81,6 +190,30 @@ export function entryState(): EntryState {
+   return router.state();
+ }
+ 
++/** `steps` entries back (negative: forward) in this tab's history: the app's tab's own, else the browser's. Whether
++ * there was one to go to (the browser's always says yes) */
++export function back(steps = 1): boolean {
++  if (!tabHistory) {
++    router.back(steps);
++    return true;
++  }
++  if (!tabHistory.canGo(-steps)) return false;
++  rememberScroll();
++  const entry = tabHistory.go(-steps);
++  if (entry) show(entry);
++  return entry !== null;
++}
++
++/** One entry forward in this tab's history */
++export function forward(): boolean {
++  return back(-1);
++}
++
++/** Whether this tab can go Back (`-1`) or Forward (`1`); in the browser, its own buttons know */
++export function canGo(delta: number): boolean {
++  return tabHistory ? tabHistory.canGo(delta) : true;
++}
++
+ /** Where Back goes in this tab, out of this page: the page it was reached from, and how many entries back; `null`
+  * for one opened on its own (a new tab, another tab shown, a link from elsewhere, the first page) */
+ export function backEntry(): { address: string; steps: number } | null {
+@@ -90,6 +223,6 @@ export function backEntry(): { address: string; steps: number } | null {
+ 
+ /** Back out of this page to the one it was reached from (the page's back button, when `backEntry` names one) */
+ export function goBack() {
+-  const back = backEntry();
+-  if (back) router.back(back.steps);
++  const entry = backEntry();
++  if (entry) back(entry.steps);
+ }
+diff --git a/dashboard/src/lib/state.svelte.ts b/dashboard/src/lib/state.svelte.ts
+index 5599265e..8d29be3c 100644
+--- a/dashboard/src/lib/state.svelte.ts
++++ b/dashboard/src/lib/state.svelte.ts
+@@ -51,7 +51,7 @@ import {
+ } from './filters';
+ import { dialogOf, withDialog, type DialogId } from './dialogs';
+ import { docOf, withDoc, type DocumentRef } from './documents';
+-import { currentAddress, entryState, navigate } from './navigation';
++import { back, currentAddress, entryState, navigate } from './navigation';
+ 
+ /** How many of the document viewer's own history entries lead to this one (0: not the viewer's) */
+ function documentDepth(): number {
+@@ -1065,7 +1065,8 @@ export class DashboardState {
+    * document opened from a link or a reload, closes it without a new history entry */
+   documentBack() {
+     if (documentDepth() > 0) {
+-      history.back();
++      // The tab's history: the app's tab's own (ATM-694), else the browser's
++      back(1);
+       return;
+     }
+     this.closeDocument();
+@@ -1076,7 +1077,7 @@ export class DashboardState {
+   closeDocument() {
+     const depth = documentDepth();
+     if (depth > 0) {
+-      history.go(-depth);
++      back(depth);
+       return;
+     }
+     this.docRef = null;
+diff --git a/dashboard/src/lib/tab-actions.ts b/dashboard/src/lib/tab-actions.ts
+index 19485086..27280502 100644
+--- a/dashboard/src/lib/tab-actions.ts
++++ b/dashboard/src/lib/tab-actions.ts
+@@ -3,7 +3,7 @@
+ // goes to the address it answers; closing the last tab closes the window.
+ import { appTabs, type AppTabs } from './app-tabs.svelte';
+ import { closeWindow, openWindow } from './api/shell';
+-import { navigate } from './navigation';
++import { rememberScroll, showTab } from './navigation';
+ 
+ /** A click that asks for a new tab: ⌘-click, Ctrl-click or a middle click, as in a browser */
+ export function wantsNewTab(e: MouseEvent): boolean {
+@@ -24,13 +24,16 @@ export interface TabActions {
+ 
+ /** What a window has to do for its tabs: in tests, stand-ins */
+ export interface TabWindow {
++  /** Show the active tab, now at `address` */
+   go(address: string): void;
++  /** The tab shown is about to be left: it keeps where its page is scrolled */
++  leave?(): void;
+   closeWindow(): unknown;
+   openWindow(address: string): Promise<boolean>;
+ }
+ 
+-/** A tab shown: an entry with no way back in it, as the one before is another tab's (ATM-686) */
+-const window_: TabWindow = { go: (address) => navigate(address, { fresh: true }), closeWindow, openWindow };
++/** A tab shown as it was left, its history as it was (ATM-694): a switch adds to no history */
++const window_: TabWindow = { go: () => showTab(), leave: rememberScroll, closeWindow, openWindow };
+ 
+ /** The actions on `tabs`, in `win` */
+ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): TabActions {
+@@ -38,11 +41,16 @@ export function tabActions(tabs: AppTabs = appTabs, win: TabWindow = window_): T
+     if (address === null) void win.closeWindow();
+     else if (address !== undefined) win.go(address);
+   };
++  /** The tab shown is left (a switch, a new tab): before the tabs change, so its own entry keeps its scroll */
++  const leaving = <T>(change: () => T): T => {
++    win.leave?.();
++    return change();
++  };
+   return {
+-    open: (address = '/') => go(tabs.open(address)),
+-    select: (id) => go(tabs.select(id) ?? undefined),
++    open: (address = '/') => go(leaving(() => tabs.open(address))),
++    select: (id) => go(id === tabs.active ? undefined : (leaving(() => tabs.select(id)) ?? undefined)),
+     close: (id = tabs.active) => go(tabs.close(id)),
+-    step: (step) => go(tabs.step(step) ?? undefined),
++    step: (step) => go(leaving(() => tabs.step(step)) ?? undefined),
+     move: (id, to) => tabs.move(id, to),
+     toWindow: () => {
+       const tab = tabs.current;
+diff --git a/dashboard/src/routes/+layout.svelte b/dashboard/src/routes/+layout.svelte
+index 9cfe116f..8a4005e6 100644
+--- a/dashboard/src/routes/+layout.svelte
++++ b/dashboard/src/routes/+layout.svelte
+@@ -32,7 +32,17 @@
+   import { appTabs } from '../lib/app-tabs.svelte';
+   import { sendExternalLink } from '../lib/external-links';
+   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
+-  import { arrived, currentAddress, navigate, originOf, useRouter, type EntryState } from '../lib/navigation';
++  import {
++    arrived,
++    back as goBackInTab,
++    currentAddress,
++    forward as goForwardInTab,
++    navigate,
++    originOf,
++    useRouter,
++    useTabHistory,
++    type EntryState,
++  } from '../lib/navigation';
+   import { newTabAddress } from '../lib/new-tab-clicks';
+   import { tabActions, wantsNewTab } from '../lib/tab-actions';
+ 
+@@ -61,6 +71,16 @@
+     state: () => page.state as EntryState,
+     back: (steps) => history.go(-steps),
+   });
++  // In the app each title-bar tab has its own history (ATM-694): navigate, Back and Forward go through it
++  if (inApp) useTabHistory(appTabs);
++
++  /** In the app, the mouse's back and forward buttons walk the active tab's history (the page's own is one entry) */
++  function mouseBackForward(e: MouseEvent) {
++    if (!inApp || (e.button !== 3 && e.button !== 4)) return;
++    e.preventDefault();
++    if (e.button === 3) goBackInTab();
++    else goForwardInTab();
++  }
+ 
+   /** An old link (#project=…&view=…), or an address written another way, becomes the page's own address */
+   function settle() {
+@@ -79,7 +99,8 @@
+         const back = appTabs.start(addressOf(location), restored);
+         if (back) navigate(back, { replace: true });
+         void listenForLinks(
+-          (address) => (back ? tabs.open(address) : navigate(address)),
++          // The link the app was started with is where its first tab starts (ATM-694: no Back to the app's root)
++          (address) => (back ? tabs.open(address) : navigate(address, { replace: true })),
+           (address) => tabs.open(address),
+         ).catch((e) => console.error('Deep links:', e));
+       });
+@@ -119,7 +140,14 @@
+   // A link the router followed itself (an anchor's plain click) pushed an entry: it remembers the address it was
+   // reached from, as navigate's entries do (ATM-686)
+   let leaving: { address: string; state: EntryState } | null = null;
+-  beforeNavigate(({ type }) => {
++  beforeNavigate(({ type, to, cancel }) => {
++    // In the app, a link the router would follow itself is a step in the tab's history instead (ATM-694): the page's
++    // own history stays one entry deep
++    if (inApp && type === 'link' && to?.url && to.url.origin === location.origin) {
++      cancel();
++      navigate(addressOf(to.url));
++      return;
++    }
+     leaving = type === 'link' ? { address: currentAddress(), state: page.state as EntryState } : null;
+   });
+ 
+@@ -141,6 +169,7 @@
+   onfocus={() => dashboard.live && void dashboard.reload()}
+   onclickcapture={openInNewTab}
+   onauxclickcapture={openInNewTab}
++  onmouseup={mouseBackForward}
+ />
+ 
+ <App />
+diff --git a/dashboard/tests/e2e/app.spec.ts b/dashboard/tests/e2e/app.spec.ts
+index d712b050..94b7b887 100644
+--- a/dashboard/tests/e2e/app.spec.ts
++++ b/dashboard/tests/e2e/app.spec.ts
+@@ -561,6 +561,58 @@ test.describe('the dashboard in the atm app', () => {
+     expect(tasksServer.windowCalls).toContain('close_window');
+   });
+ 
++  // ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): each tab its own history; a switch adds nothing
++  test('Back and Forward walk the active tab’s own history; a switch of tab adds to neither; the page’s own stays put', async ({
++    page,
++    tasksServer,
++  }) => {
++    await tasksServer.asApp();
++    tasksServer.use('standard');
++    tasksServer.link(`/projects/${tasksServer.projectId}/list`);
++    await page.goto('/');
++    await expect(page.locator('#panel-list')).toBeVisible();
++    const depth = await page.evaluate(() => history.length);
++    const at = () => addressOf(page).split('?')[0];
++    const base = `/projects/${tasksServer.projectId}`;
++
++    // Steps in this tab: the Kanban view, then a task's details over it
++    await page.locator('#tab-kanban').click();
++    await expect(page.locator('#panel-kanban')).toBeVisible();
++    await page.locator('.kanban-card[data-id="T-004"] .card-title, .kanban-card[data-id="T-004"]').first().click();
++    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
++    // The page's own history never grew
++    expect(await page.evaluate(() => history.length)).toBe(depth);
++
++    // Back: the details close, the board stays; Back again: the list; Forward: the board
++    await tasksServer.chooseMenu({ kind: 'back' });
++    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
++    await expect.poll(at).toBe(`${base}/kanban`);
++    await tasksServer.chooseMenu({ kind: 'back' });
++    await expect.poll(at).toBe(`${base}/list`);
++    await tasksServer.chooseMenu({ kind: 'back' }); // nothing before the tab's first entry
++    await expect.poll(at).toBe(`${base}/list`);
++    await tasksServer.chooseMenu({ kind: 'forward' });
++    await expect.poll(at).toBe(`${base}/kanban`);
++
++    // A new tab: its own history, Back going nowhere
++    await page.locator('#app-tab-new').click();
++    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
++    await tasksServer.chooseMenu({ kind: 'back' });
++    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
++    // Back to the first tab: as it was left, and its Back still the list (the switch added nothing)
++    await page.locator('#app-titlebar [role="tab"]').nth(0).click();
++    await expect.poll(at).toBe(`${base}/kanban`);
++    await tasksServer.chooseMenu({ kind: 'back' });
++    await expect.poll(at).toBe(`${base}/list`);
++    // The mouse's back and forward buttons too
++    await page.mouse.move(400, 300);
++    await page.evaluate(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 4, bubbles: true })));
++    await expect.poll(at).toBe(`${base}/kanban`);
++    await page.evaluate(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 3, bubbles: true })));
++    await expect.poll(at).toBe(`${base}/list`);
++    expect(await page.evaluate(() => history.length)).toBe(depth);
++  });
++
+   test('the sidebar (T-515): projects open here or, ⌘-clicked, in a new tab; a task too; its button and menu hide it', async ({
+     page,
+     tasksServer,
+diff --git a/dashboard/tests/unit/app-tabs.test.ts b/dashboard/tests/unit/app-tabs.test.ts
+index f3fdc537..3035f240 100644
+--- a/dashboard/tests/unit/app-tabs.test.ts
++++ b/dashboard/tests/unit/app-tabs.test.ts
+@@ -19,6 +19,44 @@ function memory(): Storage {
+ 
+ const addresses = (tabs: AppTabs) => tabs.tabs.map((t) => t.address);
+ 
++describe('a tab’s own history (ATM-694)', () => {
++  it('tabs an older page kept, without histories, start one at their address; a broken one too', () => {
++    const storage = memory();
++    storage.setItem(
++      'atm-app-tabs',
++      JSON.stringify({
++        tabs: [
++          { id: 't1', address: '/board' },
++          { id: 't2', address: '/projects/p1', history: { entries: [], at: 3 } },
++        ],
++        active: 't1',
++      }),
++    );
++    const tabs = new AppTabs(storage);
++    tabs.start('/board');
++    expect(tabs.tabs.map((t) => t.history)).toEqual([
++      { entries: [{ address: '/board', state: {} }], at: 0 },
++      { entries: [{ address: '/projects/p1', state: {} }], at: 0 },
++    ]);
++  });
++
++  it('keeps its last 50 entries; Back and Forward stop at its ends; kept over a reload', () => {
++    const storage = memory();
++    const tabs = new AppTabs(storage);
++    tabs.start('/');
++    for (let i = 1; i <= 60; i++) tabs.push({ address: `/projects/p${i}`, state: {} });
++    expect(tabs.current!.history.entries).toHaveLength(50);
++    expect(tabs.current!.history.entries[0].address).toBe('/projects/p11');
++    expect(tabs.go(1)).toBeNull();
++    expect(tabs.go(-49)?.address).toBe('/projects/p11');
++    expect([tabs.canGo(-1), tabs.go(-1), tabs.current!.address]).toEqual([false, null, '/projects/p11']);
++    const reloaded = new AppTabs(storage);
++    reloaded.start('/projects/p11');
++    expect(reloaded.current!.history.at).toBe(0);
++    expect(reloaded.canGo(1)).toBe(true);
++  });
++});
++
+ describe('site data blocked (ATM-676, audit D5)', () => {
+   it('the module loads when reading sessionStorage throws; its tabs work, kept nowhere', async () => {
+     const real = Object.getOwnPropertyDescriptor(window, 'sessionStorage');
+diff --git a/dashboard/tests/unit/documents.test.ts b/dashboard/tests/unit/documents.test.ts
+index 1aeacc7d..95eaeebe 100644
+--- a/dashboard/tests/unit/documents.test.ts
++++ b/dashboard/tests/unit/documents.test.ts
+@@ -256,9 +256,10 @@ describe('opening and Back (the dashboard state)', () => {
+     expect(dashboard.docRef).toEqual({ path: 'docs/x.md', lines: [3, 3] });
+     expect(location.pathname + location.search).toBe('/projects/p1/list?doc=docs/x.md:L3');
+     expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 1 });
+-    const back = vi.spyOn(history, 'back').mockImplementation(() => {});
++    // In the browser, the tab's history is the browser's: one entry back (ATM-694: through navigation's back)
++    const back = vi.spyOn(history, 'go').mockImplementation(() => {});
+     dashboard.documentBack();
+-    expect(back).toHaveBeenCalledTimes(1);
++    expect(back.mock.calls).toEqual([[-1]]);
+     back.mockRestore();
+   });
+ 
+diff --git a/dashboard/tests/unit/navigation.test.ts b/dashboard/tests/unit/navigation.test.ts
+index d878e149..0d5b69cb 100644
+--- a/dashboard/tests/unit/navigation.test.ts
++++ b/dashboard/tests/unit/navigation.test.ts
+@@ -160,3 +160,125 @@ describe('where an entry was reached from', () => {
+     expect(originOf('/a?y=2', '/a', {})).toEqual({});
+   });
+ });
++
++// ATM-694 (docs/tabs-and-navigation-design.md §4.1, §4.3): in the app each title-bar tab has its own history; the
++// page's own stays one entry deep
++describe('a tab’s own history (the app)', () => {
++  /** The app: a fresh navigation module, the tabs as its history, a router whose entry is the last one it was sent */
++  async function app(start = '/projects/abc/kanban') {
++    const nav = await fresh();
++    const { AppTabs } = await import('../../src/lib/app-tabs.svelte');
++    const { tabActions } = await import('../../src/lib/tab-actions');
++    const tabs = new AppTabs();
++    tabs.start(start);
++    let state: EntryState = {};
++    let shown = start;
++    const went: [string, boolean][] = [];
++    nav.useRouter({
++      go: (address, { replace, state: next }) => {
++        went.push([address, replace]);
++        shown = address;
++        state = next;
++        // As the app's router: the location moves there, its one entry replaced
++        history.replaceState(null, '', address);
++        nav.arrived();
++      },
++      state: () => state,
++      back: () => {
++        throw new Error('the page’s own history is never walked in the app');
++      },
++    });
++    history.replaceState(null, '', start);
++    nav.useTabHistory(tabs);
++    const actions = tabActions(tabs, {
++      go: () => nav.showTab(),
++      leave: nav.rememberScroll,
++      closeWindow: () => {},
++      openWindow: async () => true,
++    });
++    return { nav, tabs, actions, went, shown: () => shown };
++  }
++
++  const addresses = (tabs: { current?: { history: { entries: { address: string }[]; at: number } } }) => {
++    const h = tabs.current!.history;
++    return [h.entries.map((e) => e.address), h.at];
++  };
++
++  it('a step adds to the active tab’s history; Back and Forward walk it; the page’s own entry is always replaced', async () => {
++    const { nav, tabs, went, shown } = await app();
++    expect(nav.canGo(-1)).toBe(false);
++    nav.navigate('/projects/abc/kanban?task=T-1');
++    nav.navigate('/projects/abc/reviews/CR-7');
++    expect(addresses(tabs)).toEqual([
++      ['/projects/abc/kanban', '/projects/abc/kanban?task=T-1', '/projects/abc/reviews/CR-7'],
++      2,
++    ]);
++    expect(went.every(([, replace]) => replace)).toBe(true);
++    // The review page's back button knows where it was reached from
++    expect(nav.backEntry()).toEqual({ address: '/projects/abc/kanban?task=T-1', steps: 1 });
++    expect(nav.back()).toBe(true);
++    expect(shown()).toBe('/projects/abc/kanban?task=T-1');
++    expect(nav.back()).toBe(true);
++    expect(shown()).toBe('/projects/abc/kanban');
++    expect([nav.canGo(-1), nav.back()]).toEqual([false, false]);
++    expect(nav.forward()).toBe(true);
++    expect(shown()).toBe('/projects/abc/kanban?task=T-1');
++    // A step from the middle drops what was ahead, as a browser's does
++    nav.navigate('/projects/abc/list');
++    expect(addresses(tabs)).toEqual([
++      ['/projects/abc/kanban', '/projects/abc/kanban?task=T-1', '/projects/abc/list'],
++      2,
++    ]);
++    expect(nav.canGo(1)).toBe(false);
++  });
++
++  it('a replace changes the current entry only', async () => {
++    const { nav, tabs } = await app();
++    nav.navigate('/projects/abc/list');
++    nav.navigate('/projects/abc/list?sprint=S1', { replace: true });
++    expect(addresses(tabs)).toEqual([['/projects/abc/kanban', '/projects/abc/list?sprint=S1'], 1]);
++  });
++
++  it('switching tabs adds nothing to either history; each shows as it was left', async () => {
++    const { nav, tabs, actions, shown } = await app();
++    nav.navigate('/projects/abc/reviews/CR-7');
++    const first = tabs.active;
++    actions.open('/board');
++    expect(shown()).toBe('/board');
++    expect(nav.canGo(-1)).toBe(false); // a new tab's Back is disabled until it moves
++    nav.navigate('/board?task=T-2');
++    actions.select(first);
++    expect(shown()).toBe('/projects/abc/reviews/CR-7');
++    expect(addresses(tabs)).toEqual([['/projects/abc/kanban', '/projects/abc/reviews/CR-7'], 1]);
++    nav.back();
++    expect(shown()).toBe('/projects/abc/kanban');
++    actions.step(1);
++    expect(shown()).toBe('/board?task=T-2');
++    expect(addresses(tabs)).toEqual([['/board', '/board?task=T-2'], 1]);
++  });
++
++  it('each entry keeps the scroll of its page, restored on Back and on a switch back to its tab', async () => {
++    const { nav, actions } = await app();
++    const board = document.body.appendChild(document.createElement('div'));
++    board.id = 'kanban-board';
++    try {
++      board.scrollTop = 120;
++      board.scrollLeft = 30;
++      // jsdom keeps what is set: what the page would scroll to
++      expect(nav.scrollOf()).toEqual({ 'kanban-board': { top: 120, left: 30 } });
++      nav.navigate('/projects/abc/list');
++      board.scrollTop = 0;
++      board.scrollLeft = 0;
++      nav.back();
++      expect([board.scrollTop, board.scrollLeft]).toEqual([120, 30]);
++      // Left for another tab and back
++      board.scrollTop = 64;
++      actions.open('/board');
++      board.scrollTop = 0;
++      actions.step(-1);
++      expect(board.scrollTop).toBe(64);
++    } finally {
++      board.remove();
++    }
++  });
++});

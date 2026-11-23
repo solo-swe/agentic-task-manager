@@ -1,0 +1,47 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "b214d57178e4cc3fb5d752f60c430161a61a6ad5",
+    "head": "33f63fb8801811955b846188c1041657d01db7cc"
+  },
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/playwright.config.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/src/lib/state.svelte.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/performance.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/real-review.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/e2e/reviews.spec.ts",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "dashboard/tests/unit/state.test.ts",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-19T08:36:04Z"
+}

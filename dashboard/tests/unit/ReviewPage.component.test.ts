@@ -32,8 +32,30 @@ const chain = (id: string, path: string | null, more: Partial<PlacedChain> = {},
   ],
   placed: path ? [2, 2] : null,
   drifted: null,
+  in_view: true,
   ...more,
 });
+
+type Can = ReviewPageData['can'];
+const yes = { ok: true };
+const no = (why: string) => ({ ok: false, why });
+/** atm's answer (`can`) for a reviewer of a waiting review: every decision, and closing; rounds are its author's */
+const REVIEWER: Can = {
+  approve: yes,
+  request_changes: yes,
+  comment: yes,
+  round: no('rounds are its author’s'),
+  close: yes,
+};
+/** atm's answer for a reviewer of a review sent back, or a live one: never sent back (again) */
+const SENT_BACK: Can = { ...REVIEWER, request_changes: no('CR-7 is changes requested: it can’t be sent back') };
+const LIVE: Can = { ...REVIEWER, request_changes: no('CR-7 is live: it can’t be sent back') };
+/** atm's answer while a comment is open */
+const OPEN_WHY = 'CR-7 can’t be approved while comments are open: c-t1';
+/** atm's answer on an ended review: nothing */
+const ENDED: Can = Object.fromEntries(
+  ['approve', 'request_changes', 'comment', 'round', 'close'].map((a) => [a, no('CR-7 is approved: it can’t be')]),
+) as Can;
 
 function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['view']> = {}): ReviewPageData {
   return {
@@ -64,6 +86,7 @@ function data(more: Partial<ReviewPageData> = {}, view: Partial<ReviewPageData['
     view: { round: 3, against: null, files: [file('src/b.rs'), file('README.md'), file('src/a.rs')], ...view },
     needs_you: true,
     you: 'Ana',
+    can: REVIEWER,
     ...more,
   };
 }
@@ -662,7 +685,8 @@ describe('ReviewPage: Comments', () => {
     await fireEvent.click(tab(/^Comments/));
     await fireEvent.click(screen.getByRole('button', { name: 'src/a.rs · Line 2' }));
     expect(tab(/^Diffs/)).toHaveAttribute('aria-selected', 'true');
-    await vi.waitFor(() => expect(onfile).toHaveBeenCalledWith('src/a.rs'));
+    // The file and the chain's first comment, for the address (ATM-697: the comment in view)
+    await vi.waitFor(() => expect(onfile).toHaveBeenCalledWith('src/a.rs', 'c-t1'));
     await fireEvent.click(tab(/^Comments/));
     await fireEvent.click(screen.getByRole('button', { name: 'The review' }));
     expect(tab('Overview')).toHaveAttribute('aria-selected', 'true');
@@ -720,7 +744,10 @@ describe('ReviewPage: drafts (ATM-612)', () => {
   });
 
   it('the drafts show among the comments, marked, counted on Submit review, and said in its box', async () => {
-    const { container } = show(data({ drafts: [drafted('d1'), drafted('d2', null)] }), { ondrafts: handlers() });
+    const can = { ...REVIEWER, approve: no('CR-7 can’t be approved while comments are open: d1 (your draft)') };
+    const { container } = show(data({ drafts: [drafted('d1'), drafted('d2', null)], can }), {
+      ondrafts: handlers(),
+    });
     expect(screen.getByRole('button', { name: /Submit review/ })).toHaveTextContent('2');
     expect(container.querySelector('#review-pending')).toHaveTextContent('2');
     // On the review, in the conversation; the other on its file's lines
@@ -732,19 +759,19 @@ describe('ReviewPage: drafts (ATM-612)', () => {
   });
 
   it('with drafts, Comment needs no summary: it sends them; Approve is blocked by drafted comments, saying so', async () => {
-    const { onsubmit } = show(data({ drafts: [drafted('d1')] }), { ondrafts: handlers() });
+    const why = 'CR-7 can’t be approved while comments are open: d1 (your draft)';
+    const can = { ...REVIEWER, approve: no(why) };
+    const { onsubmit } = show(data({ drafts: [drafted('d1')], can }), { ondrafts: handlers() });
     await fireEvent.click(screen.getByRole('button', { name: /Submit review/ }));
     const approve = screen.getByRole('button', { name: 'Approve' });
     expect(approve).toBeDisabled();
-    expect(approve).toHaveAccessibleDescription(
-      'Your draft comment would be open once sent: send it with Comment or Request changes, or remove it',
-    );
+    expect(approve).toHaveAccessibleDescription(why);
     await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
     expect(onsubmit.mock.calls).toEqual([['comment', '']]);
   });
 
   it('sent back with drafts: the top button publishes them', () => {
-    const page = data({ drafts: [drafted('d1')] });
+    const page = data({ drafts: [drafted('d1')], can: { ...SENT_BACK, approve: no('CR-7 can’t be approved') } });
     show({ ...page, review: { ...page.review, status: 'changes_requested' } }, { ondrafts: handlers() });
     expect(screen.getByRole('button', { name: /Publish comments/ })).toHaveTextContent('1');
   });
@@ -768,8 +795,18 @@ describe('ReviewPage: drafts (ATM-612)', () => {
 });
 
 describe('ReviewPage: submit', () => {
-  /** A review with a comment still open: the decision is Submit review's */
-  const open = (more: Partial<ReviewPageData> = {}) => data({ chains: [chain('t1', 'src/a.rs')], ...more });
+  /** A review with a comment still open, atm refusing Approve: the decision is Submit review's */
+  const open = (more: Partial<ReviewPageData> = {}) =>
+    data({ chains: [chain('t1', 'src/a.rs')], can: { ...REVIEWER, approve: no(OPEN_WHY) }, ...more });
+  /** The same, sent back, or live: atm's answer for each */
+  const openAs = (status: 'changes_requested' | 'live') => {
+    const page = open();
+    return {
+      ...page,
+      review: { ...page.review, status },
+      can: { ...(status === 'live' ? LIVE : SENT_BACK), approve: no(OPEN_WHY) },
+    };
+  };
 
   it('Submit review opens the decision: request changes, with or without a summary; comment only with one', async () => {
     const { onsubmit } = show(open());
@@ -794,16 +831,12 @@ describe('ReviewPage: submit', () => {
     ]);
   });
 
-  // ATM-601: pressed, it failed with atm's refusal
+  // ATM-601, ATM-723: atm refusing it, Approve is disabled with atm's words (a refusal without words still says so)
   it.each([
-    ['a comment is open', (p: ReviewPageData) => p, '1 comment is still open: resolve them first'],
-    [
-      'two are open',
-      (p: ReviewPageData) => ({ ...p, chains: [...p.chains, { ...p.chains[0], id: 't2' }] }),
-      '2 comments are still open: resolve them first',
-    ],
-  ])('while %s, Approve is disabled and says why', async (_, made, why) => {
-    const { onsubmit } = show(made(open()));
+    ['its comments are open', OPEN_WHY, OPEN_WHY],
+    ['with no reason given', undefined, 'not allowed now'],
+  ])('atm refusing Approve (%s), it is disabled and says why', async (_, given, why) => {
+    const { onsubmit } = show(open({ can: { ...REVIEWER, approve: { ok: false, why: given } } }));
     // No one-click Approve either
     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
     const approve = screen.getByRole('button', { name: 'Approve' });
@@ -813,6 +846,25 @@ describe('ReviewPage: submit', () => {
     expect(screen.getByText(why)).toBeTruthy();
     await fireEvent.click(approve);
     expect(onsubmit).not.toHaveBeenCalled();
+  });
+
+  it('only what atm allows is offered: a refused Request changes or Close is not there, nor Comment', async () => {
+    const can = { ...REVIEWER, approve: no(OPEN_WHY), request_changes: no('not now'), close: no('not yours') };
+    const live = { ...open({ can }), review: { ...open().review, status: 'live' as const } };
+    const { unmount } = show(live, { onclose: vi.fn() });
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    expect(screen.queryByRole('button', { name: /^(Request changes|Close review)$/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Comment' })).toBeTruthy();
+    unmount();
+    show(open({ can: { ...can, comment: no('not yours'), request_changes: yes } }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    expect(screen.queryByRole('button', { name: 'Comment' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Request changes' })).toBeTruthy();
+  });
+
+  it('nothing allowed (an ended review, or not yours to decide): no decisions at all', () => {
+    show(open({ can: ENDED }), { onpoke: vi.fn() });
+    expect(screen.queryByRole('button', { name: /Submit review|Approve|Poke/ })).toBeNull();
   });
 
   it('nothing standing in the way, Approve in the panel is enabled, with no reason shown', async () => {
@@ -827,7 +879,11 @@ describe('ReviewPage: submit', () => {
   // ATM-609: a reviewer may approve a review they sent back, its comments resolved; with one open, still not
   it('sent back, everything resolved: Approve is one click, and sends the approval', async () => {
     const { onsubmit } = show(
-      data({ chains: [chain('t1', 'src/a.rs', {}, true)], review: { ...open().review, status: 'changes_requested' } }),
+      data({
+        chains: [chain('t1', 'src/a.rs', {}, true)],
+        review: { ...open().review, status: 'changes_requested' },
+        can: SENT_BACK,
+      }),
     );
     const approve = screen.getByRole('button', { name: 'Approve' });
     expect(approve).toBeEnabled();
@@ -837,11 +893,32 @@ describe('ReviewPage: submit', () => {
   });
 
   it('sent back with a comment open: Approve is disabled, saying so', async () => {
-    show({ ...open(), review: { ...open().review, status: 'changes_requested' } });
+    show(openAs('changes_requested'));
     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
-    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(
-      '1 comment is still open: resolve them first',
-    );
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAccessibleDescription(OPEN_WHY);
+  });
+
+  // ATM-700: a question left open belongs to its tab; a switch takes the page away and back
+  it('Submit review left open is there again on its tab, as it was; not on another, nor in the browser', async () => {
+    const first = show(open(), { appTab: 't1' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Half written' } });
+    first.unmount();
+    // Another tab's page of the same review: its own, closed
+    const other = show(open(), { appTab: 't2' });
+    expect(screen.queryByLabelText('Summary')).toBeNull();
+    other.unmount();
+    show(open(), { appTab: 't1' });
+    expect(screen.getByLabelText('Summary')).toHaveValue('Half written');
+  });
+
+  it('in the browser (no tab), a form left open isn’t kept', async () => {
+    const first = show(open());
+    await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
+    await fireEvent.input(screen.getByLabelText('Summary'), { target: { value: 'Gone' } });
+    first.unmount();
+    show(open());
+    expect(screen.queryByLabelText('Summary')).toBeNull();
   });
 
   it('a refresh keeps the summary being written; a decision made (the review updated) empties it', async () => {
@@ -858,9 +935,7 @@ describe('ReviewPage: submit', () => {
   });
 
   it('a review sent back still takes the reviewer’s words, as Publish comments; it isn’t sent back again (ATM-597, CR-2)', async () => {
-    const page = open();
-    page.review = { ...page.review, status: 'changes_requested' };
-    const { onsubmit } = show(page);
+    const { onsubmit } = show(openAs('changes_requested'));
     expect(screen.getByRole('button', { name: 'Comment on the review' })).toBeEnabled();
     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
     expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
@@ -873,10 +948,8 @@ describe('ReviewPage: submit', () => {
   });
 
   it('a live review (ATM-576): approved, commented on or closed with why, never sent back', async () => {
-    const page = open();
-    page.review = { ...page.review, status: 'live' };
     const onclose = vi.fn();
-    const { onsubmit } = show(page, { onclose });
+    const { onsubmit } = show(openAs('live'), { onclose });
     await fireEvent.click(screen.getByRole('button', { name: 'Submit review' }));
     expect(screen.queryByRole('button', { name: 'Request changes' })).toBeNull();
     const close = screen.getByRole('button', { name: 'Close review' });
@@ -887,12 +960,11 @@ describe('ReviewPage: submit', () => {
     expect(onsubmit).not.toHaveBeenCalled();
   });
 
-  it('an ended review takes no decision; a busy page none until it is done', async () => {
+  it('an ended review (atm allows nothing) takes no decision and no poke; a busy page none until it is done', async () => {
     for (const page of [open(), data()]) {
       for (const status of ['approved', 'closed'] as const) {
-        page.review = { ...page.review, status };
-        const { unmount } = show(page);
-        expect(screen.queryByRole('button', { name: /Submit review|Approve/ })).toBeNull();
+        const { unmount } = show({ ...page, review: { ...page.review, status }, can: ENDED }, { onpoke: vi.fn() });
+        expect(screen.queryByRole('button', { name: /Submit review|Approve|Poke/ })).toBeNull();
         unmount();
       }
     }

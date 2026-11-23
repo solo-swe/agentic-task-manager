@@ -95,8 +95,16 @@ pub fn in_open_pr(task: &Task) -> bool {
     task.get("pr").is_some_and(Value::is_object) && !task.get("merged_at").is_some_and(truthy)
 }
 
+/// Whether the task waits for its sprint's end-of-sprint review (a `batch` task done, `sprint_review: pending`): it
+/// stays in the task file until reviewed, as closing the sprint asks about it there (ATM-668, audit L6).
+#[must_use]
+pub fn awaits_sprint_review(task: &Task) -> bool {
+    task.get("sprint_review").and_then(Value::as_str) == Some("pending")
+}
+
 /// [`archivable`], keeping the tasks finished in the last `keep` days (`meta.archive.keep_days` without it), and only
-/// those finished before `before` when given (`atm db archive --keep-days`, `--before`).
+/// those finished before `before` when given (`atm db archive --keep-days`, `--before`). A task waiting for its
+/// sprint's review stays.
 #[must_use]
 pub fn archivable_by<'a>(
     document: &'a Value,
@@ -108,6 +116,7 @@ pub fn archivable_by<'a>(
     tasks_of(document)
         .filter(|t| finished(vocab, t))
         .filter(|t| !in_open_pr(t))
+        .filter(|t| !awaits_sprint_review(t))
         .filter(|t| finished_at(t).is_none_or(|f| f <= recent))
         .filter(|t| before.is_none_or(|b| finished_at(t).is_some_and(|f| f < b)))
         .collect()
@@ -159,7 +168,7 @@ pub fn archive_hint(document: &Value, vocab: &Vocabulary, size: u64) -> Option<V
 pub fn open_in_closed_sprints(vocab: &Vocabulary, document: &Value) -> Vec<Value> {
     tasks_of(document)
         .filter_map(|t| {
-            let sprint = vocab.find_sprint(t.get("sprint"))?;
+            let sprint = vocab.sprint_of(t)?;
             (sprint.get("state").and_then(Value::as_str) == Some("closed") && !finished(vocab, t))
                 .then(|| {
                     json!({

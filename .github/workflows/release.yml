@@ -1,8 +1,9 @@
 name: Release
 
-# Push a tag like v0.33.0 (packaging/release.sh) to build atm for every platform and the atm app's universal DMG, sign
-# and notarize the macOS builds, and attach them, with their checksums, to a draft GitHub release. Publishing the draft
-# updates the Homebrew formula and cask (homebrew.yml). The secrets it needs are listed in packaging/README.md.
+# Push a tag like v0.33.0 on the merged main (packaging/README.md, *A release*) to build atm for every platform and the
+# atm app's universal DMG, sign and notarize the macOS builds, and attach them, with their checksums, to a draft GitHub
+# release. Publishing the draft updates the Homebrew formula and cask (homebrew.yml). The secrets it needs are listed in
+# packaging/README.md. The tag is a plain `git tag` (ATM-705): the first job checks it, before anything is built.
 on:
   push:
     tags: ["v*"]
@@ -13,18 +14,41 @@ permissions:
   contents: read
 
 jobs:
+  # The tag names main's version (Cargo.toml's, in the tagged commit), and the commit is on main: a tag on a release
+  # branch, or one whose version wasn't bumped, builds nothing
+  tag:
+    name: The tag is main's version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: The tag is the workspace's version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -qx "version = \"$version\"" Cargo.toml || { echo "Cargo.toml isn't at $version"; exit 1; }
+      - name: The tagged commit is on main
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "$GITHUB_REF_NAME isn't on main"; exit 1; }
+
+  # The signing secrets are the `release` environment's (ATM-661, audit A5), which only a v* tag may use; every step
+  # that compiles runs before the first step that has one (A1), so no build script, proc macro or npm package sees them
   build:
     name: Build (${{ matrix.target }})
+    needs: tag
+    environment: release
     strategy:
       fail-fast: true
       matrix:
         include:
-          - { os: macos-latest, target: aarch64-apple-darwin }
-          - { os: macos-latest, target: x86_64-apple-darwin }
+          # Runners pinned by version, as CI's are (A11)
+          - { os: macos-15, target: aarch64-apple-darwin }
+          - { os: macos-15, target: x86_64-apple-darwin }
           # The oldest supported Ubuntu, so the binary runs on systems with an older glibc too
           - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: windows-2025, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,11 +56,6 @@ jobs:
           persist-credentials: false
       # The toolchain rust-toolchain.toml pins, with the target
       - run: rustup target add ${{ matrix.target }}
-      - name: The tag is the workspace's version
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          grep -qx "version = \"$version\"" Cargo.toml || { echo "Cargo.toml isn't at $version"; exit 1; }
       # atm embeds the dashboard and CompMD's runtime, built first (dashboard/dist/, never committed: T-477), with
       # pnpm at the version CI installs, from the npm registry
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -90,16 +109,14 @@ jobs:
   # cask puts on PATH), the app signed and notarized by Tauri's bundler, the DMG by packaging/notarize-dmg.sh
   app-macos:
     name: The app (universal DMG)
-    runs-on: macos-latest
+    needs: tag
+    environment: release
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - name: The tag is the workspace's version
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          grep -qx "version = \"$version\"" Cargo.toml || { echo "Cargo.toml isn't at $version"; exit 1; }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -120,6 +137,11 @@ jobs:
           done
           lipo -create -output app/src-tauri/binaries/atm-universal-apple-darwin \
             target/aarch64-apple-darwin/release/atm target/x86_64-apple-darwin/release/atm
+      # The app compiled as Tauri's bundler compiles it (both architectures, its features), with no secret in the
+      # environment (ATM-661, audit A1): the signing step below then finds nothing left to build, and only bundles,
+      # signs and notarizes
+      - name: Compile the app, with no secrets
+        run: pnpm --dir dashboard run app:bundle --target universal-apple-darwin --no-bundle
       - name: Import the Developer ID certificate
         env:
           CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
@@ -161,7 +183,7 @@ jobs:
   release:
     name: Draft the GitHub release
     needs: [build, app-macos]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

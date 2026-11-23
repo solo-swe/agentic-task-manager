@@ -147,6 +147,9 @@ describe('claims', () => {
       // A failing command still renews: the agent is at work
       assert.notEqual(runAtm(['task', 'details', 'T-404'], root, as('bob', 45)).code, 0);
       assert.equal(claims()['T-002'].lease_expires_at, at(165));
+      // `task list --agent` is a filter (the old name of --started-by, ATM-679): its caller's claims are renewed
+      assert.equal(runAtm(['task', 'list', '--agent', 'alice'], root, as('bob', 60)).code, 0);
+      assert.deepEqual([claims()['T-001'].lease_expires_at, claims()['T-002'].lease_expires_at], [at(135), at(180)]);
     } finally {
       removeDir(root);
     }

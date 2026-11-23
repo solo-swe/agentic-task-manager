@@ -21,9 +21,7 @@ pub struct StatusReport {
     pub has_sprints: bool,
 }
 
-fn id_of(task: &Task) -> Option<&str> {
-    task.get("id").and_then(Value::as_str)
-}
+use atm_common::task_id as id_of;
 
 fn name_of(task: &Task) -> Value {
     task.get("name").cloned().unwrap_or_else(|| json!(""))
@@ -42,23 +40,13 @@ fn counts(tasks: &[&Task], key: impl Fn(&Task) -> Vec<String>) -> Map<String, Va
 }
 
 fn active_sprint(vocab: &Vocabulary, tasks: &[&Task]) -> Value {
-    let Some(active) = vocab
-        .sprints
-        .iter()
-        .find(|s| s.get("state").and_then(Value::as_str) == Some("active"))
-    else {
+    let Some(active) = vocab.active_sprint() else {
         return Value::Null;
     };
     let id = active.get("id").and_then(Value::as_str);
     let in_active: Vec<&&Task> = tasks
         .iter()
-        .filter(|t| {
-            vocab
-                .find_sprint(t.get("sprint"))
-                .and_then(|s| s.get("id"))
-                .and_then(Value::as_str)
-                == id
-        })
+        .filter(|t| vocab.sprint_id_of(t) == id)
         .collect();
     let mut sprint = Map::new();
     for key in ["id", "goal", "due", "release", "start"] {
@@ -116,11 +104,7 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
     let all = store.list_tasks()?;
     let claims = store.read_claims();
     let (file_bytes, archive_bytes) = store.sizes();
-    let archived = |id: &str| {
-        store
-            .get_archived_task(id)
-            .map(|t| t.is_some_and(|t| !t.is_empty()))
-    };
+    let archived = |id: &str| crate::query::archived_task(store, id);
     let in_scope = Scope::new(vocab, scope)?;
     let tasks: Vec<&Task> = all
         .iter()
@@ -237,11 +221,14 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
         }
     }
 
+    // Live claims only, as `atm loop next` reads them (ATM-667)
+    let live = crate::leases::live_claims(&claims, atm_common::time::now());
     let (next, reason) = next_task(
         vocab,
         document,
         &all,
-        &claims,
+        &live,
+        here.as_str(),
         &Selection::default(),
         None,
         false,
@@ -269,7 +256,7 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
     let sprint_of = |t: &Task| {
         vec![
             vocab
-                .find_sprint(t.get("sprint"))
+                .sprint_of(t)
                 .and_then(|s| s.get("id"))
                 .filter(|v| truthy(v))
                 .map_or_else(|| "backlog".into(), py_str),

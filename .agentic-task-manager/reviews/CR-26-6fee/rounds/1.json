@@ -1,0 +1,42 @@
+{
+  "number": 1,
+  "kind": {
+    "kind": "range",
+    "base": "ef6ab1b53608813cd05fcf9a33c96131d185c9aa",
+    "head": "578c2d1c7a293fd5052e11adcd8f5c35abc7b05f"
+  },
+  "files": [
+    {
+      "path": "crates/atm-cli/src/commands/vcs.rs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "docs/agent/commands.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "skills/atm-push/SKILL.md",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/dry-run.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/keys.test.mjs",
+      "status": "modified",
+      "binary": false
+    },
+    {
+      "path": "tests/scripts/refusals.test.mjs",
+      "status": "modified",
+      "binary": false
+    }
+  ],
+  "by": "claude:0f56a916",
+  "at": "2026-11-18T21:18:47Z"
+}

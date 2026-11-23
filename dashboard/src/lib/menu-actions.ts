@@ -5,7 +5,7 @@ import { inApp } from './api/http';
 import type { MenuAction, MenuState, SystemItem } from './api/menu';
 import { openUrl, reloadWindow } from './api/shell';
 import type { TabActions } from './tab-actions';
-import { currentAddress } from './navigation';
+import { back as goBack, currentAddress, forward as goForward } from './navigation';
 import { pluginInfo } from './plugin-info';
 import type { DialogId } from './dialogs';
 import type { ViewId } from './tabs';
@@ -43,8 +43,9 @@ export interface PageActions {
 }
 
 export const pageActions: PageActions = {
-  back: () => history.back(),
-  forward: () => history.forward(),
+  // The tab's history: in the app, the active title-bar tab's own (ATM-694); in the browser, its tab's
+  back: () => void goBack(),
+  forward: () => void goForward(),
   // In the app, through the app (ATM-584): the address is a route, which the app has no file for
   reload: () => void (inApp ? reloadWindow(() => location.reload()) : location.reload()),
   // In the app, in the user's browser (T-551): the window opens no new tab itself
