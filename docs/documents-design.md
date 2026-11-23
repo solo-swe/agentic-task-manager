@@ -1,6 +1,6 @@
 # Documents: every document of a project, to read (ATM-728)
 
-**Status:** design, for review with Hakan (CR). Part of [the sidebar overhaul](sidebar-overhaul-design.md) (its
+**Status:** design, agreed with Hakan (CR-136); §6 records the decisions. Part of [the sidebar overhaul](sidebar-overhaul-design.md) (its
 Documents item, §1); the build becomes tasks of the sprint *Sidebar overhaul* once agreed.
 
 ## 1. In short
@@ -82,13 +82,12 @@ and the listed files' sizes and mtimes), as the other routes' `ETag`s are.
 - **Layers:** atm-docs `list_documents` (the rules of §2 and §3), atm-vcs the two `ls-files` calls, atm-lib the call,
   atm-api the route; the dashboard `lib/documents/DocumentsPage.svelte` and `api/documents.ts`.
 
-## 6. Questions for Hakan
+## 6. Decisions (Hakan, CR-136: the recommendations)
 
-1. **What is a document:** Markdown only (recommended)? Or also plain text (`*.txt`), and files without an extension
-   such as `LICENSE`?
-2. **Untracked documents:** listed, marked *new* (recommended: you see the one an agent is writing)? Or tracked only?
-3. **The first view:** Tree (recommended) or Recent?
-4. **Submodules:** shown as folders you can't open (recommended), or left out?
+1. **Markdown only** (`*.md`, `*.markdown`).
+2. **Untracked documents are listed**, marked *new*.
+3. **Tree is the first view.**
+4. **Submodules show as folders you can't open.**
 
 ## 7. Tasks it implies
 

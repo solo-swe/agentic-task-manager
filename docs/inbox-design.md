@@ -1,6 +1,6 @@
 # The Inbox: a project's raw input, triaged into tasks (ATM-728)
 
-**Status:** design, for review with Hakan (CR). Part of [the sidebar overhaul](sidebar-overhaul-design.md) (its
+**Status:** design, agreed with Hakan (CR-136); §9 records the decisions. Part of [the sidebar overhaul](sidebar-overhaul-design.md) (its
 Inbox item, §1); the build becomes tasks of the sprint *Sidebar overhaul* once agreed.
 
 ## 1. In short
@@ -171,18 +171,13 @@ stateDiagram-v2
 - **atm-api, atm-cli, the app:** the routes, `atm inbox …`, the commands; each a call into atm-lib.
 - **The dashboard:** `lib/inbox/` (the page, the item, the quick-add box), `api/inbox.ts`.
 
-## 9. Questions for Hakan
+## 9. Decisions (Hakan, CR-136)
 
-1. **Where it lives:** in the repository, committed like `tasks.json` (recommended: every worktree and clone sees it,
-   and its history is git's)? Or in your own state folder, private to this machine, as review drafts are?
-2. **Who adds:** people only (recommended: it is your input; agents have tasks and notes)? Or agents too, for
-   something they noticed that isn't their task?
-3. **Committing what you add:** the next `atm vcs commit` takes `inbox.json` along with `tasks.json` (recommended, as
-   review comments from the page are taken)? Or the triage skill only?
-4. **Triage:** a skill of its own, `/atm-triage-inbox` (recommended)? Or a mode of `/atm-create-tasks` ("create tasks
-   from the inbox")?
-5. **A discard by an agent:** only on your word in the triage session (recommended)? Or may it discard obvious
-   duplicates of existing tasks on its own, saying so?
+1. **It lives in the repository**, committed like `tasks.json`.
+2. **People only add items**, for now; agents adding may come later if a need shows.
+3. **The next `atm vcs commit` takes `inbox.json`** along with `tasks.json`.
+4. **Triage is a skill of its own**, `/atm-triage-inbox`.
+5. **An agent discards only on the user's word**, in the triage session.
 
 ## 10. Tasks it implies
 

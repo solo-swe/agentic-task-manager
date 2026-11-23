@@ -19391,7 +19391,7 @@
         "docs/documents-design.md"
       ],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T23:20:49Z",
+      "updated_at": "2026-11-23T23:43:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19403,13 +19403,17 @@
       "sprint": "Sidebar overhaul",
       "with": "user",
       "number": 728,
-      "started_at": "2026-11-23T23:18:43Z",
+      "started_at": "2026-11-23T23:43:19Z",
       "started_by": "claude:ba530ebb",
-      "commit": "5f068e60c0cc90f56159a66ce2b4f982f4aad13f",
+      "commit": "53029c7c872a029e57165fd484e887cd9adee32d",
       "code_reviews": [
         {
           "id": "01a20a94-f018-718d-b471-65fceca09ac1",
           "ref": "CR-135"
+        },
+        {
+          "id": "01a20ab6-7874-774a-849c-8bcd5ebc0473",
+          "ref": "CR-136"
         }
       ],
       "notes": [
@@ -19436,6 +19440,24 @@
           "kind": "note",
           "text": "Approved: in CR-135 (round 5)",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T23:21:00Z",
+          "kind": "review",
+          "text": "CR-136: Inbox and Documents designs",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-23T23:42:54Z",
+          "kind": "rejection",
+          "text": "CR-136 round 1: 5 open comments",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T23:43:01Z",
+          "kind": "note",
+          "text": "Approved: in CR-136 (round 1)",
+          "by": "Hakan Serce"
         }
       ],
       "reviews": [
@@ -19447,6 +19469,11 @@
         {
           "from": "2026-11-23T23:14:14Z",
           "to": "2026-11-23T23:18:31Z",
+          "outcome": "approved"
+        },
+        {
+          "from": "2026-11-23T23:21:00Z",
+          "to": "2026-11-23T23:43:01Z",
           "outcome": "approved"
         }
       ]
