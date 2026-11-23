@@ -7,7 +7,7 @@ use atm_common::{Error, Result, Vocabulary};
 use atm_db::working::Working;
 use serde_json::{Map, Value, json};
 
-use crate::leases::{check_holder, drop_expired_claims, lease_until, own_lease_expired};
+use crate::leases::{check_holder, expire, lease_until, own_lease_expired, section};
 use crate::loop_rules::lease_minutes;
 use crate::project::Project;
 
@@ -27,13 +27,7 @@ pub struct Renewed {
 
 /// The claims section of the claims store, made a map when it isn't one.
 fn claims_of(store: &mut Map<String, Value>) -> &mut Map<String, Value> {
-    let entry = store.entry("claims").or_insert_with(|| json!({}));
-    if !entry.is_object() {
-        *entry = json!({});
-    }
-    entry
-        .as_object_mut()
-        .expect("the section was made an object just above")
+    section(store, "claims")
 }
 
 fn no_live_claim(task_id: &str, gone: bool) -> Error {
@@ -81,9 +75,7 @@ pub fn renew_lease(project: &mut Project, task_id: &str, expire: bool) -> Result
             }));
         }
         let vocab = Vocabulary::of_document(&work.document)?;
-        let mut claims = claims_of(&mut work.claims_store).clone();
-        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
-        *claims_of(&mut work.claims_store) = claims;
+        let expired = crate::leases::expire(work, &vocab);
         let claims = claims_of(&mut work.claims_store);
         if !claims.get(task_id).is_some_and(atm_common::py::truthy) {
             let own = own_lease_expired(&expired, &work.document, &vocab, task_id, agent, None);
@@ -175,14 +167,15 @@ pub struct LiveClaims {
 pub fn expire_claims(project: &mut Project) -> Result<LiveClaims> {
     project.change(|work: &mut Working| {
         let vocab = Vocabulary::of_document(&work.document)?;
-        let mut claims = claims_of(&mut work.claims_store).clone();
-        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
-        let mut live: Vec<Value> = claims.values().cloned().collect();
+        let expired = expire(work, &vocab);
+        let mut live: Vec<Value> = claims_of(&mut work.claims_store)
+            .values()
+            .cloned()
+            .collect();
         live.sort_by(|a, b| {
             atm_common::py::py_str_opt(a.get("task"))
                 .cmp(&atm_common::py::py_str_opt(b.get("task")))
         });
-        *claims_of(&mut work.claims_store) = claims;
         Ok(LiveClaims {
             claims: live,
             expired,

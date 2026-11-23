@@ -5,7 +5,7 @@
 use atm_common::py::py_str_opt;
 use atm_common::time::{format_iso, now, now_iso, parse_iso};
 use atm_common::{Error, Kind, Result, Vocabulary};
-use atm_db::working::Here;
+use atm_db::working::{Here, Working};
 use serde_json::{Map, Value, json};
 
 use crate::loop_rules::lease_minutes;
@@ -59,6 +59,30 @@ fn task_at<'a>(document: &'a mut Value, task_id: &str) -> Option<&'a mut Map<Str
         .iter_mut()
         .filter_map(Value::as_object_mut)
         .find(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
+}
+
+/// A section of the claims store (`claims`, `completed`, `waiting`, `resolved`, `hints`), made a map when it isn't one.
+pub(crate) fn section<'a>(
+    store: &'a mut Map<String, Value>,
+    key: &str,
+) -> &'a mut Map<String, Value> {
+    let entry = store.entry(key).or_insert_with(|| json!({}));
+    if !entry.is_object() {
+        *entry = json!({});
+    }
+    entry
+        .as_object_mut()
+        .expect("the section was made an object just above")
+}
+
+/// The expiry every change that reads claims begins with (ATM-681): the change's claims whose lease ran out are
+/// dropped, their tasks back to to do. Returns the expired claims.
+pub(crate) fn expire(work: &mut Working, vocab: &Vocabulary) -> Vec<Value> {
+    drop_expired_claims(
+        &mut work.document,
+        section(&mut work.claims_store, "claims"),
+        vocab,
+    )
 }
 
 /// Drop the claims whose lease ran out; their tasks in this working copy go back to to do, with a failure note.

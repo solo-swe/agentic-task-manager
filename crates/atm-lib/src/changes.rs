@@ -12,7 +12,7 @@ use atm_db::working::{Here, Working};
 use serde_json::{Map, Value, json};
 
 use crate::leases::{
-    check_holder, claim_record, completion_record, drop_expired_claims, own_lease_expired,
+    check_holder, claim_record, completion_record, expire, own_lease_expired, section,
     waiting_entry,
 };
 use crate::loop_rules::{Selection, next_task};
@@ -84,16 +84,6 @@ pub struct StatusChange {
 
 fn id_of(task: &Task) -> Option<&str> {
     task.get("id").and_then(Value::as_str)
-}
-
-fn section<'a>(store: &'a mut Map<String, Value>, key: &str) -> &'a mut Map<String, Value> {
-    let entry = store.entry(key).or_insert_with(|| json!({}));
-    if !entry.is_object() {
-        *entry = json!({});
-    }
-    entry
-        .as_object_mut()
-        .expect("the section was made an object just above")
 }
 
 /// The tasks as a list to read, and the index of the one with this ID (the first, as `find_task` takes it).
@@ -276,9 +266,7 @@ pub fn change_task_status(
             Ok(archive.iter().rev().find(|t| id_of(t) == Some(id) && !t.is_empty()).cloned())
         };
         let in_archive = |id: &str| -> Result<bool> { Ok(archived_of(id)?.is_some()) };
-        let mut claims = section(&mut work.claims_store, "claims").clone();
-        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
-        *section(&mut work.claims_store, "claims") = claims;
+        let expired = expire(work, &vocab);
         apply_resolutions(work, &vocab, &archived_of);
         let here = work.here().clone();
         let (tasks, at) = snapshot(&work.document, task_id);
@@ -475,9 +463,7 @@ pub fn next_task_for(
                 .find(|t| id_of(t) == Some(id) && !t.is_empty())
                 .cloned())
         };
-        let mut claims = section(&mut work.claims_store, "claims").clone();
-        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
-        *section(&mut work.claims_store, "claims") = claims;
+        let expired = expire(work, &vocab);
         apply_resolutions(work, &vocab, &in_archive);
         let (tasks, _) = snapshot(&work.document, "");
         let refs: Vec<&Task> = tasks.iter().collect();
