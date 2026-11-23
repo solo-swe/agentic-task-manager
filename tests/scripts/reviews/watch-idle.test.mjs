@@ -15,9 +15,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function cursorOf(home) {
   const dir = path.join(home, 'watches');
   if (!fs.existsSync(dir)) return undefined;
-  const name = fs
-    .readdirSync(dir)
-    .find((f) => /^[0-9a-f]{16}\.json$/.test(f));
+  const name = fs.readdirSync(dir).find((f) => /^[0-9a-f]{16}\.json$/.test(f));
   return name && path.join(dir, name);
 }
 
@@ -45,7 +43,7 @@ describe('a review watch while it waits (ATM-727)', () => {
       await until(() => cursorOf(home) !== undefined, 'the first look');
       // What was written just before the watch began may still be told late (FSEvents): a look or two, then quiet
       let first = fs.statSync(cursorOf(home)).mtimeMs;
-      for (let settled = 0; settled < 3; ) {
+      for (let settled = 0; settled < 3;) {
         await sleep(500);
         const now = fs.statSync(cursorOf(home)).mtimeMs;
         settled = now === first ? settled + 1 : 0;
@@ -88,9 +86,16 @@ describe('a review watch while it waits (ATM-727)', () => {
       ok(['task', 'state', 'T-1', 'in_progress'], root, B);
       fs.writeFileSync(path.join(root, 'a.txt'), 'a, changed\n');
       ok(['review', 'create', '--title', 'One', '--task', 'T-1', '--uncommitted'], root, B);
-      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Name it better.'], root, { ...HAKAN, ATM_HOME: home });
+      ok(['review', 'comment', 'CR-1', '--file', 'a.txt', '--lines', '1', '--body', 'Name it better.'], root, {
+        ...HAKAN,
+        ATM_HOME: home,
+      });
       ok(['review', 'submit', 'CR-1', '--request-changes'], root, { ...HAKAN, ATM_HOME: home });
-      watching = background(['review', 'watch', '--json', '--timeout', '30s', '--since', '2000-01-01T00:00:00Z'], root, A);
+      watching = background(
+        ['review', 'watch', '--json', '--timeout', '30s', '--since', '2000-01-01T00:00:00Z'],
+        root,
+        A,
+      );
       await until(() => /Watching the reviews/.test(watching.stderr()), 'the watch to start');
       await until(() => cursorOf(home) !== undefined, 'the first look');
       await sleep(1_000);
@@ -115,7 +120,7 @@ describe('a review watch while it waits (ATM-727)', () => {
     /** The cursor's time once it has stopped moving: what was written before may be told late (FSEvents) */
     const settled = async () => {
       let last = fs.statSync(cursorOf(home)).mtimeMs;
-      for (let quiet = 0; quiet < 3; ) {
+      for (let quiet = 0; quiet < 3;) {
         await sleep(500);
         const now = fs.statSync(cursorOf(home)).mtimeMs;
         quiet = now === last ? quiet + 1 : 0;
