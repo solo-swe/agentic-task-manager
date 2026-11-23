@@ -74,7 +74,11 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
 
 ## Secrets and keys
 
-Set in this repository's settings (Secrets and variables → Actions), the same as agentic-status-bar's:
+Set as the secrets of the repository's **`release` environment** (Settings → Environments → `release`; ATM-661,
+audit A5), not as repository secrets, so only a job that names the environment can read them. The environment's
+deployment rule allows only tags matching `v*`, and a tag ruleset for `v*` (who may create, move or delete a release
+tag) goes with it. Both are set by hand on GitHub. The Homebrew and Skills workflows run on a published release (its
+tag); run by hand, they name the tag as their ref: `gh workflow run Homebrew --ref v0.43.0 -f tag=v0.43.0`.
 
 | Secret | What it is |
 |---|---|
@@ -88,7 +92,10 @@ Set in this repository's settings (Secrets and variables → Actions), the same 
 | `TAURI_SIGNING_PRIVATE_KEY` | The app updater's private key (T-483; `tauri signer generate`), as Tauri writes it: it signs the app's update archive. Not the Developer ID |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password |
 
-The release workflow reads the signing secrets only in the macOS jobs (the CLI's and the app's); only its last job,
+The release workflow reads the signing secrets only in the macOS jobs (the CLI's and the app's), and only once
+everything is compiled (ATM-661, audit A1): the CLI by `cargo build`, the app by `tauri build --no-bundle`, both with
+no secret in their environment, so no build script, proc macro or npm package sees one; the signing step then only
+bundles, signs and notarizes. `dashboard/tests/unit/ci-workflow.test.ts` checks the order. Only its last job,
 which builds nothing, can write to the repository (its releases). The Homebrew workflow reads only the tap's deploy
 key, the Skills workflow only the skills repo's. The app is signed and notarized with the CLI's secrets; its update
 archive is signed with the updater key as well.

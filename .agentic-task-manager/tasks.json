@@ -13801,7 +13801,7 @@
       "description": "Audit findings A1 and A5 ([the report](docs/codebase-audit-2026-11.md#a1-medium-high-security-signing-secrets-are-in-the-environment-while-the-app-compiles-checked)). With Hakan: the GitHub settings (an environment, a tag ruleset) are his to apply.\n\n- **A1:** `.github/workflows/release.yml:130-144` runs `tauri build` (every crate's build script and proc macro, the npm packages) with the updater key, its password and the notary key in its environment. Compile both targets in an earlier step without secrets (`cargo build --release --locked -p atm-app --target …`), then bundle and sign, where cargo has nothing left to build. Or bundle unsigned and sign the archive in its own step.\n- **A5:** no job declares an `environment:` and the only ruleset covers `main`. Propose a `release` environment restricted to `v*` tags holding the signing and deploy-key secrets, a tag ruleset for `v*`, and a workflow check that the tag's commit is on `origin/main`.\n- Pin the release, Homebrew and skills workflows' runners by version, as CI's are (A11).\n\n## Tests\n`dashboard/tests/unit/ci-workflow.test.ts`: no step that runs `cargo build` or `tauri build` has a signing secret in its `env`; the release jobs name the environment; runners are pinned.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         ".github/workflows/release.yml",
@@ -13811,7 +13811,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T09:46:54Z",
+      "updated_at": "2026-11-23T12:04:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13831,7 +13831,9 @@
           "text": "Hakan, in chat (2026-11-23): yes, change the release, Homebrew and skills workflows. Build with no signing secrets, then sign; environment: release on the secret-holding jobs; runners pinned; the CI test. Hakan sets up the GitHub side before the next release: the release environment (v* tags), its secrets and a v* tag ruleset.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-23T12:04:44Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225e61ea5857",
@@ -15251,7 +15253,7 @@
       "description": "Audit §7's repetition ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported-4)). No behaviour change; the e2e suite is the check.\n\n- One `request<T>(url, {method, body, since})` in `api/http.ts` returning `{status, body, etag}` and mapping `{error}` the same way, for the six fetch wrappers; URL building only in `http.ts`; `ipcFetch` honours `init` (D14).\n- One `formatAgo` and `formatDateTime` in `format.ts` for the three \"ago\" formats and the bare `toLocaleString()` calls.\n- `taskCardState(task)`, `<SprintBadge>`, `<TaskWaits>` for `TaskCard` and `KanbanCard`.\n- Split `ReviewPage.svelte` (1,855 lines: the file tree, submit, overview, comments, keys) and `state.svelte.ts` (1,146: the saved view, the app update, the project cache, the loader).\n- Start moving `app.css`'s component styles into their components (`.detail-*` first); inline `font-size:13px` and colours in `DetailPanel` become classes on tokens.\n- Hand-made popovers (Progress, Activity), the project selector's listbox and the card's `div role=button` become Bits UI pieces or buttons.\n\nOne piece per commit.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-226b057c6a44"
       ],
@@ -15263,7 +15265,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T11:53:25Z",
+      "updated_at": "2026-11-23T12:04:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15277,7 +15279,23 @@
       "review": "async",
       "started_at": "2026-11-23T11:47:08Z",
       "started_by": "claude:0f56a916",
-      "commit": "4052ba85374ded04eb491f0ad8bd3da2b25e2708"
+      "commit": "4052ba85374ded04eb491f0ad8bd3da2b25e2708",
+      "code_reviews": [
+        {
+          "id": "01a2084a-f285-77ca-9457-0f0ad041533b",
+          "ref": "CR-130"
+        }
+      ],
+      "review_requested_at": "2026-11-23T12:04:19Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-23T12:04:19Z",
+          "kind": "review",
+          "text": "CR-130: The dashboard: the ago and date formats in one place, one card state",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83db95b7695d",
@@ -18184,7 +18202,7 @@
         "dashboard/src/lib/projectinfo.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-23T10:52:29Z",
+      "updated_at": "2026-11-23T12:01:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18222,7 +18240,7 @@
       ],
       "started_at": "2026-11-23T09:53:50Z",
       "started_by": "claude:0f56a916",
-      "commit": "3a88ca229a43cbbee005f8d757c6c2394300eb7c",
+      "commit": "8c1b5a11c5a967ef07acc123f939018aed660126",
       "code_reviews": [
         {
           "id": "01a20809-2e06-7334-b030-a432b232e0bf",

@@ -32,19 +32,23 @@ jobs:
         run: |
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "$GITHUB_REF_NAME isn't on main"; exit 1; }
 
+  # The signing secrets are the `release` environment's (ATM-661, audit A5), which only a v* tag may use; every step
+  # that compiles runs before the first step that has one (A1), so no build script, proc macro or npm package sees them
   build:
     name: Build (${{ matrix.target }})
     needs: tag
+    environment: release
     strategy:
       fail-fast: true
       matrix:
         include:
-          - { os: macos-latest, target: aarch64-apple-darwin }
-          - { os: macos-latest, target: x86_64-apple-darwin }
+          # Runners pinned by version, as CI's are (A11)
+          - { os: macos-15, target: aarch64-apple-darwin }
+          - { os: macos-15, target: x86_64-apple-darwin }
           # The oldest supported Ubuntu, so the binary runs on systems with an older glibc too
           - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: windows-2025, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -106,7 +110,8 @@ jobs:
   app-macos:
     name: The app (universal DMG)
     needs: tag
-    runs-on: macos-latest
+    environment: release
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -132,6 +137,11 @@ jobs:
           done
           lipo -create -output app/src-tauri/binaries/atm-universal-apple-darwin \
             target/aarch64-apple-darwin/release/atm target/x86_64-apple-darwin/release/atm
+      # The app compiled as Tauri's bundler compiles it (both architectures, its features), with no secret in the
+      # environment (ATM-661, audit A1): the signing step below then finds nothing left to build, and only bundles,
+      # signs and notarizes
+      - name: Compile the app, with no secrets
+        run: pnpm --dir dashboard run app:bundle --target universal-apple-darwin --no-bundle
       - name: Import the Developer ID certificate
         env:
           CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
@@ -173,7 +183,7 @@ jobs:
   release:
     name: Draft the GitHub release
     needs: [build, app-macos]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

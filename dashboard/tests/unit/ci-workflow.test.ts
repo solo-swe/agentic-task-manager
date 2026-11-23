@@ -138,6 +138,51 @@ describe('release workflows (I18, I19; T-452)', () => {
     for (const name of ['build', 'app-macos']) expect(job(name)).toMatch(/^ {4}needs: tag$/m);
     expect(job('release')).toMatch(/^ {4}needs: \[build, app-macos\]$/m);
   });
+
+  // ATM-661 (audit A1, A5, A11): the signing and deploy secrets are kept from everything that compiles
+  const workflows = { 'release.yml': release, 'homebrew.yml': homebrew, 'skills.yml': read('skills.yml') };
+  const jobsOf = (w: string) =>
+    w
+      .slice(w.indexOf('\njobs:\n'))
+      .split(/^ {2}(?=[\w-]+:\n)/m)
+      .slice(1);
+  const stepsOf = (job: string) => job.split(/^ {6}- /m).slice(1);
+  const compiles = (step: string) => /cargo build|--no-bundle/.test(step);
+
+  for (const [name, w] of Object.entries(workflows)) {
+    it(`${name}: a step with a secret comes after every step that compiles, and compiles nothing itself`, () => {
+      for (const job of jobsOf(w)) {
+        const steps = stepsOf(job);
+        const secret = steps.findIndex((s) => /secrets\./.test(s));
+        if (secret < 0) continue;
+        const lastCompile = steps.reduce((last, s, i) => (compiles(s) ? i : last), -1);
+        expect(lastCompile, job.split('\n')[0]).toBeLessThan(secret);
+        for (const step of steps.filter((s) => /secrets\./.test(s))) expect(step).not.toMatch(/cargo build/);
+      }
+    });
+
+    it(`${name}: every job with a secret is in the release environment (v* tags only)`, () => {
+      const holding = jobsOf(w).filter((job) => /secrets\./.test(job));
+      expect(holding.length).toBeGreaterThan(0);
+      for (const job of holding) expect(job, job.split('\n')[0]).toMatch(/^ {4}environment: release$/m);
+    });
+
+    it(`${name}: every runner is pinned by version, never a -latest label`, () => {
+      const runners = w.split('\n').filter((line) => /runs-on:|\bos: /.test(line));
+      expect(runners.length).toBeGreaterThan(0);
+      for (const line of runners) expect(line).not.toMatch(/-latest/);
+    });
+  }
+
+  it('the app compiles with no secret before it is bundled and signed', () => {
+    const app = jobsOf(release).find((j) => j.startsWith('app-macos:'))!;
+    const steps = stepsOf(app);
+    const compile = steps.findIndex((s) => /app:bundle --target universal-apple-darwin --no-bundle/.test(s));
+    const sign = steps.findIndex((s) => /app:bundle --target universal-apple-darwin\n/.test(s));
+    expect(compile).toBeGreaterThan(0);
+    expect(steps[compile]).not.toMatch(/env:/);
+    expect(sign).toBeGreaterThan(compile);
+  });
 });
 
 describe('Dependabot (I19, T-275)', () => {

@@ -690,6 +690,12 @@ CI permission beyond reading and the first secrets:
   only in the Skills job (`.github/workflows/skills.yml`, T-453), which writes `skills/atm-*` and the README's atm
   section to `solo-swe/skills` from the published release's own tag, and tags `atm-v<version>`. No secret reaches a
   pull request's run: none of these workflows runs on pull requests.
+- **Secrets kept from what compiles** (ATM-661, audit A1, A5): every secret is the `release` environment's, which
+  only a `v*` tag may use (its deployment rule, with a `v*` tag ruleset, set on GitHub), and every job that reads one
+  names it. In those jobs every step that compiles (`cargo build`, the app's `tauri build --no-bundle`) runs before
+  the first step with a secret, so no build script, proc macro or npm package runs with a signing key in its
+  environment; the signing steps only bundle, sign and notarize. The runners are pinned by version (A11).
+  `ci-workflow.test.ts` checks the order, the environment and the runners.
 - **What users install** is checksummed in the formula, from the release's `SHA256SUMS`; the macOS binaries are signed
   with the Developer ID (hardened runtime) and notarized. Actions are pinned by SHA (I19).
 
