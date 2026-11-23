@@ -192,7 +192,7 @@ fragment (`links.rs` refuses one), so nothing in an address is a `#` anchor: a c
 | Middle click on a title-bar tab | — | Closes it (as browsers do; the one place a middle click closes) |
 | Right-click on a link, card or row | The browser's menu | atm's: **Open**, **Open in New Tab**, **Open in New Window**, **Copy Link** |
 | Right-click on a title-bar tab | — | **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs** |
-| Right-click elsewhere | The browser's | atm's: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text |
+| Right-click elsewhere | The browser's | atm's: **Back**, **Forward**, **Reload** (this tab); over selected text, **Copy** first (ATM-699: WebKit's menu there brought its own Reload back); in a field you type in, the system's text items |
 | ⌘[ ⌘], mouse back and forward, a swipe | The browser's (the tab's) | The tab's history |
 | ‹ › in the title bar | The browser's own buttons | Back and Forward arrows left of the sidebar toggle (Hakan, CR-63), after macOS's window buttons, as Safari, Linear and Notion have them: the active tab's history, each greyed out when there is nowhere to go; a long press or a right-click lists the entries to jump to |
 | ⌘R, Reload | The browser's | Reloads the page and shows this tab where it was, not the window's first tab |

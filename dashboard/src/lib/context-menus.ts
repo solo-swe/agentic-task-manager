@@ -1,16 +1,18 @@
 // atm's own right-click menus in the app (ATM-699, docs/tabs-and-navigation-design.md §4.5): on a link, card or row,
-// on a title-bar tab, and elsewhere. WebKit's own menu is turned off in the app (its Reload would load the page's
-// route, not the app's page, ATM-584), except over text, where the system's Cut, Copy and Paste stay. The browser keeps
-// its own menus. This module says what a right-click is on and which items its menu has; ui/AppContextMenu.svelte
-// shows them.
+// on a title-bar tab, on selected text, and elsewhere. WebKit's own menu is turned off in the app (its Reload would
+// load the page's route, not the app's page, ATM-584), except in a field you type in, where the system's Cut, Copy and
+// Paste stay. Selected text gets atm's menu with Copy (WebKit's would bring its Reload back). The browser keeps its own
+// menus. This module says what a right-click is on and which items its menu has; ui/AppContextMenu.svelte shows them.
 import type { AppTab } from './app-tabs.svelte';
 import { pageLink } from './menu-actions';
 import { newTabAddress } from './new-tab-clicks';
 
 /** What a right-click is on */
 export type MenuTarget =
-  /** Text that can be edited or is selected: the system's menu (Cut, Copy, Paste), not atm's */
+  /** A field you type in: the system's menu (Cut, Copy, Paste), not atm's */
   | { kind: 'text' }
+  /** Text selected on the page, outside a field: atm's menu, Copy first */
+  | { kind: 'selection'; text: string }
   /** A link, card or row to one of the dashboard's pages, by the address it opens */
   | { kind: 'link'; address: string }
   /** A title-bar tab, by its ID */
@@ -25,7 +27,7 @@ export const TAB_ID_PREFIX = 'app-tab-';
 export function menuTargetAt(target: Element | null, address: string, selected = ''): MenuTarget {
   if (target?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
     return { kind: 'text' };
-  if (selected.trim()) return { kind: 'text' };
+  if (selected.trim()) return { kind: 'selection', text: selected };
   const tab = target?.closest<HTMLElement>(`[role="tab"][id^="${TAB_ID_PREFIX}"]`);
   if (tab) return { kind: 'tab', id: tab.id.slice(TAB_ID_PREFIX.length) };
   const link = newTabAddress(target, address);
@@ -64,11 +66,23 @@ export interface MenuDeps {
 const copyLink = (deps: MenuDeps, address: string) => () =>
   void deps.copy(pageLink(address)).catch((e: unknown) => console.error('Copying the link failed:', e));
 
-/** The items of the menu for `target`; none for text (the system's menu shows) */
+/** Back, Forward and Reload, for this tab */
+const pageItems = (deps: MenuDeps, separated = false): MenuItem[] => [
+  { id: 'back', label: 'Back', disabled: !deps.canGo(-1), separated, run: deps.back },
+  { id: 'forward', label: 'Forward', disabled: !deps.canGo(1), run: deps.forward },
+  { id: 'reload', label: 'Reload', run: deps.reload },
+];
+
+/** The items of the menu for `target`; none in a field (the system's menu shows) */
 export function menuItems(target: MenuTarget, deps: MenuDeps): MenuItem[] {
   switch (target.kind) {
     case 'text':
       return [];
+    case 'selection': {
+      const { text } = target;
+      const copy = () => void deps.copy(text).catch((e: unknown) => console.error('Copying the text failed:', e));
+      return [{ id: 'copy', label: 'Copy', run: copy }, ...pageItems(deps, true)];
+    }
     case 'link': {
       const { address } = target;
       return [
@@ -105,10 +119,6 @@ export function menuItems(target: MenuTarget, deps: MenuDeps): MenuItem[] {
       ];
     }
     case 'page':
-      return [
-        { id: 'back', label: 'Back', disabled: !deps.canGo(-1), run: deps.back },
-        { id: 'forward', label: 'Forward', disabled: !deps.canGo(1), run: deps.forward },
-        { id: 'reload', label: 'Reload', run: deps.reload },
-      ];
+      return pageItems(deps);
   }
 }

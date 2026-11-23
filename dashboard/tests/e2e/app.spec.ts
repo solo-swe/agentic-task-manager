@@ -663,7 +663,7 @@ test.describe('the dashboard in the atm app', () => {
   });
 
   // ATM-699 (docs/tabs-and-navigation-design.md §4.5): atm's own right-click menus, WebKit's turned off
-  test('right-click menus: on a card, on a tab, elsewhere; each item does what it says; text keeps the system’s', async ({
+  test('right-click menus: on a card, on selected text, on a tab, elsewhere; each item does what it says; a field keeps the system’s', async ({
     page,
     context,
     tasksServer,
@@ -699,6 +699,20 @@ test.describe('the dashboard in the atm app', () => {
     await card.click({ button: 'right' });
     await item('open').click();
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+
+    // Selected text (ATM-699, Hakan): atm's menu, not WebKit's (whose Reload isn't the app's); Copy copies it. The
+    // task's description, text a reader selects
+    const description = page.locator('#detail-description');
+    // Rendered once CompMD has drawn it: select it then
+    await expect(description).toHaveText(/\S/);
+    await description.selectText();
+    const selected = await page.evaluate(() => getSelection()?.toString() ?? '');
+    expect(selected.trim()).not.toBe('');
+    await description.click({ button: 'right' });
+    await expect(items).toHaveText(['Copy', 'Back', 'Forward', 'Reload']);
+    await item('copy').click();
+    await expect(menu).toBeHidden();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(selected);
     await page.keyboard.press('Escape');
 
     // A tab: its six items; Close Other Tabs leaves it alone

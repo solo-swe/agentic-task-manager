@@ -17804,7 +17804,7 @@
         "crates/atm-review/src/model.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T00:20:11Z",
+      "updated_at": "2026-11-23T00:33:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17818,7 +17818,7 @@
       "review": "async",
       "started_at": "2026-11-22T23:44:03Z",
       "started_by": "claude:0f56a916",
-      "commit": "fe527cf2aee0447d38284ddba9a72d0c9af68503"
+      "commit": "910c0154de25cd4de77f7c309a3031a8c69da224"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22728aee8e9c",
@@ -19110,7 +19110,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.2, task 6 of §7 (§6.2's recommended answer).\n\n## Change\n- A question (Add task, a confirmation, Submit review) belongs to its tab: hidden on a switch and there again on return, as a macOS sheet; a menu or dropdown closes on a switch.\n- The app's own (Settings, Help, What's new, About, the search) stay above every tab.\n- A place over a page (task details, a document) is hidden with its tab and there again on return (it is in the tab's address).\n- `App.svelte` and the dialogs.\n\n## Tests\ne2e in the app: a Submit review form half-filled on one tab, another tab shown and back, the form as it was; Settings stays open across a switch.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
@@ -19118,7 +19118,7 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-22T19:45:30Z",
+      "updated_at": "2026-11-23T00:38:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19145,15 +19145,35 @@
         }
       ],
       "review_requested_at": "2026-11-22T19:45:30Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T19:45:30Z",
           "kind": "review",
           "text": "CR-118: Pop-ups by kind: a question left open stays on its tab",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:38:20Z",
+          "kind": "note",
+          "text": "Approved: in CR-118 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:38:54Z",
+          "kind": "outcome",
+          "text": "Approved in CR-118: a review’s Submit and Poke forms are parked on their tab across a switch and there again on return; the app’s own sheets stay above every tab; a closed tab’s parked forms are dropped.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T19:45:30Z",
+          "to": "2026-11-23T00:38:20Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:38:54Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15c40f37bbc",
@@ -19500,7 +19520,7 @@
       "description": "Hakan (2026-11-20): the Docs and Magazine document styles draw a narrower page than GitHub's, and GitHub's is the right size; the Theme style (the theme's own page, `auto`) looks darker and not at all like paper.\n\nToday each style copies its model's line length (`dashboard/src/themes/doc-styles.css`): GitHub 980px, Docs `calc(44rem + 112px)` (about 816px), Magazine 760px.\n\n## Change\n- Docs and Magazine: the page as wide as GitHub's (980px max), their type and colours as they are. Keep the width in one variable, so the styles can't drift apart again.\n- `dashboard/src/lib/appearance.ts`: `DOC_STYLES` in the order GitHub, Docs, Magazine, Theme (the `auto` entry last), and `DEFAULT_DOC_STYLE` GitHub. A reader who chose a style keeps it; one who never chose gets GitHub. Check how `prefs.ts` stores the default (a stored `auto` that was never chosen must not keep the old default).\n- The diff viewer's rendered side (`.doc-sheet`) follows, as it uses the same styles.\n- Settings' sample (`.doc-style-sample`) and the Rendered tooltip's wording still right.\n\n## Tests\n- `appearance` unit tests: the order and the default.\n- e2e `documents.spec.ts`: a fresh dashboard renders a Markdown document in the GitHub style; Docs and Magazine pages are as wide as GitHub's.\n- Screenshots that change (Settings menu, document viewer) are regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/themes/doc-styles.css",
@@ -19510,7 +19530,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-20T18:19:09Z",
-      "updated_at": "2026-11-22T20:35:21Z",
+      "updated_at": "2026-11-23T00:40:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19532,15 +19552,35 @@
         }
       ],
       "review_requested_at": "2026-11-22T20:35:21Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T20:35:21Z",
           "kind": "review",
           "text": "CR-119: Document styles: GitHub’s width for every page, GitHub first and the default, Theme last",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:39:57Z",
+          "kind": "note",
+          "text": "Approved: in CR-119 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:40:35Z",
+          "kind": "outcome",
+          "text": "Approved in CR-119: every document style is GitHub’s width (980px), GitHub first and the default, Theme last and named for what it is.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T20:35:21Z",
+          "to": "2026-11-23T00:39:57Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:40:35Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fa31-88c0-75df-bb58-6495920a527c",
@@ -19698,14 +19738,14 @@
       "description": "A full `pnpm test` run (ATM-676, 2026-11-21) passed every test but failed on one unhandled rejection: `ReferenceError: document is not defined` in `@compmd/sandbox`'s `settling.js` (`stylesheetsLoaded(document)`), from `tests/unit/HelpDialog.component.test.ts`. The file passes alone, and the earlier full run that day was clean, so it shows only under load.\n\n## The cause, as far as read\n- `closes with the close button, Escape and the backdrop` opens Help (a real CompMD render), then closes it after `settled()`.\n- The sandbox's `Settling` loop runs on after the view is destroyed, and when the file ends first, jsdom is gone.\n- In jsdom, settling never finishes anyway: `document.fonts` is missing. So waiting for `data-compmd=\"ready\"` doesn't help; that fires on `rendered`, before settling.\n\n## Change\nFind the right end for it:\n- whether `view.destroy()` should stop the settling (CompMD's: report it upstream, from its published package's behaviour);\n- or the test helpers make the sandbox's settling end in jsdom: a `document.fonts` stub in the unit tests' setup, and waiting for the view's `settled` before a component test ends.\n\nNever just rerun the suite or silence the error.\n\n## Tests\nThe full unit run under load, several times, with no unhandled error.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/tests/unit/HelpDialog.component.test.ts",
         "dashboard/tests/unit/compmd.helpers.ts"
       ],
       "created_at": "2026-11-20T22:26:04Z",
-      "updated_at": "2026-11-22T20:40:01Z",
+      "updated_at": "2026-11-23T00:41:40Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19727,15 +19767,35 @@
         }
       ],
       "review_requested_at": "2026-11-22T20:40:01Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T20:40:01Z",
           "kind": "review",
           "text": "CR-120: Unit tests: every file waits CompMD’s settling out before jsdom goes",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:40:18Z",
+          "kind": "note",
+          "text": "Approved: in CR-120 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:41:40Z",
+          "kind": "outcome",
+          "text": "Approved in CR-120: every unit-test file waits CompMD’s settling out (animation frames and timers) before jsdom goes, so no unhandled rejection fails the run.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T20:40:01Z",
+          "to": "2026-11-23T00:40:18Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:41:40Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fb32-2d87-77ef-a96b-3882d16be1bc",
@@ -20166,7 +20226,7 @@
       "description": "Part 4 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §5.2, §6.2, §7 step 3).\n\n## Change\n- The review page shows its buttons from `can` only: its own `approveBlocked` and `sentBack` fallbacks go, and the e2e tests' stand-in server sends `can`.\n- `REWORK_STATES` and the open-status lists the dashboard keeps are replaced by what the server answers, or by the one generated list.\n\n## Tests\nThe existing component and e2e tests kept passing, with the stand-in's `can`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1fe3a-d2ba-736d-80e3-4b81a73b4404"
       ],
@@ -20176,7 +20236,7 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-22T20:55:39Z",
+      "updated_at": "2026-11-23T00:41:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20201,15 +20261,35 @@
         }
       ],
       "review_requested_at": "2026-11-22T20:55:39Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T20:55:39Z",
           "kind": "review",
           "text": "CR-121: State machine, part 4: the list’s decided from atm, OPEN_STATUSES gone",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:40:51Z",
+          "kind": "note",
+          "text": "Approved: in CR-121 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:41:37Z",
+          "kind": "outcome",
+          "text": "Approved in CR-121: the review list entries carry atm’s ended; the dashboard groups by it; OPEN_STATUSES is gone.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T20:55:39Z",
+          "to": "2026-11-23T00:40:51Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:41:37Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fe3a-d2ba-736d-80e3-4b843b52bc96",
@@ -20222,7 +20302,7 @@
       "description": "Part 5 of [ATM-633](#ATM-633)'s build ([the design](docs/task-review-state-machine.md) §7 step 5).\n\n## Change\n`atm docs states` and `atm docs reviews` (`docs/agent/states.md`, `docs/agent/reviews.md`) say what the table does; a test checks each transition they name against it, so a change to the table fails until the docs follow.\n\n## Tests\nThe docs check, in atm-cli's tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1fe3a-d2ba-736d-80e3-4b823592de68"
       ],
@@ -20231,7 +20311,7 @@
         "docs/agent/reviews.md"
       ],
       "created_at": "2026-11-21T13:10:30Z",
-      "updated_at": "2026-11-22T21:12:10Z",
+      "updated_at": "2026-11-23T00:42:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20256,15 +20336,35 @@
         }
       ],
       "review_requested_at": "2026-11-22T21:12:10Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T21:12:10Z",
           "kind": "review",
           "text": "CR-122: State machine, part 5: the agent docs’ state tables, checked against atm’s",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:41:21Z",
+          "kind": "note",
+          "text": "Approved: in CR-122 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:42:49Z",
+          "kind": "outcome",
+          "text": "Approved in CR-122: states.md and reviews.md have the tables of moves, each checked against atm-lib’s and atm-review’s rules by a test.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T21:12:10Z",
+          "to": "2026-11-23T00:41:21Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:42:49Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1feb5-c89d-74fd-85a0-3050e2ec1a45",
@@ -20451,7 +20551,7 @@
       "description": "Step 3 of [the plan](docs/dashboard-derived-state.md), group C.\n\n## Change\n- The dashboard reads `derived.stage` and `derived.effective_release`, for archived tasks and worktree copies too. Delete `stageOf` and `effectiveRelease`'s fallback.\n- `derived` gains:\n  - `resolution`;\n  - `required_by`, `related_by` and `duplicated_by` (the links pointing at the task);\n  - `in_closed_sprint`.\n- Delete `resolutionOf`, `relationsOf`, `requiredBy` and `scope.ts` `leftovers`.\n\n## Tests\natm-lib's cases for each field; the panel's unit tests on atm's fields.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1fecd-5725-722d-8d45-22d03168db17"
       ],
@@ -20462,7 +20562,7 @@
         "dashboard/src/lib/scope.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-22T23:43:06Z",
+      "updated_at": "2026-11-23T00:42:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20487,15 +20587,35 @@
         }
       ],
       "review_requested_at": "2026-11-22T23:43:06Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T23:43:06Z",
           "kind": "review",
           "text": "CR-123: Stage, release, resolution and reverse links from atm",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:41:49Z",
+          "kind": "note",
+          "text": "Approved: in CR-123 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:42:47Z",
+          "kind": "outcome",
+          "text": "Approved in CR-123: atm serves resolution, required_by, related_by, duplicated_by and in_closed_sprint; the dashboard reads them and stage and release with no fallbacks; leftovers, the reverse-link and resolution rules gone from it.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T23:43:06Z",
+          "to": "2026-11-23T00:41:49Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:42:47Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fecd-5725-722d-8d45-22d2f1a2543f",

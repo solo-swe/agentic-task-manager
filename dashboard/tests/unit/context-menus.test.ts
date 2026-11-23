@@ -55,8 +55,11 @@ describe('what a right-click is on', () => {
     expect(menuTargetAt(on(html, selector), '/')).toEqual({ kind: 'text' });
   });
 
-  it('selected text is text, wherever it is', () => {
-    expect(menuTargetAt(on('<p id="x">hello</p>', '#x'), '/', 'hello')).toEqual({ kind: 'text' });
+  it('selected text is a selection, on a link or a tab too; in a field it stays the field’s; spaces alone are none', () => {
+    expect(menuTargetAt(on('<p id="x">hello</p>', '#x'), '/', 'hello')).toEqual({ kind: 'selection', text: 'hello' });
+    const card = on('<div class="kanban-card" data-id="ATM-1"><span id="x">t</span></div>', '#x');
+    expect(menuTargetAt(card, '/projects/a/kanban', 't')).toEqual({ kind: 'selection', text: 't' });
+    expect(menuTargetAt(on('<input id="x">', '#x'), '/', 'typed')).toEqual({ kind: 'text' });
     expect(menuTargetAt(on('<p id="x">hello</p>', '#x'), '/', '  ')).toEqual({ kind: 'page' });
   });
 
@@ -88,8 +91,31 @@ describe('what a right-click is on', () => {
 describe('the menus', () => {
   const link: MenuTarget = { kind: 'link', address: '/projects/a/list?task=ATM-1' };
 
-  it('text has none: the system’s shows', () => {
+  it('a field has none: the system’s shows', () => {
     expect(menuItems({ kind: 'text' }, deps().fake)).toEqual([]);
+  });
+
+  // ATM-699 (Hakan): WebKit's menu over a selection brought its Reload back; atm's own, Copy first
+  it('a selection: Copy, which copies the text as selected, then Back, Forward, Reload', async () => {
+    const selection: MenuTarget = { kind: 'selection', text: 'two words ' };
+    expect(menuItems(selection, deps().fake).map((i) => [i.label, !!i.disabled, !!i.separated])).toEqual([
+      ['Copy', false, false],
+      ['Back', false, true],
+      ['Forward', true, false],
+      ['Reload', false, false],
+    ]);
+    expect(await run(selection, 'copy')).toEqual(['copy two words ']);
+    expect(await run(selection, 'reload')).toEqual(['reload']);
+  });
+
+  it('a copy that fails is reported, not thrown', async () => {
+    const d = deps();
+    d.fake.copy = () => Promise.reject(new Error('denied'));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await run({ kind: 'selection', text: 'x' }, 'copy', d);
+    await Promise.resolve();
+    expect(logged).toHaveBeenCalledWith('Copying the text failed:', expect.any(Error));
+    logged.mockRestore();
   });
 
   it('a link: Open, Open in New Tab, Open in New Window, Copy Link (atm://), each doing that', async () => {

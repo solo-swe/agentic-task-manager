@@ -1,8 +1,8 @@
 <script lang="ts">
   // atm's right-click menus in the app (ATM-699, docs/tabs-and-navigation-design.md §4.5; the rules in
   // lib/context-menus.ts): one menu for the window, opened where it was right-clicked. WebKit's own menu is turned off,
-  // except over text (the system's Cut, Copy and Paste) and where something already answered the click (the Back and
-  // Forward arrows' history lists). Bits UI's menu (T-431): the arrows move, Enter chooses, Escape or a click outside
+  // except in a field you type in (the system's Cut, Copy and Paste) and where something already answered the click
+  // (the Back and Forward arrows' history lists); selected text gets atm's menu, with Copy. Bits UI's menu (T-431): the arrows move, Enter chooses, Escape or a click outside
   // closes. The app only: the routes' layout mounts it there.
   import { DropdownMenu } from 'bits-ui';
   import { appTabs } from '../app-tabs.svelte';
@@ -39,7 +39,7 @@
     if (e.defaultPrevented) return;
     const target = menuTargetAt(e.target as Element | null, currentAddress(), getSelection()?.toString() ?? '');
     const listed = menuItems(target, deps);
-    // Over text: the system's menu, with its text items
+    // In a field you type in: the system's menu, with its text items
     if (listed.length === 0) return;
     e.preventDefault();
     at = { x: e.clientX, y: e.clientY };
@@ -82,7 +82,9 @@
     flex-direction: column;
     min-width: 200px;
     padding: var(--space-2);
-    z-index: 60;
+    /* Above every layer, the details panel's (100) and the sheets' (110) too: it opens over whatever was right-clicked
+       (Bits UI gives its wrapper this z-index) */
+    z-index: 200;
   }
   .app-context-item {
     border-radius: var(--radius-sm);
