@@ -163,7 +163,7 @@ pub fn in_active_scope(vocab: &Vocabulary, task: &Task) -> bool {
     let active = vocab.active_sprint();
     active.is_none_or(|a| {
         vocab
-            .find_sprint(task.get("sprint"))
+            .sprint_of(task)
             .is_some_and(|s| s.get("id") == a.get("id"))
     })
 }

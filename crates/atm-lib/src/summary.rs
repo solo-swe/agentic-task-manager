@@ -89,7 +89,7 @@ pub(crate) fn sprint_numbers(
 }
 
 fn sprint_of<'v>(vocab: &'v Vocabulary, task: &Task) -> Option<&'v Map<String, Value>> {
-    vocab.find_sprint(task.get("sprint"))
+    vocab.sprint_of(task)
 }
 
 fn sprint_key(sprint: &Map<String, Value>) -> String {

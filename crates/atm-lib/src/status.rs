@@ -46,13 +46,7 @@ fn active_sprint(vocab: &Vocabulary, tasks: &[&Task]) -> Value {
     let id = active.get("id").and_then(Value::as_str);
     let in_active: Vec<&&Task> = tasks
         .iter()
-        .filter(|t| {
-            vocab
-                .find_sprint(t.get("sprint"))
-                .and_then(|s| s.get("id"))
-                .and_then(Value::as_str)
-                == id
-        })
+        .filter(|t| vocab.sprint_id_of(t) == id)
         .collect();
     let mut sprint = Map::new();
     for key in ["id", "goal", "due", "release", "start"] {
@@ -262,7 +256,7 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
     let sprint_of = |t: &Task| {
         vec![
             vocab
-                .find_sprint(t.get("sprint"))
+                .sprint_of(t)
                 .and_then(|s| s.get("id"))
                 .filter(|v| truthy(v))
                 .map_or_else(|| "backlog".into(), py_str),

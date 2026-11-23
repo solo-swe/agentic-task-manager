@@ -168,7 +168,7 @@ pub fn archive_hint(document: &Value, vocab: &Vocabulary, size: u64) -> Option<V
 pub fn open_in_closed_sprints(vocab: &Vocabulary, document: &Value) -> Vec<Value> {
     tasks_of(document)
         .filter_map(|t| {
-            let sprint = vocab.find_sprint(t.get("sprint"))?;
+            let sprint = vocab.sprint_of(t)?;
             (sprint.get("state").and_then(Value::as_str) == Some("closed") && !finished(vocab, t))
                 .then(|| {
                     json!({

@@ -142,10 +142,7 @@ impl Scope {
     }
 
     pub(crate) fn keeps(&self, vocab: &Vocabulary, t: &Task) -> bool {
-        let sprint = vocab
-            .find_sprint(t.get("sprint"))
-            .and_then(|s| s.get("id"))
-            .and_then(Value::as_str);
+        let sprint = vocab.sprint_id_of(t);
         if !self.names.is_empty() && !sprint.is_some_and(|s| self.names.iter().any(|n| n == s)) {
             return false;
         }

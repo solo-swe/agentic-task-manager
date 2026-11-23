@@ -344,7 +344,7 @@ pub fn change_task_status(
         }
         // Reopened in a closed sprint, the task is open where the loop's default selection never looks (T-330)
         let stranded = if command == Command::Reopen {
-            vocab.find_sprint(task.get("sprint")).filter(|s| s.get("state").and_then(Value::as_str) == Some("closed")).map(|s| {
+            vocab.sprint_of(&task).filter(|s| s.get("state").and_then(Value::as_str) == Some("closed")).map(|s| {
                 let name = s.get("id").and_then(Value::as_str).unwrap_or_default();
                 format!(
                     "{task_id} is now open in the closed sprint {}, where the loop won't take it: atm sprint move {task_id} --to backlog (or --to active)",

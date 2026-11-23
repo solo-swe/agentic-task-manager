@@ -41,6 +41,21 @@ impl Vocabulary {
         })
     }
 
+    /// The sprint `task` is in (its `sprint`, compared case-insensitively), if the project has it (ATM-681: the one
+    /// lookup).
+    #[must_use]
+    pub fn sprint_of(&self, task: &Task) -> Option<&Map<String, Value>> {
+        self.find_sprint(task.get("sprint"))
+    }
+
+    /// The ID of the sprint `task` is in, as the project writes it, if the project has that sprint.
+    #[must_use]
+    pub fn sprint_id_of(&self, task: &Task) -> Option<&str> {
+        self.sprint_of(task)
+            .and_then(|s| s.get("id"))
+            .and_then(Value::as_str)
+    }
+
     /// The active sprint, if one is (ATM-681: the one lookup; the vocabulary allows one at most).
     #[must_use]
     pub fn active_sprint(&self) -> Option<&Map<String, Value>> {

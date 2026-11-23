@@ -67,7 +67,7 @@ fn sprint_overview(vocab: &Vocabulary, tasks: &[&Task], include_closed: bool) ->
             let mut counts = [0usize; 6];
             let mut pending = 0;
             for task in tasks {
-                let Some(found) = vocab.find_sprint(task.get("sprint")) else {
+                let Some(found) = vocab.sprint_of(task) else {
                     continue;
                 };
                 if sprint_id(found) != id {
@@ -874,7 +874,7 @@ fn move_target(vocab: &Vocabulary, task: &Task, to: &str) -> Result<Option<Strin
         "next" => {
             // The first planned sprint after the task's own (for a task in the backlog or a closed sprint: the first
             // planned sprint)
-            let current = vocab.find_sprint(task.get("sprint"));
+            let current = vocab.sprint_of(task);
             let start = current
                 .and_then(|c| {
                     vocab

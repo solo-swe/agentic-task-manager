@@ -55,10 +55,7 @@ pub struct Selection {
 use atm_common::task_id as id_of;
 
 fn sprint_id<'v>(vocab: &'v Vocabulary, task: &Task) -> Option<&'v str> {
-    vocab
-        .find_sprint(task.get("sprint"))
-        .and_then(|s| s.get("id"))
-        .and_then(Value::as_str)
+    vocab.sprint_id_of(task)
 }
 
 /// The tasks a selection covers, in any status, with each one's rank in the selection's own order and the words for
@@ -124,7 +121,7 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
         Box::new(move |t| Some(found(t)))
     } else if sel.backlog {
         scope = "the backlog".into();
-        Box::new(move |t| vocab.find_sprint(t.get("sprint")).is_none().then_some(0))
+        Box::new(move |t| vocab.sprint_of(t).is_none().then_some(0))
     } else if !sel.sprints.is_empty() {
         let mut named = Vec::new();
         for name in &sel.sprints {

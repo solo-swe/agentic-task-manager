@@ -66,11 +66,7 @@ fn sprint_view(vocab: &Vocabulary, sprint: &Map<String, Value>, tasks: &[&Task])
     let id = sprint_id(sprint);
     let own: Vec<&&Task> = tasks
         .iter()
-        .filter(|t| {
-            vocab
-                .find_sprint(t.get("sprint"))
-                .is_some_and(|s| sprint_id(s) == id)
-        })
+        .filter(|t| vocab.sprint_of(t).is_some_and(|s| sprint_id(s) == id))
         .collect();
     let kinds: Vec<Option<Kind>> = own.iter().map(|t| vocab.kind_of(t.get("status"))).collect();
     let numbers = crate::summary::sprint_numbers(sprint, &kinds);
@@ -214,7 +210,7 @@ pub fn task_sprints(project: &Project) -> Result<HashMap<String, TaskSprint>> {
             .chain(archived)
             .filter_map(|t| {
                 let id = t.get("id").and_then(Value::as_str)?;
-                let found = vocab.find_sprint(t.get("sprint"))?;
+                let found = vocab.sprint_of(t)?;
                 let closed = found.get("state").and_then(Value::as_str) == Some("closed");
                 let sprint = sprint_id(found);
                 let carried = carried_through(t, &sprint);
