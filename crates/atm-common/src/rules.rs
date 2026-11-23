@@ -33,6 +33,12 @@ impl Vocabulary {
         })
     }
 
+    /// The release whose ID is `id` (exactly, as stored: ATM-681's one lookup), if there is one.
+    #[must_use]
+    pub fn find_release(&self, id: &Value) -> Option<&Map<String, Value>> {
+        self.releases.iter().find(|r| r.get("id") == Some(id))
+    }
+
     /// `release`, when `meta.releases` has it.
     ///
     /// # Errors
@@ -278,6 +284,22 @@ mod tests {
 
     fn vocab(meta: Value) -> Vocabulary {
         Vocabulary::of_meta(&task(meta)).unwrap()
+    }
+
+    #[test]
+    fn a_release_is_found_by_its_exact_id() {
+        let v = vocab(json!({"releases": [{"id": "1.0"}, {"id": "Beta"}]}));
+        assert!(v.find_release(&json!("1.0")).is_some());
+        assert!(v.find_release(&json!("Beta")).is_some());
+        assert!(
+            v.find_release(&json!("beta")).is_none(),
+            "not in another case"
+        );
+        assert!(v.find_release(&json!("2.0")).is_none());
+        assert!(
+            v.find_release(&json!(1.0)).is_none(),
+            "a number isn't the text"
+        );
     }
 
     #[test]

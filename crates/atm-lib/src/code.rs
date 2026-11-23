@@ -269,14 +269,8 @@ pub fn record_commit(
 }
 
 /// An http:// or https:// address with no space in it (the dashboard links to it: never `javascript:` or `data:`,
-/// docs/security-review.md F9).
-fn http_url(url: &str) -> bool {
-    let lower = url.to_lowercase();
-    let rest = lower
-        .strip_prefix("https://")
-        .or_else(|| lower.strip_prefix("http://"));
-    rest.is_some_and(|r| !r.is_empty() && !r.chars().any(char::is_whitespace))
-}
+/// docs/security-review.md F9)
+use atm_common::repository::web_address as http_url;
 
 /// `atm vcs pr`: the PR that contains the tasks (DM-4.3: they are then In PR). Returns the task IDs.
 ///
@@ -587,13 +581,5 @@ mod tests {
         assert!(mentions("feat(T-1): x", "T-1"));
         assert!(!mentions("feat(T-12): x", "T-1"));
         assert!(!mentions("xT-1", "T-1"));
-    }
-
-    #[test]
-    fn only_web_addresses_are_pr_links() {
-        assert!(http_url("https://github.com/o/r/pull/1"));
-        assert!(http_url("HTTP://x"));
-        assert!(!http_url("javascript:alert(1)"));
-        assert!(!http_url("https://a b"));
     }
 }

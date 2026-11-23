@@ -24,10 +24,7 @@ fn release_id(release: &Map<String, Value>) -> String {
 }
 
 fn find_release<'v>(vocab: &'v Vocabulary, id: &str) -> Option<&'v Map<String, Value>> {
-    vocab
-        .releases
-        .iter()
-        .find(|r| r.get("id").and_then(Value::as_str) == Some(id))
+    vocab.find_release(&Value::from(id))
 }
 
 /// No such release, naming the releases (exit code 2).

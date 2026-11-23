@@ -197,14 +197,8 @@ fn description(meta: Option<&Value>) -> Value {
     json!(text.chars().take(DESCRIPTION_CAP - 1).collect::<String>() + "…")
 }
 
-/// Only a web address is linked (docs/security-review.md F9): `http://` or `https://`, then no white space.
-fn web_address(url: &str) -> bool {
-    let lower = url.to_ascii_lowercase();
-    let rest = lower
-        .strip_prefix("https://")
-        .or_else(|| lower.strip_prefix("http://"));
-    rest.is_some_and(|r| !r.is_empty() && !r.chars().any(char::is_whitespace))
-}
+/// Only a web address is linked (docs/security-review.md F9)
+use atm_common::repository::web_address;
 
 /// The project's git line for its card: the working copy's branch, and the latest PR recorded on its tasks (the
 /// highest number), `merged` once its tasks have `merged_at`. No forge call and no CI state.

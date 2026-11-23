@@ -103,7 +103,7 @@ fn check_resolution(
 }
 
 fn find_release<'v>(vocab: &'v Vocabulary, release: &Value) -> Option<&'v Map<String, Value>> {
-    vocab.releases.iter().find(|r| r.get("id") == Some(release))
+    vocab.find_release(release)
 }
 
 /// The checks of one task (well formed: an object with a string ID).

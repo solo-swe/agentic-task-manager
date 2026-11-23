@@ -17548,7 +17548,7 @@
       "description": "Audit findings A4, A11, A12 and A13 ([the report](docs/codebase-audit-2026-11.md#a4-low-bug-the-loop-skill-names-atm-sprints---json-checked-that-the-line-is-there)).\n\n- **A4:** `skills/atm-loop-tasks/SKILL.md:174` names `atm sprints --json`; the command is `atm sprint list --json`.\n- **A13:** every skill starts with `atm version` and points to `atm docs`, neither pre-approved in `skills/claude-code.json`: add both (read-only; check I2 and `skills.test.ts` allow them).\n- **A12:** `packaging/homebrew-formula.sh` and `homebrew-cask.sh` put the version and checksums into Ruby unchecked: require `^[0-9]+\\.[0-9]+\\.[0-9]+$` and `^[0-9a-f]{64}$`. The deploy-key pushes accept a new host key (`homebrew.yml:41`, `skills.yml:43`): pin GitHub's host keys. Both workflows check out the tag and refuse anything not a `v*` tag.\n- **A11:** add Dependabot's `cargo` ecosystem, grouped like npm; pin the sandbox's images (`tests/sandbox/compose.yaml`, `Dockerfile`).\n\nThis changes skills: before the release PR merges, the security checklist (§3) applies.\n\n## Tests\n`dashboard/tests/unit/skills.test.ts` (the pre-approved list), `tests/scripts/packaging.test.mjs` (a bad version or checksum is refused), `ci-workflow.test.ts` (cargo in Dependabot, host keys pinned).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "skills/atm-loop-tasks/SKILL.md",
@@ -17562,7 +17562,7 @@
         "tests/sandbox/Dockerfile"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T17:28:43Z",
+      "updated_at": "2026-11-23T00:25:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17594,6 +17594,18 @@
           "kind": "review",
           "text": "CR-114: Skills and packaging: pre-approvals, the loop skill command, checked Homebrew inputs, pinned host keys and images",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:24:30Z",
+          "kind": "note",
+          "text": "Approved: in CR-114 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:25:12Z",
+          "kind": "outcome",
+          "text": "Approved in CR-114: the loop skill command, atm version and atm docs pre-approved, Homebrew inputs checked, host keys and the v* tag checked in the publish workflows, cargo in Dependabot, sandbox images pinned.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-22T17:20:33Z",
@@ -17605,7 +17617,15 @@
         }
       ],
       "review_requested_at": "2026-11-22T17:28:43Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-22T17:28:43Z",
+          "to": "2026-11-23T00:24:30Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:25:12Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-226ff51a3a63",
@@ -17619,7 +17639,7 @@
       "description": "Audit findings C8, C9, C11, C12 and C13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-2)).\n\n- **C9:** `output::clean` (`crates/atm-cli/src/output.rs:105`) keeps bidi and format characters (U+200B-200F, U+202A-202E, U+2060-2069, U+FEFF): drop them, sharing `py::printable`'s list (I30).\n- **C11:** `service start/stop --json`, `db init --meta-file --json` and `vcs commit --record --json` print text or leave fields out: a JSON object each.\n- **C13:** `task list --agent` is a filter, but `main.rs:396` takes any `--agent` as \"run as someone else\": rename the filter `--started-by` (keep `--agent` as a hidden alias for a release), or decide from the parsed command.\n- **C12:** `claim hold` says it holds while its watcher quits when the shell's start time can't be read (`claim.rs:287`): refuse then.\n- **C8:** each printed line with a UUID reopens the project and rereads the archive, twice in `say()`: one `Labeller` per process.\n\n## Tests\n`tests/scripts/output.test.mjs`: a task name with U+202E prints without it; each command's `--json` parses; `task list --agent x` still renews the caller's claim.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/output.rs",
@@ -17629,7 +17649,7 @@
         "crates/atm-cli/src/commands/maintenance.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T17:51:07Z",
+      "updated_at": "2026-11-23T00:26:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17653,6 +17673,18 @@
           "kind": "review",
           "text": "CR-115: CLI output: invisible characters dropped, --json everywhere, --started-by, claim hold refuses, one labeller",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:24:51Z",
+          "kind": "note",
+          "text": "Approved: in CR-115 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:26:26Z",
+          "kind": "outcome",
+          "text": "Approved in CR-115: invisible format characters dropped, --json on service, db init and vcs commit --record, task list --started-by, claim hold refuses an unreadable start time, one labeller per process.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-22T17:28:48Z",
@@ -17665,7 +17697,15 @@
         }
       ],
       "review_requested_at": "2026-11-22T17:51:07Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-22T17:51:07Z",
+          "to": "2026-11-23T00:24:51Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:26:26Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2270a6f9bac9",
@@ -17679,7 +17719,7 @@
       "description": "Audit findings D6, D12, D11 and D13 ([the report](docs/codebase-audit-2026-11.md#reported-not-yet-checked-by-me-5)).\n\n- **D6:** the dashboard calls `kindOf(` in about 45 places, `priorityOf` in 7 and `stageOf` in 4, though atm sends `derived.kind`, `derived.priority` and `derived.stage` (the guide: no domain logic in the UI). Add `kindOfTask(t)`, `priorityOfTask(t)`, `stageOfTask(t)` reading `derived`, falling back to the local rule only when it's missing, and use them.\n- **D12:** `DepGraph.svelte:62` picks its focus by status IDs `in_progress` and `todo`: by kind.\n- **D11:** Escape anywhere closes the details panel (`DetailPanel.svelte:194`): only when it's open and the event wasn't handled.\n- **D13:** dragging the graph writes the whole view to localStorage on every pointer move: save on pointer up, or debounce `saveView`.\n\n## Tests\nUnit tests: a project with its own status IDs gets a graph focus; a task whose `derived.kind` differs from the local rule shows atm's; Escape in a composer doesn't close the panel.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/vocab.ts",
@@ -17689,7 +17729,7 @@
         "dashboard/src/App.svelte"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-22T19:23:03Z",
+      "updated_at": "2026-11-23T00:26:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17711,15 +17751,35 @@
         }
       ],
       "review_requested_at": "2026-11-22T19:23:03Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T19:23:03Z",
           "kind": "review",
           "text": "CR-116: Dashboard rules from atm: priority and stage from derived, graph focus by kind, Escape, the graph view saved once",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:25:28Z",
+          "kind": "note",
+          "text": "Approved: in CR-116 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:26:39Z",
+          "kind": "outcome",
+          "text": "Approved in CR-116: priority and stage from derived, the graph focus by kind, Escape closes the panel only when open and unhandled, the graph view saved once a drag ends.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T19:23:03Z",
+          "to": "2026-11-23T00:25:28Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T00:26:39Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-2271adb698a3",
@@ -17744,7 +17804,7 @@
         "crates/atm-review/src/model.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T00:08:58Z",
+      "updated_at": "2026-11-23T00:20:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17758,7 +17818,7 @@
       "review": "async",
       "started_at": "2026-11-22T23:44:03Z",
       "started_by": "claude:0f56a916",
-      "commit": "ed0d33a0f4e97475dff24b4c184eb51c82c65139"
+      "commit": "fe527cf2aee0447d38284ddba9a72d0c9af68503"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22728aee8e9c",
@@ -18972,14 +19032,14 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §4.5, task 5 of §7.\n\n## Change\nA context menu component in `ui/`, used in the app only (the browser keeps its own):\n- on a link, card or row: **Open**, **Open in New Tab**, **Open in New Window**, **Copy Link** (the `atm://` form, §4.4);\n- on a title-bar tab: **New Tab**, **Duplicate**, **Move to New Window**, **Copy Link**, **Close**, **Close Other Tabs**;\n- elsewhere: **Back**, **Forward**, **Reload** (this tab), and the system's text items over text.\n\nWebKit's default menu is turned off in the app, as its Reload bypasses the app's reload.\n\n## Tests\ne2e in the app: each menu's items and what each does; Copy Link copies the `atm://` address.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c1592d63e49a",
         "01a1f8be-9f92-7355-9694-c15508e8883f"
       ],
       "files": [],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-22T19:35:55Z",
+      "updated_at": "2026-11-23T00:31:23Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18996,25 +19056,47 @@
       "sprint": "Audit and tabs",
       "number": 699,
       "review": "async",
-      "started_at": "2026-11-22T19:23:03Z",
-      "started_by": "claude:0f56a916",
-      "commit": "695a2413455a540442316676c7c4338b8fd8ca0f",
       "code_reviews": [
         {
           "id": "01a204c2-0a3d-74c3-9dcd-78181ba0c813",
           "ref": "CR-117"
         }
       ],
-      "review_requested_at": "2026-11-22T19:35:55Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-22T19:35:55Z",
           "kind": "review",
           "text": "CR-117: atm’s own right-click menus in the app: links, tabs, elsewhere",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:25:45Z",
+          "kind": "note",
+          "text": "Approved: in CR-117 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T00:27:44Z",
+          "kind": "outcome",
+          "text": "Approved in CR-117: atm’s own context menus in the app on links, cards and rows, on title-bar tabs and elsewhere; WebKit’s default menu off.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T00:31:19Z",
+          "kind": "note",
+          "text": "Reopened: Hakan: selecting text and right-clicking still shows the browser menu (missed in CR-117). Fix: atm’s own menu over a selection, with Copy.",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-22T19:35:55Z",
+          "to": "2026-11-23T00:25:45Z",
+          "outcome": "approved"
+        }
+      ],
+      "started_at": "2026-11-23T00:31:23Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8be-9f92-7355-9694-c15b77d909a3",
