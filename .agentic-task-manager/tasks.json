@@ -19017,11 +19017,11 @@
       "description": "A conversation with Hakan before `/atm-close-sprint`: what worked in this sprint and what could be improved, in how the agent works and in atm itself.\n\n## Before it\nAgents add a note to this task (`atm task note`) whenever something worth discussing comes up while they work: a slowdown, a slip, a check that caught a real bug, a rule that got in the way, a tool that was missing. The notes are the agenda.\n\n## To discuss\n- The notes, one by one: keep doing, change, or stop.\n- How long tasks took, and where the time went (implementation, tests, waiting on suites, fixing failures).\n- The testing routine: per-task checks, the full end-to-end run, the screenshots at the release.\n- Questions to the user: blocked tasks, how fast they were answered, what could have been decided up front.\n- What to carry into the next sprint: follow-up tasks (through `/atm-create-tasks`), and preferences to remember.\n\n## Outcome\nA short summary in this task's done note, follow-up tasks created, and any agreed working preference saved.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-23T22:12:40Z",
+      "updated_at": "2026-11-23T22:21:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19147,10 +19147,18 @@
           "kind": "note",
           "text": "Release PR #58: two CI failures, both cleared by one re-run. Rust (macOS) never got a runner (GitHub macOS capacity), and the timed long-review test counted 38,057 DOM nodes alive against its 30,000 bound on a retry after a timeout (22,311 locally, and it passed in the other run). Worth a look at why a retry after a timeout keeps more nodes alive.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T22:21:26Z",
+          "kind": "review",
+          "text": "Retro with Hakan: keep per-task checks plus one full e2e, steps strictly in order, trace first on a timeout, a load check before long suites. Project review default now async. A task in one run, CI and permission work split out at creation. Claims while talking: revisit if it recurs. New tasks: ATM-742 (flaky tests), ATM-743 to 745 (refactor leftovers), ATM-746 (settings), ATM-747 (Close on waiting reviews), ATM-748 (agent part 3), ATM-749 (signing recompile).",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T22:12:40Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "review_requested_at": "2026-11-23T22:21:26Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a2061f-351f-71f3-a573-ea15e4c70a99",
