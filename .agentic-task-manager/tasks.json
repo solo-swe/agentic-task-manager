@@ -19017,11 +19017,11 @@
       "description": "A conversation with Hakan before `/atm-close-sprint`: what worked in this sprint and what could be improved, in how the agent works and in atm itself.\n\n## Before it\nAgents add a note to this task (`atm task note`) whenever something worth discussing comes up while they work: a slowdown, a slip, a check that caught a real bug, a rule that got in the way, a tool that was missing. The notes are the agenda.\n\n## To discuss\n- The notes, one by one: keep doing, change, or stop.\n- How long tasks took, and where the time went (implementation, tests, waiting on suites, fixing failures).\n- The testing routine: per-task checks, the full end-to-end run, the screenshots at the release.\n- Questions to the user: blocked tasks, how fast they were answered, what could have been decided up front.\n- What to carry into the next sprint: follow-up tasks (through `/atm-create-tasks`), and preferences to remember.\n\n## Outcome\nA short summary in this task's done note, follow-up tasks created, and any agreed working preference saved.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-22T16:16:12Z",
-      "updated_at": "2026-11-23T22:23:22Z",
+      "updated_at": "2026-11-23T22:24:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19153,12 +19153,23 @@
           "kind": "review",
           "text": "Retro with Hakan: keep per-task checks plus one full e2e, steps strictly in order, trace first on a timeout, a load check before long suites. Project review default now async. A task in one run, CI and permission work split out at creation. Claims while talking: revisit if it recurs. New tasks: ATM-742 (flaky tests), ATM-743 to 745 (refactor leftovers), ATM-746 (settings), ATM-747 (Close on waiting reviews), ATM-748 (agent part 3), ATM-749 (signing recompile).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T22:24:06Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T22:24:12Z",
+          "kind": "outcome",
+          "text": "Retro held with Hakan; preferences saved, review default async, eight follow-up tasks linked (ATM-742 to ATM-749). Approved by Hakan in chat.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T22:12:40Z",
       "started_by": "claude:0f56a916",
       "review_requested_at": "2026-11-23T22:21:26Z",
-      "review_state": "waiting",
       "related": [
         "01a20a7f-82f6-7703-ac29-a943660d65f3",
         "01a20a7f-82f6-7703-ac29-a944947d1493",
@@ -19168,7 +19179,16 @@
         "01a20a7f-82f6-7703-ac29-a948c68b0fac",
         "01a20a7f-82f6-7703-ac29-a949c1da298e",
         "01a20a7f-82f6-7703-ac29-a94aeae5b5e0"
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-23T22:21:26Z",
+          "to": "2026-11-23T22:24:06Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T22:24:12Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a2061f-351f-71f3-a573-ea15e4c70a99",
