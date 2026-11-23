@@ -11,6 +11,8 @@ The short version, for people using atm. The full list of changes, for developer
 - A review you were writing waits on its tab while you look at another, and Settings stays open as you switch.
 - Every page you can see has its own link, down to a review's Diffs tab and a comment in it.
 - Agents listening for your review comments no longer slow your computer down while they wait.
+- Progress, forecasts and stats come from atm itself, so they agree everywhere, and the overview's Progress tab no
+  longer loads every project's tasks.
 
 ## [0.42.0] - 2026-11-20
 

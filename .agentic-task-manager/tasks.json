@@ -1835,7 +1835,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 741
+    "next_number": 742
   },
   "tasks": [
     {
@@ -13755,7 +13755,7 @@
       "description": "Audit finding L2 ([the report](docs/codebase-audit-2026-11.md#l2-high-security-the-review-gate-rests-on-the-actors-name-starting-with-claude-checked-in-part)). To be designed with Hakan: it changes who atm treats as a person.\n\n`agent_identity` (`crates/atm-lib/src/actor.rs:28`) falls back to the git user name unless `CLAUDE_CODE_SESSION_ID` is set, and `is_agent` (`crates/atm-common/src/edits.rs:239`) is `starts_with(\"claude:\")`. So an agent in Codex, Cursor, Copilot, OpenCode or Gemini (all installed by `atm agents install`), or one passing `--agent '<a name>'`, counts as a person: `state.rs:272` lets it mark a `blocker` task done with no review, and a `batch` task gets no `sprint_review: pending`.\n\n## Options to decide\n- Detect the other harnesses' environment variables, and give them identities of their own.\n- Inside a harness session, refuse an `--agent` or `ATM_AGENT` that would produce a person's identity.\n- Treat an actor as a person only on positive evidence (the app or server path through `user_identity`, or an interactive terminal with no harness variables).\n\n## Tests\nScenarios: each harness's environment gives an agent identity; `--agent 'Hakan'` inside a Claude Code session is refused or still an agent; a blocker task can't be done without review from any of them.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/actor.rs",
@@ -13763,7 +13763,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T12:29:20Z",
+      "updated_at": "2026-11-23T16:02:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13797,6 +13797,24 @@
           "kind": "note",
           "text": "Open for Hakan (in CR-132): the third part, a person only on positive evidence. Read literally, every run not at an interactive terminal becomes an agent: git hooks, CI steps, scripts and the CLI suite. It is the only rule that would catch Cursor and Copilot, which set no marker. Strict, or person unless a marker says otherwise?",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:52:05Z",
+          "kind": "note",
+          "text": "Approved: in CR-132 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T16:02:42Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T16:02:44Z",
+          "kind": "outcome",
+          "text": "Every harness atm recognizes (Claude Code, Codex, Gemini CLI, OpenCode, AI_AGENT) gets an agent identity, and inside one a person-named --agent or ATM_AGENT is refused. Not done: a person only at an interactive terminal (it would make hooks, CI and scripts agents). Approved by Hakan (CR-132).",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T12:07:36Z",
@@ -13809,7 +13827,15 @@
         }
       ],
       "review_requested_at": "2026-11-23T12:29:20Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-23T12:29:20Z",
+          "to": "2026-11-23T16:02:42Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T16:02:44Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225d75c0aa3a",
@@ -13824,7 +13850,7 @@
       "description": "Audit findings A1 and A5 ([the report](docs/codebase-audit-2026-11.md#a1-medium-high-security-signing-secrets-are-in-the-environment-while-the-app-compiles-checked)). With Hakan: the GitHub settings (an environment, a tag ruleset) are his to apply.\n\n- **A1:** `.github/workflows/release.yml:130-144` runs `tauri build` (every crate's build script and proc macro, the npm packages) with the updater key, its password and the notary key in its environment. Compile both targets in an earlier step without secrets (`cargo build --release --locked -p atm-app --target …`), then bundle and sign, where cargo has nothing left to build. Or bundle unsigned and sign the archive in its own step.\n- **A5:** no job declares an `environment:` and the only ruleset covers `main`. Propose a `release` environment restricted to `v*` tags holding the signing and deploy-key secrets, a tag ruleset for `v*`, and a workflow check that the tag's commit is on `origin/main`.\n- Pin the release, Homebrew and skills workflows' runners by version, as CI's are (A11).\n\n## Tests\n`dashboard/tests/unit/ci-workflow.test.ts`: no step that runs `cargo build` or `tauri build` has a signing secret in its `env`; the release jobs name the environment; runners are pinned.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         ".github/workflows/release.yml",
@@ -13834,7 +13860,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T12:07:31Z",
+      "updated_at": "2026-11-23T16:02:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13859,6 +13885,24 @@
           "kind": "review",
           "text": "CR-131: The release compiles with no signing secret; the secrets in a release environment",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:54:55Z",
+          "kind": "rejection",
+          "text": "CR-131 round 1: 1 open comment",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T16:00:35Z",
+          "kind": "note",
+          "text": "Approved: in CR-131 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T16:02:43Z",
+          "kind": "outcome",
+          "text": "The release compiles with no signing secret (tauri build --no-bundle first), the secret-holding jobs in a release environment, runners pinned, all checked in ci-workflow.test.ts. The GitHub setup is in ATM-741. Approved by Hakan (CR-131).",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T12:04:44Z",
@@ -13871,7 +13915,15 @@
         }
       ],
       "review_requested_at": "2026-11-23T12:07:31Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-23T12:07:31Z",
+          "to": "2026-11-23T16:00:35Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T16:02:43Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-225e61ea5857",
@@ -15173,7 +15225,7 @@
       "description": "Audit §2's repetition ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported)). No behaviour changes; the existing tests are the check.\n\n- `impl Project { fn change<T>(&mut self, f: impl FnMut(&mut Working) -> Result<T>) -> Result<T> }`, replacing about 30 `let mut outcome = None` sites.\n- One `task_at(work, id) -> Result<usize>` (returning `NotFound`, saying when the task is archived) for the six copies.\n- One `expire(work, vocab) -> Vec<Value>` for the four expiry preambles, and one `section(store, key)`.\n- One `REWORK_STATES` (or `rules::awaits_agent`), one `id_of` (`Task::id()`), one `valid_label`, `find_release`, `in_open_pr`, `http_url`; `Vocabulary::active_sprint()` and `sprint_id_of(task)`; `set_or_remove(map, fields)`, `count_by_kind(vocab, tasks)`, `for_each_task_in_both(work, f)`.\n- Status groups of reviews as methods on `atm_review::Status` (`is_decision`, `is_open`, `waits_on_reviewers`, `task_command`); one `actor_of`; `home::keyed_state_file(kind, parts)`.\n\nDo it in steps, one helper per commit, with the full Rust suite between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-2259e5eae26e",
         "01a1f7bc-bb84-7190-99d9-226323bfa33b"
@@ -15185,7 +15237,7 @@
         "crates/atm-review/src/model.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T11:23:26Z",
+      "updated_at": "2026-11-23T16:01:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15209,6 +15261,24 @@
           "kind": "review",
           "text": "CR-128: atm-lib: one helper for each repetition the audit found",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:55:33Z",
+          "kind": "note",
+          "text": "Approved: in CR-128 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T16:00:47Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T16:01:02Z",
+          "kind": "outcome",
+          "text": "atm-lib: twelve helpers, one per commit (Project::change, one task lookup, one expiry step, sprint_of, review_actor, keyed state files and more). Left out: set_or_remove and count_by_kind. Approved by Hakan (CR-128).",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-23T10:52:33Z",
@@ -15220,7 +15290,15 @@
         }
       ],
       "review_requested_at": "2026-11-23T11:23:26Z",
-      "review_state": "waiting"
+      "reviews": [
+        {
+          "from": "2026-11-23T11:23:26Z",
+          "to": "2026-11-23T16:00:47Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T16:01:02Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-22728aee8e9c",
@@ -15236,7 +15314,7 @@
       "description": "Audit §3-§5's repetition ([the report](docs/codebase-audit-2026-11.md#8-cross-cutting-themes), theme 5). No behaviour changes but C17's dry-run rule.\n\n## CLI\n- A flattened `#[derive(Args)] struct As { agent: Option<String> }` with `fn open(&self, cwd) -> Result<Project>` (38 fields, 17 calls).\n- `trait Shown { fn json(&self) -> Value; fn lines(&self) -> Vec<String>; }` and one `show(ctx, &out)` (92 branches).\n- One `dry(ctx, what)` called after validating and resolving, never before (49 sites).\n\n## Server\n- A `Member { project, stamp }` held for a request, so a document GET opens the project once, not four times.\n- `change::<Body, Out>(made, body, op)` for the eleven review change handlers; one `json_of`; one `conditional(request, tag, headers, load)`; `off_workers(f)`; `Served::is_own_host`.\n\n## App\n- One `with_user(state, w, p, |project| …)` for the fourteen review commands; `fn locked(m)`; `impl From<tauri::Error>` and `From<io::Error>` for `AppError`; one command list that generates the manifest and the capability.\n\nOne area per commit, the full suite between.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-22603f058a59"
       ],
@@ -15247,7 +15325,7 @@
         "app/src-tauri/src/commands.rs"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T11:47:02Z",
+      "updated_at": "2026-11-23T16:01:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15269,15 +15347,41 @@
         }
       ],
       "review_requested_at": "2026-11-23T11:47:02Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-23T11:47:02Z",
           "kind": "review",
           "text": "CR-129: The front ends: one locked(), one dry-run rule, one host check",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:56:19Z",
+          "kind": "note",
+          "text": "Approved: in CR-129 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T16:00:48Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T16:01:05Z",
+          "kind": "outcome",
+          "text": "The front ends: one locked() and AppError From impls in the app, one Context::dry called after a command has found what it changes (audit C17), one Served::is_own_host. The rest is listed in CR-129. Approved by Hakan (CR-129).",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-23T11:47:02Z",
+          "to": "2026-11-23T16:00:48Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T16:01:05Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7bc-bb84-7190-99d9-227337ddbf84",
@@ -15291,7 +15395,7 @@
       "description": "Audit §7's repetition ([the report](docs/codebase-audit-2026-11.md#repetition-and-abstractions-reported-4)). No behaviour change; the e2e suite is the check.\n\n- One `request<T>(url, {method, body, since})` in `api/http.ts` returning `{status, body, etag}` and mapping `{error}` the same way, for the six fetch wrappers; URL building only in `http.ts`; `ipcFetch` honours `init` (D14).\n- One `formatAgo` and `formatDateTime` in `format.ts` for the three \"ago\" formats and the bare `toLocaleString()` calls.\n- `taskCardState(task)`, `<SprintBadge>`, `<TaskWaits>` for `TaskCard` and `KanbanCard`.\n- Split `ReviewPage.svelte` (1,855 lines: the file tree, submit, overview, comments, keys) and `state.svelte.ts` (1,146: the saved view, the app update, the project cache, the loader).\n- Start moving `app.css`'s component styles into their components (`.detail-*` first); inline `font-size:13px` and colours in `DetailPanel` become classes on tokens.\n- Hand-made popovers (Progress, Activity), the project selector's listbox and the card's `div role=button` become Bits UI pieces or buttons.\n\nOne piece per commit.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f7bc-bb84-7190-99d9-226b057c6a44"
       ],
@@ -15303,7 +15407,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-20T06:55:03Z",
-      "updated_at": "2026-11-23T12:04:19Z",
+      "updated_at": "2026-11-23T16:01:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -15325,15 +15429,41 @@
         }
       ],
       "review_requested_at": "2026-11-23T12:04:19Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-23T12:04:19Z",
           "kind": "review",
           "text": "CR-130: The dashboard: the ago and date formats in one place, one card state",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:56:35Z",
+          "kind": "note",
+          "text": "Approved: in CR-130 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T16:00:49Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T16:01:09Z",
+          "kind": "outcome",
+          "text": "The dashboard: formatAgo, formatAgoOrDate and formatDateTime in format.ts, one taskCardState for both cards. The rest (request helper, the two splits, styles, Bits UI pieces) is listed in CR-130. Approved by Hakan (CR-130).",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-23T12:04:19Z",
+          "to": "2026-11-23T16:00:49Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T16:01:09Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f7cc-3257-7251-9ecd-83db95b7695d",
@@ -16658,7 +16788,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §3's mismatches and task 7 of §7.\n\n## Change\n- `docs/app-desktop-ui-design.md` §3 and §6 replaced by a pointer to the tabs and navigation design, and what it says of tab menus and shortcuts brought in line with what was built.\n- `docs/multi-project-api.md` §2.7: the new addresses (a review's sub-tab, a comment in view, the Reviews list's filter), and a review page has a title bar and tabs in the app.\n- What's new and the changelog entries for the sprint's work.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c15508e8883f",
         "01a1f8be-9f92-7355-9694-c156588f4b10",
@@ -16673,7 +16803,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-23T10:28:12Z",
+      "updated_at": "2026-11-23T16:01:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16700,15 +16830,41 @@
         }
       ],
       "review_requested_at": "2026-11-23T09:59:47Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-23T09:59:47Z",
           "kind": "review",
           "text": "CR-126: Docs in line with tabs and navigation; atm 0.43.0 and its entries",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:57:55Z",
+          "kind": "note",
+          "text": "Approved: in CR-126 (round 2)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T16:00:50Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T16:01:12Z",
+          "kind": "outcome",
+          "text": "Docs in line with tabs and navigation (the desktop UI design, the addresses table), and 0.43.0 with its CHANGELOG and WHATS-NEW entries. Approved by Hakan (CR-126).",
+          "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-23T09:59:47Z",
+          "to": "2026-11-23T16:00:50Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T16:01:12Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1f8d9-79c7-7484-b094-c9afad23fb21",
@@ -18418,7 +18574,7 @@
       "description": "Step 8 of [the plan](docs/dashboard-derived-state.md), group H and §4.6.\n\n## Change\n- The claims route leaves out an expired lease, by atm's clock. `parseClaims` stops filtering.\n- The worktrees route says which copy of each task is shown, and from which branch, with one ranking shared with the merge driver (`merge.rs` `kind_rank`). `mergeWorktrees`' `PROGRESS` goes.\n- A guard test (like `tokens.test.ts`) fails when `dashboard/src` decides something from a raw state field: `kindOf(`, `.review_state`, `.started_at`, `.completed_at`, `.review_requested_at`, `.blocked_at`, `meta.sprints`, `meta.statuses` and so on. The files that only show them are on an allow-list.\n\n## Tests\n- The routes' tests.\n- The guard test, failing on a sample that breaks the rule.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a1fecd-5725-722d-8d45-22cf65ee6177",
         "01a1fecd-5725-722d-8d45-22d03168db17",
@@ -18434,7 +18590,7 @@
         "dashboard/src/lib/worktrees.ts"
       ],
       "created_at": "2026-11-21T15:50:32Z",
-      "updated_at": "2026-11-23T15:14:46Z",
+      "updated_at": "2026-11-23T16:01:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -18450,7 +18606,50 @@
       "number": 724,
       "review": "async",
       "started_at": "2026-11-23T15:14:46Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "c97ed602c4072e78d65c7a6902b733a87ad0d15b",
+      "code_reviews": [
+        {
+          "id": "01a20918-e42b-77ba-8240-a5f656f068d6",
+          "ref": "CR-133"
+        }
+      ],
+      "review_requested_at": "2026-11-23T15:49:16Z",
+      "notes": [
+        {
+          "at": "2026-11-23T15:49:16Z",
+          "kind": "review",
+          "text": "CR-133: Claims and worktrees decided by atm, and a guard test against rules in the dashboard",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T15:58:19Z",
+          "kind": "note",
+          "text": "Approved: in CR-133 (round 1)",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-23T16:00:51Z",
+          "kind": "note",
+          "text": "Approved",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-23T16:01:16Z",
+          "kind": "outcome",
+          "text": "Claims held by atm clock, the worktrees shown copy by the merge driver ranking, and a guard test against raw state fields in the dashboard. Approved by Hakan (CR-133).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-23T15:49:16Z",
+          "to": "2026-11-23T16:00:51Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-23T16:01:16Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "01a1fefc-742e-7272-a4bb-2be34486ecf7",
@@ -19119,6 +19318,42 @@
         }
       ],
       "sprint": "Sidebar overhaul"
+    },
+    {
+      "id": "01a20922-b137-7532-a01a-b872ae882998",
+      "name": "Release 0.43.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "release"
+      ],
+      "description": "Ship the sprint *Audit and tabs* as 0.43.0 on `dev/0.43.0`, as AGENTS.md's *Versions* and *CI* sections describe: the audit's fixes and refactors, the app's tabs and navigation, the stats from atm, the review watch that idles, and every agent harness counted as an agent.\n\n## Before the release, on GitHub (Hakan's; ATM-661, CR-131)\n- Create the `release` environment, with a deployment rule allowing only tags matching `v*`.\n- Move the nine secrets from the repository's secrets into the environment's (`packaging/README.md`, *Secrets and keys*, lists them). Until then the jobs that name the environment read none.\n- Add a tag ruleset for `v*` (who may create, move or delete a release tag).\n- After the release: the app job's signing step should have compiled nothing (its log), as the step before it compiles the app with no secrets.\n\n## Change\n- **The version:** already 0.43.0 (ATM-701).\n- **`CHANGELOG.md` and `WHATS-NEW.md`:** the `[0.43.0]` entries dated the release day; WHATS-NEW's 3–6 bullets checked against what the sprint added since ATM-701 wrote them.\n- **Screenshots:** regenerate the Linux baselines the sprint changed (`pnpm run test:e2e:visual:update`, Docker), look at them, commit them.\n- **The security checklist** (`docs/security-architecture.md` §3): the 0.43.0 entry. Skills and `docs/agent/` changed this sprint, so the agent sandbox, or without an API key the written skill review in §3.3; the new entry points (the stats route and command, ATM-722) and the CI changes (ATM-661) are in it.\n- **Verify:** `pnpm run verify` in `dashboard/` (the screenshots included), `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.\n\n## Push\nPushing, the release PR from `dev/0.43.0` to `main`, merging, tagging and publishing are Hakan's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-23T15:59:58Z",
+      "updated_at": "2026-11-23T16:03:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Audit and tabs",
+          "from": "2026-11-23T15:59:58Z"
+        }
+      ],
+      "sprint": "Audit and tabs",
+      "review": "async",
+      "with": "user",
+      "number": 741,
+      "started_at": "2026-11-23T16:03:16Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

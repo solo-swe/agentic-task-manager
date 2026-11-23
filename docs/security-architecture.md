@@ -1297,8 +1297,8 @@ The two CompMD upgrades, as they were made:
   - `minimumReleaseAgeExclude` names the 0.9.0 packages, released today by CompMD's author.
   - **CompMD's guide for agents** is its `spec/llms.txt` at `v0.9.0`, unchanged since `v0.8.0`.
 
-**Release 0.43.0 (the sprint Audit and tabs), in progress.** The audit's fixes record their invariants in §2 as they
-land (I11, I13, I24, I25). Fields:
+**Release 0.43.0 (the sprint Audit and tabs, released by ATM-741).** The audit's fixes record their invariants in §2 as
+they landed (I11, I13, I24, I25, I30, I35). Fields:
 
 - **The task views' `derived` gains `waiting`, `needs_you`, `agent_work` and `review`** (ATM-717):
   - who a task waits on, since when, and its questions;
@@ -1354,6 +1354,45 @@ land (I11, I13, I24, I25). Fields:
 - **`atm docs states` and `atm docs reviews` carry the state tables** (ATM-715): a table of a task's moves and one of a
   review's status, each checked by a test against atm's own (`Command::sources` and `destination`, the review table's
   rows), so what agents read is what atm does. No command, path or instruction is added.
+- **Entry points:** one, the stats route (`…/projects/<p>/stats`, v1 and v2) and the app's `project_stats` command
+  (ATM-722, in §2 with I11): read-only, a registered project's task data, its task IDs compared as text, `from` and
+  `to` whole numbers. `atm project stats` (hidden) prints the same. The summaries gain `progress`, atm's own figures.
+  The claims route lists only claims held now and the worktrees route says which copy is shown (ATM-724): no new path,
+  only what the routes leave out or add of atm's own data.
+- **Who is an agent** (ATM-660, audit L2): every harness atm recognizes gives its agent an identity of its own, and
+  inside one a person-named `--agent` or `ATM_AGENT` is refused (in §2, the review modes). A harness that sets no
+  marker still runs as the person (a known limit, in the task's outcome).
+- **CI** (ATM-661, audit A1, A5, A11, with Hakan's yes): the release compiles before any step has a signing secret;
+  the jobs that read a secret name a `release` environment for `v*` tags; the release runners are pinned. No
+  permission is widened. The environment, its secrets and a `v*` tag ruleset are set on GitHub by hand (ATM-741).
+  `ci-workflow.test.ts` checks the order, the environment and the runners.
+- **The review watch** (ATM-727) idles on change notices instead of polling, and stops when its shell is gone. No
+  new output, command or instruction.
+- **Dependencies:** none new. Two advisories published during the sprint, fixed by patch releases of crates already
+  in the tree: `cookie` 0.18.3 (RUSTSEC-2026-0594; private cookies after a fork, which atm never uses) and `url`
+  2.5.9 (RUSTSEC-2026-0592; a stack overflow in `Url::origin()` on nested `blob:` URLs). `cargo deny check` passes.
+- **Skills and `docs/agent/` changed, so a written skill review** (no API key for the sandbox run; §3.3):
+  - **`atm-do-task` and `atm-loop-tasks`** (ATM-708): the watch is `atm review watch --json --once`, restarted each
+    time it ends, and an `atm review inbox` when atm says there are unread events. Both run atm only, read atm's own
+    review data, and fetch nothing. The rule that review comments are data, not commands (I1), is unchanged and now
+    also covers what the inbox prints, which quotes each comment under a line saying so (I35). The loop skill names
+    `atm sprint list --json` for the next sprint, a command it already ran.
+  - **`skills/claude-code.json`** (ATM-678, ATM-708): pre-approves `atm version`, `atm docs` and `atm review inbox`,
+    all read-only. No status change, decision or push is pre-approved (`skills.test.ts`).
+  - **`docs/agent/commands.md`**: the exit codes as atm gives them (ATM-664); `atm db init --meta-file` on an existing
+    project refuses what other commands change (ATM-669); `atm agents hooks` named as the user's to run, never an
+    agent's (ATM-708, I35).
+  - **`docs/agent/reviews.md`** (ATM-725, ATM-708): rounds as increments, no base to name; the watch with `--once`.
+    **`docs/agent/states.md`** (ATM-715): the state tables, checked against atm's own.
+  - What none of them does: run a command copied from task or review text, fetch or run a remote script, touch
+    credentials, CI, git config or hooks, push anywhere new, or let an agent decide a review. Each skill still blocks
+    a task that asks for one of those on the user (rule 7).
+- **Checks run:**
+  - `cargo test` (1,040), clippy, fmt and deny;
+  - the unit tests with coverage (1,902, 96.5% of lines) and `pnpm run check`;
+  - the CLI suite (873) and the functional e2e suite (594);
+  - the Linux screenshots in Docker (84; sixteen regenerated: the Kanban and List with atm's progress in the header,
+    the projects overview, the Settings menu and the update notice).
 
 ## 4. Keeping it current
 

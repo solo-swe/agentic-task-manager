@@ -48,6 +48,8 @@ clicks and right-click menus as in a browser). Review watches idle while they wa
   skipped task is skipped now, not done), the pace and each sprint's estimate in the loop's order, time use, the
   project's numbers, the time per task, people and agents. `atm project status` prints the forecast. The summaries
   carry the overview's Progress tab (`progress`), so it loads no project's tasks.
+- **Two advisories fixed by patch releases** (ATM-741): `cookie` 0.18.3 (RUSTSEC-2026-0594, through Tauri's
+  `reqwest`; atm never forks a server) and `url` 2.5.9 (RUSTSEC-2026-0592), in `Cargo.lock` only.
 - **Claims and worktrees decided by atm** (ATM-724): the claims route lists only the claims held now, by atm's
   clock, and its ETag moves when a lease runs out; the worktrees route says which copy of each task the board shows
   (`shown`, by the merge driver's ranking). A guard test fails when the dashboard reads a task's raw state fields
