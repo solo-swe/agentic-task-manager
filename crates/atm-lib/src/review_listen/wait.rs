@@ -58,10 +58,7 @@ pub(super) fn with_parents(chain: &Chain) -> Vec<(&Comment, Option<&Comment>)> {
 }
 
 pub(super) fn decided(status: Status) -> bool {
-    matches!(
-        status,
-        Status::Approved | Status::ChangesRequested | Status::Closed
-    )
+    status.is_decision()
 }
 
 /// Be told of the store's changes on the returned channel, while the subscription (the first value) is kept.

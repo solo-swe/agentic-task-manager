@@ -1,8 +1,8 @@
 //! Whether a watch runs (ATM-642): its lease, the agent's watch state, and the reminder when none runs.
 
 use super::{
-    HashSet, Path, PathBuf, Project, Result, ReviewFilter, ReviewHeader, ReviewStore, Status,
-    Value, cursor_file, is_agent, keyed_now, reviews,
+    HashSet, Path, PathBuf, Project, Result, ReviewFilter, ReviewHeader, ReviewStore, Value,
+    cursor_file, is_agent, keyed_now, reviews,
 };
 
 /// How long a watch's lease lasts unrenewed (ATM-642). A watch renews it on every look, at least every [`RECHECK`], so
@@ -104,12 +104,7 @@ pub(super) fn open_and_changed(
 ) -> (Vec<String>, Vec<String>) {
     let mut open: Vec<&ReviewHeader> = headers
         .iter()
-        .filter(|h| {
-            matches!(
-                h.status,
-                Status::Waiting | Status::Live | Status::ChangesRequested
-            )
-        })
+        .filter(|h| h.status.in_play())
         .filter(|h| {
             h.author.as_ref().is_some_and(|a| a.0 == me) || h.tasks.iter().any(|t| mine.contains(t))
         })

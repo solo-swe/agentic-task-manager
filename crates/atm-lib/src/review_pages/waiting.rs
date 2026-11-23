@@ -7,16 +7,14 @@ use super::{Actor, Project, Review, ReviewHeader, Status, Value, json, reviews};
 #[must_use]
 pub fn needs(header: &ReviewHeader, me: &Actor) -> bool {
     let authored = header.author.as_ref() == Some(me);
-    match header.status {
-        Status::Waiting | Status::Live => {
-            if header.reviewers.is_empty() {
-                !authored
-            } else {
-                header.reviewers.contains(me)
-            }
+    if header.status.waits_on_reviewers() {
+        if header.reviewers.is_empty() {
+            !authored
+        } else {
+            header.reviewers.contains(me)
         }
-        Status::ChangesRequested => authored,
-        Status::Draft | Status::Approved | Status::Closed => false,
+    } else {
+        header.status == Status::ChangesRequested && authored
     }
 }
 
@@ -31,10 +29,7 @@ pub fn waiting_for(review: &Review, me: &Actor) -> Option<&'static str> {
         return Some("review");
     }
     // Decided, or a draft its author is still putting together (§3.1: waiting on no one)
-    if matches!(
-        header.status,
-        Status::Approved | Status::Closed | Status::Draft
-    ) {
+    if !header.status.in_play() {
         return None;
     }
     // Which came last, by the comments' numbers (c1, c2, … in the order they were written; two in one second have the

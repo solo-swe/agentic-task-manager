@@ -123,6 +123,25 @@ impl Status {
     pub fn ended(self) -> bool {
         matches!(self, Self::Approved | Self::Closed)
     }
+
+    /// A reviewer's decision is on it (ATM-681): approved, sent back or closed; what a wait for one stops at.
+    #[must_use]
+    pub fn is_decision(self) -> bool {
+        matches!(self, Self::Approved | Self::ChangesRequested | Self::Closed)
+    }
+
+    /// It waits on its reviewers (ATM-681): waiting for review, or live while the change grows.
+    #[must_use]
+    pub fn waits_on_reviewers(self) -> bool {
+        matches!(self, Self::Waiting | Self::Live)
+    }
+
+    /// In play (ATM-681): put to its reviewers and not ended: waiting, live or sent back. Neither a draft its author
+    /// is still putting together nor one approved or closed.
+    #[must_use]
+    pub fn in_play(self) -> bool {
+        self.waits_on_reviewers() || self == Self::ChangesRequested
+    }
 }
 
 /// A review's header (`review.md`'s, §3.3): what lists and searches need.
@@ -385,6 +404,35 @@ mod tests {
         Status::Approved,
         Status::Closed,
     ];
+
+    /// ATM-681: each group of statuses, over every status
+    #[test]
+    fn the_groups_of_statuses_decided_waiting_on_reviewers_and_in_play() {
+        // (status, ended, a decision, waits on its reviewers, in play)
+        let groups: Vec<(&str, bool, bool, bool, bool)> = ALL
+            .iter()
+            .map(|s| {
+                (
+                    s.name(),
+                    s.ended(),
+                    s.is_decision(),
+                    s.waits_on_reviewers(),
+                    s.in_play(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            groups,
+            [
+                ("draft", false, false, false, false),
+                ("waiting", false, false, true, true),
+                ("live", false, false, true, true),
+                ("changes_requested", false, true, false, true),
+                ("approved", true, true, false, false),
+                ("closed", true, true, false, false),
+            ]
+        );
+    }
 
     #[test]
     fn a_status_is_named_as_it_is_written_and_only_approved_and_closed_have_ended() {

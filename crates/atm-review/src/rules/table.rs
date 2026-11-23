@@ -196,10 +196,7 @@ pub(super) fn submit_next<'a>(
     let next = match verdict {
         // Sent back too (ATM-609): a reviewer may change their mind, or settle what they asked for themselves
         Verdict::Approve => {
-            if !matches!(
-                status,
-                Status::Waiting | Status::Live | Status::ChangesRequested
-            ) {
+            if !status.in_play() {
                 return Err(not_now(review, "be approved"));
             }
             let open: Vec<String> = review
