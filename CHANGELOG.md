@@ -4,7 +4,7 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
-## [0.43.0] - Unreleased
+## [0.43.0] - 2026-11-23
 
 The sprint *Audit and tabs*: the codebase audit's findings fixed (security, the review store, the CLI, the server,
 the app), one state machine for tasks and their reviews, the dashboard's own copies of atm's rules moved behind

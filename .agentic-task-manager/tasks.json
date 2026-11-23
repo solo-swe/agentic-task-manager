@@ -1470,6 +1470,11 @@
         "goal": "Fix what the November audit found (security first, then bugs, then the shared abstractions), and make a tab a place with its own history and address (docs/tabs-and-navigation-design.md)",
         "start": "2026-11-20T17:16:33Z",
         "release": "0.43.0"
+      },
+      {
+        "id": "Sidebar overhaul",
+        "state": "planned",
+        "goal": "Turn the app sidebar into a scope selector with six destinations (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis), and fix the doc viewer, diff view and search bugs"
       }
     ],
     "releases": [
@@ -1830,7 +1835,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 728
+    "next_number": 739
   },
   "tasks": [
     {
@@ -16559,7 +16564,7 @@
       "description": "[The design](docs/tabs-and-navigation-design.md) §3's mismatches and task 7 of §7.\n\n## Change\n- `docs/app-desktop-ui-design.md` §3 and §6 replaced by a pointer to the tabs and navigation design, and what it says of tab menus and shortcuts brought in line with what was built.\n- `docs/multi-project-api.md` §2.7: the new addresses (a review's sub-tab, a comment in view, the Reviews list's filter), and a review page has a title bar and tabs in the app.\n- What's new and the changelog entries for the sprint's work.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a1f8be-9f92-7355-9694-c15508e8883f",
         "01a1f8be-9f92-7355-9694-c156588f4b10",
@@ -16574,7 +16579,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-20T11:36:44Z",
-      "updated_at": "2026-11-23T09:50:03Z",
+      "updated_at": "2026-11-23T09:59:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -16592,7 +16597,24 @@
       "number": 701,
       "review": "async",
       "started_at": "2026-11-23T09:50:03Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "fa26dc3a882a695dae2ed14171b975d4b965f9b8",
+      "code_reviews": [
+        {
+          "id": "01a207d8-efbd-709d-a951-35af7a9a3aed",
+          "ref": "CR-126"
+        }
+      ],
+      "review_requested_at": "2026-11-23T09:59:47Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-23T09:59:47Z",
+          "kind": "review",
+          "text": "CR-126: Docs in line with tabs and navigation; atm 0.43.0 and its entries",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "01a1f8d9-79c7-7484-b094-c9afad23fb21",
@@ -18552,6 +18574,316 @@
       ],
       "completed_at": "2026-11-23T09:49:59Z",
       "completed_by": "claude:0f56a916"
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d97d26c2073b",
+      "name": "Design the sidebar overhaul",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "sidebar"
+      ],
+      "description": "Today the app's sidebar only sets the current tab's project, which the tab selector chevron already does. Design what replaces it, in `docs/sidebar-overhaul-design.md`, together with the user.\n\n## The sidebar (app)\nA **scope selector** (All, or one project) and six items for the selected scope, each with a proper icon:\n\n1. **Overview**: the project's current Project tab, or the All Project Cards view for All.\n2. **Inbox** (new): raw user input, later analyzed and either turned into tasks or discarded. A simpler task list of its own, with archiving, and three states only: *created*, *discarded* (with a reason), *injected* (with links to the tasks made from it). Lets the user jot input from the app or webapp quickly without distracting working agents.\n3. **Tasks**: a page with the current Board, List and Dependencies tabs (no Dependencies for All).\n4. **Code Reviews**: the current Reviews tab's content.\n5. **Documents** (new): a list of all documents in the repo, opened in the viewer to read.\n6. **Analysis**: the current Progress and Agents tabs.\n\n## Tabs and navigation\n- Clicking an item always opens a **new tab**, never replaces the current one.\n- The tab selector chevron goes away in the app (it stays in the webapp).\n- A tab's title reads `[<short project name>|All] - [Overview|Inbox|Tasks|…]`, with the item's icon.\n- A link inside a tab (a review, say) opens **in the same tab**, and Back returns to where the user was, never a random place. Build on [the tabs design](docs/tabs-and-navigation-design.md).\n\n## The webapp\nNo sidebar: still a single page with tabs, one per item (Inbox and Documents are just more tabs).\n\n## Also in the design\n- The All-projects activity pill moves inside the tab.\n- The All-projects search and the Reviews search move up in the tab, placed like the project search.\n\n## Then\n- Write **Inbox** as its own design document (`docs/inbox-design.md`): data model, states, archiving, API, how agents analyze and inject items.\n- Write **Documents** as its own design document (`docs/documents-design.md`): which files are listed, how they are found, the viewer.\n- Decompose all three designs into implementation tasks in this sprint with `/atm-create-tasks`, so it becomes the full sprint.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/sidebar-overhaul-design.md",
+        "docs/inbox-design.md",
+        "docs/documents-design.md"
+      ],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "with": "user",
+      "number": 728
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d97e12924d39",
+      "name": "Doc viewer TOC popup sits in the corner",
+      "type": "bugfix",
+      "priority": "P2",
+      "description": "The document viewer's table-of-contents popup menu doesn't open in the corner of the viewer. Anchor it to the corner, and cover the position in the documents area's specs.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 729
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d97fba7f02a1",
+      "name": "CR tabs remember the diff position",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "Switching between a code review's tabs loses the scroll position in the diff view. Keep each view's position, so going back to the diff returns to the same place. Test the switch both ways.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 730
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d980e8e25290",
+      "name": "Diff view final mode",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews"
+      ],
+      "description": "The diff view needs a **final** view: the file as it is after the change, without any highlighting. Turn the side-by-side / single toggle into a three-way selector:\n\n- side-by-side\n- single, highlighted (today's single view)\n- single, final (no diff highlighting)\n\nComments stay anchored to their lines in every mode.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 731
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d98174c645b4",
+      "name": "Keep an unsent comment when an agent replies",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "reviews"
+      ],
+      "description": "In the diff view, while the user is writing a comment or a reply, a comment or response arriving from an agent re-renders the view and the text being edited is lost. The editor, its text and its cursor must survive updates to the review. Test with a comment and a reply in progress while new comments arrive.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 732
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d982704f90ae",
+      "name": "Badge for unseen code review updates",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "reviews"
+      ],
+      "description": "When the code review the user is looking at has comments or diffs they haven't seen (a new comment, a reply, a new round), show it: a badge on the place it happened (the comments, the round selector, …) with what is new. Seeing it clears the badge.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 733
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d98332143200",
+      "name": "Analyze atm's memory growth",
+      "type": "bugfix",
+      "priority": "P1",
+      "description": "atm was once seen growing from about 70 MB of RAM to 4.5 GB after a few hours of use. Find out why:\n\n1. Reproduce it: run `atm service` with the dashboard and the app open, agents working and reviews watched, and measure its memory over time.\n2. Find what grows (caches, watchers, event subscribers, open connections, retained task file versions, …).\n3. Fix it if the cause is clear, with a test that would have caught it, or record the findings and create the follow-up tasks.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 734
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d9843d6019f3",
+      "name": "Dependency graph placeholder lines on small nodes",
+      "type": "polish",
+      "priority": "P3",
+      "description": "When the dependency graph is zoomed out too far for text, its nodes show as empty boxes: smart, but confusing. Draw a few wiggly placeholder lines in place of the text, so a node still reads as a card with content.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 735
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d985bd59fa46",
+      "name": "All-projects activity pill inside the tab",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "sidebar"
+      ],
+      "description": "Move the All-projects activity pill inside the tab, as the sidebar overhaul design (`docs/sidebar-overhaul-design.md`) places it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a207f0-a2e1-7602-b260-d97d26c2073b"
+      ],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 736
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d98638440e40",
+      "name": "All-projects search moves up in the tab",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "sidebar"
+      ],
+      "description": "Move the All-projects search up in the tab, where the project-specific search is, as the sidebar overhaul design (`docs/sidebar-overhaul-design.md`) places it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a207f0-a2e1-7602-b260-d97d26c2073b"
+      ],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 737
+    },
+    {
+      "id": "01a207f0-a2e1-7602-b260-d9875c4593f8",
+      "name": "Reviews search moves up in the tab",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "sidebar",
+        "reviews"
+      ],
+      "description": "In the Code Reviews tab of the sidebar overhaul (`docs/sidebar-overhaul-design.md`), move the reviews search up in the tab, placed like the other searches.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a207f0-a2e1-7602-b260-d97d26c2073b"
+      ],
+      "files": [],
+      "created_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-23T10:25:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-23T10:25:40Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 738
     }
   ]
 }

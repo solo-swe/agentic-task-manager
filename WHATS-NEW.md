@@ -2,7 +2,7 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
-## [0.43.0] - Unreleased
+## [0.43.0] - 2026-11-23
 
 - In the app, each tab remembers where you have been: Back and Forward, and the arrows in the title bar, go through
   that tab's own pages.
