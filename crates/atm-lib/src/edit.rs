@@ -933,14 +933,7 @@ pub fn relabel(project: &mut Project, from: &str, to: &str) -> Result<RelabeledT
         )));
     }
     project.change(|work: &mut Working| {
-        let tasks = relabel_in(work.document["tasks"].as_array_mut(), from, to);
-        let archived = relabel_in(
-            work.archive()?
-                .get_mut("tasks")
-                .and_then(Value::as_array_mut),
-            from,
-            to,
-        );
+        let (tasks, archived) = crate::lookup::in_both(work, |list| relabel_in(list, from, to))?;
         if tasks + archived == 0 {
             return Err(Error::Invalid(format!(
                 "no task has the label {}",

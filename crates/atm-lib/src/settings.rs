@@ -550,15 +550,8 @@ pub fn rename_term(
             meta.insert("default_priority".into(), json!(to));
         }
         let field = list.task_field();
-        let tasks = rename_field(work.document["tasks"].as_array_mut(), field, from, &to);
-        let archived = rename_field(
-            work.archive()?
-                .get_mut("tasks")
-                .and_then(Value::as_array_mut),
-            field,
-            from,
-            &to,
-        );
+        let (tasks, archived) =
+            crate::lookup::in_both(work, |list| rename_field(list, field, from, &to))?;
         atm_common::Vocabulary::of_document(&work.document)?;
         Ok(RenamedTerm {
             from: from.to_string(),

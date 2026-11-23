@@ -19,6 +19,35 @@ fn project(working: &[Value], archived: &[Value]) -> Project {
 }
 
 #[test]
+fn a_change_in_both_runs_on_the_working_tasks_then_the_archived_ones() {
+    let mut p = project(
+        &[json!({"id": "T-1", "x": 1}), json!({"id": "T-2"})],
+        &[json!({"id": "T-0", "x": 1})],
+    );
+    let mut seen = Vec::new();
+    let counts = p
+        .change(|work| {
+            in_both(work, |list| {
+                let list = list.expect("both files have a task list");
+                seen.push(list.len());
+                list.iter_mut()
+                    .filter(|t| t.get("x").is_some())
+                    .map(|t| t["x"] = json!(2))
+                    .count()
+            })
+        })
+        .unwrap();
+    assert_eq!(counts, (1, 1));
+    assert_eq!(seen, [2, 1], "the working tasks first");
+    let store = p.store();
+    assert_eq!(store.get_task("T-1").unwrap().unwrap()["x"], json!(2));
+    assert_eq!(
+        store.get_archived_task("T-0").unwrap().unwrap()["x"],
+        json!(2)
+    );
+}
+
+#[test]
 fn a_task_is_found_by_its_place_and_a_missing_one_says_whether_it_is_archived() {
     let mut p = project(
         &[json!({"id": "T-1"}), json!({"id": "T-2"})],

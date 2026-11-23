@@ -440,17 +440,11 @@ pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<Rena
             )));
         }
         release_at(&mut work.document, at).insert("id".into(), json!(new));
-        let tasks = rename_release_in(work.document["tasks"].as_array_mut(), id, new);
+        let (tasks, archived) =
+            crate::lookup::in_both(work, |list| rename_release_in(list, id, new))?;
         let sprints = rename_release_in(
             work.document["meta"]
                 .get_mut("sprints")
-                .and_then(Value::as_array_mut),
-            id,
-            new,
-        );
-        let archived = rename_release_in(
-            work.archive()?
-                .get_mut("tasks")
                 .and_then(Value::as_array_mut),
             id,
             new,

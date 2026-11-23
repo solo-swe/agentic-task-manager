@@ -478,14 +478,8 @@ pub fn rename_component(project: &mut Project, id: &str, new: &str) -> Result<Re
             )));
         }
         work.document["meta"]["components"][at]["id"] = json!(new);
-        let tasks = rename_component_in(work.document["tasks"].as_array_mut(), id, new);
-        let archived = rename_component_in(
-            work.archive()?
-                .get_mut("tasks")
-                .and_then(Value::as_array_mut),
-            id,
-            new,
-        );
+        let (tasks, archived) =
+            crate::lookup::in_both(work, |list| rename_component_in(list, id, new))?;
         Vocabulary::of_document(&work.document)?;
         Ok(RenamedComponent {
             from: id.to_string(),
