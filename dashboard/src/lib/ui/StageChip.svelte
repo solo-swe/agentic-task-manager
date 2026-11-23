@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDateTime } from '../format';
   import { pullRef } from '../repo';
   import { prOf, stageOf } from '../stages';
   import { dashboard } from '../state.svelte';
@@ -11,7 +12,7 @@
   const stage = $derived(stageOf(task));
   const pr = $derived(prOf(task));
   const merged = $derived(
-    `Merged${pr ? ` in #${pr.number}` : ''}${task.merged_at ? ` on ${new Date(task.merged_at).toLocaleString()}` : ''}`,
+    `Merged${pr ? ` in #${pr.number}` : ''}${task.merged_at ? ` on ${formatDateTime(task.merged_at)}` : ''}`,
   );
 </script>
 

@@ -9,6 +9,7 @@
   import { actorsLine, earlierAttempts } from '../actors';
   import { noteKindLabel, shortSha, taskNotes } from '../notes';
   import { waitLine } from '../waiting';
+  import { formatDateTime } from '../format';
   import { taskTimes } from '../work';
   import { commitRef } from '../repo';
   import { referenceTo, type DocumentRef } from '../documents';
@@ -418,9 +419,7 @@
             <li class="detail-note note-{note.kind}" data-kind={note.kind}>
               <div class="note-head">
                 <span class="note-kind">{noteKindLabel(note.kind)}</span>
-                <span class="note-meta"
-                  >{note.by ? `${note.by} · ` : ''}{note.at ? new Date(note.at).toLocaleString() : ''}</span
-                >
+                <span class="note-meta">{note.by ? `${note.by} · ` : ''}{formatDateTime(note.at)}</span>
               </div>
               <div class="note-text">
                 <CompMd text={note.text} {task} onopen={openDocument} />
@@ -434,7 +433,7 @@
   {#if claim || actors || attempts.length || task.commit || times.length}
     <div class="detail-group" data-group="activity">
       {#if claim}
-        {@const since = new Date(claim.claimed_at).toLocaleString()}
+        {@const since = formatDateTime(claim.claimed_at)}
         {@const until = new Date(claim.lease_expires_at).toLocaleTimeString()}
         <div class="detail-section" id="detail-claim">
           <div class="label">Claimed by</div>
@@ -461,7 +460,7 @@
           <div class="label">Timestamps</div>
           <div class="value" style="font-size:13px;color:var(--text-muted)">
             {#each times as row, i (row.label)}{#if i}<br />{/if}{row.label}:
-              {row.at ? new Date(row.at).toLocaleString() : row.text}{/each}
+              {row.at ? formatDateTime(row.at) : row.text}{/each}
           </div>
         </div>
       {/if}
@@ -521,7 +520,7 @@
           </div>
         {/if}
         {#if task.derived?.waiting?.since}
-          <div style="color:var(--text-muted)">Since {new Date(task.derived.waiting.since).toLocaleString()}</div>
+          <div style="color:var(--text-muted)">Since {formatDateTime(task.derived.waiting.since)}</div>
         {/if}
         {#if wait.note}<div class="review-note">
             <CompMd text={wait.note.text} {task} onopen={openDocument} />
@@ -547,7 +546,7 @@
       <div class="value" style="font-size:13px">
         <div><strong>{wait.text}</strong></div>
         {#if task.derived?.waiting?.since}
-          <div style="color:var(--text-muted)">Since {new Date(task.derived.waiting.since).toLocaleString()}</div>
+          <div style="color:var(--text-muted)">Since {formatDateTime(task.derived.waiting.since)}</div>
         {/if}
         {#if wait.questions.length}
           <ol class="block-questions">

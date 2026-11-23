@@ -1,6 +1,6 @@
 <script lang="ts">
   // One project on the overview (docs/multi-project-dashboard-proposal.md 3.5), from its server summary
-  import { formatAgo } from '../format';
+  import { formatAgo, formatDateTime } from '../format';
   import type { ProjectEntry } from '../load';
   import { needsYou, statsLine } from '../projects';
   import { dashboard } from '../state.svelte';
@@ -288,9 +288,7 @@
         <!-- The task finished last, and when (T-208): replaces the bare "12 m ago" -->
         <span
           class="project-card-last"
-          title="Last finished: {taskLabel(lastDone)} {lastDone.name}, {new Date(
-            lastDone.completed_at,
-          ).toLocaleString()}"
+          title="Last finished: {taskLabel(lastDone)} {lastDone.name}, {formatDateTime(lastDone.completed_at)}"
         >
           <!-- When, in the quiet label style (T-335) -->
           <span class="project-card-label project-card-last-when"

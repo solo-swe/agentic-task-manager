@@ -41,6 +41,11 @@ export function formatAgoOrDate(iso: string, now: number): string {
   return `${Math.floor(seconds / size)} ${unit} ago`;
 }
 
+/** A moment in full, date and time, in the viewer's locale (a note's, a claim's, a merge's); "" without one. */
+export function formatDateTime(iso: string | undefined | null): string {
+  return iso ? new Date(iso).toLocaleString() : '';
+}
+
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
