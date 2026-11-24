@@ -500,8 +500,8 @@
       onclick={clearTextFragment}
     >
       {#if doc && toc.length >= 2}
-        <!-- The contents: one box at the page's top left, in view as it scrolls. Closed, it is a faint button; hovered
-             or focused, the box itself grows into the list, so the pointer is already inside it -->
+        <!-- The contents: one box in the viewer's top left corner (ATM-729), in view as it scrolls. Closed, it is a faint
+             button; hovered or focused, the box itself grows into the list, so the pointer is already inside it -->
         <div class="doc-toc" class:open={tocOpen} id="doc-toc">
           <div
             class="doc-toc-box"

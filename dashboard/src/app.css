@@ -2567,10 +2567,12 @@ button.repo-ref {
   --doc-page-ink: var(--text);
 }
 .doc-body {
+  /* Its padding, which the contents box (.doc-toc) reaches out across to sit in the viewer's corner */
+  --doc-body-pad: var(--space-9);
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-9);
+  padding: var(--doc-body-pad);
   background: var(--doc-desk);
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -2674,18 +2676,20 @@ button.repo-ref {
 /* The contents (T-402): one box at the page's top left that stays in view as the document scrolls (sticky, taking no
    room). Closed, it is a faint button, brighter while the pointer is over the window; hovered or focused, the box
    itself grows from the button into the list (down and to the right), so the pointer is inside it all along */
+/* The contents sit in the viewer's top left corner (ATM-729), whatever the page's width (a document style's page is
+   wider than the 820 px column the box once sat in, which put it over the text): stuck at the body's padding edge (a
+   sticky box's top counts from inside its scroller's padding), so it stays put as the document scrolls, and reaching
+   out across that padding to the corner */
 .doc-toc {
   position: sticky;
   top: 0;
   height: 0;
   z-index: 5;
-  max-width: 820px;
-  margin: 0 auto;
 }
 .doc-toc-box {
   position: absolute;
-  top: -12px;
-  left: -12px;
+  top: calc(var(--space-3) - var(--doc-body-pad));
+  left: calc(var(--space-3) - var(--doc-body-pad));
   display: flex;
   flex-direction: column;
   width: 28px;
@@ -2815,7 +2819,7 @@ button.repo-ref {
   pointer-events: none;
 }
 .doc-viewer.narrow .doc-body {
-  padding: var(--space-6);
+  --doc-body-pad: var(--space-6);
 }
 .doc-viewer.narrow .doc-page {
   padding: var(--space-8) var(--space-7) var(--space-9);
