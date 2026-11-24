@@ -130,6 +130,34 @@ test.describe('Project tab', () => {
     ]);
   });
 
+  // ATM-756 (docs/sidebar-overhaul-design.md §2.4): the Overview links into the Board and the List, in place
+  test('a sprint opens the Board on it and Back returns; a status count opens the List of its tasks', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDashboard(page, tasksServer, shop(), { tab: 'project' });
+    await page.locator('#project-sprints a[data-sprint="Checkout"]').click();
+    await expect(page.locator('#panel-kanban')).toBeVisible();
+    await expect(page).toHaveURL(/\/kanban\?sprint=Checkout$/);
+    // Checkout's two tasks
+    await expect(page.locator('#kanban .kanban-card')).toHaveCount(2);
+    await page.goBack();
+    await expect(page.locator('#project-sprints')).toBeVisible();
+    // The backlog too
+    await page.locator('#project-sprints a[data-sprint="backlog"]').click();
+    await expect(page).toHaveURL(/\/kanban\?sprint=backlog$/);
+    await page.goBack();
+    // To Do: the List of the to-do tasks, every sprint
+    await page.locator('#project-statuses a[data-status="todo"]').click();
+    await expect(page).toHaveURL(/\/list\?sprint=all$/);
+    await expect(page.locator('.task-card')).toHaveCount(1);
+    await expect(page.locator('#filters-toggle .filters-badge')).toHaveText('1');
+    await page.goBack();
+    await expect(page.locator('#project-statuses')).toBeVisible();
+    // Done isn't a link
+    await expect(page.locator('#project-statuses a[data-status="done"]')).toHaveCount(0);
+  });
+
   test('the stats: when, how much, and agent time (T-253)', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, shop(), { tab: 'project' });
     const stat = (key: string) => page.locator(`#project-stats [data-stat="${key}"]`);

@@ -84,7 +84,7 @@ import { latest, type Ticket } from './latest';
 import type { ListGroupBy } from './list-groups';
 import { loadProjectSources, type ProjectSource } from './overview-data';
 import { scopeOf } from './scope';
-import { sprintParamOf, withSprintParam } from './sprint-param';
+import { sprintParamOf, statusListAddress, withSprintParam } from './sprint-param';
 import type { Release } from './releases';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import { DEFAULT_VOCABULARY, type Vocabulary } from './vocab';
@@ -1008,6 +1008,15 @@ export class DashboardState {
     // A fresh set replaces the old one (filters is $state.raw): nothing mutates it
     // eslint-disable-next-line svelte/prefer-svelte-reactivity
     this.filters = { ...this.filters, sprint: new Set(values) };
+  }
+
+  /** The List of the project's tasks in `status`, in every sprint, as the Overview counts them (its status counts'
+   * links, ATM-756): the other filters and the search cleared, in place */
+  showStatus(status: string) {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a fresh set, never changed
+    this.filters = { ...emptyFilters(), status: new Set([status]) };
+    this.query = '';
+    navigate(statusListAddress(currentAddress()));
   }
 
   /** The other filters and the search cleared, the sprints kept (the scope bar's "filtered ✕") */

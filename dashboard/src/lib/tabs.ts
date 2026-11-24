@@ -109,6 +109,19 @@ export function withView(address: string, view: ViewId): string {
   return formatAddress(params);
 }
 
+/** The project page `view` of the project `address` shows, in its workspace, with nothing open over it and no query:
+ * where a project's Overview links go (ATM-756) */
+export function projectPage(address: string, view: ViewId): string {
+  const from = addressParams(address);
+  const params = new URLSearchParams();
+  for (const key of ['workspace', 'project']) {
+    const value = from.get(key);
+    if (value !== null) params.set(key, value);
+  }
+  params.set('view', view);
+  return formatAddress(params);
+}
+
 /** The neighbour of `value` in `values` for arrow-key navigation, wrapping around at the ends */
 export function adjacent<T>(values: readonly T[], value: T, step: 1 | -1): T {
   const i = Math.max(0, values.indexOf(value));

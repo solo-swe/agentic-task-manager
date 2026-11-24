@@ -20837,7 +20837,7 @@
         "dashboard/src/lib/places.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T15:42:11Z",
+      "updated_at": "2026-11-24T15:57:57Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20851,7 +20851,7 @@
       "number": 754,
       "started_at": "2026-11-24T15:22:22Z",
       "started_by": "claude:ba530ebb",
-      "commit": "64f728612375a3a1d7d9be6983d197912b5f0c6e",
+      "commit": "0dec7e4862fb30da4391108a011c9ac6ce31c61f",
       "code_reviews": [
         {
           "id": "01a20e38-c64c-7203-b5b1-11af51b45fe0",

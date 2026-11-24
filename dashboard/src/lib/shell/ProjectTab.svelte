@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { BACKLOG } from '../filters';
   import { formatMinutes } from '../format';
+  import { currentAddress } from '../navigation';
+  import { sprintBoardAddress, statusListAddress } from '../sprint-param';
   import { actorsOf, vocabCounts } from '../projectinfo';
   import { histogramOf, numbersOf } from '../projectstats';
   import { repositoryOf } from '../repo';
@@ -41,6 +44,19 @@
   const open = $derived(counts.sprints.filter((s) => s.state !== 'closed'));
   const closed = $derived(counts.sprints.filter((s) => s.state === 'closed'));
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  // Links into the Board and the List (ATM-756, docs/sidebar-overhaul-design.md §2.4): to this project's pages, in its
+  // workspace, which is all they take from the address (read again for another project)
+  const here = $derived(dashboard.projectId === null ? '' : currentAddress());
+  /** The statuses whose counts open the List: to do, in review, blocked */
+  const LISTED_KINDS = new Set(['todo', 'review', 'blocked']);
+  /** A status count clicked: the List of its tasks, with the status in the Filters, in place; ⌘ or Ctrl the link's own
+   * way (the List, a tab of its own) */
+  function openStatus(e: MouseEvent, status: string) {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    dashboard.showStatus(status);
+  }
 
   // Stats (T-253)
   const stats = $derived(numbersOf(dashboard.stats));
@@ -174,18 +190,32 @@
         <!-- The sprints in the planning order, the backlog, then the closed ones, folded (T-323) -->
         <dt>Sprints</dt>
         <dd id="project-sprints">
+          <!-- Each a link to the Board on it (ATM-756, docs/sidebar-overhaul-design.md §2.4), in place in the tab -->
           {#each open as s (s.id)}
-            <span class="vocab-item" data-sprint={s.id} data-state={s.state}
-              ><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></span
+            <a
+              class="vocab-item vocab-link"
+              data-sprint={s.id}
+              data-state={s.state}
+              href={sprintBoardAddress(here, s.id)}
+              title="The Board on {s.id}"><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></a
             >
           {/each}
           {#if counts.backlog || counts.sprints.length}
-            <span class="vocab-item" data-sprint="backlog">Backlog <strong>{counts.backlog}</strong></span>
+            <a
+              class="vocab-item vocab-link"
+              data-sprint="backlog"
+              href={sprintBoardAddress(here, BACKLOG)}
+              title="The Board on the backlog">Backlog <strong>{counts.backlog}</strong></a
+            >
           {/if}
           {#if showClosed}
             {#each closed as s (s.id)}
-              <span class="vocab-item" data-sprint={s.id} data-state={s.state}
-                ><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></span
+              <a
+                class="vocab-item vocab-link"
+                data-sprint={s.id}
+                data-state={s.state}
+                href={sprintBoardAddress(here, s.id)}
+                title="The Board on {s.id}"><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></a
               >
             {/each}
           {/if}
@@ -228,9 +258,19 @@
         <dt>Statuses</dt>
         <dd id="project-statuses">
           {#each counts.statuses as s (s.id)}
-            <span class="vocab-item" data-status={s.id}
-              >{s.label}{s.kind && s.kind !== s.id ? ` (${s.kind})` : ''} <strong>{s.count}</strong></span
-            >
+            {@const text = `${s.label}${s.kind && s.kind !== s.id ? ` (${s.kind})` : ''}`}
+            {#if s.kind && LISTED_KINDS.has(s.kind)}
+              <!-- To do, in review, blocked: the List of those tasks, every sprint (ATM-756) -->
+              <a
+                class="vocab-item vocab-link"
+                data-status={s.id}
+                href={statusListAddress(here)}
+                title="The List of the tasks {s.label.toLowerCase()}"
+                onclick={(e) => openStatus(e, s.id)}>{text} <strong>{s.count}</strong></a
+              >
+            {:else}
+              <span class="vocab-item" data-status={s.id}>{text} <strong>{s.count}</strong></span>
+            {/if}
           {/each}
         </dd>
         <dt>Priorities</dt>
