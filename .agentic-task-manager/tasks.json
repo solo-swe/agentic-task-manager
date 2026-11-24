@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 751,
+    "next_number": 767,
     "review": "async"
   },
   "tasks": [
@@ -19383,7 +19383,7 @@
       "description": "Today the app's sidebar only sets the current tab's project, which the tab selector chevron already does. Design what replaces it, in `docs/sidebar-overhaul-design.md`, together with the user.\n\n## The sidebar (app)\nA **scope selector** (All, or one project) and six items for the selected scope, each with a proper icon:\n\n1. **Overview**: the project's current Project tab, or the All Project Cards view for All.\n2. **Inbox** (new): raw user input, later analyzed and either turned into tasks or discarded. A simpler task list of its own, with archiving, and three states only: *created*, *discarded* (with a reason), *injected* (with links to the tasks made from it). Lets the user jot input from the app or webapp quickly without distracting working agents.\n3. **Tasks**: a page with the current Board, List and Dependencies tabs (no Dependencies for All).\n4. **Code Reviews**: the current Reviews tab's content.\n5. **Documents** (new): a list of all documents in the repo, opened in the viewer to read.\n6. **Analysis**: the current Progress and Agents tabs.\n\n## Tabs and navigation\n- Clicking an item always opens a **new tab**, never replaces the current one.\n- The tab selector chevron goes away in the app (it stays in the webapp).\n- A tab's title reads `[<short project name>|All] - [Overview|Inbox|Tasks|…]`, with the item's icon.\n- A link inside a tab (a review, say) opens **in the same tab**, and Back returns to where the user was, never a random place. Build on [the tabs design](docs/tabs-and-navigation-design.md).\n\n## The webapp\nNo sidebar: still a single page with tabs, one per item (Inbox and Documents are just more tabs).\n\n## Also in the design\n- The All-projects activity pill moves inside the tab.\n- The All-projects search and the Reviews search move up in the tab, placed like the project search.\n\n## Then\n- Write **Inbox** as its own design document (`docs/inbox-design.md`): data model, states, archiving, API, how agents analyze and inject items.\n- Write **Documents** as its own design document (`docs/documents-design.md`): which files are listed, how they are found, the viewer.\n- Decompose all three designs into implementation tasks in this sprint with `/atm-create-tasks`, so it becomes the full sprint.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/sidebar-overhaul-design.md",
@@ -19391,7 +19391,7 @@
         "docs/documents-design.md"
       ],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T23:47:56Z",
+      "updated_at": "2026-11-23T23:51:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19403,9 +19403,9 @@
       "sprint": "Sidebar overhaul",
       "with": "user",
       "number": 728,
-      "started_at": "2026-11-23T23:43:19Z",
+      "started_at": "2026-11-23T23:51:01Z",
       "started_by": "claude:ba530ebb",
-      "commit": "374b7be0b440f2e2a495278ed037f5ce14cc9a86",
+      "commit": "21acdf11c6ae73ddfa0e54cb95c5b443c0ffee29",
       "code_reviews": [
         {
           "id": "01a20a94-f018-718d-b471-65fceca09ac1",
@@ -19468,6 +19468,12 @@
           "kind": "review",
           "text": "CR-137: Documents design, a closer review",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-23T23:50:48Z",
+          "kind": "note",
+          "text": "Approved: in CR-137 (round 2)",
+          "by": "Hakan Serce"
         }
       ],
       "reviews": [
@@ -19485,10 +19491,13 @@
           "from": "2026-11-23T23:21:00Z",
           "to": "2026-11-23T23:43:01Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-23T23:45:50Z",
+          "to": "2026-11-23T23:50:48Z",
+          "outcome": "approved"
         }
-      ],
-      "review_requested_at": "2026-11-23T23:45:50Z",
-      "review_state": "waiting"
+      ]
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d97e12924d39",
@@ -19690,13 +19699,14 @@
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "01a207f0-a2e1-7602-b260-d97d26c2073b"
+        "01a207f0-a2e1-7602-b260-d97d26c2073b",
+        "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-24T00:06:50Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19720,13 +19730,14 @@
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "01a207f0-a2e1-7602-b260-d97d26c2073b"
+        "01a207f0-a2e1-7602-b260-d97d26c2073b",
+        "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-24T00:06:51Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19751,13 +19762,14 @@
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "01a207f0-a2e1-7602-b260-d97d26c2073b"
+        "01a207f0-a2e1-7602-b260-d97d26c2073b",
+        "01a20ae0-5493-734f-9c10-e88adf1461c5"
       ],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-24T00:06:51Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -20189,7 +20201,23 @@
         "01a20808-570f-738e-a5c5-e9142ff2e1c9",
         "01a20a7f-82f6-7703-ac29-a943660d65f3",
         "01a20a7f-82f6-7703-ac29-a9476f7fe2b6",
-        "01a20a7f-82f6-7703-ac29-a94aeae5b5e0"
+        "01a20a7f-82f6-7703-ac29-a94aeae5b5e0",
+        "01a20ae0-5493-734f-9c10-e889c1f825f3",
+        "01a20ae0-5493-734f-9c10-e88adf1461c5",
+        "01a20ae0-5493-734f-9c10-e88bc947df5c",
+        "01a20ae0-5493-734f-9c10-e88c3ee7f2b3",
+        "01a20ae0-5493-734f-9c10-e88db033076e",
+        "01a20ae0-5493-734f-9c10-e88e728b0f5d",
+        "01a20ae0-5493-734f-9c10-e88f1d3ccd68",
+        "01a20ae0-5493-734f-9c10-e890ef3d8071",
+        "01a20ae0-5493-734f-9c10-e8910f0acbe3",
+        "01a20ae0-5493-734f-9c10-e8925a26795e",
+        "01a20ae0-5493-734f-9c10-e89307ded508",
+        "01a20ae0-5493-734f-9c10-e8942c011d6d",
+        "01a20ae0-5493-734f-9c10-e895a1716a0b",
+        "01a20ae0-5493-734f-9c10-e8964a234ac5",
+        "01a20ae0-5493-734f-9c10-e897f4d0ca72",
+        "01a20ae0-5493-734f-9c10-e89835dfc661"
       ],
       "files": [
         "Cargo.toml",
@@ -20199,7 +20227,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-23T22:40:34Z",
-      "updated_at": "2026-11-23T22:40:34Z",
+      "updated_at": "2026-11-24T00:06:51Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20212,6 +20240,555 @@
       "release": "0.44.0",
       "review": "async",
       "number": 750
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e889c1f825f3",
+      "name": "Sidebar items: an address's item, the new views and /projects/<id> as the Overview",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "sidebar"
+      ],
+      "description": "The item model of [the sidebar overhaul](docs/sidebar-overhaul-design.md) §4: each address belongs to one of the six items (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis), and the addresses the new pages need exist.\n\n## Change\n- **The item of an address:** one function in `lib/address.ts`, beside `placeName`, from the view (`project` → Overview, `kanban`/`list`/`graph` → Tasks, `reviews` → Code Reviews, `progress`/`agents` → Analysis; All's `projects`, `board`, `list`, `reviews`, `progress`, `agents`). The sidebar's mark and the tab titles will use it.\n- **New views:** a project's `inbox` and `documents`, All's `list`, and the app's `/new`, in `address.ts`, its path pattern, and `PAGE_PATH` in atm serve (the server answers the page at those paths).\n- **`/projects/<id>` with no view is the Overview**, no longer the Board.\n- **Labels:** Kanban becomes **Board** and Graph **Dependencies** in `places.ts` and the tab buttons; the address segments stay `kanban` and `graph`, so old links keep working.\n- `docs/multi-project-api.md` §2.7: the new addresses.\n\n## Tests\nUnit tests for the item of every address, the new paths parsed and written, the default view, and old addresses unchanged; a serve test for the new page paths.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/address.ts",
+        "dashboard/src/lib/places.ts",
+        "dashboard/src/lib/routes.ts",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 751
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e88adf1461c5",
+      "name": "The page by item: items as the webapp's tabs, Tasks' and Analysis' sub-tabs, All's List",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "sidebar"
+      ],
+      "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.3 and §5: the seven view tabs become the items.\n\n## Change\n- **The webapp's tabs** are the items, in the sidebar's order: six for a project, four for All (Overview, Tasks, Code Reviews, Analysis). A tab click is in place.\n- **Sub-tabs** under the page header: Tasks has Board · List · Dependencies (Board · List for All), Analysis has Progress · Agents. Each is a step in the tab's history, as the view tabs are now.\n- **All's List:** the List view over every project's tasks (today All has only the Omniboard).\n- **In the app** the item row isn't shown (the sidebar does its job, ATM sidebar task), but the sub-tabs are.\n- Inbox and Documents show a placeholder page until their own tasks build them.\n\n## Tests\nComponent tests for the tabs per scope and the sub-tabs; e2e: the webapp's tabs and sub-tabs, Back across sub-tabs, All's List. Update the screenshots' expectations where the tab row changed (the release task regenerates them).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e889c1f825f3"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/ViewPanel.svelte",
+        "dashboard/src/lib/shell/Header.svelte"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 752
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e88bc947df5c",
+      "name": "The app's sidebar: a scope selector and the items",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "sidebar",
+        "app"
+      ],
+      "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2: the app's sidebar becomes a scope selector and the items.\n\n## Change\n- **The scope selector** at the top (§2.1): *All projects*, then the workspace's projects with logo, name, progress bar and needs-you badge (missing ones dimmed), a Bits UI menu. It follows the active tab; a choice by hand holds until the next tab switch; kept in the preferences.\n- **The items** (§2.2), with Lucide icons (`layout-dashboard`, `inbox`, `square-kanban`, `file-diff`, `file-text`, `trending-up`; add the missing ones to `Icon.svelte`): six for a project, four for All. Each is a real link; a click **always opens a new tab** right of the active one and goes to it; ⌘/Ctrl or middle click in the background; right-click is ATM-699's link menu. The current item is marked.\n- **Badges:** Inbox's open count (0 until the inbox exists), Code Reviews' waiting-on-you count.\n- **The app's title bar** loses the project chooser (`ProjectSelector`) and the view tabs. The webapp keeps the chooser.\n- The workspace switcher stays as it is.\n\n## Tests\nComponent tests for the selector (following the tab, the hand choice, missing projects) and the items (new tab, background, the mark, badges); e2e in the app fixture: an item opens a new tab, the chooser gone from the title bar.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e889c1f825f3",
+        "01a20ae0-5493-734f-9c10-e88adf1461c5"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/lib/shell/Header.svelte",
+        "dashboard/src/lib/ui/Icon.svelte"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 753
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e88c3ee7f2b3",
+      "name": "Tab titles: <scope> - <item>, with the item's icon",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "sidebar",
+        "app"
+      ],
+      "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §3: an app tab's title is `<scope> - <item>` with the item's icon: `ATM - Tasks`, `All - Code Reviews`. The scope is the project's key, else its name cut to 16 characters; All is `All`. A review or a document open in the tab names itself instead (`ATM - CR-134`, `ATM - sidebar-overhaul-design.md`), keeping the item's icon. `/new` is *New Tab*.\n\n## Tests\nUnit tests for the title of each kind of address (each item, a review, a document, a project without a key, a long name, `/new`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e889c1f825f3"
+      ],
+      "files": [
+        "dashboard/src/lib/app-tabs.svelte.ts",
+        "dashboard/src/lib/places.ts"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 754
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e88db033076e",
+      "name": "The new tab's chooser of scope and item (/new)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "sidebar",
+        "app"
+      ],
+      "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §3: the + button, File ▸ New Tab and ⌘T open a new tab on `/new`, a chooser of scope and item (the app only).\n\n## Change\n- **Two columns:** the scopes (All, then the projects, as the scope selector lists them, with badges) and the chosen scope's items with their badges. The sidebar's scope is chosen when it opens.\n- **Choosing an item opens it in this tab**, in place of the chooser (the chooser is the tab's first entry: Back returns to it).\n- **Keys:** ↑↓ in a column, ←→ between them, typing filters the projects, Enter opens. No item shortcuts.\n- Reuse the scope selector's project list from the sidebar task.\n\n## Tests\nComponent tests for the columns, the keys and opening in place; e2e: + opens it, choosing opens the page, Back returns to the chooser.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e88bc947df5c"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/NewTabPage.svelte",
+        "dashboard/src/lib/tab-actions.ts"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 755
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e88e728b0f5d",
+      "name": "A project's Overview links into the Board and the List",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "sidebar"
+      ],
+      "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.4: a project now opens on its Overview, so the Overview links into the Board, in place in the tab: the active sprint (its name and progress), each planned and recent closed sprint it lists, and the backlog open the Board on that one (`/projects/<id>/kanban?sprint=<name>`); a count by status (to do, in review, blocked) opens the List filtered by it. Everything else on the Overview stays as the Project tab has it.\n\nFind the Project tab's component first (the `project` view), and add the links where it names a sprint or counts tasks.\n\n## Tests\nComponent tests for each link's address; e2e: from the Overview to the Board on a sprint and Back.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e889c1f825f3"
+      ],
+      "files": [
+        "dashboard/src/lib/overview/ProjectsOverview.svelte"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 756
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e88f1d3ccd68",
+      "name": "All reviews: a project filter",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "sidebar",
+        "reviews"
+      ],
+      "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.5: All's Code Reviews (`/reviews`) gets a project filter at the top of the list: All projects, or one or more projects, in the list's address like its other filters (`?projects=atm,compmd`), next to its search.\n\n## Tests\nUnit tests for the address (read, written, unknown projects ignored); component tests for the filter; e2e: filtering by a project, kept across a reload.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e889c1f825f3"
+      ],
+      "files": [
+        "dashboard/src/lib/overview/OverviewReviews.svelte",
+        "dashboard/src/lib/address.ts"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 757
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e890ef3d8071",
+      "name": "Docs: the desktop UI design and Help on the sidebar and tabs",
+      "type": "docs",
+      "priority": "P3",
+      "labels": [
+        "sidebar"
+      ],
+      "description": "Bring the docs in line with [the sidebar overhaul](docs/sidebar-overhaul-design.md) as built: `docs/app-desktop-ui-design.md` §4 (the sidebar) replaced by a pointer to the overhaul design, and Help's pages on the sidebar, the items, the new tab's chooser and tab titles.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e88bc947df5c",
+        "01a20ae0-5493-734f-9c10-e88db033076e"
+      ],
+      "files": [
+        "docs/app-desktop-ui-design.md",
+        "docs/help.md"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 758
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e8910f0acbe3",
+      "name": "Inbox: the store and its rules",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "inbox"
+      ],
+      "description": "[The inbox design](docs/inbox-design.md) §2–§4 and §8: the data and the rules, below the front ends.\n\n## Change\n- **atm-common:** `schema/inbox.schema.json` and the item type (`id` `IN-<n>`, `text` up to 20,000 characters, `state` `created`/`discarded`/`injected`, `reason`, `tasks`, who and when).\n- **atm-db:** `.agentic-task-manager/inbox.json` and `inbox-archive.json` in the store, with its lock; atm's merge driver takes `inbox.json` too (items merged by ID, `next` the larger, a clashing number renumbered as tasks are).\n- **atm-lib `inbox.rs`:** add (a person only; an agent is refused), edit (a person, while created), discard (a reason required), inject (tasks that exist, at least one; final), restore (a person, from discarded), list, and archiving decided items with `atm db archive`'s rules (never created ones). A task made from an item gets `from: [\"IN-…\"]`.\n\n## Tests\nUnit tests for every move from every state, by a person and by an agent, each refusal, the limits, archiving and the merge.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-common/schema/inbox.schema.json",
+        "crates/atm-db/src/inbox.rs",
+        "crates/atm-lib/src/inbox.rs"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 759
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e8925a26795e",
+      "name": "Inbox: atm inbox commands",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "inbox",
+        "cli"
+      ],
+      "description": "[The inbox design](docs/inbox-design.md) §3–§5: the CLI.\n\n## Change\n- `atm inbox add '<text>' | --text-file F`, `edit IN-3 --text-file F`, `list [--state …] [--archived] [--json]`, `show IN-3`, `discard IN-3 --reason '…'`, `inject IN-3 --task ATM-760 …`, `restore IN-3`.\n- `atm db archive` and `atm db unarchive IN-3` for items; the archive hint counts them.\n- `atm project status`: one line, *Inbox: N open (`/atm-triage-inbox`)*; `atm loop next` and the review watch never read the inbox.\n- `atm vcs commit` takes `inbox.json` along with `tasks.json` when it changed.\n- `docs/agent/commands.md` (and a topic if it needs one), `atm docs` embedding it.\n\n## Tests\nCLI scenarios (`tests/scripts/scenarios/`) for each command, its refusals and `--json`; the status line; the commit taking `inbox.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e8910f0acbe3"
+      ],
+      "files": [
+        "crates/atm-cli/src/commands/inbox.rs",
+        "docs/agent/commands.md"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 760
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e89307ded508",
+      "name": "Inbox: REST routes and the app's commands",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "inbox",
+        "api",
+        "security"
+      ],
+      "description": "[The inbox design](docs/inbox-design.md) §7.\n\n## Change\n- `GET …/projects/<id>/inbox?state=&archived=` (with `ETag`), `POST …/inbox` `{text}`, `PATCH …/inbox/<IN>` `{text}`, `POST …/inbox/<IN>/decisions` (`discarded` with a reason, or `restored`), v2 and v1 forms.\n- **The write routes get the review routes' guards exactly:** Host check, the server's own `Origin`, the session token in `X-Atm-Session`, a JSON body of at most 1 MB with `deny_unknown_fields`, acting as the user at the machine (never an agent's identity), one atm-lib call each. No inject route.\n- The project summary's `inbox: {open}`.\n- The app's commands `project_inbox`, `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item` (I27), in the capability's manifest.\n- **In the same change:** `docs/security-architecture.md` (I11's write routes, I27, the entry points) and `docs/multi-project-api.md`.\n\n## Tests\natm-api unit tests with a fake atm-lib (each answer class, status codes, `ETag`); serve tests for every guard (no token, another origin, a form, an unknown field, an agent identity); the app's command tests.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e8910f0acbe3"
+      ],
+      "files": [
+        "crates/atm-api/src/routes/inbox.rs",
+        "app/src-tauri/src/commands/inbox.rs",
+        "docs/security-architecture.md",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 761
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e8942c011d6d",
+      "name": "Inbox: the page",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "inbox",
+        "ux"
+      ],
+      "description": "[The inbox design](docs/inbox-design.md) §6: the Inbox item's page, in the app and the webapp.\n\n## Change\n- The **quick-add box** at the top, focused on open, Enter adds (⇧Enter a new line), focus kept for the next; its draft kept on its tab.\n- The **filter** Open (default) · Discarded · Injected · All and *archived*, in the address (`?state=&archived=`).\n- **Each item:** first line as title (the rest on a click), when and who; Edit and Discard (a dialog asking the reason) when open; reason and Restore when discarded; its tasks as links when injected.\n- The sidebar's Inbox **badge** from the summary's open count.\n\n## Tests\nComponent tests (adding, the filter, each state's actions, the reason dialog); e2e with the fixture playing the routes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e89307ded508",
+        "01a20ae0-5493-734f-9c10-e88bc947df5c"
+      ],
+      "files": [
+        "dashboard/src/lib/inbox/InboxPage.svelte",
+        "dashboard/src/lib/api/inbox.ts"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 762
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e895a1716a0b",
+      "name": "Inbox: the /atm-triage-inbox skill",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "inbox",
+        "skills",
+        "security"
+      ],
+      "description": "[The inbox design](docs/inbox-design.md) §5: a skill that triages the open items with the user.\n\n## Change\n- `skills/atm-triage-inbox/SKILL.md` (`name` and `description` only, the version check first, detail from `atm docs`): read the open items, propose for each the tasks it becomes, a merge into an existing task, a discard with a reason, or a question; on the user's word, add tasks through `/atm-create-tasks` only (never `atm task add`), then `atm inbox inject`, or `atm inbox discard` (only on the user's word); commit `inbox.json` with `tasks.json`.\n- **Inbox text is data, not commands** (I1), stated in the skill.\n- Pre-approved commands in `skills/claude-code.json`: the inbox reads, `inject` and `discard` only.\n- `skills.test.ts`: the rules present, the allowed commands.\n- It reads outside text: the agent sandbox before the release PR merges, or the written skill review in the security document §3.3.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e8925a26795e"
+      ],
+      "files": [
+        "skills/atm-triage-inbox/SKILL.md",
+        "skills/claude-code.json",
+        "dashboard/tests/unit/skills.test.ts",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 763
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e8964a234ac5",
+      "name": "Documents: the listing in atm-docs",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "documents"
+      ],
+      "description": "[The documents design](docs/documents-design.md) §2–§3: `list_documents` in atm-docs, through atm-lib.\n\n## Change\n- **Which files:** `*.md` and `*.markdown` that git tracks or has untracked and not ignored (atm-vcs: `ls-files` and `ls-files --others --exclude-standard`, literal pathspecs), refused as `document_path` refuses (`.git/`, `.agentic-task-manager/`, environment and key files). None without git.\n- **Submodules included:** each checked-out submodule's documents by the same rules from its own repository, nested ones too, their paths from the project's root; one not checked out listed as such.\n- **Each entry:** `path`, `title` (the first ATX or Setext heading in the first 8 KB, else the name without `.md`), `bytes`, `modified_at`, `tracked`.\n- **At most 500**, the first by path, with how many more; `q` (titles and paths, at most 200 characters) matched before the cut.\n- A stamp for the `ETag` (the index, `HEAD`, the listed files' sizes and mtimes).\n\n## Tests\nUnit tests for each rule: refused paths, ignored and untracked files, submodules (checked out, not, nested), titles of each kind, the cap and `q` past it, no git.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-docs/src/lib.rs",
+        "crates/atm-vcs/src/lib.rs"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 764
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e897f4d0ca72",
+      "name": "Documents: the listing route and the app's command",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "documents",
+        "api",
+        "security"
+      ],
+      "description": "[The documents design](docs/documents-design.md) §5: `GET …/projects/<id>/documents` without `path` (and `?q=`) answers `{documents, submodules, more}` with an `ETag`; with `path`, one document as now. v2 and v1 forms. The app's command `project_documents` (I27).\n\nA new read entry point: it keeps I11 and I12 (Host check, refused from other sites, registered projects only, nothing outside the project, no symlink). **In the same change:** `docs/security-architecture.md` and `docs/multi-project-api.md` §2.6.\n\n## Tests\natm-api unit tests on a fake atm-lib; serve tests for the route, its `ETag` and the cross-site refusal; the app's command test.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e8964a234ac5"
+      ],
+      "files": [
+        "crates/atm-api/src/routes/source.rs",
+        "app/src-tauri/src/commands.rs",
+        "docs/security-architecture.md",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 765
+    },
+    {
+      "id": "01a20ae0-5493-734f-9c10-e89835dfc661",
+      "name": "Documents: the page",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "documents",
+        "ux"
+      ],
+      "description": "[The documents design](docs/documents-design.md) §4: the Documents item's page.\n\n## Change\n- **Tree** (default: folders open or closed, a submodule marked as one) and **Recent** (by last change); the view and the search in the address (`?view=&q=`), open folders per project in the preferences.\n- **Each row:** title, file name, how long ago it changed, *new* when untracked.\n- **Search** in the tab's header line, filtering in the page, or by the route's `?q=` when the list was cut at 500.\n- **A click opens the viewer in place** (`?doc=…` over the page, Back closes it); ⌘-click a new tab.\n\n## Tests\nComponent tests (tree, recent, search both ways, the *new* mark, submodules); e2e: open a document and Back to the list.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20ae0-5493-734f-9c10-e897f4d0ca72",
+        "01a20ae0-5493-734f-9c10-e88adf1461c5"
+      ],
+      "files": [
+        "dashboard/src/lib/documents/DocumentsPage.svelte",
+        "dashboard/src/lib/api/documents.ts"
+      ],
+      "created_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T00:06:43Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T00:06:43Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 766
     }
   ]
 }
