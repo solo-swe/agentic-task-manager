@@ -23,7 +23,7 @@ const entry = (n: number, title: string, more: Record<string, unknown> = {}) => 
 });
 
 test.describe('Projects Overview: the Reviews tab', () => {
-  test('every project’s reviews, each saying its project; the picker narrows to one; a row opens it in its project', async ({
+  test('every project’s reviews, each saying its project; the project filter narrows them, in the address (ATM-757); a row opens it in its project', async ({
     page,
     tasksServer,
   }) => {
@@ -38,10 +38,34 @@ test.describe('Projects Overview: the Reviews tab', () => {
     // Both are CR-1, each in its own project
     await expect(rows.locator('.review-project')).toHaveText(['fixture', 'Second Project']);
     await expect(rows.nth(1).getByRole('link')).toHaveAttribute('href', /\/projects\/second\/reviews\/CR-1/);
-    // The picker: one project's
-    await page.locator('#overview-reviews-project').selectOption('second');
+    // The project filter (ATM-757), beside the search in the title bar: one project's
+    const filter = page.locator('.topbar #review-projects');
+    await expect(filter).toHaveText('All projects');
+    await filter.click();
+    await page.locator('#review-projects-menu [data-project="second"]').click();
+    await page.keyboard.press('Escape');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText('Theirs');
+    await expect(page).toHaveURL(/\/reviews\?projects=second$/);
+    // Kept over a reload: it is the address's
+    await page.reload();
+    await expect(rows).toHaveCount(1);
+    await expect(filter).toHaveText('Second Project');
+    // Both: every one of theirs; Back goes to the one before
+    await filter.click();
+    await page.locator(`#review-projects-menu [data-project="${tasksServer.projectId}"]`).click();
+    await page.keyboard.press('Escape');
+    await expect(rows).toHaveCount(2);
+    await expect(filter).toHaveText('2 projects');
+    await page.goBack();
+    await expect(rows).toHaveCount(1);
+    // All projects again
+    await filter.click();
+    await page.locator('#review-projects-menu [data-project=""]').click();
+    await expect(rows).toHaveCount(2);
+    await expect(page).toHaveURL(/\/reviews$/);
+    await page.goBack();
+    await expect(rows).toHaveCount(1);
     await rows.first().getByRole('link').click();
     await expect(page).toHaveURL(/\/projects\/second\/reviews\/CR-1/);
   });

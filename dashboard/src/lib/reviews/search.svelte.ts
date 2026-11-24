@@ -3,10 +3,14 @@
 // its search while it is shown; the title bar (Header) shows the field while one is offered, and what is typed goes
 // to the list's query.
 
-/** A list's search: its query's text now, and what to do with a new one */
+import type { Snippet } from 'svelte';
+
+/** A list's search: its query's text now, and what to do with a new one; and what sits beside it (All reviews' project
+ * filter, ATM-757) */
 export interface OfferedSearch {
   readonly q: string;
   search: (q: string) => void;
+  readonly aside?: Snippet;
 }
 
 let offered = $state.raw<OfferedSearch | null>(null);

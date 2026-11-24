@@ -58,3 +58,5 @@
     <kbd class="search-key" aria-hidden="true">/</kbd>
   {/if}
 </label>
+<!-- What the list puts beside its search: All reviews' project filter (ATM-757) -->
+{@render offered.aside?.()}

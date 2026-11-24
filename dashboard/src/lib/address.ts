@@ -291,6 +291,26 @@ export function withReviewList(address: string, query: ReviewListAddress): strin
   return formatAddress(params);
 }
 
+/** All reviews' project filter (ATM-757, docs/sidebar-overhaul-design.md §2.5): the projects `?projects=atm,compmd`
+ * names, those among `known` in its order; none (every project) when it names none of them */
+export function reviewProjectsOf(address: string, known: readonly string[]): string[] {
+  const named = new Set(
+    (addressParams(address).get('projects') ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+  return known.filter((id) => named.has(id));
+}
+
+/** `address` (All reviews') narrowed to `projects`; none is every project, and no parameter */
+export function withReviewProjects(address: string, projects: readonly string[]): string {
+  const params = addressParams(address);
+  params.delete('projects');
+  if (projects.length) params.set('projects', projects.join(','));
+  return formatAddress(params);
+}
+
 /** The page of review `review` of `project`, in the workspace `address` is in, with nothing else open over it (a task's
  * details or a document: ATM-585, a task linking to its review) */
 export function reviewPageOf(address: string, project: string, review: string): string {

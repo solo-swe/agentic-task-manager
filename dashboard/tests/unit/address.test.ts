@@ -16,11 +16,38 @@ import {
   REVIEW_SECTIONS,
   reviewListOf,
   reviewOf,
+  reviewProjectsOf,
   withReview,
   withReviewList,
+  withReviewProjects,
   withWorkspace,
   workspaceOf,
 } from '../../src/lib/address';
+
+// All reviews' project filter in its address (ATM-757, docs/sidebar-overhaul-design.md §2.5)
+describe('the All reviews project filter in the address', () => {
+  const known = ['atm', 'compmd', 'blog'];
+
+  it('reads the projects named, in the workspace’s order; unknown and empty ones are left out', () => {
+    expect(reviewProjectsOf('/reviews', known)).toEqual([]);
+    expect(reviewProjectsOf('/reviews?projects=', known)).toEqual([]);
+    expect(reviewProjectsOf('/reviews?projects=atm', known)).toEqual(['atm']);
+    expect(reviewProjectsOf('/reviews?projects=blog,atm', known)).toEqual(['atm', 'blog']);
+    expect(reviewProjectsOf('/reviews?projects=atm,gone,,%20compmd%20', known)).toEqual(['atm', 'compmd']);
+    // Only unknown ones: every project
+    expect(reviewProjectsOf('/reviews?projects=gone', known)).toEqual([]);
+    expect(reviewProjectsOf('/w/work/reviews?projects=compmd&q=x', known)).toEqual(['compmd']);
+  });
+
+  it('writes them as one parameter, none for every project, keeping the rest of the address', () => {
+    expect(withReviewProjects('/reviews', ['atm', 'compmd'])).toBe('/reviews?projects=atm,compmd');
+    expect(withReviewProjects('/reviews?projects=atm&task=T-1', [])).toBe('/reviews?task=T-1');
+    expect(withReviewProjects('/w/work/reviews', ['blog'])).toBe('/w/work/reviews?projects=blog');
+    // Read back as written
+    const written = withReviewProjects('/reviews', ['compmd', 'blog']);
+    expect(reviewProjectsOf(written, known)).toEqual(['compmd', 'blog']);
+  });
+});
 import { VIEWS } from '../../src/lib/tabs';
 import { OVERVIEW_PATHS, PROJECT_TABS, REVIEW_SECTION_PATHS } from '../../src/params';
 

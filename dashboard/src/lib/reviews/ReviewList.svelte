@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { TaskLinks } from '../compmd';
   import { formatAgoOrDate } from '../format';
   import { readStored, writeStored } from '../prefs';
@@ -33,6 +34,7 @@
     taskHref,
     taskLinks,
     unreadable = [],
+    searchAside,
   }: {
     entries: ReviewEntry[];
     query: Query;
@@ -53,6 +55,8 @@
     taskLinks?: TaskLinks;
     /** The reviews atm can't read (ATM-617): rows of their own, with why, after the others and whatever the query */
     unreadable?: UnreadableReview[];
+    /** Beside its search in the title bar (All reviews' project filter, ATM-757) */
+    searchAside?: Snippet;
   } = $props();
 
   function openTask(e: MouseEvent, key: string) {
@@ -114,6 +118,9 @@
         return query.q;
       },
       search: (q) => onquery({ ...query, q }),
+      get aside() {
+        return searchAside;
+      },
     }),
   );
 

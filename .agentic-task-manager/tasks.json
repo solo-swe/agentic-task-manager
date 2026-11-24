@@ -20914,7 +20914,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.4: a project now opens on its Overview, so the Overview links into the Board, in place in the tab: the active sprint (its name and progress), each planned and recent closed sprint it lists, and the backlog open the Board on that one (`/projects/<id>/kanban?sprint=<name>`); a count by status (to do, in review, blocked) opens the List filtered by it. Everything else on the Overview stays as the Project tab has it.\n\nFind the Project tab's component first (the `project` view), and add the links where it names a sprint or counts tasks.\n\n## Tests\nComponent tests for each link's address; e2e: from the Overview to the Board on a sprint and Back.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20922,7 +20922,7 @@
         "dashboard/src/lib/overview/ProjectsOverview.svelte"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T15:42:17Z",
+      "updated_at": "2026-11-24T16:02:55Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20935,7 +20935,24 @@
       "review": "async",
       "number": 756,
       "started_at": "2026-11-24T15:42:17Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "aad73af21686761abeb28e6c36165bab16d80e06",
+      "code_reviews": [
+        {
+          "id": "01a20e4b-bf44-7454-919c-ca08c578bdca",
+          "ref": "CR-161"
+        }
+      ],
+      "review_requested_at": "2026-11-24T16:02:55Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T16:02:55Z",
+          "kind": "review",
+          "text": "CR-161: A project's Overview links into the Board and the List",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88f1d3ccd68",
@@ -20949,7 +20966,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §2.5: All's Code Reviews (`/reviews`) gets a project filter at the top of the list: All projects, or one or more projects, in the list's address like its other filters (`?projects=atm,compmd`), next to its search.\n\n## Tests\nUnit tests for the address (read, written, unknown projects ignored); component tests for the filter; e2e: filtering by a project, kept across a reload.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20958,7 +20975,7 @@
         "dashboard/src/lib/address.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T16:03:00Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20969,7 +20986,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 757
+      "number": 757,
+      "started_at": "2026-11-24T16:03:00Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e890ef3d8071",
