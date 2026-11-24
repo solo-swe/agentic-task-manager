@@ -17,6 +17,7 @@
   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
   import { forgetAllUnsent } from './unsent';
   import { isDiffMode, type DiffMode } from './diff';
+  import { seenAtFirst, setUnseenMarks, unseenOf, withSeen, type Seen } from './unseen';
   import {
     chainsOf,
     driftedOf,
@@ -169,6 +170,29 @@
   /** Sent back to its author: more words are *Publish comments* (ATM-597, CR-2), the button's name only */
   const sentBack = $derived(review.status === 'changes_requested');
   const rounds = $derived(page.rounds.map((r) => r.number));
+  // What came since the page opened (ATM-733): what it showed first is seen; a comment after it is new until it has
+  // been in view (ChainBox marks it, through `setUnseenMarks`), a round until the Diffs show it. The page is one
+  // review's (ATM-675), so another review starts again
+  let seen = $state.raw<Seen>(
+    untrack(() =>
+      seenAtFirst(
+        page.chains,
+        page.rounds.map((r) => r.number),
+      ),
+    ),
+  );
+  const unseen = $derived(unseenOf(seen, page.chains, rounds, page.you));
+  setUnseenMarks({
+    isNew: (id) => unseen.comments.has(id),
+    seen: (id) => {
+      if (unseen.comments.has(id)) seen = withSeen(seen, [id]);
+    },
+  });
+  $effect(() => {
+    const round = unseen.round;
+    if (round !== null && tab === 'diffs' && !view.now && view.round === round)
+      untrack(() => (seen = { ...seen, round }));
+  });
   const sideOf = (revision: string | null) => (revision ? side(revision) : null);
   const statusLetter = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' } as const;
   const totals = $derived(
@@ -705,12 +729,33 @@
     anchor: { ...c.anchor, lines: c.placed ?? c.drifted?.lines ?? c.anchor.lines },
   });
 
+  // `fresh`: what came under each since the page opened (ATM-733): the review's own comments (the Overview's
+  // conversation), the files' and a new round (the Diffs), all of them (the Comments)
   const tabs = $derived([
-    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0 },
-    { id: 'diffs', label: 'Diffs', icon: 'file-diff', count: files.length, open: 0 },
+    { id: 'overview', label: 'Overview', icon: 'info', count: null, open: 0, fresh: unseen.general, round: false },
+    {
+      id: 'diffs',
+      label: 'Diffs',
+      icon: 'file-diff',
+      count: files.length,
+      open: 0,
+      fresh: unseen.onFiles,
+      round: unseen.round !== null,
+    },
     // The open ones beside the total (ATM-614): *Comments 7 (2 open)*
-    { id: 'comments', label: 'Comments', icon: 'message-square', count: allChains.length, open: chainCounts.open },
+    {
+      id: 'comments',
+      label: 'Comments',
+      icon: 'message-square',
+      count: allChains.length,
+      open: chainCounts.open,
+      fresh: unseen.general + unseen.onFiles,
+      round: false,
+    },
   ] as const);
+  /** A tab's badge's words: how many new comments, and a new round */
+  const freshText = (t: { fresh: number; round: boolean }) =>
+    [t.fresh ? `${t.fresh} new` : '', t.round ? `round ${unseen.round}` : ''].filter(Boolean).join(', ');
 </script>
 
 <svelte:window {onkeydown} />
@@ -893,7 +938,11 @@
             aria-label={t.open ? `${t.label}: ${t.count}, ${t.open} open` : undefined}
             ><Icon name={t.icon} size={15} /><span class="review-tab-label">{t.label}</span>{#if t.count !== null}<span
                 class="review-count">{t.count}</span
-              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}</button
+              >{/if}{#if t.open}<span class="review-count-open">({t.open} open)</span>{/if}{#if t.fresh || t.round}<span
+                class="review-new"
+                data-new={t.id}
+                title="Came while you had the review open">{freshText(t)}</span
+              >{/if}</button
           >
         {/each}
       </div>
@@ -910,9 +959,17 @@
               }}
             >
               {#if live}<option value="now">Now, as it is being made</option>{/if}
-              {#each rounds as n (n)}<option value={String(n)}>{n} of {rounds.length}</option>{/each}
+              {#each rounds as n (n)}<option value={String(n)}
+                  >{n} of {rounds.length}{n === unseen.round ? ' (new)' : ''}</option
+                >{/each}
             </select>
           </label>
+          {#if unseen.round !== null}<button
+              class="review-new review-new-round"
+              id="review-new-round"
+              title="Show round {unseen.round}, new since you opened the review"
+              onclick={() => onround(unseen.round, null)}>Round {unseen.round} new</button
+            >{/if}
           <select
             class="review-select-bare"
             id="review-against"
@@ -1547,6 +1604,20 @@
   .review-count-open {
     color: var(--text-muted);
     font-size: var(--text-xs);
+  }
+  /* What came while the page was open (ATM-733): on its tab, and the round picker's new round */
+  .review-new {
+    margin-left: var(--space-2);
+    padding: 0 var(--space-3);
+    border: none;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+  .review-new-round {
+    cursor: pointer;
   }
   /* The Diffs tab's tools */
   .review-tools {

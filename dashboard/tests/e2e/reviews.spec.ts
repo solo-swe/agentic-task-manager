@@ -2454,6 +2454,62 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(mine.getByLabel('Edit your comment')).toHaveValue('Half written');
   });
 
+  // ATM-733 (Hakan): what came while the review was open shows where it came, until it is seen
+  test('comments and a round arriving while the review is open are badged on their tabs, marked New, cleared once seen', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const page_ = reviewPage();
+    await page.goto(reviewPath(tasksServer, '/CR-2'));
+    const badge = (tab: string) => page.locator(`[data-new="${tab}"]`);
+    await expect(page.locator('#review-tab-overview')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.review-new')).toHaveCount(0);
+    // An agent replies on src/a.rs, comments on the review as a whole, and adds round 4; the user comments too
+    const [t1, t2, t3] = page_.chains as { comments: Record<string, unknown>[] }[];
+    const agent = (id: string, body: string) => ({ ...comment(id, body), author: 'claude:b', resolved: null });
+    tasksServer.setReview('CR-2', {
+      ...page_,
+      rounds: [...page_.rounds, { number: 4, kind: { kind: 'files' }, files: [], by: 'claude:a', at: '' }],
+      view: { ...page_.view, round: 4 },
+      chains: [
+        { ...t1, comments: [{ ...t1.comments[0], replies: [agent('c11', 'Upper case is the style.')] }] },
+        t2,
+        t3,
+        {
+          id: 't12',
+          anchor: { round: 4, path: null, side: 'new', lines: null, quote: null },
+          comments: [{ ...agent('c12', 'Round 4 is up.'), resolved: false }],
+          placed: null,
+          drifted: null,
+        },
+        {
+          id: 't13',
+          anchor: { round: 4, path: null, side: 'new', lines: null, quote: null },
+          comments: [{ ...comment('c13', 'My own note.'), author: 'Ana' }],
+          placed: null,
+          drifted: null,
+        },
+      ],
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    // On the Diffs: the reply, and the new round; the Comments: both comments (the user's own, Ana's, isn't new)
+    await expect(badge('diffs')).toHaveText('1 new, round 4');
+    await expect(badge('comments')).toHaveText(/^[12] new$/);
+    // The Overview shows the comment on the review, marked New; in view, it is seen, and its badges go down
+    const general = page.locator('.review-conversation [data-comment="c12"]');
+    await expect(general).toBeVisible();
+    await expect(badge('overview')).toHaveCount(0);
+    await expect(badge('comments')).toHaveText('1 new');
+    await expect(page.locator('.review-conversation [data-comment="c13"] .chain-new')).toHaveCount(0);
+    // The Diffs show round 4 (seen) and the reply under src/a.rs's chain, marked New until it is in view
+    await page.locator('#review-tab-diffs').click();
+    await expect(diffOf(page, 'src/a.rs').locator('[data-comment="c11"]')).toBeVisible();
+    await expect(page.locator('#review-new-round')).toHaveCount(0);
+    await expect(page.locator('.review-new')).toHaveCount(0);
+    await expect(page.locator('.chain-new')).toHaveCount(0);
+  });
+
   // ATM-732 (Hakan): an agent's comment arriving above a box being written in cut the diff's rows again, which made
   // the box again: the reply's text was lost, and the comment's box lost its focus and its cursor
   test('comments arriving while you write a comment and a reply in the diff keep both, the cursor and the focus', async ({

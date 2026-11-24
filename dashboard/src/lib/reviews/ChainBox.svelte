@@ -9,6 +9,7 @@
   import { commentEdits, documentLinks, taskLinks } from './links';
   import type { Chain, ReviewComment } from './types';
   import { forgetUnsent, keepsUnsent, unsent } from './unsent';
+  import { seenInView, unseenMarks } from './unseen';
 
   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
   // viewer: its lines (the diff shows the file and the text, so the chain doesn't repeat them), each comment with its
@@ -43,6 +44,8 @@
 
   /** What drafting does on this page (ATM-612); none where drafts can't be kept */
   const drafts = draftActions();
+  /** Which comments came since the page opened (ATM-733): marked New until they have been in view */
+  const marks = unseenMarks();
 
   // A reply or an edit being written here comes back when this chain's box is made again (ATM-732: an update of the
   // review that cuts the diff's rows again above it, a comment from an agent arriving): kept in `unsent`, by comment
@@ -145,7 +148,13 @@
 </script>
 
 {#snippet comment(c: ReviewComment, depth: number)}
-  <li class="chain-comment" data-comment={c.id} data-depth={depth}>
+  <li
+    class="chain-comment"
+    class:unseen={marks?.isNew(c.id)}
+    data-comment={c.id}
+    data-depth={depth}
+    {@attach seenInView(c.id, marks)}
+  >
     {#if c.resolved !== null && onresolve && !c.resolved}
       <div class="chain-state">
         <button class="chain-button chain-resolve" onclick={() => onresolve?.(c.id, true)}
@@ -172,6 +181,7 @@
       {#if c.draft}<span class="chain-draft" title="Only you see it: sent with your review"
           ><Icon name="pencil" size={12} /> Draft</span
         >{/if}
+      {#if marks?.isNew(c.id)}<span class="chain-new" title="Came while you had the review open">New</span>{/if}
       <time class="chain-time" datetime={c.at}>{when(c.at)}</time>
       {#if editable(c) && editing !== c.id}
         <span class="chain-draft-actions">
@@ -430,6 +440,18 @@
   .chain-time {
     color: var(--text-muted);
     font-size: var(--text-xs);
+  }
+  /* A comment that came while the page was open (ATM-733), until it has been in view */
+  .chain-new {
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+  .chain-comment.unseen {
+    box-shadow: inset 2px 0 0 var(--accent);
   }
   /* A poke (ATM-611): marked by its author, never resolved */
   .chain-poke {
