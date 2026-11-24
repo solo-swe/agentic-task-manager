@@ -16,6 +16,7 @@
   import type { TaskLinks } from '../compmd';
   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
   import { forgetAllUnsent } from './unsent';
+  import { isDiffMode, type DiffMode } from './diff';
   import {
     chainsOf,
     driftedOf,
@@ -254,7 +255,7 @@
   // The layout and view of every diff, and the tree's width: kept in this browser
   const LAYOUT_KEY = 'atm-review-layout';
   const stored = readStored(LAYOUT_KEY);
-  let mode = $state<'split' | 'unified'>(stored.mode === 'unified' ? 'unified' : 'split');
+  let mode = $state<DiffMode>(isDiffMode(stored.mode) ? stored.mode : 'split');
   let rendered = $state<'source' | 'rendered'>(stored.view === 'rendered' ? 'rendered' : 'source');
   let width = $state(typeof stored.tree === 'number' ? stored.tree : TREE_WIDTH.default);
   /** Long lines wrap (ATM-588), in Split too, its two sides kept level (ATM-616) */
@@ -977,6 +978,13 @@
               aria-label="Unified"
               title="Unified"
               onclick={() => (mode = 'unified')}><Icon name="rows-2" size={15} /></button
+            >
+            <!-- The file as it is after the change, nothing marked (ATM-731) -->
+            <button
+              aria-pressed={mode === 'final'}
+              aria-label="Final"
+              title="Final: the file after the change"
+              onclick={() => (mode = 'final')}><Icon name="file-text" size={15} /></button
             >
           </div>
           <div class="review-segmented" role="group" aria-label="Lines">

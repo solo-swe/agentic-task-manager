@@ -54,6 +54,7 @@
   import ChainBox from './ChainBox.svelte';
   import ComposerActions from './ComposerActions.svelte';
   import DiffView from './DiffView.svelte';
+  import type { DiffMode } from './diff';
   import ReviewImage, { isImage } from './ReviewImage.svelte';
   import { draftActions } from './drafts';
   import { focusOnShow } from './focus';
@@ -97,7 +98,7 @@
     after: DocumentSource | null;
     viewed: boolean;
     folded: boolean;
-    mode: 'split' | 'unified';
+    mode: DiffMode;
     view: 'source' | 'rendered';
     /** Long lines wrap, in Unified (ATM-588) */
     wrap?: boolean;

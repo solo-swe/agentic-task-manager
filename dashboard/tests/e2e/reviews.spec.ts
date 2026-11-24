@@ -1692,6 +1692,32 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(diffOf(page, 'src/a.rs')).toHaveAttribute('data-mode', 'unified');
   });
 
+  // ATM-731 (Hakan): the file as it is after the change, nothing marked
+  test('Final: each file as it is after the change, whole and unmarked; its chains on their lines; kept for the next page', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDiffs(page, tasksServer);
+    await page.getByRole('button', { name: 'Final' }).click();
+    const view = diffOf(page, 'src/a.rs');
+    await expect(page.locator('.diff-view[data-mode="final"]')).toHaveCount(3);
+    // src/a.rs after round 3: 41 lines (40, and line 30b added), each numbered once, nothing folded or marked
+    await expect(view.locator('.diff-line')).toHaveCount(41);
+    await expect(view.getByRole('button', { name: /Show \d+ unchanged/ })).toHaveCount(0);
+    for (const marked of ['.diff-removed', '.diff-added', '.diff-changed'])
+      await expect(view.locator(`.diff-line${marked}`), marked).toHaveCount(0);
+    await expect(view.locator('.diff-code.both')).toHaveCount(0);
+    // The chain on LINE 3 (new side) stays under its line, in the file
+    await expect(view.locator('.diff-run + [data-chain="t1"], .diff-run ~ [data-chain="t1"]').first()).toBeVisible();
+    await expect(view.locator('.diff-elsewhere [data-chain="t1"]')).toHaveCount(0);
+    await page.reload();
+    await page.getByRole('tab', { name: /^Diffs/ }).click();
+    await expect(diffOf(page, 'src/a.rs')).toHaveAttribute('data-mode', 'final');
+    // The Layout group's three, Final pressed
+    await expect(page.getByRole('group', { name: 'Layout' }).getByRole('button')).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'Final' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('Rendered: a Markdown file on the document viewer’s page, with its line numbers; Unified shows one side', async ({
     page,
     tasksServer,

@@ -19515,11 +19515,11 @@
       "description": "The document viewer's table-of-contents popup menu doesn't open in the corner of the viewer. Anchor it to the corner, and cover the position in the documents area's specs.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:08:21Z",
+      "updated_at": "2026-11-24T02:16:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19532,7 +19532,24 @@
       "review": "async",
       "number": 729,
       "started_at": "2026-11-24T02:08:21Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "1fddfae0df4f744a154cf6cb6ac0ec4c429a54a4",
+      "code_reviews": [
+        {
+          "id": "01a20b57-5449-7129-a6c6-36dc6d03d5dc",
+          "ref": "CR-143"
+        }
+      ],
+      "review_requested_at": "2026-11-24T02:16:42Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T02:16:42Z",
+          "kind": "review",
+          "text": "CR-143: The contents box sits in the document viewer’s corner",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d97fba7f02a1",
@@ -19592,13 +19609,13 @@
       "description": "The diff view needs a **final** view: the file as it is after the change, without any highlighting. Turn the side-by-side / single toggle into a three-way selector:\n\n- side-by-side\n- single, highlighted (today's single view)\n- single, final (no diff highlighting)\n\nComments stay anchored to their lines in every mode.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-24T02:16:48Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19607,7 +19624,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 731
+      "number": 731,
+      "started_at": "2026-11-24T02:16:48Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98174c645b4",

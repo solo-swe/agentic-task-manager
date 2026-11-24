@@ -3,7 +3,9 @@ import {
   changeStarts,
   changedLines,
   fenced,
+  finalBlocks,
   foldKey,
+  isDiffMode,
   linesOf,
   linesUnder,
   nextChange,
@@ -100,6 +102,50 @@ describe('the unified view', () => {
     const added = unifiedBlocks(parseHunks('@@ -0,0 +1,2 @@\n+a\n+b\n'), 'a\nb\n');
     expect(added).toHaveLength(1);
     expect(unifiedBlocks([], 'a\nb\n')).toEqual([{ type: 'fold', fold: { oldFrom: 1, newFrom: 1, count: 2 } }]);
+  });
+});
+
+// ATM-731: the file as it is after the change, whole and unmarked
+describe('the final view', () => {
+  it('is every line of the new file, in order, nothing folded, nothing removed, nothing marked', () => {
+    const blocks = finalBlocks(parseHunks(PATCH), NEW);
+    expect(blocks).toHaveLength(1);
+    const rows = blocks[0].type === 'rows' ? blocks[0].rows : [];
+    expect(rows.map((r) => r.text)).toEqual(linesOf(NEW));
+    expect(rows.map((r) => r.new)).toEqual(linesOf(NEW).map((_, i) => i + 1));
+    expect(new Set(rows.map((r) => r.kind))).toEqual(new Set(['context']));
+    // No change to go to
+    expect(changeStarts(blocks)).toEqual([]);
+  });
+
+  it('keeps each line’s old number where it had one, so a chain on an unchanged line of the old side stays on it', () => {
+    const rows = (finalBlocks(parseHunks(PATCH), NEW)[0] as { rows: { old: number | null; new: number | null }[] })
+      .rows;
+    const at = (n: number) => rows.find((r) => r.new === n)!;
+    expect(at(2).old).toBe(2);
+    expect(at(3).old, 'THREE replaced three: no old line').toBeNull();
+    expect([at(8).old, at(9).old], 'eight a and b were added').toEqual([null, null]);
+    expect(at(10).old, 'nine moved down one').toBe(9);
+    // The removed line (old 3, old 8) is on no row
+    expect(rows.some((r) => r.old === 8)).toBe(false);
+  });
+
+  it('a file with no change is shown whole; a deleted file has no rows; a new one is all its lines', () => {
+    expect(finalBlocks([], 'a\nb\n')[0]).toMatchObject({ type: 'rows', rows: [{ text: 'a' }, { text: 'b' }] });
+    expect(finalBlocks(parseHunks('@@ -1,2 +0,0 @@\n-a\n-b\n'), null)).toEqual([]);
+    const created = finalBlocks(parseHunks('@@ -0,0 +1,2 @@\n+a\n+b\n'), 'a\nb\n');
+    expect(created[0]).toMatchObject({
+      rows: [
+        { text: 'a', kind: 'context' },
+        { text: 'b', kind: 'context' },
+      ],
+    });
+    expect(finalBlocks([], '')).toEqual([]);
+  });
+
+  it('the modes are three, and anything else is none of them', () => {
+    for (const mode of ['split', 'unified', 'final']) expect(isDiffMode(mode)).toBe(true);
+    for (const other of ['Final', '', null, undefined, 3]) expect(isDiffMode(other)).toBe(false);
   });
 });
 
