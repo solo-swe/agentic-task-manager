@@ -56,8 +56,8 @@
 
 <!-- On the board, the page doesn't scroll: the board takes the window's height and its columns scroll (T-265) -->
 <section class="projects-overview" class:on-board={tab === 'board'} id="projects-overview">
-  {#if !inApp || !dashboard.sidebarOpen}
-    <!-- In the app the sidebar's items do its job (ATM-753); with the sidebar hidden it is back, until ATM-755 -->
+  {#if !inApp}
+    <!-- The webapp's only: in the app the sidebar's items, its rail and the new tab's chooser do its job (ATM-753) -->
     <ItemTabs {items} current={item} onselect={selectItem} label="All projects" />
   {/if}
   {#if subViews.length > 1}

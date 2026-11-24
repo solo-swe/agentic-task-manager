@@ -1106,6 +1106,9 @@ test.describe('the dashboard in the atm app', () => {
     expect(main.x).toBeGreaterThanOrEqual(strip.x + strip.width);
     await expect(rail.locator('.app-sidebar-rail-item')).toHaveCount(6);
     await expect(rail.locator('[data-item="tasks"]')).toHaveAttribute('aria-current', 'page');
+    // The rail does the sidebar's job: the page doesn't get the webapp's item row back, only Tasks' sub-tabs
+    await expect(page.locator('.item-tabs')).toHaveCount(0);
+    await expect(page.locator('#tab-kanban')).toBeVisible();
     // Pointing at it: the whole sidebar over the page, which stays where it is
     await rail.locator('[data-item="overview"]').hover();
     await expect(sidebar).toBeVisible();

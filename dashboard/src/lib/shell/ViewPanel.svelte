@@ -38,13 +38,12 @@
   // (state.svelte.ts onNavigate). An item opens on its first view
   const selectItem = (next: Item) => next !== item && dashboard.selectTab(PROJECT_ITEM_VIEWS[next][0]);
   const selectView = (next: ViewId) => dashboard.selectTab(next);
-  // In the app the sidebar's items do the item row's job (ATM-753); with the sidebar hidden, the row is back, until the
-  // new tab's chooser reaches every page (ATM-755)
-  const showsItems = $derived(!inApp || !dashboard.sidebarOpen);
+  // The item row is the webapp's only (docs/sidebar-overhaul-design.md §2.3, §5): in the app the sidebar's items do its
+  // job (ATM-753), and with the sidebar hidden its rail (ATM-771) and the new tab's chooser (ATM-755) do
 </script>
 
 <div class="graph-section" id="graph-section">
-  {#if showsItems}
+  {#if !inApp}
     <div class="view-header">
       <ItemTabs items={ITEMS} current={item} onselect={selectItem} {badges} label="Project" />
     </div>
