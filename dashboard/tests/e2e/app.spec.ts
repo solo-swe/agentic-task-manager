@@ -1270,6 +1270,54 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(() => tasksServer.savedTabs?.active).toBe(0);
   });
 
+  test('the app starts on its active tab at once: nothing of the root or the hidden tabs loaded or shown first (ATM-776)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    const first = `/projects/${tasksServer.projectId}/kanban`;
+    tasksServer.restoredTabs = {
+      addresses: [first, '/board', '/projects/second/list', `/projects/${tasksServer.projectId}/reviews`],
+      active: 2,
+    };
+    // What the page shows, from its first frame: the title of each, as it changes
+    await page.addInitScript(() => {
+      const w = window as unknown as { __shown: string[] };
+      w.__shown = [];
+      const look = () => {
+        const title = document.querySelector('#dashboard-title')?.textContent?.trim() ?? '';
+        if (title && title !== w.__shown.at(-1)) w.__shown.push(title);
+      };
+      new MutationObserver(look).observe(document, { subtree: true, childList: true, characterData: true });
+    });
+    await page.goto('/');
+    // The fixture's second project is "Second Project" in the list and "Minimal Project" in its own task file
+    await expect(page.locator('#dashboard-title')).toHaveText(/^(Second|Minimal) Project - Tasks/);
+    await expect(page.locator('.title-bar-tab')).toHaveCount(4);
+    await page.waitForTimeout(500);
+    // Only the active tab's page was shown: its project (by its ID until the list names it), never another tab's
+    const shown = await page.evaluate(() => (window as unknown as { __shown: string[] }).__shown);
+    expect(
+      shown.every((t) => /^(second|Second Project|Minimal Project) - Tasks/.test(t)),
+      shown.join(' | '),
+    ).toBe(true);
+    // Only the project list and the active tab's own project were asked for: no other tab's
+    const loads = tasksServer.commands.filter((c) =>
+      ['project_tasks', 'project_stats', 'claims', 'worktrees', 'project_reviews', 'project_review', 'search'].includes(
+        c.command,
+      ),
+    );
+    expect(
+      loads.filter((c) => c.project !== 'second'),
+      JSON.stringify(tasksServer.commands),
+    ).toEqual([]);
+    // The hidden tabs still have their names, from the project list
+    await expect(page.locator('.title-bar-tab').nth(0)).toContainText('Standard Project');
+    await expect(page.locator('.title-bar-tab').nth(3)).toContainText('Standard Project');
+  });
+
   test('Reload (ATM-584) loads the window again through the app, back at its tabs and the one it showed', async ({
     page,
     tasksServer,

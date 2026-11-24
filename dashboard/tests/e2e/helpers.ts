@@ -1088,10 +1088,13 @@ export class TasksServer {
   /** The reload commands' answers (ATM-768), in order: the command, and whether it carried a body (the page didn't
    * have it) */
   reloads: { command: string; body: boolean }[] = [];
+  /** Every command the page called, in order, with the project it named (ATM-776) */
+  commands: { command: string; project: string | null }[] = [];
 
   /** A command's answer, a reload command's as the app's `Fresh` (ATM-768): its tag (a hash of the answer and what
    * asked for it) and its body, or none when the page's `known` tag is still it */
   private reload(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
+    this.commands.push({ command, project: typeof args.project === 'string' ? args.project : null });
     const answer = this.answerCommand(command, args);
     if (!['list_projects', 'project_tasks', 'claims', 'worktrees'].includes(command) || !('ok' in answer))
       return answer;

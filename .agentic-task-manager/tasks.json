@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 776,
+    "next_number": 777,
     "review": "async"
   },
   "tasks": [
@@ -22141,14 +22141,14 @@
       "description": "From Hakan: a click on the sidebar's scope chevron shows nothing.\n\n## Cause\nThe list is a `.menu`, which `app.css` places at `top: calc(100% + 6px)` of its positioned parent. In the sidebar that parent is the sidebar itself (fixed, the window's full height), so the list opens below the window's bottom. A click in the tests still reached it: Playwright scrolled the sidebar.\n\n## Change\nThe chooser in a `.menu-anchor` of its own, so its list opens just under its button, the sidebar's width, over the items.\n\n## Tests\n`app.spec.ts`'s sidebar test: the list is just under the button, inside the window, on top at its point, with the sidebar not scrolled.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/Sidebar.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-24T17:35:36Z",
-      "updated_at": "2026-11-24T17:56:09Z",
+      "updated_at": "2026-11-24T18:42:18Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22162,7 +22162,7 @@
       "number": 774,
       "started_at": "2026-11-24T17:35:44Z",
       "started_by": "claude:ba530ebb",
-      "commit": "9cc701b4da46e8e29cd7a85db6fb5aed79dfb2f5",
+      "commit": "993f7421b1bd1c504a1652a73e495bbb1740e4c2",
       "code_reviews": [
         {
           "id": "01a20eb3-6a56-77a1-bada-f5b2f72ab73e",
@@ -22170,15 +22170,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T17:56:09Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T17:56:09Z",
           "kind": "review",
           "text": "CR-168: App sidebar: the scope chooser opens under its button",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T18:41:53Z",
+          "kind": "note",
+          "text": "Approved: in CR-168 (round 2)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T17:56:09Z",
+          "to": "2026-11-24T18:41:53Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T18:42:18Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ea3-39a1-7679-9b4b-441ae7c5c873",
@@ -22243,6 +22257,43 @@
       ],
       "completed_at": "2026-11-24T18:12:04Z",
       "completed_by": "claude:ba530ebb"
+    },
+    {
+      "id": "01a20ecd-7e9d-75cc-aae4-3ed01bc173fa",
+      "name": "App start: show the active tab at once, load nothing for the hidden tabs",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "performance",
+        "tabs"
+      ],
+      "description": "From Hakan: when atm opens, there is some weird per-tab opening and latency. It should open instantly and load nothing for the tabs that aren't visible.\n\n## Look into\nAs the app starts, the page first shows the window's own address (the app's root), and only once `restored_tabs` answers does it go to the tab that was active (`+layout.svelte`'s `onMount`, `appTabs.start`). Record in the app fixture every command the page asks from start until the active tab shows, with several restored tabs (projects, a review, All projects), and find what is loaded for a tab not shown, and what is shown before the active tab.\n\n## Change\n- The active restored tab is the first page shown: nothing of the root (or another tab) is loaded or drawn before it.\n- A tab not shown loads nothing until it is switched to (its title comes from what the page has: the project list).\n\n## Tests\nAn app e2e test: with restored tabs, the commands asked until the active tab shows are only the project list and the active tab's own; no other tab's page was shown in between.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/routes/+layout.svelte",
+        "dashboard/src/lib/app-tabs.svelte.ts",
+        "dashboard/tests/e2e/app.spec.ts",
+        "dashboard/tests/e2e/helpers.ts"
+      ],
+      "created_at": "2026-11-24T18:24:38Z",
+      "updated_at": "2026-11-24T18:24:46Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T18:24:38Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "number": 776,
+      "started_at": "2026-11-24T18:24:46Z",
+      "started_by": "claude:ba530ebb"
     }
   ]
 }
