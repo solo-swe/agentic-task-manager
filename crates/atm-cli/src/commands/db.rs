@@ -109,19 +109,39 @@ fn archive(
         keep_days,
         dry_run: ctx.dry_run,
     };
-    let result = archive_finished(&mut Project::open(cwd)?, &request)?;
+    let whole = request.sprints.is_empty() && request.before.is_none();
+    let mut project = Project::open(cwd)?;
+    let result = archive_finished(&mut project, &request)?;
+    // The inbox's decided items too (ATM-760, docs/inbox-design.md §4), by the same keep-days, when the archive isn't
+    // limited to a sprint or a date (those are the tasks')
+    let inbox_moved = if whole && !ctx.dry_run {
+        atm_lib::inbox::archive(&mut project, keep_days)?
+    } else {
+        Vec::new()
+    };
     let (ids, dropped, kept) = (&result.moved, &result.duplicates_dropped, &result.kept);
     let (tasks_kb, archive_kb) = (result.sizes.0 / 1024, result.sizes.1 / 1024);
     if ctx.json {
-        print_json(&json!({
+        let mut out = json!({
             "moved": ids,
             "dry_run": ctx.dry_run,
             "tasks_kb": tasks_kb,
             "archive_kb": archive_kb,
             "duplicates_dropped": dropped,
             "kept": kept,
-        }));
+        });
+        if !inbox_moved.is_empty() {
+            out["inbox_moved"] = json!(inbox_moved);
+        }
+        print_json(&out);
         return Ok(());
+    }
+    if !inbox_moved.is_empty() {
+        println!(
+            "Archived {} inbox item(s): {}.",
+            inbox_moved.len(),
+            inbox_moved.join(", ")
+        );
     }
     if !dropped.is_empty() && !ctx.dry_run {
         println!(
@@ -161,14 +181,34 @@ fn unarchive(ctx: Context, cwd: &Path, ids: &[String]) -> Result<()> {
         return Ok(());
     }
     let mut project = Project::open(cwd)?;
-    let stored = project.resolve_tasks(ids)?;
-    let result = unarchive_tasks(&mut project, &stored)?;
+    // Inbox items (IN-3) come back into the inbox (ATM-760); the rest are tasks
+    let (items, tasks): (Vec<String>, Vec<String>) = ids
+        .iter()
+        .cloned()
+        .partition(|id| atm_common::inbox::item_number(id).is_some());
+    let back = if items.is_empty() {
+        Vec::new()
+    } else {
+        atm_lib::inbox::unarchive(&mut project, &items)?
+    };
+    let result = if tasks.is_empty() {
+        None
+    } else {
+        let stored = project.resolve_tasks(&tasks)?;
+        Some(unarchive_tasks(&mut project, &stored)?)
+    };
+    let (restored, moves_back) =
+        result.map_or_else(|| (Vec::new(), Vec::new()), |r| (r.restored, r.moves_back));
     if ctx.json {
-        print_json(&json!({"restored": result.restored, "moves_back": result.moves_back}));
+        let mut out = json!({"restored": restored, "moves_back": moves_back});
+        if !back.is_empty() {
+            out["inbox_restored"] = json!(back);
+        }
+        print_json(&out);
         return Ok(());
     }
     println!("Brought back {} from the archive.", ids.join(", "));
-    let again = &result.moves_back;
+    let again = &moves_back;
     if !again.is_empty() {
         let one = again.len() == 1;
         println!(
