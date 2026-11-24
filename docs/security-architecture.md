@@ -700,8 +700,10 @@ CI permission beyond reading and the first secrets:
   only a `v*` tag may use (its deployment rule, with a `v*` tag ruleset, set on GitHub), and every job that reads one
   names it. In those jobs every step that compiles (`cargo build`, the app's `tauri build --no-bundle`) runs before
   the first step with a secret, so no build script, proc macro or npm package runs with a signing key in its
-  environment; the signing steps only bundle, sign and notarize. The runners are pinned by version (A11).
-  `ci-workflow.test.ts` checks the order, the environment and the runners.
+  environment; the signing steps only bundle, sign and notarize. The app's compile repeats until a pass compiles
+  nothing, and the signing step fails if anything compiles in it (ATM-749: in 0.43.0 a fresh checkout's first compile
+  left atm-app dirty, and the signing step compiled it again with the secrets). The runners are pinned by version
+  (A11). `ci-workflow.test.ts` checks the order, the passes, the environment and the runners.
 - **What users install** is checksummed in the formula, from the release's `SHA256SUMS`; the macOS binaries are signed
   with the Developer ID (hardened runtime) and notarized. Actions are pinned by SHA (I19).
 

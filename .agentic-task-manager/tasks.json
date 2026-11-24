@@ -1934,7 +1934,7 @@
     "key_history": [
       "T"
     ],
-    "next_number": 767,
+    "next_number": 770,
     "review": "async"
   },
   "tasks": [
@@ -19515,11 +19515,11 @@
       "description": "The document viewer's table-of-contents popup menu doesn't open in the corner of the viewer. Anchor it to the corner, and cover the position in the documents area's specs.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:16:42Z",
+      "updated_at": "2026-11-24T02:37:23Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19541,15 +19541,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T02:16:42Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T02:16:42Z",
           "kind": "review",
           "text": "CR-143: The contents box sits in the document viewer’s corner",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T02:37:05Z",
+          "kind": "note",
+          "text": "Approved: in CR-143 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T02:16:42Z",
+          "to": "2026-11-24T02:37:05Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T02:37:23Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d97fba7f02a1",
@@ -19562,11 +19576,11 @@
       "description": "Switching between a code review's tabs loses the scroll position in the diff view. Keep each view's position, so going back to the diff returns to the same place. Test the switch both ways.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:24:26Z",
+      "updated_at": "2026-11-24T02:37:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19588,15 +19602,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T00:24:26Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T00:24:26Z",
           "kind": "review",
           "text": "CR-138: CR sub-tabs keep the diff position",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T02:37:17Z",
+          "kind": "note",
+          "text": "Approved: in CR-138 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T00:24:26Z",
+          "to": "2026-11-24T02:37:17Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T02:37:35Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d980e8e25290",
@@ -19609,11 +19637,11 @@
       "description": "The diff view needs a **final** view: the file as it is after the change, without any highlighting. Turn the side-by-side / single toggle into a three-way selector:\n\n- side-by-side\n- single, highlighted (today's single view)\n- single, final (no diff highlighting)\n\nComments stay anchored to their lines in every mode.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:27:25Z",
+      "updated_at": "2026-11-24T02:37:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19635,15 +19663,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T02:27:25Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T02:27:25Z",
           "kind": "review",
           "text": "CR-144: Diff view: a Final layout, the file after the change",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T02:37:45Z",
+          "kind": "note",
+          "text": "Approved: in CR-144 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T02:27:25Z",
+          "to": "2026-11-24T02:37:45Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T02:37:57Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98174c645b4",
@@ -19656,11 +19698,11 @@
       "description": "In the diff view, while the user is writing a comment or a reply, a comment or response arriving from an agent re-renders the view and the text being edited is lost. The editor, its text and its cursor must survive updates to the review. Test with a comment and a reply in progress while new comments arrive.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:33:02Z",
+      "updated_at": "2026-11-24T02:38:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19682,15 +19724,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T00:33:02Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T00:33:02Z",
           "kind": "review",
           "text": "CR-139: Keep an unsent comment or reply when the review updates",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T02:38:24Z",
+          "kind": "note",
+          "text": "Approved: in CR-139 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T00:33:02Z",
+          "to": "2026-11-24T02:38:24Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T02:38:32Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d982704f90ae",
@@ -19703,11 +19759,11 @@
       "description": "When the code review the user is looking at has comments or diffs they haven't seen (a new comment, a reply, a new round), show it: a badge on the place it happened (the comments, the round selector, …) with what is new. Seeing it clears the badge.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T02:27:31Z",
+      "updated_at": "2026-11-24T02:38:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19720,7 +19776,38 @@
       "review": "async",
       "number": 733,
       "started_at": "2026-11-24T02:27:31Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "6189a18380cca367a9f46e476d44b1e5a143feaa",
+      "code_reviews": [
+        {
+          "id": "01a20b68-a360-716a-91de-f51434797102",
+          "ref": "CR-145"
+        }
+      ],
+      "review_requested_at": "2026-11-24T02:35:36Z",
+      "notes": [
+        {
+          "at": "2026-11-24T02:35:36Z",
+          "kind": "review",
+          "text": "CR-145: Badge for unseen code review updates",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T02:38:36Z",
+          "kind": "note",
+          "text": "Approved: in CR-145 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T02:35:36Z",
+          "to": "2026-11-24T02:38:36Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T02:38:47Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d98332143200",
@@ -19730,11 +19817,11 @@
       "description": "atm was once seen growing from about 70 MB of RAM to 4.5 GB after a few hours of use. Find out why:\n\n1. Reproduce it: run `atm service` with the dashboard and the app open, agents working and reviews watched, and measure its memory over time.\n2. Find what grows (caches, watchers, event subscribers, open connections, retained task file versions, …).\n3. Fix it if the cause is clear, with a test that would have caught it, or record the findings and create the follow-up tasks.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T01:29:14Z",
+      "updated_at": "2026-11-24T02:47:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19756,15 +19843,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T00:48:05Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T00:48:05Z",
           "kind": "review",
           "text": "CR-140: Memory growth: the app page grows with every reload in WebKit; findings and follow-ups",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T02:47:01Z",
+          "kind": "note",
+          "text": "Approved: in CR-140 (round 2)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T00:48:05Z",
+          "to": "2026-11-24T02:47:01Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T02:47:13Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d9843d6019f3",
@@ -20264,7 +20365,7 @@
       "description": "Found in the 0.43.0 release (run 45266083639). ATM-661 added a step that compiles the app with no secrets (`app:bundle --target universal-apple-darwin --no-bundle`) before the signing step, so the signing step's `tauri build` would find nothing left to build (audit A1). It didn't: the signing step logged `Compiling atm-app v0.43.0` and took 2 m 43 s, with the Developer ID, notary and updater secrets in its environment. Only atm-app itself recompiled, no dependency, so no third-party build script ran with them; but atm-app's own `build.rs` and Tauri's macros in its compile did.\n\n## To find out\nWhat differs between `tauri build --no-bundle` and `tauri build` for `atm-app`: an environment variable a build script tracks (`rerun-if-env-changed`: the `APPLE_*`, `TAURI_SIGNING_*` or `TAURI_ENV_*` the bundling run sets), a feature Tauri adds when it bundles, or the config. Reproduce it locally (both commands in a row, `CARGO_LOG=cargo::core::compiler::fingerprint=info` says why a crate is dirty).\n\n## Then\nThe fix in `.github/workflows/release.yml` (or `app/src-tauri/build.rs`), and a check that would have caught it: the signing step fails if cargo compiles anything (its output says `Compiling`). A CI workflow change is Hakan's yes.\n\n## Tests\n`ci-workflow.test.ts`; the next release's log shows no `Compiling` in the signing step.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         ".github/workflows/release.yml",
@@ -20272,7 +20373,7 @@
         "dashboard/tests/unit/ci-workflow.test.ts"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-23T22:39:56Z",
+      "updated_at": "2026-11-24T02:36:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "review": "async",
@@ -20295,7 +20396,9 @@
           "from": "2026-11-23T22:39:56Z"
         }
       ],
-      "sprint": "Sidebar overhaul"
+      "sprint": "Sidebar overhaul",
+      "started_at": "2026-11-24T02:36:08Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20a91-76ac-710c-81db-f000bc9edfc9",
@@ -20376,7 +20479,7 @@
       "description": "The item model of [the sidebar overhaul](docs/sidebar-overhaul-design.md) §4: each address belongs to one of the six items (Overview, Inbox, Tasks, Code Reviews, Documents, Analysis), and the addresses the new pages need exist.\n\n## Change\n- **The item of an address:** one function in `lib/address.ts`, beside `placeName`, from the view (`project` → Overview, `kanban`/`list`/`graph` → Tasks, `reviews` → Code Reviews, `progress`/`agents` → Analysis; All's `projects`, `board`, `list`, `reviews`, `progress`, `agents`). The sidebar's mark and the tab titles will use it.\n- **New views:** a project's `inbox` and `documents`, All's `list`, and the app's `/new`, in `address.ts`, its path pattern, and `PAGE_PATH` in atm serve (the server answers the page at those paths).\n- **`/projects/<id>` with no view is the Overview**, no longer the Board.\n- **Labels:** Kanban becomes **Board** and Graph **Dependencies** in `places.ts` and the tab buttons; the address segments stay `kanban` and `graph`, so old links keep working.\n- `docs/multi-project-api.md` §2.7: the new addresses.\n\n## Tests\nUnit tests for the item of every address, the new paths parsed and written, the default view, and old addresses unchanged; a serve test for the new page paths.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/address.ts",
@@ -20385,7 +20488,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T01:26:45Z",
+      "updated_at": "2026-11-24T02:39:16Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20407,15 +20510,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T01:26:45Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T01:26:45Z",
           "kind": "review",
           "text": "CR-141: Sidebar items: the item of an address, the new pages, a project opens on its Overview",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T02:39:08Z",
+          "kind": "note",
+          "text": "Approved: in CR-141 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T01:26:45Z",
+          "to": "2026-11-24T02:39:08Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T02:39:16Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88adf1461c5",
@@ -20666,7 +20783,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §2–§4 and §8: the data and the rules, below the front ends.\n\n## Change\n- **atm-common:** `schema/inbox.schema.json` and the item type (`id` `IN-<n>`, `text` up to 20,000 characters, `state` `created`/`discarded`/`injected`, `reason`, `tasks`, who and when).\n- **atm-db:** `.agentic-task-manager/inbox.json` and `inbox-archive.json` in the store, with its lock; atm's merge driver takes `inbox.json` too (items merged by ID, `next` the larger, a clashing number renumbered as tasks are).\n- **atm-lib `inbox.rs`:** add (a person only; an agent is refused), edit (a person, while created), discard (a reason required), inject (tasks that exist, at least one; final), restore (a person, from discarded), list, and archiving decided items with `atm db archive`'s rules (never created ones). A task made from an item gets `from: [\"IN-…\"]`.\n\n## Tests\nUnit tests for every move from every state, by a person and by an agent, each refusal, the limits, archiving and the merge.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-common/schema/inbox.schema.json",
@@ -20674,7 +20791,7 @@
         "crates/atm-lib/src/inbox.rs"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T02:08:16Z",
+      "updated_at": "2026-11-24T02:41:36Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20696,15 +20813,29 @@
         }
       ],
       "review_requested_at": "2026-11-24T02:08:16Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-24T02:08:16Z",
           "kind": "review",
           "text": "CR-142: Inbox: the store, the merge and the rules",
           "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T02:40:51Z",
+          "kind": "note",
+          "text": "Approved: in CR-142 (round 1)",
+          "by": "Hakan Serce"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T02:08:16Z",
+          "to": "2026-11-24T02:40:51Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T02:41:36Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8925a26795e",
@@ -20951,6 +21082,124 @@
       "sprint": "Sidebar overhaul",
       "review": "async",
       "number": 766
+    },
+    {
+      "id": "01a20b6d-f9af-72ac-9448-da28a38919f5",
+      "name": "App: a lease renewal doesn't reload the page; a change reloads only what changed",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "performance"
+      ],
+      "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. Every atm command an agent runs renews its lease and writes `.agentic-task-manager/claims.json`; the app's subscriptions (`api/changes.ts`, the app's watchers) tell the page about any change in the task folder, and the page reloads everything (`dashboard.reload()`: the project list, the tasks, claims, worktrees). While an agent works that is a full reload every few seconds, a few MB each in WebKit's memory.\n\n## Change\n- The change notice says what changed (`tasks.json`, `claims.json`, `reviews/`, …), and the page reloads only that part.\n- A change of `claims.json` that only moves a lease's end (the page shows a claim's holder, not its lease) reloads nothing.\n- The same for the browser's polling where it applies (`atm serve`), so both front ends behave alike.\n\n## Tests\nUnit tests for the notice's kinds and what each reloads; an e2e in the app fixture counting the commands the page calls after a lease renewal (none) and after a claim change (the claims only).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/api/changes.ts",
+        "dashboard/src/routes/+layout.svelte",
+        "app/src-tauri/src/commands/state.rs",
+        "app/src-tauri/src/lib.rs"
+      ],
+      "created_at": "2026-11-24T02:41:26Z",
+      "updated_at": "2026-11-24T02:43:28Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T02:41:26Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "related": [
+        "01a207f0-a2e1-7602-b260-d98332143200"
+      ],
+      "number": 767,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a20b6d-f9af-72ac-9448-da292a487519",
+      "name": "App: answer \"unchanged\" instead of re-sending an unchanged answer",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "performance"
+      ],
+      "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. In the browser an unchanged answer is a `304` with no body (`ETag`s); the app has none (`api/ipc.ts`: \"No ETags\"), so each reload carries the whole answer again: 1.16 MB of task view for this repo, plus the project list.\n\n## Change\nThe app's read commands (project list, a project's tasks, claims, …) take the stamp the page last got (the same one `atm serve`'s `ETag` hashes) and answer \"unchanged\" with no body when it still matches; `ipc.ts` maps that to what the client already handles for a `304`.\n\n## Tests\nThe commands' unit tests (a matching stamp, a stale one, none); an e2e in the app fixture checking a reload with nothing new carries no body.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "01a20b6d-f9af-72ac-9448-da28a38919f5"
+      ],
+      "files": [
+        "dashboard/src/lib/api/ipc.ts",
+        "app/src-tauri/src/commands/state.rs"
+      ],
+      "created_at": "2026-11-24T02:41:26Z",
+      "updated_at": "2026-11-24T02:43:32Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T02:41:26Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "related": [
+        "01a207f0-a2e1-7602-b260-d98332143200"
+      ],
+      "number": 768,
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "01a20b6d-f9af-72ac-9448-da2a83797476",
+      "name": "App: ipcFetch hands the parsed answer through, without turning it back into text",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "performance"
+      ],
+      "description": "From [the memory analysis §3b](docs/memory-growth-analysis.md#3b-what-a-reload-does-in-the-app-the-code-cr-140), CR-140. `ipcFetch` (`api/ipc.ts`) turns each parsed `invoke` answer back into text (`new Response(JSON.stringify(answer))`), which the client parses again: about three copies of every answer, two of them in WebKit's own memory.\n\n## Change\nHand the client a `Response`-like object whose `json()` returns the parsed answer as it is (with the status and headers the client reads), so no answer is serialised again.\n\n## Tests\n`ipc.test.ts`: the answer comes through as the same object, statuses and errors as before; the client's tests still pass against it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/api/ipc.ts",
+        "dashboard/tests/unit/ipc.test.ts"
+      ],
+      "created_at": "2026-11-24T02:41:26Z",
+      "updated_at": "2026-11-24T02:43:33Z",
+      "created_by": "claude:ba530ebb",
+      "updated_by": "claude:ba530ebb",
+      "sprint_history": [
+        {
+          "sprint": "Sidebar overhaul",
+          "from": "2026-11-24T02:41:26Z"
+        }
+      ],
+      "sprint": "Sidebar overhaul",
+      "review": "async",
+      "related": [
+        "01a207f0-a2e1-7602-b260-d98332143200"
+      ],
+      "number": 769,
+      "components": [
+        "dashboard"
+      ]
     }
   ]
 }
