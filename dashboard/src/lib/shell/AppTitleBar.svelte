@@ -19,9 +19,8 @@
     type AppShell,
   } from '../api/shell';
   import { dashboard } from '../state.svelte';
-  import Logo from '../ui/Logo.svelte';
-  import ProjectLogo from '../ui/ProjectLogo.svelte';
   import { appTabs, tabProject, type AppTab } from '../app-tabs.svelte';
+  import { tabTitle, type ProjectNaming } from '../places';
   import { tabActions } from '../tab-actions';
   import TitleBarTabs from '../ui/TitleBarTabs.svelte';
   import AppMenus from './AppMenus.svelte';
@@ -43,14 +42,20 @@
     void setWindowTitle(title);
   });
 
-  /** A tab's name, by the project or review in its own address (T-525, ATM-574): its label's, and its entry's in the
-   * strip's More menu (ATM-685) */
-  function tabName(tab: AppTab): string {
-    const id = tabProject(tab.address);
+  /** How a tab names a project: its key, else its name as its page titles it (kept once shown, T-525) */
+  function naming(id: string): ProjectNaming | undefined {
+    const listed = dashboard.projects.find((p) => p.id === id);
+    return listed ? { key: listed.summary?.key, name: dashboard.nameOf(id) ?? listed.name } : undefined;
+  }
+
+  /** A tab's title and icon, by its own address (ATM-754, docs/sidebar-overhaul-design.md §3: `ATM - Tasks`, `All -
+   * Code Reviews`, `ATM - CR-134`): its label's, and its entry's in the strip's More menu (ATM-685). Every tab, chosen
+   * or not, by its own address, so a label doesn't change when its tab is chosen */
+  const titleOf = (tab: AppTab) => tabTitle(tab.address, naming);
+  /** A review's tab says the review's title on hover (its label names it by its reference) */
+  function hoverOf(tab: AppTab): string | undefined {
     const review = reviewOf(tab.address).review;
-    if (review) return reviewWindow.names[`${id}:${review}`] ?? review;
-    const listed = id === null ? undefined : dashboard.projects.find((p) => p.id === id);
-    return listed ? (dashboard.nameOf(listed.id) ?? listed.name) : id === null ? 'Projects Overview' : title;
+    return review ? reviewWindow.names[`${tabProject(tab.address)}:${review}`] : undefined;
   }
 </script>
 
@@ -76,29 +81,17 @@
     onclose={(id) => tabs.close(id)}
     onnew={() => tabs.open()}
     onmove={tabs.move}
-    name={tabName}
+    name={(tab) => titleOf(tab).title}
   >
     {#snippet label(tab)}
-      <!-- Every tab, chosen or not, by the project in its own address (T-525): its logo and its name as its page
-           titles it (kept once shown), so a tab's label doesn't change when it is chosen, while the page still shows
-           the tab before -->
-      {@const id = tabProject(tab.address)}
-      {@const listed = id === null ? undefined : dashboard.projects.find((p) => p.id === id)}
-      {@const name = tabName(tab)}
-      {#if reviewOf(tab.address).review}
-        <!-- A review's tab (ATM-574): its reference and title, no project chooser -->
-        <Icon name="message-square" size={15} />
-        {#if tab.id === appTabs.active}<h1 id="dashboard-title">{name}</h1>
-        {:else}<span class="app-tab-name">{name}</span>{/if}
+      {@const shown = titleOf(tab)}
+      <span class="app-tab-icon" title={hoverOf(tab)}><Icon name={shown.icon} size={15} /></span>
+      {#if tab.id === appTabs.active}
+        <!-- The tab shown: its title is the page's heading. No project chooser: the sidebar's scope does its job, and a
+             tab doesn't change project in place (ATM-753, docs/sidebar-overhaul-design.md §2.3) -->
+        <h1 id="dashboard-title" title={hoverOf(tab)}>{shown.title}</h1>
       {:else}
-        {#if listed}<ProjectLogo project={listed} size={16} />{:else}<Logo size={16} />{/if}
-        {#if tab.id === appTabs.active}
-          <!-- The tab shown: its name is the page's heading. No project chooser: the sidebar's scope does its job, and a
-               tab doesn't change project in place (ATM-753, docs/sidebar-overhaul-design.md §2.3) -->
-          <h1 id="dashboard-title">{name}</h1>
-        {:else}
-          <span class="app-tab-name">{name}</span>
-        {/if}
+        <span class="app-tab-name" title={hoverOf(tab)}>{shown.title}</span>
       {/if}
     {/snippet}
   </TitleBarTabs>

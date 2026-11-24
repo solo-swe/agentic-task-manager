@@ -297,6 +297,8 @@ describe('serve', () => {
       needs_you_reviews: [],
       git: { branch: 'main', pr: null },
       description: null,
+      // No meta.key (ATM-754)
+      key: null,
       last_activity: '2026-03-15T11:00:00Z',
       completions_14d: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
       // The All projects board (T-257): T-7 ready; T-5 waits for a review; T-6 blocked on the user before T-8 on an

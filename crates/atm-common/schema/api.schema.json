@@ -754,6 +754,10 @@
         },
         "git": { "$ref": "#/$defs/GitSummary" },
         "description": { "type": ["string", "null"], "description": "meta.description, capped at 200 characters" },
+        "key": {
+          "type": ["string", "null"],
+          "description": "meta.key, the project's short name its tasks' keys start with; null without one; absent from an older server (ATM-754: the app's tab titles)"
+        },
         "last_activity": { "type": ["string", "null"] },
         "completions_14d": { "type": "array", "items": { "type": "integer" }, "description": "Oldest day first" },
         "board": { "$ref": "#/$defs/ProjectBoard" },

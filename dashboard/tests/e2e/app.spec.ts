@@ -10,7 +10,7 @@ test.describe('the dashboard in the atm app', () => {
     await tasksServer.asApp();
     tasksServer.use('standard');
     await page.goto(`/projects/${tasksServer.projectId}/kanban`);
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
     expect(tasksServer.httpRequests).toEqual([]);
   });
@@ -24,11 +24,11 @@ test.describe('the dashboard in the atm app', () => {
     tasksServer.use('standard');
     await page.goto('/');
     // Two projects: the page opens on the overview
-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
     await expect.poll(() => tasksServer.windowTitles.at(-1)).toBe(await page.title());
 
     await tasksServer.pushLink('/projects/second/list');
-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
     await expect.poll(() => tasksServer.windowTitles.at(-1)).toContain('Minimal Project');
   });
 
@@ -105,8 +105,9 @@ test.describe('the dashboard in the atm app', () => {
       await page.goto('/');
       // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
       // charts are inside the tab, under it, without a second title
+      // Its title: the scope and the item, the Overview the landing page opens on (ATM-754)
       await expect(page.locator('#app-titlebar .title-bar-tab.selected #dashboard-title')).toHaveText(
-        'Standard Project',
+        'Standard Project - Overview',
       );
       await expect(page.locator('#dashboard-title')).toHaveCount(1);
       await expect(page.locator('#app-tab-new')).toBeVisible();
@@ -187,7 +188,7 @@ test.describe('the dashboard in the atm app', () => {
     await page.goto('/');
     const tabs = page.locator('.title-bar-tab [role="tab"]');
     await expect(tabs).toHaveCount(2);
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     // What the switches show: the tabs' labels whenever they change, and whether the board was ever empty
     await page.evaluate(() => {
       const w = window as unknown as { __labels: string[]; __empty: boolean };
@@ -201,7 +202,7 @@ test.describe('the dashboard in the atm app', () => {
       new MutationObserver(() => {
         if (labels() !== w.__labels.at(-1)) w.__labels.push(labels());
         // The first project's board (the minimal one's is empty in its active sprint, as it should be)
-        const first = document.querySelector('#dashboard-title')?.textContent === 'Standard Project';
+        const first = document.querySelector('#dashboard-title')?.textContent?.startsWith('Standard Project - ');
         if (first && !document.querySelector('#kanban .kanban-card')) w.__empty = true;
       }).observe(document.body, { subtree: true, childList: true, characterData: true });
     });
@@ -215,18 +216,18 @@ test.describe('the dashboard in the atm app', () => {
     // A project not shown yet: loaded; its tab keeps its name (the workspace's, then its own: the same here)
     const asked = tasksServer.projectTaskRequests;
     await tabs.nth(1).click();
-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
     await expect.poll(() => tasksServer.projectTaskRequests).toBeGreaterThan(asked);
     await expect(page.locator('#kanban')).toContainText('To Do');
     // Back to the first: shown from what was kept, before any answer, so its board is never empty
     const loads = tasksServer.projectTaskRequests;
     await tabs.nth(0).click();
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     expect((await seen()).__empty).toBe(false);
     // Its load still asks (a change since would show), and finds nothing new
     await expect.poll(() => tasksServer.projectTaskRequests).toBeGreaterThan(loads);
     // The labels never changed, and the window's title went only to each project's name: never "Task Dashboard"
-    expect((await seen()).__labels).toEqual(['Standard Project | Minimal Project']);
+    expect((await seen()).__labels).toEqual(['Standard Project - Tasks | Minimal Project - Tasks']);
     expect(tasksServer.windowTitles.slice(titles)).not.toContain('Task Dashboard');
   });
 
@@ -380,14 +381,14 @@ test.describe('the dashboard in the atm app', () => {
       ).toBe(true);
       await more.click();
       const items = page.locator('#app-tab-more-menu .title-bar-tabs-menu-item');
-      await expect(items.first()).toHaveText('Second Project');
+      await expect(items.first()).toHaveText(/^Second Project - /);
       // Only those out of view: the active one is in view, so it isn't listed
       const listed = await items.evaluateAll((els) => els.map((e) => e.getAttribute('data-tab')));
       const active = await page.locator('.title-bar-tab.selected [role="tab"]').getAttribute('id');
       expect(listed).not.toContain(active!.replace('app-tab-', ''));
       // Over the page, so a real click reaches it (it was under the page's subtitle at first)
       await items.first().click({ timeout: 5000 });
-      await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+      await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
       // Shown, and scrolled into view: wholly inside the strip
       const first = page.locator('.title-bar-tab').first();
       await expect(first).toHaveClass(/selected/);
@@ -402,7 +403,7 @@ test.describe('the dashboard in the atm app', () => {
         .toBe(true);
       // Now the last tabs are out of view: the menu lists them, not the first
       await more.click();
-      await expect(items.first()).not.toHaveText('Minimal Project');
+      await expect(items.first()).not.toHaveText(/^Minimal Project - /);
       await page.keyboard.press('Escape');
     },
   );
@@ -524,8 +525,9 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#review-page')).toHaveAttribute('data-review', 'CR-2');
     // Opened on its own, its back button goes up to its reviews list
     await expect(page.locator('.review-back')).toHaveText('Reviews');
-    // The tab is the review's: its reference and title
-    await expect(page.locator('#dashboard-title')).toHaveText('CR-2: Trim the names');
+    // The tab is the review's (ATM-754): its project and reference, its title on hover, the item's icon
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project - CR-2');
+    await expect(page.locator('#dashboard-title')).toHaveAttribute('title', 'CR-2: Trim the names');
     // The window's own bar and sidebar toggle are there, as on every tab
     await expect(page.locator('#app-titlebar')).toBeVisible();
     // ATM-691 (Hakan): and the ⋯ at its right end, which opens Settings, the document's text size with them
@@ -547,7 +549,7 @@ test.describe('the dashboard in the atm app', () => {
     await tabs.nth(0).click();
     await expect(page.locator('#review-list')).toBeVisible();
     // And the review's tab keeps its name while another is shown
-    await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
+    await expect(page.locator('#app-tab-t2-label')).toContainText('Standard Project - CR-2');
     expect(tasksServer.httpRequests).toEqual([]);
 
     // From the review's tab, another project's page from the sidebar: a new tab of its own, labelled by it (ATM-753:
@@ -559,11 +561,11 @@ test.describe('the dashboard in the atm app', () => {
     await page.locator('#app-sidebar [data-item="overview"]').click();
     await expect(tabs).toHaveCount(3);
     await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
     await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second\/project(\?|$)/);
     // The other tabs are as they were
     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
-    await expect(page.locator('#app-tab-t2-label')).toContainText('CR-2: Trim the names');
+    await expect(page.locator('#app-tab-t2-label')).toContainText('Standard Project - CR-2');
   });
 
   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
@@ -576,13 +578,13 @@ test.describe('the dashboard in the atm app', () => {
     tasksServer.link(`/projects/${tasksServer.projectId}/list`);
     await page.goto('/');
     const tabs = page.locator('#app-titlebar [role="tab"]');
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     await expect(tabs).toHaveCount(1);
 
     // + : a second tab, on the overview
     await page.locator('#app-tab-new').click();
     await expect(tabs).toHaveCount(2);
-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
     // The other tab keeps its project's name, and a click goes back to where it was
     await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
@@ -592,14 +594,14 @@ test.describe('the dashboard in the atm app', () => {
     // A link while the app runs opens in a new tab
     await tasksServer.pushLink('/projects/second/list');
     await expect(tabs).toHaveCount(3);
-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
 
     // The menu's Previous Tab, then Close Tab: the next tab takes its place
     await tasksServer.chooseMenu({ kind: 'previous_tab' });
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     await tasksServer.chooseMenu({ kind: 'close_tab' });
     await expect(tabs).toHaveCount(2);
-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
 
     // ×, on the last tab left: the window closes
     await page.locator('.title-bar-tab').nth(0).hover();
@@ -767,9 +769,9 @@ test.describe('the dashboard in the atm app', () => {
 
     // A new tab: its own history, Back going nowhere
     await page.locator('#app-tab-new').click();
-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
     await tasksServer.chooseMenu({ kind: 'back' });
-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
     // Back to the first tab: as it was left, and its Back still the list (the switch added nothing)
     await page.locator('#app-titlebar [role="tab"]').nth(0).click();
     await expect.poll(at).toBe(`${base}/kanban`);
@@ -853,7 +855,7 @@ test.describe('the dashboard in the atm app', () => {
 
     // A new tab: its own history, both disabled; back to the first, the arrows follow it
     await page.locator('#app-tab-new').click();
-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
     await expect(backArrow).toBeDisabled();
     await expect(forwardArrow).toBeDisabled();
     await page.locator('#app-titlebar [role="tab"]').nth(0).click();
@@ -906,13 +908,13 @@ test.describe('the dashboard in the atm app', () => {
     await expect(scope).toHaveAttribute('data-scope', tasksServer.projectId);
     await expect(sidebar.locator('.app-sidebar-link')).toHaveCount(6);
     await expect(tabs).toHaveCount(1);
-    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^All - /);
 
     // An item opens its page in a new tab, shown
     await sidebar.locator('[data-item="tasks"]').click();
     await expect(tabs).toHaveCount(2);
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     await expect(page.locator('#kanban')).toBeVisible();
     await expect(sidebar.locator('[data-item="tasks"]')).toHaveAttribute('aria-current', 'page');
     // Even the page the tab shows: a new tab again
@@ -934,7 +936,7 @@ test.describe('the dashboard in the atm app', () => {
 
     // ⌘-click on a task's card opens its details in a new tab
     await tabs.nth(1).click();
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     const card = page.locator('#kanban .kanban-card').first();
     const id = await card.getAttribute('data-id');
     await card.click({ modifiers: ['ControlOrMeta'] });
@@ -1034,7 +1036,7 @@ test.describe('the dashboard in the atm app', () => {
     await page.locator('#app-sidebar-scopes [data-scope=""]').click();
     for (const item of ['overview', 'tasks', 'analysis', 'reviews']) {
       await page.locator(`#app-sidebar [data-item="${item}"]`).click();
-      await expect(page.locator('#dashboard-title'), item).toHaveText('Projects Overview');
+      await expect(page.locator('#dashboard-title'), item).toHaveText(/^All - /);
       await expect(trail.locator('#activity-card'), item).toBeVisible();
       await expect(trail.locator('#progress-card'), item).toHaveCount(0);
       await expect(page.locator('#app-titlebar #activity-card'), item).toHaveCount(0);
@@ -1121,7 +1123,7 @@ test.describe('the dashboard in the atm app', () => {
     tasksServer.use('standard');
     await page.goto('/');
     // From the menu: atm ▸ Connect Your Agents… (the app's footer is a status bar, T-516)
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     await tasksServer.chooseMenu({ kind: 'connect_agents' });
     const harness = page.locator('.agents-harness[data-harness="claude"]');
     await expect(harness.locator('.agents-harness-state')).toHaveText('Not connected');
@@ -1144,7 +1146,7 @@ test.describe('the dashboard in the atm app', () => {
     await tasksServer.asApp();
     tasksServer.use('standard');
     await page.goto('/');
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     await tasksServer.chooseMenu({ kind: 'connect_agents' });
     const shared = page.locator('.agents-harness[data-harness="agents"]');
     await expect(shared.locator('.agents-harness-tools')).toHaveText('Found here: Codex, Cursor');
@@ -1247,7 +1249,7 @@ test.describe('the dashboard in the atm app', () => {
       .poll(() => tasksServer.savedTabs?.addresses.map((a) => a.split('?')[0]))
       .toEqual(['/board', first, '/projects/second/list']);
     // The drag didn't select it: the first project's tab is still shown
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     // A plain click selects: the tab is chosen and the page goes to its project (not its heading's text, which turns
     // from the listed name to the project's own once its page loads)
     await tabs.nth(2).locator('[role="tab"]').click();
@@ -1290,11 +1292,11 @@ test.describe('the dashboard in the atm app', () => {
     tasksServer.use('standard');
     tasksServer.link('/projects/second/list');
     await page.goto('/');
-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
     await expect.poll(() => addressOf(page)).toMatch(/^\/projects\/second\/list(\?|$)/);
 
     await tasksServer.pushLink(`/projects/${tasksServer.projectId}/kanban`);
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     // Not a page of the dashboard: the page stays where it is
     await tasksServer.pushLink('/api/projects');
     await expect.poll(() => addressOf(page)).toMatch(new RegExp(`^/projects/${tasksServer.projectId}/kanban(\\?|$)`));
@@ -1342,7 +1344,7 @@ test.describe('the dashboard in the atm app', () => {
     // Another project (a deep link: in-page, as the project menu goes): the first one's subscription ends, the second's
     // starts
     await tasksServer.pushLink('/projects/second/kanban');
-    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Minimal Project - /);
     await expect
       .poll(() => [...tasksServer.subscriptions.values()].map((s) => `${s.workspace}/${s.project}`).sort())
       .toEqual(['default/null', 'default/second']);
@@ -1373,7 +1375,7 @@ test.describe('the dashboard in the atm app', () => {
     await bar.getByRole('button', { name: 'Not now' }).click();
     await expect(bar).toHaveCount(0);
     await page.reload();
-    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveText(/^Standard Project - /);
     await expect.poll(() => tasksServer.updateCalls.filter((c) => c === 'check_update').length).toBe(2);
     await expect(bar).toHaveCount(0);
   });

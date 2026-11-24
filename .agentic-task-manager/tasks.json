@@ -20257,14 +20257,14 @@
       "description": "From the Audit and tabs retrospective (ATM-726). Three e2e tests failed intermittently this sprint; each passed when run alone or on a re-run, so they waste runs and hide real failures.\n\n## The tests\n- **`graph-zoom.spec.ts`** (panning or zooming turns auto-fit off): under a loaded full run, the `+` key press reached the 90-task graph before it took keys, so auto-fit stayed on. 5 of 5 passed alone. Wait for the graph to be ready for keys (a state the graph exposes, not a timeout) before pressing.\n- **`reviews.spec.ts` › performance › a long review (94 files) … measured** (`@timed`): in CI on PR #58 the first attempt hit the 30 s test timeout inside the scroll's `page.evaluate`, and the retry counted 38,057 DOM nodes alive against the 30,000 bound (22,311 locally, twice; it passed in the other run). Find why a retry after a timeout keeps more nodes alive (the first attempt's page not gone? a trace with `--trace on`), and fix the cause. Never raise the bound (AGENTS.md).\n- **Specs with fixed dates:** three reviews-list specs used fixed 17 November dates and broke on 22 November, past the list's 5-day cutoff (ATM-723). Sweep `dashboard/tests/e2e/` for dates written as literals that a rule compares with now, and make each relative to the run or fix the page's clock (`page.clock.setFixedTime`, which also sets atm's time since ATM-722).\n\n## Tests\nEach spec passes 10 times in a row under the full suite's load (`--repeat-each 10`), and the timed test in CI's conditions.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/tests/e2e/graph-zoom.spec.ts",
         "dashboard/tests/e2e/reviews.spec.ts"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-24T15:08:47Z",
+      "updated_at": "2026-11-24T15:19:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "review": "async",
@@ -20280,7 +20280,24 @@
       ],
       "sprint": "Sidebar overhaul",
       "started_at": "2026-11-24T15:08:47Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "b0155922a813a713a8084b48362e8bf4a955dfd8",
+      "code_reviews": [
+        {
+          "id": "01a20e24-14b2-75b2-a5a6-8328b09e5046",
+          "ref": "CR-158"
+        }
+      ],
+      "review_requested_at": "2026-11-24T15:19:35Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T15:19:35Z",
+          "kind": "review",
+          "text": "CR-158: Flaky e2e tests: graph keys, the long review's nodes, fixed dates",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20a7f-82f6-7703-ac29-a944947d1493",
@@ -20376,13 +20393,13 @@
       "description": "From the Audit and tabs retrospective (ATM-726). Each permission prompt stalls an unattended loop until Hakan is back, and each denial costs a round trip. Look at `.claude/settings.json` (project) and propose rules and hooks that make the safe forms just work and the unsafe ones fail fast with a message saying what to do instead. A change to permission settings is Hakan's to make: propose it in the task's review, apply it on his yes.\n\n## What happened (examples to design against)\n- **Compound commands prompted:** `cmd1 && cmd2`, `cmd ; cmd`, `cmd | grep …`, `cmd > file 2>&1`, `VAR=x cmd`, `cd dir && cmd`, `$(…)`. Plain single commands didn't.\n- **A quoted pattern read as shell syntax:** `grep -n -E \"project_tasks|\\| \\`GET …/tasks\" docs/x.md` (backticks and `|` inside the quotes) was rejected; `grep -n project_tasks docs/x.md` wasn't.\n- **Interpreters and in-place edits:** a `python` call, `node -e \"…writeFileSync…\"`, `perl -0pi -e`, `sed -i`, `cat >> file <<EOF` were rejected; Read/Edit/Write were the way.\n- **Forms the allow list doesn't have:** the agent ran `pnpm --dir dashboard exec vitest …`, `pnpm --dir dashboard run build`, `pnpm --dir dashboard exec playwright test …` and `node --test tests/scripts/…` all session; the list allows `pnpm exec vitest *` and `node tests/scripts/run.mjs *` but not these.\n- **`gh` with filters:** `gh api … --jq '…'` prompted; plain `gh api …`, `gh pr checks`, `gh run list` didn't.\n- **Paths outside the project:** `ls ~/.claude`, `curl -o /dev/null …` prompted.\n- **The auto-mode classifier** (not the settings) denied `atm task review approve` (oversight) and one `gh secret delete` (destructive) even on Hakan's word: note these, as settings may not be the fix.\n\n## To propose\n- Allow rules for the forms above that are read-only or test-only, as exact as the existing ones (never `Bash(node *)` or `Bash(pnpm run *)`).\n- A `PreToolUse` hook on `Bash` that refuses a compound command or an interpreter one-liner with a message naming the plain form (one command per call; Read/Edit/Write for files), so the agent corrects itself instead of waiting on a prompt. Pipe-test it before writing it (the update-config skill's steps).\n- What to keep as it is (the deny list of cat/head/tail/sed/awk/cd).\n\n## Tests\nThe hook pipe-tested with a compound and a plain command; each new allow rule tried once.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         ".claude/settings.json"
       ],
       "created_at": "2026-11-23T22:20:58Z",
-      "updated_at": "2026-11-23T22:39:56Z",
+      "updated_at": "2026-11-24T15:22:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "review": "async",
@@ -20394,7 +20411,25 @@
           "from": "2026-11-23T22:39:56Z"
         }
       ],
-      "sprint": "Sidebar overhaul"
+      "sprint": "Sidebar overhaul",
+      "started_at": "2026-11-24T15:19:55Z",
+      "started_by": "claude:ba530ebb",
+      "code_reviews": [
+        {
+          "id": "01a20e26-83e8-72ff-aad1-94e124fff281",
+          "ref": "CR-159"
+        }
+      ],
+      "review_requested_at": "2026-11-24T15:22:14Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T15:22:14Z",
+          "kind": "review",
+          "text": "CR-159: Proposal: Claude Code settings that keep agents from tripping permission prompts",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a20a7f-82f6-7703-ac29-a948c68b0fac",
@@ -20793,7 +20828,7 @@
       "description": "[The sidebar overhaul](docs/sidebar-overhaul-design.md) §3: an app tab's title is `<scope> - <item>` with the item's icon: `ATM - Tasks`, `All - Code Reviews`. The scope is the project's key, else its name cut to 16 characters; All is `All`. A review or a document open in the tab names itself instead (`ATM - CR-134`, `ATM - sidebar-overhaul-design.md`), keeping the item's icon. `/new` is *New Tab*.\n\n## Tests\nUnit tests for the title of each kind of address (each item, a review, a document, a project without a key, a long name, `/new`).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e889c1f825f3"
       ],
@@ -20802,7 +20837,7 @@
         "dashboard/src/lib/places.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T15:22:22Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20813,7 +20848,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 754
+      "number": 754,
+      "started_at": "2026-11-24T15:22:22Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e88db033076e",

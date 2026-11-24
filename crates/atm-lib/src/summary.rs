@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use atm_common::edits::is_agent;
-use atm_common::keys::{key_of, keys_format, label_of, number_of, with_key};
+use atm_common::keys::{key_of, keys_format, label_of, number_of, project_key, with_key};
 use atm_common::py::{py_str, py_str_opt, strip, truthy};
 use atm_common::rules::{natural_cmp, unfinished_dependencies};
 use atm_common::time::{format_iso, now, parse_iso};
@@ -822,6 +822,8 @@ pub fn project_summary(project: &Project) -> Result<Value> {
             .collect::<Vec<_>>(),
         "git": git_summary(project, &tasks),
         "description": description(document.get("meta")),
+        // Its short name (`meta.key`), which the app's tabs are titled by (ATM-754); null without one
+        "key": project_key(document).filter(|k| !k.is_empty()),
         "last_activity": last.map(format_iso),
         "completions_14d": completions,
         "board": board(&shown, &tasks, &kinds, &todo_refs, current, &live, true),

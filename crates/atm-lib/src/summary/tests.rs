@@ -55,6 +55,8 @@ fn a_keys_format_project_gives_its_tasks_keys_and_a_legacy_one_does_not() {
         &json!({"format": 2, "key": "ATM", "next_number": 14}),
     );
     let s = project_summary(&keyed).unwrap();
+    // The project's own key (ATM-754: the app's tabs are titled by it)
+    assert_eq!(s["key"], json!("ATM"));
     // Keys plain (ADR-009): no key_final carried, whatever the file still says
     let key_of = |v: &Value| (v["key"].clone(), v.get("key_final").cloned());
     assert_eq!(key_of(&s["last_done"]), (json!("ATM-2"), None));
@@ -84,6 +86,10 @@ fn a_keys_format_project_gives_its_tasks_keys_and_a_legacy_one_does_not() {
         &json!({}),
     );
     let s = project_summary(&legacy).unwrap();
+    assert_eq!(s["key"], Value::Null);
+    // An empty key is none
+    let empty = project(&json!([]), &json!({"key": ""}));
+    assert_eq!(project_summary(&empty).unwrap()["key"], Value::Null);
     for entry in [
         &s["last_done"],
         &s["next"][0],
