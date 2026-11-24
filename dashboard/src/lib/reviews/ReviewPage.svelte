@@ -15,6 +15,7 @@
   import { setCommentEdits, setDocumentLinks, setTaskLinks } from './links';
   import type { TaskLinks } from '../compmd';
   import ReviewFile, { holdNearCards, whenIdle } from './ReviewFile.svelte';
+  import { forgetAllUnsent } from './unsent';
   import {
     chainsOf,
     driftedOf,
@@ -391,6 +392,8 @@
 
   let writing: (() => void) | null = null;
   onDestroy(() => writing?.());
+  // What was written and not sent is this review's (ATM-732): the next review's page starts with none
+  onDestroy(forgetAllUnsent);
   /** A link in the summary or a comment to a document of the project (ATM-586): a file the round changed opens its diff
    * here, the review being about it; anything else, or a document's heading or text, the document viewer */
   function openLink(ref: DocumentRef) {

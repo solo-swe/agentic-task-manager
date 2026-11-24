@@ -4,9 +4,11 @@
   import Icon from '../ui/Icon.svelte';
   import ComposerActions from './ComposerActions.svelte';
   import { draftActions } from './drafts';
+  import { untrack } from 'svelte';
   import { focusOnShow } from './focus';
   import { commentEdits, documentLinks, taskLinks } from './links';
   import type { Chain, ReviewComment } from './types';
+  import { forgetUnsent, keepsUnsent, unsent } from './unsent';
 
   // A chain of comments (docs/code-review-design.md §3.4, §3.7, ATM-573, ATM-574), in place under its lines in the diff
   // viewer: its lines (the diff shows the file and the text, so the chain doesn't repeat them), each comment with its
@@ -42,11 +44,24 @@
   /** What drafting does on this page (ATM-612); none where drafts can't be kept */
   const drafts = draftActions();
 
-  let replyingTo = $state<string | null>(null);
-  let draft = $state('');
+  // A reply or an edit being written here comes back when this chain's box is made again (ATM-732: an update of the
+  // review that cuts the diff's rows again above it, a comment from an agent arriving): kept in `unsent`, by comment
+  const everyComment = (list: ReviewComment[]): ReviewComment[] => list.flatMap((c) => [c, ...everyComment(c.replies)]);
+  const keptFor = (prefix: string) =>
+    untrack(() =>
+      everyComment(chain.comments)
+        .map((c) => ({ c, kept: unsent(`${prefix}:${c.id}`) }))
+        .find((k) => k.kept),
+    );
+  const keptReply = keptFor('reply');
+  const keptEdit = keptFor('edit');
+
+  let replyingTo = $state<string | null>(keptReply?.c.id ?? null);
+  let draft = $state(keptReply?.kept?.text ?? '');
   let refused = $state<string | null>(null);
 
   function closeReply() {
+    if (replyingTo) forgetUnsent(`reply:${replyingTo}`);
     replyingTo = null;
     draft = '';
     refused = null;
@@ -74,9 +89,9 @@
   const editable = (c: ReviewComment) => (c.draft ? !!drafts : !!edits && !!c.editable);
 
   // A draft's text, or one's own comment's, changed in place (ATM-612, ATM-638)
-  let editing = $state<string | null>(null);
-  let editingDraft = false;
-  let editText = $state('');
+  let editing = $state<string | null>(keptEdit?.c.id ?? null);
+  let editingDraft = !!keptEdit?.c.draft;
+  let editText = $state(keptEdit?.kept?.text ?? '');
   let editRefused = $state<string | null>(null);
   function startEdit(c: ReviewComment) {
     editing = c.id;
@@ -84,13 +99,17 @@
     editText = c.body;
     editRefused = null;
   }
+  function stopEdit() {
+    if (editing) forgetUnsent(`edit:${editing}`);
+    editing = null;
+  }
   async function saveEdit() {
     const body = editText.trim();
     if (!body || !editing) return;
     const by = editingDraft ? drafts?.edit : edits?.edit;
     if (!by) return;
     editRefused = await by(editing, body);
-    if (editRefused === null) editing = null;
+    if (editRefused === null) stopEdit();
   }
 
   const a = $derived(chain.anchor);
@@ -183,14 +202,14 @@
           aria-label={c.draft ? 'Edit your draft' : 'Edit your comment'}
           bind:value={editText}
           rows="3"
-          {@attach focusOnShow}
+          {@attach keepsUnsent(`edit:${c.id}`, focusOnShow)}
           onkeydown={(e) => {
-            if (e.key === 'Escape') editing = null;
+            if (e.key === 'Escape') stopEdit();
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void saveEdit();
           }}></textarea>
         {#if editRefused}<p class="chain-problem" role="alert">Not saved: {editRefused}</p>{/if}
         <div class="chain-actions">
-          <button type="button" class="chain-button" onclick={() => (editing = null)}>Cancel</button>
+          <button type="button" class="chain-button" onclick={stopEdit}>Cancel</button>
           <button type="submit" class="chain-button primary" disabled={!editText.trim()}>Save</button>
         </div>
       </form>
@@ -213,7 +232,7 @@
             bind:value={draft}
             rows="3"
             placeholder="Reply…"
-            {@attach focusOnShow}
+            {@attach keepsUnsent(`reply:${c.id}`, focusOnShow)}
             onkeydown={(e) => {
               if (e.key === 'Escape') closeReply();
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitReply();

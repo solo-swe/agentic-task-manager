@@ -21,6 +21,7 @@
     type UnifiedRow,
   } from './diff';
   import type { Chain, Picked, Side } from './types';
+  import { forgetUnsent, keepsUnsent } from './unsent';
 
   /** How many rows of a file are drawn at a time (ATM-587): 300 made a frame of about 120 ms when scrolled into a
    * long file, 100 about 30 */
@@ -272,6 +273,7 @@
     } else {
       picked = { block, side: s, at: row, from: row, to: row };
       draft = '';
+      forgetUnsent(`comment:${path}`);
     }
     dragging = true;
   }
@@ -319,6 +321,7 @@
   const composing = $derived(shownView === 'rendered' ? renderedPick : dragging ? null : pickedLines);
 
   function cancel() {
+    forgetUnsent(`comment:${path}`);
     picked = null;
     renderedPick = null;
     draft = '';
@@ -445,7 +448,7 @@
       rows="3"
       placeholder="Leave a comment…"
       bind:value={draft}
-      {@attach shownView === 'rendered' ? focusWhenPlaced : focusOnShow}
+      {@attach keepsUnsent(`comment:${path}`, shownView === 'rendered' ? focusWhenPlaced : focusOnShow)}
       onkeydown={(e) => {
         if (e.key === 'Escape') cancel();
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
@@ -579,6 +582,7 @@
               ? (p) => {
                   renderedPick = p;
                   draft = '';
+                  forgetUnsent(`comment:${path}`);
                 }
               : undefined}
           />

@@ -2428,6 +2428,55 @@ test.describe('the diff viewer on a review’s page', () => {
     await expect(mine.getByLabel('Edit your comment')).toHaveValue('Half written');
   });
 
+  // ATM-732 (Hakan): an agent's comment arriving above a box being written in cut the diff's rows again, which made
+  // the box again: the reply's text was lost, and the comment's box lost its focus and its cursor
+  test('comments arriving while you write a comment and a reply in the diff keep both, the cursor and the focus', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openReviews(page, tasksServer);
+    const page_ = reviewPage();
+    await page.goto(reviewPath(tasksServer, '/CR-2?file=src/a.rs'));
+    const view = diffOf(page, 'src/a.rs');
+    // A reply to the chain on line 3, half written, then a comment on line 31, being written, its cursor inside it
+    await view.locator('[data-chain="t1"]').getByRole('button', { name: 'Reply' }).click();
+    const reply = view.getByLabel('Reply to Ana');
+    await reply.fill('Half a reply');
+    await view.locator('.diff-new').getByRole('button', { name: 'Line 31', exact: true }).first().click();
+    const box = page.locator('.diff-composer textarea');
+    await box.fill('Half a comment');
+    await box.press('ArrowLeft');
+    await box.press('ArrowLeft');
+    await box.press('ArrowLeft');
+    const caret = 'Half a comment'.length - 3;
+    // An agent comments above each of them: on line 2, and on line 30
+    const agents = (id: string, line: number, cid: string) => ({
+      id,
+      anchor: { round: 3, path: 'src/a.rs', side: 'new', lines: [line, line], quote: `line ${line}` },
+      comments: [{ ...comment(cid, `Agent on line ${line}`), author: 'claude:b' }],
+      placed: [line, line],
+      drifted: null,
+    });
+    tasksServer.setReview('CR-2', {
+      ...page_,
+      chains: [...page_.chains, agents('t8', 2, 'c8'), agents('t9', 30, 'c9')],
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(view.locator('[data-chain="t8"]')).toBeVisible();
+    await expect(view.locator('[data-chain="t9"]')).toBeVisible();
+    await expect(view.getByLabel('Reply to Ana')).toHaveValue('Half a reply');
+    await expect(page.locator('.diff-composer textarea')).toHaveValue('Half a comment');
+    await expect(page.locator('.diff-composer textarea')).toBeFocused();
+    expect(
+      await page
+        .locator('.diff-composer textarea')
+        .evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd]),
+    ).toEqual([caret, caret]);
+    // Typing goes on where it was
+    await page.keyboard.type('XY');
+    await expect(page.locator('.diff-composer textarea')).toHaveValue('Half a commXYent');
+  });
+
   // ATM-612: drafts, only the user's, sent together with their decision
   test('drafts: one added from a diff’s lines; shown marked and counted; edited, removed, and sent with Comment', async ({
     page,

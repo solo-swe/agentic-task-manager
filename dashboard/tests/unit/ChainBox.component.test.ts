@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ChainBox from '../../src/lib/reviews/ChainBox.svelte';
 import type { Chain, ReviewComment } from '../../src/lib/reviews/types';
+import { forgetAllUnsent } from '../../src/lib/reviews/unsent';
 
 // A chain of comments (lib/reviews/ChainBox.svelte, ATM-573, ATM-574): where it is (its lines; `detailed`, its file
 // too, and the text it was made on), where it stands (Resolve while open, a resolved check above the comment once
@@ -62,6 +63,8 @@ afterEach(() => {
   vi.restoreAllMocks();
   page.drafts = undefined;
   edits.current = undefined;
+  // A box left open by a test is the next test's otherwise (ATM-732)
+  forgetAllUnsent();
 });
 
 describe('ChainBox: editing your own comment (ATM-638)', () => {
@@ -345,5 +348,71 @@ describe('ChainBox: replies', () => {
     await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'Again.' } });
     await fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', metaKey: true });
     expect(onreply).toHaveBeenLastCalledWith('c1', 'Again.');
+  });
+});
+
+// ATM-732: an update of the review can make a chain's box again (the diff's rows cut again above it); what was being
+// written in it comes back
+describe('ChainBox: made again while you write', () => {
+  it('a reply being written comes back, under its comment, with its text, its cursor and the focus', async () => {
+    const c = chain([comment('c1', { replies: [comment('r1', { resolved: null })] })]);
+    const first = show(c);
+    await fireEvent.click(
+      within(first.container.querySelector('[data-comment="r1"]') as HTMLElement).getByRole('button', {
+        name: 'Reply',
+      }),
+    );
+    const box = screen.getByRole('textbox', { name: 'Reply to Ana' }) as HTMLTextAreaElement;
+    await fireEvent.input(box, { target: { value: 'Half a reply' } });
+    box.setSelectionRange(4, 4);
+    await fireEvent.keyUp(box, { key: 'ArrowLeft' });
+    first.unmount();
+    const again = show(c);
+    const back = screen.getByRole('textbox', { name: 'Reply to Ana' }) as HTMLTextAreaElement;
+    expect(back.closest('[data-comment]')?.getAttribute('data-comment')).toBe('r1');
+    expect(back).toHaveValue('Half a reply');
+    expect(back).toHaveFocus();
+    expect([back.selectionStart, back.selectionEnd]).toEqual([4, 4]);
+    // Closed, it is forgotten: made again, no box
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    again.unmount();
+    show(c);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('one written without the focus comes back without taking it; one sent is forgotten', async () => {
+    const c = chain([comment('c1')]);
+    const first = show(c);
+    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    const reply = () => screen.queryByRole('textbox', { name: 'Reply to Ana' });
+    await fireEvent.input(reply()!, { target: { value: 'Later.' } });
+    // The reader went to write elsewhere
+    const other = document.body.appendChild(document.createElement('input'));
+    try {
+      other.focus();
+      await new Promise((r) => queueMicrotask(() => r(null)));
+      first.unmount();
+      const again = show(c);
+      expect(reply()).toHaveValue('Later.');
+      expect(other).toHaveFocus();
+      await fireEvent.submit(again.container.querySelector('form') as HTMLElement);
+      expect(again.onreply).toHaveBeenCalledWith('c1', 'Later.');
+      again.unmount();
+      show(c);
+      expect(reply()).toBeNull();
+    } finally {
+      other.remove();
+    }
+  });
+
+  it('an edit of your own comment comes back with its changed text', async () => {
+    editing();
+    const c = chain([comment('c1', { body: 'Old.', editable: true })]);
+    const first = show(c);
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
+    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'New, half' } });
+    first.unmount();
+    show(c);
+    expect(screen.getByRole('textbox', { name: 'Edit your comment' })).toHaveValue('New, half');
   });
 });

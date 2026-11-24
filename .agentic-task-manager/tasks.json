@@ -19543,11 +19543,11 @@
       "description": "Switching between a code review's tabs loses the scroll position in the diff view. Keep each view's position, so going back to the diff returns to the same place. Test the switch both ways.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T00:18:57Z",
+      "updated_at": "2026-11-24T00:24:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19560,7 +19560,24 @@
       "review": "async",
       "number": 730,
       "started_at": "2026-11-24T00:18:57Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "77783bafe0d18041a124866cbbf69ce976c69707",
+      "code_reviews": [
+        {
+          "id": "01a20af0-8d37-7594-86b1-c9bf4e54b5e3",
+          "ref": "CR-138"
+        }
+      ],
+      "review_requested_at": "2026-11-24T00:24:26Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-24T00:24:26Z",
+          "kind": "review",
+          "text": "CR-138: CR sub-tabs keep the diff position",
+          "by": "claude:ba530ebb"
+        }
+      ]
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d980e8e25290",
@@ -19601,13 +19618,13 @@
       "description": "In the diff view, while the user is writing a comment or a reply, a comment or response arriving from an agent re-renders the view and the text being edited is lost. The editor, its text and its cursor must survive updates to the review. Test with a comment and a reply in progress while new comments arrive.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-23T10:25:40Z",
+      "updated_at": "2026-11-24T00:24:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:ba530ebb",
       "sprint_history": [
         {
           "sprint": "Sidebar overhaul",
@@ -19616,7 +19633,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 732
+      "number": 732,
+      "started_at": "2026-11-24T00:24:30Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a207f0-a2e1-7602-b260-d982704f90ae",
