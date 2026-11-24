@@ -497,14 +497,16 @@ pub fn folder(entry: &Value) -> PathBuf {
     PathBuf::from(entry["path"].as_str().unwrap_or_default())
 }
 
-/// What the summary depends on: the task data, the claims, the day, and the checked-out branch (on the card).
+/// What the summary depends on: the task data, the claims, the day, the checked-out branch (on the card), the reviews
+/// and the inbox (its open items, ATM-761).
 fn summary_stamp(stamp: &Value) -> Value {
     json!([
         stamp["tasks"],
         stamp["claims"],
         &format_iso(now())[..10],
         stamp["head"],
-        stamp["reviews"]
+        stamp["reviews"],
+        stamp["inbox"]
     ])
 }
 

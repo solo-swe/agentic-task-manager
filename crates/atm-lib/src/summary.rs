@@ -829,6 +829,8 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         "stats": project_stats(project, document, vocab, &tasks, current),
         // The overview's Progress tab (ATM-722): from the summary, no project's tasks loaded for it
         "progress": crate::stats::overview(project, current * 1000)?,
+        // The Inbox item's badge (ATM-761): items waiting to be triaged; an inbox that can't be read counts none
+        "inbox": {"open": crate::inbox::open_count(project).unwrap_or(0)},
     }))
 }
 

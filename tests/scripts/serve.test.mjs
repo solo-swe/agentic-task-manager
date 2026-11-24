@@ -329,6 +329,8 @@ describe('serve', () => {
       board_active_sprint: null,
       // The card's line (T-255): no creation times, no work recorded
       stats: { started: null, tasks: 8, agent_minutes: 0 },
+      // No inbox yet (ATM-761)
+      inbox: { open: 0 },
     });
     assert.deepEqual(
       [byId.eeee5555.summary.percent, byId.eeee5555.summary.recent_sprints, byId.eeee5555.summary.last_activity],
@@ -348,6 +350,12 @@ describe('serve', () => {
     // (the branch HEAD names, as the project card's: the test repository has no commit yet, but HEAD is main, T-385)
     assert.deepEqual(summary.working, [{ task: 'T-7', name: 'T-7', agent: 'claude:test', branch: 'main' }]);
     assert.deepEqual(summary.next, []);
+    // An item noted in the inbox (ATM-761) is a new version too: its count is the Inbox item's badge
+    const before = changed.headers.get('etag');
+    assert.equal(runAtm(['inbox', 'add', 'Later'], root, { ...env, ATM_AGENT: 'Ana' }).code, 0);
+    const noted = await fetch(url, { headers: { 'If-None-Match': before } });
+    assert.equal(noted.status, 200);
+    assert.deepEqual((await noted.json()).projects.find((p) => p.id === 'abcd1234').summary.inbox, { open: 1 });
     atm(['service', 'stop'], root);
   });
 
@@ -1101,7 +1109,7 @@ describe('serve', () => {
     for (const method of ['POST', 'PUT', 'DELETE'])
       assert.deepEqual(await get('/api/projects', { method }), [
         405,
-        'only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews',
+        'only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews and the inbox',
       ]);
     atm(['service', 'stop'], root);
   });
@@ -1330,6 +1338,91 @@ describe('serve', () => {
     const [sent] = JSON.parse(atm(['review', 'comments', 'CR-3', '--json'], root).stdout);
     assert.deepEqual([sent.comments[0].body, sent.anchor.path], ['Why two?', 'a.txt']);
     assert.deepEqual((await (await fetch(drafts)).json()).drafts, []);
+    atm(['service', 'stop'], root);
+  });
+
+  test('inbox (ATM-761): read with an ETag; changed only from atm’s own page with its session token, as JSON; as the user', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project({ meta: { id: 'abcd1234', project: 'Serve' }, tasks: [] });
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const origin = `http://localhost:${port}`;
+    const page = await (await fetch(`${origin}/projects/abcd1234/inbox`)).text();
+    const token = /<meta name="atm-session" content="([0-9a-f]{64})">/.exec(page)?.[1];
+    assert.ok(token, 'the page has the session token');
+    const inbox = `${origin}/api/v2/workspaces/default/projects/abcd1234/inbox`;
+    const send = (method, url, body, headers = {}) =>
+      fetch(url, {
+        method,
+        headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Atm-Session': token, ...headers },
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+      });
+    const refused = async (r) => [r.status, (await r.json()).error];
+    const items = () => JSON.parse(atm(['inbox', 'list', '--state', 'all', '--json'], root).stdout).items;
+
+    // Empty at first, with an ETag; v1's route is the default workspace's
+    let r = await fetch(inbox);
+    assert.equal(r.status, 200);
+    assert.deepEqual((await r.json()).items, []);
+    const empty = r.headers.get('etag');
+    assert.ok(empty);
+    assert.equal((await fetch(inbox, { headers: { 'If-None-Match': empty } })).status, 304);
+    assert.equal((await fetch(`${origin}/api/v1/projects/abcd1234/inbox`)).status, 200);
+
+    // Added as the user at the machine: the inbox refuses an agent, whatever agent's environment started the server
+    r = await send('POST', inbox, { text: 'Remember the **sidebar**' });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.equal((await r.json()).item.id, 'IN-1');
+    assert.equal(items()[0].created_by, git(['config', 'user.name'], root).trim());
+    // The poll sees it
+    assert.equal((await fetch(inbox, { headers: { 'If-None-Match': empty } })).status, 200);
+    r = await send('PATCH', `${inbox}/IN-1`, { text: 'Remember the sidebar' });
+    assert.equal(r.status, 200, await r.clone().text());
+    r = await send('POST', `${inbox}/IN-1/decisions`, { decision: 'discarded', reason: 'Done already' });
+    assert.equal(r.status, 201, await r.clone().text());
+    r = await send('POST', `${inbox}/IN-1/decisions`, { decision: 'restored' });
+    assert.equal(r.status, 201, await r.clone().text());
+    assert.deepEqual(
+      items().map((i) => [i.id, i.text, i.state]),
+      [['IN-1', 'Remember the sidebar', 'created']],
+    );
+
+    // Without the token, with another, from another site, or as a form: refused, nothing written
+    const note = { text: 'Not this one' };
+    assert.deepEqual(await refused(await send('POST', inbox, note, { 'X-Atm-Session': '' })), [
+      403,
+      "no session token, or not this server's",
+    ]);
+    assert.deepEqual(await refused(await send('POST', inbox, note, { 'X-Atm-Session': 'f'.repeat(64) })), [
+      403,
+      "no session token, or not this server's",
+    ]);
+    assert.deepEqual(await refused(await send('POST', inbox, note, { Origin: 'https://evil.example' })), [
+      403,
+      "a change comes from atm's own page",
+    ]);
+    assert.deepEqual(
+      await refused(
+        await fetch(inbox, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin, 'X-Atm-Session': token },
+          body: 'text=Not+this+one',
+        }),
+      ),
+      [415, 'the body is JSON'],
+    );
+    // A field a request doesn't take (another author), a list, an injection (an agent's, never the page's), a route
+    // there isn't, a method a resource doesn't take, and v1's path, which takes no change
+    assert.equal((await send('POST', inbox, { text: 'x', created_by: 'claude:x' })).status, 400);
+    assert.equal((await send('POST', inbox, ['x'])).status, 400);
+    assert.equal((await send('POST', `${inbox}/IN-1/decisions`, { decision: 'injected', tasks: ['T-1'] })).status, 400);
+    assert.equal((await send('POST', `${inbox}/IN-1/injections`, {})).status, 404);
+    assert.equal((await send('DELETE', `${inbox}/IN-1`, {})).status, 405);
+    assert.equal((await send('POST', `${origin}/api/v1/projects/abcd1234/inbox`, note)).status, 405);
+    // Too large a body
+    assert.equal((await send('POST', inbox, { text: 'x'.repeat(1_100_000) })).status, 413);
+    assert.equal(items().length, 1, 'nothing refused was written');
     atm(['service', 'stop'], root);
   });
 

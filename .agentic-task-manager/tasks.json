@@ -20942,7 +20942,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §3–§5: the CLI.\n\n## Change\n- `atm inbox add '<text>' | --text-file F`, `edit IN-3 --text-file F`, `list [--state …] [--archived] [--json]`, `show IN-3`, `discard IN-3 --reason '…'`, `inject IN-3 --task ATM-760 …`, `restore IN-3`.\n- `atm db archive` and `atm db unarchive IN-3` for items; the archive hint counts them.\n- `atm project status`: one line, *Inbox: N open (`/atm-triage-inbox`)*; `atm loop next` and the review watch never read the inbox.\n- `atm vcs commit` takes `inbox.json` along with `tasks.json` when it changed.\n- `docs/agent/commands.md` (and a topic if it needs one), `atm docs` embedding it.\n\n## Tests\nCLI scenarios (`tests/scripts/scenarios/`) for each command, its refusals and `--json`; the status line; the commit taking `inbox.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8910f0acbe3"
       ],
@@ -20951,7 +20951,7 @@
         "docs/agent/commands.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T06:40:31Z",
+      "updated_at": "2026-11-24T06:44:19Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20976,10 +20976,25 @@
           "at": "2026-11-24T06:40:23Z",
           "kind": "failure",
           "text": "lease expired (claude:ba530ebb)"
+        },
+        {
+          "at": "2026-11-24T06:44:19Z",
+          "kind": "review",
+          "text": "CR-149: Inbox: atm inbox commands",
+          "by": "claude:ba530ebb"
         }
       ],
       "started_at": "2026-11-24T06:40:31Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "0f7c30297198906b3b99b151b011995f80871774",
+      "code_reviews": [
+        {
+          "id": "01a20c4c-55f8-73f3-a681-4cc4f0bfe7ec",
+          "ref": "CR-149"
+        }
+      ],
+      "review_requested_at": "2026-11-24T06:44:19Z",
+      "review_state": "waiting"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e89307ded508",
@@ -20994,7 +21009,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §7.\n\n## Change\n- `GET …/projects/<id>/inbox?state=&archived=` (with `ETag`), `POST …/inbox` `{text}`, `PATCH …/inbox/<IN>` `{text}`, `POST …/inbox/<IN>/decisions` (`discarded` with a reason, or `restored`), v2 and v1 forms.\n- **The write routes get the review routes' guards exactly:** Host check, the server's own `Origin`, the session token in `X-Atm-Session`, a JSON body of at most 1 MB with `deny_unknown_fields`, acting as the user at the machine (never an agent's identity), one atm-lib call each. No inject route.\n- The project summary's `inbox: {open}`.\n- The app's commands `project_inbox`, `add_inbox_item`, `edit_inbox_item`, `decide_inbox_item` (I27), in the capability's manifest.\n- **In the same change:** `docs/security-architecture.md` (I11's write routes, I27, the entry points) and `docs/multi-project-api.md`.\n\n## Tests\natm-api unit tests with a fake atm-lib (each answer class, status codes, `ETag`); serve tests for every guard (no token, another origin, a form, an unknown field, an agent identity); the app's command tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e8910f0acbe3"
       ],
@@ -21005,7 +21020,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T06:44:24Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21016,7 +21031,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 761
+      "number": 761,
+      "started_at": "2026-11-24T06:44:24Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8942c011d6d",

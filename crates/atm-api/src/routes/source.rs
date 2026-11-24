@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use atm_common::{Error, Result};
 use atm_lib::Project;
+use atm_lib::inbox::{self, ItemDecision, ItemEdit, Listing, NewItem};
 use atm_lib::query::Filters;
 use atm_lib::review_drafts::{self, Draft, DraftUpdate, NewDraft};
 use atm_lib::review_pages::ReviewQuery;
@@ -133,6 +134,35 @@ pub trait ProjectSource {
     /// # Errors
     /// The project can't be opened.
     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>>;
+    /// Its inbox's items `which` lists, of the inbox or its archive (ATM-761): `{items, created, discarded, injected}`.
+    ///
+    /// # Errors
+    /// The project or its inbox can't be read.
+    fn inbox(&self, which: Listing, archived: bool) -> Result<Value>;
+    /// Its inbox, to change as the user at the machine (never an agent's identity).
+    ///
+    /// # Errors
+    /// The project can't be opened.
+    fn inbox_as_user(&self) -> Result<Box<dyn InboxChanges>>;
+}
+
+/// A project's inbox, changed (atm-lib's `inbox`): what the page does; an injection is an agent's, never a route's.
+pub trait InboxChanges {
+    /// A new item: it, as stored.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn add_item(&mut self, item: &NewItem) -> Result<Value>;
+    /// An open item's new text.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn edit_item(&mut self, id: &str, edit: &ItemEdit) -> Result<Value>;
+    /// A person's decision: discarded, or restored.
+    ///
+    /// # Errors
+    /// What atm-lib refuses.
+    fn decide_item(&mut self, id: &str, decision: &ItemDecision) -> Result<Value>;
 }
 
 /// A project's reviews, changed (atm-lib's `review_requests`).
@@ -358,6 +388,34 @@ impl ProjectSource for Member {
 
     fn reviews_as_user(&self) -> Result<Box<dyn ReviewChanges>> {
         Ok(Box::new(self.project_as_user()?))
+    }
+
+    fn inbox(&self, which: Listing, archived: bool) -> Result<Value> {
+        let listed = inbox::list(&self.project()?, which, archived)?;
+        Ok(serde_json::json!({
+            "items": listed.items,
+            "created": listed.created,
+            "discarded": listed.discarded,
+            "injected": listed.injected,
+        }))
+    }
+
+    fn inbox_as_user(&self) -> Result<Box<dyn InboxChanges>> {
+        Ok(Box::new(self.project_as_user()?))
+    }
+}
+
+impl InboxChanges for Project {
+    fn add_item(&mut self, item: &NewItem) -> Result<Value> {
+        inbox::add(self, &item.text)
+    }
+
+    fn edit_item(&mut self, id: &str, edit: &ItemEdit) -> Result<Value> {
+        inbox::edit(self, id, &edit.text)
+    }
+
+    fn decide_item(&mut self, id: &str, decision: &ItemDecision) -> Result<Value> {
+        inbox::decide(self, id, decision)
     }
 }
 

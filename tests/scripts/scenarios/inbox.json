@@ -60,7 +60,13 @@
           "version": 1,
           "next": 4,
           "items": [
-            { "id": "IN-1", "text": "First\nmore", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" },
+            {
+              "id": "IN-1",
+              "text": "First\nmore",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            },
             {
               "id": "IN-2",
               "text": "Second",
@@ -71,13 +77,21 @@
               "decided_at": "2026-11-24T09:05:00Z",
               "decided_by": "Ana"
             },
-            { "id": "IN-3", "text": "Third", "state": "created", "created_at": "2026-11-24T09:02:00Z", "created_by": "Ana" }
+            {
+              "id": "IN-3",
+              "text": "Third",
+              "state": "created",
+              "created_at": "2026-11-24T09:02:00Z",
+              "created_by": "Ana"
+            }
           ]
         }
       }
     },
     "args": ["inbox", "list"],
-    "expect": { "stdout": "IN-3  created  Third\nIN-1  created  First\n3 items in the inbox: 2 open, 1 discarded, 0 injected\n" }
+    "expect": {
+      "stdout": "IN-3  created  Third\nIN-1  created  First\n3 items in the inbox: 2 open, 1 discarded, 0 injected\n"
+    }
   },
   {
     "name": "inbox list --state discarded says why; --json gives the items and counts",
@@ -88,7 +102,13 @@
           "version": 1,
           "next": 3,
           "items": [
-            { "id": "IN-1", "text": "First", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" },
+            {
+              "id": "IN-1",
+              "text": "First",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            },
             {
               "id": "IN-2",
               "text": "Second",
@@ -121,7 +141,13 @@
           "version": 1,
           "next": 2,
           "items": [
-            { "id": "IN-1", "text": "Title line\nand more", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+            {
+              "id": "IN-1",
+              "text": "Title line\nand more",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
           ]
         }
       }
@@ -145,7 +171,15 @@
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
-          "items": [{ "id": "IN-1", "text": "Old idea", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
+          "items": [
+            {
+              "id": "IN-1",
+              "text": "Old idea",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
+          ]
         }
       }
     },
@@ -210,11 +244,24 @@
     "name": "inbox inject: the item names its tasks, and each task names the item",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }, { "id": "T-002", "status": "todo" }] },
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-001", "status": "todo" },
+            { "id": "T-002", "status": "todo" }
+          ]
+        },
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
-          "items": [{ "id": "IN-1", "text": "Two things", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
+          "items": [
+            {
+              "id": "IN-1",
+              "text": "Two things",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            }
+          ]
         }
       }
     },
@@ -251,7 +298,9 @@
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
+          "items": [
+            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+          ]
         }
       }
     },
@@ -263,7 +312,9 @@
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
+          "items": [
+            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+          ]
         }
       }
     }
@@ -276,7 +327,9 @@
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
+          "items": [
+            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+          ]
         }
       },
       "commands": [["sh", "-c", "\"$ATM\" inbox inject IN-1 --task T-001"]]
@@ -325,7 +378,9 @@
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
+          "items": [
+            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+          ]
         }
       }
     },
@@ -341,7 +396,9 @@
         ".agentic-task-manager/inbox.json": {
           "version": 1,
           "next": 2,
-          "items": [{ "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }]
+          "items": [
+            { "id": "IN-1", "text": "x", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
+          ]
         }
       }
     },
@@ -354,7 +411,10 @@
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
     "env": { "ATM_AGENT": "Ana" },
     "args": ["inbox", "add", "x", "--dry-run"],
-    "expect": { "stdout": "[dry-run] would add an item to the inbox\n", "files": { ".agentic-task-manager/inbox.json": false } }
+    "expect": {
+      "stdout": "[dry-run] would add an item to the inbox\n",
+      "files": { ".agentic-task-manager/inbox.json": false }
+    }
   },
   {
     "name": "db archive moves the inbox's items decided long ago, never an open one; unarchive brings one back",
@@ -365,7 +425,13 @@
           "version": 1,
           "next": 4,
           "items": [
-            { "id": "IN-1", "text": "open, old", "state": "created", "created_at": "2026-01-01T09:00:00Z", "created_by": "Ana" },
+            {
+              "id": "IN-1",
+              "text": "open, old",
+              "state": "created",
+              "created_at": "2026-01-01T09:00:00Z",
+              "created_by": "Ana"
+            },
             {
               "id": "IN-2",
               "text": "decided, old",
@@ -407,7 +473,13 @@
           "version": 1,
           "next": 3,
           "items": [
-            { "id": "IN-1", "text": "open, old", "state": "created", "created_at": "2026-01-01T09:00:00Z", "created_by": "Ana" },
+            {
+              "id": "IN-1",
+              "text": "open, old",
+              "state": "created",
+              "created_at": "2026-01-01T09:00:00Z",
+              "created_by": "Ana"
+            },
             {
               "id": "IN-2",
               "text": "decided, old",
@@ -465,7 +537,13 @@
           "version": 1,
           "next": 3,
           "items": [
-            { "id": "IN-1", "text": "a", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" },
+            {
+              "id": "IN-1",
+              "text": "a",
+              "state": "created",
+              "created_at": "2026-11-24T09:00:00Z",
+              "created_by": "Ana"
+            },
             { "id": "IN-2", "text": "b", "state": "created", "created_at": "2026-11-24T09:00:00Z", "created_by": "Ana" }
           ]
         }

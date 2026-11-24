@@ -420,6 +420,26 @@ page has them as `drafts` too, a draft comment placed in the round shown (`place
   `reply_to_review_comment`, `poke_review`, and the drafts' `list_review_drafts`, `add_review_draft`,
   `update_review_draft` and `remove_review_draft`.
 
+### 2.10 A project's inbox (ATM-761)
+
+The project's inbox (docs/inbox-design.md): `IN-<n>` items a person notes for later, each `created`, then `discarded`
+with a reason or `injected` into tasks. Under `api/v2/workspaces/<w>/projects/<p>/`:
+
+| Route | Body | Does | Answer |
+|---|---|---|---|
+| `GET inbox?state=&archived=` | — | the items `state` names (`created`, the open ones, by default; `discarded`, `injected`, `all`), of the archive with `archived=1`, newest first; also at `api/v1/projects/<p>/inbox` | `200`, `{items, created, discarded, injected}` (the counts are the whole inbox's or archive's), with an `ETag`: `304` while it is unchanged |
+| `POST inbox` | `{text}` | an item added, as the user (`atm inbox add`) | `201`, `{item}` |
+| `PATCH inbox/<IN>` | `{text}` | an open item's text (`atm inbox edit`) | `200`, `{item}` |
+| `POST inbox/<IN>/decisions` | `{decision: "discarded", reason}` or `{decision: "restored"}` | a person's decision (`atm inbox discard`, `restore`) | `201`, `{item}` |
+
+- **The same checks as the review routes** (§2.9): the server's own `Origin`, the session token, JSON (at most 1 MB),
+  each body an object with exactly its fields, acting as the user at the machine: so the inbox's own rule, that an
+  agent doesn't add, edit or restore, holds whatever environment started the server. v1's path takes no change.
+- **No route injects an item**: the tasks an item became are an agent's to record (`atm inbox inject`), in the triage
+  skill, with the user.
+- The app's commands do the same, one each: `project_inbox` (with `which` and `archived`), `add_inbox_item`,
+  `edit_inbox_item` and `decide_inbox_item`.
+
 ## 3. `GET /api/projects`
 
 ```json
@@ -517,6 +537,7 @@ and `key_final` too, as the task views give them; a project before task keys has
 | `completions_14d` | 14 integers, oldest first, ending with today: done-kind tasks by the UTC day of `completed_at` (tasks without `completed_at` aren't counted) |
 | `board` | the cards for the All projects board (§3.3) |
 | `board_active_sprint` | the same columns, of the active sprint's tasks only, with their own counts: the board's default view (T-340, §3.3); `null` without an active sprint. Absent before 0.26, when the dashboard shows `board` |
+| `inbox` | `{ open }`: the project's inbox items waiting to be triaged (ATM-761), the Inbox item's badge; `0` when the inbox can't be read; absent from an older server. The summary's stamp includes `inbox.json`, so its cache and `ETag` move with an item |
 | `progress` | the overview's Progress tab (ATM-722, atm-lib's `stats::overview`), so the overview loads no project's tasks for it: `done` and `total` (all but the skipped, the archive too), `open_releases` (`[{ id, name, done, total }]`, the planned ones), `done_days` (`[[day, count]]`, days since 1970 in UTC, for the velocity chart), `burndown` (`[[day, scope, remaining]]` at the end of each day from the first task's to today) and `forecast` (`{ minutes: { likely, low, high }, waiting }`, the agent work left at the agents' pace and the open tasks waiting on someone; `null` without a pace) |
 | `stats` | the overview card's line (T-255), archived tasks included (a task in both files counted once, from `tasks.json`; an unreadable archive left out): `started`, the earliest `created_at` (else `meta.created`, else `null`); `tasks`, how many; `agent_minutes`, the agent time as the Project tab counts it: the work (`started_at` until the review request or completion, until now while active) of tasks an agent (`claude:…`) or nobody recorded started, each agent's spans merged, added up. Computed when the summary is (a change to `tasks.json` or the claims), so a running task's time grows between changes only then |
 

@@ -1104,3 +1104,109 @@ fn the_window_commands_act_on_the_calling_window() {
     }
     std::fs::remove_dir_all(&home).expect("clean up");
 }
+
+/// ATM-761: the inbox's commands, as its REST routes: the items, an item added as the user, its text changed, a
+/// person's decision; a body that isn't the request refused; a page from anywhere else can't call them
+#[test]
+#[cfg_attr(
+    windows,
+    ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+)]
+fn the_inbox_commands_answer_what_the_page_reads_and_only_from_the_apps_page() {
+    let home = a_state_with_a_project("inbox-flow");
+    let (_app, windows) = mock_app(
+        &home,
+        tauri::generate_handler![
+            project_inbox,
+            add_inbox_item,
+            edit_inbox_item,
+            decide_inbox_item
+        ],
+        &["main"],
+    );
+    let window = &windows[0];
+    let on = |extra: Value| {
+        let mut args = json!({"workspace": "work", "project": "abcd1234"});
+        args.as_object_mut()
+            .expect("an object")
+            .extend(extra.as_object().expect("an object").clone());
+        args
+    };
+    let list = |which: Value| {
+        call(
+            window,
+            "project_inbox",
+            &on(json!({"which": which, "archived": false})),
+        )
+    };
+    assert_eq!(list(Value::Null).expect("the inbox")["items"], json!([]));
+    let added = call(
+        window,
+        "add_inbox_item",
+        &on(json!({"item": {"text": "A note"}})),
+    )
+    .expect("an item");
+    assert_eq!(added["item"]["id"], json!("IN-1"), "{added}");
+    // As the user at the machine: the inbox refuses an agent
+    assert!(
+        !added["item"]["created_by"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("claude:")
+    );
+    let edited = call(
+        window,
+        "edit_inbox_item",
+        &on(json!({"id": "IN-1", "edit": {"text": "A better note"}})),
+    )
+    .expect("an edit");
+    assert_eq!(edited["item"]["text"], json!("A better note"));
+    let discarded = call(
+        window,
+        "decide_inbox_item",
+        &on(json!({"id": "IN-1", "decision": {"decision": "discarded", "reason": "Done"}})),
+    )
+    .expect("a decision");
+    assert_eq!(discarded["item"]["state"], json!("discarded"));
+    assert_eq!(
+        list(json!("discarded")).expect("the discarded")["discarded"],
+        json!(1)
+    );
+    // Not a request: another author, an injection, a list
+    for (command, args) in [
+        (
+            "add_inbox_item",
+            on(json!({"item": {"text": "x", "created_by": "claude:x"}})),
+        ),
+        ("add_inbox_item", on(json!({"item": ["x"]}))),
+        (
+            "decide_inbox_item",
+            on(json!({"id": "IN-1", "decision": {"decision": "injected", "tasks": ["T-1"]}})),
+        ),
+    ] {
+        let refused = call(window, command, &args).expect_err(command);
+        assert_eq!(refused["kind"], json!("invalid"), "{command}: {refused}");
+    }
+    // From anywhere but the app's own page: none answers
+    for elsewhere in ELSEWHERE {
+        assert!(
+            tauri::test::get_ipc_response(
+                window,
+                ipc_request(
+                    "add_inbox_item",
+                    &on(json!({"item": {"text": "x"}})),
+                    elsewhere
+                )
+            )
+            .is_err(),
+            "add_inbox_item answered a page from {elsewhere}"
+        );
+    }
+    assert_eq!(
+        list(json!("all")).expect("all")["items"]
+            .as_array()
+            .map(Vec::len),
+        Some(1)
+    );
+    std::fs::remove_dir_all(&home).expect("clean up");
+}

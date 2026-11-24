@@ -196,6 +196,79 @@ fn a_person_restores_a_discarded_item_which_forgets_its_reason() {
     );
 }
 
+// The page's requests (ATM-761)
+
+#[test]
+fn a_decision_discards_with_its_reason_or_restores_without_one() {
+    let decision = |decision, reason: Option<&str>| ItemDecision {
+        decision,
+        reason: reason.map(String::from),
+    };
+    let mut p = project_with(
+        inbox(&[item("IN-1", "created", None)]),
+        atm_common::inbox::empty_inbox(),
+        PERSON,
+    );
+    for wrong in [
+        decision(Decided::Discarded, None),
+        decision(Decided::Restored, Some("why")),
+    ] {
+        assert!(
+            matches!(decide(&mut p, "IN-1", &wrong), Err(Error::Invalid(_))),
+            "{wrong:?}"
+        );
+    }
+    let gone = decide(
+        &mut p,
+        "IN-1",
+        &decision(Decided::Discarded, Some("Done already")),
+    )
+    .unwrap();
+    assert_eq!(
+        (gone["state"].as_str(), gone["reason"].as_str()),
+        (Some("discarded"), Some("Done already"))
+    );
+    let back = decide(&mut p, "IN-1", &decision(Decided::Restored, None)).unwrap();
+    assert_eq!(back["state"], "created");
+    // A restore is a person's, as restore() is
+    let mut agent = as_actor(p, AGENT);
+    decide(&mut agent, "IN-1", &decision(Decided::Discarded, Some("x"))).unwrap();
+    assert!(matches!(
+        decide(&mut agent, "IN-1", &decision(Decided::Restored, None)),
+        Err(Error::Refused(_))
+    ));
+}
+
+#[test]
+fn the_page_s_requests_take_their_fields_and_no_other_and_no_injection() {
+    let parsed = |v: Value| serde_json::from_value::<ItemDecision>(v);
+    assert!(parsed(json!({"decision": "discarded", "reason": "x"})).is_ok());
+    assert!(parsed(json!({"decision": "restored"})).is_ok());
+    for refused in [
+        json!({"decision": "injected"}),
+        json!({"decision": "discarded", "reason": "x", "by": "claude:a"}),
+        json!({}),
+    ] {
+        assert!(parsed(refused.clone()).is_err(), "{refused}");
+    }
+    assert!(serde_json::from_value::<NewItem>(json!({"text": "x", "state": "injected"})).is_err());
+    assert!(serde_json::from_value::<ItemEdit>(json!({"text": "x", "id": "IN-9"})).is_err());
+}
+
+#[test]
+fn a_listing_is_named_by_its_state_the_open_ones_without_one() {
+    for (state, listing) in [
+        (None, Listing::Open),
+        (Some("created"), Listing::Open),
+        (Some("discarded"), Listing::In(InboxState::Discarded)),
+        (Some("injected"), Listing::In(InboxState::Injected)),
+        (Some("all"), Listing::All),
+    ] {
+        assert_eq!(listing_of(state).unwrap(), listing, "{state:?}");
+    }
+    assert!(matches!(listing_of(Some("open")), Err(Error::Invalid(_))));
+}
+
 // Injecting
 
 #[test]

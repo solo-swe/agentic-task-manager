@@ -762,8 +762,16 @@
           "description": "The same, of the active sprint's tasks only; null without an active sprint (T-340)"
         },
         "stats": { "$ref": "#/$defs/ProjectStats" },
-        "progress": { "$ref": "#/$defs/OverviewProgress" }
+        "progress": { "$ref": "#/$defs/OverviewProgress" },
+        "inbox": { "$ref": "#/$defs/InboxSummary" }
       }
+    },
+    "InboxSummary": {
+      "type": "object",
+      "description": "The project's inbox (ATM-761): how many items wait to be triaged, the Inbox item's badge; absent from an older server",
+      "additionalProperties": false,
+      "required": ["open"],
+      "properties": { "open": { "type": "integer" } }
     },
     "OverviewProgress": {
       "type": "object",

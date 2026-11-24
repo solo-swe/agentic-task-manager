@@ -4,11 +4,10 @@
 
 use std::path::Path;
 
-use atm_common::inbox::InboxState;
 use atm_common::{Error, Result};
 use atm_lib::Project;
 use atm_lib::actor::agent_identity;
-use atm_lib::inbox::{self, Listing};
+use atm_lib::inbox;
 use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
@@ -152,15 +151,7 @@ fn report(ctx: Context, item: &Value, did: &str) {
 
 /// `atm inbox list`: the items `state` names (the open ones without it), of the inbox or its archive
 fn list(ctx: Context, cwd: &Path, state: Option<&str>, archived: bool) -> Result<()> {
-    let which = match state {
-        None | Some("created") => Listing::Open,
-        Some("all") => Listing::All,
-        Some(other) => Listing::In(
-            InboxState::parse(other)
-                .ok_or_else(|| Error::Invalid(format!("no inbox state {other:?}")))?,
-        ),
-    };
-    let listed = inbox::list(&Project::open(cwd)?, which, archived)?;
+    let listed = inbox::list(&Project::open(cwd)?, inbox::listing_of(state)?, archived)?;
     if ctx.json {
         print_json(&json!({
             "items": listed.items,

@@ -21,6 +21,7 @@ use atm_common::inbox::{
 use atm_common::time::{now_iso, parse_iso};
 use atm_common::{Error, Result};
 use atm_db::working::Working;
+use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use crate::project::Project;
@@ -389,6 +390,65 @@ pub fn unarchive(project: &mut Project, ids: &[String]) -> Result<Vec<String>> {
         inbox["next"] = json!(next);
         Ok(names)
     })
+}
+
+/// `POST …/inbox` (ATM-761): an item's text.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NewItem {
+    pub text: String,
+}
+
+/// `PATCH …/inbox/<IN>`: an open item's new text.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ItemEdit {
+    pub text: String,
+}
+
+/// What a person decides about an item on the page: discard it (with why), or bring a discarded one back. Inject isn't
+/// one: an agent records it, with the tasks it made (docs/inbox-design.md §7).
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Decided {
+    Discarded,
+    Restored,
+}
+
+/// `POST …/inbox/<IN>/decisions`: a decision, and for a discard its reason.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ItemDecision {
+    pub decision: Decided,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// A person's decision on item `id`: discarded with its reason, or restored (no reason).
+///
+/// # Errors
+/// `Invalid` for a discard without a reason or a restore with one; what [`discard`] and [`restore`] refuse.
+pub fn decide(project: &mut Project, id: &str, decision: &ItemDecision) -> Result<Value> {
+    match (decision.decision, decision.reason.as_deref()) {
+        (Decided::Discarded, Some(reason)) => discard(project, id, reason),
+        (Decided::Discarded, None) => Err(Error::Invalid("a discard says why (reason)".into())),
+        (Decided::Restored, None) => restore(project, id),
+        (Decided::Restored, Some(_)) => Err(Error::Invalid("a restore takes no reason".into())),
+    }
+}
+
+/// The listing a `state` names (`created`, the open ones, when none; `discarded`, `injected`, `all`).
+///
+/// # Errors
+/// `Invalid` for a state that isn't one.
+pub fn listing_of(state: Option<&str>) -> Result<Listing> {
+    match state {
+        None | Some("created") => Ok(Listing::Open),
+        Some("all") => Ok(Listing::All),
+        Some(other) => InboxState::parse(other)
+            .map(Listing::In)
+            .ok_or_else(|| Error::Invalid(format!("no inbox state {other:?}"))),
+    }
 }
 
 /// How many items wait in the inbox (created): the status line's and the dashboard's badge.

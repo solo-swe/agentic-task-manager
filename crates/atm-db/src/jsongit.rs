@@ -344,6 +344,8 @@ impl Store for JsonGitStore {
             "claims": file_stamp(&claims_store_path(&self.paths)),
             "head": file_stamp(&self.paths.root.join(".git").join("HEAD")),
             "copies": copies,
+            // The inbox (ATM-761): a summary counts its open items, so a change of it is a new version
+            "inbox": file_stamp(&self.paths.inbox()),
         })
     }
 

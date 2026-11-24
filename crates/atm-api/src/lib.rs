@@ -181,7 +181,12 @@ async fn serve_checked_review_change(
     };
     tokio::task::spawn_blocking(move || {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            routes::serve_review_change(&served.projects, &method, &path, body)
+            // An inbox change (ATM-761) behind the same checks, to its own routes
+            if routes::is_inbox_path(&path) {
+                routes::serve_inbox_change(&served.projects, &method, &path, body)
+            } else {
+                routes::serve_review_change(&served.projects, &method, &path, body)
+            }
         }))
         .unwrap_or_else(|_| send_error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"))
     })
@@ -277,14 +282,15 @@ fn send_conditional(
 /// change.
 async fn serve_request(State(served): State<Arc<Served>>, request: Request) -> Response {
     let method = request.method().clone();
-    let changes_reviews =
-        changes_something(&method) && routes::is_reviews_path(request.uri().path());
+    let changes_reviews = changes_something(&method)
+        && (routes::is_reviews_path(request.uri().path())
+            || routes::is_inbox_path(request.uri().path()));
     if method != Method::GET && method != Method::HEAD && !changes_reviews {
         // OPTIONS among them: no CORS preflight is ever answered, so no other site can send the session header; and
-        // every path but a project's reviews is read-only
+        // every path but a project's reviews and its inbox (ATM-761) is read-only
         return send_error(
             StatusCode::METHOD_NOT_ALLOWED,
-            "only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews",
+            "only GET and HEAD, and POST, PATCH, PUT or DELETE on reviews and the inbox",
         );
     }
     let host = request
