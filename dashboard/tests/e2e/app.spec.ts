@@ -664,13 +664,15 @@ test.describe('the dashboard in the atm app', () => {
     const card = page.locator('.kanban-card[data-id="T-004"]');
 
     // A card: Open, Open in New Tab, Open in New Window, Copy Link
+    // The link is the board's address as the page has it (with its Sprint filter, once written: T-323), and the task
+    await expect(page).toHaveURL(/[?&]sprint=active(&|$)/);
     await card.click({ button: 'right' });
     await expect(items).toHaveText(['Open', 'Open in New Tab', 'Open in New Window', 'Copy Link']);
     await item('copy-link').click();
     await expect(menu).toBeHidden();
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(`atm://projects/${tasksServer.projectId}/kanban?task=T-004`);
+      .toBe(`atm://projects/${tasksServer.projectId}/kanban?sprint=active&task=T-004`);
     await card.click({ button: 'right' });
     await item('open-tab').click();
     await expect(tabs).toHaveCount(2);

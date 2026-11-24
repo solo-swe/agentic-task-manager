@@ -119,7 +119,7 @@ export type ProjectsResult =
 export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Validators): Promise<ProjectsResult> {
   const file = await fetchFile(projectsUrl(), fetchFn, since);
   if (file.unchanged) return file;
-  const list = (JSON.parse(file.text) as { projects?: unknown }).projects;
+  const list = (file.data as { projects?: unknown } | null)?.projects;
   const projects = (Array.isArray(list) ? list : []).filter(isProject).map((p) => ({
     id: p.id,
     name: typeof p.name === 'string' && p.name ? p.name : p.id,
@@ -250,13 +250,14 @@ export async function loadTasks(
 ): Promise<LoadResult> {
   const file = await fetchFile(v1TasksUrl(project), fetchFn, since);
   if (file.unchanged) return file;
-  const list = JSON.parse(file.text) as TaskViewList;
+  const list = (file.data ?? {}) as TaskViewList;
   const problems = Array.isArray(list.problems) ? list.problems.filter((p): p is string => typeof p === 'string') : [];
   return {
     unchanged: false,
     loaded: parseTasksFile(
       { meta: list.meta, tasks: viewedTasks(list) },
-      typeof list.bytes === 'number' ? list.bytes : file.text.length,
+      // atm says how big its task data is; an answer without it (none is) counts as small
+      typeof list.bytes === 'number' ? list.bytes : 0,
       problems,
       isHint(list.archive_hint) ? list.archive_hint : null,
       {
@@ -280,7 +281,7 @@ export async function loadArchive(
   fetchFn: Fetch = browserFetch,
   since?: Validators,
 ): Promise<ArchiveResult> {
-  const file = await fetchFile(`${v1TasksUrl(project)}?archived=true`, fetchFn, since, '{"tasks": []}');
+  const file = await fetchFile(`${v1TasksUrl(project)}?archived=true`, fetchFn, since, { tasks: [] });
   if (file.unchanged) return file;
-  return { unchanged: false, tasks: viewedTasks(JSON.parse(file.text) as TaskViewList), validators: file.validators };
+  return { unchanged: false, tasks: viewedTasks((file.data ?? {}) as TaskViewList), validators: file.validators };
 }

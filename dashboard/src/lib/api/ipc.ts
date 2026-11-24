@@ -1,7 +1,8 @@
 // The dashboard's IPC transport (T-457): in the atm app, the same requests the browser makes of atm serve are the app's
 // commands (app/src-tauri/src/commands.rs, ADR-003 §5), which answer what the REST routes do. `ipcFetch` takes the
 // dashboard's own URLs (api/http.ts builds them: `default`'s v1 routes, another workspace's v2 ones) and answers each
-// with a `Response`, so everything above the client layer works unchanged. No ETags: the app reads its own files, and
+// as a `Response` (a JSON one handing the command's answer through as it is, ATM-769), so everything above the client
+// layer works unchanged. No ETags: the app reads its own files, and
 // its live changes come through the subscriptions' channels.
 import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_WORKSPACE } from './workspace';
@@ -151,8 +152,29 @@ export function callFor(url: string): Call | null {
   return null;
 }
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+/**
+ * A command's JSON answer as the `Response` the client reads (ATM-769): `json()` hands back `body` itself, as `invoke`
+ * parsed it, never turned back into text to be parsed again (each answer was three copies, two in WebKit's own memory:
+ * docs/memory-growth-analysis.md §3b). The client reads `ok`, `status`, `headers` and `json()`; `text()` is there for
+ * anything else, made only when asked. Each `json()` gives the same object: the client never changes what it reads.
+ */
+export function answered(body: unknown, status = 200): Response {
+  const answer = {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: '',
+    headers: new Headers({ 'Content-Type': 'application/json' }),
+    redirected: false,
+    type: 'basic',
+    url: '',
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
+    clone: () => answered(body, status),
+  };
+  return answer as unknown as Response;
+}
+
+const json = answered;
 
 /** `fetch`'s shape, answered by the app's commands (a request's options, such as its validators, don't apply) */
 export async function ipcFetch(input: RequestInfo | URL): Promise<Response> {

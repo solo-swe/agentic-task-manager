@@ -147,7 +147,9 @@ export interface Validators {
   lastModified?: string;
 }
 
-export type FileResult = { unchanged: true } | { unchanged: false; text: string; validators: Validators };
+/** A file's answer: unchanged, or its JSON parsed (`data`), as the response gives it: in the app the command's answer
+ * itself, never turned back into text (ATM-769) */
+export type FileResult = { unchanged: true } | { unchanged: false; data: unknown; validators: Validators };
 
 /**
  * Fetches a URL from the server (D-5.1). With the validators of the last load, the request is conditional
@@ -159,21 +161,21 @@ export async function fetchFile(
   url: string,
   fetchFn: Fetch,
   since?: Validators,
-  missing?: string,
+  missing?: unknown,
 ): Promise<FileResult> {
   const headers: Record<string, string> = {};
   if (since?.etag) headers['If-None-Match'] = since.etag;
   if (since?.lastModified) headers['If-Modified-Since'] = since.lastModified;
   const resp = await fetchFn(url, { cache: 'no-store', headers });
   if (resp.status === 304 && since) return { unchanged: true };
-  if (resp.status === 404 && missing !== undefined) return { unchanged: false, text: missing, validators: {} };
+  if (resp.status === 404 && missing !== undefined) return { unchanged: false, data: missing, validators: {} };
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const validators: Validators = {};
   const etag = resp.headers.get('ETag');
   const lastModified = resp.headers.get('Last-Modified');
   if (etag) validators.etag = etag;
   if (lastModified) validators.lastModified = lastModified;
-  return { unchanged: false, text: await resp.text(), validators };
+  return { unchanged: false, data: await resp.json(), validators };
 }
 
 /** fetchFile for a project's file (p/<id>/<file>) */
@@ -182,7 +184,7 @@ export function fetchProjectFile(
   file: ProjectFile,
   fetchFn: Fetch,
   since?: Validators,
-  missing?: string,
+  missing?: unknown,
 ): Promise<FileResult> {
   return fetchFile(projectFileUrl(project, file), fetchFn, since, missing);
 }

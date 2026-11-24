@@ -1,6 +1,7 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { afterEach, describe, expect, it } from 'vitest';
-import { callFor, ipcFetch } from '../../src/lib/api/ipc';
+import { fetchFile, type Fetch } from '../../src/lib/api/http';
+import { answered, callFor, ipcFetch } from '../../src/lib/api/ipc';
 
 describe('the IPC transport (T-457)', () => {
   afterEach(() => clearMocks());
@@ -123,6 +124,46 @@ describe('the IPC transport (T-457)', () => {
     const missing = await ipcFetch('/api/v2/workspaces/nope/projects/p1/claims');
     expect([missing.status, await missing.json()]).toEqual([404, { error: 'unknown workspace' }]);
     expect((await ipcFetch('/__atm/whoami')).status).toBe(404);
+  });
+
+  it('hands a command’s answer through as it is, never turned back into text (ATM-769)', async () => {
+    const answer = { tasks: [{ task: { id: 'T-1' } }], bytes: 10 };
+    mockIPC(() => answer);
+    const resp = await ipcFetch('/api/v1/projects/p1/tasks');
+    expect([resp.ok, resp.status, resp.headers.get('Content-Type')]).toEqual([true, 200, 'application/json']);
+    expect(await resp.json()).toBe(answer);
+    expect(await resp.json()).toBe(answer);
+    // Through the client's own reading, the same object
+    const file = await fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch);
+    expect(file.unchanged ? null : file.data).toBe(answer);
+    // Text only when asked for it; a clone answers the same
+    expect(await resp.text()).toBe(JSON.stringify(answer));
+    expect(await resp.clone().json()).toBe(answer);
+  });
+
+  it('a JSON answer is ok only for a 2xx status', () => {
+    for (const [status, ok] of [
+      [200, true],
+      [204, true],
+      [299, true],
+      [304, false],
+      [404, false],
+      [500, false],
+    ] as const)
+      expect([answered(null, status).ok, answered(null, status).status], String(status)).toEqual([ok, status]);
+    expect(answered({}).status).toBe(200);
+  });
+
+  it('a command’s error comes through the client as its status', async () => {
+    mockIPC(() => {
+      throw { kind: 'not_found', message: 'no such project' };
+    });
+    await expect(fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch)).rejects.toThrow('HTTP 404');
+    expect(await fetchFile('/api/v1/projects/p1/tasks', ipcFetch as Fetch, undefined, { tasks: [] })).toEqual({
+      unchanged: false,
+      data: { tasks: [] },
+      validators: {},
+    });
   });
 
   it('reads a tasks route’s flags as true only for "true" or "1", any case, and its single filters empty as none', () => {
