@@ -1368,6 +1368,9 @@ test.describe('the dashboard in the atm app', () => {
       loads.filter((c) => c.project !== 'second'),
       JSON.stringify(tasksServer.commands),
     ).toEqual([]);
+    // And the active tab's own once each: its tasks and its stats, not again for the Analysis page it keeps hidden
+    // (ATM-776: that page asked atm twice more at every start)
+    expect(loads.map((c) => c.command).sort()).toEqual(['claims', 'project_stats', 'project_tasks', 'worktrees']);
     // The hidden tabs still have their names, from the project list
     await expect(page.locator('.title-bar-tab').nth(0)).toContainText('Standard Project');
     await expect(page.locator('.title-bar-tab').nth(3)).toContainText('Standard Project');

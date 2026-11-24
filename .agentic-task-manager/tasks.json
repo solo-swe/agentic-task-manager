@@ -21748,7 +21748,7 @@
       "description": "[The documents design](docs/documents-design.md) §4: the Documents item's page.\n\n## Change\n- **Tree** (default: folders open or closed, a submodule marked as one) and **Recent** (by last change); the view and the search in the address (`?view=&q=`), open folders per project in the preferences.\n- **Each row:** title, file name, how long ago it changed, *new* when untracked.\n- **Search** in the tab's header line, filtering in the page, or by the route's `?q=` when the list was cut at 500.\n- **A click opens the viewer in place** (`?doc=…` over the page, Back closes it); ⌘-click a new tab.\n\n## Tests\nComponent tests (tree, recent, search both ways, the *new* mark, submodules); e2e: open a document and Back to the list.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "01a20ae0-5493-734f-9c10-e897f4d0ca72",
         "01a20ae0-5493-734f-9c10-e88adf1461c5"
@@ -21758,7 +21758,7 @@
         "dashboard/src/lib/api/documents.ts"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T20:04:20Z",
+      "updated_at": "2026-11-24T20:25:51Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -21771,7 +21771,38 @@
       "review": "async",
       "number": 766,
       "started_at": "2026-11-24T20:04:20Z",
-      "started_by": "claude:ba530ebb"
+      "started_by": "claude:ba530ebb",
+      "commit": "cda50484f0b285d4c766db0461b29319525d854b",
+      "code_reviews": [
+        {
+          "id": "01a20f37-a278-762d-a8c7-1a5a8559b65d",
+          "ref": "CR-173"
+        }
+      ],
+      "review_requested_at": "2026-11-24T20:20:34Z",
+      "notes": [
+        {
+          "at": "2026-11-24T20:20:34Z",
+          "kind": "review",
+          "text": "CR-173: Documents: the page",
+          "by": "claude:ba530ebb"
+        },
+        {
+          "at": "2026-11-24T20:25:35Z",
+          "kind": "note",
+          "text": "Approved: in CR-173 (round 1)",
+          "by": "Hakan Serce"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-24T20:20:34Z",
+          "to": "2026-11-24T20:25:35Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-24T20:25:51Z",
+      "completed_by": "claude:ba530ebb"
     },
     {
       "id": "01a20b6d-f9af-72ac-9448-da28a38919f5",
@@ -22372,7 +22403,7 @@
       "description": "From Hakan: when atm opens, there is some weird per-tab opening and latency. It should open instantly and load nothing for the tabs that aren't visible.\n\n## Look into\nAs the app starts, the page first shows the window's own address (the app's root), and only once `restored_tabs` answers does it go to the tab that was active (`+layout.svelte`'s `onMount`, `appTabs.start`). Record in the app fixture every command the page asks from start until the active tab shows, with several restored tabs (projects, a review, All projects), and find what is loaded for a tab not shown, and what is shown before the active tab.\n\n## Change\n- The active restored tab is the first page shown: nothing of the root (or another tab) is loaded or drawn before it.\n- A tab not shown loads nothing until it is switched to (its title comes from what the page has: the project list).\n\n## Tests\nAn app e2e test: with restored tabs, the commands asked until the active tab shows are only the project list and the active tab's own; no other tab's page was shown in between.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/routes/+layout.svelte",
@@ -22381,7 +22412,7 @@
         "dashboard/tests/e2e/helpers.ts"
       ],
       "created_at": "2026-11-24T18:24:38Z",
-      "updated_at": "2026-11-24T20:16:55Z",
+      "updated_at": "2026-11-24T20:20:52Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -22455,7 +22486,9 @@
           "to": "2026-11-24T19:11:33Z",
           "by": "claude:ba530ebb"
         }
-      ]
+      ],
+      "started_at": "2026-11-24T20:20:52Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20f0a-2258-70ca-bca7-b29b7753d0eb",
