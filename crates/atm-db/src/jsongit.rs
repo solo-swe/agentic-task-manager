@@ -3,6 +3,7 @@
 
 pub mod claims;
 pub mod files;
+pub mod inbox_merge;
 // atm-fs's, shared with the review store (ATM-563)
 pub use atm_fs::lock;
 pub mod logo;
@@ -122,6 +123,37 @@ impl JsonGitStore {
         write_text_atomic(&file, &(to_json(archive) + "\n"))
             .map_err(|e| Error::failed(format!("{}: {e}", file.shown())))
     }
+
+    /// The inbox and its archive, those that changed (ATM-759): the archive first when items move into it, so a
+    /// crash between the two writes leaves an item in both, never in neither; the inbox first otherwise. Once there
+    /// is an inbox, atm's merge driver merges it item by item.
+    fn write_inbox(&self, work: &Working) -> Result<()> {
+        let write = |file: std::path::PathBuf, document: &Value| {
+            write_text_atomic(&file, &(to_json(document) + "\n"))
+                .map_err(|e| Error::failed(format!("{}: {e}", file.shown())))
+        };
+        let (inbox, archive) = (work.changed_inbox(), work.changed_inbox_archive());
+        if inbox.is_none() && archive.is_none() {
+            return Ok(());
+        }
+        if work.inbox_archive_first() {
+            if let Some(archive) = archive {
+                write(self.paths.inbox_archive(), archive)?;
+            }
+            if let Some(inbox) = inbox {
+                write(self.paths.inbox(), inbox)?;
+            }
+        } else {
+            if let Some(inbox) = inbox {
+                write(self.paths.inbox(), inbox)?;
+            }
+            if let Some(archive) = archive {
+                write(self.paths.inbox_archive(), archive)?;
+            }
+        }
+        setup::ensure_inbox_merge(&self.paths)?;
+        Ok(())
+    }
 }
 
 impl JsonGitStore {
@@ -142,6 +174,7 @@ impl JsonGitStore {
             branch: checked_out_branch(&root),
         };
         let paths = self.paths.clone();
+        let (inbox, inbox_archive) = (self.paths.inbox(), self.paths.inbox_archive());
         // Strictly (ATM-674, R9): a store that can't be read would be written back empty, its claims lost
         let mut work = Working::new(
             document,
@@ -149,6 +182,10 @@ impl JsonGitStore {
             here,
             size,
             Box::new(move || archive_document(&paths)),
+        )
+        .with_inbox(
+            Box::new(move || files::inbox_document(&inbox)),
+            Box::new(move || files::inbox_document(&inbox_archive)),
         );
         change(&mut work)?;
         let archive = work.changed_archive().cloned();
@@ -165,6 +202,7 @@ impl JsonGitStore {
                 self.write_archive(archive)?;
             }
         }
+        self.write_inbox(&work)?;
         if work.store_changed() {
             write_store(&self.paths, &work.claims_store)?;
         }
@@ -223,6 +261,14 @@ impl Store for JsonGitStore {
 
     fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()> {
         self.apply(change)
+    }
+
+    fn inbox(&self, archived: bool) -> Result<Value> {
+        files::inbox_document(&if archived {
+            self.paths.inbox_archive()
+        } else {
+            self.paths.inbox()
+        })
     }
 
     fn exists(&self) -> bool {
@@ -504,6 +550,88 @@ mod tests {
             .unwrap();
         assert_eq!(store.list_tasks().unwrap().len(), 0);
         assert!(store.get_archived_task("T-1").unwrap().is_some());
+    }
+
+    /// ATM-759: the inbox is read only when a change asks for it and written only when it changed; an item moved into
+    /// its archive is written there first; a store reads either back
+    #[test]
+    fn the_inbox_and_its_archive_are_written_when_a_change_changed_them() {
+        use serde_json::json;
+        let (_dir, mut store) = project_with("{\"tasks\": []}");
+        store
+            .change(&mut |work| {
+                work.tasks().push(json!({"id": "T-1"}));
+                Ok(())
+            })
+            .unwrap();
+        assert!(
+            !store.paths().inbox().exists(),
+            "a change that didn't touch it writes none"
+        );
+        assert_eq!(
+            store.inbox(false).unwrap(),
+            atm_common::inbox::empty_inbox()
+        );
+        store
+            .change(&mut |work| {
+                let inbox = work.inbox()?;
+                inbox["items"] = json!([{"id": "IN-1", "state": "discarded", "text": "x"}]);
+                inbox["next"] = json!(2);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(store.inbox(false).unwrap()["items"][0]["id"], "IN-1");
+        // Moved into the archive: in it, and out of the inbox
+        store
+            .change(&mut |work| {
+                let item = work.inbox()?["items"]
+                    .as_array_mut()
+                    .expect("a list")
+                    .remove(0);
+                work.moving_into_inbox_archive();
+                work.inbox_archive()?["items"]
+                    .as_array_mut()
+                    .expect("a list")
+                    .push(item);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(store.inbox(false).unwrap()["items"], json!([]));
+        assert_eq!(store.inbox(true).unwrap()["items"][0]["id"], "IN-1");
+        assert!(store.paths().inbox_archive().is_file());
+    }
+
+    #[test]
+    fn an_inbox_that_isnt_one_is_refused_and_a_change_that_asks_for_it_writes_nothing() {
+        let (_dir, mut store) = project_with("{\"tasks\": []}");
+        std::fs::write(
+            store.paths().inbox(),
+            "{\"items\": [{\"id\": \"T-1\", \"state\": \"created\"}]}",
+        )
+        .unwrap();
+        assert!(
+            store
+                .inbox(false)
+                .unwrap_err()
+                .to_string()
+                .contains("no item ID")
+        );
+        let error = store
+            .change(&mut |work| {
+                work.tasks().push(serde_json::json!({"id": "T-9"}));
+                work.inbox().map(|_| ())
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("inbox.json"), "{error}");
+        assert!(store.get_task("T-9").unwrap().is_none(), "nothing written");
+        std::fs::write(store.paths().inbox(), "not json").unwrap();
+        assert!(
+            store
+                .inbox(false)
+                .unwrap_err()
+                .to_string()
+                .contains("not valid JSON")
+        );
     }
 
     /// T-555: the store watches its own files: a change in its task file and in its claims store (in git's folder,

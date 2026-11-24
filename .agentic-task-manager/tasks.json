@@ -19694,7 +19694,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-11-23T10:25:40Z",
-      "updated_at": "2026-11-24T01:16:20Z",
+      "updated_at": "2026-11-24T01:29:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -19708,7 +19708,7 @@
       "number": 734,
       "started_at": "2026-11-24T00:33:27Z",
       "started_by": "claude:ba530ebb",
-      "commit": "9cc4140c916255c5b0e021554640606a0d69130b",
+      "commit": "decf669457f1bdc21397eb6abc238b7adb777a4c",
       "code_reviews": [
         {
           "id": "01a20b06-334a-74c9-b822-cf1fa366f6a1",
@@ -20626,7 +20626,7 @@
       "description": "[The inbox design](docs/inbox-design.md) §2–§4 and §8: the data and the rules, below the front ends.\n\n## Change\n- **atm-common:** `schema/inbox.schema.json` and the item type (`id` `IN-<n>`, `text` up to 20,000 characters, `state` `created`/`discarded`/`injected`, `reason`, `tasks`, who and when).\n- **atm-db:** `.agentic-task-manager/inbox.json` and `inbox-archive.json` in the store, with its lock; atm's merge driver takes `inbox.json` too (items merged by ID, `next` the larger, a clashing number renumbered as tasks are).\n- **atm-lib `inbox.rs`:** add (a person only; an agent is refused), edit (a person, while created), discard (a reason required), inject (tasks that exist, at least one; final), restore (a person, from discarded), list, and archiving decided items with `atm db archive`'s rules (never created ones). A task made from an item gets `from: [\"IN-…\"]`.\n\n## Tests\nUnit tests for every move from every state, by a person and by an agent, each refusal, the limits, archiving and the merge.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-common/schema/inbox.schema.json",
@@ -20634,7 +20634,7 @@
         "crates/atm-lib/src/inbox.rs"
       ],
       "created_at": "2026-11-24T00:06:43Z",
-      "updated_at": "2026-11-24T00:06:43Z",
+      "updated_at": "2026-11-24T01:30:00Z",
       "created_by": "claude:ba530ebb",
       "updated_by": "claude:ba530ebb",
       "sprint_history": [
@@ -20645,7 +20645,9 @@
       ],
       "sprint": "Sidebar overhaul",
       "review": "async",
-      "number": 759
+      "number": 759,
+      "started_at": "2026-11-24T01:30:00Z",
+      "started_by": "claude:ba530ebb"
     },
     {
       "id": "01a20ae0-5493-734f-9c10-e8925a26795e",

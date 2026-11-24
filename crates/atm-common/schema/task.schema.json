@@ -119,7 +119,12 @@
       "type": "string",
       "description": "How a finished task ended, when it isn't the default: wont_do, duplicate, obsolete or done (SR-2.8)"
     },
-    "duplicate_of": { "type": "string", "description": "The task this one duplicates (with the duplicate resolution)" }
+    "duplicate_of": { "type": "string", "description": "The task this one duplicates (with the duplicate resolution)" },
+    "from": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^IN-[1-9][0-9]*$" },
+      "description": "The inbox items this task was made from (docs/inbox-design.md §2, ATM-759): IN-<n>, each linking back to it"
+    }
   },
   "$defs": {
     "Note": {

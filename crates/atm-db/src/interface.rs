@@ -57,6 +57,16 @@ pub trait Store {
     /// The task data's sizes in bytes: (`tasks.json`, the archive).
     fn sizes(&self) -> (u64, u64);
 
+    /// The inbox document (`{version, next, items}`, ATM-759), or its archive's with `archived`, as stored now: an
+    /// empty one when there is none. A change reads and writes it through [`Working::inbox`] instead.
+    ///
+    /// # Errors
+    /// When it exists but can't be read.
+    fn inbox(&self, archived: bool) -> Result<Value> {
+        let _ = archived;
+        Ok(atm_common::inbox::empty_inbox())
+    }
+
     /// Run `change` on the task data under the store's isolation, and write what it changed; nothing when it fails.
     /// The store's snapshot is read again afterwards.
     ///

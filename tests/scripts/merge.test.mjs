@@ -655,4 +655,77 @@ describe('merge-driver command', () => {
       removeDir(dir);
     }
   });
+
+  // ATM-759: the inbox and its archive merge item by item, by the path git names (%P)
+  const inboxItem = (id, by, state = 'created', more = {}) => ({
+    id,
+    text: `${id} by ${by}`,
+    state,
+    created_at: '2026-11-24T09:00:00Z',
+    created_by: by,
+    updated_at: '2026-11-24T09:00:00Z',
+    ...more,
+  });
+  const inboxOf = (...items) => JSON.stringify({ version: 1, next: items.length + 1, items });
+
+  test('the inbox merges item by item: both branches’ items kept, a number given twice renumbered on theirs', () => {
+    for (const name of ['inbox.json', 'inbox-archive.json']) {
+      const { dir, paths } = files(
+        inboxOf(inboxItem('IN-1', 'Hakan')),
+        inboxOf(
+          inboxItem('IN-1', 'Hakan', 'discarded', { reason: 'no', updated_at: '2026-11-24T10:00:00Z' }),
+          inboxItem('IN-2', 'Hakan'),
+        ),
+        inboxOf(inboxItem('IN-1', 'Hakan'), inboxItem('IN-2', 'Ana')),
+      );
+      try {
+        const r = runAtm(['db', 'merge-driver', ...paths, `.agentic-task-manager/${name}`], dir);
+        assert.equal(r.code, 0, r.stderr);
+        const merged = JSON.parse(fs.readFileSync(paths[1], 'utf8'));
+        assert.deepEqual(
+          merged.items.map((i) => [i.id, i.created_by, i.state]),
+          [
+            ['IN-1', 'Hakan', 'discarded'],
+            ['IN-2', 'Hakan', 'created'],
+            ['IN-3', 'Ana', 'created'],
+          ],
+          name,
+        );
+        // No conflict: the item renumbered keeps its old number to say so
+        assert.equal(merged.items[2].renumbered_from, 'IN-2');
+        assert.equal(merged.next, 4);
+      } finally {
+        removeDir(dir);
+      }
+    }
+  });
+
+  test('a real merge of two branches that each added to the inbox keeps every item', () => {
+    withRepo((root) => {
+      const inboxFile = path.join(root, '.agentic-task-manager/inbox.json');
+      const attributes = path.join(root, '.agentic-task-manager/.gitattributes');
+      // As atm leaves them once the inbox is written (setup's ensure_inbox_merge)
+      fs.appendFileSync(attributes, 'inbox.json merge=atm\ninbox-archive.json merge=atm\n');
+      fs.writeFileSync(inboxFile, inboxOf(inboxItem('IN-1', 'Hakan')));
+      git(['add', '-A'], root);
+      git(['commit', '-q', '-m', 'inbox'], root);
+      git(['switch', '-q', '-c', 'other'], root);
+      fs.writeFileSync(inboxFile, inboxOf(inboxItem('IN-1', 'Hakan'), inboxItem('IN-2', 'Ana')));
+      git(['commit', '-q', '-am', 'other'], root);
+      git(['switch', '-q', 'main'], root);
+      fs.writeFileSync(inboxFile, inboxOf(inboxItem('IN-1', 'Hakan'), inboxItem('IN-2', 'Hakan')));
+      git(['commit', '-q', '-am', 'main'], root);
+      const r = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root, encoding: 'utf8' });
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      const merged = JSON.parse(fs.readFileSync(inboxFile, 'utf8'));
+      assert.deepEqual(
+        merged.items.map((i) => [i.id, i.created_by]),
+        [
+          ['IN-1', 'Hakan'],
+          ['IN-2', 'Hakan'],
+          ['IN-3', 'Ana'],
+        ],
+      );
+    });
+  });
 });

@@ -22,6 +22,8 @@ const REVIEW_ATTRIBUTES_LINES: [&str; 2] = [
     "reviews/*/review.md merge=atm",
     "reviews/*/comments.md merge=atm",
 ];
+/// The inbox and its archive (docs/inbox-design.md §8, ATM-759), merged item by item.
+const INBOX_ATTRIBUTES_LINES: [&str; 2] = ["inbox.json merge=atm", "inbox-archive.json merge=atm"];
 
 /// Whether `folder` is in a git repository: the one way atm asks.
 #[must_use]
@@ -160,6 +162,15 @@ pub fn ensure_archive_merge(paths: &Paths) -> Result<bool> {
 /// When `.gitattributes` can't be read or written.
 pub fn ensure_review_merge(paths: &Paths) -> Result<bool> {
     ensure_lines(paths, &REVIEW_ATTRIBUTES_LINES)
+}
+
+/// In git: the inbox and its archive merge item by item (ATM-759). Added when the project's inbox is first written,
+/// so projects without one see no change. Returns whether `.gitattributes` changed (staged).
+///
+/// # Errors
+/// When `.gitattributes` can't be read or written.
+pub fn ensure_inbox_merge(paths: &Paths) -> Result<bool> {
+    ensure_lines(paths, &INBOX_ATTRIBUTES_LINES)
 }
 
 #[cfg(test)]

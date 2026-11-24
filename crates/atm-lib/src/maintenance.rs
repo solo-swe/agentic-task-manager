@@ -209,6 +209,26 @@ pub fn merge_versions(
     path: Option<&str>,
 ) -> Result<Vec<String>> {
     let name = path.map(|p| p.rsplit('/').next().unwrap_or(p));
+    // The inbox and its archive, item by item (ATM-759)
+    if matches!(
+        name,
+        Some(atm_common::inbox::INBOX_FILE | atm_common::inbox::INBOX_ARCHIVE_FILE)
+    ) {
+        let read = |p: &Path| -> Result<serde_json::Value> {
+            let text = std::fs::read_to_string(p).unwrap_or_default();
+            if text.trim().is_empty() {
+                return Ok(atm_common::inbox::empty_inbox());
+            }
+            serde_json::from_str(&text)
+                .map_err(|e| atm_common::Error::failed(format!("{}: {e}", p.display())))
+        };
+        // A number given on both branches is renumbered, not a conflict: the item says so (`renumbered_from`)
+        let (merged, _renumbered) =
+            atm_db::jsongit::inbox_merge::merge_inbox(&read(base)?, &read(ours)?, &read(theirs)?);
+        atm_common::home::write_text_atomic(ours, &(atm_common::py::to_json(&merged) + "\n"))
+            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", ours.display())))?;
+        return Ok(Vec::new());
+    }
     if !matches!(name, Some("comments.md" | "review.md")) {
         // A number clash moves the task that isn't on the base branch (ADR-009), read from git
         let on_base = tasks_on_base_branch(ours);

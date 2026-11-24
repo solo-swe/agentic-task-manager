@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "inbox.schema.json",
+  "title": "Inbox",
+  "description": "A project's inbox, as .agentic-task-manager/inbox.json and inbox-archive.json keep it (docs/inbox-design.md §2, ATM-759): the user's raw input, each item created, then discarded with a reason or injected into the tasks made from it.",
+  "type": "object",
+  "required": ["items"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1, "description": "The file's format: 1" },
+    "next": { "type": "integer", "minimum": 1, "description": "The next item's number: a number is never given twice" },
+    "items": { "type": "array", "items": { "$ref": "#/$defs/InboxItem" } }
+  },
+  "$defs": {
+    "InboxItem": {
+      "type": "object",
+      "required": ["id", "text", "state"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^IN-[1-9][0-9]*$", "description": "IN-<n>, per project" },
+        "text": { "type": "string", "description": "Markdown, as task text renders; at most 20,000 characters" },
+        "state": { "enum": ["created", "discarded", "injected"] },
+        "reason": { "type": "string", "description": "Discarded only: why, at most 500 characters" },
+        "tasks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Injected only: the keys of the tasks made from it, at least one; each task's from names the item back"
+        },
+        "created_at": { "type": "string", "description": "ISO 8601" },
+        "created_by": { "type": "string", "description": "Who added it: a person (an agent can't)" },
+        "updated_at": { "type": "string", "description": "ISO 8601, the item's last change" },
+        "updated_by": { "type": "string", "description": "Who changed it last (an edit or a restore)" },
+        "decided_at": { "type": "string", "description": "ISO 8601, when it was discarded or injected" },
+        "decided_by": { "type": "string", "description": "Who discarded or injected it" },
+        "renumbered_from": {
+          "type": "string",
+          "description": "The number a merge took from it, when both branches gave it to different items: theirs moved to the next free one"
+        }
+      }
+    }
+  }
+}

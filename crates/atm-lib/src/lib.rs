@@ -15,6 +15,7 @@ pub mod components;
 pub use atm_docs as documents;
 pub mod edit;
 pub mod foreign;
+pub mod inbox;
 pub mod leases;
 pub mod lifecycle;
 mod lookup;
